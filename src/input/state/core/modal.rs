@@ -9,6 +9,7 @@
 //! this module says the pair deliberately coexists.
 
 use super::DrawingState;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::state::InputState;
 
 /// Every popup surface that participates in modal mutual exclusion, in the
@@ -173,7 +174,11 @@ impl InputState {
     /// each surface is dismissed by its own closer — the tour used to be a bare
     /// flag clear here, which left the toolbar chrome it hides still hidden.
     pub(crate) fn prepare_for_screen_modal(&mut self) {
-        self.cancel_active_interaction();
+        with_legacy_measurer(|measurer| self.prepare_for_screen_modal_with_measurer(measurer))
+    }
+
+    pub(crate) fn prepare_for_screen_modal_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.cancel_active_interaction_with(measurer);
         for surface in ModalSurface::ALL {
             if self.modal_is_open(surface) {
                 self.close_modal(surface);

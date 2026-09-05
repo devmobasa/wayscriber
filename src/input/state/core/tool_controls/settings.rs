@@ -1,5 +1,6 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::{ArrowStyle, BlurStyle, Color, FontDescriptor};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
@@ -59,16 +60,26 @@ impl InputState {
     /// treating every pressure sample as a persisted user preference edit.
     #[cfg_attr(not(feature = "tablet-input"), allow(dead_code))]
     pub(crate) fn set_pressure_thickness_for_active_tool(&mut self, thickness: f64) -> f64 {
+        with_legacy_measurer(|measurer| {
+            self.set_pressure_thickness_for_active_tool_with(measurer, thickness)
+        })
+    }
+
+    pub(crate) fn set_pressure_thickness_for_active_tool_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        thickness: f64,
+    ) -> f64 {
         let tool = self.active_tool();
         let clamped = self.style.set_pressure_thickness(tool, thickness);
         let initial_pressure_sample_changes =
             self.active_initial_pressure_sample_changes(clamped as f32);
         if initial_pressure_sample_changes {
-            self.mark_current_provisional_dirty_full();
+            self.mark_current_provisional_dirty_full_with(measurer);
         }
         self.update_initial_pressure_sample(clamped);
         if initial_pressure_sample_changes {
-            self.mark_current_provisional_dirty_full();
+            self.mark_current_provisional_dirty_full_with(measurer);
         }
         self.needs_redraw = true;
         clamped
@@ -76,6 +87,17 @@ impl InputState {
 
     #[cfg(feature = "tablet-input")]
     pub(crate) fn replace_active_drawing_pressure_samples(&mut self, thickness: f64) -> bool {
+        with_legacy_measurer(|measurer| {
+            self.replace_active_drawing_pressure_samples_with(measurer, thickness)
+        })
+    }
+
+    #[cfg(feature = "tablet-input")]
+    pub(crate) fn replace_active_drawing_pressure_samples_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        thickness: f64,
+    ) -> bool {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS) as f32;
         let DrawingState::Drawing {
             point_thicknesses, ..
@@ -87,7 +109,7 @@ impl InputState {
             return false;
         }
 
-        self.mark_current_provisional_dirty_full();
+        self.mark_current_provisional_dirty_full_with(measurer);
 
         let DrawingState::Drawing {
             point_thicknesses, ..
@@ -97,7 +119,7 @@ impl InputState {
         };
         point_thicknesses.fill(clamped);
 
-        self.mark_current_provisional_dirty_full();
+        self.mark_current_provisional_dirty_full_with(measurer);
         self.needs_redraw = true;
         true
     }
@@ -133,6 +155,10 @@ impl InputState {
 
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
     pub fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
+        with_legacy_measurer(|measurer| self.set_tool_override_with(measurer, tool))
+    }
+
+    pub fn set_tool_override_with(&mut self, measurer: &TextMeasurer, tool: Option<Tool>) -> bool {
         if self.presenter_mode_active()
             && matches!(
                 self.presenter_mode_config().tool_behavior,
@@ -165,7 +191,7 @@ impl InputState {
             self.state,
             DrawingState::Idle | DrawingState::TextInput { .. }
         ) {
-            self.cancel_active_interaction();
+            self.cancel_active_interaction_with(measurer);
         }
 
         self.sync_current_settings_from_active_tool();
@@ -280,10 +306,18 @@ impl InputState {
 
     /// Sets thickness or eraser size depending on the active tool.
     pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
+        with_legacy_measurer(|measurer| self.set_thickness_for_active_tool_with(measurer, value))
+    }
+
+    pub fn set_thickness_for_active_tool_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        value: f64,
+    ) -> bool {
         let changed = if self.active_tool().uses_eraser_size() {
-            self.set_eraser_size(value)
+            self.set_eraser_size_with(measurer, value)
         } else {
-            self.set_thickness(value)
+            self.set_thickness_with(measurer, value)
         };
         if changed {
             self.pending_onboarding_usage.used_thickness_change = true;
@@ -293,11 +327,19 @@ impl InputState {
 
     /// Nudges thickness or eraser size depending on the active tool.
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
+        with_legacy_measurer(|measurer| self.nudge_thickness_for_active_tool_with(measurer, delta))
+    }
+
+    pub fn nudge_thickness_for_active_tool_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        delta: f64,
+    ) -> bool {
         let tool = self.active_tool();
         let changed = if tool.uses_eraser_size() {
-            self.set_eraser_size(self.style.eraser_size + delta)
+            self.set_eraser_size_with(measurer, self.style.eraser_size + delta)
         } else {
-            self.set_thickness(self.thickness_for_tool(tool) + delta)
+            self.set_thickness_with(measurer, self.thickness_for_tool(tool) + delta)
         };
         if changed {
             self.pending_onboarding_usage.used_thickness_change = true;
@@ -326,6 +368,10 @@ impl InputState {
 
     /// Sets the absolute thickness (px), clamped to valid bounds. Returns true if changed.
     pub fn set_thickness(&mut self, thickness: f64) -> bool {
+        with_legacy_measurer(|measurer| self.set_thickness_with(measurer, thickness))
+    }
+
+    pub fn set_thickness_with(&mut self, measurer: &TextMeasurer, thickness: f64) -> bool {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let tool = self.active_tool();
         let current = self.style.tool_settings.get(tool).thickness;
@@ -333,10 +379,10 @@ impl InputState {
             return false;
         }
 
-        self.mark_current_provisional_dirty_full();
+        self.mark_current_provisional_dirty_full_with(measurer);
         let changed = self.style.set_thickness(tool, clamped);
         debug_assert!(changed);
-        self.mark_current_provisional_dirty_full();
+        self.mark_current_provisional_dirty_full_with(measurer);
         self.preset_slots.clear_active();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -346,14 +392,18 @@ impl InputState {
 
     /// Sets the absolute eraser size (px), clamped to valid bounds. Returns true if changed.
     pub fn set_eraser_size(&mut self, size: f64) -> bool {
+        with_legacy_measurer(|measurer| self.set_eraser_size_with(measurer, size))
+    }
+
+    pub fn set_eraser_size_with(&mut self, measurer: &TextMeasurer, size: f64) -> bool {
         let clamped = size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         if (clamped - self.style.eraser_size).abs() < f64::EPSILON {
             return false;
         }
-        self.mark_current_provisional_dirty_full();
+        self.mark_current_provisional_dirty_full_with(measurer);
         let changed = self.style.set_eraser_size(clamped);
         debug_assert!(changed);
-        self.mark_current_provisional_dirty_full();
+        self.mark_current_provisional_dirty_full_with(measurer);
         self.preset_slots.clear_active();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;

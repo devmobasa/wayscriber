@@ -294,12 +294,13 @@ mod tests {
 
     #[test]
     fn session_capture_rollback_preserves_board_delete_confirmation_identity() {
+        let measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         state.switch_board(BOARD_ID_BLACKBOARD);
         assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
         let requested_at = Instant::now();
 
-        state.delete_active_board_at(requested_at);
+        state.delete_active_board_at_with_measurer(&measurer, requested_at);
         assert!(state.has_pending_board_delete());
         state.begin_pointer_drag(MouseButton::Left, None);
 
@@ -308,7 +309,10 @@ mod tests {
         });
         assert!(state.has_active_pointer_interaction());
 
-        state.delete_active_board_at(requested_at + Duration::from_millis(1));
+        state.delete_active_board_at_with_measurer(
+            &measurer,
+            requested_at + Duration::from_millis(1),
+        );
 
         assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
         assert!(!state.has_pending_board_delete());

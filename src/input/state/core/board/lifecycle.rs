@@ -1,4 +1,5 @@
 use super::super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::input::boards::PendingBoardRuntimeUiAction;
 
 impl InputState {
@@ -39,8 +40,8 @@ impl InputState {
         });
     }
 
-    pub(super) fn prepare_active_page_content_change(&mut self) {
-        self.cancel_active_interaction();
+    pub(super) fn prepare_active_page_content_change(&mut self, measurer: &TextMeasurer) {
+        self.cancel_active_interaction_with(measurer);
     }
 
     pub(super) fn finish_active_page_content_change(&mut self) {

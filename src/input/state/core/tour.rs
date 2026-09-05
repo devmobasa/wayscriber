@@ -2,6 +2,7 @@
 
 use crate::domain::Action;
 use crate::input::events::Key;
+use crate::input::state::{InputTextResources, with_legacy_text_resources};
 
 use super::base::InputState;
 
@@ -296,15 +297,15 @@ impl InputState {
 
     /// Start the guided tour.
     pub fn start_tour(&mut self) {
-        crate::ui_text::with_legacy_engine(|engine| self.start_tour_with_engine(engine))
+        with_legacy_text_resources(|resources| self.start_tour_with_resources(resources))
     }
 
-    pub(crate) fn start_tour_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
+    pub(crate) fn start_tour_with_resources(&mut self, resources: InputTextResources<'_>) {
         if self.focus_mode_active() {
             // The tour restores pinned chrome when it ends, so it must begin
             // from Focus Mode's real baseline rather than nesting underneath
             // that transient snapshot owner.
-            self.toggle_focus_mode_with_engine(engine);
+            self.toggle_focus_mode_with_resources(resources);
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::Tour);
         self.tour.start();
@@ -317,11 +318,11 @@ impl InputState {
     /// starts the overlay regardless of the persisted `tour_shown` flag — and
     /// so a future replay-specific behavior has a single call site to hang on.
     pub fn start_tour_replay(&mut self) {
-        crate::ui_text::with_legacy_engine(|engine| self.start_tour_replay_with_engine(engine))
+        with_legacy_text_resources(|resources| self.start_tour_replay_with_resources(resources))
     }
 
-    pub(crate) fn start_tour_replay_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
-        self.start_tour_with_engine(engine);
+    pub(crate) fn start_tour_replay_with_resources(&mut self, resources: InputTextResources<'_>) {
+        self.start_tour_with_resources(resources);
     }
 
     /// End the tour (skip or complete).

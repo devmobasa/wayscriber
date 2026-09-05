@@ -29,27 +29,29 @@ fn set_page_count(state: &mut InputState, board_index: usize, count: usize) {
 
 #[test]
 fn confirmed_board_delete_uses_supplied_now_for_undo_timestamp() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
     let requested_at = Instant::now();
     let confirmed_at = requested_at + Duration::from_millis(1);
 
-    state.delete_active_board_at(requested_at);
-    state.delete_active_board_at(confirmed_at);
+    state.delete_active_board_at_with_measurer(&measurer, requested_at);
+    state.delete_active_board_at_with_measurer(&measurer, confirmed_at);
 
     assert_eq!(state.latest_deleted_board_at_for_test(), Some(confirmed_at));
 }
 
 #[test]
 fn expired_board_delete_confirmation_is_replaced_with_supplied_now() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
     let requested_at = Instant::now();
     let expired_at = requested_at + Duration::from_millis(BOARD_DELETE_CONFIRM_MS + 1);
     let board_count = state.boards.board_count();
 
-    state.delete_active_board_at(requested_at);
-    state.delete_active_board_at(expired_at);
+    state.delete_active_board_at_with_measurer(&measurer, requested_at);
+    state.delete_active_board_at_with_measurer(&measurer, expired_at);
 
     assert_eq!(state.boards.board_count(), board_count);
     assert_eq!(
@@ -60,13 +62,14 @@ fn expired_board_delete_confirmation_is_replaced_with_supplied_now() {
 
 #[test]
 fn restore_deleted_board_expires_old_entries_with_supplied_now() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
     let requested_at = Instant::now();
     let confirmed_at = requested_at + Duration::from_millis(1);
 
-    state.delete_active_board_at(requested_at);
-    state.delete_active_board_at(confirmed_at);
+    state.delete_active_board_at_with_measurer(&measurer, requested_at);
+    state.delete_active_board_at_with_measurer(&measurer, confirmed_at);
     let actions = state.take_pending_board_runtime_ui_actions();
     assert!(matches!(
         actions.as_slice(),
@@ -88,6 +91,7 @@ fn restore_deleted_board_expires_old_entries_with_supplied_now() {
 
 #[test]
 fn confirmed_active_page_delete_uses_supplied_now_for_undo_timestamp() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -96,11 +100,11 @@ fn confirmed_active_page_delete_uses_supplied_now_for_undo_timestamp() {
     let confirmed_at = requested_at + Duration::from_millis(1);
 
     assert_eq!(
-        state.delete_active_page_at(requested_at),
+        state.delete_active_page_at_with_measurer(&measurer, requested_at),
         crate::draw::PageDeleteOutcome::Pending
     );
     assert_eq!(
-        state.delete_active_page_at(confirmed_at),
+        state.delete_active_page_at_with_measurer(&measurer, confirmed_at),
         crate::draw::PageDeleteOutcome::Removed
     );
 
@@ -109,6 +113,7 @@ fn confirmed_active_page_delete_uses_supplied_now_for_undo_timestamp() {
 
 #[test]
 fn expired_active_page_delete_confirmation_is_replaced_with_supplied_now() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -118,11 +123,11 @@ fn expired_active_page_delete_confirmation_is_replaced_with_supplied_now() {
     let page_count = state.boards.page_count();
 
     assert_eq!(
-        state.delete_active_page_at(requested_at),
+        state.delete_active_page_at_with_measurer(&measurer, requested_at),
         crate::draw::PageDeleteOutcome::Pending
     );
     assert_eq!(
-        state.delete_active_page_at(expired_at),
+        state.delete_active_page_at_with_measurer(&measurer, expired_at),
         crate::draw::PageDeleteOutcome::Pending
     );
 
@@ -135,6 +140,7 @@ fn expired_active_page_delete_confirmation_is_replaced_with_supplied_now() {
 
 #[test]
 fn expired_page_in_board_delete_confirmation_is_replaced_with_supplied_now() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     set_page_count(&mut state, board, 2);
@@ -143,11 +149,11 @@ fn expired_page_in_board_delete_confirmation_is_replaced_with_supplied_now() {
     let page_count = state.boards.board_states()[board].pages.page_count();
 
     assert_eq!(
-        state.delete_page_in_board_at(board, 1, requested_at),
+        state.delete_page_in_board_at_with_measurer(&measurer, board, 1, requested_at),
         crate::draw::PageDeleteOutcome::Pending
     );
     assert_eq!(
-        state.delete_page_in_board_at(board, 1, expired_at),
+        state.delete_page_in_board_at_with_measurer(&measurer, board, 1, expired_at),
         crate::draw::PageDeleteOutcome::Pending
     );
 
@@ -166,6 +172,7 @@ fn expired_page_in_board_delete_confirmation_is_replaced_with_supplied_now() {
 /// one, so it cannot surface later against a session that no longer backs it.
 #[test]
 fn session_replacement_drops_queued_delete_undo_toast() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
 
@@ -173,8 +180,8 @@ fn session_replacement_drops_queued_delete_undo_toast() {
     // deleted-board undo entry exists.
     let requested_at = Instant::now();
     let confirmed_at = requested_at + Duration::from_millis(1);
-    state.delete_active_board_at(requested_at);
-    state.delete_active_board_at(confirmed_at);
+    state.delete_active_board_at_with_measurer(&measurer, requested_at);
+    state.delete_active_board_at_with_measurer(&measurer, confirmed_at);
     assert!(
         state.has_deleted_boards_for_test(),
         "board delete recorded undo"
@@ -226,6 +233,7 @@ fn session_replacement_drops_queued_delete_undo_toast() {
 
 #[test]
 fn restore_deleted_page_expires_old_entries_with_supplied_now() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -234,16 +242,19 @@ fn restore_deleted_page_expires_old_entries_with_supplied_now() {
     let confirmed_at = requested_at + Duration::from_millis(1);
 
     assert_eq!(
-        state.delete_active_page_at(requested_at),
+        state.delete_active_page_at_with_measurer(&measurer, requested_at),
         crate::draw::PageDeleteOutcome::Pending
     );
     assert_eq!(
-        state.delete_active_page_at(confirmed_at),
+        state.delete_active_page_at_with_measurer(&measurer, confirmed_at),
         crate::draw::PageDeleteOutcome::Removed
     );
     let page_count_after_delete = state.boards.page_count();
 
-    state.restore_deleted_page_at(confirmed_at + Duration::from_millis(PAGE_UNDO_EXPIRE_MS + 1));
+    state.restore_deleted_page_at_with_measurer(
+        &measurer,
+        confirmed_at + Duration::from_millis(PAGE_UNDO_EXPIRE_MS + 1),
+    );
 
     assert!(!state.has_deleted_pages_for_test());
     assert_eq!(state.boards.page_count(), page_count_after_delete);
@@ -255,14 +266,15 @@ fn restore_deleted_page_expires_old_entries_with_supplied_now() {
 
 #[test]
 fn delete_then_create_reused_id_tracks_distinct_identity_before_drain() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     assert!(state.create_board());
     let reused_id = state.board_id().to_string();
     let _ = state.take_pending_board_runtime_ui_actions();
 
     let requested_at = Instant::now();
-    state.delete_active_board_at(requested_at);
-    state.delete_active_board_at(requested_at + Duration::from_millis(1));
+    state.delete_active_board_at_with_measurer(&measurer, requested_at);
+    state.delete_active_board_at_with_measurer(&measurer, requested_at + Duration::from_millis(1));
     assert!(state.create_board());
     assert_eq!(state.board_id(), reused_id);
 
@@ -278,6 +290,7 @@ fn delete_then_create_reused_id_tracks_distinct_identity_before_drain() {
 
 #[test]
 fn delete_then_restore_same_board_cancels_pending_identity_deletion() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     assert!(state.create_board());
     let restored_id = state.board_id().to_string();
@@ -285,8 +298,8 @@ fn delete_then_restore_same_board_cancels_pending_identity_deletion() {
 
     let requested_at = Instant::now();
     let confirmed_at = requested_at + Duration::from_millis(1);
-    state.delete_active_board_at(requested_at);
-    state.delete_active_board_at(confirmed_at);
+    state.delete_active_board_at_with_measurer(&measurer, requested_at);
+    state.delete_active_board_at_with_measurer(&measurer, confirmed_at);
     state.restore_deleted_board_at(confirmed_at + Duration::from_millis(1));
 
     let runtime_actions = state.take_pending_board_runtime_ui_actions();

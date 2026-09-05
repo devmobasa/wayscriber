@@ -1,6 +1,7 @@
 use super::super::super::base::{InputState, PAGE_DELETE_CONFIRM_MS};
 use crate::domain::Action;
 use crate::draw::PageDeleteOutcome as CanvasPageDeleteOutcome;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::boards::{
     PageDeleteBoardTarget, PageDeleteOutcome, PageDeleteRequest, PageDeleteTarget,
     PageOperationRejection, PageRestoreOutcome, PageRestorePlacement, PageRestoreRejection,
@@ -15,11 +16,28 @@ impl InputState {
         board_index: usize,
         page_index: usize,
     ) -> CanvasPageDeleteOutcome {
-        self.delete_page_in_board_at(board_index, page_index, Instant::now())
+        with_legacy_measurer(|measurer| {
+            self.delete_page_in_board_with_measurer(measurer, board_index, page_index)
+        })
     }
 
-    pub(crate) fn delete_page_in_board_at(
+    pub(crate) fn delete_page_in_board_with_measurer(
         &mut self,
+        measurer: &TextMeasurer,
+        board_index: usize,
+        page_index: usize,
+    ) -> CanvasPageDeleteOutcome {
+        self.delete_page_in_board_at_with_measurer(
+            measurer,
+            board_index,
+            page_index,
+            Instant::now(),
+        )
+    }
+
+    pub(crate) fn delete_page_in_board_at_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
         board_index: usize,
         page_index: usize,
         now: Instant,
@@ -50,7 +68,7 @@ impl InputState {
             && ((matches!(&request, PageDeleteRequest::Request(_)) && page_count <= 1)
                 || confirmation_is_current);
         if should_prepare_active {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
 
         match self.boards.delete_page(request) {
@@ -100,10 +118,21 @@ impl InputState {
     }
 
     pub fn page_delete(&mut self) -> CanvasPageDeleteOutcome {
-        self.delete_active_page_at(Instant::now())
+        with_legacy_measurer(|measurer| self.page_delete_with_measurer(measurer))
     }
 
-    pub(crate) fn delete_active_page_at(&mut self, now: Instant) -> CanvasPageDeleteOutcome {
+    pub fn page_delete_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+    ) -> CanvasPageDeleteOutcome {
+        self.delete_active_page_at_with_measurer(measurer, Instant::now())
+    }
+
+    pub(crate) fn delete_active_page_at_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+        now: Instant,
+    ) -> CanvasPageDeleteOutcome {
         let page_count = self.boards.page_count();
         let page_index = self.boards.active_page_index();
 
@@ -128,7 +157,7 @@ impl InputState {
             && ((matches!(&request, PageDeleteRequest::Request(_)) && page_count <= 1)
                 || confirmation_is_current);
         if should_prepare_active {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
 
         match self.boards.delete_page(request) {
@@ -235,14 +264,22 @@ impl InputState {
 
     /// Restore the most recently deleted page.
     pub fn restore_deleted_page(&mut self) {
-        self.restore_deleted_page_at(Instant::now());
+        with_legacy_measurer(|measurer| self.restore_deleted_page_with_measurer(measurer))
     }
 
-    pub(crate) fn restore_deleted_page_at(&mut self, now: Instant) {
+    pub fn restore_deleted_page_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.restore_deleted_page_at_with_measurer(measurer, Instant::now());
+    }
+
+    pub(crate) fn restore_deleted_page_at_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+        now: Instant,
+    ) {
         if let Some((request, deleted_at)) = self.board_transitions.take_restorable_page(now) {
             let active_target = request.board_id == self.boards.active_board_id();
             if active_target {
-                self.prepare_active_page_content_change();
+                self.prepare_active_page_content_change(measurer);
             }
             match self.boards.restore_page(request) {
                 PageRestoreOutcome::Restored {

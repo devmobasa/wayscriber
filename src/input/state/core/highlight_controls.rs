@@ -1,5 +1,6 @@
 use super::base::{DrawingState, InputState};
 use super::history_limits::HistoryMode;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
 use std::time::Instant;
@@ -132,12 +133,16 @@ impl InputState {
 
     /// Sets highlight-only tool mode on/off and keeps click highlight in sync.
     pub fn set_highlight_tool(&mut self, enable: bool) {
+        with_legacy_measurer(|measurer| self.set_highlight_tool_with_measurer(measurer, enable))
+    }
+
+    pub fn set_highlight_tool_with_measurer(&mut self, measurer: &TextMeasurer, enable: bool) {
         let currently_on = self.highlight_tool_active();
         if enable != currently_on {
             if enable {
-                self.set_tool_override(Some(Tool::Highlight));
+                self.set_tool_override_with(measurer, Some(Tool::Highlight));
             } else {
-                self.set_tool_override(None);
+                self.set_tool_override_with(measurer, None);
             }
         }
 
@@ -157,6 +162,10 @@ impl InputState {
 
     /// Toggles the combined highlight tool and click highlight together.
     pub fn toggle_all_highlights(&mut self) -> bool {
+        with_legacy_measurer(|measurer| self.toggle_all_highlights_with_measurer(measurer))
+    }
+
+    pub fn toggle_all_highlights_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         let force_click =
             self.presenter_mode_active() && self.presenter_mode_config().enable_click_highlight;
         let enable = if force_click {
@@ -164,7 +173,7 @@ impl InputState {
         } else {
             !(self.highlight_tool_active() || self.click_highlight_enabled())
         };
-        self.set_highlight_tool(enable);
+        self.set_highlight_tool_with_measurer(measurer, enable);
         self.highlight_tool_active()
     }
 

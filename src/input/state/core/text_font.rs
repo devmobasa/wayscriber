@@ -7,8 +7,8 @@
 //! applied change reports.
 
 use super::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::{FontDescriptor, Shape, families_match};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 
 fn text_font_descriptor(shape: &Shape) -> Option<&FontDescriptor> {
     match shape {
@@ -94,10 +94,6 @@ impl InputState {
     /// numeric weight is asking for something a two-state control cannot say,
     /// so turning bold off from here lands on `normal` rather than restoring
     /// whatever number was there.
-    pub(crate) fn set_font_bold(&mut self, bold: bool) -> bool {
-        with_legacy_measurer(|measurer| self.set_font_bold_with(measurer, bold))
-    }
-
     pub(crate) fn set_font_bold_with(&mut self, measurer: &TextMeasurer, bold: bool) -> bool {
         let weight = if bold { "bold" } else { "normal" };
         if self.selection_has_text() {
@@ -129,13 +125,6 @@ impl InputState {
     /// Returns whether anything changed. A shape already in that family is left
     /// alone — matched without case, because fontconfig resolves names that way
     /// and rewriting `Sans` as `sans` is not an edit.
-    pub(in crate::input::state::core) fn apply_family_to_selected_text(
-        &mut self,
-        family: &str,
-    ) -> bool {
-        with_legacy_measurer(|measurer| self.apply_family_to_selected_text_with(measurer, family))
-    }
-
     pub(in crate::input::state::core) fn apply_family_to_selected_text_with(
         &mut self,
         measurer: &TextMeasurer,

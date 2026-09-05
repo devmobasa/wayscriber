@@ -423,6 +423,7 @@ fn delayed_paste_replaces_the_selection_captured_at_invocation() {
 
 #[test]
 fn paste_generation_does_not_match_a_later_text_edit() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.handle_action(Action::EnterTextMode);
     let first = state
@@ -430,7 +431,7 @@ fn paste_generation_does_not_match_a_later_text_edit() {
         .generation(&state.state)
         .expect("text edit is active");
 
-    state.cancel_text_input();
+    state.cancel_text_input_with(&measurer);
     state.handle_action(Action::EnterTextMode);
 
     assert!(

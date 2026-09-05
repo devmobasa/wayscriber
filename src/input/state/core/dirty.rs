@@ -76,10 +76,6 @@ impl InputState {
     ///
     /// This is needed when existing provisional geometry changes in place, for
     /// example when the first tablet pressure sample backfills previous widths.
-    pub(crate) fn mark_current_provisional_dirty_full(&mut self) {
-        with_legacy_measurer(|measurer| self.mark_current_provisional_dirty_full_with(measurer))
-    }
-
     pub(crate) fn mark_current_provisional_dirty_full_with(&mut self, measurer: &TextMeasurer) {
         let (current_x, current_y) = self.pointer.canvas();
         if let Some(bounds) = self.compute_provisional_bounds(measurer, current_x, current_y) {

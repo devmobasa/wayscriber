@@ -150,10 +150,6 @@ impl InputState {
     }
 
     /// Cancels the current text input session and restores any edited shape.
-    pub(crate) fn cancel_text_input(&mut self) {
-        with_legacy_measurer(|measurer| self.cancel_text_input_with(measurer))
-    }
-
     pub(crate) fn cancel_text_input_with(&mut self, measurer: &TextMeasurer) {
         self.cancel_text_edit_with(measurer);
         self.end_text_input_session();
@@ -338,12 +334,13 @@ mod tests {
 
     #[test]
     fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
+        let measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         state.style.text_wrap_width = Some(240);
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.needs_redraw = false;
 
-        state.cancel_text_input();
+        state.cancel_text_input_with(&measurer);
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(state.style.text_wrap_width.is_none());
@@ -352,6 +349,7 @@ mod tests {
 
     #[test]
     fn cancel_text_input_releases_an_active_block_drag() {
+        let measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.modifiers.alt = true;
@@ -359,7 +357,7 @@ mod tests {
         assert!(state.text_block_drag_active());
         assert!(state.has_active_pointer_interaction());
 
-        state.cancel_text_input();
+        state.cancel_text_input_with(&measurer);
 
         assert!(!state.text_block_drag_active());
         assert!(!state.has_active_pointer_interaction());

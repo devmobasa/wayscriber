@@ -11,6 +11,7 @@
 
 use super::InputState;
 use crate::draw::{FontDescriptor, families_match};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 
 impl InputState {
     /// Install the configured list. Blank and repeated names are the config
@@ -51,6 +52,10 @@ impl InputState {
     /// until something is typed, and because a family name is the only way to
     /// tell two similar faces apart at a glance.
     pub(crate) fn cycle_font_family(&mut self) -> bool {
+        with_legacy_measurer(|measurer| self.cycle_font_family_with_measurer(measurer))
+    }
+
+    pub(crate) fn cycle_font_family_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         if self.style.font_cycle.is_empty() {
             self.push_toast(
                 super::ToastPriority::Info,
@@ -63,7 +68,7 @@ impl InputState {
         // A selection takes the step, so the gesture edits what the user is
         // looking at rather than a setting they cannot see.
         if self.selection_has_text() {
-            return self.cycle_selected_font_family();
+            return self.cycle_selected_font_family(measurer);
         }
 
         let Some(next) = self.next_font_family(&self.style.font_descriptor.family) else {
@@ -90,7 +95,7 @@ impl InputState {
     ///
     /// The step is decided once, from the first selected text shape, so a mixed
     /// selection converges on one family instead of fanning out further.
-    fn cycle_selected_font_family(&mut self) -> bool {
+    fn cycle_selected_font_family(&mut self, measurer: &TextMeasurer) -> bool {
         let Some(next) = self
             .first_selected_text_family()
             .and_then(|family| self.next_font_family(&family))
@@ -98,7 +103,7 @@ impl InputState {
             return false;
         };
 
-        let changed = self.apply_family_to_selected_text(&next);
+        let changed = self.apply_family_to_selected_text_with(measurer, &next);
         if changed {
             log::info!("Selected text font family set to {next}");
         }

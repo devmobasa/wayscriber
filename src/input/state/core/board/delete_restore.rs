@@ -1,5 +1,6 @@
 use super::super::base::{BOARD_DELETE_CONFIRM_MS, InputState};
 use crate::domain::Action;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::boards::{
     BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
     BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
@@ -111,10 +112,18 @@ impl InputState {
     }
 
     pub fn delete_active_board(&mut self) {
-        self.delete_active_board_at(Instant::now());
+        with_legacy_measurer(|measurer| self.delete_active_board_with_measurer(measurer))
     }
 
-    pub(crate) fn delete_active_board_at(&mut self, now: Instant) {
+    pub fn delete_active_board_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.delete_active_board_at_with_measurer(measurer, Instant::now());
+    }
+
+    pub(crate) fn delete_active_board_at_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+        now: Instant,
+    ) {
         let request = self
             .board_transitions
             .confirm_board_delete(now)
@@ -145,7 +154,7 @@ impl InputState {
             _ => true,
         };
         if deleting_active && matches!(request, BoardDeleteRequest::Confirm(_)) {
-            self.cancel_active_interaction();
+            self.cancel_active_interaction_with(measurer);
         }
 
         match self.boards.delete_board(request) {

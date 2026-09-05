@@ -92,46 +92,51 @@ fn assert_same_chrome(actual: &InputState, expected: &InputState) {
 #[test]
 fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
     let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &engine,
+    };
     let mut explicit = seeded(&engine);
     let mut legacy = seeded(&UiTextEngine::default());
     // Enter/leave Focus, then make Light's drawing-entry path leave Focus.
-    explicit.toggle_focus_mode_with_engine(&engine);
+    explicit.toggle_focus_mode_with_resources(resources);
     legacy.toggle_focus_mode();
     assert_same_chrome(&explicit, &legacy);
     assert!(explicit.focus_mode_active());
-    assert!(explicit.set_light_mode_drawing_with_engine(&engine, true));
+    assert!(explicit.set_light_mode_drawing_with_resources(resources, true));
     assert!(legacy.set_light_mode_drawing(true));
     assert_same_chrome(&explicit, &legacy);
     assert!(explicit.light_mode_active());
     assert!(!explicit.focus_mode_active());
     assert_eq!(
-        explicit.toggle_light_mode_drawing_with_engine(&engine),
+        explicit.toggle_light_mode_drawing_with_resources(resources),
         legacy.toggle_light_mode_drawing()
     );
     assert_same_chrome(&explicit, &legacy);
     assert_eq!(
-        explicit.toggle_light_mode_with_engine(&engine),
+        explicit.toggle_light_mode_with_resources(resources),
         legacy.toggle_light_mode()
     );
     assert_same_chrome(&explicit, &legacy);
     assert!(!explicit.light_mode_active());
     // Presenter and Light replace each other's numeric visibility snapshots.
     assert_eq!(
-        explicit.toggle_presenter_mode_with_engine(&engine),
+        explicit.toggle_presenter_mode_with_resources(resources),
         legacy.toggle_presenter_mode()
     );
     assert_same_chrome(&explicit, &legacy);
     assert!(explicit.presenter_mode_active());
     assert_eq!(
-        explicit.toggle_light_mode_with_engine(&engine),
+        explicit.toggle_light_mode_with_resources(resources),
         legacy.toggle_light_mode()
     );
     assert_same_chrome(&explicit, &legacy);
     assert!(!explicit.presenter_mode_active());
-    explicit.toggle_focus_mode_with_engine(&engine);
+    explicit.toggle_focus_mode_with_resources(resources);
     legacy.toggle_focus_mode();
     assert_same_chrome(&explicit, &legacy);
-    explicit.start_tour_replay_with_engine(&engine);
+    explicit.start_tour_replay_with_resources(resources);
     legacy.start_tour_replay();
     assert_same_chrome(&explicit, &legacy);
     assert!(explicit.tour.is_active());
@@ -141,6 +146,11 @@ fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
 #[test]
 fn explicit_focus_rescue_and_display_cycle_refresh_saved_geometry() {
     let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &engine,
+    };
     let mut input = seeded(&engine);
     input.set_toolbar_visible_with_engine(&engine, false);
     input.ui_visibility.show_status_bar = false;
@@ -148,7 +158,7 @@ fn explicit_focus_rescue_and_display_cycle_refresh_saved_geometry() {
     input.ui_visibility.show_zoom_chip = false;
     input.refresh_status_hud_layout_with_engine(&engine);
     assert!(!input.focus_mode_active());
-    input.toggle_focus_mode_with_engine(&engine);
+    input.toggle_focus_mode_with_resources(resources);
     assert!(input.toolbar_visible(), "Focus rescues fully hidden chrome");
     assert!(input.ui_visibility.show_status_bar);
     assert!(!input.focus_mode_active());
