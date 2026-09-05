@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use super::page::{CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, draw_canvas_page};
+use super::page::{
+    CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, draw_canvas_page_with_measurer,
+};
 use crate::draw::{BlurStyle, EmbeddedImage, Frame, RenderCaches, RenderCtx, Shape};
 
 fn page(frame: Frame, backdrop: CanvasExportBackdropSnapshot) -> CanvasPageExportSnapshot {
@@ -20,7 +22,13 @@ fn pixels(page: &CanvasPageExportSnapshot, caches: &mut RenderCaches) -> Vec<u8>
     let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 20, 20).unwrap();
     {
         let cairo = cairo::Context::new(&surface).unwrap();
-        draw_canvas_page(&mut RenderCtx::new(&cairo, caches), page, 1.0).unwrap();
+        draw_canvas_page_with_measurer(
+            &crate::draw::TextMeasurer::default(),
+            &mut RenderCtx::new(&cairo, caches),
+            page,
+            1.0,
+        )
+        .unwrap();
     }
     surface.flush();
     surface.data().unwrap().to_vec()
@@ -322,6 +330,92 @@ fn png_and_region_entries_preserve_embedded_image_and_text_pixels() {
             &png_pixels[y * stride..y * stride + 640],
             &region.data()[y * 640..(y + 1) * 640],
             "PNG and region row {y}"
+        );
+    }
+}
+
+#[test]
+fn mixed_image_and_wrapped_text_pages_reuse_measurement_across_output_scales() {
+    let image = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
+    let ctx = cairo::Context::new(&image).unwrap();
+    ctx.set_source_rgb(0.1, 0.4, 0.8);
+    ctx.paint().unwrap();
+    let mut png = Vec::new();
+    image.write_to_png(&mut png).unwrap();
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Image {
+        x: 5,
+        y: 5,
+        w: 190,
+        h: 100,
+        data: EmbeddedImage {
+            mime_type: "image/png".into(),
+            width: 2,
+            height: 2,
+            bytes: png.into(),
+        },
+    });
+    frame.add_shape(Shape::Text {
+        x: 20,
+        y: 35,
+        text: "Page 測試 العربية wrapped text".into(),
+        color: crate::draw::WHITE,
+        size: 16.0,
+        font_descriptor: crate::draw::FontDescriptor::default(),
+        background_enabled: false,
+        wrap_width: Some(140),
+    });
+    let mut page = page(
+        frame,
+        CanvasExportBackdropSnapshot::Solid(crate::draw::WHITE),
+    );
+    page.viewport_width = 220;
+    page.viewport_height = 130;
+    let mut image_only = page.clone();
+    image_only
+        .frame
+        .shapes
+        .retain(|shape| matches!(shape.shape, Shape::Image { .. }));
+    let paint = |page: &CanvasPageExportSnapshot,
+                 measurer: &crate::draw::TextMeasurer,
+                 caches: &mut RenderCaches,
+                 scale: i32| {
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 220 * scale, 130 * scale).unwrap();
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            draw_canvas_page_with_measurer(
+                measurer,
+                &mut RenderCtx::new(&ctx, caches),
+                page,
+                scale as f64,
+            )
+            .unwrap();
+        }
+        surface.data().unwrap().to_vec()
+    };
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut caches = RenderCaches::default();
+    for scale in [1, 2, 1] {
+        let actual = paint(&page, &measurer, &mut caches, scale);
+        let fresh = paint(
+            &page,
+            &crate::draw::TextMeasurer::default(),
+            &mut RenderCaches::default(),
+            scale,
+        );
+        assert!(actual == fresh, "mixed export page at scale {scale}");
+        let baseline = paint(&image_only, &measurer, &mut RenderCaches::default(), scale);
+        assert!(
+            actual != baseline,
+            "text must paint over the image at scale {scale}"
+        );
+        assert!(
+            actual
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[..3] != [255, 255, 255])
         );
     }
 }

@@ -59,7 +59,7 @@ pub(crate) fn with_legacy_measurer<R>(f: impl FnOnce(&TextMeasurer) -> R) -> R {
 /// Build a Pango layout configured exactly like the measurement and render
 /// paths: same font description, same text, same wrap mode and width clamp.
 /// Every caret, hit-test, and decoration helper goes through this, so their
-/// geometry cannot drift from what `measure_text_cached` and the renderer see.
+/// geometry cannot drift from what `TextMeasurer::measure` and the renderer see.
 pub(crate) fn configured_layout(
     ctx: &cairo::Context,
     text: &str,
@@ -89,32 +89,6 @@ fn snap_char_boundary(text: &str, byte: usize) -> usize {
         index -= 1;
     }
     index
-}
-
-/// Measure text using Pango, with caching.
-/// Returns cached measurement if available, otherwise measures and caches.
-pub(crate) fn measure_text_cached(
-    text: &str,
-    font_desc_str: &str,
-    size: f64,
-    wrap_width: Option<i32>,
-) -> Option<TextMeasurement> {
-    with_legacy_measurer(|measurer| measurer.measure(text, font_desc_str, size, wrap_width))
-}
-
-/// Measure text using cached measurements.
-/// The `_ctx` parameter is kept for API compatibility but measurements always
-/// use a shared context for consistency across different rendering contexts.
-/// Geometry stays stable because destination settings are ignored and all
-/// measurements use the same canonical context.
-pub(crate) fn measure_text_with_context(
-    _ctx: &cairo::Context,
-    text: &str,
-    font_desc_str: &str,
-    size: f64,
-    wrap_width: Option<i32>,
-) -> Option<TextMeasurement> {
-    measure_text_cached(text, font_desc_str, size, wrap_width)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -154,7 +154,8 @@ pub(crate) fn sticky_note_layout(
     }
 }
 
-pub(crate) fn sticky_note_text_layout(
+pub(crate) fn sticky_note_text_layout_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
     ctx: &cairo::Context,
     text: &str,
     size: f64,
@@ -176,9 +177,7 @@ pub(crate) fn sticky_note_text_layout(
     }
 
     // Use cached measurements if available, otherwise measure and cache
-    if let Some(measurement) =
-        super::text_cache::measure_text_with_context(ctx, text, &font_desc_str, size, wrap_width)
-    {
+    if let Some(measurement) = measurer.measure(text, &font_desc_str, size, wrap_width) {
         StickyNoteTextLayout {
             layout,
             content: measurement.content_extents(wrap_width),

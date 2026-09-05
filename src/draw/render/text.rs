@@ -1,7 +1,7 @@
 use super::backdrop_probe;
 use crate::draw::shape::{
-    TextMeasurement, measure_text_with_context, sticky_note_layout, sticky_note_layout_text,
-    sticky_note_text_layout,
+    TextMeasurement, sticky_note_layout, sticky_note_layout_text,
+    sticky_note_text_layout_with_measurer,
 };
 use crate::draw::{Color, FontDescriptor};
 use std::f64::consts::{FRAC_PI_2, PI};
@@ -37,7 +37,37 @@ pub fn render_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) {
-    render_text_with_halo(
+    crate::draw::with_legacy_measurer(|measurer| {
+        render_text_with_measurer(
+            measurer,
+            ctx,
+            x,
+            y,
+            text,
+            color,
+            size,
+            font_descriptor,
+            background_enabled,
+            wrap_width,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+) {
+    render_text_with_halo_with_measurer(
+        measurer,
         ctx,
         x,
         y,
@@ -65,7 +95,39 @@ pub fn render_text_with_halo(
     wrap_width: Option<i32>,
     halo_enabled: bool,
 ) {
-    render_text_over_with_halo(
+    crate::draw::with_legacy_measurer(|measurer| {
+        render_text_with_halo_with_measurer(
+            measurer,
+            ctx,
+            x,
+            y,
+            text,
+            color,
+            size,
+            font_descriptor,
+            background_enabled,
+            wrap_width,
+            halo_enabled,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_with_halo_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+    halo_enabled: bool,
+) {
+    render_text_over_with_halo_with_measurer(
+        measurer,
         ctx,
         x,
         y,
@@ -100,7 +162,39 @@ pub fn render_text_over(
     wrap_width: Option<i32>,
     known_background_luminance: Option<f64>,
 ) {
-    render_text_over_with_halo(
+    crate::draw::with_legacy_measurer(|measurer| {
+        render_text_over_with_measurer(
+            measurer,
+            ctx,
+            x,
+            y,
+            text,
+            color,
+            size,
+            font_descriptor,
+            background_enabled,
+            wrap_width,
+            known_background_luminance,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_over_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+    known_background_luminance: Option<f64>,
+) {
+    render_text_over_with_halo_with_measurer(
+        measurer,
         ctx,
         x,
         y,
@@ -118,6 +212,39 @@ pub fn render_text_over(
 /// [`render_text_over`], with explicit control over its contrasting outline.
 #[allow(clippy::too_many_arguments)]
 pub fn render_text_over_with_halo(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+    known_background_luminance: Option<f64>,
+    halo_enabled: bool,
+) {
+    crate::draw::with_legacy_measurer(|measurer| {
+        render_text_over_with_halo_with_measurer(
+            measurer,
+            ctx,
+            x,
+            y,
+            text,
+            color,
+            size,
+            font_descriptor,
+            background_enabled,
+            wrap_width,
+            known_background_luminance,
+            halo_enabled,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_over_with_halo_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -155,7 +282,8 @@ pub fn render_text_over_with_halo(
     }
 
     // Use cached measurements for ink rect (avoids repeated Pango measurement)
-    let measurement = measure_text_with_context(ctx, text, &font_desc_str, size, wrap_width)
+    let measurement = measurer
+        .measure(text, &font_desc_str, size, wrap_width)
         .unwrap_or_else(|| {
             // Fallback: measure directly.
             let (ink_rect, logical_rect) = layout.extents();
@@ -285,10 +413,38 @@ pub fn render_sticky_note(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) {
+    crate::draw::with_legacy_measurer(|measurer| {
+        render_sticky_note_with_measurer(
+            measurer,
+            ctx,
+            x,
+            y,
+            text,
+            background,
+            size,
+            font_descriptor,
+            wrap_width,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_sticky_note_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    background: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
+) {
     if text.is_empty() {
         return;
     }
     render_sticky_note_layout(
+        measurer,
         ctx,
         x,
         y,
@@ -314,7 +470,35 @@ pub(crate) fn render_sticky_note_preview(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) {
+    crate::draw::with_legacy_measurer(|measurer| {
+        render_sticky_note_preview_with_measurer(
+            measurer,
+            ctx,
+            x,
+            y,
+            text,
+            background,
+            size,
+            font_descriptor,
+            wrap_width,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_sticky_note_preview_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    background: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
+) {
     render_sticky_note_layout(
+        measurer,
         ctx,
         x,
         y,
@@ -329,6 +513,7 @@ pub(crate) fn render_sticky_note_preview(
 
 #[allow(clippy::too_many_arguments)]
 fn render_sticky_note_layout(
+    measurer: &crate::draw::TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -342,7 +527,14 @@ fn render_sticky_note_layout(
     ctx.save().ok();
     ctx.set_antialias(cairo::Antialias::Best);
 
-    let text_layout = sticky_note_text_layout(ctx, layout_text, size, font_descriptor, wrap_width);
+    let text_layout = sticky_note_text_layout_with_measurer(
+        measurer,
+        ctx,
+        layout_text,
+        size,
+        font_descriptor,
+        wrap_width,
+    );
     let base_x = x as f64;
     let base_y = y as f64 - text_layout.baseline;
     let note_layout = sticky_note_layout(

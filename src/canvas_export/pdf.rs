@@ -144,6 +144,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
         .map_err(|err| CaptureError::ImageError(format!("Failed to create PDF context: {err}")))?;
 
     let mut caches = RenderCaches::default();
+    let measurer = crate::draw::TextMeasurer::default();
     let ui_text = crate::ui_text::UiTextEngine::default();
     for page in &snapshot.pages {
         let layout = page.layout;
@@ -157,6 +158,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
         let backdrop = ExportBackdrop::new(&page.page.backdrop)?;
         if frame_has_magnified_spotlight(&page.page.frame) {
             render_magnified_page_raster(
+                &measurer,
                 &mut RenderCtx::new(&ctx, &mut caches),
                 &page.page,
                 &backdrop,
@@ -168,6 +170,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
                 CanvasExportBackdropSnapshot::PersistedImage { .. }
             );
             draw_canvas_page_region(
+                &measurer,
                 &mut RenderCtx::new(&ctx, &mut caches),
                 &page.page,
                 &backdrop,
@@ -203,6 +206,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
 }
 
 fn render_magnified_page_raster(
+    measurer: &crate::draw::TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
@@ -220,6 +224,7 @@ fn render_magnified_page_raster(
         ))
     })?;
     draw_canvas_page_region(
+        measurer,
         &mut RenderCtx::new(&raster_ctx, render.caches),
         page,
         backdrop,

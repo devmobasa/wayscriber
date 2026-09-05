@@ -25,7 +25,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::canvas_export::page::draw_canvas_page;
+    use crate::canvas_export::page::draw_canvas_page_with_measurer;
     use crate::canvas_export::png::render_canvas_surface;
     use crate::config::{PdfExportConfig, RenderColorMappingConfig, RenderProfileConfig};
     use crate::draw::{BLACK, BlurStyle, FontDescriptor, Frame, RED, Shape, WHITE};
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn draw_canvas_page_uses_explicit_output_scale() {
+    fn draw_canvas_page_with_measurer_uses_explicit_output_scale() {
         let mut frame = Frame::new();
         frame.add_shape(Shape::Rect {
             x: 4,
@@ -193,7 +193,8 @@ mod tests {
             cairo::ImageSurface::create(cairo::Format::ARgb32, 20, 20).expect("surface");
         {
             let ctx = cairo::Context::new(&surface).expect("context");
-            draw_canvas_page(
+            draw_canvas_page_with_measurer(
+                &crate::draw::TextMeasurer::default(),
                 &mut crate::draw::RenderCtx::new(&ctx, &mut crate::draw::RenderCaches::default()),
                 &page_snapshot(frame),
                 2.0,

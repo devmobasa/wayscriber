@@ -27,15 +27,52 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape(&mut self, shape: &Shape) {
-        self.render_shape_with_halo(shape, true);
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.render_shape_with_measurer(measurer, shape)
+        })
+    }
+
+    pub fn render_shape_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        shape: &Shape,
+    ) {
+        self.render_shape_with_halo_with_measurer(measurer, shape, true);
     }
 
     pub fn render_shape_with_halo(&mut self, shape: &Shape, text_halo_enabled: bool) {
-        self.render_shape_over_with_halo(shape, None, text_halo_enabled);
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.render_shape_with_halo_with_measurer(measurer, shape, text_halo_enabled)
+        })
+    }
+
+    pub fn render_shape_with_halo_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        shape: &Shape,
+        text_halo_enabled: bool,
+    ) {
+        self.render_shape_over_with_halo_with_measurer(measurer, shape, None, text_halo_enabled);
     }
 
     pub fn render_shape_over(&mut self, shape: &Shape, known_background_luminance: Option<f64>) {
-        self.render_shape_over_with_halo(shape, known_background_luminance, true);
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.render_shape_over_with_measurer(measurer, shape, known_background_luminance)
+        })
+    }
+
+    pub fn render_shape_over_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        shape: &Shape,
+        known_background_luminance: Option<f64>,
+    ) {
+        self.render_shape_over_with_halo_with_measurer(
+            measurer,
+            shape,
+            known_background_luminance,
+            true,
+        );
     }
 
     pub fn render_shape_over_with_halo(
@@ -44,7 +81,25 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
         known_background_luminance: Option<f64>,
         text_halo_enabled: bool,
     ) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.render_shape_over_with_halo_with_measurer(
+                measurer,
+                shape,
+                known_background_luminance,
+                text_halo_enabled,
+            )
+        })
+    }
+
+    pub fn render_shape_over_with_halo_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        shape: &Shape,
+        known_background_luminance: Option<f64>,
+        text_halo_enabled: bool,
+    ) {
         super::shapes::render_shape_with_cache(
+            measurer,
             &mut self.caches.images,
             self.cairo,
             shape,
@@ -64,3 +119,6 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod text_tests;

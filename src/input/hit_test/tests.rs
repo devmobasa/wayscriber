@@ -330,6 +330,8 @@ fn double_arrow_is_grabbed_by_either_head() {
 
 #[test]
 fn arrow_label_hit_detects_label_bounds() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let font = FontDescriptor::default();
     let label = ArrowLabel {
         value: 12,
@@ -357,9 +359,19 @@ fn arrow_label_hit_detects_label_bounds() {
     );
 
     let label_text = "12";
-    let layout =
-        crate::draw::shape::arrow_label_layout(100, 0, 0, 0, 2.0, 0.0, label_text, 12.0, &font)
-            .expect("label layout should exist");
+    let layout = crate::draw::shape::arrow_label_layout_with(
+        &test_text_measurer,
+        100,
+        0,
+        0,
+        0,
+        2.0,
+        0.0,
+        label_text,
+        12.0,
+        &font,
+    )
+    .expect("label layout should exist");
     let hit_point = (
         layout.bounds.x + layout.bounds.width / 2,
         layout.bounds.y + layout.bounds.height / 2,
@@ -377,6 +389,8 @@ fn arrow_label_hit_detects_label_bounds() {
 
 #[test]
 fn step_marker_hit_detects_center_and_rejects_outside_point() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let font = FontDescriptor::default();
     let label = StepMarkerLabel {
         value: 7,
@@ -403,8 +417,12 @@ fn step_marker_hit_detects_center_and_rejects_outside_point() {
     let Shape::StepMarker { label, .. } = &drawn.shape else {
         panic!("expected step marker shape");
     };
-    let radius =
-        crate::draw::shape::step_marker_radius(label.value, label.size, &label.font_descriptor);
+    let radius = crate::draw::shape::step_marker_radius_with(
+        &test_text_measurer,
+        label.value,
+        label.size,
+        &label.font_descriptor,
+    );
     let outline = crate::draw::shape::step_marker_outline_thickness(label.size);
     let outside_x = 50 + (radius + outline / 2.0).ceil() as i32 + 2;
     assert!(
@@ -537,14 +555,26 @@ fn labelled_arrow_shape(style: ArrowStyle, head_at_end: bool) -> DrawnShape {
 
 #[test]
 fn a_double_arrow_label_is_grabbable_from_the_same_place_either_way() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     // head_at_end has no effect on a Double arrow — the outline is the same
     // polygon either way, and docs/CONFIG.md says so. The hit area has to
     // follow, or the number is grabbable where it is not painted on exactly
     // one of the two readings.
     let font = FontDescriptor::default();
-    let layout =
-        crate::draw::shape::arrow_label_layout(400, 100, 0, 100, 4.0, 0.0, "7", 12.0, &font)
-            .expect("label layout should exist");
+    let layout = crate::draw::shape::arrow_label_layout_with(
+        &test_text_measurer,
+        400,
+        100,
+        0,
+        100,
+        4.0,
+        0.0,
+        "7",
+        12.0,
+        &font,
+    )
+    .expect("label layout should exist");
     let center = (
         layout.bounds.x + layout.bounds.width / 2,
         layout.bounds.y + layout.bounds.height / 2,

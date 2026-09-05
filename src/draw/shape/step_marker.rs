@@ -2,15 +2,11 @@ use crate::draw::FontDescriptor;
 use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
-use super::text_cache::{TextMeasurer, with_legacy_measurer};
+use super::text_cache::TextMeasurer;
 
 const STEP_MARKER_PADDING_RATIO: f64 = 0.45;
 const STEP_MARKER_PADDING_MIN: f64 = 6.0;
 const STEP_MARKER_MIN_RADIUS: f64 = 10.0;
-
-pub(crate) fn step_marker_radius(value: u32, size: f64, font_descriptor: &FontDescriptor) -> f64 {
-    with_legacy_measurer(|measurer| step_marker_radius_with(measurer, value, size, font_descriptor))
-}
 
 pub(crate) fn step_marker_radius_with(
     measurer: &TextMeasurer,
@@ -63,14 +59,22 @@ mod tests {
 
     #[test]
     fn step_marker_radius_grows_with_font_size() {
+        let measurer = crate::draw::TextMeasurer::default();
         let font = FontDescriptor::default();
-        assert!(step_marker_radius(1, 32.0, &font) > step_marker_radius(1, 12.0, &font));
+        assert!(
+            step_marker_radius_with(&measurer, 1, 32.0, &font)
+                > step_marker_radius_with(&measurer, 1, 12.0, &font)
+        );
     }
 
     #[test]
     fn step_marker_radius_grows_for_multi_digit_labels() {
+        let measurer = crate::draw::TextMeasurer::default();
         let font = FontDescriptor::default();
-        assert!(step_marker_radius(88, 18.0, &font) >= step_marker_radius(8, 18.0, &font));
+        assert!(
+            step_marker_radius_with(&measurer, 88, 18.0, &font)
+                >= step_marker_radius_with(&measurer, 8, 18.0, &font)
+        );
     }
 
     #[test]

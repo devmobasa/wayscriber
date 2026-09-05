@@ -22,21 +22,17 @@ pub use types::{
     StepMarkerLabel,
 };
 
-pub(crate) use arrow_label::{
-    ARROW_LABEL_BACKGROUND, arrow_label_ends, arrow_label_layout, arrow_label_layout_with,
-};
+pub(crate) use arrow_label::{ARROW_LABEL_BACKGROUND, arrow_label_ends, arrow_label_layout_with};
 pub(crate) use bounds::{bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points};
 pub(crate) use polygon::{PolygonTemplate, generated_points, has_minimum_distinct_points};
-pub(crate) use step_marker::{
-    step_marker_outline_thickness, step_marker_radius, step_marker_radius_with,
-};
+pub(crate) use step_marker::{step_marker_outline_thickness, step_marker_radius_with};
 pub(crate) use text::{
     bounding_box_for_sticky_note_preview_with, bounding_box_for_text_with, sticky_note_layout,
-    sticky_note_layout_text, sticky_note_text_layout,
+    sticky_note_layout_text, sticky_note_text_layout_with_measurer,
 };
 pub(crate) use text_cache::{
     CaretGeometry, LogicalBounds, TextMeasurement, VisualCaretDirection, VisualLineDirection,
-    VisualLineEdge, caret_geometry_text, configured_layout, measure_text_with_context,
+    VisualLineEdge, caret_geometry_text, configured_layout,
 };
 
 #[cfg(test)]

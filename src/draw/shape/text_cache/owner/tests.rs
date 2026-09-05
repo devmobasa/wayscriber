@@ -102,14 +102,21 @@ fn destination_settings_do_not_change_canonical_measurements() {
     destination.set_font_options(&options);
     let owner = TextMeasurer::default();
     let fresh = TextMeasurer::default();
-    let actual = crate::draw::shape::text_cache::measure_text_with_context(
+    crate::draw::render_text_with_measurer(
+        &owner,
         &destination,
+        0,
+        5,
         "Hello 你好\nאבג",
-        "Sans 16",
+        crate::draw::RED,
         16.0,
+        &crate::draw::FontDescriptor::default(),
+        false,
         Some(70),
-    )
-    .unwrap();
+    );
+    let actual = owner
+        .measure("Hello 你好\nאבג", "Sans 16", 16.0, Some(70))
+        .unwrap();
     let expected = fresh
         .measure("Hello 你好\nאבג", "Sans 16", 16.0, Some(70))
         .unwrap();

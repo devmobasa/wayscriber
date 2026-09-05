@@ -96,7 +96,8 @@ impl CanvasExportRect {
     }
 }
 
-pub fn draw_canvas_page(
+pub fn draw_canvas_page_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     output_scale: f64,
@@ -125,6 +126,7 @@ pub fn draw_canvas_page(
         (f64::from(page.viewport_height) * output_scale).ceil() as u32,
     );
     let rendered = draw_canvas_page_region(
+        measurer,
         render,
         page,
         &backdrop,
@@ -137,7 +139,9 @@ pub fn draw_canvas_page(
     rendered
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_canvas_page_region(
+    measurer: &crate::draw::TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
@@ -161,8 +165,14 @@ pub(crate) fn draw_canvas_page_region(
         destination.height / source.height,
     );
     ctx.translate(-source.x, -source.y);
-    let rendered =
-        draw_canvas_page_contents(render, page, backdrop, paint_backdrop, fallback_target_size);
+    let rendered = draw_canvas_page_contents(
+        measurer,
+        render,
+        page,
+        backdrop,
+        paint_backdrop,
+        fallback_target_size,
+    );
     let _ = ctx.restore();
     rendered
 }
@@ -381,6 +391,7 @@ impl ExportBackdrop {
 }
 
 fn draw_canvas_page_contents(
+    measurer: &crate::draw::TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
@@ -422,7 +433,8 @@ fn draw_canvas_page_contents(
                 },
                 &replay_ctx,
             ),
-            other => render.render_shape_over_with_halo(
+            other => render.render_shape_over_with_halo_with_measurer(
+                measurer,
                 other,
                 known_background_luminance,
                 page.text_halo_enabled,

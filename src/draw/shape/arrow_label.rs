@@ -2,7 +2,7 @@ use crate::draw::{ArrowStyle, FontDescriptor};
 use crate::util::Rect;
 
 use super::text::{text_bounds_from_metrics, text_layout_metrics};
-use super::text_cache::{TextMeasurer, with_legacy_measurer};
+use super::text_cache::TextMeasurer;
 
 pub(crate) const ARROW_LABEL_BACKGROUND: bool = true;
 
@@ -53,34 +53,6 @@ pub(crate) struct ArrowLabelLayout {
 /// so a label anchored to the chord's midpoint would float in the gap the arrow
 /// was drawn to route around; the anchor follows the arc instead, and sits on
 /// the outside of the curve where there is room for it.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn arrow_label_layout(
-    tip_x: i32,
-    tip_y: i32,
-    tail_x: i32,
-    tail_y: i32,
-    thick: f64,
-    bend: f64,
-    label_text: &str,
-    label_size: f64,
-    font_descriptor: &FontDescriptor,
-) -> Option<ArrowLabelLayout> {
-    with_legacy_measurer(|measurer| {
-        arrow_label_layout_with(
-            measurer,
-            tip_x,
-            tip_y,
-            tail_x,
-            tail_y,
-            thick,
-            bend,
-            label_text,
-            label_size,
-            font_descriptor,
-        )
-    })
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn arrow_label_layout_with(
     measurer: &TextMeasurer,

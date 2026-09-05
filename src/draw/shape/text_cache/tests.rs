@@ -80,11 +80,12 @@ fn caret_geometry_snaps_off_boundary_indices_down() {
 
 #[test]
 fn test_cache_returns_same_measurement() {
+    let measurer = crate::draw::TextMeasurer::default();
     let text = "Hello World";
     let font = "Sans 12";
 
-    let m1 = measure_text_cached(text, font, 12.0, None);
-    let m2 = measure_text_cached(text, font, 12.0, None);
+    let m1 = measurer.measure(text, font, 12.0, None);
+    let m2 = measurer.measure(text, font, 12.0, None);
 
     assert!(m1.is_some());
     assert!(m2.is_some());
@@ -99,20 +100,21 @@ fn test_cache_returns_same_measurement() {
 
 #[test]
 fn test_different_sizes_use_different_cache_keys() {
+    let measurer = crate::draw::TextMeasurer::default();
     // Verify that measurements for different sizes are cached with different keys
     // by checking that both requests succeed (cache doesn't confuse them)
     let text = "Test";
     let font = "Sans";
 
-    let m1 = measure_text_cached(text, font, 12.0, None);
-    let m2 = measure_text_cached(text, font, 24.0, None);
+    let m1 = measurer.measure(text, font, 12.0, None);
+    let m2 = measurer.measure(text, font, 24.0, None);
 
     assert!(m1.is_some(), "12pt measurement should succeed");
     assert!(m2.is_some(), "24pt measurement should succeed");
 
     // Request them again - should hit cache for both
-    let m1_cached = measure_text_cached(text, font, 12.0, None);
-    let m2_cached = measure_text_cached(text, font, 24.0, None);
+    let m1_cached = measurer.measure(text, font, 12.0, None);
+    let m2_cached = measurer.measure(text, font, 24.0, None);
 
     let m1 = m1.unwrap();
     let m1_cached = m1_cached.unwrap();
@@ -175,17 +177,19 @@ fn test_insert_existing_key_updates_cached_measurement() {
 
 #[test]
 fn test_empty_text_returns_none() {
-    let result = measure_text_cached("", "Sans 12", 12.0, None);
+    let measurer = crate::draw::TextMeasurer::default();
+    let result = measurer.measure("", "Sans 12", 12.0, None);
     assert!(result.is_none());
 }
 
 #[test]
 fn test_wrap_width_affects_cache_key() {
+    let measurer = crate::draw::TextMeasurer::default();
     let text = "A very long text that would wrap";
     let font = "Sans 12";
 
-    let m1 = measure_text_cached(text, font, 12.0, None);
-    let m2 = measure_text_cached(text, font, 12.0, Some(50));
+    let m1 = measurer.measure(text, font, 12.0, None);
+    let m2 = measurer.measure(text, font, 12.0, Some(50));
 
     assert!(m1.is_some());
     assert!(m2.is_some());
