@@ -1,5 +1,5 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{Shape, ShapeId};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 use crate::util::Rect;
 
@@ -156,10 +156,6 @@ impl InputState {
     /// walking back through boards, frame, and shape to re-read the value it
     /// was just derived from is a message chain waiting to disagree with the
     /// knob position.
-    pub(crate) fn selected_spotlight_control(&self) -> Option<SelectedSpotlightControl> {
-        with_legacy_measurer(|measurer| self.selected_spotlight_control_with(measurer))
-    }
-
     pub(crate) fn selected_spotlight_control_with(
         &self,
         measurer: &TextMeasurer,

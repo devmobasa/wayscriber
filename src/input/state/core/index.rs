@@ -32,17 +32,6 @@ impl InputState {
         self.hit_test_all_for_points_cached_with(measurer, points, tolerance)
     }
 
-    /// Returns all shapes intersecting any of the provided points using cached spatial data.
-    pub(crate) fn hit_test_all_for_points_cached(
-        &self,
-        points: &[(i32, i32)],
-        tolerance: f64,
-    ) -> Vec<ShapeId> {
-        with_legacy_measurer(|measurer| {
-            self.hit_test_all_for_points_cached_with(measurer, points, tolerance)
-        })
-    }
-
     pub(crate) fn hit_test_all_for_points_cached_with(
         &self,
         measurer: &TextMeasurer,
@@ -117,10 +106,6 @@ impl InputState {
     #[cfg(test)]
     pub fn has_spatial_index(&self) -> bool {
         self.canvas_index.has_spatial_index()
-    }
-
-    pub(crate) fn ensure_spatial_index_for_active_frame(&mut self) {
-        with_legacy_measurer(|measurer| self.ensure_spatial_index_for_active_frame_with(measurer))
     }
 
     pub(crate) fn ensure_spatial_index_for_active_frame_with(&mut self, measurer: &TextMeasurer) {

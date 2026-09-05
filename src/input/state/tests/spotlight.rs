@@ -260,10 +260,11 @@ fn assert_on_the_step_grid(value: f64) {
 
 #[test]
 fn every_pixel_of_the_track_snaps_to_the_same_grid_the_toolbar_uses() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     let (mut state, id) = spotlight_state_with_one_loupe(1.0);
     state.set_selection(vec![id]);
     let track = state
-        .selected_spotlight_control()
+        .selected_spotlight_control_with(&test_text_measurer)
         .expect("control")
         .track
         .track;
@@ -272,7 +273,7 @@ fn every_pixel_of_the_track_snaps_to_the_same_grid_the_toolbar_uses() {
     // drag used to produce values like 2.19x that no other control could show.
     for offset in 0..=track.width {
         let value = state
-            .selected_spotlight_control()
+            .selected_spotlight_control_with(&test_text_measurer)
             .expect("control")
             .track
             .magnification_at(track.x + offset);
@@ -421,15 +422,18 @@ fn a_locked_topmost_loupe_hides_an_unlocked_loupe_from_the_wheel() {
 
 #[test]
 fn the_on_canvas_knob_only_appears_for_one_unlocked_selected_loupe() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     assert!(
-        state.selected_spotlight_control().is_none(),
+        state
+            .selected_spotlight_control_with(&test_text_measurer)
+            .is_none(),
         "nothing selected, nothing to adjust"
     );
 
     state.set_selection(vec![id]);
     let control = state
-        .selected_spotlight_control()
+        .selected_spotlight_control_with(&test_text_measurer)
         .expect("a selected loupe carries the control");
     let track = control.track;
     assert_eq!(control.shape_id, id);
@@ -443,13 +447,16 @@ fn the_on_canvas_knob_only_appears_for_one_unlocked_selected_loupe() {
         .expect("shape index");
     state.boards.active_frame_mut().shapes[index].locked = true;
     assert!(
-        state.selected_spotlight_control().is_none(),
+        state
+            .selected_spotlight_control_with(&test_text_measurer)
+            .is_none(),
         "a locked loupe is not adjustable"
     );
 }
 
 #[test]
 fn the_control_only_shows_on_a_page_that_already_forces_full_damage() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     // The control is drawn well outside the loupe's bounds, above it. It is
     // never clipped away because a page holding any Spotlight repaints in full
     // (`render_force_full_damage_reason`), and the control cannot appear
@@ -458,14 +465,22 @@ fn the_control_only_shows_on_a_page_that_already_forces_full_damage() {
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     state.set_selection(vec![id]);
 
-    assert!(state.selected_spotlight_control().is_some());
+    assert!(
+        state
+            .selected_spotlight_control_with(&test_text_measurer)
+            .is_some()
+    );
     assert!(
         state.has_spotlight(),
         "a visible control implies a spotlight, which implies full-frame damage"
     );
 
     state.clear_selection();
-    assert!(state.selected_spotlight_control().is_none());
+    assert!(
+        state
+            .selected_spotlight_control_with(&test_text_measurer)
+            .is_none()
+    );
 }
 
 #[test]
@@ -627,6 +642,7 @@ fn a_toolbar_page_switch_closes_the_wheel_gesture_too() {
 
 #[test]
 fn a_panned_board_still_places_the_control_where_the_user_can_reach_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     // The clamp is in canvas coordinates, so it has to follow the pan. A loupe
     // at the top of the *visible* area needs the control flipped below it even
     // though its canvas y is far from zero.
@@ -646,7 +662,7 @@ fn a_panned_board_still_places_the_control_where_the_user_can_reach_it() {
     state.set_selection(vec![loupe]);
 
     let track = state
-        .selected_spotlight_control()
+        .selected_spotlight_control_with(&test_text_measurer)
         .expect("a panned loupe still has a reachable control")
         .track
         .track;
@@ -662,6 +678,7 @@ fn a_panned_board_still_places_the_control_where_the_user_can_reach_it() {
 
 #[test]
 fn maximum_persisted_view_offsets_do_not_overflow_the_selected_control_path() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.switch_board(crate::input::BOARD_ID_WHITEBOARD);
     state.update_screen_dimensions(1920, 1080);
@@ -683,11 +700,12 @@ fn maximum_persisted_view_offsets_do_not_overflow_the_selected_control_path() {
     let visible = state.visible_canvas_rect();
     assert_eq!((visible.x, visible.y), (i32::MAX, i32::MAX));
     assert_eq!((visible.width, visible.height), (1, 1));
-    let _ = state.selected_spotlight_control();
+    let _ = state.selected_spotlight_control_with(&test_text_measurer);
 }
 
 #[test]
 fn an_edge_loupe_keeps_its_control_on_screen() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     let (mut state, _) = spotlight_state_with_one_loupe(2.0);
     state.boards.active_frame_mut().shapes.clear();
 
@@ -702,7 +720,7 @@ fn an_edge_loupe_keeps_its_control_on_screen() {
     });
     state.set_selection(vec![corner]);
     let track = state
-        .selected_spotlight_control()
+        .selected_spotlight_control_with(&test_text_measurer)
         .expect("an edge loupe still has a reachable control")
         .track;
     assert!(track.track.x >= 0, "the left end must stay grabbable");
@@ -726,7 +744,10 @@ fn an_edge_loupe_keeps_its_control_on_screen() {
         magnification: 4.0,
     });
     state.set_selection(vec![right]);
-    let track = state.selected_spotlight_control().expect("control").track;
+    let track = state
+        .selected_spotlight_control_with(&test_text_measurer)
+        .expect("control")
+        .track;
     assert!(
         track.track.x + track.track.width <= 1920,
         "the right end must stay grabbable, got x={}",
@@ -752,7 +773,7 @@ fn extreme_loupe_coordinates_do_not_overflow_the_hit_test_or_the_track() {
     // wrap in release; failing to place the control is the correct outcome.
     let _ = state.spotlight_at(i32::MAX, i32::MIN);
     state.set_selection(vec![id]);
-    let _ = state.selected_spotlight_control();
+    let _ = state.selected_spotlight_control_with(&test_text_measurer);
     let _ = state.hit_spotlight_magnification_track_with(&test_text_measurer, 0, 0);
 }
 
@@ -768,7 +789,7 @@ fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
     let (mut state, id) = spotlight_state_with_one_loupe(1.0);
     state.set_selection(vec![id]);
     let track = state
-        .selected_spotlight_control()
+        .selected_spotlight_control_with(&test_text_measurer)
         .expect("control")
         .track
         .track;
@@ -806,10 +827,11 @@ fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
 
 #[test]
 fn cancelling_a_knob_drag_restores_the_factor_it_started_from() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     state.set_selection(vec![id]);
     let track = state
-        .selected_spotlight_control()
+        .selected_spotlight_control_with(&test_text_measurer)
         .expect("control")
         .track
         .track;

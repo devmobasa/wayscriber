@@ -264,7 +264,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
     }
 
     // Force spatial index build
-    state.ensure_spatial_index_for_active_frame();
+    state.ensure_spatial_index_for_active_frame_with(&test_text_measurer);
     assert!(
         state.has_spatial_index(),
         "spatial index should be built with {} shapes",
@@ -322,6 +322,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
 /// Tests that tolerance larger than cell size still finds shapes.
 #[test]
 fn spatial_grid_large_tolerance_finds_distant_shapes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.set_hit_test_threshold(2);
     state.set_hit_test_tolerance(100.0); // Larger than cell size (64)
@@ -344,7 +345,7 @@ fn spatial_grid_large_tolerance_finds_distant_shapes() {
         });
     }
 
-    state.ensure_spatial_index_for_active_frame();
+    state.ensure_spatial_index_for_active_frame_with(&test_text_measurer);
     assert!(state.has_spatial_index());
 
     // Query point is 80 pixels away from shape, but tolerance is 100

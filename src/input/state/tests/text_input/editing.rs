@@ -633,7 +633,9 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
         .style
         .font_descriptor
         .to_pango_string(state.style.current_font_size);
-    let geometry = crate::draw::shape::caret_geometry_text(preview, &font, None, 11)
+    let measurer = crate::draw::TextMeasurer::default();
+    let geometry = measurer
+        .caret_geometry_text(preview, &font, None, 11)
         .expect("preview caret geometry is measurable");
     let click_x = geometry.x.round() as i32;
     state.on_mouse_press_with_canvas(MouseButton::Left, click_x, 0, click_x, 0);

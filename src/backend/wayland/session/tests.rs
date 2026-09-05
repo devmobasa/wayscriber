@@ -1409,7 +1409,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         color: input.style.current_color,
         thick: input.style.current_thickness,
     });
-    input.ensure_spatial_index_for_active_frame();
+    input.ensure_spatial_index_for_active_frame_with(&measurer);
     assert!(input.has_spatial_index());
 
     input.set_selection(vec![shape_id]);

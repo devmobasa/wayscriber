@@ -1,5 +1,5 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{Shape, ShapeId};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 use crate::util::Rect;
 
@@ -13,10 +13,6 @@ impl InputState {
         let center_x = bounds.x + bounds.width + TEXT_RESIZE_HANDLE_OFFSET;
         let center_y = bounds.y + bounds.height + TEXT_RESIZE_HANDLE_OFFSET;
         Rect::new(center_x - half, center_y - half, size, size)
-    }
-
-    pub(crate) fn selected_text_resize_handle(&self) -> Option<(ShapeId, Rect)> {
-        with_legacy_measurer(|measurer| self.selected_text_resize_handle_with(measurer))
     }
 
     pub(crate) fn selected_text_resize_handle_with(
