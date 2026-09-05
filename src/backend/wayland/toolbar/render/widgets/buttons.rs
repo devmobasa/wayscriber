@@ -10,7 +10,7 @@ use super::constants::{
 };
 use super::draw_round_rect;
 use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 use std::f64::consts::PI;
 
 /// Faint white glow behind a hovered flat button (quieter than
@@ -265,6 +265,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
 /// Returns nothing but renders the control with proper active/hover states.
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -344,7 +345,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
         let label_x = if i == 0 { x } else { x + segment_w };
 
         // Center the label in the segment
-        let layout = text_layout(ctx, label_style, label, None);
+        let layout = engine.layout(ctx, label_style, label, None);
         let ext = layout.ink_extents();
         let tx = label_x + (segment_w - ext.width()) / 2.0 - ext.x_bearing();
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
