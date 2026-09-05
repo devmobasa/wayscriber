@@ -25,11 +25,8 @@ impl ConfiguratorApp {
         &mut self,
         field: KeybindingField,
     ) -> Vec<Effect> {
-        if self.pending_shortcut_conflict.is_some() {
-            return Vec::new();
-        }
-        self.shortcut_text_editor = None;
-        self.active_shortcut_recorder = Some(ShortcutRecorderState::new(field));
+        self.shortcuts
+            .begin_recording(ShortcutRecorderState::new(field));
         Vec::new()
     }
 
@@ -37,11 +34,8 @@ impl ConfiguratorApp {
         &mut self,
         field: KeybindingField,
     ) -> Vec<Effect> {
-        if self.pending_shortcut_conflict.is_some() {
-            return Vec::new();
-        }
-        self.shortcut_text_editor = None;
-        self.active_shortcut_recorder = Some(ShortcutRecorderState::new_sequence(field));
+        self.shortcuts
+            .begin_recording(ShortcutRecorderState::new_sequence(field));
         Vec::new()
     }
 
@@ -49,13 +43,7 @@ impl ConfiguratorApp {
         &mut self,
         field: KeybindingField,
     ) -> Vec<Effect> {
-        if self
-            .active_shortcut_recorder
-            .as_ref()
-            .is_some_and(|recorder| recorder.field == field)
-        {
-            self.active_shortcut_recorder = None;
-        }
+        self.shortcuts.cancel_recording(field);
         Vec::new()
     }
 
@@ -64,7 +52,7 @@ impl ConfiguratorApp {
         keyval: u32,
         modifiers: KeyboardModifiers,
     ) -> Vec<Effect> {
-        let Some(recorder) = self.active_shortcut_recorder.as_mut() else {
+        let Some(recorder) = self.shortcuts.recorder_mut() else {
             return Vec::new();
         };
         match normalize_key_event(keyval, modifiers) {
@@ -80,7 +68,7 @@ impl ConfiguratorApp {
                 let field = recorder.field;
                 let finished = recorder.push_keyboard_step(binding);
                 if let Some(shortcut) = finished {
-                    self.active_shortcut_recorder = None;
+                    self.shortcuts.set_recorder(None);
                     self.commit_recorded_binding(field, shortcut)
                 } else {
                     Vec::new()
@@ -95,7 +83,7 @@ impl ConfiguratorApp {
         kind: RecorderDeviceKind,
         modifiers: KeyboardModifiers,
     ) -> Vec<Effect> {
-        let Some(recorder) = self.active_shortcut_recorder.as_mut() else {
+        let Some(recorder) = self.shortcuts.recorder_mut() else {
             return Vec::new();
         };
         let field = recorder.field;
@@ -109,27 +97,27 @@ impl ConfiguratorApp {
                     recorder.prompt = sequence_keyboard_only_message().to_string();
                     return Vec::new();
                 }
-                self.active_shortcut_recorder = None;
+                self.shortcuts.set_recorder(None);
                 self.commit_recorded_binding(field, trigger.into())
             }
         }
     }
 
     pub(super) fn handle_shortcut_sequence_finish(&mut self) -> Vec<Effect> {
-        let Some(recorder) = self.active_shortcut_recorder.take() else {
+        let Some(recorder) = self.shortcuts.take_recorder() else {
             return Vec::new();
         };
         match recorder.finish_sequence() {
             Some(shortcut) => self.commit_recorded_binding(recorder.field, shortcut),
             None => {
-                self.active_shortcut_recorder = Some(recorder);
+                self.shortcuts.set_recorder(Some(recorder));
                 Vec::new()
             }
         }
     }
 
     pub(super) fn handle_shortcut_sequence_remove_last_step(&mut self) -> Vec<Effect> {
-        if let Some(recorder) = self.active_shortcut_recorder.as_mut() {
+        if let Some(recorder) = self.shortcuts.recorder_mut() {
             recorder.remove_last_step();
         }
         Vec::new()
@@ -140,7 +128,7 @@ impl ConfiguratorApp {
         field: KeybindingField,
         binding: Shortcut,
     ) -> Vec<Effect> {
-        if self.pending_shortcut_conflict.is_some() {
+        if self.shortcuts.conflict().is_some() {
             return Vec::new();
         }
         match remove_binding(&mut self.draft.keybindings, field, &binding) {
@@ -159,7 +147,7 @@ impl ConfiguratorApp {
         &mut self,
         field: KeybindingField,
     ) -> Vec<Effect> {
-        if self.pending_shortcut_conflict.is_some() {
+        if self.shortcuts.conflict().is_some() {
             return Vec::new();
         }
         reset_field(
@@ -176,46 +164,43 @@ impl ConfiguratorApp {
         &mut self,
         field: KeybindingField,
     ) -> Vec<Effect> {
-        if self.pending_shortcut_conflict.is_some() {
-            return Vec::new();
-        }
-        self.active_shortcut_recorder = None;
         let text = self
             .draft
             .keybindings
             .value_for(field)
             .unwrap_or_default()
             .to_string();
-        self.shortcut_text_editor = Some(ShortcutTextEditor::new(field, text));
+        self.shortcuts
+            .begin_text_edit(ShortcutTextEditor::new(field, text));
         Vec::new()
     }
 
     pub(super) fn handle_shortcut_text_edit_changed(&mut self, text: String) -> Vec<Effect> {
-        if let Some(editor) = self.shortcut_text_editor.as_mut() {
+        if let Some(editor) = self.shortcuts.editor_mut() {
             editor.text = text;
         }
         Vec::new()
     }
 
     pub(super) fn handle_shortcut_text_edit_applied(&mut self) -> Vec<Effect> {
-        let Some(editor) = self.shortcut_text_editor.clone() else {
+        let Some(editor) = self.shortcuts.editor().cloned() else {
             return Vec::new();
         };
         match parse_keybindings(&editor.text) {
             Ok(parsed) => {
                 let conflicts = text_conflicts_for(&self.draft.keybindings, editor.field, &parsed);
                 if conflicts.is_empty() {
-                    self.shortcut_text_editor = None;
+                    self.shortcuts.set_editor(None);
                     return self
                         .handle_keybinding_changed(editor.field, editor.text.trim().to_string());
                 }
-                self.shortcut_text_editor = None;
-                self.pending_shortcut_conflict =
-                    Some(crate::models::PendingShortcutConflict::Text {
+                self.shortcuts.set_editor(None);
+                self.shortcuts
+                    .set_conflict(Some(crate::models::PendingShortcutConflict::Text {
                         target: editor.field,
                         new_value: editor.text,
                         conflicts,
-                    });
+                    }));
             }
             Err(error) => {
                 self.status = StatusMessage::error(error);
@@ -228,18 +213,12 @@ impl ConfiguratorApp {
         &mut self,
         field: KeybindingField,
     ) -> Vec<Effect> {
-        if self
-            .shortcut_text_editor
-            .as_ref()
-            .is_some_and(|editor| editor.field == field)
-        {
-            self.shortcut_text_editor = None;
-        }
+        self.shortcuts.cancel_text_edit(field);
         Vec::new()
     }
 
     pub(super) fn handle_shortcut_conflict_replace_confirmed(&mut self) -> Vec<Effect> {
-        let Some(pending) = self.pending_shortcut_conflict.take() else {
+        let Some(pending) = self.shortcuts.take_conflict() else {
             return Vec::new();
         };
         let result = match pending {
@@ -257,7 +236,7 @@ impl ConfiguratorApp {
         match result {
             Ok(()) => {
                 self.refresh_dirty_flag();
-                if self.shortcut_conflict_review {
+                if self.shortcuts.review {
                     self.arm_next_shortcut_conflict();
                 } else {
                     self.status = StatusMessage::idle();
@@ -271,8 +250,8 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_shortcut_conflict_canceled(&mut self) -> Vec<Effect> {
-        self.pending_shortcut_conflict = None;
-        self.shortcut_conflict_review = false;
+        self.shortcuts.set_conflict(None);
+        self.shortcuts.review = false;
         Vec::new()
     }
 
@@ -342,7 +321,10 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_shortcut_reset_visible_requested(&mut self) -> Vec<Effect> {
-        if self.is_loading || self.is_saving || self.shortcut_reset_visible_pending() {
+        if self.document.is_loading()
+            || self.document.is_saving()
+            || self.shortcut_reset_visible_pending()
+        {
             return Vec::new();
         }
         let fields = self.visible_keybinding_fields();
@@ -371,7 +353,10 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_shortcut_reset_all_requested(&mut self) -> Vec<Effect> {
-        if self.is_loading || self.is_saving || self.shortcut_reset_all_pending() {
+        if self.document.is_loading()
+            || self.document.is_saving()
+            || self.shortcut_reset_all_pending()
+        {
             return Vec::new();
         }
         self.pending_confirmation = Some(PendingConfirmation::ShortcutResetAll);
@@ -400,12 +385,12 @@ impl ConfiguratorApp {
 
     pub(super) fn handle_shortcut_conflict_review_started(&mut self) -> Vec<Effect> {
         if !self.shortcut_manager_summary().has_conflicts() {
-            self.shortcut_conflict_review = false;
+            self.shortcuts.review = false;
             self.status = StatusMessage::info("No shortcut conflicts to review.");
             return Vec::new();
         }
-        self.shortcut_conflict_review = true;
-        if self.pending_shortcut_conflict.is_some() {
+        self.shortcuts.review = true;
+        if self.shortcuts.conflict().is_some() {
             return Vec::new();
         }
         self.arm_next_shortcut_conflict();
@@ -416,16 +401,17 @@ impl ConfiguratorApp {
         match next_review_conflict(&self.draft.keybindings) {
             Some((field, binding, claimants)) => {
                 self.select_keybinding_field(field);
-                self.pending_shortcut_conflict =
-                    Some(crate::models::PendingShortcutConflict::Recorded {
+                self.shortcuts.set_conflict(Some(
+                    crate::models::PendingShortcutConflict::Recorded {
                         target: field,
                         binding,
                         claimants,
-                    });
+                    },
+                ));
                 self.status = StatusMessage::info("Review the next conflicting shortcut.");
             }
             None => {
-                self.shortcut_conflict_review = false;
+                self.shortcuts.review = false;
                 self.status = StatusMessage::success("No remaining shortcut conflicts.");
             }
         }
@@ -438,12 +424,12 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         let claimants = other_claimants(&self.draft.keybindings, field, &binding);
         if !claimants.is_empty() {
-            self.pending_shortcut_conflict =
-                Some(crate::models::PendingShortcutConflict::Recorded {
+            self.shortcuts
+                .set_conflict(Some(crate::models::PendingShortcutConflict::Recorded {
                     target: field,
                     binding,
                     claimants,
-                });
+                }));
             return Vec::new();
         }
         match append_binding(&mut self.draft.keybindings, field, &binding) {

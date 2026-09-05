@@ -1,7 +1,6 @@
-use crate::models::{DaemonAction, DaemonActionResult, DaemonRuntimeStatus};
-
 use super::super::effects::Effect;
 use super::super::state::ConfiguratorApp;
+use crate::models::{DaemonAction, DaemonActionResult, DaemonRuntimeStatus};
 
 impl ConfiguratorApp {
     pub(super) fn handle_daemon_status_loaded(
@@ -9,142 +8,19 @@ impl ConfiguratorApp {
         request_id: u64,
         result: Result<DaemonRuntimeStatus, String>,
     ) -> Vec<Effect> {
-        if request_id != self.daemon_latest_status_request_id {
-            return Vec::new();
-        }
-        let preserve_feedback = self.daemon_preserve_feedback_status_request_id == Some(request_id);
-        if preserve_feedback {
-            self.daemon_preserve_feedback_status_request_id = None;
-        }
-        match result {
-            Ok(status) => {
-                self.apply_daemon_status(status);
-                if should_update_feedback_after_status_load(
-                    preserve_feedback,
-                    self.daemon_busy,
-                    self.daemon_feedback.as_deref(),
-                ) {
-                    self.daemon_feedback = Some("Background mode status loaded.".to_string());
-                }
-            }
-            Err(err) => {
-                if preserve_feedback && !self.daemon_busy {
-                    let previous_feedback = self
-                        .daemon_feedback
-                        .as_deref()
-                        .unwrap_or("Background setup action failed.");
-                    self.daemon_feedback =
-                        Some(format!("{previous_feedback}\nStatus refresh failed: {err}"));
-                } else if !self.daemon_busy {
-                    self.daemon_feedback =
-                        Some(format!("Failed to load background setup status: {err}"));
-                }
-            }
-        }
-        Vec::new()
+        self.daemon.handle_daemon_status_loaded(request_id, result)
     }
-
     pub(super) fn handle_daemon_shortcut_input_changed(&mut self, value: String) -> Vec<Effect> {
-        self.daemon_shortcut_input = value;
-        Vec::new()
+        self.daemon.handle_daemon_shortcut_input_changed(value)
     }
-
     pub(super) fn handle_daemon_action_requested(&mut self, action: DaemonAction) -> Vec<Effect> {
-        if self.daemon_busy {
-            return Vec::new();
-        }
-        self.invalidate_pending_daemon_status_requests();
-        self.daemon_busy = true;
-        self.daemon_feedback = Some(action_pending_message(action));
-        let shortcut_input = self.daemon_shortcut_input.clone();
-        vec![Effect::PerformDaemonAction {
-            action,
-            shortcut_input,
-        }]
+        self.daemon.handle_daemon_action_requested(action)
     }
-
     pub(super) fn handle_daemon_action_completed(
         &mut self,
         result: Result<DaemonActionResult, String>,
     ) -> Vec<Effect> {
-        self.daemon_busy = false;
-        match result {
-            Ok(output) => {
-                self.apply_daemon_status(output.status);
-                self.daemon_feedback = Some(output.message);
-                Vec::new()
-            }
-            Err(err) => {
-                self.daemon_feedback = Some(format!("Background setup action failed: {err}"));
-                self.schedule_daemon_status_reload(true)
-            }
-        }
-    }
-
-    fn apply_daemon_status(&mut self, status: DaemonRuntimeStatus) {
-        if let Some(configured_shortcut) = status.configured_shortcut.clone() {
-            self.daemon_shortcut_input = configured_shortcut;
-        } else if self.daemon_shortcut_input.trim().is_empty() {
-            self.daemon_shortcut_input = status.desktop.default_shortcut_input().to_string();
-        }
-        self.daemon_status = Some(status);
-    }
-
-    fn schedule_daemon_status_reload(&mut self, preserve_feedback: bool) -> Vec<Effect> {
-        let request_id = self.daemon_next_status_request_id;
-        self.daemon_next_status_request_id = self.daemon_next_status_request_id.saturating_add(1);
-        self.daemon_latest_status_request_id = request_id;
-        if preserve_feedback {
-            self.daemon_preserve_feedback_status_request_id = Some(request_id);
-        }
-        vec![Effect::LoadDaemonStatus { request_id }]
-    }
-
-    fn invalidate_pending_daemon_status_requests(&mut self) {
-        let invalidation_id = self.daemon_next_status_request_id;
-        self.daemon_next_status_request_id = self.daemon_next_status_request_id.saturating_add(1);
-        self.daemon_latest_status_request_id = invalidation_id;
-        self.daemon_preserve_feedback_status_request_id = None;
-    }
-}
-
-fn should_update_feedback_after_status_load(
-    preserve_feedback: bool,
-    daemon_busy: bool,
-    current_feedback: Option<&str>,
-) -> bool {
-    if preserve_feedback || daemon_busy {
-        return false;
-    }
-    let Some(feedback) = current_feedback else {
-        return true;
-    };
-    let normalized = feedback.to_ascii_lowercase();
-    normalized.contains("detecting background mode setup status")
-        || normalized.contains("refreshing background setup status")
-        || normalized.contains("detecting daemon setup status")
-        || normalized.contains("refreshing daemon status")
-        || normalized == "background mode status loaded."
-        || normalized == "daemon status loaded."
-}
-
-fn action_pending_message(action: DaemonAction) -> String {
-    match action {
-        DaemonAction::RefreshStatus => "Refreshing background setup status...".to_string(),
-        DaemonAction::InstallOrUpdateService => {
-            "Installing/updating background service...".to_string()
-        }
-        DaemonAction::EnableAndStartService => {
-            "Enabling and starting background mode...".to_string()
-        }
-        DaemonAction::RestartService => "Restarting background service...".to_string(),
-        DaemonAction::StopAndDisableService => {
-            "Stopping and disabling background mode...".to_string()
-        }
-        DaemonAction::ApplyShortcut => "Applying desktop shortcut setup...".to_string(),
-        DaemonAction::ApplyLightControls => {
-            "Applying light passthrough controls setup...".to_string()
-        }
+        self.daemon.handle_daemon_action_completed(result)
     }
 }
 
@@ -178,14 +54,14 @@ mod tests {
     #[test]
     fn daemon_status_loaded_sets_default_shortcut_when_missing() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
-        app.daemon_shortcut_input.clear();
+        app.daemon.shortcut_input.clear();
         let status = test_status(DesktopEnvironment::Kde, None);
 
-        app.daemon_latest_status_request_id = 7;
+        app.daemon.latest_status_request_id = 7;
         let _ = app.handle_daemon_status_loaded(7, Ok(status));
 
-        assert_eq!(app.daemon_shortcut_input, "Ctrl+Shift+G");
-        assert!(app.daemon_status.is_some());
+        assert_eq!(app.daemon.shortcut_input, "Ctrl+Shift+G");
+        assert!(app.daemon.status.is_some());
     }
 
     #[test]
@@ -193,30 +69,37 @@ mod tests {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
         assert!(
-            app.daemon_feedback
-                .as_deref()
+            app.daemon
+                .feedback
+                .as_ref()
+                .map(crate::app::daemon_workflow::DaemonFeedback::text)
                 .unwrap_or_default()
                 .contains("Background setup action failed")
         );
         assert_eq!(
-            app.daemon_preserve_feedback_status_request_id,
-            Some(app.daemon_latest_status_request_id)
+            app.daemon.preserve_feedback_status_request_id,
+            Some(app.daemon.latest_status_request_id)
         );
     }
 
     #[test]
     fn status_loaded_does_not_clear_daemon_busy() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
-        app.daemon_busy = true;
-        app.daemon_feedback = Some("Installing/updating background service...".to_string());
+        let _ = app.handle_daemon_action_requested(DaemonAction::RestartService);
+        app.daemon.feedback = Some(crate::app::daemon_workflow::DaemonFeedback::Action(
+            "Installing/updating background service...".to_string(),
+        ));
         let status = test_status(DesktopEnvironment::Kde, None);
 
-        app.daemon_latest_status_request_id = 9;
+        app.daemon.latest_status_request_id = 9;
         let _ = app.handle_daemon_status_loaded(9, Ok(status));
 
-        assert!(app.daemon_busy);
+        assert!(app.daemon.is_busy());
         assert_eq!(
-            app.daemon_feedback.as_deref(),
+            app.daemon
+                .feedback
+                .as_ref()
+                .map(crate::app::daemon_workflow::DaemonFeedback::text),
             Some("Installing/updating background service...")
         );
     }
@@ -225,31 +108,33 @@ mod tests {
     fn failed_action_feedback_is_preserved_after_status_reload() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
-        let preserved_request_id = app.daemon_latest_status_request_id;
+        let preserved_request_id = app.daemon.latest_status_request_id;
         let status = test_status(DesktopEnvironment::Kde, None);
 
         let _ = app.handle_daemon_status_loaded(preserved_request_id, Ok(status));
 
         assert!(
-            app.daemon_feedback
-                .as_deref()
+            app.daemon
+                .feedback
+                .as_ref()
+                .map(crate::app::daemon_workflow::DaemonFeedback::text)
                 .unwrap_or_default()
                 .contains("Background setup action failed: boom")
         );
-        assert!(app.daemon_preserve_feedback_status_request_id.is_none());
+        assert!(app.daemon.preserve_feedback_status_request_id.is_none());
     }
 
     #[test]
     fn stale_status_callback_does_not_consume_preserve_flag() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
-        let preserved_request_id = app.daemon_latest_status_request_id;
+        let preserved_request_id = app.daemon.latest_status_request_id;
         let stale_request_id = preserved_request_id.saturating_sub(1);
         let stale_status = test_status(DesktopEnvironment::Kde, None);
         let _ = app.handle_daemon_status_loaded(stale_request_id, Ok(stale_status));
 
         assert_eq!(
-            app.daemon_preserve_feedback_status_request_id,
+            app.daemon.preserve_feedback_status_request_id,
             Some(preserved_request_id)
         );
     }
@@ -258,9 +143,11 @@ mod tests {
     fn preserved_error_is_not_applied_while_new_action_is_busy() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
-        let preserved_request_id = app.daemon_latest_status_request_id;
-        app.daemon_busy = true;
-        app.daemon_feedback = Some("Restarting background service...".to_string());
+        let preserved_request_id = app.daemon.latest_status_request_id;
+        let _ = app.handle_daemon_action_requested(DaemonAction::RestartService);
+        app.daemon.feedback = Some(crate::app::daemon_workflow::DaemonFeedback::Action(
+            "Restarting background service...".to_string(),
+        ));
 
         let _ = app.handle_daemon_status_loaded(
             preserved_request_id,
@@ -268,7 +155,10 @@ mod tests {
         );
 
         assert_eq!(
-            app.daemon_feedback.as_deref(),
+            app.daemon
+                .feedback
+                .as_ref()
+                .map(crate::app::daemon_workflow::DaemonFeedback::text),
             Some("Restarting background service...")
         );
     }
@@ -290,7 +180,7 @@ mod tests {
         new_status.service_unit_path = Some("/tmp/wayscriber.service".to_string());
 
         let _ = app.handle_daemon_action_completed(Err("old failure".to_string()));
-        let old_request_id = app.daemon_latest_status_request_id;
+        let old_request_id = app.daemon.latest_status_request_id;
 
         let effects = app.handle_daemon_action_requested(DaemonAction::RefreshStatus);
         assert!(matches!(
@@ -307,13 +197,20 @@ mod tests {
 
         let _ = app.handle_daemon_status_loaded(old_request_id, Ok(old_status));
 
-        assert_eq!(app.daemon_shortcut_input.as_str(), "<Ctrl><Shift>new");
+        assert_eq!(app.daemon.shortcut_input.as_str(), "<Ctrl><Shift>new");
         assert_eq!(
-            app.daemon_status
+            app.daemon
+                .status
                 .as_ref()
                 .and_then(|status| status.configured_shortcut.as_deref()),
             Some("<Ctrl><Shift>new")
         );
-        assert_eq!(app.daemon_feedback.as_deref(), Some("refresh complete"));
+        assert_eq!(
+            app.daemon
+                .feedback
+                .as_ref()
+                .map(crate::app::daemon_workflow::DaemonFeedback::text),
+            Some("refresh complete")
+        );
     }
 }

@@ -47,6 +47,7 @@ impl InputState {
         };
 
         let mut max_line_width: f64 = 0.0;
+        let mut body_ascent: f64 = 0.0;
         let mut max_label_width: f64 = 0.0;
         let mut max_value_width: f64 = 0.0;
 
@@ -71,6 +72,7 @@ impl InputState {
         for line in &panel.lines {
             let extents = engine.layout(ctx, body_style, line, None).ink_extents();
             max_line_width = max_line_width.max(extents.width());
+            body_ascent = body_ascent.max(-extents.y_bearing());
         }
         for entry in &panel.entries {
             let extents = engine
@@ -185,7 +187,9 @@ impl InputState {
         }
 
         let title_baseline_y = origin_y + PANEL_PADDING_Y + PANEL_TITLE_FONT;
-        let info_start_y = title_baseline_y + PANEL_INFO_OFFSET;
+        // The info offset is a gap below the title box, not a baseline offset.
+        let divider_y = origin_y + PANEL_PADDING_Y + title_height;
+        let info_start_y = divider_y + PANEL_INFO_OFFSET + body_ascent;
         let mut entry_start_y = origin_y + PANEL_PADDING_Y + title_height + info_height;
         if !panel.entries.is_empty() {
             entry_start_y += PANEL_SECTION_GAP;
@@ -200,6 +204,7 @@ impl InputState {
             width: panel_width,
             height: panel_height,
             title_baseline_y,
+            divider_y,
             info_start_y,
             entry_start_y,
             entry_row_height: PANEL_ROW_HEIGHT,
@@ -250,6 +255,60 @@ mod engine_tests {
             crate::ui::render_properties_panel_with_engine(engine, &ctx, state, 800, 600);
         }
         surface.data().unwrap().to_vec()
+    }
+
+    #[test]
+    fn info_text_clears_divider_and_entries_without_growing_panel() {
+        let engine = UiTextEngine::default();
+        let mut state = crate::input::state::test_support::make_test_input_state();
+        let id = state.boards.active_frame_mut().add_shape(Shape::Text {
+            x: 40,
+            y: 60,
+            text: "Shape info".into(),
+            color: crate::draw::Color::new(1.0, 0.0, 0.0, 1.0),
+            size: 18.0,
+            font_descriptor: Default::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+        state.set_selection(vec![id]);
+        assert!(state.show_properties_panel_with(&TextMeasurer::default()));
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        state.update_properties_panel_layout(&ctx, 800, 600);
+        let panel = state.properties_panel().unwrap();
+        let layout = state.properties_panel_layout().unwrap();
+        assert!(!panel.lines.is_empty());
+        assert!(!panel.entries.is_empty());
+        let style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: PANEL_BODY_FONT,
+        };
+        for (index, line) in panel.lines.iter().enumerate() {
+            let ink = engine.layout(&ctx, style, line, None).ink_extents();
+            let top = layout.info_start_y + index as f64 * PANEL_LINE_HEIGHT + ink.y_bearing();
+            assert!(top > layout.divider_y, "info ink must clear the divider");
+            assert!(
+                top + ink.height() < layout.entry_start_y,
+                "info ink must clear entries"
+            );
+        }
+        let expected_height = PANEL_PADDING_Y * 2.0
+            + PANEL_TITLE_FONT
+            + 4.0
+            + PANEL_INFO_OFFSET
+            + PANEL_LINE_HEIGHT * panel.lines.len() as f64
+            + PANEL_SECTION_GAP
+            + PANEL_ROW_HEIGHT * panel.entries.len() as f64;
+        assert_eq!(layout.height, expected_height.ceil());
+        let rows_bottom =
+            layout.entry_start_y + panel.entries.len() as f64 * layout.entry_row_height;
+        assert_eq!(
+            layout.origin_y + layout.height - rows_bottom,
+            PANEL_PADDING_Y
+        );
     }
 
     #[test]

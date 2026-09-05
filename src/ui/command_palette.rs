@@ -66,6 +66,63 @@ const TOOLTIP_BG: Rgba = (0.04, 0.05, 0.07, 0.98);
 const SCROLL_TRACK: Rgba = (1.0, 1.0, 1.0, 0.1);
 const SCROLL_THUMB: Rgba = (1.0, 1.0, 1.0, 0.35);
 
+/// Prepared application values consumed by the painter.
+pub(crate) enum CommandPaletteView {
+    Closed,
+    Capture {
+        action: crate::config::Action,
+        bindings: Vec<String>,
+    },
+    List(PaletteListView),
+}
+
+pub(crate) struct PaletteListView {
+    query: String,
+    rows: Vec<CommandPaletteListRow>,
+    geometry: (f64, f64, f64, f64),
+    scroll: usize,
+    selected: usize,
+    bindings: std::collections::HashMap<crate::config::Action, Vec<String>>,
+    tooltip: Option<(String, i32, i32)>,
+}
+
+impl CommandPaletteView {
+    pub(crate) fn prepare(state: &InputState, width: u32, height: u32) -> Self {
+        if !state.command_palette_is_engaged() {
+            return Self::Closed;
+        }
+        if let Some(action) = state.keybinding_capture_action() {
+            return Self::Capture {
+                action,
+                bindings: state.action_binding_labels(action),
+            };
+        }
+        let rows = state.command_palette_rows();
+        let geometry = state.command_palette_geometry_for_rows(width, height, &rows);
+        let bindings = rows
+            .iter()
+            .filter_map(|row| match row {
+                CommandPaletteListRow::Command { command, .. } => {
+                    Some((command.action, state.action_binding_labels(command.action)))
+                }
+                _ => None,
+            })
+            .collect();
+        let tooltip = state
+            .command_palette_action_tooltip_for_layout(&rows, geometry)
+            .map(|(text, x, y)| (text.to_string(), x, y));
+        Self::List(PaletteListView {
+            query: state.command_palette.query.clone(),
+            rows,
+            geometry: (geometry.x, geometry.y, geometry.width, geometry.height),
+            scroll: state.command_palette.scroll,
+            selected: state.command_palette.selected,
+            bindings,
+            tooltip,
+        })
+    }
+}
+
 /// Render the command palette if open.
 pub fn render_command_palette(
     ctx: &cairo::Context,
@@ -89,30 +146,27 @@ pub(crate) fn render_command_palette_with_engine(
     screen_width: u32,
     screen_height: u32,
 ) {
-    if !input_state.command_palette_is_engaged() {
-        return;
-    }
+    let view = CommandPaletteView::prepare(input_state, screen_width, screen_height);
+    paint_command_palette(engine, ctx, &view, screen_width, screen_height);
+}
 
-    if let Some(action) = input_state.keybinding_capture_action() {
-        render_keybinding_capture(
-            engine,
-            ctx,
-            input_state,
-            action,
-            screen_width,
-            screen_height,
-        );
-        return;
-    }
-
-    let rows = input_state.command_palette_rows();
-    let geometry =
-        input_state.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
-    let palette_width = geometry.width;
-    let height = geometry.height;
-
-    let x = geometry.x;
-    let y = geometry.y;
+pub(crate) fn paint_command_palette(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    view: &CommandPaletteView,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let view = match view {
+        CommandPaletteView::Closed => return,
+        CommandPaletteView::Capture { action, bindings } => {
+            render_keybinding_capture(engine, ctx, bindings, *action, screen_width, screen_height);
+            return;
+        }
+        CommandPaletteView::List(view) => view,
+    };
+    let rows = &view.rows;
+    let (x, y, palette_width, height) = view.geometry;
 
     draw_command_palette_frame(
         ctx,
@@ -128,26 +182,11 @@ pub(crate) fn render_command_palette_with_engine(
     let inner_width = palette_width - COMMAND_PALETTE_PADDING * 2.0;
     let mut cursor_y = y + COMMAND_PALETTE_PADDING;
 
-    cursor_y = draw_command_palette_input(
-        engine,
-        ctx,
-        inner_x,
-        cursor_y,
-        inner_width,
-        &input_state.command_palette.query,
-    );
+    cursor_y = draw_command_palette_input(engine, ctx, inner_x, cursor_y, inner_width, &view.query);
 
-    render_command_palette_rows(
-        engine,
-        ctx,
-        input_state,
-        &rows,
-        inner_x,
-        inner_width,
-        cursor_y,
-    );
+    render_command_palette_rows(engine, ctx, view, rows, inner_x, inner_width, cursor_y);
 
-    if rows.is_empty() && !input_state.command_palette.query.is_empty() {
+    if rows.is_empty() && !view.query.is_empty() {
         draw_command_palette_empty_state(
             engine,
             ctx,
@@ -164,18 +203,16 @@ pub(crate) fn render_command_palette_with_engine(
         palette_width,
         cursor_y,
         rows.len(),
-        input_state.command_palette.scroll,
+        view.scroll,
     );
 
-    if let Some((tooltip, pointer_x, pointer_y)) =
-        input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
-    {
+    if let Some((tooltip, pointer_x, pointer_y)) = view.tooltip.as_ref() {
         draw_command_palette_action_tooltip(
             engine,
             ctx,
             tooltip,
-            pointer_x as f64,
-            pointer_y as f64,
+            *pointer_x as f64,
+            *pointer_y as f64,
             screen_width as f64,
             screen_height as f64,
         );
@@ -367,7 +404,7 @@ fn draw_command_palette_input(
 fn render_command_palette_rows(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
-    input_state: &InputState,
+    view: &PaletteListView,
     rows: &[CommandPaletteListRow],
     inner_x: f64,
     inner_width: f64,
@@ -375,7 +412,7 @@ fn render_command_palette_rows(
 ) {
     let styles = command_palette_row_styles();
 
-    let scroll = input_state.command_palette.scroll;
+    let scroll = view.scroll;
     for (visible_idx, row) in rows
         .iter()
         .skip(scroll)
@@ -391,11 +428,15 @@ fn render_command_palette_rows(
                 command,
                 command_index,
             } => {
-                let is_selected = *command_index == input_state.command_palette.selected;
+                let is_selected = *command_index == view.selected;
                 render_command_row(
                     engine,
                     ctx,
-                    input_state,
+                    &view.query,
+                    view.bindings
+                        .get(&command.action)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default(),
                     command,
                     &styles,
                     inner_x,

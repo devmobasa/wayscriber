@@ -97,7 +97,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         if let Some(blocker) =
-            SessionCatalogOperation::Duplicate.cached_status_blocker(self.daemon_status.as_ref())
+            SessionCatalogOperation::Duplicate.cached_status_blocker(self.daemon.status.as_ref())
         {
             self.status = StatusMessage::warning(blocker);
             return Vec::new();
@@ -135,7 +135,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         if let Some(blocker) =
-            SessionCatalogOperation::Move.cached_status_blocker(self.daemon_status.as_ref())
+            SessionCatalogOperation::Move.cached_status_blocker(self.daemon.status.as_ref())
         {
             self.status = StatusMessage::warning(blocker);
             return Vec::new();
@@ -177,7 +177,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         if let Some(blocker) = SessionCatalogOperation::ClearToolState
-            .cached_status_blocker(self.daemon_status.as_ref())
+            .cached_status_blocker(self.daemon.status.as_ref())
         {
             self.status = StatusMessage::warning(blocker);
             return Vec::new();
@@ -198,7 +198,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         if let Some(blocker) =
-            SessionCatalogOperation::Clear.cached_status_blocker(self.daemon_status.as_ref())
+            SessionCatalogOperation::Clear.cached_status_blocker(self.daemon.status.as_ref())
         {
             self.status = StatusMessage::warning(blocker);
             return Vec::new();

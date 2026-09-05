@@ -1,8 +1,15 @@
 # Wayscriber Configurator (GTK4)
 
-Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on GTK4 and libadwaita through [Relm4](https://relm4.org) and reuses the `wayscriber::Config` types directly, so validation and defaults match the CLI. It also retains the original TOML document so comments, ordering, and settings unknown to this build survive a save.
+The configurator is a native Rust desktop UI for editing `~/.config/wayscriber/config.toml`.
+It uses GTK4, libadwaita, and [Relm4](https://relm4.org).
+It shares the `wayscriber::Config` types with the CLI, so validation and defaults match.
+It preserves TOML comments, ordering, and settings unknown to this build when it saves.
 
-`config.toml` changes only through an explicit user edit action, never automatically. This program writes it when you press **Save**; the overlay writes it from three narrow editors — shortcut editing, preset slots, and the quick-color palette — each of which rewrites only its own key and backs the file up first. Nothing else in Wayscriber — daemon, tray, startup, shutdown, validation — ever changes it, so an incidental preference toggle applies to that run and sends you here for a durable change.
+`config.toml` changes only when you explicitly edit it. The configurator writes the file when you press **Save**.
+The overlay can also save shortcut edits, preset slots, and quick colors.
+Each overlay editor changes only its own key and backs up the file first.
+The daemon, tray, startup, shutdown, and validation do not change the file.
+Other preference changes apply to the current run. Use the configurator to change their defaults.
 
 This file covers building and running the configurator from source. For screenshots, a demo video, and the user-facing walkthrough, see [Configurator (GUI)](../README.md#configurator-gui) and https://wayscriber.com/docs/configuration/configurator.html
 
@@ -81,3 +88,19 @@ cargo build --release
 ```
 
 Artifacts land in `target/release/`. No Node toolchain or bundler is required.
+
+## Workflow ownership
+
+Each workflow module owns a related set of operations:
+
+- `app/document_workflow.rs` prevents loads and saves from running at the same time. It passes the loaded document to the save operation.
+- `app/migration_workflow.rs` tracks update offers and dismissals for each document destination.
+- `app/shortcut_workflow.rs` keeps shortcut recording, text editing, and conflict resolution separate. Only one can be active at a time.
+- `app/daemon_workflow.rs` manages background setup actions, status request identities, and typed feedback.
+
+App update handlers coordinate draft changes and UI effects.
+
+Saves use `Config::validate_for_save` from the core crate.
+It compares persisted typed values to detect changes outside keybindings and rejects those changes.
+It also returns keybinding validation reports for user feedback.
+Save decisions do not depend on diagnostic text.

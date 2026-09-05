@@ -12,7 +12,9 @@ mod keybindings;
 mod performance;
 mod presets;
 mod render_profiles;
+mod save;
 mod session;
+pub use save::SaveValidationError;
 mod spotlight;
 #[cfg(feature = "tablet-input")]
 mod tablet;

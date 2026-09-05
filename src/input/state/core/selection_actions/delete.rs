@@ -1,7 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::ShapeId;
 use crate::draw::TextMeasurer;
-use crate::draw::frame::UndoAction;
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -39,46 +38,17 @@ impl InputState {
             return false;
         }
 
-        let mut removed = Vec::new();
-        let mut dirty = Vec::new();
-        {
-            let frame = self.boards.active_frame();
-            for (index, shape) in frame.shapes.iter().enumerate() {
-                if id_set.contains(&shape.id) {
-                    if shape.locked {
-                        continue;
-                    }
-                    dirty.push((shape.id, shape.bounding_box_with(measurer)));
-                    removed.push((index, shape.clone()));
-                }
-            }
-        }
-
-        if removed.is_empty() {
+        let effects = crate::input::state::core::editing::CanvasEdit::delete(
+            self.boards.active_frame_mut(),
+            id_set,
+            measurer,
+            self.history_limits.undo_stack_limit(),
+        );
+        if !self.apply_edit_effects(measurer, effects) {
             return false;
         }
 
-        {
-            let frame = self.boards.active_frame_mut();
-            for (index, _) in removed.iter().rev() {
-                frame
-                    .remove_shape_at(*index)
-                    .expect("recorded selection index remains valid during reverse deletion");
-            }
-            frame.push_undo_action(
-                UndoAction::Delete { shapes: removed },
-                self.history_limits.undo_stack_limit(),
-            );
-        }
-
-        for (shape_id, bounds) in dirty {
-            self.mark_selection_dirty_region(bounds);
-            self.invalidate_hit_cache_for_with(measurer, shape_id);
-        }
-
         self.clear_selection();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
         true
     }
 

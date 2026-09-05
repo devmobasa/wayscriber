@@ -21,19 +21,6 @@ pub(super) fn set_popover_capture_transparent(
     set_popover_input_enabled(popover, input_enabled);
 }
 
-fn paired_popover_surface<'a>(
-    popover: Option<&'a gtk4::Popover>,
-    surface: Option<&'a CaptureSurfaceContent>,
-) -> Option<(&'a gtk4::Popover, &'a CaptureSurfaceContent)> {
-    if popover.is_none() && surface.is_none() {
-        return None;
-    }
-    Some((
-        popover.expect("popover capture surface is paired at construction"),
-        surface.expect("capture surface is paired with its popover"),
-    ))
-}
-
 fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
     popover.set_can_target(enabled);
     if let Some(surface) = popover.surface() {
@@ -48,115 +35,52 @@ fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
 }
 
 impl TopBar {
-    pub(super) fn hide_popovers_for_window_hide(&self) {
-        self.shapes_expected_open.set(false);
-        self.overflow_expected_open.set(false);
-        self.canvas_expected_open.set(false);
-        self.session_expected_open.set(false);
-        self.settings_expected_open.set(false);
-        for popover in [
-            self.shapes_popover.as_ref(),
-            self.overflow_popover.as_ref(),
-            self.canvas_popover.as_ref(),
-            self.session_popover.as_ref(),
-            self.settings_popover.as_ref(),
+    fn popover_resources(&self) -> impl Iterator<Item = (&'static str, &PopoverResources)> {
+        [
+            ("top-shapes-popover", self.shapes.mounted.as_ref()),
+            ("top-overflow-popover", self.overflow.mounted.as_ref()),
+            ("top-canvas-popover", self.canvas.mounted.as_ref()),
+            ("top-session-popover", self.session.mounted.as_ref()),
+            ("top-settings-popover", self.settings.mounted.as_ref()),
         ]
         .into_iter()
-        .flatten()
-        {
-            if popover.is_visible() {
-                popover.popdown();
-            }
-        }
+        .filter_map(|(name, resources)| resources.map(|resources| (name, resources)))
     }
 
-    /// Popovers are independent native Wayland surfaces, so their parent's
-    /// opacity does not affect them. Keep any open popover mapped and replace
-    /// its content with the same transparent proof node as the toolbar rather
-    /// than starting a popup close animation during capture.
+    pub(super) fn hide_popovers_for_window_hide(&self) {
+        self.shapes.set_open(false);
+        self.overflow.set_open(false);
+        self.canvas.set_open(false);
+        self.session.set_open(false);
+        self.settings.set_open(false);
+    }
+
+    /// Each native stays mapped with transparent proof content during capture.
     pub(super) fn set_popovers_capture_transparent(&self, transparent: bool) {
-        for (popover, capture_surface) in [
-            (
-                self.shapes_popover.as_ref(),
-                self.shapes_capture_surface.as_ref(),
-            ),
-            (
-                self.overflow_popover.as_ref(),
-                self.overflow_capture_surface.as_ref(),
-            ),
-            (
-                self.canvas_popover.as_ref(),
-                self.canvas_capture_surface.as_ref(),
-            ),
-            (
-                self.session_popover.as_ref(),
-                self.session_capture_surface.as_ref(),
-            ),
-            (
-                self.settings_popover.as_ref(),
-                self.settings_capture_surface.as_ref(),
-            ),
-        ] {
-            let Some((popover, capture_surface)) = paired_popover_surface(popover, capture_surface)
-            else {
-                continue;
-            };
-            if transparent && !popover.is_visible() {
-                continue;
-            }
-            set_popover_capture_transparent(popover, capture_surface, transparent, !transparent);
+        for (_, resources) in self.popover_resources() {
+            resources.set_capture_transparent(transparent);
         }
     }
 
     pub(in crate::toolbar_gtk::view) fn tooltip_roots(&self) -> Vec<gtk4::Widget> {
-        [
-            self.shapes_popover.as_ref(),
-            self.overflow_popover.as_ref(),
-            self.canvas_popover.as_ref(),
-            self.session_popover.as_ref(),
-            self.settings_popover.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|popover| popover.clone().upcast::<gtk4::Widget>())
-        .collect()
+        self.popover_resources()
+            .map(|(_, resources)| resources.popover.clone().upcast())
+            .collect()
     }
 
     pub(in crate::toolbar_gtk::view) fn capture_popover_targets(&self) -> Vec<CaptureProofTarget> {
-        [
-            (
-                "top-shapes-popover",
-                self.shapes_popover.as_ref(),
-                self.shapes_capture_surface.as_ref(),
-            ),
-            (
-                "top-overflow-popover",
-                self.overflow_popover.as_ref(),
-                self.overflow_capture_surface.as_ref(),
-            ),
-            (
-                "top-canvas-popover",
-                self.canvas_popover.as_ref(),
-                self.canvas_capture_surface.as_ref(),
-            ),
-            (
-                "top-session-popover",
-                self.session_popover.as_ref(),
-                self.session_capture_surface.as_ref(),
-            ),
-            (
-                "top-settings-popover",
-                self.settings_popover.as_ref(),
-                self.settings_capture_surface.as_ref(),
-            ),
-        ]
-        .into_iter()
-        .filter_map(|(name, popover, capture_surface)| {
-            let (popover, capture_surface) = paired_popover_surface(popover, capture_surface)?;
-            (popover.is_visible() && popover.is_mapped())
-                .then(|| CaptureProofTarget::new_withdrawable(name, popover, capture_surface))
-        })
-        .collect()
+        self.popover_resources()
+            .filter(|(_, resources)| {
+                resources.popover.is_visible() && resources.popover.is_mapped()
+            })
+            .map(|(name, resources)| {
+                CaptureProofTarget::new_withdrawable(
+                    name,
+                    &resources.popover,
+                    &resources.capture_surface,
+                )
+            })
+            .collect()
     }
 
     /// Keep the popovers' contents and open state in line with the snapshot.
@@ -175,7 +99,7 @@ impl TopBar {
         let button_size = (btn_w * scale, btn_h * scale);
         let icon_size = ICON_SIZE * scale;
 
-        if let Some(popover) = self.shapes_popover.clone() {
+        if let Some(resources) = self.shapes.mounted.clone() {
             let open = snapshot.shape_picker_open;
             if open {
                 // Only rebuild the grid when its inputs changed; a rebuild
@@ -186,10 +110,9 @@ impl TopBar {
                     snapshot.fill_enabled,
                     snapshot.polygon_sides,
                 );
-                if self.shapes_content_key.get() != Some(content_key) {
-                    self.shapes_capture_surface
-                        .as_ref()
-                        .expect("shapes popover capture surface is paired")
+                if self.shapes.content_key != Some(content_key) {
+                    resources
+                        .capture_surface
                         .set_content(&self.build_shapes_popover_content(
                             snapshot,
                             button_size,
@@ -197,18 +120,13 @@ impl TopBar {
                             use_icons,
                             scale,
                         ));
-                    self.shapes_content_key.set(Some(content_key));
+                    self.shapes.content_key = Some(content_key);
                 }
             }
-            self.shapes_expected_open.set(open);
-            if open && !popover.is_visible() {
-                popover.popup();
-            } else if !open && popover.is_visible() {
-                popover.popdown();
-            }
+            self.shapes.set_open(open);
         }
 
-        if let Some(popover) = self.overflow_popover.clone() {
+        if let Some(resources) = self.overflow.mounted.clone() {
             let open = snapshot.top_overflow_open
                 && model::TopToolbarSpec::overflow_control_count(snapshot, plan) > 0;
             if open {
@@ -222,11 +140,10 @@ impl TopBar {
                     snapshot.session_popover_open,
                     snapshot.settings_popover_open,
                 );
-                if self.overflow_content_key.get() != Some(content_key) {
+                if self.overflow.content_key != Some(content_key) {
                     let spec = model::TopToolbarSpec::build(snapshot, plan);
-                    self.overflow_capture_surface
-                        .as_ref()
-                        .expect("overflow popover capture surface is paired")
+                    resources
+                        .capture_surface
                         .set_content(&self.build_overflow_popover_content(
                             snapshot,
                             &spec,
@@ -235,17 +152,12 @@ impl TopBar {
                             use_icons,
                             scale,
                         ));
-                    self.overflow_content_key.set(Some(content_key));
+                    self.overflow.content_key = Some(content_key);
                 }
             }
-            self.overflow_expected_open.set(open);
-            if open && !popover.is_visible() {
-                popover.popup();
-            } else if !open && popover.is_visible() {
-                popover.popdown();
-            }
+            self.overflow.set_open(open);
         } else {
-            self.overflow_expected_open.set(false);
+            self.overflow.expected_open.set(false);
         }
 
         self.sync_menu_popovers(snapshot, scale);
@@ -255,85 +167,63 @@ impl TopBar {
     /// line with the snapshot, mirroring the shapes/overflow pattern: content
     /// rebuilds only when the model's snapshot inputs change.
     fn sync_menu_popovers(&mut self, snapshot: &ToolbarSnapshot, scale: f64) {
-        if let Some(popover) = self.canvas_popover.clone() {
+        if let Some(resources) = self.canvas.mounted.clone() {
             let open = snapshot.canvas_popover_open;
             if open {
                 let content_key = CanvasMenuContentKey::of(snapshot);
-                if self.canvas_content_key.borrow().as_ref() != Some(&content_key) {
+                if self.canvas.content_key.as_ref() != Some(&content_key) {
                     let (content, updaters) = self.build_canvas_popover_content(snapshot, scale);
-                    self.canvas_capture_surface
-                        .as_ref()
-                        .expect("canvas popover capture surface is paired")
-                        .set_content(&content);
+                    resources.capture_surface.set_content(&content);
                     // Delay-slider values ride these persistent updaters (the
                     // content key omits them), so a delay drag never rebuilds
                     // the subtree. Replace the old set — it captured the now
                     // dead widgets this rebuild just discarded.
-                    *self.canvas_updaters.borrow_mut() = updaters;
-                    *self.canvas_content_key.borrow_mut() = Some(content_key);
+                    self.canvas.updaters = updaters;
+                    self.canvas.content_key = Some(content_key);
                 }
             }
-            self.canvas_expected_open.set(open);
-            if open && !popover.is_visible() {
-                popover.popup();
-            } else if !open && popover.is_visible() {
-                popover.popdown();
-            }
+            self.canvas.set_open(open);
         } else {
-            self.canvas_expected_open.set(false);
+            self.canvas.expected_open.set(false);
         }
 
-        if let Some(popover) = self.session_popover.clone() {
+        if let Some(resources) = self.session.mounted.clone() {
             let open = snapshot.session_popover_open;
             if open {
                 let content_key = SessionMenuContentKey::of(snapshot);
-                if self.session_content_key.borrow().as_ref() != Some(&content_key) {
-                    self.session_capture_surface
-                        .as_ref()
-                        .expect("session popover capture surface is paired")
+                if self.session.content_key.as_ref() != Some(&content_key) {
+                    resources
+                        .capture_surface
                         .set_content(&self.build_session_popover_content(snapshot, scale));
-                    *self.session_content_key.borrow_mut() = Some(content_key);
+                    self.session.content_key = Some(content_key);
                 }
             }
-            self.session_expected_open.set(open);
-            if open && !popover.is_visible() {
-                popover.popup();
-            } else if !open && popover.is_visible() {
-                popover.popdown();
-            }
+            self.session.set_open(open);
         } else {
-            self.session_expected_open.set(false);
+            self.session.expected_open.set(false);
         }
 
-        if let Some(popover) = self.settings_popover.clone() {
+        if let Some(resources) = self.settings.mounted.clone() {
             let open = snapshot.settings_popover_open;
             if open {
                 let content_key = SettingsMenuContentKey::of(snapshot);
-                if self.settings_content_key.borrow().as_ref() != Some(&content_key) {
+                if self.settings.content_key.as_ref() != Some(&content_key) {
                     let (content, updaters) = self.build_settings_popover_content(snapshot, scale);
-                    self.settings_capture_surface
-                        .as_ref()
-                        .expect("settings popover capture surface is paired")
-                        .set_content(&content);
-                    self.settings_updaters = updaters;
-                    *self.settings_content_key.borrow_mut() = Some(content_key);
+                    resources.capture_surface.set_content(&content);
+                    self.settings.updaters = updaters;
+                    self.settings.content_key = Some(content_key);
                 }
             }
-            self.settings_expected_open.set(open);
-            if open && !popover.is_visible() {
-                popover.popup();
-            } else if !open && popover.is_visible() {
-                popover.popdown();
-            }
+            self.settings.set_open(open);
         } else {
-            self.settings_expected_open.set(false);
+            self.settings.expected_open.set(false);
         }
     }
 
     /// Canvas popover content: the Canvas pane's Boards / Pages / Advanced /
     /// Zoom command sections and the Step Undo/Redo configuration inside a
     /// scrollable viewport. Returns the built widget together with the
-    /// section's value-updaters, which the host keeps in `canvas_updaters` and
+    /// section's value-updaters, which the host keeps in the Canvas popover owner and
     /// runs every `apply` — the delay sliders read their live value from these
     /// (the content key omits the delay values) so a delay drag never rebuilds
     /// the subtree. Most state (sections, step counts, enabled/glyph faces)

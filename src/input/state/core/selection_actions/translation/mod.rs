@@ -9,25 +9,11 @@ mod undo;
 
 impl InputState {
     pub(crate) fn capture_movable_selection_snapshots(&self) -> Vec<(ShapeId, ShapeSnapshot)> {
-        let frame = self.boards.active_frame();
-        self.selected_shape_ids()
-            .iter()
-            .filter_map(|id| {
-                frame.shape(*id).and_then(|shape| {
-                    if shape.locked {
-                        None
-                    } else {
-                        Some((
-                            *id,
-                            ShapeSnapshot {
-                                shape: shape.shape.clone(),
-                                locked: shape.locked,
-                            },
-                        ))
-                    }
-                })
-            })
-            .collect()
+        crate::input::state::core::editing::CanvasEdit::capture(
+            self.boards.active_frame(),
+            self.selected_shape_ids(),
+        )
+        .into_snapshots()
     }
 
     pub(crate) fn apply_translation_to_selection_with(
@@ -51,38 +37,17 @@ impl InputState {
             return false;
         }
 
-        let mut moved_any = false;
-        for idx in 0..ids_len {
-            let id = self.selected_shape_ids()[idx];
-            let bounds = {
-                let frame = self.boards.active_frame_mut();
-                if let Some(shape) = frame.shape_mut(id) {
-                    if shape.locked {
-                        None
-                    } else {
-                        let before = shape.bounding_box_with(measurer);
-                        shape.shape.translate(dx, dy);
-                        shape.invalidate_bounds();
-                        let after = shape.bounding_box_with(measurer);
-                        Some((before, after))
-                    }
-                } else {
-                    None
-                }
-            };
-
-            if let Some((before_bounds, after_bounds)) = bounds {
-                self.mark_selection_dirty_region(before_bounds);
-                self.mark_selection_dirty_region(after_bounds);
-                self.invalidate_hit_cache_for_with(measurer, id);
-                moved_any = true;
-            }
-        }
-
-        if moved_any {
-            self.needs_redraw = true;
-        }
-        moved_any
+        let ids = self.selected_shape_ids().to_vec();
+        let effects = crate::input::state::core::editing::CanvasEdit::preview_current(
+            self.boards.active_frame_mut(),
+            &ids,
+            measurer,
+            |shape| {
+                shape.translate(dx, dy);
+                true
+            },
+        );
+        self.apply_edit_effects(measurer, effects)
     }
 
     pub(crate) fn translate_selection_with_undo_with(
@@ -101,7 +66,7 @@ impl InputState {
         if !self.apply_translation_to_selection_with(measurer, dx, dy) {
             return false;
         }
-        self.push_translation_undo(before);
+        self.push_translation_undo(measurer, before);
         true
     }
 

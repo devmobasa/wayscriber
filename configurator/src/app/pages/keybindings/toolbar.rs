@@ -142,13 +142,15 @@ fn actions_bar(sender: &ComponentSender<ConfiguratorApp>, bindings: &mut Vec<Bin
         set_visible(&reset_all, !reset_armed);
         set_sensitive(
             &reset_visible,
-            !visible_empty && !app.is_loading && !app.is_saving,
+            !visible_empty && !app.document.is_loading() && !app.document.is_saving(),
         );
-        set_sensitive(&reset_all, !app.is_loading && !app.is_saving);
+        set_sensitive(
+            &reset_all,
+            !app.document.is_loading() && !app.document.is_saving(),
+        );
         set_sensitive(
             &review,
-            app.shortcut_manager_summary().has_conflicts()
-                && app.pending_shortcut_conflict.is_none(),
+            app.shortcut_manager_summary().has_conflicts() && app.shortcuts.conflict().is_none(),
         );
     }));
     row

@@ -93,7 +93,7 @@ impl DrawnShape {
 }
 
 /// Snapshot of a shape used for undo/redo of modifications.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ShapeSnapshot {
     pub shape: Shape,
     pub locked: bool,

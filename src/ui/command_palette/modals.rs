@@ -79,7 +79,7 @@ pub(super) fn keybinding_capture_geometry(
 pub(super) fn render_keybinding_capture(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
-    input_state: &InputState,
+    current: &[String],
     action: crate::config::Action,
     screen_width: u32,
     screen_height: u32,
@@ -108,7 +108,6 @@ pub(super) fn render_keybinding_capture(
         y + 38.0,
         None,
     );
-    let current = input_state.action_binding_labels(action);
     constants::set_color(ctx, TEXT_DESCRIPTION);
     engine.draw_baseline(
         ctx,

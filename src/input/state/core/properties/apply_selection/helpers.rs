@@ -58,90 +58,29 @@ impl InputState {
     pub(in crate::input::state::core) fn apply_selection_change_with<A, F>(
         &mut self,
         measurer: &TextMeasurer,
-        mut applicable: A,
-        mut apply: F,
+        applicable: A,
+        apply: F,
     ) -> SelectionApplyResult
     where
         A: FnMut(&Shape) -> bool,
         F: FnMut(&mut Shape) -> bool,
     {
-        let ids_len = self.selected_shape_ids().len();
-        if ids_len == 0 {
-            return SelectionApplyResult::default();
+        let ids = self.selected_shape_ids().to_vec();
+        let (changed, locked, applicable, effects) =
+            crate::input::state::core::editing::CanvasEdit::apply_selection(
+                self.boards.active_frame_mut(),
+                &ids,
+                measurer,
+                self.history_limits.undo_stack_limit(),
+                applicable,
+                apply,
+            );
+        self.apply_edit_effects(measurer, effects);
+        SelectionApplyResult {
+            changed,
+            locked,
+            applicable,
         }
-
-        let mut result = SelectionApplyResult::default();
-        let mut actions = Vec::new();
-        let mut dirty_regions = Vec::new();
-
-        for idx in 0..ids_len {
-            let id = self.selected_shape_ids()[idx];
-            let frame = self.boards.active_frame_mut();
-            let Some(drawn) = frame.shape_mut(id) else {
-                continue;
-            };
-            if !applicable(&drawn.shape) {
-                continue;
-            }
-            result.applicable += 1;
-            if drawn.locked {
-                result.locked += 1;
-                continue;
-            }
-
-            let before_bounds = drawn.bounding_box_with(measurer);
-            let before_snapshot = crate::draw::frame::ShapeSnapshot {
-                shape: drawn.shape.clone(),
-                locked: drawn.locked,
-            };
-
-            let changed = apply(&mut drawn.shape);
-            drawn.invalidate_bounds();
-            if !changed {
-                continue;
-            }
-
-            let after_bounds = drawn.bounding_box_with(measurer);
-            let after_snapshot = crate::draw::frame::ShapeSnapshot {
-                shape: drawn.shape.clone(),
-                locked: drawn.locked,
-            };
-
-            actions.push(crate::draw::frame::UndoAction::Modify {
-                shape_id: drawn.id,
-                before: before_snapshot,
-                after: after_snapshot,
-            });
-            dirty_regions.push((drawn.id, before_bounds, after_bounds));
-            result.changed += 1;
-        }
-
-        if actions.is_empty() {
-            return result;
-        }
-
-        let undo_action = if actions.len() == 1 {
-            let Some(action) = actions.pop() else {
-                return result;
-            };
-            action
-        } else {
-            crate::draw::frame::UndoAction::Compound { actions }
-        };
-
-        self.boards
-            .active_frame_mut()
-            .push_undo_action(undo_action, self.history_limits.undo_stack_limit());
-        self.mark_session_dirty();
-
-        for (shape_id, before, after) in dirty_regions {
-            self.mark_selection_dirty_region(before);
-            self.mark_selection_dirty_region(after);
-            self.invalidate_hit_cache_for_with(measurer, shape_id);
-        }
-        self.needs_redraw = true;
-
-        result
     }
 
     pub(in crate::input::state::core) fn report_selection_apply_result(

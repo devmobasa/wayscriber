@@ -185,6 +185,17 @@ separate lifecycles.
 
 ---
 
+Canvas selection edits use `src/input/state/core/editing.rs::CanvasEdit`. It captures
+unlocked shapes, applies previews, commits one history entry, and restores snapshots
+on cancellation. `EditEffects` carries cache, redraw, and persistence work back to
+`InputState`. Translation previews avoid cloning shape paths on every motion event;
+resize previews borrow the gesture's starting snapshots. A multi-shape resize is one
+Undo/Redo operation, and an unchanged final snapshot adds no history entry.
+
+The command palette prepares a `CommandPaletteView` before painting. Its list rows,
+geometry, query, selection, shortcut labels, and tooltip are application values;
+the painter only consumes the view and the retained `UiTextEngine`.
+
 ## 5. Capture Pipeline
 
 **New structure (all under `src/capture/`):**
@@ -241,6 +252,11 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
+Frozen and zoom preflight use `CapturePreflight`: `Pending` carries backend policy
+and the source layout identity; dispatch changes it to `Capturing` while retaining
+that identity for stale-layout checks and fallback. Terminal cleanup resets the
+phase. Their backend selection policies and acquisition identities remain separate.
+
 ## 6. Toolbar Frontends
 
 - `src/ui/toolbar/model/top_spec.rs` owns the renderer-neutral top-toolbar contract: stable
@@ -258,6 +274,10 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   records which historical `side.*` serialized IDs still feed those models.
 
 ---
+
+Each GTK top-strip `PopoverOwner` groups its mounted popover and capture surface,
+expected-open flag, content key, and value updaters. It owns open/close and teardown;
+capture suppression operates on the paired resources without runtime pairing checks.
 
 ## 7. Domain Values and Dependency Direction
 

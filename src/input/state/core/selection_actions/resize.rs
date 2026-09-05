@@ -40,23 +40,7 @@ impl InputState {
 
     /// Capture snapshots of selected shapes for resize operation.
     pub(crate) fn capture_resize_selection_snapshots(&self) -> Vec<(ShapeId, ShapeSnapshot)> {
-        let ids = self.selected_shape_ids();
-        let frame = self.boards.active_frame();
-        let mut snapshots = Vec::with_capacity(ids.len());
-        for id in ids {
-            if let Some(shape) = frame.shape(*id)
-                && !shape.locked
-            {
-                snapshots.push((
-                    *id,
-                    ShapeSnapshot {
-                        shape: shape.shape.clone(),
-                        locked: shape.locked,
-                    },
-                ));
-            }
-        }
-        snapshots
+        self.capture_movable_selection_snapshots()
     }
 
     /// Apply resize transformation to all selected shapes.
@@ -79,23 +63,16 @@ impl InputState {
         let (scale_x, scale_y, anchor_x, anchor_y) =
             Self::compute_scale_factors(handle, original_bounds, dx, dy);
 
-        // Collect IDs to invalidate after the loop
-        let mut ids_to_invalidate = Vec::with_capacity(snapshots.len());
-
-        {
-            let frame = self.boards.active_frame_mut();
-            for (shape_id, snapshot) in snapshots {
-                if let Some(drawn) = frame.shape_mut(*shape_id) {
-                    // Apply scaling transformation to the shape
-                    drawn.set_shape(snapshot.shape.scaled(scale_x, scale_y, anchor_x, anchor_y));
-                    ids_to_invalidate.push(*shape_id);
-                }
-            }
-        }
-
-        for shape_id in ids_to_invalidate {
-            self.invalidate_hit_cache_for_with(measurer, shape_id);
-        }
+        let edit = crate::input::state::core::editing::CanvasEdit::borrow_snapshots(snapshots);
+        let effects = edit.preview(
+            self.boards.active_frame_mut(),
+            measurer,
+            |shape, snapshot| {
+                *shape = snapshot.shape.scaled(scale_x, scale_y, anchor_x, anchor_y);
+                true
+            },
+        );
+        self.apply_edit_effects(measurer, effects);
         self.mark_selection_dirty_region(self.selection_bounds_with(measurer));
     }
 
@@ -106,24 +83,8 @@ impl InputState {
         snapshots: &[(ShapeId, ShapeSnapshot)],
     ) {
         let previous_bounds = self.selection_bounds_with(measurer);
-        let mut ids_to_invalidate = Vec::with_capacity(snapshots.len());
-
-        {
-            let frame = self.boards.active_frame_mut();
-            for (shape_id, snapshot) in snapshots {
-                if let Some(drawn) = frame.shape_mut(*shape_id) {
-                    drawn.set_shape(snapshot.shape.clone());
-                    drawn.locked = snapshot.locked;
-                    ids_to_invalidate.push(*shape_id);
-                }
-            }
-        }
-
+        self.restore_selection_from_snapshots_with(measurer, snapshots.to_vec());
         self.mark_selection_dirty_region(previous_bounds);
         self.mark_selection_dirty_region(self.selection_bounds_with(measurer));
-        for shape_id in ids_to_invalidate {
-            self.invalidate_hit_cache_for_with(measurer, shape_id);
-        }
-        self.needs_redraw = true;
     }
 }

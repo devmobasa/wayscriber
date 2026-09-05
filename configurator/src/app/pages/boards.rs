@@ -165,8 +165,8 @@ fn add_legacy_note(page: &mut PageBuilder) {
     page.custom(&label);
     page.bind(move |app, _summary| {
         let visible = app
-            .base_document
-            .as_ref()
+            .document
+            .loaded()
             .is_some_and(|document| document.config().boards.is_none());
         if label.is_visible() != visible {
             label.set_visible(visible);

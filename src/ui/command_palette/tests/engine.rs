@@ -113,3 +113,29 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
         assert!(invalid.iter().all(|byte| *byte == 0));
     }
 }
+
+#[test]
+fn prepared_palette_paints_without_application_state() {
+    let engine = UiTextEngine::default();
+    let closed = pixels(1, |ctx| {
+        paint_command_palette(&engine, ctx, &CommandPaletteView::Closed, 800, 600)
+    });
+    assert!(closed.iter().all(|byte| *byte == 0));
+    let view = CommandPaletteView::List(PaletteListView {
+        query: "No matching action".into(),
+        rows: Vec::new(),
+        geometry: (100.0, 100.0, 520.0, 180.0),
+        scroll: 0,
+        selected: 0,
+        bindings: Default::default(),
+        tooltip: None,
+    });
+    let painted = pixels(1, |ctx| {
+        paint_command_palette(&engine, ctx, &view, 800, 600)
+    });
+    assert!(painted.iter().any(|byte| *byte != 0));
+    // The dimmer and the panel have different opacity, so this checks the
+    // prepared geometry actually places a panel, beyond merely clearing Cairo.
+    let alpha = |x: usize, y: usize| painted[(y * 800 + x) * 4 + 3];
+    assert!(alpha(200, 150) > alpha(20, 20));
+}

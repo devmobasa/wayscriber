@@ -17,7 +17,9 @@
 
 mod controls;
 mod drag;
+mod popover_owner;
 mod popovers;
+use popover_owner::{PopoverOwner, PopoverResources};
 mod strip;
 mod style_pill;
 #[cfg(test)]
@@ -137,7 +139,7 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, boo
 /// deliberately NOT in this key: each slider emits continuously during a drag,
 /// so keying the content on its value would rebuild the popover subtree on the
 /// first backend echo, destroying the live gesture and resetting the scroll
-/// position. They ride the persistent `canvas_updaters` instead (like the
+/// position. They ride the persistent popover value updaters instead (like the
 /// strip's thickness/opacity/font-size sliders), which set the value in place
 /// and are a no-op while the slider is mid-drag. The step *counts* stay in the
 /// key: they change through discrete −/+ clicks, never a drag, so a rebuild is
@@ -378,39 +380,11 @@ pub(in crate::toolbar_gtk) struct TopBar {
     capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     updaters: Rc<RefCell<Vec<Updater>>>,
-    /// Persistent value-updaters for the open Canvas popover's content. The
-    /// continuously-dragged delay sliders ride these updaters so a drag never
-    /// triggers a subtree rebuild. Repopulated whenever the popover content is
-    /// (re)built; run every `apply`.
-    canvas_updaters: Rc<RefCell<Vec<Updater>>>,
-    /// Persistent value-updaters for the open Settings popover. Checkbox
-    /// values and their next events change in place; only structural menu
-    /// changes replace the subtree.
-    settings_updaters: Vec<Updater>,
-    shapes_popover: Option<gtk4::Popover>,
-    shapes_capture_surface: Option<CaptureSurfaceContent>,
-    overflow_popover: Option<gtk4::Popover>,
-    overflow_capture_surface: Option<CaptureSurfaceContent>,
-    canvas_popover: Option<gtk4::Popover>,
-    canvas_capture_surface: Option<CaptureSurfaceContent>,
-    session_popover: Option<gtk4::Popover>,
-    session_capture_surface: Option<CaptureSurfaceContent>,
-    settings_popover: Option<gtk4::Popover>,
-    settings_capture_surface: Option<CaptureSurfaceContent>,
-    /// Popover open state as last driven by the snapshot; lets the
-    /// `closed` handlers distinguish user dismissal from state sync.
-    shapes_expected_open: Rc<Cell<bool>>,
-    overflow_expected_open: Rc<Cell<bool>>,
-    canvas_expected_open: Rc<Cell<bool>>,
-    session_expected_open: Rc<Cell<bool>>,
-    settings_expected_open: Rc<Cell<bool>>,
-    /// Discriminants of the currently built popover contents; skips the
-    /// per-snapshot rebuild that would reset hover and in-flight presses.
-    shapes_content_key: Cell<Option<ShapesContentKey>>,
-    overflow_content_key: Cell<Option<OverflowContentKey>>,
-    canvas_content_key: RefCell<Option<CanvasMenuContentKey>>,
-    session_content_key: RefCell<Option<SessionMenuContentKey>>,
-    settings_content_key: RefCell<Option<SettingsMenuContentKey>>,
+    shapes: PopoverOwner<ShapesContentKey>,
+    overflow: PopoverOwner<OverflowContentKey>,
+    canvas: PopoverOwner<CanvasMenuContentKey>,
+    session: PopoverOwner<SessionMenuContentKey>,
+    settings: PopoverOwner<SettingsMenuContentKey>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -490,28 +464,11 @@ impl TopBar {
             capture_surface,
             structure: None,
             updaters: Rc::new(RefCell::new(Vec::new())),
-            canvas_updaters: Rc::new(RefCell::new(Vec::new())),
-            settings_updaters: Vec::new(),
-            shapes_popover: None,
-            shapes_capture_surface: None,
-            overflow_popover: None,
-            overflow_capture_surface: None,
-            canvas_popover: None,
-            canvas_capture_surface: None,
-            session_popover: None,
-            session_capture_surface: None,
-            settings_popover: None,
-            settings_capture_surface: None,
-            shapes_expected_open: Rc::new(Cell::new(false)),
-            overflow_expected_open: Rc::new(Cell::new(false)),
-            canvas_expected_open: Rc::new(Cell::new(false)),
-            session_expected_open: Rc::new(Cell::new(false)),
-            settings_expected_open: Rc::new(Cell::new(false)),
-            shapes_content_key: Cell::new(None),
-            overflow_content_key: Cell::new(None),
-            canvas_content_key: RefCell::new(None),
-            session_content_key: RefCell::new(None),
-            settings_content_key: RefCell::new(None),
+            shapes: PopoverOwner::default(),
+            overflow: PopoverOwner::default(),
+            canvas: PopoverOwner::default(),
+            session: PopoverOwner::default(),
+            settings: PopoverOwner::default(),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
@@ -605,11 +562,11 @@ impl TopBar {
         // a subtree rebuild (set_value is a no-op mid-drag, so an in-flight
         // gesture survives). Run after `sync_popovers` so a fresh rebuild's
         // updaters are the ones invoked.
-        for updater in self.canvas_updaters.borrow().iter() {
+        for updater in &self.canvas.updaters {
             updater(snapshot);
         }
         if snapshot.settings_popover_open {
-            for updater in &self.settings_updaters {
+            for updater in &self.settings.updaters {
                 updater(snapshot);
             }
         }
@@ -676,46 +633,15 @@ impl TopBar {
     fn rebuild(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         // Popovers are parented to bar buttons; unparent them before the
         // buttons go away or GTK complains and leaks the popover widgets.
-        self.shapes_expected_open.set(false);
-        self.overflow_expected_open.set(false);
-        self.canvas_expected_open.set(false);
-        self.session_expected_open.set(false);
-        self.settings_expected_open.set(false);
-        if let Some(popover) = self.shapes_popover.take() {
-            popover.unparent();
-        }
-        self.shapes_capture_surface = None;
-        if let Some(popover) = self.overflow_popover.take() {
-            popover.unparent();
-        }
-        self.overflow_capture_surface = None;
-        if let Some(popover) = self.canvas_popover.take() {
-            popover.unparent();
-        }
-        self.canvas_capture_surface = None;
-        if let Some(popover) = self.session_popover.take() {
-            popover.unparent();
-        }
-        self.session_capture_surface = None;
-        if let Some(popover) = self.settings_popover.take() {
-            popover.unparent();
-        }
-        self.settings_capture_surface = None;
-        self.shapes_content_key.set(None);
-        self.overflow_content_key.set(None);
-        *self.canvas_content_key.borrow_mut() = None;
-        *self.session_content_key.borrow_mut() = None;
-        *self.settings_content_key.borrow_mut() = None;
+        self.shapes.clear();
+        self.overflow.clear();
+        self.canvas.clear();
+        self.session.clear();
+        self.settings.clear();
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }
         self.updaters.borrow_mut().clear();
-        // The Canvas popover was just unparented above, so its persistent
-        // value-updaters (which capture those now-dead widgets) must go too;
-        // a fresh open repopulates them.
-        self.canvas_updaters.borrow_mut().clear();
-        self.settings_updaters.clear();
-
         if snapshot.top_minimized {
             self.build_minimized(snapshot, plan);
         } else if snapshot.top_micro_active() {

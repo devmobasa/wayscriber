@@ -1,48 +1,18 @@
 use crate::draw::ShapeId;
-use crate::draw::frame::{ShapeSnapshot, UndoAction};
+use crate::draw::frame::ShapeSnapshot;
 use crate::input::InputState;
+use crate::input::state::core::editing::CanvasEdit;
 
 impl InputState {
-    pub(crate) fn push_translation_undo(&mut self, before: Vec<(ShapeId, ShapeSnapshot)>) -> bool {
-        if before.is_empty() {
-            return false;
-        }
-
-        let mut actions = Vec::new();
-        {
-            let frame = self.boards.active_frame();
-            for (shape_id, before_snapshot) in &before {
-                if let Some(shape) = frame.shape(*shape_id) {
-                    let after_snapshot = ShapeSnapshot {
-                        shape: shape.shape.clone(),
-                        locked: shape.locked,
-                    };
-                    actions.push(UndoAction::modify_from_snapshots(
-                        *shape_id,
-                        before_snapshot.clone(),
-                        after_snapshot,
-                    ));
-                }
-            }
-        }
-
-        if actions.is_empty() {
-            return false;
-        }
-
-        let undo_action = if actions.len() == 1 {
-            let Some(action) = actions.pop() else {
-                return false;
-            };
-            action
-        } else {
-            UndoAction::Compound { actions }
-        };
-
-        self.boards
-            .active_frame_mut()
-            .push_undo_action(undo_action, self.history_limits.undo_stack_limit());
-        self.mark_session_dirty();
-        true
+    pub(crate) fn push_translation_undo(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        before: Vec<(ShapeId, ShapeSnapshot)>,
+    ) -> bool {
+        let effects = CanvasEdit::from_snapshots(before).commit(
+            self.boards.active_frame_mut(),
+            self.history_limits.undo_stack_limit(),
+        );
+        self.apply_edit_effects(measurer, effects)
     }
 }

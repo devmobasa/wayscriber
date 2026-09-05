@@ -98,7 +98,7 @@ pub(crate) use types::{
 #[allow(unused_imports)]
 pub use validate::{
     ConfigValidationReport, DefaultShortcutSkipped, InvalidKeybinding,
-    KeybindingConflictResolution, KeybindingProblem,
+    KeybindingConflictResolution, KeybindingProblem, SaveValidationError,
 };
 
 // Re-export for public API (unused internally but part of public interface)

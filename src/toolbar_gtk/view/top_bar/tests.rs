@@ -321,7 +321,7 @@ fn canvas_popover_content_key_rebuilds_on_section_and_value_changes() {
 /// of the content key, the first backend echo would rebuild the whole popover
 /// subtree, destroying the live gesture and resetting the scroll. So a
 /// delay-value change must leave the content key stable — the values ride the
-/// persistent `canvas_updaters` instead (set in place, a no-op mid-drag).
+/// persistent Canvas popover value updaters instead (set in place, a no-op mid-drag).
 #[test]
 fn canvas_popover_content_key_ignores_delay_slider_values() {
     let state = make_test_input_state();
@@ -1129,26 +1129,11 @@ fn has_capture_phase_click_gesture(widget: &gtk4::Widget) -> bool {
 }
 
 fn detach_test_popovers(top: &mut TopBar) {
-    if let Some(popover) = top.shapes_popover.take() {
-        popover.unparent();
-    }
-    top.shapes_capture_surface = None;
-    if let Some(popover) = top.overflow_popover.take() {
-        popover.unparent();
-    }
-    top.overflow_capture_surface = None;
-    if let Some(popover) = top.canvas_popover.take() {
-        popover.unparent();
-    }
-    top.canvas_capture_surface = None;
-    if let Some(popover) = top.session_popover.take() {
-        popover.unparent();
-    }
-    top.session_capture_surface = None;
-    if let Some(popover) = top.settings_popover.take() {
-        popover.unparent();
-    }
-    top.settings_capture_surface = None;
+    top.shapes.clear();
+    top.overflow.clear();
+    top.canvas.clear();
+    top.session.clear();
+    top.settings.clear();
 }
 
 fn assert_builtin_node(
@@ -2256,8 +2241,8 @@ fn assert_gtk_toggle_events(regular: &ToolbarSnapshot, highlighted: &ToolbarSnap
     active.any_highlight_active = true;
     active.top_pinned = true;
     active.top_overflow_open = true;
-    top.shapes_expected_open.set(true);
-    top.overflow_expected_open.set(true);
+    top.shapes.expected_open.set(true);
+    top.overflow.expected_open.set(true);
     for updater in top.updaters.borrow().iter() {
         updater(&active);
     }
@@ -2270,8 +2255,8 @@ fn assert_gtk_toggle_events(regular: &ToolbarSnapshot, highlighted: &ToolbarSnap
             (&overflow, ToolbarEvent::ToggleTopOverflow(false)),
         ],
     );
-    top.shapes_expected_open.set(false);
-    top.overflow_expected_open.set(false);
+    top.shapes.expected_open.set(false);
+    top.overflow.expected_open.set(false);
     detach_test_popovers(&mut top);
     assert_highlight_ring_event(&mut top, highlighted, &rx);
 }
@@ -2279,12 +2264,28 @@ fn assert_gtk_toggle_events(regular: &ToolbarSnapshot, highlighted: &ToolbarSnap
 fn assert_test_popover_capture_surfaces(top: &TopBar) {
     for (popover, capture_surface) in [
         (
-            top.shapes_popover.as_ref().unwrap(),
-            top.shapes_capture_surface.as_ref().unwrap(),
+            top.shapes
+                .mounted
+                .as_ref()
+                .map(|resources| &resources.popover)
+                .unwrap(),
+            top.shapes
+                .mounted
+                .as_ref()
+                .map(|resources| &resources.capture_surface)
+                .unwrap(),
         ),
         (
-            top.overflow_popover.as_ref().unwrap(),
-            top.overflow_capture_surface.as_ref().unwrap(),
+            top.overflow
+                .mounted
+                .as_ref()
+                .map(|resources| &resources.popover)
+                .unwrap(),
+            top.overflow
+                .mounted
+                .as_ref()
+                .map(|resources| &resources.capture_surface)
+                .unwrap(),
         ),
     ] {
         let content = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
@@ -2567,9 +2568,9 @@ fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {
         &session_snapshot,
         &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &session_snapshot),
     );
-    assert!(menu_top.session_popover.is_some(), "session popover exists");
+    assert!(menu_top.session.mounted.is_some(), "session popover exists");
     assert!(
-        menu_top.settings_popover.is_some(),
+        menu_top.settings.mounted.is_some(),
         "settings popover exists"
     );
 
@@ -2737,7 +2738,7 @@ fn assert_canvas_popover_contract(
     regular: &ToolbarSnapshot,
     rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
 ) {
-    assert!(top.canvas_popover.is_some(), "canvas popover exists");
+    assert!(top.canvas.mounted.is_some(), "canvas popover exists");
     assert_canvas_command_sections(top, regular, rx);
     assert_canvas_delay_updates(top, regular);
     assert_empty_canvas_popover(top, regular);

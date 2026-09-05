@@ -84,18 +84,20 @@ impl CaptureSession {
 impl FrozenState {
     /// Start a screencopy capture for the active output.
     pub fn start_capture(&mut self) -> Result<()> {
-        if self.direct_capture.is_some() || self.portal_in_progress || self.preflight_pending {
+        if self.direct_capture.is_some() || self.portal_in_progress || self.preflight.is_pending() {
             warn!("Frozen-mode capture already in progress; ignoring toggle");
             return Ok(());
         }
 
         self.capture_done = false;
-        self.preflight_backend = Some(
-            self.preferred_backend()
-                .context("no frozen capture backend is available")?,
+        let backend = self
+            .preferred_backend()
+            .context("no frozen capture backend is available")?;
+        self.preflight.begin(
+            backend,
+            self.active_output_id,
+            self.output_layout_generation,
         );
-        self.snapshot_preflight_layout();
-        self.preflight_pending = true;
         Ok(())
     }
 

@@ -112,7 +112,8 @@ pub(super) fn missing_tools(status: &DaemonRuntimeStatus) -> Option<String> {
 }
 
 pub(super) fn service_installed(app: &ConfiguratorApp) -> bool {
-    app.daemon_status
+    app.daemon
+        .status
         .as_ref()
         .is_some_and(|status| status.service_installed)
 }

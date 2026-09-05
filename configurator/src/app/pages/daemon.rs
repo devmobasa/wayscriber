@@ -45,7 +45,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             // alone: until the environment is known there is nothing for the
             // setup steps to say.
             let visible = daemon_section_visible(section, shown_areas(summary))
-                && (section == DaemonSection::TechnicalDetails || app.daemon_status.is_some());
+                && (section == DaemonSection::TechnicalDetails || app.daemon.status.is_some());
             set_visible(&group, visible);
         }));
     }

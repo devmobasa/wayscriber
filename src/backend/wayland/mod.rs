@@ -1,6 +1,7 @@
 mod acquisition;
 mod backend;
 mod capture;
+mod capture_preflight;
 mod clipboard;
 mod config_edits;
 mod frozen;

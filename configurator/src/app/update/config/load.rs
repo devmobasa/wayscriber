@@ -11,7 +11,6 @@ impl ConfiguratorApp {
         &mut self,
         result: Result<(Box<ConfigDocument>, Option<String>), String>,
     ) -> Vec<Effect> {
-        self.is_loading = false;
         match result {
             Ok((document, repair_warning)) => {
                 let draft = ConfigDraft::from_config(document.config());
@@ -35,9 +34,10 @@ impl ConfiguratorApp {
                 );
                 // Last, so everything above reads the document by reference and
                 // the model takes ownership of exactly one copy.
-                self.base_document = Some(*document);
+                self.document.finish_load(Some(*document));
             }
             Err(err) => {
+                self.document.finish_load(None);
                 self.status =
                     StatusMessage::error(format!("Failed to load config from disk: {err}"));
             }
@@ -51,8 +51,7 @@ impl ConfiguratorApp {
     }
 
     pub(in crate::app::update) fn handle_reload_requested(&mut self) -> Vec<Effect> {
-        if !self.is_loading && !self.is_saving {
-            self.is_loading = true;
+        if self.document.begin_reload() {
             self.clear_defaults_confirmation();
             self.status = StatusMessage::info("Reloading configuration...");
             return vec![Effect::LoadConfig];

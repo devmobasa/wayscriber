@@ -34,7 +34,7 @@ fn handle_config_loaded_success_resets_loading_and_dirty_state() {
     let (path, document) = temp_config_document("loaded", "");
     let _ = app.handle_config_loaded(Ok((document, None)));
 
-    assert!(!app.is_loading);
+    assert!(!app.document.is_loading());
     assert!(!app.is_dirty);
     assert_eq!(app.boards_collapsed.len(), app.draft.boards.items.len());
     assert!(status_contains(
@@ -75,10 +75,10 @@ fn handle_config_loaded_error_preserves_the_last_good_document_and_draft() {
 
     let _ = app.handle_config_loaded(Err("broken".to_string()));
 
-    assert!(!app.is_loading);
+    assert!(!app.document.is_loading());
     assert_eq!(
-        app.base_document
-            .as_ref()
+        app.document
+            .loaded()
             .expect("last good document")
             .destination(),
         destination,
@@ -102,7 +102,7 @@ fn handle_config_loaded_repair_document_allows_saving() {
         Some("invalid type: string, expected u32".to_string()),
     )));
 
-    assert!(app.base_document.is_some());
+    assert!(app.document.loaded().is_some());
     assert!(matches!(app.status, StatusMessage::Warning(_)));
     assert!(status_contains(&app.status, "loaded for repair"));
     assert!(status_contains(
@@ -110,7 +110,7 @@ fn handle_config_loaded_repair_document_allows_saving() {
         "malformed TOML content remains only in the backup"
     ));
     let _ = app.handle_save_requested();
-    assert!(app.is_saving);
+    assert!(app.document.is_saving());
     let _ = std::fs::remove_file(path);
 }
 
@@ -247,12 +247,12 @@ fn handle_save_requested_blocks_without_loaded_document() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     // A fresh app is still running its startup load; this test is about
     // the load having finished without producing a document.
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
 
     let effects = app.handle_save_requested();
 
     assert!(effects.is_empty());
-    assert!(!app.is_saving);
+    assert!(!app.document.is_saving());
     assert!(status_contains(
         &app.status,
         "Configuration has not loaded successfully"
@@ -262,14 +262,14 @@ fn handle_save_requested_blocks_without_loaded_document() {
 #[test]
 fn handle_save_requested_sets_saving_for_valid_draft() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_saving = false;
+    app.document.set_saving_for_test(false);
     let (path, document) = temp_config_document("save-request", "");
     let _ = app.handle_config_loaded(Ok((document, None)));
 
     let effects = app.handle_save_requested();
 
     assert!(matches!(effects.as_slice(), [Effect::SaveConfig { .. }]));
-    assert!(app.is_saving);
+    assert!(app.document.is_saving());
     assert!(status_contains(&app.status, "Saving configuration..."));
     let _ = std::fs::remove_file(path);
 }
@@ -284,7 +284,7 @@ fn the_running_save_holds_the_document_and_the_result_returns_one() {
     let (document, config) = save_effect(&mut app);
 
     assert!(
-        app.base_document.is_none(),
+        app.document.loaded().is_none(),
         "the write holds the document while it runs"
     );
     let (saved, backup) = document
@@ -294,7 +294,7 @@ fn the_running_save_holds_the_document_and_the_result_returns_one() {
     let _ = app.handle_config_saved(Ok((backup, Box::new(saved))));
 
     assert!(
-        app.base_document.is_some(),
+        app.document.loaded().is_some(),
         "a finished save hands a document back"
     );
 }
@@ -308,13 +308,13 @@ fn a_failed_save_hands_the_document_back() {
     app.refresh_dirty_flag();
 
     let (document, _config) = save_effect(&mut app);
-    assert!(app.base_document.is_none());
+    assert!(app.document.loaded().is_none());
 
     let _ = app.handle_config_saved(Err((Some(document), "Permission denied".to_string())));
 
-    assert!(!app.is_saving);
+    assert!(!app.document.is_saving());
     assert!(
-        app.base_document.is_some(),
+        app.document.loaded().is_some(),
         "the document the failed write borrowed must return to the model"
     );
     assert!(app.is_dirty, "the draft is still unsaved");
@@ -343,7 +343,7 @@ fn a_save_whose_job_never_returned_asks_for_a_reload() {
 
     let _ = app.handle_config_saved(Err((None, "config save blocking job panicked".to_string())));
 
-    assert!(app.base_document.is_none());
+    assert!(app.document.loaded().is_none());
     assert!(status_contains(&app.status, "Reload before saving again"));
 }
 
@@ -357,9 +357,9 @@ fn a_draft_the_converter_rejects_keeps_the_document() {
     let effects = app.handle_save_requested();
 
     assert!(effects.is_empty());
-    assert!(!app.is_saving);
+    assert!(!app.document.is_saving());
     assert!(
-        app.base_document.is_some(),
+        app.document.loaded().is_some(),
         "a refused save must not take the document with it"
     );
     assert!(status_contains(
@@ -378,9 +378,9 @@ fn a_draft_with_out_of_range_numbers_keeps_the_document() {
     let effects = app.handle_save_requested();
 
     assert!(effects.is_empty());
-    assert!(!app.is_saving);
+    assert!(!app.document.is_saving());
     assert!(
-        app.base_document.is_some(),
+        app.document.loaded().is_some(),
         "a refused save must not take the document with it"
     );
     assert!(status_contains(
@@ -404,8 +404,11 @@ fn a_color_field_holding_invalid_hex_blocks_the_save() {
     let effects = app.handle_save_requested();
 
     assert!(effects.is_empty());
-    assert!(!app.is_saving);
-    assert!(app.base_document.is_some(), "nothing was written or taken");
+    assert!(!app.document.is_saving());
+    assert!(
+        app.document.loaded().is_some(),
+        "nothing was written or taken"
+    );
     assert!(status_contains(&app.status, "1 color field"));
     assert!(status_contains(
         &app.status,
@@ -507,7 +510,7 @@ fn every_invalid_color_field_is_counted_for_the_refusal() {
 #[test]
 fn reset_to_defaults_requires_confirmation() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft.capture_enabled = !app.defaults.capture_enabled;
     let changed_draft = app.draft.clone();
 
@@ -524,7 +527,7 @@ fn reset_to_defaults_requires_confirmation() {
 #[test]
 fn reset_to_defaults_repeated_request_is_a_no_op() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft.capture_enabled = !app.defaults.capture_enabled;
     let changed_draft = app.draft.clone();
 
@@ -541,7 +544,7 @@ fn reset_to_defaults_repeated_request_is_a_no_op() {
 #[test]
 fn reset_to_defaults_confirmed_applies_the_defaults() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft.capture_enabled = !app.defaults.capture_enabled;
     app.baseline.capture_enabled = !app.defaults.capture_enabled;
 
@@ -562,7 +565,7 @@ fn reset_to_defaults_confirmed_applies_the_defaults() {
 #[test]
 fn reset_to_defaults_confirmed_without_a_request_changes_nothing() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft.capture_enabled = !app.defaults.capture_enabled;
     let changed_draft = app.draft.clone();
 
@@ -581,7 +584,7 @@ fn reset_to_defaults_confirmed_without_a_request_changes_nothing() {
 #[test]
 fn reset_to_defaults_canceled_disarms_and_clears_the_hint() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft.capture_enabled = !app.defaults.capture_enabled;
     let changed_draft = app.draft.clone();
 
@@ -600,7 +603,7 @@ fn reset_to_defaults_canceled_disarms_and_clears_the_hint() {
 #[test]
 fn reset_to_defaults_canceled_keeps_status_that_replaced_the_hint() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
     app.status = StatusMessage::error("Failed to clear session s-1: nope");
@@ -617,7 +620,7 @@ fn reset_to_defaults_canceled_keeps_status_that_replaced_the_hint() {
 #[test]
 fn reset_to_defaults_canceled_without_a_request_keeps_the_status() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.status = StatusMessage::error("Failed to load config from disk: nope");
 
     let _ = app.handle_reset_to_defaults_canceled();
@@ -628,7 +631,7 @@ fn reset_to_defaults_canceled_without_a_request_keeps_the_status() {
 #[test]
 fn active_confirmation_cancel_uses_the_typed_owner() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
     let effects = app.handle_active_confirmation_canceled();
@@ -641,7 +644,7 @@ fn active_confirmation_cancel_uses_the_typed_owner() {
 #[test]
 fn active_confirmation_cancel_preserves_newer_feedback() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
     app.status = StatusMessage::error("A newer operation failed");
@@ -655,7 +658,7 @@ fn active_confirmation_cancel_preserves_newer_feedback() {
 #[test]
 fn reset_to_defaults_confirmation_is_canceled_by_draft_edit() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
     let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
@@ -669,7 +672,7 @@ fn reset_to_defaults_confirmation_is_canceled_by_draft_edit() {
 #[test]
 fn a_draft_edit_between_request_and_confirm_refuses_the_confirm() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
     let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
@@ -696,7 +699,7 @@ fn a_shortcut_typed_for_an_omitted_action_is_arbitrated_not_filtered() {
         .keybindings
         .set(KeybindingField::ClearCanvas, "Ctrl+Alt+U".to_string());
 
-    let document = app.base_document.as_ref().expect("a loaded document");
+    let document = app.document.loaded().expect("a loaded document");
     let mut config = app
         .draft
         .to_config(document.config())
@@ -781,9 +784,9 @@ fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
     let effects = app.handle_save_requested();
 
     assert!(effects.is_empty());
-    assert!(!app.is_saving);
+    assert!(!app.document.is_saving());
     assert!(
-        app.base_document.is_some(),
+        app.document.loaded().is_some(),
         "a refused save must not take the document with it"
     );
     assert!(status_contains(
@@ -801,15 +804,15 @@ fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
 fn save_is_refused_while_a_reload_is_in_flight() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     let (path, document) = temp_config_document("save-during-reload", "");
-    app.base_document = Some(*document);
-    app.is_loading = true;
+    app.document.finish_load(Some(*document));
+    app.document.set_loading_for_test(true);
     app.is_dirty = true;
     let before = app.status.clone();
 
     let _ = app.handle_save_requested();
 
     assert!(
-        !app.is_saving,
+        !app.document.is_saving(),
         "no save may start under an in-flight reload"
     );
     assert!(app.is_dirty, "the draft stays dirty for the next attempt");
@@ -824,18 +827,18 @@ fn save_is_refused_while_a_reload_is_in_flight() {
 #[test]
 fn handle_config_saved_success_clears_dirty_and_records_backup() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_saving = true;
+    app.document.set_saving_for_test(true);
     app.is_dirty = true;
     app.draft.capture_enabled = !app.draft.capture_enabled;
     let backup = PathBuf::from("/tmp/wayscriber-config.bak");
     let (path, document) = temp_config_document("saved", "");
 
     let _ = app.handle_config_saved(Ok((Some(backup.clone()), document)));
-    assert!(app.base_document.is_some());
+    assert!(app.document.loaded().is_some());
 
-    assert!(!app.is_saving);
+    assert!(!app.document.is_saving());
     assert!(!app.is_dirty);
-    assert_eq!(app.last_backup_path, Some(backup));
+    assert_eq!(app.document.last_backup_path, Some(backup));
     assert_eq!(app.draft, app.baseline);
     assert!(status_contains(
         &app.status,

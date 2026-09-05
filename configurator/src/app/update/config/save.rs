@@ -14,7 +14,7 @@ impl ConfiguratorApp {
         // document when it lands, so a save started underneath it would write
         // the pre-reload draft and then be judged against a document it never
         // saw — leaving stale fields marked clean and the next save rejected.
-        if self.is_saving || self.is_loading {
+        if self.document.is_saving() || self.document.is_loading() {
             return Vec::new();
         }
         self.clear_defaults_confirmation();
@@ -29,7 +29,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
 
-        if self.pending_shortcut_conflict.is_some() {
+        if self.shortcuts.conflict().is_some() {
             self.status = StatusMessage::error("Resolve the shortcut conflict before saving.");
             return Vec::new();
         }
@@ -38,7 +38,7 @@ impl ConfiguratorApp {
         // copy here and gets one back from `handle_config_saved` either way.
         // Taking it is also the "nothing loaded" check: there is one `Option`
         // to read, and reading it is what moves the value.
-        let Some(document) = self.base_document.take() else {
+        let Some(document) = self.document.begin_save() else {
             self.status = StatusMessage::error(
                 "Configuration has not loaded successfully. Reload before saving.",
             );
@@ -47,7 +47,6 @@ impl ConfiguratorApp {
 
         match self.prepare_config_to_save(&document) {
             Ok(config) => {
-                self.is_saving = true;
                 self.status = StatusMessage::info("Saving configuration...");
                 vec![Effect::SaveConfig {
                     document: Box::new(document),
@@ -57,7 +56,7 @@ impl ConfiguratorApp {
             Err(errors) => {
                 // No write starts, so the document goes straight back: this
                 // handler must not be a way to lose it.
-                self.base_document = Some(document);
+                self.document.finish_save(Some(document));
                 let message = errors
                     .into_iter()
                     .map(|err| format!("{}: {}", err.field, err.message))
@@ -84,31 +83,30 @@ impl ConfiguratorApp {
         &mut self,
         document: &ConfigDocument,
     ) -> Result<Config, Vec<FormError>> {
-        let mut config = self.draft.to_config(document.config())?;
-        let before_clamp = config.clone();
-        self.pending_save_validation = config.validate_and_clamp();
-        if save_clamped_non_keybinding_fields(&before_clamp, &config) {
-            self.pending_save_validation = Default::default();
-            return Err(vec![FormError::new(
-                "config",
-                "Some values are outside their allowed ranges and would be changed on save. Fix them before saving.",
-            )]);
+        let config = self.draft.to_config(document.config())?;
+        match config.validate_for_save() {
+            Ok((config, report)) => {
+                self.document.pending_validation = report;
+                Ok(config)
+            }
+            Err(error) => {
+                self.document.pending_validation = Default::default();
+                Err(vec![FormError::new("config", error.to_string())])
+            }
         }
-        Ok(config)
     }
 
     pub(in crate::app::update) fn handle_config_saved(
         &mut self,
         result: ConfigSaveResult,
     ) -> Vec<Effect> {
-        self.is_saving = false;
         // Either outcome answers this write; a failed one wrote nothing, so
         // there is no resolution to report for it.
-        let validation = std::mem::take(&mut self.pending_save_validation);
+        let validation = std::mem::take(&mut self.document.pending_validation);
         match result {
             Ok((backup, saved_document)) => {
                 let draft = ConfigDraft::from_config(saved_document.config());
-                self.last_backup_path = backup.clone();
+                self.document.last_backup_path = backup.clone();
                 self.draft = draft.clone();
                 self.baseline = draft;
                 self.boards_collapsed = vec![false; self.draft.boards.items.len()];
@@ -129,7 +127,7 @@ impl ConfiguratorApp {
                     status = status.with_note(&note);
                 }
                 self.status = status;
-                self.base_document = Some(*saved_document);
+                self.document.finish_save(Some(*saved_document));
             }
             Err((document, err)) => {
                 // The write borrowed the model's only document; a failure hands
@@ -137,7 +135,8 @@ impl ConfiguratorApp {
                 // with nothing to hand back is a blocking job that never
                 // returned, which leaves a reload as the way forward.
                 let restored = document.is_some();
-                self.base_document = document.map(|document| *document);
+                self.document
+                    .finish_save(document.map(|document| *document));
                 let mut message = format!("Failed to save configuration: {err}");
                 if !restored {
                     message.push_str(
@@ -150,10 +149,4 @@ impl ConfiguratorApp {
 
         Vec::new()
     }
-}
-
-fn save_clamped_non_keybinding_fields(before: &Config, after: &Config) -> bool {
-    let mut before = before.clone();
-    before.keybindings = after.keybindings.clone();
-    format!("{before:?}") != format!("{after:?}")
 }
