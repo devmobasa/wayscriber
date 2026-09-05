@@ -5,7 +5,7 @@
 
 A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rust.
 
-Draw over any app, present with callouts and zoom, keep your boards between sessions — all from a lightweight daemon you toggle with one keybind.
+Draw over any app, present with callouts and zoom, keep your boards between sessions. Toggle the lightweight daemon with one keybind.
 
 **Docs:** https://wayscriber.com/docs/
 
@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 ## Why wayscriber?
 
 - **Annotate live** over any app without disrupting your workflow
-- **Professional presentation tools** — presenter mode, numbered callouts, click highlights, screen freeze, zoom
+- **Professional presentation tools**: presenter mode, numbered callouts, click highlights, screen freeze, zoom
 - **Persistent sessions** that survive restarts
 - **Native Wayland performance** with ZoomIt-like controls
 - **Lightweight daemon** with instant toggle via keybind
@@ -79,7 +79,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 | GNOME | ⚠️ Partial | Normal overlay and Freeze via portal when available; [light passthrough](#light-passthrough-mode) unavailable |
 | X11 | ❌ | Not supported |
 
-The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — see the notes in [Debian and Ubuntu](#debian-and-ubuntu) and [Fedora and RHEL](#fedora-and-rhel). The AUR packages and Nix are unaffected.
+The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See the notes in [Debian and Ubuntu](#debian-and-ubuntu) and [Fedora and RHEL](#fedora-and-rhel). The AUR packages and Nix are unaffected.
 
 <details>
 <summary>Tested environments</summary>
@@ -143,7 +143,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Full-screen saves, active-window grabs, region capture
 - Copy to clipboard or save to file
 - Uses `grim`, `slurp`, `wl-clipboard` (installed automatically by deb/rpm/AUR packages; fallback: xdg-desktop-portal)
-- Copy text from screen (OCR): <kbd>Ctrl+Shift+X</kbd>, then drag a region of the shown desktop — or <kbd>Ctrl+A</kbd> for all of it — and get its text on the clipboard (needs `tesseract`)
+- Copy text from screen (OCR): press <kbd>Ctrl+Shift+X</kbd>. Drag a desktop region, or press <kbd>Ctrl+A</kbd> for the whole desktop. The recognized text goes to the clipboard. Requires `tesseract`.
 
 ### Sessions and persistence
 - Session persistence is enabled by default for boards, undo/redo history, and tool state
@@ -160,7 +160,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
 - Command palette (<kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd>)
-- Search, run, edit, unbind, or reset action shortcuts from the command palette; hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> while clicking a bindable toolbar control for direct shortcut capture (the modifier chord is configurable). An accepted shortcut is written straight back to `config.toml` — only that action's entry, with a timestamped `.bak` — and <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator
+- Search, run, edit, unbind, or reset action shortcuts from the command palette. Hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> and click a bindable toolbar control to record its shortcut. You can configure this modifier chord. Wayscriber saves only that action's entry to `config.toml` and creates a timestamped `.bak` backup. Press <kbd>Ctrl+Shift+E</kbd> on a palette row to open the same shortcut in the configurator
 
 ### Multi-monitor
 - Move overlay focus between monitors: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
@@ -177,8 +177,8 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Click highlights with configurable colors/radius/duration
 - Persistent ring while the click highlight tool is active
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
-- Input HUD (<kbd>Ctrl+Shift+K</kbd>): on-screen keystroke and click chips for demos and screencasts (opt-in system-wide capture via the `input-monitor` build feature — see [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks))
-- Light passthrough (layer-shell): draw while input passes through to the app underneath — see [Light passthrough mode](#light-passthrough-mode)
+- Input HUD (<kbd>Ctrl+Shift+K</kbd>): on-screen keystroke and click chips for demos and screencasts (optional system-wide capture through the `input-monitor` build feature). See [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks)
+- Light passthrough (layer-shell): draw while input passes through to the app underneath. See [Light passthrough mode](#light-passthrough-mode)
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. Freeze prefers compositor-native `wlr-screencopy` or `ext-image-copy-capture` and falls back to the screenshot portal when available
 - Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Each Spotlight can magnify its opening from 1× to 4×, while dim strength and edge softness remain shared under `[spotlight]`. Magnification uses complete pixels from a solid board, Freeze, Zoom, or a captured/export backdrop; a live transparent board keeps the ordinary opening and prompts you to Freeze.
 
@@ -201,7 +201,7 @@ Pick the path that matches your setup:
 | Fast CLI install with auto-updates on Debian/Ubuntu/Mint/Pop!_OS | [Debian and Ubuntu](#debian-and-ubuntu) |
 | Fast CLI install with auto-updates on Fedora/Nobara or RHEL/Rocky/Alma 10+ | [Fedora and RHEL](#fedora-and-rhel) |
 | Arch, Manjaro, CachyOS, or another Arch-based distro | [AUR or direct release installer](#arch-linux-aur); prefer `wayscriber-bin` when the AUR is available |
-| NixOS, or the Nix package manager on another distro | [NixOS and Nix](#nixos-and-nix) — `nixpkgs` for the standard install, the project flake for the newest release and the Configurator |
+| NixOS, or the Nix package manager on another distro | [NixOS and Nix](#nixos-and-nix): `nixpkgs` for the standard install, the project flake for the newest release and the Configurator |
 | One-off package (browser or terminal) without adding a repo | [GitHub Releases](#github-releases-one-off) |
 | Hacking on wayscriber or building a local binary | [From source](#from-source) |
 
@@ -329,7 +329,7 @@ Wayscriber is packaged in [`nixpkgs`](https://search.nixos.org/packages?query=wa
 
 If you are on a stable NixOS channel and want the newest release, use [the project flake](#latest-release-and-configurator) rather than waiting for `nixpkgs`.
 
-**NixOS, from nixpkgs** — add Wayscriber to `configuration.nix` or another NixOS module:
+**NixOS, from nixpkgs**. Add Wayscriber to `configuration.nix` or another NixOS module:
 ```nix
 { pkgs, ... }:
 
@@ -414,7 +414,7 @@ nix flake update wayscriber
 sudo nixos-rebuild switch --flake .#myhost
 ```
 
-**Nix on another Linux distro** — when running the Nix package manager on Ubuntu, Fedora, or elsewhere, a user profile install is reasonable:
+**Nix on another Linux distro**. If you use Nix on Ubuntu, Fedora, or another Linux distribution, you can install it in your user profile:
 ```bash
 nix profile install nixpkgs#wayscriber
 ```
@@ -434,14 +434,14 @@ nix develop github:devmobasa/wayscriber
 
 ### GitHub Releases (one-off)
 
-Install the release package directly if you prefer not to add a repo — these are one-off installs with no auto-updates.
+If you prefer not to add a repository, install the release package directly. These packages do not update automatically.
 
 In a browser:
 
 1. Open the [latest release](https://github.com/devmobasa/wayscriber/releases/latest).
 2. Install the main app package that matches your distro:
-   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) — v0.9.23+ supports Ubuntu 24.04+, Linux Mint 22+, Pop!_OS 24.04+, Debian 13+, and compatible newer Debian-based distros (see the [release requirement](#debian-and-ubuntu))
-   - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm) — v0.9.23+ supports compatible Fedora/Nobara releases and RHEL/Rocky/Alma 10+ (see the [release requirement](#fedora-and-rhel))
+   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb): v0.9.23+ supports Ubuntu 24.04+, Linux Mint 22+, Pop!_OS 24.04+, Debian 13+, and compatible newer Debian-based distros (see the [release requirement](#debian-and-ubuntu))
+   - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm): v0.9.23+ supports compatible Fedora/Nobara releases and RHEL/Rocky/Alma 10+ (see the [release requirement](#fedora-and-rhel))
 3. Optional: install the configurator package after wayscriber:
    - [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
    - [wayscriber-configurator-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm)
@@ -487,7 +487,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-Then clone the repository — the dependency and build steps below run from inside it:
+Clone the repository. Run the dependency and build commands from its directory:
 
 ```bash
 git clone https://github.com/devmobasa/wayscriber.git
@@ -559,8 +559,7 @@ sudo dnf install wl-clipboard grim slurp       # Fedora
 `Copy text from screen` (<kbd>Ctrl+Shift+X</kbd>) recognizes the text in a
 dragged screen region and copies it to the clipboard; <kbd>Ctrl+A</kbd> inside
 the selector reads the whole screen instead. A band sweeps the region while
-Tesseract runs, and a card reports the outcome — never the recognized text,
-which goes only to the clipboard. Its toolbar button is hidden until you turn it
+Tesseract runs. A card reports the outcome. The recognized text goes only to the clipboard. Its toolbar button is hidden until you turn it
 on. Install Tesseract and the language data you configure in
 `[capture].ocr_languages` (default `eng`):
 
@@ -584,15 +583,15 @@ wayscriber --version
 wayscriber --active
 ```
 
-(If you used `nix run` instead of installing, `wayscriber` is not on your `PATH` — keep using the `nix run` command from [Installation](#nixos-and-nix).)
+(If you used `nix run` instead of installing, `wayscriber` is not on your `PATH`. Keep using the `nix run` command from [Installation](#nixos-and-nix).)
 
 Once the overlay is up:
 
-- <kbd>F1</kbd> or <kbd>F10</kbd> — help overlay
-- <kbd>Shift+F1</kbd> — quick reference
-- <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd> — command palette
-- <kbd>F11</kbd> — [configurator](#configurator-gui)
-- <kbd>Escape</kbd> — hide or exit
+- <kbd>F1</kbd> or <kbd>F10</kbd>: help overlay
+- <kbd>Shift+F1</kbd>: quick reference
+- <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd>: command palette
+- <kbd>F11</kbd>: [configurator](#configurator-gui)
+- <kbd>Escape</kbd>: hide or exit
 
 Discovery and shortcut-coaching tips have **Got it** and **Tip settings…**
 controls. **Got it**
@@ -678,7 +677,7 @@ on shorter or scaled displays:
 
 Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Omarchy/Quickshell, Noctalia/Quickshell, and COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
 
-**Alternative — compositor autostart instead of systemd:**
+**Alternative: compositor autostart instead of systemd:**
 
 For Hyprland Lua, add these to the matching files:
 ```lua
@@ -713,7 +712,7 @@ wayscriber --active --mode blueprint
 wayscriber --freeze   # start with screen frozen
 ```
 
-`whiteboard` and `blackboard` are built in; `blueprint` is an example of a custom board defined in `config.toml` (`[[boards.items]]` — see [Configuration](#configuration)).
+`whiteboard` and `blackboard` are built in. `blueprint` is an example of a custom board defined under `[[boards.items]]` in `config.toml`. See [Configuration](#configuration).
 
 Bind to a key (Hyprland Lua config):
 ```lua
@@ -731,11 +730,11 @@ The same in-overlay shortcuts apply as in [First launch](#first-launch); <kbd>Es
 
 Light passthrough (layer-shell compositors only) lets normal keyboard and pointer input reach the app underneath while wayscriber stays visible for drawing.
 
-- <kbd>F6</kbd> enters passthrough from the focused overlay. It is a wayscriber in-overlay shortcut, not an OS/global shortcut — once passthrough is active, wayscriber may no longer receive that keypress.
+- <kbd>F6</kbd> enters passthrough from the focused overlay. It is a wayscriber in-overlay shortcut, not an OS/global shortcut. Once passthrough is active, wayscriber may no longer receive that keypress.
 - For reliable control (including getting back out of passthrough), bind compositor/global shortcuts to `wayscriber --light-toggle` and `wayscriber --light-draw-toggle`.
 - Use `wayscriber --light-draw-on` on press and `wayscriber --light-draw-off` on release for draw-while-held shortcuts.
 - Hyprland and KDE binding examples are in [docs/SETUP.md](docs/SETUP.md#light-passthrough-controls-on-hyprland); the KDE section follows the Hyprland binding example.
-- **Stock GNOME Wayland does not support this mode** — regular app windows cannot provide the required click-through shell overlay. Freeze may still work for still-image capture, but it is not a live passthrough replacement. A GNOME Shell extension approach would be needed for true shell-level passthrough.
+- **Stock GNOME Wayland does not support this mode**. Regular app windows cannot provide the required click-through shell overlay. Freeze may still work for still-image capture, but it is not a live passthrough replacement. A GNOME Shell extension approach would be needed for true shell-level passthrough.
 
 ### Screenshots and export
 
@@ -796,7 +795,7 @@ In Review you can also remove rows or columns from the captured pixels. Press
 **Cut** (or <kbd>X</kbd>) and drag across the selection; later cuts use the
 already-collapsed output. **Undo** (<kbd>Ctrl+Z</kbd>), **Redo**
 (<kbd>Ctrl+Y</kbd> or <kbd>Ctrl+Shift+Z</kbd>), and **Reset** apply only to
-this Review — they never change board drawings. After any cut the source crop
+this Review. They never change board drawings. After any cut the source crop
 is locked until you undo all cuts or Reset, and the loupe is hidden while Cut
 is armed or cuts exist. Copy, Save, Both, and Board all receive the collapsed
 result; Board keeps the original top-left and shrinks to the output size.
@@ -831,7 +830,7 @@ Canvas export commands are available in the command palette and keybindings. `ex
 - **Check for a newer release:** `wayscriber --check-update` (Wayscriber never installs
   updates itself; it points at the instructions for your install method). Turn the
   background check off with `[updates] check = false` or
-  `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` — see
+  `WAYSCRIBER_DISABLE_UPDATE_CHECK=1`. See
   https://wayscriber.com/docs/getting-started/updating.html
 - **Full docs:** https://wayscriber.com/docs/
 
@@ -868,25 +867,25 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
 | Triangle / parallelogram / rhombus / regular polygon | **Shape picker** in the top strip (bindable) |
 | Freeform polygon | **Shape picker**, then click vertices; <kbd>Enter</kbd> or double-click to finish |
-| Blur | **Shape picker** (bindable) — drag a region; style via **Cycle Blur Style** |
-| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims; set 1×–4× magnification in the style pill, scroll over the loupe, or select an unlocked loupe and drag its on-canvas knob |
+| Blur | **Shape picker** (bindable): drag a region; style via **Cycle Blur Style** |
+| Spotlight | **Shape picker** (bindable): drag an ellipse; everything else dims; set 1×–4× magnification in the style pill, scroll over the loupe, or select an unlocked loupe and drag its on-canvas knob |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. What sits inline depends on the strip mode: the simple strip keeps Select, Pen, Marker, Step marker, and Eraser inline, while the full strip adds Line and Arrow. Everything else — rectangle, ellipse, blur, spotlight, and the polygons — is one click away inside the picker.
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The full strip also shows Line and Arrow. The picker contains rectangle, ellipse, blur, spotlight, and polygon tools.
 
 Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
 
-These tools' default keybindings are intentionally empty; bind them under `[keybindings.tools]` if you reach for them often. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
+These tools' default keybindings are intentionally empty; bind them under `[keybindings.tools]` if you reach for them often. Drag and mouse-button mappings are configurable. See [Drag-tool mappings](#drag-tool-mappings).
 
 </details>
 
 <details>
 <summary>Text editing</summary>
 
-While a text block or sticky note is being edited, these keys belong to the editor and are not configurable. Everything else — undo, tool switching, board navigation, capture — still reaches its usual binding.
+While a text block or sticky note is being edited, these keys belong to the editor and are not configurable. Undo, tool switching, board navigation, and capture still use their usual bindings.
 
 | Action | Key/Mouse |
 |--------|-----------|
@@ -943,7 +942,7 @@ Caret movement and selection follow the rendered layout, so they behave correctl
 | White | <kbd>W</kbd> |
 | Black | <kbd>K</kbd> |
 
-The first eight quick colors map to the shortcuts above and are customizable — see [Quick colors](#quick-colors).
+The first eight quick colors map to the shortcuts above and are customizable. See [Quick colors](#quick-colors).
 
 Pick a color directly from the displayed desktop with the screen eyedropper: press <kbd>I</kbd>, use the eyedropper button in the toolbar or color picker, or search for **Pick screen color** in the command palette (<kbd>Ctrl+K</kbd>). Rebind it if you prefer another shortcut:
 
@@ -1059,8 +1058,7 @@ wayscriber-configurator   # or press F11
 
 See `docs/CONFIG.md` and https://wayscriber.com/docs/ for the full reference.
 
-`config.toml` contains authored defaults, and it changes only through an explicit user edit action —
-never automatically. Two things write it: the configurator's **Save**, and the overlay's three
+`config.toml` contains authored defaults. It changes only when you explicitly edit it. Two things write it: the configurator's **Save**, and the overlay's three
 narrow editors (shortcut editing, preset slots, and the quick-color palette), each of which rewrites
 only its own key and copies the previous file to a timestamped `.bak` first. Running, using, and
 quitting Wayscriber never changes the file on its own. An incidental preference toggle applies to
@@ -1082,11 +1080,11 @@ item IDs still customize top-toolbar controls and must not be renamed.
 
 `wayscriber-configurator` is a native GTK4/libadwaita app built with Relm4, shipped as its own optional package. Open it any time with <kbd>F11</kbd> from the overlay, or run `wayscriber-configurator`.
 
-It covers most of `config.toml`: drawing and arrow defaults, rendering profiles and performance, UI and toolbar layout, presenter mode, history, capture and PDF export, boards, sessions, tablet input, presets, and keybindings. A few things stay hand-edited — `[tray]`, `[updates]`, `[spotlight]`, the `[tablet.stylus_button]` action mappings, and full multi-board setup under `[boards]` — and the configurator leaves all of them untouched when it saves.
+It covers most of `config.toml`: drawing and arrow defaults, rendering profiles and performance, UI and toolbar layout, presenter mode, history, capture and PDF export, boards, sessions, tablet input, presets, and keybindings. Some settings require manual edits: `[tray]`, `[updates]`, `[spotlight]`, the `[tablet.stylus_button]` action mappings, and full multi-board setup under `[boards]`. The configurator preserves these settings when it saves.
 
 [![The wayscriber configurator editing settings on a Wayland desktop](https://wayscriber.com/img/poster-configurator.webp)](https://wayscriber.com/#configurator)
 
-- Edits authored defaults with validation and automatic backups — your comments, ordering, and keys unknown to this build all survive a save
+- Edits authored defaults with validation and automatic backups. Your comments, ordering, and keys unknown to this build all survive a save
 - ~130 rebindable actions in a searchable list; <kbd>Ctrl+Shift+E</kbd> on a command palette row opens that shortcut directly
 - Installs and manages the daemon service, and applies global shortcuts on GNOME and KDE
 - Manages sessions: rename, duplicate, move, or clear saved boards and tool state
@@ -1116,7 +1114,7 @@ It covers most of `config.toml`: drawing and arrow defaults, rendering profiles 
 
 </details>
 
-It is a separate optional package — install the main `wayscriber` package first, then add it from [Installation](#installation). Full reference: https://wayscriber.com/docs/configuration/configurator.html
+It is a separate optional package. Install the main `wayscriber` package first. Then add the configurator from [Installation](#installation). Full reference: https://wayscriber.com/docs/configuration/configurator.html
 
 ### Key sections
 
@@ -1156,7 +1154,7 @@ size = 3.0
 
 ### Drag-tool mappings
 
-Drag modifier mappings are configurable via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab. For per-button workflows, use `[drawing.drag_tools.left]`, `[drawing.drag_tools.right]`, and `[drawing.drag_tools.middle]`; each binding can set a tool and optional color. The polygon tools have intentionally empty default keybindings — select them from the toolbar picker or bind them yourself. Freeform polygon is selectable but not drag-bindable.
+Drag modifier mappings are configurable via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab. For per-button workflows, use `[drawing.drag_tools.left]`, `[drawing.drag_tools.right]`, and `[drawing.drag_tools.middle]`; each binding can set a tool and optional color. The polygon tools have intentionally empty default keybindings. Select them from the toolbar picker or bind them yourself. Freeform polygon is selectable but not drag-bindable.
 
 ### Quick colors
 
@@ -1164,7 +1162,7 @@ The quick color palette is configurable with ordered `[[drawing.quick_colors]]` 
 
 You can also recolor the palette without opening an editor: **right-click any swatch** to open the color picker for that slot. The swatch updates live as you drag, OK saves that one entry's color back to `config.toml` (leaving your other settings and comments alone, with a timestamped `.bak`), and Cancel restores it. The slot keeps its label and shortcut, so <kbd>R</kbd> still selects the red slot after you point it at a different red. Recoloring the swatch you are drawing with moves the live color along with it. Left-click still just selects a swatch, and the leftmost chip still opens the picker for the active tool's own color.
 
-Changed your mind? The recolor picker carries a **Default** button that loads the color wayscriber ships for that slot. It stages the color like any other pick, so the swatch previews it and OK/Cancel still decide. It appears only for the eleven built-in slots — extra colors you added yourself have no shipped default to restore.
+Changed your mind? The recolor picker carries a **Default** button that loads the color wayscriber ships for that slot. It stages the color like any other pick, so the swatch previews it and OK/Cancel still decide. It appears only for the eleven built-in slots. Extra colors you added yourself have no shipped default to restore.
 
 ### Session manager and persistence
 
@@ -1217,7 +1215,7 @@ Tablet input works out of the box in default builds. Set `[tablet].enabled = fal
 
 ### Daemon not starting after reboot
 
-Enabled user services start when you log in, not at boot — if the daemon is missing after a reboot and login, see [Service won't start](#service-wont-start). Enable lingering only if you want the daemon started before login or kept running after logout:
+Enabled user services start when you log in. If the daemon is missing after a reboot and login, see [Service won't start](#service-wont-start). Enable lingering only if you want the daemon started before login or kept running after logout:
 ```bash
 loginctl enable-linger $USER
 ```
@@ -1245,7 +1243,7 @@ systemctl --user restart wayscriber.service
 
 **Cause:** The "Better Blur DX" effect (or similar blur effects) may blur wayscriber's transparent overlay.
 
-**Solution (Option 1 — configure Better Blur DX):**
+**Solution (Option 1: configure Better Blur DX):**
 1. Open **System Settings** → **Window Management** → **Desktop Effects**
 2. Click the configure button next to "Better Blur DX"
 3. Go to the **Force Blur** tab
@@ -1253,7 +1251,7 @@ systemctl --user restart wayscriber.service
 5. Make sure `Blur all except matching` is selected
 6. Click **Apply**
 
-**Solution (Option 2 — use standard blur):**
+**Solution (Option 2: use standard blur):**
 1. Disable "Better Blur DX" in **Desktop Effects**
 2. Enable the standard "Blur" effect instead
 
@@ -1349,7 +1347,7 @@ Future plans are tracked in [GitHub issues](https://github.com/devmobasa/wayscri
 
 ## License and credits
 
-**MIT License** — see [LICENSE](LICENSE)
+**MIT License**. See [LICENSE](LICENSE)
 
 ### Acknowledgments
 
