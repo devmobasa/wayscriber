@@ -1,7 +1,7 @@
 //! Tour overlay rendering.
 
 use crate::input::state::{InputState, TourStep};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, OVERLAY_DIM_HEAVY, PROGRESS_FILL, PROGRESS_TRACK, RADIUS_PANEL, SPACING_PANEL,
@@ -11,6 +11,16 @@ use super::primitives::draw_rounded_rect;
 
 /// Render the guided tour overlay.
 pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
+    render_tour_with_engine(&UiTextEngine::default(), ctx, input_state, width, height);
+}
+
+pub(crate) fn render_tour_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    width: u32,
+    height: u32,
+) {
     let Some(step) = input_state.current_tour_step() else {
         return;
     };
@@ -95,18 +105,18 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
         input_state.tour.step() + 1,
         TourStep::COUNT
     );
-    draw_text_baseline(ctx, step_style, &step_text, content_x, y + 12.0, None);
+    engine.draw_baseline(ctx, step_style, &step_text, content_x, y + 12.0, None);
     y += 24.0;
 
     // Title
     constants::set_color(ctx, TEXT_WHITE);
-    draw_text_baseline(ctx, title_style, step.title(), content_x, y + 24.0, None);
+    engine.draw_baseline(ctx, title_style, step.title(), content_x, y + 24.0, None);
     y += title_height + 16.0;
 
     // Description
     constants::set_color(ctx, TEXT_DESCRIPTION);
     for line in description.lines() {
-        draw_text_baseline(ctx, desc_style, line, content_x, y + 18.0, None);
+        engine.draw_baseline(ctx, desc_style, line, content_x, y + 18.0, None);
         y += desc_line_height;
     }
     y += 24.0;
@@ -127,5 +137,5 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     // Navigation hint
     constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.8));
-    draw_text_baseline(ctx, nav_style, step.nav_hint(), content_x, y + 13.0, None);
+    engine.draw_baseline(ctx, nav_style, step.nav_hint(), content_x, y + 13.0, None);
 }

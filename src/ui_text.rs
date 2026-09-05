@@ -214,17 +214,6 @@ pub(crate) fn text_layout(
     with_legacy_engine(|engine| engine.layout(ctx, style, text, wrap_width))
 }
 
-pub(crate) fn draw_text_baseline(
-    ctx: &cairo::Context,
-    style: UiTextStyle<'_>,
-    text: &str,
-    x: f64,
-    y: f64,
-    wrap_width: Option<f64>,
-) -> UiTextExtents {
-    with_legacy_engine(|engine| engine.draw_baseline(ctx, style, text, x, y, wrap_width))
-}
-
 impl UiTextEngine {
     pub(crate) fn layout(
         &self,

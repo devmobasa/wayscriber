@@ -282,7 +282,14 @@ impl WaylandState {
             self.inline_top_base_x() + top_offset.0,
             self.inline_top_base_y() + top_offset.1 + top_h as f64 + 8.0,
         );
-        crate::ui::render_precision_entry_popup(ctx, &self.input_state, width, height, anchor);
+        crate::ui::render_precision_entry_popup_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+            anchor,
+        );
     }
 
     fn render_radial_menu_and_feedback(
@@ -412,7 +419,13 @@ impl WaylandState {
             return;
         }
         if let Some(card) = self.first_run_onboarding_card() {
-            crate::ui::render_onboarding_card(ctx, width, height, &card);
+            crate::ui::render_onboarding_card_with_engine(
+                self.render.ui_text(),
+                ctx,
+                width,
+                height,
+                &card,
+            );
         }
         crate::ui::render_command_palette_with_engine(
             self.render.ui_text(),
@@ -421,7 +434,13 @@ impl WaylandState {
             width,
             height,
         );
-        crate::ui::render_tour(ctx, &self.input_state, width, height);
+        crate::ui::render_tour_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
     }
 
     /// The scan band while recognition runs, then the outcome card. The card

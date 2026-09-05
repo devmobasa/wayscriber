@@ -16,7 +16,6 @@ mod ocr_scan;
 mod onboarding_card;
 mod precision_entry;
 mod primitives;
-pub(crate) use primitives::{draw_rounded_rect, text_extents_for};
 mod properties_panel;
 mod radial_menu;
 mod render_context;
@@ -62,8 +61,10 @@ pub(crate) use measure_badge::{
 pub(crate) use ocr_scan::{
     ocr_scan_geometry, render_ocr_scan_result, render_ocr_scan_still, render_ocr_scan_sweep,
 };
+pub(crate) use onboarding_card::render_onboarding_card_with_engine;
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
+pub(crate) use precision_entry::render_precision_entry_popup_with_engine;
 /// Shared measured-text trimming, also used by the standalone about dialog.
 pub(crate) use primitives::ellipsize_to_fit_with_engine;
 pub(crate) use primitives::{checkerboard_behind, draw_pill};
@@ -103,6 +104,7 @@ pub(crate) use toasts::{
     render_ui_toast_with_engine, ui_toast_geometry_with_engine,
 };
 pub use tour::render_tour;
+pub(crate) use tour::render_tour_with_engine;
 
 #[cfg(test)]
 #[path = "ui/tests/theme_compatibility.rs"]

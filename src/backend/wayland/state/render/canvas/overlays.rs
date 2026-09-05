@@ -96,6 +96,7 @@ impl WaylandState {
             })
             .flatten();
         crate::ui::render_spotlight_magnification_control(
+            self.render.ui_text(),
             ctx,
             control.track,
             control.magnification,
