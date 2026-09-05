@@ -1,4 +1,4 @@
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::TextMeasurer;
 use log::warn;
 
 use crate::draw::Shape;
@@ -282,14 +282,6 @@ impl InputState {
             .paste_target_is_current(&self.state, target)
     }
 
-    pub(crate) fn apply_text_paste(
-        &mut self,
-        target: TextPasteTarget,
-        text: &str,
-    ) -> Option<TextPasteEdit> {
-        with_legacy_measurer(|measurer| self.apply_text_paste_with(measurer, target, text))
-    }
-
     pub(crate) fn apply_text_paste_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -302,10 +294,6 @@ impl InputState {
         self.needs_redraw = true;
         self.update_text_preview_dirty_from_editor_with(measurer);
         Some(edit)
-    }
-
-    pub(crate) fn complete_text_copy(&mut self, request: TextClipboardRequest) {
-        with_legacy_measurer(|measurer| self.complete_text_copy_with(measurer, request))
     }
 
     pub(crate) fn complete_text_copy_with(

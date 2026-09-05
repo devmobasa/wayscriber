@@ -3,7 +3,7 @@ use crate::draw::shape::{
     CaretGeometry, LogicalBounds, bounding_box_for_points,
     bounding_box_for_sticky_note_preview_with, bounding_box_for_text_with,
 };
-use crate::draw::{Shape, TextMeasurer, with_legacy_measurer};
+use crate::draw::{Shape, TextMeasurer};
 use crate::input::tool::{
     PROVISIONAL_POLYGON_DAMAGE_PADDING, ToolMotionBehavior, ToolMotionSizeSource,
 };
@@ -150,10 +150,6 @@ impl InputState {
     }
 
     /// Updates dirty tracking for the live text preview/caret overlay.
-    pub(crate) fn update_text_preview_dirty(&mut self) {
-        with_legacy_measurer(|measurer| self.update_text_preview_dirty_with(measurer))
-    }
-
     pub(crate) fn update_text_preview_dirty_with(&mut self, measurer: &TextMeasurer) {
         self.text_editing.mark_cursor_rect_dirty();
         let new_bounds = self.compute_text_preview_bounds(measurer);
@@ -338,10 +334,6 @@ impl InputState {
     /// so it is correct mid-buffer and in wrapped/multiline text, unlike the old
     /// append-only "right edge of the preview" assumption. `None` outside text
     /// input or when no measurement context exists.
-    pub(crate) fn caret_cursor_rect_canvas(&self) -> Option<Rect> {
-        with_legacy_measurer(|measurer| self.caret_cursor_rect_canvas_with(measurer))
-    }
-
     pub(crate) fn caret_cursor_rect_canvas_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;

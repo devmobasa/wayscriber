@@ -383,19 +383,27 @@ impl InputState {
     }
 
     pub fn ime_apply_done(&mut self) -> bool {
+        crate::draw::with_legacy_measurer(|measurer| self.ime_apply_done_with(measurer))
+    }
+
+    pub(crate) fn ime_apply_done_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {
         let changed = self.text_editing.apply_ime_done(&mut self.state);
         if changed {
             self.needs_redraw = true;
-            self.update_text_preview_dirty();
+            self.update_text_preview_dirty_with(measurer);
         }
         changed
     }
 
     pub fn ime_clear(&mut self) -> bool {
+        crate::draw::with_legacy_measurer(|measurer| self.ime_clear_with(measurer))
+    }
+
+    pub(crate) fn ime_clear_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {
         let had_preedit = self.text_editing.clear_ime();
         if had_preedit {
             self.needs_redraw = true;
-            self.update_text_preview_dirty();
+            self.update_text_preview_dirty_with(measurer);
         }
         had_preedit
     }

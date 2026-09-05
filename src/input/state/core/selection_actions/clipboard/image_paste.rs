@@ -1,20 +1,10 @@
 use super::super::super::base::{ClipboardPasteRequest, InputState};
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
-    pub(crate) fn paste_external_image_from_request(
-        &mut self,
-        request: &ClipboardPasteRequest,
-        image: EmbeddedImage,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.paste_external_image_from_request_with(measurer, request, image)
-        })
-    }
-
     pub(crate) fn paste_external_image_from_request_with(
         &mut self,
         measurer: &TextMeasurer,

@@ -61,7 +61,9 @@ impl Dispatch<ZwpTextInputV3, ()> for WaylandState {
                 // state. Requests are ignored until the next Enter, so
                 // clear only local state and preserve the commit serial.
                 state.text_input.leave();
-                state.input_state.ime_clear();
+                state
+                    .input_state
+                    .ime_clear_with(state.render.text_measurer());
                 state.input_state.take_text_input_cursor_rect_dirty();
                 state.input_state.take_text_input_external_change_dirty();
             }
@@ -109,7 +111,9 @@ impl WaylandState {
     /// enable/disable/update still in flight, and committing more state against
     /// it would only pile on out-of-order updates.
     fn on_ime_done(&mut self, serial: u32) {
-        let editor_changed = self.input_state.ime_apply_done();
+        let editor_changed = self
+            .input_state
+            .ime_apply_done_with(self.render.text_measurer());
         let cursor_dirty = self.input_state.take_text_input_cursor_rect_dirty();
         self.text_input.collect_editor_changes(
             cursor_dirty,
@@ -124,7 +128,11 @@ impl WaylandState {
         let Some(ti) = self.text_input.protocol() else {
             return;
         };
-        if !self.report_text_cursor_rectangle(&ti, self.text_input.external_change_pending()) {
+        if !self.report_text_cursor_rectangle(
+            &ti,
+            self.text_input.external_change_pending(),
+            self.render.text_measurer(),
+        ) {
             return;
         }
         ti.commit();
@@ -160,18 +168,22 @@ impl WaylandState {
         if desired != self.text_input.is_enabled() && desired {
             ti.enable();
             ti.set_content_type(ContentHint::empty(), ContentPurpose::Normal);
-            self.report_text_cursor_rectangle(&ti, false);
+            self.report_text_cursor_rectangle(&ti, false, self.render.text_measurer());
             ti.commit();
             self.text_input.enabled_committed();
         } else if desired != self.text_input.is_enabled() {
             ti.disable();
             ti.commit();
             self.text_input.disabled_committed();
-            self.input_state.ime_clear();
+            self.input_state.ime_clear_with(self.render.text_measurer());
             self.input_state.take_text_input_cursor_rect_dirty();
             self.input_state.take_text_input_external_change_dirty();
         } else if self.text_input.cursor_update_ready()
-            && self.report_text_cursor_rectangle(&ti, self.text_input.external_change_pending())
+            && self.report_text_cursor_rectangle(
+                &ti,
+                self.text_input.external_change_pending(),
+                self.render.text_measurer(),
+            )
         {
             ti.commit();
             self.text_input.cursor_update_committed();
@@ -182,7 +194,12 @@ impl WaylandState {
     /// candidate popup near the composition. `set_cursor_rectangle` takes
     /// surface-local coordinates, but the cached preview bounds are in canvas
     /// space, so convert them through the active zoom/pan transform first.
-    fn report_text_cursor_rectangle(&self, ti: &ZwpTextInputV3, external_change: bool) -> bool {
+    fn report_text_cursor_rectangle(
+        &self,
+        ti: &ZwpTextInputV3,
+        external_change: bool,
+        measurer: &crate::draw::TextMeasurer,
+    ) -> bool {
         if external_change {
             ti.set_text_change_cause(ChangeCause::Other);
         }
@@ -194,7 +211,7 @@ impl WaylandState {
 
         // Prefer the exact caret position so the candidate popup sits at the
         // composition point — correct mid-buffer and in wrapped/multiline text.
-        if let Some(caret_canvas) = self.input_state.caret_cursor_rect_canvas()
+        if let Some(caret_canvas) = self.input_state.caret_cursor_rect_canvas_with(measurer)
             && let Some(rect) = self.input_state.screen_rect_for_canvas(caret_canvas)
         {
             ti.set_cursor_rectangle(rect.x, rect.y, rect.width.clamp(1, 4), rect.height.max(1));

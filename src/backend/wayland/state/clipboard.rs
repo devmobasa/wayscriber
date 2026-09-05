@@ -241,9 +241,11 @@ impl WaylandState {
                 shapes,
                 warning,
             } => {
-                let pasted = self
-                    .input_state
-                    .paste_clipboard_shapes_from_request(&request, shapes);
+                let pasted = self.input_state.paste_clipboard_shapes_from_request_with(
+                    self.render.text_measurer(),
+                    &request,
+                    shapes,
+                );
                 self.input_state.finish_clipboard_paste_request(request.id);
                 if pasted == 0 {
                     self.set_transfer_warning_toast(
@@ -268,9 +270,11 @@ impl WaylandState {
                 log::debug!("Ignoring stale clipboard paste completion {}", request_id);
             }
             PasteAction::ApplyPrivateSelection { request, shapes } => {
-                let pasted = self
-                    .input_state
-                    .paste_clipboard_shapes_from_request(&request, shapes);
+                let pasted = self.input_state.paste_clipboard_shapes_from_request_with(
+                    self.render.text_measurer(),
+                    &request,
+                    shapes,
+                );
                 self.input_state.finish_clipboard_paste_request(request.id);
                 if pasted == 0 {
                     self.set_transfer_warning_toast(TransferWarning::NoShapesPasted);
@@ -308,9 +312,11 @@ impl WaylandState {
                         ))
                     }
                 };
-                let pasted = self
-                    .input_state
-                    .paste_external_image_from_request(&request, image);
+                let pasted = self.input_state.paste_external_image_from_request_with(
+                    self.render.text_measurer(),
+                    &request,
+                    image,
+                );
                 log::info!(
                     "Applied external image paste request {} to board '{}' page {}: success={}, mime={}, dimensions={}x{}, bytes={}",
                     request.id,
@@ -450,9 +456,11 @@ impl WaylandState {
                 .selection_clipboard_snapshot()
                 .shapes_for_fallback(generation)
         {
-            let pasted = self
-                .input_state
-                .paste_clipboard_shapes_from_request(request, shapes);
+            let pasted = self.input_state.paste_clipboard_shapes_from_request_with(
+                self.render.text_measurer(),
+                request,
+                shapes,
+            );
             if pasted > 0 {
                 self.input_state.push_toast(
                     ToastPriority::Info,

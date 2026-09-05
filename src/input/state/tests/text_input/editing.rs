@@ -272,6 +272,7 @@ fn ctrl_x_without_a_selection_falls_through_without_editing() {
 
 #[test]
 fn ctrl_x_deletes_the_selection_only_after_clipboard_publication() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.shift = true;
     state.on_key_press(Key::Home);
@@ -290,7 +291,7 @@ fn ctrl_x_deletes_the_selection_only_after_clipboard_publication() {
         "a failed clipboard publication must leave the selection intact"
     );
 
-    state.complete_text_copy(request);
+    state.complete_text_copy_with(&measurer, request);
     assert_eq!(
         buffer(&state),
         "",
@@ -316,6 +317,7 @@ fn repeated_ctrl_x_requests_are_retained_before_backend_draining() {
 
 #[test]
 fn stale_cut_completion_never_deletes_later_edits() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.shift = true;
     state.on_key_press(Key::Home);
@@ -329,12 +331,13 @@ fn stale_cut_completion_never_deletes_later_edits() {
 
     state.on_key_press(Key::Char('X'));
     assert_eq!(buffer(&state), "X");
-    state.complete_text_copy(request);
+    state.complete_text_copy_with(&measurer, request);
     assert_eq!(buffer(&state), "X");
 }
 
 #[test]
 fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('a'));
@@ -360,7 +363,7 @@ fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection(
     state.modifiers.ctrl = false;
 
     assert_eq!(buffer(&state), "hello");
-    state.complete_text_copy(request);
+    state.complete_text_copy_with(&measurer, request);
     assert_eq!(
         buffer(&state),
         "hello",
@@ -407,6 +410,7 @@ fn repeated_ctrl_v_requests_are_retained_before_backend_draining() {
 
 #[test]
 fn delayed_paste_replaces_the_selection_captured_at_invocation() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('a'));
@@ -419,7 +423,11 @@ fn delayed_paste_replaces_the_selection_captured_at_invocation() {
     // Clipboard reads are asynchronous. Moving the caret while the read is in
     // flight must not retarget the completion away from the invoked selection.
     state.on_key_press(Key::Home);
-    assert!(state.apply_text_paste(target, "X").is_some());
+    assert!(
+        state
+            .apply_text_paste_with(&measurer, target, "X")
+            .is_some()
+    );
     assert_eq!(buffer(&state), "X");
 }
 

@@ -40,7 +40,9 @@ impl WaylandState {
                 context: request,
                 outcome: TextCopyOutcome::Copied,
                 ..
-            } => self.input_state.complete_text_copy(request),
+            } => self
+                .input_state
+                .complete_text_copy_with(self.render.text_measurer(), request),
             RuntimeOperationPoll::Ready {
                 outcome: TextCopyOutcome::Failed,
                 ..
@@ -94,7 +96,11 @@ impl WaylandState {
                 if self.input_state.text_paste_target_is_current(target) {
                     match outcome {
                         TextPasteOutcome::Text(text) => {
-                            if let Some(edit) = self.input_state.apply_text_paste(target, &text) {
+                            if let Some(edit) = self.input_state.apply_text_paste_with(
+                                self.render.text_measurer(),
+                                target,
+                                &text,
+                            ) {
                                 self.clipboard.rebase_pending_text_pastes(&edit);
                             }
                         }
