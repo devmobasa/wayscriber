@@ -255,8 +255,10 @@ fn cache_keys_keep_font_categories_quantized_size_and_wrap_units() {
 fn temporary_legacy_bridge_retains_layouts_and_matches_an_explicit_owner() {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
-    let first = text_layout(&ctx, style(14.0), "legacy bridge", Some(50.0));
-    let second = text_layout(&ctx, style(14.0), "legacy bridge", Some(50.0));
+    let first =
+        with_legacy_engine(|engine| engine.layout(&ctx, style(14.0), "legacy bridge", Some(50.0)));
+    let second =
+        with_legacy_engine(|engine| engine.layout(&ctx, style(14.0), "legacy bridge", Some(50.0)));
     assert_eq!(first.layout, second.layout);
     let engine = UiTextEngine::default();
     let explicit = engine.layout(&ctx, style(14.0), "legacy bridge", Some(50.0));

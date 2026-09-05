@@ -162,14 +162,6 @@ pub(crate) fn with_legacy_engine<T>(f: impl FnOnce(&UiTextEngine) -> T) -> T {
     LEGACY_UI_TEXT.with(f)
 }
 
-pub(crate) fn measure_text(
-    style: UiTextStyle<'_>,
-    text: &str,
-    wrap_width: Option<f64>,
-) -> Option<UiTextExtents> {
-    with_legacy_engine(|engine| engine.measure(style, text, wrap_width))
-}
-
 impl UiTextEngine {
     /// Measure before a target exists, using the same layout cache as painting.
     pub(crate) fn measure(
@@ -203,15 +195,6 @@ fn weight_key(weight: cairo::FontWeight) -> u8 {
         cairo::FontWeight::Bold => 1,
         _ => 0,
     }
-}
-
-pub(crate) fn text_layout(
-    ctx: &cairo::Context,
-    style: UiTextStyle<'_>,
-    text: &str,
-    wrap_width: Option<f64>,
-) -> UiTextLayout {
-    with_legacy_engine(|engine| engine.layout(ctx, style, text, wrap_width))
 }
 
 impl UiTextEngine {

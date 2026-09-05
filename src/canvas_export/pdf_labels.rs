@@ -6,10 +6,12 @@ use crate::config::{
 };
 
 use super::pdf::PdfPageMetadata;
+use crate::ui_text::UiTextEngine;
 
 const ELLIPSIS: &str = "…";
 
 pub(crate) fn render_pdf_label(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     config: &PdfLabelConfig,
     metadata: &PdfPageMetadata,
@@ -43,10 +45,10 @@ pub(crate) fn render_pdf_label(
         size: config.font_size,
     };
 
-    let Some(text) = ellipsize_to_width(&style, &text, available_width) else {
+    let Some(text) = ellipsize_to_width(engine, &style, &text, available_width) else {
         return;
     };
-    let layout = crate::ui_text::text_layout(ctx, style, &text, None);
+    let layout = engine.layout(ctx, style, &text, None);
     let extents = layout.ink_extents();
     if extents.width() <= 0.0 || extents.height() <= 0.0 {
         return;
@@ -187,12 +189,15 @@ fn label_value<'a>(name: &str, metadata: &'a PdfPageMetadata) -> Option<&'a str>
 /// fonts is fitted by what will actually be drawn rather than by the toy
 /// API's idea of its width.
 fn ellipsize_to_width(
+    engine: &UiTextEngine,
     style: &crate::ui_text::UiTextStyle<'_>,
     text: &str,
     max_width: f64,
 ) -> Option<String> {
     let width_of = |candidate: &str| {
-        crate::ui_text::measure_text(*style, candidate, None).map(|extents| extents.width())
+        engine
+            .measure(*style, candidate, None)
+            .map(|extents| extents.width())
     };
 
     if width_of(text)? <= max_width {
@@ -290,9 +295,10 @@ mod tests {
     /// measured as nothing and painted as boxes in the exported PDF.
     #[test]
     fn non_latin_labels_measure_as_real_text() {
+        let engine = &UiTextEngine::default();
         let style = label_style();
         for text in ["ボード 1", "لوحة", "보드", "Доска"] {
-            let extents = crate::ui_text::measure_text(style, text, None).expect("shaped extents");
+            let extents = engine.measure(style, text, None).expect("shaped extents");
             assert!(
                 extents.width() > 0.0,
                 "{text:?} measured as nothing, so it would paint as nothing"
@@ -304,23 +310,27 @@ mod tests {
     /// box is trimmed by what will actually be drawn.
     #[test]
     fn ellipsizing_uses_the_shaped_width() {
+        let engine = &UiTextEngine::default();
         let style = label_style();
         let long = "ボードボードボードボードボードボード";
-        let full = crate::ui_text::measure_text(style, long, None)
+        let full = engine
+            .measure(style, long, None)
             .expect("shaped extents")
             .width();
 
-        let fitted = ellipsize_to_width(&style, long, full / 2.0).expect("a shorter label fits");
+        let fitted =
+            ellipsize_to_width(engine, &style, long, full / 2.0).expect("a shorter label fits");
         assert!(fitted.ends_with(ELLIPSIS), "trimmed labels are marked");
         assert!(fitted.chars().count() < long.chars().count());
-        let fitted_width = crate::ui_text::measure_text(style, &fitted, None)
+        let fitted_width = engine
+            .measure(style, &fitted, None)
             .expect("shaped extents")
             .width();
         assert!(fitted_width <= full / 2.0, "the result actually fits");
 
         // A label that already fits is returned untouched.
         assert_eq!(
-            ellipsize_to_width(&style, long, full * 2.0).as_deref(),
+            ellipsize_to_width(engine, &style, long, full * 2.0).as_deref(),
             Some(long)
         );
     }
@@ -342,5 +352,65 @@ mod tests {
             ),
             Some((140.0, 70.0))
         );
+    }
+
+    #[test]
+    fn retained_labels_rebind_between_pdf_and_raster_without_changing_fit_or_pixels() {
+        let engine = UiTextEngine::default();
+        let config = PdfLabelConfig {
+            enabled: true,
+            content: PdfLabelContentMode::BoardName,
+            position: PdfLabelPosition::BottomRight,
+            font_size: 12.0,
+            ..PdfLabelConfig::default()
+        };
+        let mut metadata = metadata();
+        metadata.board_name = "Board 測試 العربية long label repeated across exported pages".into();
+        let style = crate::ui_text::UiTextStyle {
+            family: &config.font_family,
+            ..label_style()
+        };
+        let available_width = 240.0 - config.margin * 2.0 - config.padding_x * 2.0;
+        let fitted =
+            ellipsize_to_width(&engine, &style, &metadata.board_name, available_width).unwrap();
+        assert!(fitted.ends_with(ELLIPSIS));
+        assert!(engine.measure(style, &fitted, None).unwrap().width() <= available_width);
+        for density in [1, 2, 1] {
+            // The same owner paints a vector target, then returns to raster and
+            // canonical measurement just as an export's repeated labels do.
+            let pdf = cairo::PdfSurface::for_stream(240.0, 100.0, Vec::<u8>::new()).unwrap();
+            {
+                let ctx = cairo::Context::new(&pdf).unwrap();
+                render_pdf_label(&engine, &ctx, &config, &metadata, 240.0, 100.0);
+                ctx.show_page().unwrap();
+            }
+            let stream = pdf.finish_output_stream().unwrap();
+            let bytes = stream.downcast::<Vec<u8>>().unwrap();
+            assert!(bytes.starts_with(b"%PDF-"));
+            assert_eq!(
+                ellipsize_to_width(&engine, &style, &metadata.board_name, available_width),
+                Some(fitted.clone())
+            );
+            let pixels = |engine: &UiTextEngine| {
+                let mut surface = cairo::ImageSurface::create(
+                    cairo::Format::ARgb32,
+                    240 * density,
+                    100 * density,
+                )
+                .unwrap();
+                surface.set_device_scale(density as f64, density as f64);
+                {
+                    let ctx = cairo::Context::new(&surface).unwrap();
+                    render_pdf_label(engine, &ctx, &config, &metadata, 240.0, 100.0);
+                }
+                surface.data().unwrap().to_vec()
+            };
+            let actual = pixels(&engine);
+            assert!(actual.iter().any(|byte| *byte != 0));
+            assert!(
+                actual == pixels(&UiTextEngine::default()),
+                "label density {density}"
+            );
+        }
     }
 }

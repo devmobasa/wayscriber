@@ -144,6 +144,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
         .map_err(|err| CaptureError::ImageError(format!("Failed to create PDF context: {err}")))?;
 
     let mut caches = RenderCaches::default();
+    let ui_text = crate::ui_text::UiTextEngine::default();
     for page in &snapshot.pages {
         let layout = page.layout;
         validate_page_size(layout.page_width, layout.page_height)?;
@@ -179,6 +180,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
             )?;
         }
         render_pdf_label(
+            &ui_text,
             &ctx,
             &snapshot.labels,
             &page.metadata,
