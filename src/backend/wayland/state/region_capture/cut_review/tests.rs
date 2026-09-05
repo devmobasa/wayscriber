@@ -236,16 +236,6 @@ fn undo_with_nothing_to_undo_leaves_an_in_flight_drag() {
     assert!(edits.drag.is_some());
 }
 
-fn review_input() -> crate::input::InputState {
-    let mut input = crate::input::state::test_support::make_test_input_state();
-    input.activate_region_review(
-        crate::input::state::RegionPurposeTag::CaptureInteractive,
-        1,
-        display(),
-    );
-    input
-}
-
 fn edits_with_current_preview() -> RegionReviewEdits {
     let mut edits = edits();
     let fingerprint = fingerprint(edits.source_rect);
@@ -266,28 +256,21 @@ fn edits_with_current_preview() -> RegionReviewEdits {
 }
 
 #[test]
-fn undo_and_redo_retire_pointer_touch_and_tablet_owners_before_release() {
+fn undo_and_redo_retire_pointer_touch_and_tablet_cut_drags_before_release() {
     for owner in [
         RegionInputSource::Pointer,
         RegionInputSource::Touch,
         RegionInputSource::Stylus,
     ] {
-        let mut input = review_input();
         let mut edits = Some(edits_with_current_preview());
         edits.as_mut().unwrap().toggle_mode();
         assert!(edits.as_mut().unwrap().begin_drag(owner, (1.0, 1.0)));
-        assert!(input.begin_region_review_move(owner));
-        assert!(input.region_selection_is_owned_by(owner));
 
         let fingerprint = fingerprint(edits.as_ref().unwrap().source_rect);
-        assert!(apply_cut_history_change(&mut edits, &mut input, |edits| {
+        assert!(apply_cut_history_change(&mut edits, |edits| {
             edits.undo(fingerprint.clone())
         }));
         assert!(edits.as_ref().unwrap().drag.is_none());
-        assert!(
-            !input.region_selection_is_owned_by(owner),
-            "{owner:?} must be retired before release"
-        );
         assert_eq!(
             edits
                 .as_mut()
@@ -296,15 +279,12 @@ fn undo_and_redo_retire_pointer_touch_and_tablet_owners_before_release() {
             CutCommit::None,
             "{owner:?} release must not commit after undo"
         );
-        assert!(!input.finish_region_review_move(owner));
 
         assert!(edits.as_mut().unwrap().begin_drag(owner, (1.0, 1.0)));
-        assert!(input.begin_region_review_move(owner));
-        assert!(apply_cut_history_change(&mut edits, &mut input, |edits| {
+        assert!(apply_cut_history_change(&mut edits, |edits| {
             edits.redo(fingerprint.clone())
         }));
         assert!(edits.as_ref().unwrap().drag.is_none());
-        assert!(!input.region_selection_is_owned_by(owner));
         assert_eq!(
             edits
                 .as_mut()

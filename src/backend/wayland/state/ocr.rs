@@ -17,7 +17,6 @@ use super::WaylandState;
 use super::acquisition::report_screen_source_activation_rejected_to;
 use super::region_capture::{
     ActiveScreenRegion, FreezeOwnership, RegionOwnerLoss, RegionSelectionFinalize,
-    finalize_region_selection_with_review_edits,
 };
 use super::screen_image::{
     CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
@@ -225,7 +224,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn cancel_ocr(&mut self) -> bool {
         let Some(region) = self.region_capture.active() else {
             self.acquisition.clear_zoom_waiter(ZoomWaiterOwner::Ocr);
-            self.input_state.cancel_region_ui_only();
+            self.region_capture
+                .sync_input_projection(&mut self.input_state);
             return false;
         };
         let pending_acquisition = region.pending_acquisition();
@@ -307,38 +307,35 @@ impl WaylandState {
         if self.finish_region_cut_drag(source, (x, y)) {
             return true;
         }
-        let (active, review_edits) = self.region_capture.selection_parts();
-        let rect = match finalize_region_selection_with_review_edits(
-            active,
-            &mut self.input_state,
-            review_edits,
-            source,
-            (x, y),
-        ) {
-            RegionSelectionFinalize::NotOwned => return false,
-            RegionSelectionFinalize::Rearmed => return true,
-            RegionSelectionFinalize::Reviewed => return true,
-            RegionSelectionFinalize::Measured => return true,
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::Ocr,
-                rect,
-            } => rect,
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::CaptureDeliver,
-                rect,
-            } => {
-                self.submit_region_capture(rect);
-                return true;
-            }
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::CaptureInteractive,
-                ..
-            } => return true,
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::Measure,
-                ..
-            } => return true,
-        };
+        let rect =
+            match self
+                .region_capture
+                .finalize_selection(&mut self.input_state, source, (x, y))
+            {
+                RegionSelectionFinalize::NotOwned => return false,
+                RegionSelectionFinalize::Rearmed => return true,
+                RegionSelectionFinalize::Reviewed => return true,
+                RegionSelectionFinalize::Measured => return true,
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::Ocr,
+                    rect,
+                } => rect,
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::CaptureDeliver,
+                    rect,
+                } => {
+                    self.submit_region_capture(rect);
+                    return true;
+                }
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::CaptureInteractive,
+                    ..
+                } => return true,
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::Measure,
+                    ..
+                } => return true,
+            };
 
         // The crop is taken while the capture is still held: releasing first
         // would leave the worker reading pixels that no longer exist.

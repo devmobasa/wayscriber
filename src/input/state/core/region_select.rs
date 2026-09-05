@@ -83,12 +83,12 @@ pub struct RegionSelection {
     pub end: (f64, f64),
 }
 
-/// UI-facing lifecycle shared by OCR, native screen-region capture, and the
-/// capture-free logical screen ruler.
+/// Read-only UI projection of the backend-owned selector shared by OCR,
+/// native screen-region capture, and the capture-free logical screen ruler.
 ///
-/// It owns transient input and render state only. The selected pixels and the
-/// recognition work belong outside `InputState`, so cancelling here can never
-/// discard a request that is already running.
+/// The Wayland region-capture controller owns lifecycle, device ownership, and
+/// geometry. `InputState` retains only this synchronized value for input gating
+/// and painting.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum RegionSelectUiState {
     #[default]
@@ -220,14 +220,6 @@ impl RegionSelectUiState {
 }
 
 impl InputState {
-    pub(crate) fn activate_measure_mode_with(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-        generation: u64,
-    ) {
-        self.activate_region_with(measurer, RegionPurposeTag::Measure, generation);
-    }
-
     pub(crate) fn request_copy_text_from_screen(&mut self) {
         self.emit_input_effect(super::base::InputEffect::OcrPass {
             requested: true,
@@ -255,18 +247,45 @@ impl InputState {
         self.region_select_ui_state.is_engaged()
     }
 
+    /// Replace the backend-owned selector projection used for input gating and
+    /// painting. Lifecycle and geometry mutations remain in the Wayland
+    /// region-capture controller.
+    pub(crate) fn sync_region_projection(&mut self, next: RegionSelectUiState) {
+        if self.region_select_ui_state == next {
+            return;
+        }
+        let targeted_measure_damage = self.region_select_ui_state.purpose()
+            == Some(RegionPurposeTag::Measure)
+            || next.purpose() == Some(RegionPurposeTag::Measure);
+        self.region_select_ui_state = next;
+        if !targeted_measure_damage {
+            self.dirty_tracker.mark_full();
+        }
+        self.needs_redraw = true;
+    }
+}
+
+#[cfg(test)]
+impl InputState {
+    pub(crate) fn activate_measure_mode_with(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        generation: u64,
+    ) {
+        self.activate_region_with(measurer, RegionPurposeTag::Measure, generation);
+    }
+
     pub(crate) fn set_region_pending_capture(
         &mut self,
         purpose: RegionPurposeTag,
         generation: u64,
         source: ScreenCaptureSource,
     ) {
-        self.region_select_ui_state = RegionSelectUiState::PendingCapture {
+        self.sync_region_projection(RegionSelectUiState::PendingCapture {
             purpose,
             generation,
             source,
-        };
-        self.mark_region_dirty();
+        });
     }
 
     pub(crate) fn activate_region_with(
@@ -275,22 +294,13 @@ impl InputState {
         purpose: RegionPurposeTag,
         generation: u64,
     ) {
-        // A capture can take long enough for another interaction to begin while
-        // OCR is pending. Entering the modal state must cancel it so the
-        // selector cannot swallow the matching release event.
         self.prepare_for_screen_modal_with_measurer(measurer);
-        self.region_select_ui_state = RegionSelectUiState::Armed {
+        self.sync_region_projection(RegionSelectUiState::Armed {
             purpose,
             generation,
-        };
-        self.mark_region_dirty();
+        });
     }
 
-    /// Begin a region drag owned by `owner`.
-    ///
-    /// Ignored unless the selector is armed, so a stray press during capture
-    /// cannot start a region against a stale image — and, because a drag in
-    /// progress is no longer armed, a second device cannot take one over.
     pub(crate) fn start_region_selection(
         &mut self,
         owner: RegionInputSource,
@@ -313,14 +323,13 @@ impl InputState {
             } => (purpose, generation),
             _ => return false,
         };
-        self.region_select_ui_state = RegionSelectUiState::Selecting {
+        self.sync_region_projection(RegionSelectUiState::Selecting {
             purpose,
             generation,
             owner,
             start: point,
             current: point,
-        };
-        self.mark_region_dirty();
+        });
         true
     }
 
@@ -330,65 +339,92 @@ impl InputState {
         generation: u64,
         display: RegionSelection,
     ) {
-        debug_assert_eq!(purpose, RegionPurposeTag::CaptureInteractive);
-        self.region_select_ui_state = RegionSelectUiState::Review {
+        self.sync_region_projection(RegionSelectUiState::Review {
             purpose,
             generation,
             display,
             move_owner: None,
-        };
-        self.mark_region_dirty();
+        });
     }
 
     pub(crate) fn begin_region_review_move(&mut self, owner: RegionInputSource) -> bool {
-        let RegionSelectUiState::Review { move_owner, .. } = &mut self.region_select_ui_state
+        let RegionSelectUiState::Review {
+            purpose,
+            generation,
+            display,
+            move_owner: None,
+        } = self.region_select_ui_state
         else {
             return false;
         };
-        if move_owner.is_some() {
-            return false;
-        }
-        *move_owner = Some(owner);
-        self.mark_region_dirty();
+        self.sync_region_projection(RegionSelectUiState::Review {
+            purpose,
+            generation,
+            display,
+            move_owner: Some(owner),
+        });
         true
     }
 
     pub(crate) fn update_region_review_display(&mut self, display: RegionSelection) {
         let RegionSelectUiState::Review {
-            display: current, ..
-        } = &mut self.region_select_ui_state
+            purpose,
+            generation,
+            move_owner,
+            ..
+        } = self.region_select_ui_state
         else {
             return;
         };
-        if *current != display {
-            *current = display;
-            self.mark_region_dirty();
-        }
+        self.sync_region_projection(RegionSelectUiState::Review {
+            purpose,
+            generation,
+            display,
+            move_owner,
+        });
     }
 
     pub(crate) fn finish_region_review_move(&mut self, owner: RegionInputSource) -> bool {
-        let RegionSelectUiState::Review { move_owner, .. } = &mut self.region_select_ui_state
+        let RegionSelectUiState::Review {
+            purpose,
+            generation,
+            display,
+            move_owner: Some(current),
+        } = self.region_select_ui_state
         else {
             return false;
         };
-        if *move_owner != Some(owner) {
+        if current != owner {
             return false;
         }
-        *move_owner = None;
-        self.mark_region_dirty();
+        self.sync_region_projection(RegionSelectUiState::Review {
+            purpose,
+            generation,
+            display,
+            move_owner: None,
+        });
         true
     }
 
-    /// Move the region, if `source` is the device dragging it. Motion from any
-    /// other device is somebody else's and is dropped.
     pub(crate) fn update_region_selection(&mut self, source: RegionInputSource, point: (f64, f64)) {
-        if let RegionSelectUiState::Selecting { owner, current, .. } =
-            &mut self.region_select_ui_state
-            && *owner == source
-            && *current != point
-        {
-            *current = point;
-            self.mark_region_dirty();
+        let RegionSelectUiState::Selecting {
+            purpose,
+            generation,
+            owner,
+            start,
+            ..
+        } = self.region_select_ui_state
+        else {
+            return;
+        };
+        if owner == source {
+            self.sync_region_projection(RegionSelectUiState::Selecting {
+                purpose,
+                generation,
+                owner,
+                start,
+                current: point,
+            });
         }
     }
 
@@ -406,28 +442,21 @@ impl InputState {
         if owner != source {
             return false;
         }
-        self.region_select_ui_state = RegionSelectUiState::Measured {
+        self.sync_region_projection(RegionSelectUiState::Measured {
             purpose: RegionPurposeTag::Measure,
             generation,
             display: RegionSelection {
                 start,
                 end: current,
             },
-        };
-        self.mark_region_dirty();
+        });
         true
     }
 
-    /// Whether `source` is the device dragging the region right now. The
-    /// release and per-device cancellation paths check this before acting, so
-    /// one device cannot submit or discard another's region.
     pub(crate) fn region_selection_is_owned_by(&self, source: RegionInputSource) -> bool {
         self.region_select_ui_state.selection_owner() == Some(source)
     }
 
-    /// Abandon a drag that was too small to be a region and wait for the next
-    /// one. A mis-click should not drop the user out of the selector, and it
-    /// must not release a capture the selector is still using.
     pub(crate) fn rearm_region_selection(&mut self) {
         if let RegionSelectUiState::Selecting {
             purpose,
@@ -435,37 +464,15 @@ impl InputState {
             ..
         } = self.region_select_ui_state
         {
-            self.region_select_ui_state = RegionSelectUiState::Armed {
+            self.sync_region_projection(RegionSelectUiState::Armed {
                 purpose,
                 generation,
-            };
-            self.mark_region_dirty();
+            });
         }
     }
 
     pub(crate) fn cancel_region_ui_only(&mut self) {
-        if !matches!(self.region_select_ui_state, RegionSelectUiState::Inactive) {
-            let was_measure =
-                self.region_select_ui_state.purpose() == Some(RegionPurposeTag::Measure);
-            self.region_select_ui_state = RegionSelectUiState::Inactive;
-            self.mark_region_dirty_for(was_measure);
-        }
-    }
-
-    /// The selector paints a full-surface scrim with the selected region cut
-    /// out of it, so every change repaints the whole surface: an incremental
-    /// buffer would otherwise keep the scrim from an earlier frame.
-    fn mark_region_dirty(&mut self) {
-        self.mark_region_dirty_for(
-            self.region_select_ui_state.purpose() == Some(RegionPurposeTag::Measure),
-        );
-    }
-
-    fn mark_region_dirty_for(&mut self, targeted_measure_damage: bool) {
-        if !targeted_measure_damage {
-            self.dirty_tracker.mark_full();
-        }
-        self.needs_redraw = true;
+        self.sync_region_projection(RegionSelectUiState::Inactive);
     }
 }
 

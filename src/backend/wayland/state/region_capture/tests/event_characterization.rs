@@ -12,6 +12,7 @@ fn active_region_for(purpose: RegionPurposeTag) -> ActiveScreenRegion {
             bounds: (100, 80),
             anchor: None,
             edge: None,
+            phase: RegionInteractionPhase::Armed,
         },
     }
 }

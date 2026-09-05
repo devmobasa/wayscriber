@@ -13,42 +13,53 @@ pub(super) fn review_resize_handle_at(
     crate::ui::RegionResizeHandles::place(selection).hit(logical)
 }
 
+fn sync_projection(
+    backend: &Option<ActiveScreenRegion>,
+    input_state: &mut crate::input::InputState,
+) {
+    input_state.sync_region_projection(
+        backend
+            .map(ActiveScreenRegion::ui_state)
+            .unwrap_or_default(),
+    );
+}
+
 pub(super) fn begin_region_selection_event(
     backend: &mut Option<ActiveScreenRegion>,
     input_state: &mut crate::input::InputState,
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> bool {
-    if input_state.region_state().selection_owner().is_some() {
-        return false;
-    }
     let Some(region) = backend.as_mut() else {
         return false;
     };
-    if input_state.region_state().is_review() {
+    if region.selection_owner().is_some() {
+        return false;
+    }
+    if matches!(region.phase(), Some(RegionInteractionPhase::Review { .. })) {
         // A grip is checked before the rectangle it decorates: corner chips sit
         // on the rectangle's own edge, so the interior test would otherwise
         // swallow every resize press.
         if let Some(handle) = review_resize_handle_at(region, logical)
             && region.begin_review_resize(handle, logical)
         {
-            return input_state.begin_region_review_move(owner);
+            region.set_phase(RegionInteractionPhase::Review { owner: Some(owner) });
+            sync_projection(backend, input_state);
+            return true;
         }
         if region.begin_review_move(logical) {
-            return input_state.begin_region_review_move(owner);
+            region.set_phase(RegionInteractionPhase::Review { owner: Some(owner) });
+            sync_projection(backend, input_state);
+            return true;
         }
         region.reset_review_for_selection();
+        region.set_phase(RegionInteractionPhase::Armed);
     }
     if !region.begin_selection(logical) {
         return false;
     }
-    let Some(preview) = region.display_selection() else {
-        return false;
-    };
-    if !input_state.start_region_selection(owner, preview.start) {
-        return false;
-    }
-    input_state.update_region_selection(owner, preview.end);
+    region.set_phase(RegionInteractionPhase::Selecting { owner });
+    sync_projection(backend, input_state);
     true
 }
 
@@ -58,10 +69,15 @@ pub(super) fn update_region_selection_event(
     owner: RegionInputSource,
     logical: (f64, f64),
 ) {
+    let state = backend
+        .as_ref()
+        .copied()
+        .map(ActiveScreenRegion::ui_state)
+        .unwrap_or_default();
     if backend
         .as_ref()
         .is_some_and(|region| region.purpose().is_capture())
-        && input_state.region_is_active()
+        && state.is_active()
     {
         // Capture chrome follows hover even when no device owns a drag: Armed
         // paints the crosshair/readout, while Review paints bar hover and the
@@ -72,39 +88,39 @@ pub(super) fn update_region_selection_event(
     } else if backend
         .as_ref()
         .is_some_and(|region| region.purpose() == RegionPurposeTag::Measure)
-        && input_state.region_is_active()
+        && state.is_active()
     {
         // Measure has no full-screen scrim. Its old/current chrome strips are
         // added by collect_ui_effect_damage, so motion only schedules a frame.
         input_state.needs_redraw = true;
     }
-    if !input_state.region_selection_is_owned_by(owner) {
+    let Some(region) = backend.as_mut() else {
+        return;
+    };
+    if region.selection_owner() != Some(owner) {
         return;
     }
-    if input_state.region_state().is_review() {
-        if let Some(region) = backend.as_mut()
-            && (region.update_review_resize(logical) || region.update_review_move(logical))
-            && let Some(preview) = region
-                .review_geometry()
-                .map(RegionSelectionGeometry::display_selection)
-        {
-            input_state.update_region_review_display(preview);
-        }
-        return;
-    }
-    if let Some(region) = backend.as_mut()
-        && region.update_endpoint(logical)
-        && let Some(preview) = region.display_selection()
-    {
-        input_state.update_region_selection(owner, preview.end);
+    let changed = if matches!(region.phase(), Some(RegionInteractionPhase::Review { .. })) {
+        region.update_review_resize(logical) || region.update_review_move(logical)
+    } else {
+        region.update_endpoint(logical)
+    };
+    if changed {
+        sync_projection(backend, input_state);
     }
 }
 
 /// End whichever Review drag a device owned. Exactly one of the two can be in
-/// flight, so this reports a single "the drag ended" answer that stays in step
-/// with the UI state's own move owner.
-fn finish_review_drag(region: &mut ActiveScreenRegion) -> bool {
-    region.finish_review_resize() || region.finish_review_move()
+/// flight, so this reports a single "the drag ended" answer.
+fn finish_review_drag(region: &mut ActiveScreenRegion, owner: RegionInputSource) -> bool {
+    if region.selection_owner() != Some(owner) {
+        return false;
+    }
+    let finished = region.finish_review_resize() || region.finish_review_move();
+    if finished {
+        region.set_phase(RegionInteractionPhase::Review { owner: None });
+    }
+    finished
 }
 
 pub(super) fn sync_region_square_modifier_event(
@@ -118,13 +134,7 @@ pub(super) fn sync_region_square_modifier_event(
     if !region.set_square_modifier(shift) {
         return false;
     }
-    if let Some(owner) = input_state.region_state().selection_owner()
-        && let Some(preview) = region
-            .selection_geometry()
-            .map(RegionSelectionGeometry::display_selection)
-    {
-        input_state.update_region_selection(owner, preview.end);
-    }
+    sync_projection(backend, input_state);
     true
 }
 
@@ -142,6 +152,7 @@ pub(super) fn rearm_region_selection_event(
         logical_anchor,
         logical_edge,
         review_resize,
+        phase,
         ..
     }) = backend.as_mut()
     {
@@ -150,12 +161,20 @@ pub(super) fn rearm_region_selection_event(
         *logical_anchor = None;
         *logical_edge = None;
         *review_resize = None;
+        *phase = RegionInteractionPhase::Armed;
     }
-    if let Some(ActiveScreenRegion::Measure { anchor, edge, .. }) = backend.as_mut() {
+    if let Some(ActiveScreenRegion::Measure {
+        anchor,
+        edge,
+        phase,
+        ..
+    }) = backend.as_mut()
+    {
         *anchor = None;
         *edge = None;
+        *phase = RegionInteractionPhase::Armed;
     }
-    input_state.rearm_region_selection();
+    sync_projection(backend, input_state);
 }
 
 pub(super) fn region_owner_lost_event(
@@ -163,23 +182,24 @@ pub(super) fn region_owner_lost_event(
     input_state: &mut crate::input::InputState,
     source: RegionInputSource,
 ) -> RegionOwnerLoss {
-    if !input_state.region_selection_is_owned_by(source) {
+    let Some(region) = backend.as_mut() else {
+        return RegionOwnerLoss::NotOwned;
+    };
+    if region.selection_owner() != Some(source) {
         return RegionOwnerLoss::NotOwned;
     }
-    if input_state.region_state().purpose() == Some(RegionPurposeTag::Measure) {
+    let purpose = region.purpose();
+    if purpose == RegionPurposeTag::Measure {
         rearm_region_selection_event(backend, input_state);
         return RegionOwnerLoss::Rearmed;
     }
-    let Some(purpose) = backend.as_ref().map(|region| region.purpose()) else {
-        return RegionOwnerLoss::NotOwned;
-    };
     if !purpose.is_capture() {
         return RegionOwnerLoss::Cancel(purpose);
     }
-    if input_state.region_state().is_review() {
-        let finished_backend = backend.as_mut().is_some_and(finish_review_drag);
-        let finished_ui = input_state.finish_region_review_move(source);
-        debug_assert_eq!(finished_backend, finished_ui);
+    if matches!(region.phase(), Some(RegionInteractionPhase::Review { .. })) {
+        let finished = finish_review_drag(region, source);
+        debug_assert!(finished);
+        sync_projection(backend, input_state);
         return RegionOwnerLoss::Rearmed;
     }
     rearm_region_selection_event(backend, input_state);
@@ -197,63 +217,56 @@ fn finalize_region_selection(
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> SelectionFinalization {
-    if !input_state.region_selection_is_owned_by(owner) {
+    let Some(region) = backend.as_mut() else {
+        return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
+    };
+    if region.selection_owner() != Some(owner) {
         return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
     }
-    if !backend.as_ref().is_some_and(|region| {
-        input_state.region_state().purpose() == Some(region.purpose())
-            && input_state.region_state().generation() == Some(region.generation())
-    }) {
+    if region.purpose() == RegionPurposeTag::Measure {
+        region.update_endpoint(logical);
+        if region.measure_selection().is_some() {
+            region.set_phase(RegionInteractionPhase::Measured);
+            sync_projection(backend, input_state);
+            return SelectionFinalization::Complete(RegionSelectionFinalize::Measured);
+        }
         return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
     }
-    if input_state.region_state().purpose() == Some(RegionPurposeTag::Measure) {
-        update_region_selection_event(backend, input_state, owner, logical);
-        return SelectionFinalization::Complete(
-            if backend
-                .as_ref()
-                .and_then(|region| region.measure_selection())
-                .is_some()
-                && input_state.complete_measurement(owner)
-            {
-                RegionSelectionFinalize::Measured
-            } else {
-                RegionSelectionFinalize::NotOwned
-            },
-        );
-    }
-    if input_state.region_state().is_review() {
-        update_region_selection_event(backend, input_state, owner, logical);
-        let finished_backend = backend.as_mut().is_some_and(finish_review_drag);
-        let finished_ui = input_state.finish_region_review_move(owner);
-        debug_assert_eq!(finished_backend, finished_ui);
-        return SelectionFinalization::Complete(if finished_backend {
+    if matches!(region.phase(), Some(RegionInteractionPhase::Review { .. })) {
+        let changed = region.update_review_resize(logical) || region.update_review_move(logical);
+        let finished = finish_review_drag(region, owner);
+        if changed || finished {
+            sync_projection(backend, input_state);
+        }
+        return SelectionFinalization::Complete(if finished {
             RegionSelectionFinalize::Reviewed
         } else {
             RegionSelectionFinalize::NotOwned
         });
     }
-    let Some(region @ ActiveScreenRegion::Ready { .. }) = backend.as_mut() else {
+    let ActiveScreenRegion::Ready { .. } = region else {
         return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
     };
-    if region.purpose().is_capture() && input_state.region_is_active() {
+    if region.purpose().is_capture() {
         input_state.dirty_tracker.mark_full();
         input_state.needs_redraw = true;
     }
-    if region.update_endpoint(logical)
-        && let Some(preview) = region.display_selection()
-    {
-        input_state.update_region_selection(owner, preview.end);
-    }
-    let Some(rect) = region.selection_rect() else {
+    region.update_endpoint(logical);
+    sync_projection(backend, input_state);
+    let Some(rect) = backend.as_ref().and_then(|region| region.selection_rect()) else {
         rearm_region_selection_event(backend, input_state);
         return SelectionFinalization::Complete(RegionSelectionFinalize::Rearmed);
     };
+    let region = backend
+        .as_mut()
+        .expect("active region retained while finalizing");
     let purpose = region.purpose();
     if purpose == RegionPurposeTag::CaptureInteractive {
         let Some(seed) = region.enter_review_seed(rect) else {
             return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
         };
-        input_state.activate_region_review(purpose, seed.generation, seed.display);
+        region.set_phase(RegionInteractionPhase::Review { owner: None });
+        sync_projection(backend, input_state);
         return SelectionFinalization::Review(seed);
     }
     SelectionFinalization::Complete(RegionSelectionFinalize::Selected { purpose, rect })

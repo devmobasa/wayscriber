@@ -500,6 +500,7 @@ fn whole_image_is_available_to_every_purpose_that_can_submit_one() {
         bounds: (100, 80),
         anchor: None,
         edge: None,
+        phase: RegionInteractionPhase::Armed,
     };
     assert_eq!(measure.whole_image_selection(), None);
 }
@@ -973,25 +974,23 @@ fn rejected_review_rectangle_preserves_the_active_resize() {
 }
 
 #[test]
-fn mismatched_generation_release_preserves_selection_and_owner() {
+fn stale_ui_projection_cannot_override_the_controller_generation() {
     let mut backend = Some(interactive_region());
     let mut input = make_test_input_state();
-    input.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
-        RegionPurposeTag::CaptureInteractive,
-        1,
-    );
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
         RegionInputSource::Pointer,
         (20.0, 20.0),
     ));
-    if let Some(ActiveScreenRegion::Ready { generation, .. }) = backend.as_mut() {
-        *generation = 2;
-    }
-    let before_backend = backend;
-    let before_ui = input.region_state();
+    let selection = input.region_state().selection().unwrap();
+    input.sync_region_projection(RegionSelectUiState::Selecting {
+        purpose: RegionPurposeTag::CaptureInteractive,
+        generation: 99,
+        owner: RegionInputSource::Pointer,
+        start: selection.start,
+        current: selection.end,
+    });
     let mut edits = None;
 
     assert_eq!(
@@ -1002,9 +1001,9 @@ fn mismatched_generation_release_preserves_selection_and_owner() {
             RegionInputSource::Pointer,
             (60.0, 50.0),
         ),
-        RegionSelectionFinalize::NotOwned
+        RegionSelectionFinalize::Reviewed
     );
-    assert_eq!(backend, before_backend);
-    assert_eq!(input.region_state(), before_ui);
-    assert!(edits.is_none());
+    assert_eq!(input.region_state().generation(), Some(1));
+    assert!(input.region_state().is_review());
+    assert!(edits.is_some());
 }

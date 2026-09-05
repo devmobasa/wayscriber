@@ -39,6 +39,7 @@ fn pending_and_ready_region_state_preserve_generation_and_freeze_ownership() {
         legend_dismissed: false,
         include_drawings: false,
         review_resize: None,
+        phase: RegionInteractionPhase::Armed,
     };
     assert_eq!(ready.generation(), pending.generation());
     assert_eq!(ready.owned_frozen_generation(), Some(44));
@@ -51,6 +52,7 @@ fn measure_mode_owns_logical_geometry_without_a_screen_image() {
         bounds: (800, 600),
         anchor: None,
         edge: None,
+        phase: RegionInteractionPhase::Armed,
     });
     let mut input = make_test_input_state();
     input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 7);
@@ -127,6 +129,7 @@ fn lost_measure_drag_rearms_for_another_device() {
         bounds: (800, 600),
         anchor: None,
         edge: None,
+        phase: RegionInteractionPhase::Armed,
     });
     let mut input = make_test_input_state();
     input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 8);
@@ -159,6 +162,7 @@ fn reversed_measure_drag_uses_outward_integer_edges() {
         bounds: (800, 600),
         anchor: None,
         edge: None,
+        phase: RegionInteractionPhase::Armed,
     });
     let mut input = make_test_input_state();
     input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 9);
@@ -288,6 +292,7 @@ pub(super) fn ocr_region(scale: f64) -> ActiveScreenRegion {
         legend_dismissed: false,
         include_drawings: false,
         review_resize: None,
+        phase: RegionInteractionPhase::Armed,
     }
 }
 
@@ -339,6 +344,9 @@ fn measure_detects_a_real_surface_resize_without_needing_a_screen_source() {
         bounds: (100, 80),
         anchor: Some((10.0, 20.0)),
         edge: Some((30.0, 40.0)),
+        phase: RegionInteractionPhase::Selecting {
+            owner: RegionInputSource::Pointer,
+        },
     };
 
     assert!(!active_region_source_changed(

@@ -3,7 +3,6 @@ use super::model::{CutCommit, CutMode, RegionReviewCorrelation, RegionReviewEdit
 use crate::backend::wayland::state::WaylandState;
 use crate::backend::wayland::state::region_capture::ActiveScreenRegion;
 use crate::capture::CutAxis;
-use crate::input::InputState;
 use crate::input::state::{RegionInputSource, RegionSelection};
 use crate::screen_pixels::ImagePixelRect;
 use crate::ui::{RegionActionAvailability, RegionCutStatus};
@@ -27,28 +26,11 @@ pub(in crate::backend::wayland::state::region_capture) fn review_edits_for_activ
     ))
 }
 
-fn retire_cut_drag_owner(input: &mut InputState, owner: Option<RegionInputSource>) {
-    if let Some(owner) = owner {
-        let _ = input.finish_region_review_move(owner);
-    }
-}
-
 pub(super) fn apply_cut_history_change(
     edits: &mut Option<RegionReviewEdits>,
-    input: &mut InputState,
     change: impl FnOnce(&mut RegionReviewEdits) -> bool,
 ) -> bool {
-    let owner = edits
-        .as_ref()
-        .and_then(|edits| edits.drag.map(|drag| drag.owner));
-    let Some(edits) = edits.as_mut() else {
-        return false;
-    };
-    if !change(edits) {
-        return false;
-    }
-    retire_cut_drag_owner(input, owner);
-    true
+    edits.as_mut().is_some_and(change)
 }
 
 impl WaylandState {
@@ -119,7 +101,11 @@ impl WaylandState {
     }
 
     fn retire_region_cut_drag_owner(&mut self, owner: Option<RegionInputSource>) {
-        retire_cut_drag_owner(&mut self.input_state, owner);
+        if let Some(owner) = owner {
+            let _ = self
+                .region_capture
+                .finish_review_aux_drag(&mut self.input_state, owner);
+        }
     }
 
     fn toggle_region_cut_mode(&mut self) -> bool {
@@ -136,13 +122,16 @@ impl WaylandState {
         let Some(fingerprint) = self.current_region_fingerprint() else {
             return false;
         };
-        if !apply_cut_history_change(
-            self.region_capture.review_edits_slot_mut(),
-            &mut self.input_state,
-            |edits| edits.undo(fingerprint),
-        ) {
+        let owner = self
+            .region_capture
+            .review_edits()
+            .and_then(|edits| edits.drag.map(|drag| drag.owner));
+        if !apply_cut_history_change(self.region_capture.review_edits_slot_mut(), |edits| {
+            edits.undo(fingerprint)
+        }) {
             return false;
         }
+        self.retire_region_cut_drag_owner(owner);
         self.mark_region_cut_ui_dirty();
         self.schedule_region_cut_preview();
         true
@@ -152,26 +141,33 @@ impl WaylandState {
         let Some(fingerprint) = self.current_region_fingerprint() else {
             return false;
         };
-        if !apply_cut_history_change(
-            self.region_capture.review_edits_slot_mut(),
-            &mut self.input_state,
-            |edits| edits.redo(fingerprint),
-        ) {
+        let owner = self
+            .region_capture
+            .review_edits()
+            .and_then(|edits| edits.drag.map(|drag| drag.owner));
+        if !apply_cut_history_change(self.region_capture.review_edits_slot_mut(), |edits| {
+            edits.redo(fingerprint)
+        }) {
             return false;
         }
+        self.retire_region_cut_drag_owner(owner);
         self.mark_region_cut_ui_dirty();
         self.schedule_region_cut_preview();
         true
     }
 
     fn reset_region_cuts(&mut self) -> bool {
+        let owner = self
+            .region_capture
+            .review_edits()
+            .and_then(|edits| edits.drag.map(|drag| drag.owner));
         if !apply_cut_history_change(
             self.region_capture.review_edits_slot_mut(),
-            &mut self.input_state,
             RegionReviewEdits::reset,
         ) {
             return false;
         }
+        self.retire_region_cut_drag_owner(owner);
         self.mark_region_cut_ui_dirty();
         true
     }
@@ -193,7 +189,10 @@ impl WaylandState {
         if !edits.begin_drag(owner, point) {
             return false;
         }
-        if !self.input_state.begin_region_review_move(owner) {
+        if !self
+            .region_capture
+            .begin_review_aux_drag(&mut self.input_state, owner)
+        {
             if let Some(edits) = self.region_capture.review_edits_mut() {
                 edits.drag = None;
             }
@@ -243,7 +242,9 @@ impl WaylandState {
             return false;
         };
         let commit = edits.finish_drag(owner, point, display, fingerprint);
-        let _ = self.input_state.finish_region_review_move(owner);
+        let _ = self
+            .region_capture
+            .finish_review_aux_drag(&mut self.input_state, owner);
         match commit {
             CutCommit::Applied => {
                 self.mark_region_cut_ui_dirty();
@@ -278,7 +279,9 @@ impl WaylandState {
             return false;
         }
         edits.drag = None;
-        let _ = self.input_state.finish_region_review_move(owner);
+        let _ = self
+            .region_capture
+            .finish_review_aux_drag(&mut self.input_state, owner);
         self.mark_region_cut_ui_dirty();
         true
     }
@@ -295,7 +298,9 @@ impl WaylandState {
             return false;
         }
         if let Some(owner) = owner {
-            let _ = self.input_state.finish_region_review_move(owner);
+            let _ = self
+                .region_capture
+                .finish_review_aux_drag(&mut self.input_state, owner);
         }
         self.mark_region_cut_ui_dirty();
         true

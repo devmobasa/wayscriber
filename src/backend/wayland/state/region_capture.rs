@@ -23,6 +23,7 @@ mod selection_state;
 mod source_guard;
 mod window_snap;
 
+use active_state::RegionInteractionPhase;
 pub(super) use active_state::{ActiveScreenRegion, FreezeOwnership};
 pub(in crate::backend::wayland) use board::{
     board_bounds_for_world_rect, world_rect_for_composed_region, world_rect_for_image_rect_exact,

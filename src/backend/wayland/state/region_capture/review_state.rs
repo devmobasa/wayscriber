@@ -4,6 +4,7 @@ pub(super) struct InteractiveReviewSeed {
     pub(super) generation: u64,
     pub(super) source: ScreenSourceToken,
     pub(super) rect: ImagePixelRect,
+    #[cfg(test)]
     pub(super) display: RegionSelection,
 }
 
@@ -33,6 +34,7 @@ impl ActiveScreenRegion {
             logical_anchor,
             logical_edge,
             review_resize,
+            phase,
             ..
         } = self
         else {
@@ -48,23 +50,27 @@ impl ActiveScreenRegion {
             rect.height(),
             source.image_size,
         )?;
-        let display = super::super::screen_image::screen_rect_for_image_rect(source, rect);
         let seed = InteractiveReviewSeed {
             generation: *generation,
             source: *source,
             rect,
-            display: RegionSelection {
-                start: (f64::from(display.x), f64::from(display.y)),
-                end: (
-                    f64::from(display.x.saturating_add(display.width)),
-                    f64::from(display.y.saturating_add(display.height)),
-                ),
+            #[cfg(test)]
+            display: {
+                let display = super::super::screen_image::screen_rect_for_image_rect(source, rect);
+                RegionSelection {
+                    start: (f64::from(display.x), f64::from(display.y)),
+                    end: (
+                        f64::from(display.x.saturating_add(display.width)),
+                        f64::from(display.y.saturating_add(display.height)),
+                    ),
+                }
             },
         };
         // Re-entering Review replaces the rectangle wholesale — `Ctrl+A` can
         // do that while a grip is still held — so the old grip must not
         // survive to block the next move, resize or nudge.
         *review_resize = None;
+        *phase = RegionInteractionPhase::Review { owner: None };
         *anchor = None;
         *raw_edge = None;
         *logical_anchor = None;

@@ -331,6 +331,7 @@ fn ready(purpose: crate::input::state::RegionPurposeTag) -> ActiveScreenRegion {
         legend_dismissed: false,
         include_drawings: false,
         review_resize: None,
+        phase: super::super::RegionInteractionPhase::Armed,
     }
 }
 

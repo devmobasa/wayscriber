@@ -51,6 +51,7 @@ pub(super) fn capture_region_at_scale(scale: f64) -> ActiveScreenRegion {
         legend_dismissed: false,
         include_drawings: false,
         review_resize: None,
+        phase: RegionInteractionPhase::Armed,
     }
 }
 
