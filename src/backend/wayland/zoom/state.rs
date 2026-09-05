@@ -1,3 +1,4 @@
+use crate::backend::wayland::capture_preflight::CapturePreflight;
 use std::sync::Arc;
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
@@ -5,7 +6,6 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 use crate::backend::wayland::RuntimeWakeHandle;
 use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
-use crate::backend::wayland::portal_capture::layout_token_matches;
 use crate::backend::wayland::portal_task::PortalTask;
 use crate::input::InputState;
 
@@ -117,10 +117,7 @@ pub struct ZoomState {
     pub(super) portal_in_progress: bool,
     pub(super) portal_target_output_id: Option<u32>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
-    pub(super) preflight_pending: bool,
-    pub(super) preflight_use_fallback: bool,
-    preflight_output_id: Option<u32>,
-    preflight_layout_generation: Option<u64>,
+    pub(super) preflight: CapturePreflight<bool>,
     pub(super) capture_done: bool,
     next_capture_id: u64,
     current_capture_id: Option<ZoomCaptureId>,
@@ -166,10 +163,7 @@ impl ZoomState {
             portal_in_progress: false,
             portal_target_output_id: None,
             runtime_wake,
-            preflight_pending: false,
-            preflight_use_fallback: false,
-            preflight_output_id: None,
-            preflight_layout_generation: None,
+            preflight: CapturePreflight::Idle,
             capture_done: false,
             next_capture_id: 1,
             current_capture_id: None,
@@ -279,39 +273,29 @@ impl ZoomState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some() || self.portal_in_progress || self.preflight_pending
+        self.capture.is_some() || self.portal_in_progress || self.preflight.is_pending()
     }
 
     #[cfg(test)]
     pub fn preflight_pending(&self) -> bool {
-        self.preflight_pending
+        self.preflight.is_pending()
     }
 
     pub fn take_preflight_pending(&mut self) -> Option<bool> {
-        if !self.preflight_pending {
-            return None;
-        }
-        let use_fallback = self.preflight_use_fallback;
-        self.preflight_pending = false;
-        self.preflight_use_fallback = false;
-        Some(use_fallback)
+        self.preflight.take_pending()
     }
 
+    #[cfg(test)]
     pub(super) fn snapshot_preflight_layout(&mut self) {
-        self.preflight_output_id = self.active_output_id;
-        self.preflight_layout_generation = Some(self.output_layout_generation);
+        self.preflight
+            .begin(true, self.active_output_id, self.output_layout_generation);
     }
 
     pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), String> {
-        let Some(generation) = self.preflight_layout_generation else {
-            return Ok(());
-        };
-        if layout_token_matches(
-            self.preflight_output_id,
-            generation,
-            self.active_output_id,
-            self.output_layout_generation,
-        ) {
+        if self
+            .preflight
+            .layout_matches(self.active_output_id, self.output_layout_generation)
+        {
             Ok(())
         } else {
             Err("Zoom failed after the display layout changed".to_string())
@@ -325,11 +309,6 @@ impl ZoomState {
 
     pub(super) fn finish_stale_direct_capture(&mut self, input_state: &mut InputState) {
         self.cancel_with_outcome(input_state, false, ZoomSourceOutcome::StaleLayout);
-    }
-
-    fn clear_preflight_layout_snapshot(&mut self) {
-        self.preflight_output_id = None;
-        self.preflight_layout_generation = None;
     }
 
     pub fn take_capture_done(&mut self) -> bool {
@@ -407,12 +386,10 @@ impl ZoomState {
             capture.frame.destroy();
             changed = true;
         }
-        if self.preflight_pending || self.portal_in_progress {
+        if self.preflight.is_pending() || self.portal_in_progress {
             changed = true;
         }
-        self.preflight_pending = false;
-        self.preflight_use_fallback = false;
-        self.clear_preflight_layout_snapshot();
+        self.preflight = CapturePreflight::Idle;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
             task.cancel();
@@ -491,9 +468,7 @@ impl ZoomState {
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
         }
-        self.preflight_pending = false;
-        self.preflight_use_fallback = false;
-        self.clear_preflight_layout_snapshot();
+        self.preflight = CapturePreflight::Idle;
         self.capture_done = true;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {

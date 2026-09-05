@@ -79,7 +79,7 @@ impl TopBar {
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         let sender = self.feedback.clone();
-        let expected = self.shapes_expected_open.clone();
+        let expected = self.shapes.expected_open.clone();
         button.connect_clicked(move |_| {
             send_event(&sender, event_for_toggle_state(control, !expected.get()));
         });
@@ -102,7 +102,7 @@ impl TopBar {
             event_for_toggle_state(control, false),
         );
         let sender = self.feedback.clone();
-        let expected = self.shapes_expected_open.clone();
+        let expected = self.shapes.expected_open.clone();
         popover.connect_closed(move |_| {
             if expected.get() {
                 send_event(&sender, event_for_toggle_state(control, false));
@@ -110,8 +110,7 @@ impl TopBar {
         });
         let capture_surface = CaptureSurfaceContent::empty();
         popover.set_child(Some(capture_surface.widget()));
-        self.shapes_popover = Some(popover);
-        self.shapes_capture_surface = Some(capture_surface);
+        self.shapes.install(popover, capture_surface);
         button
     }
 
@@ -385,7 +384,7 @@ impl TopBar {
         );
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();
-        let expected = self.overflow_expected_open.clone();
+        let expected = self.overflow.expected_open.clone();
         button.connect_clicked(move |_| {
             send_event(&sender, event_for_toggle_state(control, !expected.get()));
         });
@@ -404,7 +403,7 @@ impl TopBar {
             event_for_toggle_state(control, false),
         );
         let sender = self.feedback.clone();
-        let expected = self.overflow_expected_open.clone();
+        let expected = self.overflow.expected_open.clone();
         popover.connect_closed(move |_| {
             if expected.get() {
                 send_event(&sender, event_for_toggle_state(control, false));
@@ -412,33 +411,29 @@ impl TopBar {
         });
         let capture_surface = CaptureSurfaceContent::empty();
         popover.set_child(Some(capture_surface.widget()));
-        self.overflow_popover = Some(popover);
-        self.overflow_capture_surface = Some(capture_surface);
+        self.overflow.install(popover, capture_surface);
 
         // The Canvas/Session/Settings popovers anchor to the same ⋯ toggle
         // their menu entries live in; the entries themselves render inside
         // the overflow popover from the shared spec.
         let (canvas_popover, canvas_capture) = self.menu_popover(
             &button,
-            self.canvas_expected_open.clone(),
+            self.canvas.expected_open.clone(),
             ToolbarEvent::ToggleCanvasPopover(false),
         );
-        self.canvas_popover = Some(canvas_popover);
-        self.canvas_capture_surface = Some(canvas_capture);
+        self.canvas.install(canvas_popover, canvas_capture);
         let (session_popover, session_capture) = self.menu_popover(
             &button,
-            self.session_expected_open.clone(),
+            self.session.expected_open.clone(),
             ToolbarEvent::ToggleSessionPopover(false),
         );
-        self.session_popover = Some(session_popover);
-        self.session_capture_surface = Some(session_capture);
+        self.session.install(session_popover, session_capture);
         let (settings_popover, settings_capture) = self.menu_popover(
             &button,
-            self.settings_expected_open.clone(),
+            self.settings.expected_open.clone(),
             ToolbarEvent::ToggleSettingsPopover(false),
         );
-        self.settings_popover = Some(settings_popover);
-        self.settings_capture_surface = Some(settings_capture);
+        self.settings.install(settings_popover, settings_capture);
         button
     }
 

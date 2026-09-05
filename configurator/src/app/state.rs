@@ -1,14 +1,10 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
-use wayscriber::config::{
-    Config, ConfigDocument, ConfigValidationReport, MigrationPreview, PRESET_SLOTS_MAX,
-};
+use wayscriber::config::{Config, MigrationPreview, PRESET_SLOTS_MAX};
 
 use crate::models::{
-    ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingField, KeybindingsTabId, PendingShortcutConflict, SearchQuery, SessionCatalogState,
-    ShortcutManagerFilter, ShortcutManagerSort, ShortcutRecorderState, ShortcutTextEditor,
+    ColorPickerId, ConfigDraft, DesktopEnvironment, DragMouseButton, KeybindingField,
+    KeybindingsTabId, SearchQuery, SessionCatalogState, ShortcutManagerFilter, ShortcutManagerSort,
     StartupRequest, TabId, ToolbarLayoutModeOption, UiTabId,
 };
 
@@ -19,11 +15,7 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) draft: ConfigDraft,
     pub(crate) baseline: ConfigDraft,
     pub(crate) defaults: ConfigDraft,
-    // The source document owns typed config, lossless TOML, and the guarded
-    // save revision. Owned outright and moved into a running save, so it is
-    // `None` exactly while a write holds it and for as long as no load has
-    // produced one.
-    pub(crate) base_document: Option<ConfigDocument>,
+    pub(crate) document: super::document_workflow::DocumentWorkflow,
     pub(crate) status: StatusMessage,
     pub(crate) active_tab: TabId,
     pub(crate) active_ui_tab: UiTabId,
@@ -33,14 +25,11 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) shortcut_sort: ShortcutManagerSort,
     pub(crate) selected_keybinding: Option<KeybindingField>,
     pub(crate) keybinding_focus_serial: u64,
-    pub(crate) shortcut_conflict_review: bool,
     pub(crate) active_drawing_drag_button: Option<DragMouseButton>,
     pub(crate) preset_collapsed: Vec<bool>,
     pub(crate) boards_collapsed: Vec<bool>,
     pub(crate) color_picker_hex: HashMap<ColorPickerId, String>,
     pub(crate) override_mode: ToolbarLayoutModeOption,
-    pub(crate) is_loading: bool,
-    pub(crate) is_saving: bool,
     pub(crate) is_dirty: bool,
     /// The destructive question the user can currently answer.
     ///
@@ -48,29 +37,8 @@ pub(crate) struct ConfiguratorApp {
     /// replaces the other instead of leaving two independently armed actions
     /// on screen.
     pub(crate) pending_confirmation: Option<PendingConfirmation>,
-    /// What an accepted migration would change in the loaded configuration.
-    /// Held here rather than in `status` so an expired or replaced status
-    /// message cannot take the offer away with it.
-    pub(crate) migration_preview: Option<MigrationPreview>,
-    /// The document whose migration offer the user dismissed, named by the file
-    /// the config path resolved to rather than by the path itself. `None` while
-    /// no offer has been dismissed.
-    pub(crate) migration_dismissed: Option<PathBuf>,
-    /// What validating the configuration the running Save is writing had to
-    /// change in `[keybindings]`, held until that write reports back.
-    ///
-    /// The resolution reaches the file, so the reloaded document cannot show
-    /// it: this is the only carrier from the moment the config is built to the
-    /// status the finished save renders.
-    pub(crate) pending_save_validation: ConfigValidationReport,
-    pub(crate) last_backup_path: Option<PathBuf>,
-    pub(crate) daemon_status: Option<DaemonRuntimeStatus>,
-    pub(crate) daemon_shortcut_input: String,
-    pub(crate) daemon_feedback: Option<String>,
-    pub(crate) daemon_busy: bool,
-    pub(crate) daemon_next_status_request_id: u64,
-    pub(crate) daemon_latest_status_request_id: u64,
-    pub(crate) daemon_preserve_feedback_status_request_id: Option<u64>,
+    pub(crate) migration: super::migration_workflow::MigrationWorkflow,
+    pub(crate) daemon: super::daemon_workflow::DaemonWorkflow,
     pub(crate) session_catalog: SessionCatalogState,
     pub(crate) search_query: SearchQuery,
     /// Bumped once per request to put the caret in the search box. The shell
@@ -81,9 +49,7 @@ pub(crate) struct ConfiguratorApp {
     /// What the launching process asked to open, taken by the first config
     /// load and empty from then on.
     pub(crate) startup_request: StartupRequest,
-    pub(crate) active_shortcut_recorder: Option<ShortcutRecorderState>,
-    pub(crate) shortcut_text_editor: Option<ShortcutTextEditor>,
-    pub(crate) pending_shortcut_conflict: Option<PendingShortcutConflict>,
+    pub(crate) shortcuts: super::shortcut_workflow::ShortcutWorkflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,7 +191,7 @@ impl ConfiguratorApp {
             draft: baseline.clone(),
             baseline,
             defaults,
-            base_document: None,
+            document: super::document_workflow::DocumentWorkflow::loading(),
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
@@ -235,39 +201,25 @@ impl ConfiguratorApp {
             shortcut_sort: ShortcutManagerSort::Category,
             selected_keybinding: None,
             keybinding_focus_serial: 0,
-            shortcut_conflict_review: false,
             active_drawing_drag_button: None,
             preset_collapsed: vec![false; PRESET_SLOTS_MAX],
             boards_collapsed: vec![false; boards_len],
             color_picker_hex: HashMap::new(),
             override_mode,
-            is_loading: true,
-            is_saving: false,
             is_dirty: false,
             pending_confirmation: None,
-            migration_preview: None,
-            migration_dismissed: None,
-            pending_save_validation: ConfigValidationReport::default(),
-            last_backup_path: None,
-            daemon_status: None,
-            daemon_shortcut_input: desktop.default_shortcut_input().to_string(),
-            daemon_feedback: Some("Detecting background mode setup status...".to_string()),
-            daemon_busy: false,
-            daemon_next_status_request_id: 2,
-            daemon_latest_status_request_id: 1,
-            daemon_preserve_feedback_status_request_id: None,
+            migration: super::migration_workflow::MigrationWorkflow::default(),
+            daemon: super::daemon_workflow::DaemonWorkflow::new(desktop),
             session_catalog: SessionCatalogState::loading(),
             search_query: SearchQuery::default(),
             search_focus_serial: 0,
             startup_search_focus_pending: true,
             startup_request: startup,
-            active_shortcut_recorder: None,
-            shortcut_text_editor: None,
-            pending_shortcut_conflict: None,
+            shortcuts: super::shortcut_workflow::ShortcutWorkflow::default(),
         };
         app.sync_all_color_picker_hex();
 
-        let initial_status_request_id = app.daemon_latest_status_request_id;
+        let initial_status_request_id = app.daemon.latest_status_request_id;
         let effects = vec![
             Effect::LoadConfig,
             Effect::LoadDaemonStatus {
@@ -352,21 +304,15 @@ impl ConfiguratorApp {
     /// about, so refreshing the preview clears the dismissal and its offer
     /// shows.
     pub(crate) fn pending_migration(&self) -> Option<&MigrationPreview> {
-        if self.migration_dismissed.is_some() {
-            return None;
-        }
-        self.migration_preview.as_ref()
+        self.migration.pending()
     }
 
     pub(crate) fn shortcut_recorder_active(&self) -> bool {
-        self.active_shortcut_recorder.is_some()
+        self.shortcuts.recorder().is_some()
     }
 
     pub(super) fn clear_shortcut_editing(&mut self) {
-        self.active_shortcut_recorder = None;
-        self.shortcut_text_editor = None;
-        self.pending_shortcut_conflict = None;
-        self.shortcut_conflict_review = false;
+        self.shortcuts.clear();
     }
 }
 

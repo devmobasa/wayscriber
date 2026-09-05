@@ -142,7 +142,7 @@ fn catalog_load_clears_only_a_session_confirmation() {
 #[test]
 fn catalog_load_preserves_a_defaults_confirmation() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     let _ = app.handle_reset_to_defaults_requested();
 
     let _ = app.handle_session_catalog_loaded(Ok(vec![catalog_item("s-1", "Lecture")]));
@@ -158,7 +158,7 @@ fn duplicate_request_blocks_without_daemon_status() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = None;
+    app.daemon.status = None;
 
     let effects = app.handle_session_catalog_duplicate_requested("s-1".to_string());
 
@@ -175,7 +175,7 @@ fn duplicate_request_sets_busy_when_safe() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
 
     let effects = app.handle_session_catalog_duplicate_requested("s-1".to_string());
 
@@ -195,7 +195,7 @@ fn move_request_blocks_without_daemon_status() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = None;
+    app.daemon.status = None;
 
     let effects = app.handle_session_catalog_move_requested("s-1".to_string());
 
@@ -212,7 +212,7 @@ fn move_request_sets_busy_when_safe() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
 
     let effects = app.handle_session_catalog_move_requested("s-1".to_string());
 
@@ -232,7 +232,7 @@ fn clear_request_blocks_without_daemon_status() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = None;
+    app.daemon.status = None;
 
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
@@ -248,7 +248,7 @@ fn clear_tool_state_request_blocks_without_daemon_status() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = None;
+    app.daemon.status = None;
 
     let _ = app.handle_session_catalog_clear_tool_state_requested("s-1".to_string());
 
@@ -265,7 +265,7 @@ fn clear_tool_state_request_sets_busy_when_safe() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
 
     let effects = app.handle_session_catalog_clear_tool_state_requested("s-1".to_string());
 
@@ -286,7 +286,7 @@ fn clear_request_sets_pending_confirmation_when_safe() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
 
     let effects = app.handle_session_catalog_clear_requested("s-1".to_string());
 
@@ -300,7 +300,7 @@ fn clear_request_sets_pending_confirmation_when_safe() {
 fn clear_request_rejects_a_session_that_is_no_longer_present() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
 
     let effects = app.handle_session_catalog_clear_requested("missing".to_string());
 
@@ -312,11 +312,11 @@ fn clear_request_rejects_a_session_that_is_no_longer_present() {
 #[test]
 fn session_clear_request_replaces_the_defaults_confirmation() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_reset_to_defaults_requested();
 
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
@@ -329,11 +329,11 @@ fn session_clear_request_replaces_the_defaults_confirmation() {
 #[test]
 fn defaults_request_replaces_the_session_clear_confirmation() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
     let _ = app.handle_reset_to_defaults_requested();
@@ -349,7 +349,7 @@ fn clear_canceled_disarms_and_clears_its_confirmation_status() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
     let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
@@ -365,7 +365,7 @@ fn active_confirmation_cancel_disarms_session_clear() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
     let effects = app.handle_active_confirmation_canceled();
@@ -381,7 +381,7 @@ fn clear_canceled_preserves_status_that_replaced_its_confirmation() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
     app.status = StatusMessage::error("A newer session operation failed");
 
@@ -415,7 +415,7 @@ fn stale_clear_cancel_does_not_disarm_a_newer_confirmation() {
         catalog_item("s-1", "Lecture"),
         catalog_item("s-2", "Workshop"),
     ]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
     let _ = app.handle_session_catalog_clear_requested("s-2".to_string());
 
@@ -437,7 +437,7 @@ fn clear_confirmed_consumes_the_pending_confirmation() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
     let effects = app.handle_session_catalog_clear_confirmed("s-1".to_string());
@@ -461,7 +461,7 @@ fn clear_confirmed_twice_starts_only_one_clear() {
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
     let _ = app.handle_session_catalog_clear_confirmed("s-1".to_string());
 
@@ -485,7 +485,7 @@ fn clear_confirmed_for_another_row_leaves_the_pending_one_armed() {
         catalog_item("s-1", "Lecture"),
         catalog_item("s-2", "Seminar"),
     ]);
-    app.daemon_status = Some(inactive_daemon_status());
+    app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
     let effects = app.handle_session_catalog_clear_confirmed("s-2".to_string());

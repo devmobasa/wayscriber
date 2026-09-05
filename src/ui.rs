@@ -37,10 +37,10 @@ pub use color_picker_popup::{color_picker_popup_visual_geometry, render_color_pi
 pub(crate) use color_picker_popup::{
     color_picker_popup_visual_geometry_with_engine, render_color_picker_popup_with_engine,
 };
-pub use command_palette::{command_palette_visual_geometry, render_command_palette};
 pub(crate) use command_palette::{
-    command_palette_visual_geometry_with_engine, render_command_palette_with_engine,
+    CommandPaletteView, command_palette_visual_geometry_with_engine, paint_command_palette,
 };
+pub use command_palette::{command_palette_visual_geometry, render_command_palette};
 pub use context_menu::render_context_menu;
 pub(crate) use context_menu::render_context_menu_with_engine;
 pub(crate) use eyedropper_loupe::{compute_eyedropper_loupe_layout, render_eyedropper_loupe};

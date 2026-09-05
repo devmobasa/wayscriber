@@ -126,16 +126,18 @@ impl ZoomState {
             self.source_terminal.is_none(),
             "a zoom capture terminal is still pending"
         );
-        if self.capture.is_some() || self.portal_in_progress || self.preflight_pending {
+        if self.capture.is_some() || self.portal_in_progress || self.preflight.is_pending() {
             warn!("Zoom capture already in progress; ignoring request");
             return Ok(());
         }
 
         self.begin_identified_capture();
         self.capture_done = false;
-        self.preflight_use_fallback = use_fallback || self.manager.is_none();
-        self.snapshot_preflight_layout();
-        self.preflight_pending = true;
+        self.preflight.begin(
+            use_fallback || self.manager.is_none(),
+            self.active_output_id,
+            self.output_layout_generation,
+        );
         Ok(())
     }
 

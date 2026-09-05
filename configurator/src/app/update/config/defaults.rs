@@ -13,7 +13,8 @@ impl ConfiguratorApp {
     /// `refresh_dirty_flag`, which is the same standing-down the Cancel
     /// control asks for explicitly.
     pub(in crate::app::update) fn handle_reset_to_defaults_requested(&mut self) -> Vec<Effect> {
-        if self.is_loading || self.is_saving || self.defaults_reset_pending() {
+        if self.document.is_loading() || self.document.is_saving() || self.defaults_reset_pending()
+        {
             return Vec::new();
         }
 

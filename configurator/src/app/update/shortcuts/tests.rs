@@ -57,9 +57,7 @@ fn starting_one_recorder_closes_any_older_recorder() {
     let _ = app.handle_shortcut_recording_started(KeybindingField::ClearCanvas);
     let _ = app.handle_shortcut_recording_started(KeybindingField::Undo);
     assert_eq!(
-        app.active_shortcut_recorder
-            .as_ref()
-            .map(|recorder| recorder.field),
+        app.shortcuts.recorder().map(|recorder| recorder.field),
         Some(KeybindingField::Undo)
     );
 }
@@ -82,14 +80,14 @@ fn confirmation_and_shortcut_conflict_do_not_consume_each_other() {
         app.pending_confirmation.is_some(),
         "recording a conflict must not disarm Defaults"
     );
-    assert!(app.pending_shortcut_conflict.is_some());
+    assert!(app.shortcuts.conflict().is_some());
     let _ = app.handle_window_escape_pressed();
     assert!(
         app.pending_confirmation.is_none(),
         "Escape still cancels Defaults when the recorder is closed"
     );
     assert!(
-        app.pending_shortcut_conflict.is_some(),
+        app.shortcuts.conflict().is_some(),
         "Escape must not take the shortcut conflict with it"
     );
 }
@@ -144,7 +142,7 @@ fn recorder_escape_does_not_cancel_defaults_confirmation() {
     let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
     let _ = app.handle_window_escape_pressed();
     assert!(app.pending_confirmation.is_some());
-    assert!(app.active_shortcut_recorder.is_some());
+    assert!(app.shortcuts.recorder().is_some());
 }
 
 #[test]
@@ -153,9 +151,9 @@ fn conflict_cancel_leaves_the_draft_byte_for_byte() {
     let before = app.draft.clone();
     let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
     let _ = app.handle_shortcut_recorder_key(u32::from(b'e'), KeyboardModifiers::default());
-    assert!(app.pending_shortcut_conflict.is_some());
+    assert!(app.shortcuts.conflict().is_some());
     let _ = app.handle_shortcut_conflict_canceled();
-    assert!(app.pending_shortcut_conflict.is_none());
+    assert!(app.shortcuts.conflict().is_none());
     assert_eq!(app.draft, before);
 }
 
@@ -171,7 +169,7 @@ fn invalid_raw_text_blocks_save_and_stays_visible() {
         .set(KeybindingField::Exit, "Ctrl+Shift".to_string());
     let effects = app.handle_save_requested();
     assert!(effects.is_empty());
-    assert!(app.base_document.is_some());
+    assert!(app.document.loaded().is_some());
     assert_eq!(
         app.draft.keybindings.value_for(KeybindingField::Exit),
         Some("Ctrl+Shift")
@@ -198,7 +196,7 @@ fn save_after_confirmed_replacement_writes_only_the_intended_fields() {
             super_held: false,
         },
     );
-    assert!(app.pending_shortcut_conflict.is_some());
+    assert!(app.shortcuts.conflict().is_some());
     let _ = app.handle_shortcut_conflict_replace_confirmed();
     save_draft(&mut app);
 
@@ -231,7 +229,7 @@ fn pending_conflict_blocks_save_without_taking_the_document() {
     let _ = app.handle_shortcut_recorder_key(u32::from(b'e'), KeyboardModifiers::default());
     let effects = app.handle_save_requested();
     assert!(effects.is_empty());
-    assert!(app.base_document.is_some());
+    assert!(app.document.loaded().is_some());
     assert!(status_contains(&app.status, "shortcut conflict"));
 }
 
@@ -243,9 +241,9 @@ fn text_editor_keeps_invalid_text_until_canceled() {
     let _ = app.handle_shortcut_text_edit_changed("Ctrl+Shift".to_string());
     let _ = app.handle_shortcut_text_edit_applied();
     assert_eq!(app.draft, before);
-    assert!(app.shortcut_text_editor.is_some());
+    assert!(app.shortcuts.editor().is_some());
     let _ = app.handle_shortcut_text_edit_canceled(KeybindingField::Undo);
-    assert!(app.shortcut_text_editor.is_none());
+    assert!(app.shortcuts.editor().is_none());
     assert_eq!(app.draft, before);
 }
 
@@ -347,7 +345,7 @@ fn active_confirmation_canceled_clears_defaults_without_touching_conflicts() {
     let effects = app.handle_active_confirmation_canceled();
     assert!(effects.is_empty());
     assert!(app.pending_confirmation.is_none());
-    assert!(app.pending_shortcut_conflict.is_some());
+    assert!(app.shortcuts.conflict().is_some());
 }
 
 #[test]
@@ -360,7 +358,7 @@ fn auxiliary_mouse_button_records_into_the_draft() {
         KeyboardModifiers::default(),
     );
     assert!(effects.is_empty());
-    assert!(app.active_shortcut_recorder.is_none());
+    assert!(app.shortcuts.recorder().is_none());
     assert_eq!(
         app.draft
             .keybindings
@@ -384,8 +382,8 @@ fn recording_stylus_primary_prompts_to_move_the_default_legacy_barrel() {
         KeyboardModifiers::default(),
     );
     let pending = app
-        .pending_shortcut_conflict
-        .as_ref()
+        .shortcuts
+        .conflict()
         .expect("legacy barrel is already assigned");
     assert_eq!(pending.replace_label(), "Move Legacy Binding");
     let effects = app.handle_shortcut_conflict_replace_confirmed();
@@ -411,17 +409,17 @@ fn recording_a_two_step_sequence_commits_on_finish() {
     };
     let effects = app.handle_shortcut_recorder_key(u32::from(b'k'), chord);
     assert!(effects.is_empty());
-    assert!(app.active_shortcut_recorder.is_some());
+    assert!(app.shortcuts.recorder().is_some());
     let effects = app.handle_shortcut_recorder_key(u32::from(b'c'), chord);
     assert!(effects.is_empty());
     assert!(
-        app.active_shortcut_recorder
-            .as_ref()
+        app.shortcuts
+            .recorder()
             .is_some_and(|recorder| recorder.can_finish())
     );
     let effects = app.handle_shortcut_sequence_finish();
     assert!(effects.is_empty());
-    assert!(app.active_shortcut_recorder.is_none());
+    assert!(app.shortcuts.recorder().is_none());
     assert_eq!(
         app.draft
             .keybindings
@@ -444,7 +442,7 @@ fn third_sequence_step_finishes_automatically() {
     let _ = app.handle_shortcut_recorder_key(u32::from(b'c'), chord);
     let effects = app.handle_shortcut_recorder_key(u32::from(b'v'), chord);
     assert!(effects.is_empty());
-    assert!(app.active_shortcut_recorder.is_none());
+    assert!(app.shortcuts.recorder().is_none());
     assert_eq!(
         app.draft
             .keybindings
@@ -463,10 +461,10 @@ fn sequence_recording_rejects_device_buttons() {
         KeyboardModifiers::default(),
     );
     assert!(effects.is_empty());
-    assert!(app.active_shortcut_recorder.is_some());
+    assert!(app.shortcuts.recorder().is_some());
     assert!(
-        app.active_shortcut_recorder
-            .as_ref()
+        app.shortcuts
+            .recorder()
             .is_some_and(|recorder| recorder.prompt.contains("keyboard-only"))
     );
 }
@@ -485,8 +483,8 @@ fn sequence_prefix_conflict_uses_the_same_replace_flow() {
     let _ = app.handle_shortcut_recorder_key(u32::from(b'c'), ctrl);
     let _ = app.handle_shortcut_sequence_finish();
     let pending = app
-        .pending_shortcut_conflict
-        .as_ref()
+        .shortcuts
+        .conflict()
         .expect("Ctrl+K is the command palette");
     let prompt = pending.prompt();
     assert!(prompt.contains("Ctrl+K"), "{prompt}");
@@ -506,7 +504,7 @@ fn text_editor_accepts_a_sequence_beside_a_single() {
         .handle_shortcut_text_edit_changed("F5, Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C".to_string());
     let effects = app.handle_shortcut_text_edit_applied();
     assert!(effects.is_empty());
-    assert!(app.pending_shortcut_conflict.is_none());
+    assert!(app.shortcuts.conflict().is_none());
     assert_eq!(
         app.draft
             .keybindings
@@ -536,7 +534,7 @@ fn reset_visible_affects_exactly_the_filtered_identity_set() {
     use crate::models::ShortcutManagerFilter;
 
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.keybindings_show_all = true;
     app.draft
         .keybindings
@@ -593,7 +591,7 @@ fn reset_visible_does_not_touch_fields_outside_the_filter() {
     use crate::models::ShortcutManagerFilter;
 
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.keybindings_show_all = true;
     app.draft
         .keybindings
@@ -623,7 +621,7 @@ fn reset_visible_does_not_touch_fields_outside_the_filter() {
 #[test]
 fn reset_all_requires_confirmation_and_stays_draft_only() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft
         .keybindings
         .set(KeybindingField::Undo, "F9".to_string());
@@ -657,7 +655,7 @@ fn reset_all_requires_confirmation_and_stays_draft_only() {
 #[test]
 fn reset_all_confirm_without_request_changes_nothing() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft
         .keybindings
         .set(KeybindingField::Undo, "F9".to_string());
@@ -671,7 +669,7 @@ fn reset_all_confirm_without_request_changes_nothing() {
 #[test]
 fn conflict_review_queue_arms_the_next_conflict_after_replace() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.is_loading = false;
+    app.document.set_loading_for_test(false);
     app.draft
         .keybindings
         .set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
@@ -686,21 +684,21 @@ fn conflict_review_queue_arms_the_next_conflict_after_replace() {
         .set(KeybindingField::Redo, "Ctrl+Alt+Shift+Y".to_string());
 
     let _ = app.handle_shortcut_conflict_review_started();
-    assert!(app.shortcut_conflict_review);
-    assert!(app.pending_shortcut_conflict.is_some());
-    let first_target = match app.pending_shortcut_conflict.as_ref() {
+    assert!(app.shortcuts.review);
+    assert!(app.shortcuts.conflict().is_some());
+    let first_target = match app.shortcuts.conflict() {
         Some(crate::models::PendingShortcutConflict::Recorded { target, .. }) => *target,
         other => panic!("expected a recorded conflict, got {other:?}"),
     };
 
     let _ = app.handle_shortcut_conflict_replace_confirmed();
     assert!(
-        app.shortcut_conflict_review,
+        app.shortcuts.review,
         "the queue continues after one replace"
     );
     let second = app
-        .pending_shortcut_conflict
-        .as_ref()
+        .shortcuts
+        .conflict()
         .expect("the next conflict should be armed");
     match second {
         crate::models::PendingShortcutConflict::Recorded { target, .. } => {
@@ -721,8 +719,8 @@ fn conflict_review_cancel_stops_the_queue() {
         .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
     let _ = app.handle_shortcut_conflict_review_started();
     let _ = app.handle_shortcut_conflict_canceled();
-    assert!(!app.shortcut_conflict_review);
-    assert!(app.pending_shortcut_conflict.is_none());
+    assert!(!app.shortcuts.review);
+    assert!(app.shortcuts.conflict().is_none());
 }
 
 #[test]
@@ -736,8 +734,8 @@ fn jump_to_conflict_selects_the_other_claimant() {
         .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
     let _ = app.handle_shortcut_conflict_review_started();
     let jump = app
-        .pending_shortcut_conflict
-        .as_ref()
+        .shortcuts
+        .conflict()
         .and_then(crate::models::PendingShortcutConflict::jump_field)
         .expect("a claimant to jump to");
     let _ = app.handle_shortcut_manager_jump_to(jump);

@@ -114,7 +114,7 @@ impl InputState {
             DrawingState::MovingSelection {
                 snapshots, moved, ..
             } => {
-                selection::finish_moving_selection(self, snapshots, moved);
+                selection::finish_moving_selection(self, measurer, snapshots, moved);
             }
             DrawingState::Selecting {
                 start_x,

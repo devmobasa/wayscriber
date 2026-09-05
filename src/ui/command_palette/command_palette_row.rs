@@ -1,6 +1,5 @@
 use crate::config::KeybindingsConfig;
 use crate::config::action_meta::ActionMeta;
-use crate::input::InputState;
 use crate::input::state::COMMAND_PALETTE_ITEM_HEIGHT;
 use crate::input::state::query_tokens;
 use crate::input::state::{
@@ -49,7 +48,8 @@ pub(super) fn command_palette_row_styles() -> CommandPaletteRowStyle {
 pub(super) fn render_command_row(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
-    input_state: &InputState,
+    query: &str,
+    shortcut_labels: &[String],
     cmd: &ActionMeta,
     styles: &CommandPaletteRowStyle,
     inner_x: f64,
@@ -93,7 +93,7 @@ pub(super) fn render_command_row(
     draw_label_match_highlights(
         engine,
         ctx,
-        &input_state.command_palette.query,
+        query,
         cmd.label,
         label_x,
         label_y,
@@ -124,7 +124,6 @@ pub(super) fn render_command_row(
     };
     let content_right = inner_x + inner_width - 8.0 - actions_width;
 
-    let shortcut_labels = input_state.action_binding_labels(cmd.action);
     let badge_left_edge = render_command_row_shortcut_badge(
         engine,
         ctx,
@@ -132,7 +131,7 @@ pub(super) fn render_command_row(
         content_right,
         desc_x,
         is_selected,
-        &shortcut_labels,
+        shortcut_labels,
         &styles.shortcut,
     );
 

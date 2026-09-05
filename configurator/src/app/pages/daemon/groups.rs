@@ -45,13 +45,18 @@ pub(super) fn overview_group(
     group.add(&body);
 
     bindings.push(Box::new(move |app, summary| {
-        let (text, tone) = overall_status(app.daemon_status.as_ref());
+        let (text, tone) = overall_status(app.daemon.status.as_ref());
         set_label(&status_label, text);
         apply_tone(&status_label, tone);
         set_visible(&status_row, shown_areas(summary).status);
-        set_sensitive(&refresh, !app.daemon_busy);
+        set_sensitive(&refresh, !app.daemon.is_busy());
 
-        match app.daemon_feedback.as_deref() {
+        match app
+            .daemon
+            .feedback
+            .as_ref()
+            .map(crate::app::daemon_workflow::DaemonFeedback::text)
+        {
             Some(feedback) => {
                 set_label(&feedback_label, feedback);
                 apply_tone(&feedback_label, feedback_tone(feedback));
@@ -60,8 +65,8 @@ pub(super) fn overview_group(
             None => set_visible(&feedback_label, false),
         }
 
-        set_visible(&busy_label, app.daemon_busy);
-        set_visible(&loading_label, app.daemon_status.is_none());
+        set_visible(&busy_label, app.daemon.is_busy());
+        set_visible(&loading_label, app.daemon.status.is_none());
     }));
 
     group
@@ -93,7 +98,7 @@ pub(super) fn install_group(
         set_label(&state_label, text);
         apply_tone(&state_label, tone);
         set_button_label(&install, install_button_label(installed));
-        set_sensitive(&install, !app.daemon_busy);
+        set_sensitive(&install, !app.daemon.is_busy());
     }));
 
     group
@@ -146,17 +151,19 @@ pub(super) fn shortcut_group(
         set_visible(&body, installed);
 
         let capability = app
-            .daemon_status
+            .daemon
+            .status
             .as_ref()
             .map(|status| status.shortcut_apply_capability);
         let placeholder = shortcut_placeholder(capability);
         if entry.placeholder_text().as_deref() != Some(placeholder) {
             entry.set_placeholder_text(Some(placeholder));
         }
-        set_text_blocked(&entry, &entry_handler, &app.daemon_shortcut_input);
+        set_text_blocked(&entry, &entry_handler, &app.daemon.shortcut_input);
 
         match app
-            .daemon_status
+            .daemon
+            .status
             .as_ref()
             .and_then(|status| status.configured_shortcut.as_deref())
         {
@@ -172,7 +179,7 @@ pub(super) fn shortcut_group(
 
         let manual = capability == Some(ShortcutApplyCapability::Manual);
         set_visible(&manual_label, manual);
-        set_sensitive(&apply, !app.daemon_busy && !manual);
+        set_sensitive(&apply, !app.daemon.is_busy() && !manual);
     }));
 
     group
@@ -214,7 +221,7 @@ pub(super) fn light_controls_group(
     group.add(&manual_label);
 
     bindings.push(Box::new(move |app, _summary| {
-        let status = app.daemon_status.as_ref();
+        let status = app.daemon.status.as_ref();
         match status.and_then(|status| status.light_controls_config_path.as_deref()) {
             Some(path) => {
                 set_label(&path_label, &format!("Hyprland include: {path}"));
@@ -236,7 +243,7 @@ pub(super) fn light_controls_group(
             light_controls_status(status.is_some_and(|status| status.light_controls_configured));
         set_label(&state_label, text);
         apply_tone(&state_label, tone);
-        set_sensitive(&install, !app.daemon_busy && installed);
+        set_sensitive(&install, !app.daemon.is_busy() && installed);
     }));
 
     group
@@ -279,7 +286,7 @@ pub(super) fn start_group(
         set_visible(&locked_label, !installed);
         set_visible(&body, installed);
 
-        let status = app.daemon_status.as_ref();
+        let status = app.daemon.status.as_ref();
         let running = status.is_some_and(|status| status.service_active);
         let enabled = status.is_some_and(|status| status.service_enabled);
         let (text, tone) = service_status(running, enabled);
@@ -289,7 +296,7 @@ pub(super) fn start_group(
         set_visible(&running_row, running);
         set_visible(&start, !running);
         for button in [&restart, &stop, &start] {
-            set_sensitive(button, !app.daemon_busy);
+            set_sensitive(button, !app.daemon.is_busy());
         }
     }));
 
@@ -329,8 +336,8 @@ pub(super) fn details_group(
     group.add(&body);
 
     bindings.push(Box::new(move |app, _summary| {
-        set_sensitive(&refresh, !app.daemon_busy);
-        let Some(status) = app.daemon_status.as_ref() else {
+        set_sensitive(&refresh, !app.daemon.is_busy());
+        let Some(status) = app.daemon.status.as_ref() else {
             set_visible(&detecting_label, true);
             for label in [
                 &desktop_label,

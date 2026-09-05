@@ -29,6 +29,7 @@ pub struct PropertiesPanelLayout {
     pub width: f64,
     pub height: f64,
     pub title_baseline_y: f64,
+    pub divider_y: f64,
     pub info_start_y: f64,
     pub entry_start_y: f64,
     pub entry_row_height: f64,

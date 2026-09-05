@@ -1,3 +1,4 @@
+use crate::backend::wayland::capture_preflight::CapturePreflight;
 use log::info;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -132,10 +133,7 @@ pub struct FrozenState {
     pub(super) portal_in_progress: bool,
     pub(super) portal_target_output_id: Option<u32>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
-    pub(super) preflight_pending: bool,
-    pub(super) preflight_backend: Option<FrozenCaptureBackend>,
-    preflight_output_id: Option<u32>,
-    preflight_layout_generation: Option<u64>,
+    pub(super) preflight: CapturePreflight<FrozenCaptureBackend>,
     pub(super) capture_done: bool,
     pending_image: Option<PendingFrozenImage>,
     acquisition_attempt: Option<(ScreenAcquisitionId, ScreenAcquisitionOwner)>,
@@ -201,10 +199,7 @@ impl FrozenState {
             portal_in_progress: false,
             portal_target_output_id: None,
             runtime_wake,
-            preflight_pending: false,
-            preflight_backend: None,
-            preflight_output_id: None,
-            preflight_layout_generation: None,
+            preflight: CapturePreflight::Idle,
             capture_done: false,
             pending_image: None,
             acquisition_attempt: None,
@@ -352,35 +347,30 @@ impl FrozenState {
     pub fn is_in_progress(&self) -> bool {
         self.direct_capture.is_some()
             || self.portal_in_progress
-            || self.preflight_pending
+            || self.preflight.is_pending()
             || self.pending_image.is_some()
     }
 
     pub(in crate::backend::wayland) fn take_preflight_pending(
         &mut self,
     ) -> Option<FrozenCaptureBackend> {
-        if !self.preflight_pending {
-            return None;
-        }
-        self.preflight_pending = false;
-        self.preflight_backend.take()
+        self.preflight.take_pending()
     }
 
+    #[cfg(test)]
     pub(super) fn snapshot_preflight_layout(&mut self) {
-        self.preflight_output_id = self.active_output_id;
-        self.preflight_layout_generation = Some(self.output_layout_generation);
+        self.preflight.begin(
+            FrozenCaptureBackend::Portal,
+            self.active_output_id,
+            self.output_layout_generation,
+        );
     }
 
     pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), String> {
-        let Some(generation) = self.preflight_layout_generation else {
-            return Ok(());
-        };
-        if layout_token_matches(
-            self.preflight_output_id,
-            generation,
-            self.active_output_id,
-            self.output_layout_generation,
-        ) {
+        if self
+            .preflight
+            .layout_matches(self.active_output_id, self.output_layout_generation)
+        {
             Ok(())
         } else {
             Err("Freeze failed after the display layout changed".to_string())
@@ -462,10 +452,7 @@ impl FrozenState {
         if let Some(capture) = self.direct_capture.take() {
             capture.destroy();
         }
-        self.preflight_pending = false;
-        self.preflight_backend = None;
-        self.preflight_output_id = None;
-        self.preflight_layout_generation = None;
+        self.preflight = CapturePreflight::Idle;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
             task.cancel();

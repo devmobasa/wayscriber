@@ -6,11 +6,12 @@ use super::super::SELECTION_DRAG_THRESHOLD;
 
 pub(super) fn finish_moving_selection(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     snapshots: Vec<(ShapeId, ShapeSnapshot)>,
     moved: bool,
 ) {
     if moved {
-        state.push_translation_undo(snapshots);
+        state.push_translation_undo(measurer, snapshots);
     }
 }
 
@@ -119,33 +120,76 @@ pub(super) fn finish_selection_resize(
     measurer: &crate::draw::TextMeasurer,
     snapshots: &[(ShapeId, ShapeSnapshot)],
 ) {
-    // Capture after-snapshots and push undo actions
-    let mut has_changes = false;
-    let frame = state.boards.active_frame_mut();
-    for (shape_id, before_snapshot) in snapshots {
-        if let Some(shape) = frame.shape(*shape_id) {
-            let after_snapshot = ShapeSnapshot {
-                shape: shape.shape.clone(),
-                locked: shape.locked,
-            };
-            // Check if shape bounds changed (simpler than full PartialEq on Shape)
-            let before_bounds = before_snapshot.shape.bounding_box_with(measurer);
-            let after_bounds = after_snapshot.shape.bounding_box_with(measurer);
-            if before_bounds != after_bounds {
-                frame.push_undo_action(
-                    UndoAction::modify_from_snapshots(
-                        *shape_id,
-                        before_snapshot.clone(),
-                        after_snapshot,
-                    ),
-                    state.history_limits.undo_stack_limit(),
-                );
-                has_changes = true;
-            }
+    let effects =
+        crate::input::state::core::editing::CanvasEdit::from_snapshots(snapshots.to_vec()).commit(
+            state.boards.active_frame_mut(),
+            state.history_limits.undo_stack_limit(),
+        );
+    state.apply_edit_effects(measurer, effects);
+    state.needs_redraw = true;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multi_shape_resize_undo_and_redo_are_one_gesture() {
+        let mut state = crate::input::state::test_support::TestInputStateBuilder::default().build();
+        let measurer = crate::draw::TextMeasurer::default();
+        let ids: Vec<_> = [10, 50]
+            .into_iter()
+            .map(|x| {
+                state.boards.active_frame_mut().add_shape(Shape::Rect {
+                    x,
+                    y: 10,
+                    w: 20,
+                    h: 20,
+                    fill: false,
+                    color: crate::draw::WHITE,
+                    thick: 2.0,
+                })
+            })
+            .collect();
+        state.set_selection(ids.clone());
+        let snapshots = state.capture_resize_selection_snapshots();
+        let bounds = state.selection_bounds_with(&measurer).unwrap();
+        let before: Vec<_> = snapshots
+            .iter()
+            .map(|(_, snapshot)| snapshot.shape.clone())
+            .collect();
+        state.apply_selection_resize_with(
+            &measurer,
+            crate::input::state::SelectionHandle::BottomRight,
+            &bounds,
+            bounds.width,
+            bounds.height,
+            &snapshots,
+        );
+        let after: Vec<_> = ids
+            .iter()
+            .map(|id| {
+                state
+                    .boards
+                    .active_frame()
+                    .shape(*id)
+                    .unwrap()
+                    .shape
+                    .clone()
+            })
+            .collect();
+        assert_ne!(before, after);
+        let history = state.boards.active_frame().undo_stack_len();
+        finish_selection_resize(&mut state, &measurer, &snapshots);
+        let frame = state.boards.active_frame_mut();
+        assert_eq!(frame.undo_stack_len(), history + 1);
+        assert!(frame.undo_last().is_some());
+        for (id, before) in ids.iter().zip(before) {
+            assert_eq!(frame.shape(*id).unwrap().shape, before);
+        }
+        assert!(frame.redo_last().is_some());
+        for (id, after) in ids.iter().zip(after) {
+            assert_eq!(frame.shape(*id).unwrap().shape, after);
         }
     }
-    if has_changes {
-        state.mark_session_dirty();
-    }
-    state.needs_redraw = true;
 }

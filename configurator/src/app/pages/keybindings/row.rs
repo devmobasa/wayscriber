@@ -262,14 +262,14 @@ pub(super) fn binding_row(
         }
 
         let recording = app
-            .active_shortcut_recorder
-            .as_ref()
+            .shortcuts
+            .recorder()
             .filter(|recorder| recorder.field == field);
         recorder.refresh(recording);
 
         let editing = app
-            .shortcut_text_editor
-            .as_ref()
+            .shortcuts
+            .editor()
             .filter(|editor| editor.field == field);
         let editor_text = editing.map(|editor| editor.text.as_str()).unwrap_or(value);
         let editor_error = editing.and_then(|editor| editor.parse_error());

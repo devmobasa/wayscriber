@@ -86,10 +86,10 @@ pub(crate) fn render_properties_panel_with_engine(
     );
 
     constants::set_color(ctx, DIVIDER);
-    ctx.move_to(layout.label_x, layout.title_baseline_y + 4.0);
+    ctx.move_to(layout.label_x, layout.divider_y);
     ctx.line_to(
         layout.origin_x + layout.width - layout.padding_x,
-        layout.title_baseline_y + 4.0,
+        layout.divider_y,
     );
     let _ = ctx.stroke();
 

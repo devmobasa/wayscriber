@@ -55,7 +55,7 @@ pub(super) fn add(page: &mut PageBuilder) {
         let gates = CatalogGates::of(app);
         set_sensitive(&refresh, !gates.busy);
 
-        match SessionCatalogOperation::Clear.cached_status_blocker(app.daemon_status.as_ref()) {
+        match SessionCatalogOperation::Clear.cached_status_blocker(app.daemon.status.as_ref()) {
             Some(blocker) => {
                 set_label(&blocker_label, blocker);
                 set_visible(&blocker_label, true);
@@ -155,7 +155,7 @@ struct CatalogGates {
 
 impl CatalogGates {
     fn of(app: &ConfiguratorApp) -> Self {
-        let status = app.daemon_status.as_ref();
+        let status = app.daemon.status.as_ref();
         Self {
             busy: app.session_catalog.busy || app.session_catalog.is_loading,
             duplicate_blocked: SessionCatalogOperation::Duplicate

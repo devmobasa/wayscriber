@@ -24,7 +24,7 @@ pub struct EmbeddedImage {
 }
 
 /// Brush options for eraser strokes.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct EraserBrush {
     /// Brush diameter in pixels (logical coordinates)
     pub size: f64,
@@ -168,7 +168,7 @@ impl ArrowStyle {
 }
 
 /// Label metadata for numbered arrows.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ArrowLabel {
     /// Numeric label value.
     pub value: u32,
@@ -179,7 +179,7 @@ pub struct ArrowLabel {
 }
 
 /// Label metadata for numbered step markers.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct StepMarkerLabel {
     /// Numeric label value.
     pub value: u32,
@@ -193,7 +193,7 @@ pub struct StepMarkerLabel {
 ///
 /// Each variant represents a different drawing tool/primitive with its specific parameters.
 /// All shapes store their own color and size information for independent rendering.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum Shape {
     /// Freehand drawing - polyline connecting mouse drag points
     Freehand {

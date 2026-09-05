@@ -187,7 +187,7 @@ fn conflict_banner(
 
     let revealer_for_bind = revealer.clone();
     bindings.push(Box::new(move |app, _summary| {
-        match &app.pending_shortcut_conflict {
+        match &app.shortcuts.conflict() {
             Some(conflict) => {
                 set_label(&label, &conflict.prompt());
                 replace.set_label(conflict.replace_label());

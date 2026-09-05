@@ -81,3 +81,16 @@ cargo build --release
 ```
 
 Artifacts land in `target/release/`. No Node toolchain or bundler is required.
+
+## Workflow ownership
+
+`app/document_workflow.rs` owns mutually exclusive load/save phases and transfers
+the loaded document to save effects. `app/migration_workflow.rs` owns offers and
+dismissals tied to the document destination. `app/shortcut_workflow.rs` makes
+recording, text editing, and conflict resolution mutually exclusive.
+`app/daemon_workflow.rs` owns background setup actions, status request identities,
+and typed feedback. App update handlers coordinate draft changes and UI effects.
+
+Authored saves use the core `Config::validate_for_save` result. It rejects changes
+outside keybindings by comparing persisted typed values and returns keybinding
+validation reports for user feedback. Diagnostic text is not used for decisions.

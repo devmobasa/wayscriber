@@ -5,6 +5,7 @@ mod captured_image;
 pub(crate) mod color_picker_popup;
 mod command_palette;
 mod dirty;
+pub(in crate::input::state) mod editing;
 mod eyedropper;
 mod feedback;
 mod font_cycle;
