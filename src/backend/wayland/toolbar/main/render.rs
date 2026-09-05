@@ -1,3 +1,4 @@
+use crate::ui_text::UiTextEngine;
 use smithay_client_toolkit::shm::Shm;
 
 use super::structs::ToolbarSurfaceManager;
@@ -7,6 +8,7 @@ use crate::ui::toolbar::ToolbarSnapshot;
 impl ToolbarSurfaceManager {
     pub fn render(
         &mut self,
+        engine: &UiTextEngine,
         shm: &Shm,
         snapshot: &ToolbarSnapshot,
         hover: Option<(f64, f64)>,
@@ -28,13 +30,13 @@ impl ToolbarSurfaceManager {
             render_profile,
             |ctx, w, h, snap, hits, hov, hov_start| {
                 crate::backend::wayland::toolbar::render_top_strip(
-                    ctx, w, h, snap, hits, hov, hov_start,
+                    engine, ctx, w, h, snap, hits, hov, hov_start,
                 )
             },
         ) {
             self.top.report_render_failure(&err);
         }
-        self.top.sync_top_input_region(snapshot);
+        self.top.sync_top_input_region(engine, snapshot);
     }
 
     pub fn mark_dirty(&mut self) {

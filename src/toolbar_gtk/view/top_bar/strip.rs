@@ -193,7 +193,7 @@ impl TopBar {
         // narrower layout (notably `simple`) does not keep the regular strip's
         // empty trailing area. Height remains content-driven for GTK popovers.
         self.window
-            .set_default_size(top_default_width(snapshot), -1);
+            .set_default_size(top_default_width(&self.ui_text, snapshot), -1);
         let scale = effective_scale(snapshot);
         let use_icons = snapshot.use_icons || plan.compact;
         let gap = if plan.compact { COMPACT_GAP } else { GAP };

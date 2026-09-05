@@ -276,7 +276,8 @@ impl WaylandState {
 
     fn render_precision_entry(&mut self, ctx: &cairo::Context, width: u32, height: u32) {
         let snapshot = self.toolbar_snapshot();
-        let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
+        let (_, top_h) =
+            crate::backend::wayland::toolbar::top_size(self.render.ui_text(), &snapshot);
         let top_offset = self.toolbar_chrome.top_offset();
         let anchor = (
             self.inline_top_base_x() + top_offset.0,

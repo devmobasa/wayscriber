@@ -1,3 +1,4 @@
+use crate::ui_text::UiTextEngine;
 mod spec;
 
 #[cfg(test)]
@@ -8,16 +9,19 @@ use crate::ui::toolbar::ToolbarSnapshot;
 pub(super) use spec::ToolbarLayoutSpec;
 
 /// Compute the target logical size for the top toolbar given snapshot state.
-pub fn top_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
-    let base = ToolbarLayoutSpec::new(snapshot).top_size(snapshot);
+pub fn top_size(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> (u32, u32) {
+    let base = ToolbarLayoutSpec::new(snapshot).top_size(engine, snapshot);
     scale_size(base, snapshot.toolbar_scale)
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover on the top strip as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
 /// while no menu popover is open.
-pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
-    super::view::top::top_popover_scroll_bounds(snapshot)
+pub fn top_popover_scroll_bounds(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+) -> Option<(f64, f64)> {
+    super::view::top::top_popover_scroll_bounds(engine, snapshot)
 }
 
 fn scale_size(size: (u32, u32), scale: f64) -> (u32, u32) {

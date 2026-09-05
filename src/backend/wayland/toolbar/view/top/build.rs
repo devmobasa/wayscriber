@@ -3,6 +3,8 @@
 //! This module owns the implementation behind `top`'s stable planning,
 //! building, sizing, and input-region interface.
 
+use crate::ui_text::UiTextEngine;
+
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
@@ -25,6 +27,7 @@ pub(super) const OVERFLOW_ANCHOR_GAP: f64 = 6.0;
 pub(super) const OVERFLOW_BOTTOM_MARGIN: f64 = 4.0;
 
 pub(super) fn build_top_view_planned(
+    engine: &UiTextEngine,
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
     width: f64,
@@ -298,7 +301,14 @@ pub(super) fn build_top_view_planned(
         // The highlight ring remains visible because it extends the button's
         // own band rather than forming a detached row.
         let popover_anchor = overflow_family_anchor(anchor, snapshot, plan);
-        super::menus::push_menu_popover(&mut tree, snapshot, plan, popover_anchor, (width, height));
+        super::menus::push_menu_popover(
+            engine,
+            &mut tree,
+            snapshot,
+            plan,
+            popover_anchor,
+            (width, height),
+        );
     }
 
     tree

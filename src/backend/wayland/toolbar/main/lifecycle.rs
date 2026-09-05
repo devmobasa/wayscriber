@@ -1,3 +1,4 @@
+use crate::ui_text::UiTextEngine;
 use log::info;
 use smithay_client_toolkit::{
     compositor::CompositorState,
@@ -10,8 +11,10 @@ use crate::backend::wayland::state::WaylandState;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 impl ToolbarSurfaceManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn ensure_created(
         &mut self,
+        engine: &UiTextEngine,
         qh: &QueueHandle<WaylandState>,
         compositor: &CompositorState,
         layer_shell: &LayerShell,
@@ -19,7 +22,7 @@ impl ToolbarSurfaceManager {
         output: Option<&wl_output::WlOutput>,
         snapshot: &ToolbarSnapshot,
     ) {
-        let top_size = crate::backend::wayland::toolbar::top_size(snapshot);
+        let top_size = crate::backend::wayland::toolbar::top_size(engine, snapshot);
 
         if self.is_top_visible() {
             if self.top.layer_surface.is_none() {

@@ -186,6 +186,7 @@ impl WaylandState {
                 let scale = self.surface.scale();
                 let output = self.surface.current_output();
                 self.toolbar.ensure_created(
+                    self.render.ui_text(),
                     qh,
                     self.protocol.compositor(),
                     layer_shell,
@@ -211,8 +212,13 @@ impl WaylandState {
 
         // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
         let render_profile = self.input_state.active_ui_render_profile().cloned();
-        self.toolbar
-            .render(self.protocol.shm(), snapshot, None, render_profile.as_ref());
+        self.toolbar.render(
+            self.render.ui_text(),
+            self.protocol.shm(),
+            snapshot,
+            None,
+            render_profile.as_ref(),
+        );
         self.toolbar.apply_input_regions(self.protocol.compositor());
     }
 

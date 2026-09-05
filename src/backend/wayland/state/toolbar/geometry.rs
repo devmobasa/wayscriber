@@ -132,7 +132,11 @@ mod tests {
             crate::ui::toolbar::ToolbarBindingHints::default(),
         );
         snapshot.top_viewport_max = Some(budget);
-        let planned = crate::backend::wayland::toolbar::layout::top_size(&snapshot).0 as f64;
+        let planned = crate::backend::wayland::toolbar::layout::top_size(
+            &crate::ui_text::UiTextEngine::default(),
+            &snapshot,
+        )
+        .0 as f64;
         assert!(planned <= budget, "planned={planned}, budget={budget}");
     }
 

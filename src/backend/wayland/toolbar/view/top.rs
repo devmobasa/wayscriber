@@ -13,6 +13,8 @@
 //! color chip, sizes; `model::StylePillSpec`). Blue is reserved for the active
 //! tool; disabled history buttons are dimmed and not interactive.
 
+use crate::ui_text::UiTextEngine;
+
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::Tool;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
@@ -47,7 +49,7 @@ pub(crate) use model::TopStripPlan;
 
 /// Degrade the strip until it fits the viewport: quick swatches shrink
 /// 8→6→4→0 first, then droppable items move into the overflow menu.
-pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
+pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopStripPlan {
     let mut plan = TopStripPlan::unconstrained();
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return plan;
@@ -55,7 +57,7 @@ pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
     let Some(budget) = snapshot.top_viewport_max else {
         return plan;
     };
-    let fits = |plan: &TopStripPlan| natural_width_planned(snapshot, plan) <= budget;
+    let fits = |plan: &TopStripPlan| natural_width_planned(engine, snapshot, plan) <= budget;
     if fits(&plan) {
         return plan;
     }
@@ -243,9 +245,14 @@ fn bar_band_height(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
 }
 
 /// Build the complete top-strip tree for the given logical surface size.
-pub fn build_top_view(snapshot: &ToolbarSnapshot, width: f64, height: f64) -> WidgetTree {
-    let plan = plan_top_strip(snapshot);
-    build::build_top_view_planned(snapshot, &plan, width, height)
+pub fn build_top_view(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+    width: f64,
+    height: f64,
+) -> WidgetTree {
+    let plan = plan_top_strip(engine, snapshot);
+    build::build_top_view_planned(engine, snapshot, &plan, width, height)
 }
 
 /// Input rects for the top surface in tree-logical coordinates, or None
@@ -255,6 +262,7 @@ pub fn build_top_view(snapshot: &ToolbarSnapshot, width: f64, height: f64) -> Wi
 /// transparent inter-island gaps consistently stay click-through to the
 /// canvas whether or not a popover is up.
 pub fn top_input_rects(
+    engine: &UiTextEngine,
     snapshot: &ToolbarSnapshot,
     width: f64,
     height: f64,
@@ -262,9 +270,9 @@ pub fn top_input_rects(
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return None;
     }
-    let plan = plan_top_strip(snapshot);
+    let plan = plan_top_strip(engine, snapshot);
     let bar_h = bar_band_height(snapshot, &plan);
-    let tree = build_top_view(snapshot, width, height);
+    let tree = build_top_view(engine, snapshot, width, height);
     let mut rects: Vec<_> = tree
         .nodes()
         .iter()
@@ -293,11 +301,11 @@ pub fn top_input_rects(
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, the style pill, the overflow
 /// popover, and the Canvas/Session/Settings popovers.
-pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
+pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
     }
-    let plan = plan_top_strip(snapshot);
+    let plan = plan_top_strip(engine, snapshot);
     let contextual_stack = build::shape_popover_height_planned(snapshot, &plan)
         + build::ring_row_height_planned(snapshot, &plan)
         + build::style_pill_height_planned(snapshot, &plan);
@@ -306,33 +314,45 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
     // Size the shared surface to whichever path reaches farther down.
     contextual_stack
         .max(build::overflow_height_planned(snapshot, &plan))
-        .max(menus::menu_popover_height_planned(snapshot, &plan))
+        .max(menus::menu_popover_height_planned(engine, snapshot, &plan))
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
 /// while no menu popover is open. The wheel path and scrollbar drag use these
 /// same bounds.
-pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
-    let plan = plan_top_strip(snapshot);
-    menus::menu_scroll_bounds_planned(snapshot, &plan)
+pub fn top_popover_scroll_bounds(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+) -> Option<(f64, f64)> {
+    let plan = plan_top_strip(engine, snapshot);
+    menus::menu_scroll_bounds_planned(engine, snapshot, &plan)
 }
 
 /// Natural width of the strip: the left-to-right content walk plus the
 /// right-aligned chrome block. Computed from a build against a sentinel
 /// width so the size math and the builder can never drift apart.
-pub fn top_natural_width(snapshot: &ToolbarSnapshot, height: f64) -> f64 {
-    let plan = plan_top_strip(snapshot);
-    natural_width_planned_at(snapshot, &plan, height)
+pub fn top_natural_width(engine: &UiTextEngine, snapshot: &ToolbarSnapshot, height: f64) -> f64 {
+    let plan = plan_top_strip(engine, snapshot);
+    natural_width_planned_at(engine, snapshot, &plan, height)
 }
 
-fn natural_width_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
+fn natural_width_planned(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+) -> f64 {
     let base_height = base_bar_height(snapshot);
-    natural_width_planned_at(snapshot, plan, base_height)
+    natural_width_planned_at(engine, snapshot, plan, base_height)
 }
 
-fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, height: f64) -> f64 {
-    let tree = build::build_top_view_planned(snapshot, plan, 0.0, height);
+fn natural_width_planned_at(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+    height: f64,
+) -> f64 {
+    let tree = build::build_top_view_planned(engine, snapshot, plan, 0.0, height);
     // The tools/history island cards already include their trailing padding,
     // so the max right edge of the left-hand content is the pill edge. The
     // right-anchored chrome (island card and buttons) is excluded because it
