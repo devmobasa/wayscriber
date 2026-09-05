@@ -1,20 +1,7 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextEngine, UiTextStyle, with_legacy_engine};
-
-pub(crate) fn text_extents_for(
-    ctx: &cairo::Context,
-    family: &str,
-    slant: cairo::FontSlant,
-    weight: cairo::FontWeight,
-    size: f64,
-    text: &str,
-) -> cairo::TextExtents {
-    with_legacy_engine(|engine| {
-        text_extents_for_with_engine(engine, ctx, family, slant, weight, size, text)
-    })
-}
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 pub(crate) fn text_extents_for_with_engine(
     engine: &UiTextEngine,
@@ -254,17 +241,13 @@ pub(crate) fn draw_pill(
 }
 
 /// Keycap chip interior padding, as fractions of the label font size.
-/// Shared by [`keycap_size`] and [`draw_keycap`] so pre-measured centering
+/// Shared by [`keycap_size_with_engine`] and [`draw_keycap_with_engine`] so pre-measured centering
 /// can never drift from the drawn chip.
 const KEYCAP_PAD_X_FACTOR: f64 = 0.5;
 const KEYCAP_PAD_Y_FACTOR: f64 = 0.3;
 
-/// Measured (width, height) the [`draw_keycap`] chip occupies for `label` at
+/// Measured (width, height) the [`draw_keycap_with_engine`] chip occupies for `label` at
 /// `font_size`, for callers that need to center the chip before drawing it.
-pub(crate) fn keycap_size(ctx: &cairo::Context, label: &str, font_size: f64) -> (f64, f64) {
-    with_legacy_engine(|engine| keycap_size_with_engine(engine, ctx, label, font_size))
-}
-
 pub(crate) fn keycap_size_with_engine(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
@@ -292,20 +275,6 @@ pub(crate) fn keycap_size_with_engine(
 /// Draw a flat keycap chip (rounded rect + centered label) and return its
 /// (width, height). The single keycap language that replaces the per-surface
 /// badge renderings as surfaces migrate (M2+).
-pub(crate) fn draw_keycap(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    label: &str,
-    font_size: f64,
-    fill: Rgba,
-    text_color: Rgba,
-) -> (f64, f64) {
-    with_legacy_engine(|engine| {
-        draw_keycap_with_engine(engine, ctx, x, y, label, font_size, fill, text_color)
-    })
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_keycap_with_engine(
     engine: &UiTextEngine,
@@ -358,7 +327,7 @@ pub(crate) fn keycap_text_style(font_size: f64) -> UiTextStyle<'static> {
     }
 }
 
-/// [`keycap_size`] without a rendering context, for callers that lay out
+/// [`keycap_size_with_engine`] without a rendering context, for callers that lay out
 /// before a frame buffer exists (damage geometry). Goes through the shared
 /// measurement cache, so it agrees with the drawn chip exactly.
 pub(crate) fn keycap_box_size(
@@ -375,7 +344,7 @@ pub(crate) fn keycap_box_size(
 
 /// Draw a keycap chip into a caller-provided box, centering the label inside
 /// it. Rows of chips use this so a shared row height survives labels with
-/// different ascenders and descenders; [`draw_keycap`] is the natural-size
+/// different ascenders and descenders; [`draw_keycap_with_engine`] is the natural-size
 /// shorthand over the same chrome.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_keycap_in_box(

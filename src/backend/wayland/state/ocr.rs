@@ -585,6 +585,7 @@ impl WaylandState {
         // dismisses on the first drag through the shared selector state.
         if self.config.capture.region.show_legend && !self.region_picker_legend_dismissed() {
             crate::ui::render_region_legend(
+                self.render.ui_text(),
                 ctx,
                 (screen_width, screen_height),
                 crate::ui::OCR_LEGEND_TEXT,

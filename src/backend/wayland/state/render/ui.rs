@@ -567,6 +567,7 @@ impl WaylandState {
         };
 
         crate::ui::render_region_capture_picker(
+            self.render.ui_text(),
             ctx,
             width,
             height,

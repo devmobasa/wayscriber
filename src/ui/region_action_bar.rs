@@ -1,8 +1,8 @@
 use crate::input::state::RegionSelection;
 use crate::ui::theme::{self, Rgba, overlay};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
-use super::primitives::{draw_keycap, draw_rounded_rect, keycap_size};
+use super::primitives::{draw_keycap_with_engine, draw_rounded_rect, keycap_size_with_engine};
 
 const SURFACE_MARGIN: f64 = 8.0;
 const SELECTION_GAP: f64 = 12.0;
@@ -362,6 +362,7 @@ impl RegionActionBar {
 }
 
 pub(crate) fn render_region_action_bar(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     bar: &RegionActionBar,
     visual: RegionActionBarVisual,
@@ -371,6 +372,7 @@ pub(crate) fn render_region_action_bar(
 
     for &item in &bar.items {
         draw_action(
+            engine,
             ctx,
             item,
             visual.hovered == Some(item.action),
@@ -386,6 +388,7 @@ pub(crate) fn render_region_action_bar(
     );
     for &item in &bar.edit {
         draw_action(
+            engine,
             ctx,
             item,
             visual.hovered == Some(item.action),
@@ -399,8 +402,14 @@ pub(crate) fn render_region_action_bar(
         bar.toggle.bounds.y,
         bar.toggle.bounds.width,
     );
-    draw_toggle(ctx, bar.toggle, visual.hovered, visual.include_drawings);
-    draw_status(ctx, bar, visual.status);
+    draw_toggle(
+        engine,
+        ctx,
+        bar.toggle,
+        visual.hovered,
+        visual.include_drawings,
+    );
+    draw_status(engine, ctx, bar, visual.status);
     let _ = ctx.restore();
 }
 
@@ -467,6 +476,7 @@ fn draw_row_divider(ctx: &cairo::Context, row: RegionActionRect, next_y: f64, wi
 }
 
 fn draw_action(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     item: RegionActionItem,
     hovered: bool,
@@ -515,12 +525,18 @@ fn draw_action(
     );
     let _ = ctx.stroke();
 
-    draw_action_content(ctx, item, primary, enabled);
+    draw_action_content(engine, ctx, item, primary, enabled);
 }
 
 /// Label over keycap, the pair centred as one block so every control's text
 /// sits on the same optical line regardless of ascenders or descenders.
-fn draw_action_content(ctx: &cairo::Context, item: RegionActionItem, primary: bool, enabled: bool) {
+fn draw_action_content(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    item: RegionActionItem,
+    primary: bool,
+    enabled: bool,
+) {
     let _ = ctx.save();
     ctx.rectangle(
         item.bounds.x,
@@ -532,13 +548,13 @@ fn draw_action_content(ctx: &cairo::Context, item: RegionActionItem, primary: bo
 
     let center_x = item.bounds.x + item.bounds.width / 2.0;
     let label = item.action.label();
-    let layout = text_layout(ctx, label_style(), label, None);
+    let layout = engine.layout(ctx, label_style(), label, None);
     let label_extents = layout.ink_extents();
     let shortcut = item.action.shortcut();
     let (keycap_width, keycap_height) = if shortcut.is_empty() {
         (0.0, 0.0)
     } else {
-        keycap_size(ctx, shortcut, KEYCAP_FONT_SIZE)
+        keycap_size_with_engine(engine, ctx, shortcut, KEYCAP_FONT_SIZE)
     };
 
     let stack_height = if shortcut.is_empty() {
@@ -563,7 +579,8 @@ fn draw_action_content(ctx: &cairo::Context, item: RegionActionItem, primary: bo
     );
 
     if !shortcut.is_empty() {
-        draw_keycap(
+        draw_keycap_with_engine(
+            engine,
             ctx,
             center_x - keycap_width / 2.0,
             stack_top + label_extents.height() + LABEL_KEYCAP_GAP,
@@ -585,6 +602,7 @@ fn draw_action_content(ctx: &cairo::Context, item: RegionActionItem, primary: bo
 }
 
 fn draw_toggle(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     item: RegionActionItem,
     hovered: Option<RegionAction>,
@@ -623,7 +641,7 @@ fn draw_toggle(
     draw_checkbox(ctx, box_x, box_y, box_size, checked);
 
     let label = item.action.label();
-    let layout = text_layout(ctx, toggle_label_style(), label, None);
+    let layout = engine.layout(ctx, toggle_label_style(), label, None);
     let extents = layout.ink_extents();
     theme::set_color(
         ctx,
@@ -639,8 +657,10 @@ fn draw_toggle(
         item.bounds.y + (item.bounds.height - extents.height()) / 2.0 - extents.y_bearing(),
     );
 
-    let (keycap_width, keycap_height) = keycap_size(ctx, item.action.shortcut(), KEYCAP_FONT_SIZE);
-    draw_keycap(
+    let (keycap_width, keycap_height) =
+        keycap_size_with_engine(engine, ctx, item.action.shortcut(), KEYCAP_FONT_SIZE);
+    draw_keycap_with_engine(
+        engine,
         ctx,
         item.bounds.x + item.bounds.width - 6.0 - keycap_width,
         item.bounds.y + (item.bounds.height - keycap_height) / 2.0,
@@ -699,7 +719,12 @@ fn draw_checkbox(ctx: &cairo::Context, x: f64, y: f64, size: f64, checked: bool)
     let _ = ctx.stroke();
 }
 
-fn draw_status(ctx: &cairo::Context, bar: &RegionActionBar, status: Option<RegionCutStatus>) {
+fn draw_status(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    bar: &RegionActionBar,
+    status: Option<RegionCutStatus>,
+) {
     let Some(status) = status else {
         return;
     };
@@ -713,7 +738,7 @@ fn draw_status(ctx: &cairo::Context, bar: &RegionActionBar, status: Option<Regio
     let _ = ctx.save();
     ctx.rectangle(row.x, row.y, row.width, row.height);
     ctx.clip();
-    let layout = text_layout(ctx, status_label_style(font_size), status.message(), None);
+    let layout = engine.layout(ctx, status_label_style(font_size), status.message(), None);
     let extents = layout.ink_extents();
     theme::set_color(
         ctx,
@@ -974,6 +999,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_action_bar(
+            &UiTextEngine::default(),
             &ctx,
             &bar,
             RegionActionBarVisual::simple(Some(RegionAction::Both), true),
@@ -1001,7 +1027,12 @@ mod tests {
         let row_alpha = |checked: bool| {
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
             let ctx = cairo::Context::new(&surface).unwrap();
-            render_region_action_bar(&ctx, &bar, RegionActionBarVisual::simple(None, checked));
+            render_region_action_bar(
+                &UiTextEngine::default(),
+                &ctx,
+                &bar,
+                RegionActionBarVisual::simple(None, checked),
+            );
             drop(ctx);
             surface.flush();
             let stride = surface.stride() as usize;
@@ -1024,6 +1055,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_action_bar(
+            &UiTextEngine::default(),
             &ctx,
             &bar,
             RegionActionBarVisual {
@@ -1060,6 +1092,7 @@ mod tests {
             cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_action_bar(
+            &UiTextEngine::default(),
             &ctx,
             &bar,
             RegionActionBarVisual {
@@ -1114,6 +1147,55 @@ mod tests {
                         "status paint at ({x}, {y}) left the bar on {surface:?}"
                     );
                 }
+            }
+        }
+    }
+    #[test]
+    fn retained_text_owner_matches_fresh_bar_pixels_across_status_and_density() {
+        let engine = UiTextEngine::default();
+        for density in [1, 2, 1] {
+            for status in [
+                None,
+                Some(RegionCutStatus::Updating),
+                Some(RegionCutStatus::Failed),
+            ] {
+                let paint = |engine: &UiTextEngine| {
+                    let mut surface = cairo::ImageSurface::create(
+                        cairo::Format::ARgb32,
+                        800 * density,
+                        600 * density,
+                    )
+                    .unwrap();
+                    {
+                        let ctx = cairo::Context::new(&surface).unwrap();
+                        ctx.scale(f64::from(density), f64::from(density));
+                        render_region_action_bar(
+                            engine,
+                            &ctx,
+                            &sample_bar(),
+                            RegionActionBarVisual {
+                                hovered: Some(RegionAction::CutBand),
+                                include_drawings: status.is_none(),
+                                availability: RegionActionAvailability {
+                                    terminal: status.is_none(),
+                                    cut: true,
+                                    undo: true,
+                                    redo: false,
+                                    reset: true,
+                                },
+                                cut_armed: true,
+                                status,
+                            },
+                        );
+                    }
+                    surface.data().unwrap().to_vec()
+                };
+                let actual = paint(&engine);
+                assert!(actual.iter().any(|&byte| byte != 0));
+                assert!(
+                    actual == paint(&UiTextEngine::default()),
+                    "retained action bar pixels differ"
+                );
             }
         }
     }

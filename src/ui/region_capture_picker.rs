@@ -4,12 +4,13 @@ use crate::input::state::RegionSelection;
 use crate::screen_pixels::PackedArgb32;
 use crate::util::Rect;
 
-use super::primitives::{draw_rounded_rect, text_extents_for};
+use super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::region_action_bar::{
     RegionAction, RegionActionAvailability, RegionActionBar, RegionActionBarVisual,
     RegionActionRect, RegionCutStatus, render_region_action_bar,
 };
 use super::region_resize_handles::{RegionResizeHandles, render_region_resize_handles};
+use crate::ui_text::UiTextEngine;
 
 const SCRIM: (f64, f64, f64, f64) = (0.02, 0.03, 0.05, 0.48);
 const PANEL_FILL: (f64, f64, f64, f64) = (12.0 / 255.0, 12.0 / 255.0, 15.0 / 255.0, 0.92);
@@ -250,6 +251,7 @@ pub(crate) fn render_region_capture_loupe(
 }
 
 pub(crate) fn render_region_capture_picker(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     screen_width: u32,
     screen_height: u32,
@@ -306,6 +308,7 @@ pub(crate) fn render_region_capture_picker(
             .filter(|_| visual.review)
             .map(normalized_rect);
         draw_readout_panel(
+            engine,
             ctx,
             measurement,
             READOUT_FONT_SIZE,
@@ -318,6 +321,7 @@ pub(crate) fn render_region_capture_picker(
     }
     if visual.show_legend && (visual.window.active || visual.selection.is_none()) {
         render_region_legend(
+            engine,
             ctx,
             (screen_width, screen_height),
             picker_legend_text(visual.window),
@@ -328,6 +332,7 @@ pub(crate) fn render_region_capture_picker(
     }
     if let Some(action_bar) = visual.action_bar.as_ref() {
         render_region_action_bar(
+            engine,
             ctx,
             action_bar,
             RegionActionBarVisual {
@@ -581,6 +586,7 @@ fn covered_by_action_bar(
 /// rectangle; otherwise it trails the pointer.
 #[allow(clippy::too_many_arguments)]
 fn draw_readout_panel(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     text: &str,
     font_size: f64,
@@ -590,7 +596,8 @@ fn draw_readout_panel(
     screen: (u32, u32),
     weight: cairo::FontWeight,
 ) {
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "monospace",
         cairo::FontSlant::Normal,
@@ -646,8 +653,14 @@ fn draw_readout_panel(
 
 /// The hint strip along the top of a region selector. Shared so every selector
 /// teaches its keys the same way and in the same place.
-pub(crate) fn render_region_legend(ctx: &cairo::Context, screen: (u32, u32), text: &str) {
-    let extents = text_extents_for(
+pub(crate) fn render_region_legend(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    screen: (u32, u32),
+    text: &str,
+) {
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -744,7 +757,7 @@ mod tests {
     fn the_shared_legend_paints_across_the_top_of_any_selector() {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 400).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
-        render_region_legend(&ctx, (800, 400), OCR_LEGEND_TEXT);
+        render_region_legend(&UiTextEngine::default(), &ctx, (800, 400), OCR_LEGEND_TEXT);
         drop(ctx);
         surface.flush();
         let stride = surface.stride() as usize;
@@ -791,6 +804,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             40,
             40,
@@ -839,6 +853,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             40,
             40,
@@ -880,6 +895,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             40,
             40,
@@ -928,6 +944,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 20).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             40,
             20,
@@ -975,6 +992,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             40,
             40,
@@ -1040,6 +1058,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             40,
             40,
@@ -1084,6 +1103,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             800,
             600,
@@ -1195,6 +1215,7 @@ mod tests {
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
             let ctx = cairo::Context::new(&surface).unwrap();
             render_region_capture_picker(
+                &UiTextEngine::default(),
                 &ctx,
                 800,
                 600,
@@ -1291,6 +1312,7 @@ mod tests {
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 300, 260).unwrap();
             let ctx = cairo::Context::new(&surface).unwrap();
             render_region_capture_picker(
+                &UiTextEngine::default(),
                 &ctx,
                 300,
                 260,
@@ -1403,6 +1425,7 @@ mod tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 60, 40).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
+            &UiTextEngine::default(),
             &ctx,
             60,
             40,
@@ -1447,5 +1470,61 @@ mod tests {
             &[0xCC, 0xBB, 0xAA, 0xFF],
             "second source pixel fills the right half of the displayed output"
         );
+    }
+    #[test]
+    fn retained_text_owner_matches_fresh_picker_pixels_across_modes_and_density() {
+        let engine = UiTextEngine::default();
+        let selection = RegionSelection {
+            start: (90.0, 70.0),
+            end: (480.0, 220.0),
+        };
+        for density in [1, 2, 1] {
+            for (review, show_scrim) in [(false, true), (true, true), (false, false)] {
+                let paint = |engine: &UiTextEngine| {
+                    let mut surface = cairo::ImageSurface::create(
+                        cairo::Format::ARgb32,
+                        640 * density,
+                        480 * density,
+                    )
+                    .unwrap();
+                    {
+                        let ctx = cairo::Context::new(&surface).unwrap();
+                        ctx.scale(f64::from(density), f64::from(density));
+                        render_region_capture_picker(
+                            engine,
+                            &ctx,
+                            640,
+                            480,
+                            &RegionCapturePickerVisual {
+                                selection: Some(selection),
+                                pointer: (480.0, 220.0),
+                                measurement: Some("390 × 150"),
+                                show_scrim,
+                                review,
+                                resize_handles: None,
+                                hovered_handle: None,
+                                show_legend: false,
+                                loupe: None,
+                                action_bar: review
+                                    .then(|| RegionActionBar::place(selection, (640, 480))),
+                                hovered_action: None,
+                                include_drawings: true,
+                                cut: Default::default(),
+                                window: RegionCaptureWindowVisual::disabled(),
+                            },
+                            |_, _| None,
+                        );
+                        render_region_legend(engine, &ctx, (640, 480), OCR_LEGEND_TEXT);
+                    }
+                    surface.data().unwrap().to_vec()
+                };
+                let actual = paint(&engine);
+                assert!(actual.iter().any(|&byte| byte != 0));
+                assert!(
+                    actual == paint(&UiTextEngine::default()),
+                    "retained picker pixels differ"
+                );
+            }
+        }
     }
 }
