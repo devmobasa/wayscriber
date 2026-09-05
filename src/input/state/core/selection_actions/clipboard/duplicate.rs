@@ -1,13 +1,13 @@
 use super::super::super::base::InputState;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 
 const DUPLICATE_OFFSET: i32 = 12;
 
 #[allow(dead_code)]
 impl InputState {
     pub(crate) fn duplicate_selection(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.duplicate_selection_with(measurer))
+        with_scoped_measurer(|measurer| self.duplicate_selection_with(measurer))
     }
 
     pub(crate) fn duplicate_selection_with(&mut self, measurer: &TextMeasurer) -> bool {

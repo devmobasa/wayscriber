@@ -3,7 +3,7 @@
 //! Collects axis-aligned rectangles that need repainting between frames.
 
 use super::Shape;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::util::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,7 +75,7 @@ impl DirtyTracker {
 
     /// Adds the bounding box for the given shape, or full damage if none is available.
     pub fn mark_shape(&mut self, shape: &Shape) {
-        with_legacy_measurer(|measurer| self.mark_shape_with(shape, measurer));
+        with_scoped_measurer(|measurer| self.mark_shape_with(shape, measurer));
     }
 
     /// Adds bounds measured with the supplied owner, or full damage if unavailable.

@@ -27,7 +27,7 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape(&mut self, shape: &Shape) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.render_shape_with_measurer(measurer, shape)
         })
     }
@@ -41,7 +41,7 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape_with_halo(&mut self, shape: &Shape, text_halo_enabled: bool) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.render_shape_with_halo_with_measurer(measurer, shape, text_halo_enabled)
         })
     }
@@ -56,7 +56,7 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape_over(&mut self, shape: &Shape, known_background_luminance: Option<f64>) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.render_shape_over_with_measurer(measurer, shape, known_background_luminance)
         })
     }
@@ -81,7 +81,7 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
         known_background_luminance: Option<f64>,
         text_halo_enabled: bool,
     ) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.render_shape_over_with_halo_with_measurer(
                 measurer,
                 shape,

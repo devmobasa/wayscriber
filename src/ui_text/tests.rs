@@ -252,16 +252,18 @@ fn cache_keys_keep_font_categories_quantized_size_and_wrap_units() {
 }
 
 #[test]
-fn temporary_legacy_bridge_retains_layouts_and_matches_an_explicit_owner() {
+fn scoped_convenience_engines_are_isolated_and_match_an_explicit_owner() {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     let first =
-        with_legacy_engine(|engine| engine.layout(&ctx, style(14.0), "legacy bridge", Some(50.0)));
+        with_scoped_engine(|engine| engine.layout(&ctx, style(14.0), "scoped owner", Some(50.0)));
     let second =
-        with_legacy_engine(|engine| engine.layout(&ctx, style(14.0), "legacy bridge", Some(50.0)));
-    assert_eq!(first.layout, second.layout);
+        with_scoped_engine(|engine| engine.layout(&ctx, style(14.0), "scoped owner", Some(50.0)));
+    assert_ne!(first.layout, second.layout);
     let engine = UiTextEngine::default();
-    let explicit = engine.layout(&ctx, style(14.0), "legacy bridge", Some(50.0));
+    let explicit = engine.layout(&ctx, style(14.0), "scoped owner", Some(50.0));
     assert_ne!(first.layout, explicit.layout);
+    assert_ne!(second.layout, explicit.layout);
+    assert_extents_eq(first.ink_extents(), second.ink_extents());
     assert_extents_eq(first.ink_extents(), explicit.ink_extents());
 }

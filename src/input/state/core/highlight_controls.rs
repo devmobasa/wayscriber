@@ -1,6 +1,6 @@
 use super::base::{DrawingState, InputState};
 use super::history_limits::HistoryMode;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
 use std::time::Instant;
@@ -133,7 +133,7 @@ impl InputState {
 
     /// Sets highlight-only tool mode on/off and keeps click highlight in sync.
     pub fn set_highlight_tool(&mut self, enable: bool) {
-        with_legacy_measurer(|measurer| self.set_highlight_tool_with_measurer(measurer, enable))
+        with_scoped_measurer(|measurer| self.set_highlight_tool_with_measurer(measurer, enable))
     }
 
     pub fn set_highlight_tool_with_measurer(&mut self, measurer: &TextMeasurer, enable: bool) {
@@ -162,7 +162,7 @@ impl InputState {
 
     /// Toggles the combined highlight tool and click highlight together.
     pub fn toggle_all_highlights(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.toggle_all_highlights_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.toggle_all_highlights_with_measurer(measurer))
     }
 
     pub fn toggle_all_highlights_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {

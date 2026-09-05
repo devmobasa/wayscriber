@@ -2,7 +2,7 @@ use super::super::base::{ClipboardFingerprint, ClipboardPasteRequest, InputState
 use super::super::selection::LocalSelectionContext;
 use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;
 
@@ -165,7 +165,7 @@ impl InputState {
         request: &ClipboardPasteRequest,
         shapes: Vec<Shape>,
     ) -> usize {
-        with_legacy_measurer(|measurer| {
+        with_scoped_measurer(|measurer| {
             self.paste_clipboard_shapes_from_request_with(measurer, request, shapes)
         })
     }

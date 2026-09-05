@@ -62,7 +62,7 @@ impl InputState {
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
-        crate::ui_text::with_legacy_engine(|engine| {
+        crate::ui_text::with_scoped_engine(|engine| {
             self.update_zoom_chip_layout_for_pointer_with_engine(
                 engine,
                 style,

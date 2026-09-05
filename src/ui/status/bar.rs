@@ -14,7 +14,7 @@ use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
 use crate::label_format::{format_binding_labels, join_binding_labels};
 use crate::ui::toolbar::bindings::action_for_tool;
-use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle, with_legacy_engine};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle, with_scoped_engine};
 
 mod content;
 mod helpers;

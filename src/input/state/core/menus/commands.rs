@@ -80,7 +80,7 @@ impl InputState {
     }
 
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.execute_menu_command_with_resources(resources, command)
         })
     }

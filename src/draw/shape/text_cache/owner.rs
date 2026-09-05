@@ -19,6 +19,11 @@ impl Default for TextMeasurer {
 }
 
 impl TextMeasurer {
+    #[cfg(test)]
+    pub(super) fn cache_len(&self) -> usize {
+        self.cache.borrow().entries.len()
+    }
+
     pub(super) fn with_measurement_context<R>(
         &self,
         f: impl FnOnce(&cairo::Context) -> R,

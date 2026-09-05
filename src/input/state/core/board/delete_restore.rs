@@ -1,6 +1,6 @@
 use super::super::base::{BOARD_DELETE_CONFIRM_MS, InputState};
 use crate::domain::Action;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::boards::{
     BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
     BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
@@ -112,7 +112,7 @@ impl InputState {
     }
 
     pub fn delete_active_board(&mut self) {
-        with_legacy_measurer(|measurer| self.delete_active_board_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.delete_active_board_with_measurer(measurer))
     }
 
     pub fn delete_active_board_with_measurer(&mut self, measurer: &TextMeasurer) {

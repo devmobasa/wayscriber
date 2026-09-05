@@ -47,13 +47,34 @@ impl TextMeasurement {
     }
 }
 
-thread_local! {
-    // Temporary bridge for callers being migrated to explicit ownership.
-    static LEGACY_TEXT_MEASURER: TextMeasurer = TextMeasurer::default();
+/// Run a public convenience operation with an isolated call-local owner.
+/// Runtime paths should pass their persistent `TextMeasurer` explicitly.
+pub(crate) fn with_scoped_measurer<R>(f: impl FnOnce(&TextMeasurer) -> R) -> R {
+    let measurer = TextMeasurer::default();
+    f(&measurer)
 }
 
-pub(crate) fn with_legacy_measurer<R>(f: impl FnOnce(&TextMeasurer) -> R) -> R {
-    LEGACY_TEXT_MEASURER.with(f)
+#[cfg(test)]
+#[test]
+fn scoped_convenience_measurements_do_not_share_cache_entries() {
+    with_scoped_measurer(|measurer| {
+        assert_eq!(measurer.cache_len(), 0);
+        assert!(
+            measurer
+                .measure("first owner", "Sans", 14.0, None)
+                .is_some()
+        );
+        assert_eq!(measurer.cache_len(), 1);
+    });
+    with_scoped_measurer(|measurer| {
+        assert_eq!(measurer.cache_len(), 0);
+        assert!(
+            measurer
+                .measure("second owner", "Sans", 14.0, None)
+                .is_some()
+        );
+        assert_eq!(measurer.cache_len(), 1);
+    });
 }
 
 /// Build a Pango layout configured exactly like the measurement and render

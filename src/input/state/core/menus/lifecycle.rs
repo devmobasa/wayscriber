@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use super::types::{ContextMenuKind, MenuCommand};
 use crate::draw::ShapeId;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 
 impl InputState {
     /// Closes the currently open context menu.
@@ -58,7 +58,7 @@ impl InputState {
     }
 
     pub fn toggle_context_menu_via_keyboard(&mut self) {
-        with_legacy_measurer(|measurer| self.toggle_context_menu_via_keyboard_with(measurer))
+        with_scoped_measurer(|measurer| self.toggle_context_menu_via_keyboard_with(measurer))
     }
 
     pub fn toggle_context_menu_via_keyboard_with(&mut self, measurer: &TextMeasurer) {

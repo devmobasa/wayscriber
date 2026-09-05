@@ -132,7 +132,7 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.on_mouse_press_with_canvas_and_resources(
                 resources, button, screen_x, screen_y, canvas_x, canvas_y,
             )

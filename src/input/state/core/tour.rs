@@ -2,7 +2,7 @@
 
 use crate::domain::Action;
 use crate::input::events::Key;
-use crate::input::state::{InputTextResources, with_legacy_text_resources};
+use crate::input::state::{InputTextResources, with_scoped_text_resources};
 
 use super::base::InputState;
 
@@ -297,7 +297,7 @@ impl InputState {
 
     /// Start the guided tour.
     pub fn start_tour(&mut self) {
-        with_legacy_text_resources(|resources| self.start_tour_with_resources(resources))
+        with_scoped_text_resources(|resources| self.start_tour_with_resources(resources))
     }
 
     pub(crate) fn start_tour_with_resources(&mut self, resources: InputTextResources<'_>) {
@@ -318,7 +318,7 @@ impl InputState {
     /// starts the overlay regardless of the persisted `tour_shown` flag — and
     /// so a future replay-specific behavior has a single call site to hang on.
     pub fn start_tour_replay(&mut self) {
-        with_legacy_text_resources(|resources| self.start_tour_replay_with_resources(resources))
+        with_scoped_text_resources(|resources| self.start_tour_replay_with_resources(resources))
     }
 
     pub(crate) fn start_tour_replay_with_resources(&mut self, resources: InputTextResources<'_>) {

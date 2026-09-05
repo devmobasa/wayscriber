@@ -34,7 +34,7 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.on_key_press_with_resources(resources, key)
         });
     }
@@ -48,7 +48,7 @@ impl InputState {
     }
 
     pub fn on_key_repeat(&mut self, key: Key) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.on_key_repeat_with_resources(resources, key)
         });
     }

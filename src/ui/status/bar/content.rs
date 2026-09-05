@@ -68,7 +68,7 @@ pub fn compute_status_hud_layout(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<StatusHudLayout> {
-    with_legacy_engine(|engine| {
+    with_scoped_engine(|engine| {
         compute_status_hud_layout_with_engine(
             engine,
             input_state,

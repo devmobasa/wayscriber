@@ -139,7 +139,7 @@ impl InputState {
 
     /// Select the currently hovered segment and close the menu.
     pub fn radial_menu_select_hovered(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.radial_menu_select_hovered_with_resources(resources)
         })
     }
@@ -182,7 +182,7 @@ impl InputState {
 
     /// Adjust thickness via scroll wheel while the menu is open.
     pub fn radial_menu_adjust_thickness(&mut self, delta: f64) -> bool {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.radial_menu_adjust_thickness_with_measurer(measurer, delta)
         })
     }

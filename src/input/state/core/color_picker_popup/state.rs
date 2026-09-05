@@ -1,6 +1,6 @@
 //! Color picker popup state methods for InputState.
 
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 use std::borrow::Cow;
 
 use crate::draw::Color;
@@ -47,7 +47,7 @@ impl InputState {
 
     /// Opens the color picker popup with the current color.
     pub fn open_color_picker_popup(&mut self) {
-        with_legacy_measurer(|measurer| self.open_color_picker_popup_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.open_color_picker_popup_with_measurer(measurer))
     }
 
     pub fn open_color_picker_popup_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -61,7 +61,7 @@ impl InputState {
     /// index is past the palette — a stale click on a snapshot rendered before
     /// the palette shrank, which must open nothing.
     pub fn open_color_picker_popup_for_quick_color(&mut self, index: usize) -> bool {
-        with_legacy_measurer(|measurer| {
+        with_scoped_measurer(|measurer| {
             self.open_color_picker_popup_for_quick_color_with_measurer(measurer, index)
         })
     }

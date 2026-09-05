@@ -18,7 +18,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_activate_row(&mut self, index: usize) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_activate_row_with_measurer(measurer, index)
         })
     }
@@ -40,7 +40,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_activate_page(&mut self, page_index: usize) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_activate_page_with_measurer(measurer, page_index)
         })
     }
@@ -69,7 +69,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_add_page(&mut self) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_add_page_with_measurer(measurer)
         })
     }
@@ -95,7 +95,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_delete_page(&mut self, page_index: usize) -> PageDeleteOutcome {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_delete_page_with_measurer(measurer, page_index)
         })
     }
@@ -116,7 +116,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_duplicate_page(&mut self, page_index: usize) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_duplicate_page_with_measurer(measurer, page_index)
         })
     }
@@ -143,7 +143,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_create_new(&mut self) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_create_new_with_measurer(measurer)
         })
     }
@@ -173,7 +173,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_delete_selected(&mut self) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_delete_selected_with_measurer(measurer)
         })
     }

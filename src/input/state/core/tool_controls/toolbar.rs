@@ -12,7 +12,7 @@ pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 impl InputState {
     /// Sets toolbar visibility without changing its persisted pin.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
+        crate::ui_text::with_scoped_engine(|engine| {
             self.set_toolbar_visible_with_engine(engine, visible)
         })
     }
@@ -244,7 +244,7 @@ impl InputState {
     }
 
     pub fn cycle_top_toolbar_display(&mut self) -> TopDisplayMode {
-        crate::ui_text::with_legacy_engine(|engine| {
+        crate::ui_text::with_scoped_engine(|engine| {
             self.cycle_top_toolbar_display_with_engine(engine)
         })
     }
@@ -426,7 +426,7 @@ impl InputState {
 
     /// Wrapper for undo that preserves existing action plumbing.
     pub fn toolbar_undo(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.toolbar_undo_with_resources(resources)
         })
     }
@@ -440,7 +440,7 @@ impl InputState {
 
     /// Wrapper for redo that preserves existing action plumbing.
     pub fn toolbar_redo(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.toolbar_redo_with_resources(resources)
         })
     }
@@ -454,7 +454,7 @@ impl InputState {
 
     /// Wrapper for clear that preserves existing action plumbing.
     pub fn toolbar_clear(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.toolbar_clear_with_resources(resources)
         })
     }
@@ -470,7 +470,7 @@ impl InputState {
     /// were removed without a locked-shape warning, offers a short toast with
     /// an "Undo?" chip. The keyboard action and Shift+click stay instant.
     pub fn toolbar_clear_with_undo_toast(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.toolbar_clear_with_undo_toast_with_resources(resources)
         })
     }
@@ -502,7 +502,7 @@ impl InputState {
 
     /// Wrapper for entering text mode.
     pub fn toolbar_enter_text_mode(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.toolbar_enter_text_mode_with_resources(resources)
         })
     }
@@ -516,7 +516,7 @@ impl InputState {
 
     /// Wrapper for entering sticky note mode.
     pub fn toolbar_enter_sticky_note_mode(&mut self) {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.toolbar_enter_sticky_note_mode_with_resources(resources)
         })
     }

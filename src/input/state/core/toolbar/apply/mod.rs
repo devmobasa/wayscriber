@@ -14,7 +14,7 @@ impl InputState {
     ///
     /// Returns true if the event resulted in a state change.
     pub fn apply_toolbar_event(&mut self, event: ToolbarEvent) -> bool {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.apply_toolbar_event_with_resources(resources, event)
         })
     }

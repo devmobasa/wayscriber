@@ -152,14 +152,11 @@ impl Default for UiTextEngine {
     }
 }
 
-// Temporary migration bridge for unmigrated overlay/toolbar/export roots.
-// Remove when every production caller receives an explicit engine.
-thread_local! {
-    static LEGACY_UI_TEXT: UiTextEngine = UiTextEngine::default();
-}
-
-pub(crate) fn with_legacy_engine<T>(f: impl FnOnce(&UiTextEngine) -> T) -> T {
-    LEGACY_UI_TEXT.with(f)
+/// Run a public convenience operation with an isolated call-local owner.
+/// Runtime paths should pass their persistent `UiTextEngine` explicitly.
+pub(crate) fn with_scoped_engine<T>(f: impl FnOnce(&UiTextEngine) -> T) -> T {
+    let engine = UiTextEngine::default();
+    f(&engine)
 }
 
 impl UiTextEngine {

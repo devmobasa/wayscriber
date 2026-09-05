@@ -12,17 +12,16 @@ pub(crate) struct InputTextResources<'a> {
     pub(crate) ui_engine: &'a UiTextEngine,
 }
 
-/// Temporary adapter for callers whose input roots have not migrated yet.
-pub(in crate::input::state) fn with_legacy_text_resources<R>(
+/// Run a public convenience operation with isolated call-local resources.
+/// Backend runtime paths pass their persistent owners explicitly instead.
+pub(in crate::input::state) fn with_scoped_text_resources<R>(
     operation: impl FnOnce(InputTextResources<'_>) -> R,
 ) -> R {
-    crate::draw::with_legacy_measurer(|measurer| {
-        crate::ui_text::with_legacy_engine(|ui_engine| {
-            operation(InputTextResources {
-                measurer,
-                ui_engine,
-            })
-        })
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
+    operation(InputTextResources {
+        measurer: &measurer,
+        ui_engine: &ui_engine,
     })
 }
 

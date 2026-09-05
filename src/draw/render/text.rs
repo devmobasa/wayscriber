@@ -37,7 +37,7 @@ pub fn render_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) {
-    crate::draw::with_legacy_measurer(|measurer| {
+    crate::draw::with_scoped_measurer(|measurer| {
         render_text_with_measurer(
             measurer,
             ctx,
@@ -95,7 +95,7 @@ pub fn render_text_with_halo(
     wrap_width: Option<i32>,
     halo_enabled: bool,
 ) {
-    crate::draw::with_legacy_measurer(|measurer| {
+    crate::draw::with_scoped_measurer(|measurer| {
         render_text_with_halo_with_measurer(
             measurer,
             ctx,
@@ -162,7 +162,7 @@ pub fn render_text_over(
     wrap_width: Option<i32>,
     known_background_luminance: Option<f64>,
 ) {
-    crate::draw::with_legacy_measurer(|measurer| {
+    crate::draw::with_scoped_measurer(|measurer| {
         render_text_over_with_measurer(
             measurer,
             ctx,
@@ -224,7 +224,7 @@ pub fn render_text_over_with_halo(
     known_background_luminance: Option<f64>,
     halo_enabled: bool,
 ) {
-    crate::draw::with_legacy_measurer(|measurer| {
+    crate::draw::with_scoped_measurer(|measurer| {
         render_text_over_with_halo_with_measurer(
             measurer,
             ctx,
@@ -413,7 +413,7 @@ pub fn render_sticky_note(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) {
-    crate::draw::with_legacy_measurer(|measurer| {
+    crate::draw::with_scoped_measurer(|measurer| {
         render_sticky_note_with_measurer(
             measurer,
             ctx,

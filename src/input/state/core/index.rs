@@ -4,7 +4,7 @@ mod grid;
 mod owner;
 
 use super::base::InputState;
-use crate::draw::{ShapeId, TextMeasurer, with_legacy_measurer};
+use crate::draw::{ShapeId, TextMeasurer, with_scoped_measurer};
 use owner::ActiveFrameOrderGuard;
 pub(in crate::input::state) use owner::CanvasIndex;
 #[cfg(test)]
@@ -63,7 +63,7 @@ impl InputState {
     /// Instead of invalidating the entire spatial index, this method updates
     /// only the affected cells, providing O(1) amortized updates instead of O(n).
     pub fn invalidate_hit_cache_for(&mut self, id: ShapeId) {
-        with_legacy_measurer(|measurer| self.invalidate_hit_cache_for_with(measurer, id))
+        with_scoped_measurer(|measurer| self.invalidate_hit_cache_for_with(measurer, id))
     }
 
     /// Refreshes one shape in the index using the supplied text measurements.
@@ -127,7 +127,7 @@ impl InputState {
 
     /// Performs hit-testing against the active frame and returns the top-most shape id.
     pub fn hit_test_at(&mut self, x: i32, y: i32) -> Option<ShapeId> {
-        with_legacy_measurer(|measurer| self.hit_test_at_with(measurer, x, y))
+        with_scoped_measurer(|measurer| self.hit_test_at_with(measurer, x, y))
     }
 
     /// Finds the topmost shape using the supplied canonical text measurements.

@@ -69,7 +69,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_commit_page_edit(&mut self) -> bool {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_commit_page_edit_with_measurer(measurer)
         })
     }
@@ -268,7 +268,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_rename_selected(&mut self) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_rename_selected_with_measurer(measurer)
         })
     }
@@ -296,7 +296,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_color_selected(&mut self) {
-        crate::draw::with_legacy_measurer(|measurer| {
+        crate::draw::with_scoped_measurer(|measurer| {
             self.board_picker_edit_color_selected_with_measurer(measurer)
         })
     }

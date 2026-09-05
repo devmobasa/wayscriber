@@ -485,7 +485,7 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> bool {
-        crate::input::state::with_legacy_text_resources(|resources| {
+        crate::input::state::with_scoped_text_resources(|resources| {
             self.handle_command_palette_click_with_resources(
                 resources,
                 x,

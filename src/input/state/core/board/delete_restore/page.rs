@@ -1,7 +1,7 @@
 use super::super::super::base::{InputState, PAGE_DELETE_CONFIRM_MS};
 use crate::domain::Action;
 use crate::draw::PageDeleteOutcome as CanvasPageDeleteOutcome;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::boards::{
     PageDeleteBoardTarget, PageDeleteOutcome, PageDeleteRequest, PageDeleteTarget,
     PageOperationRejection, PageRestoreOutcome, PageRestorePlacement, PageRestoreRejection,
@@ -108,7 +108,7 @@ impl InputState {
     }
 
     pub fn page_delete(&mut self) -> CanvasPageDeleteOutcome {
-        with_legacy_measurer(|measurer| self.page_delete_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.page_delete_with_measurer(measurer))
     }
 
     pub fn page_delete_with_measurer(
@@ -254,7 +254,7 @@ impl InputState {
 
     /// Restore the most recently deleted page.
     pub fn restore_deleted_page(&mut self) {
-        with_legacy_measurer(|measurer| self.restore_deleted_page_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.restore_deleted_page_with_measurer(measurer))
     }
 
     pub fn restore_deleted_page_with_measurer(&mut self, measurer: &TextMeasurer) {

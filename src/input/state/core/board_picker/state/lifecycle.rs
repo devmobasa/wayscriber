@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerPageNavMode, BoardPickerState};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::{TextMeasurer, with_scoped_measurer};
 
 impl InputState {
     pub(crate) fn is_board_picker_open(&self) -> bool {
@@ -16,7 +16,7 @@ impl InputState {
     }
 
     pub(crate) fn open_board_picker(&mut self) {
-        with_legacy_measurer(|measurer| self.open_board_picker_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.open_board_picker_with_measurer(measurer))
     }
 
     pub(crate) fn open_board_picker_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -24,7 +24,7 @@ impl InputState {
     }
 
     pub(crate) fn open_board_picker_quick(&mut self) {
-        with_legacy_measurer(|measurer| self.open_board_picker_quick_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.open_board_picker_quick_with_measurer(measurer))
     }
 
     pub(crate) fn open_board_picker_quick_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -55,7 +55,7 @@ impl InputState {
     }
 
     pub(crate) fn toggle_board_picker(&mut self) {
-        with_legacy_measurer(|measurer| self.toggle_board_picker_with_measurer(measurer))
+        with_scoped_measurer(|measurer| self.toggle_board_picker_with_measurer(measurer))
     }
 
     pub(crate) fn toggle_board_picker_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -67,7 +67,7 @@ impl InputState {
     }
 
     pub(crate) fn toggle_board_picker_quick(&mut self) {
-        with_legacy_measurer(|measurer| self.toggle_board_picker_quick_with(measurer))
+        with_scoped_measurer(|measurer| self.toggle_board_picker_quick_with(measurer))
     }
 
     pub(crate) fn toggle_board_picker_quick_with(&mut self, measurer: &TextMeasurer) {
