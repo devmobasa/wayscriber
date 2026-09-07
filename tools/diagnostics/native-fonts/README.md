@@ -14,7 +14,7 @@ package version is not a complete font-set description.
 From any working directory, run:
 
 ```sh
-/path/to/wayscriber/tools/diagnostics/native-fonts/run.sh /tmp/native-font-check
+/path/to/wayscriber/tools/diagnostics/native-fonts/run-stress.sh /tmp/native-font-check
 ```
 
 Optional arguments after the results directory are threads, waves, iterations
