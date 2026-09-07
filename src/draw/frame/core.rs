@@ -72,6 +72,20 @@ impl Frame {
         frame
     }
 
+    /// Copy exactly the newest undo/redo entries retained by clamp_history_depth,
+    /// without first allocating copies of discarded actions or their payloads.
+    pub fn clone_with_history_limit(&self, limit: usize) -> Self {
+        if limit == usize::MAX {
+            return self.clone();
+        }
+        let mut frame = self.clone_without_history();
+        frame.next_shape_id = self.next_shape_id;
+        frame.shape_order_generation = self.shape_order_generation;
+        frame.undo_stack = self.undo_stack[self.undo_stack.len().saturating_sub(limit)..].to_vec();
+        frame.redo_stack = self.redo_stack[self.redo_stack.len().saturating_sub(limit)..].to_vec();
+        frame
+    }
+
     pub fn page_name(&self) -> Option<&str> {
         self.page_name.as_deref()
     }
