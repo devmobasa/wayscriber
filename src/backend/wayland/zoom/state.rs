@@ -6,7 +6,7 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 use crate::backend::wayland::RuntimeWakeHandle;
 use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
-use crate::backend::wayland::portal_task::PortalTask;
+use crate::backend::wayland::portal_task::PortalOperation;
 use crate::input::InputState;
 
 use super::capture::CaptureSession;
@@ -113,9 +113,7 @@ pub struct ZoomState {
     image_provenance: Option<ScreenImageProvenance>,
     pub(super) image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
-    pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
-    pub(super) portal_in_progress: bool,
-    pub(super) portal_target_output_id: Option<u32>,
+    pub(super) portal: PortalOperation<PortalCaptureResult>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight: CapturePreflight<bool>,
     pub(super) capture_done: bool,
@@ -159,9 +157,7 @@ impl ZoomState {
             image_provenance: None,
             image_target_dimensions: None,
             image_generation: 0,
-            portal_task: None,
-            portal_in_progress: false,
-            portal_target_output_id: None,
+            portal: PortalOperation::default(),
             runtime_wake,
             preflight: CapturePreflight::Idle,
             capture_done: false,
@@ -273,7 +269,7 @@ impl ZoomState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some() || self.portal_in_progress || self.preflight.is_pending()
+        self.capture.is_some() || self.portal.is_running() || self.preflight.is_pending()
     }
 
     #[cfg(test)]
@@ -386,15 +382,11 @@ impl ZoomState {
             capture.frame.destroy();
             changed = true;
         }
-        if self.preflight.is_pending() || self.portal_in_progress {
+        if self.preflight.is_pending() || self.portal.is_running() {
             changed = true;
         }
         self.preflight = CapturePreflight::Idle;
-        self.portal_in_progress = false;
-        if let Some(mut task) = self.portal_task.take() {
-            task.cancel();
-        }
-        self.portal_target_output_id = None;
+        self.portal.finish();
         self.pending_activation = false;
         if changed {
             self.finish_source_capture(ZoomSourceOutcome::Aborted);
@@ -470,11 +462,7 @@ impl ZoomState {
         }
         self.preflight = CapturePreflight::Idle;
         self.capture_done = true;
-        self.portal_in_progress = false;
-        if let Some(mut task) = self.portal_task.take() {
-            task.cancel();
-        }
-        self.portal_target_output_id = None;
+        self.portal.finish();
         self.pending_activation = false;
         self.finish_source_capture_with_report(outcome, report);
 

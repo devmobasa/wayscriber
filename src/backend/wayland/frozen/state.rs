@@ -14,7 +14,7 @@ use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::{crop_argb, layout_token_matches};
-use crate::backend::wayland::portal_task::PortalTask;
+use crate::backend::wayland::portal_task::PortalOperation;
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -129,9 +129,7 @@ pub struct FrozenState {
     image_provenance: Option<ScreenImageProvenance>,
     image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
-    pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
-    pub(super) portal_in_progress: bool,
-    pub(super) portal_target_output_id: Option<u32>,
+    pub(super) portal: PortalOperation<PortalCaptureResult>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight: CapturePreflight<FrozenCaptureBackend>,
     pub(super) capture_done: bool,
@@ -195,9 +193,7 @@ impl FrozenState {
             image_provenance: None,
             image_target_dimensions: None,
             image_generation: 0,
-            portal_task: None,
-            portal_in_progress: false,
-            portal_target_output_id: None,
+            portal: PortalOperation::default(),
             runtime_wake,
             preflight: CapturePreflight::Idle,
             capture_done: false,
@@ -346,7 +342,7 @@ impl FrozenState {
 
     pub fn is_in_progress(&self) -> bool {
         self.direct_capture.is_some()
-            || self.portal_in_progress
+            || self.portal.is_running()
             || self.preflight.is_pending()
             || self.pending_image.is_some()
     }
@@ -453,11 +449,7 @@ impl FrozenState {
             capture.destroy();
         }
         self.preflight = CapturePreflight::Idle;
-        self.portal_in_progress = false;
-        if let Some(mut task) = self.portal_task.take() {
-            task.cancel();
-        }
-        self.portal_target_output_id = None;
+        self.portal.finish();
         self.pending_image = None;
         self.capture_done = true;
     }
@@ -1507,7 +1499,9 @@ mod tests {
     fn cancel_clears_an_in_flight_portal_capture() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
-        state.portal_in_progress = true;
+        state.portal.start(
+            crate::backend::wayland::portal_task::PortalTask::disconnected_for_test(Instant::now()),
+        );
 
         state.cancel(&mut input_state);
 

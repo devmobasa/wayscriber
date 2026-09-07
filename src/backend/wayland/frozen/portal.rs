@@ -21,7 +21,7 @@ impl FrozenState {
         &mut self,
         tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
-        if self.portal_in_progress {
+        if self.portal.is_running() {
             warn!("Portal capture already running; ignoring new request");
             return Ok(());
         }
@@ -36,8 +36,6 @@ impl FrozenState {
             "portal freeze capture",
         )
         .map_err(anyhow::Error::msg)?;
-        self.portal_in_progress = true;
-        self.portal_target_output_id = Some(target_output_id);
 
         let layout_generation = self.output_layout_generation;
         // Notify user that portal fallback is in progress
@@ -47,43 +45,41 @@ impl FrozenState {
             "Requesting screen capture...".to_string(),
             Some("camera-photo".to_string()),
         );
-        self.portal_task = Some(PortalTask::spawn(tokio_handle, runtime_wake, async move {
-            async {
-                let bytes = capture_via_portal_fullscreen_bytes().await?;
+        self.portal
+            .start(PortalTask::spawn(tokio_handle, runtime_wake, async move {
+                async {
+                    let bytes = capture_via_portal_fullscreen_bytes().await?;
 
-                let (data, width, height) = decode_image_to_argb(&bytes)
-                    .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
+                    let (data, width, height) = decode_image_to_argb(&bytes).map_err(|error| {
+                        CaptureError::ImageError(format!("Decode failed: {error}"))
+                    })?;
 
-                Ok((
-                    Some(target_output_id),
-                    layout_generation,
-                    Some(source_geometry),
-                    FrozenImage {
-                        width,
-                        height,
-                        stride: (width * 4) as i32,
-                        data,
-                    },
-                ))
-            }
-            .await
-        }));
+                    Ok((
+                        Some(target_output_id),
+                        layout_generation,
+                        Some(source_geometry),
+                        FrozenImage {
+                            width,
+                            height,
+                            stride: (width * 4) as i32,
+                            data,
+                        },
+                    ))
+                }
+                .await
+            }));
 
         Ok(())
     }
 
     /// Check for completed portal capture and apply result if present.
     pub fn poll_portal_capture(&mut self, input_state: &mut InputState, now: Instant) {
-        if !self.portal_in_progress {
+        if !self.portal.is_running() {
             return;
         }
 
         // Timeout safeguard to avoid overlay staying hidden forever
-        if self
-            .portal_task
-            .as_ref()
-            .is_some_and(|task| task.timed_out(now))
-        {
+        if self.portal.timed_out(now) {
             warn!("Portal frozen capture timed out; restoring overlay");
             if self.has_acquisition_attempt() {
                 self.finish_acquisition(
@@ -105,11 +101,7 @@ impl FrozenState {
             return;
         }
 
-        let poll = self
-            .portal_task
-            .as_mut()
-            .map(PortalTask::poll)
-            .unwrap_or(PortalPoll::Disconnected);
+        let poll = self.portal.poll();
         match poll {
             PortalPoll::Ready(Ok((target_output, layout_generation, source_geometry, image))) => {
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
@@ -208,13 +200,11 @@ impl FrozenState {
     }
 
     pub fn portal_timeout(&self, now: Instant) -> Option<Duration> {
-        self.portal_task.as_ref().map(|task| task.timeout(now))
+        self.portal.timeout(now)
     }
 
     fn finish_portal_task(&mut self) {
-        self.portal_in_progress = false;
-        self.portal_task.take();
-        self.portal_target_output_id = None;
+        self.portal.finish();
     }
 }
 
@@ -261,7 +251,7 @@ mod tests {
     ) -> anyhow::Result<()> {
         for _ in 0..100 {
             frozen.poll_portal_capture(input, Instant::now());
-            if !frozen.portal_in_progress {
+            if !frozen.portal.is_running() {
                 return Ok(());
             }
             tokio::task::yield_now().await;
@@ -278,16 +268,16 @@ mod tests {
             .capture_via_portal(&tokio::runtime::Handle::current())
             .expect_err("missing geometry must fail closed");
         assert!(error.to_string().contains("geometry is unavailable"));
-        assert!(!frozen.portal_in_progress);
-        assert!(frozen.portal_task.is_none());
+        assert!(!frozen.portal.is_running());
+        assert!(!frozen.portal.is_running());
 
         frozen.set_active_geometry(Some(crop_geometry((0, 0))));
         let error = frozen
             .capture_via_portal(&tokio::runtime::Handle::current())
             .expect_err("missing output identity must fail closed");
         assert!(error.to_string().contains("identity is unavailable"));
-        assert!(!frozen.portal_in_progress);
-        assert!(frozen.portal_task.is_none());
+        assert!(!frozen.portal.is_running());
+        assert!(!frozen.portal.is_running());
         Ok(())
     }
 
@@ -298,18 +288,17 @@ mod tests {
         let mut input = make_test_input_state();
         frozen.set_active_output(None, Some(1));
 
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), image(0))) },
         ));
-        frozen.portal_in_progress = true;
         poll_until_finished(&mut frozen, &mut input).await?;
 
         assert!(!input.frozen_active());
         assert!(frozen.has_pending_image());
-        assert!(!frozen.portal_in_progress);
-        assert!(frozen.portal_task.is_none());
+        assert!(!frozen.portal.is_running());
+        assert!(!frozen.portal.is_running());
         assert!(!frozen.take_capture_done());
 
         frozen
@@ -328,7 +317,7 @@ mod tests {
             let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
-            frozen.portal_task = Some(if panic_task {
+            frozen.portal.start(if panic_task {
                 PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
                     panic!("expected frozen portal panic")
                 })
@@ -337,12 +326,11 @@ mod tests {
                     Err(CaptureError::PermissionDenied)
                 })
             });
-            frozen.portal_in_progress = true;
 
             poll_until_finished(&mut frozen, &mut input).await?;
 
             assert!(!frozen.is_in_progress());
-            assert!(frozen.portal_task.is_none());
+            assert!(!frozen.portal.is_running());
             assert!(frozen.take_capture_done());
             assert!(!input.frozen_active());
         }
@@ -357,7 +345,7 @@ mod tests {
             let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
-            frozen.portal_task = Some(if timed_out {
+            frozen.portal.start(if timed_out {
                 PortalTask::spawn_at_for_test(
                     &tokio::runtime::Handle::current(),
                     wake.handle(),
@@ -369,12 +357,11 @@ mod tests {
             } else {
                 PortalTask::disconnected_for_test(now)
             });
-            frozen.portal_in_progress = true;
 
             frozen.poll_portal_capture(&mut input, now);
 
             assert!(!frozen.is_in_progress());
-            assert!(frozen.portal_task.is_none());
+            assert!(!frozen.portal.is_running());
             assert!(frozen.take_capture_done());
             assert!(!input.frozen_active());
         }
@@ -386,7 +373,7 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async {
@@ -395,7 +382,6 @@ mod tests {
                 ))
             },
         ));
-        frozen.portal_in_progress = true;
 
         poll_until_finished(&mut frozen, &mut input).await?;
 
@@ -416,7 +402,7 @@ mod tests {
             .request(ScreenAcquisitionOwner::UserFreeze)
             .expect("id");
         frozen.start_capture_for(id, ScreenAcquisitionOwner::UserFreeze)?;
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async {
@@ -425,7 +411,6 @@ mod tests {
                 ))
             },
         ));
-        frozen.portal_in_progress = true;
 
         poll_until_finished(&mut frozen, &mut input).await?;
 
@@ -448,12 +433,11 @@ mod tests {
         let mut input = make_test_input_state();
         input.set_frozen_active(true);
         frozen.set_active_output(None, Some(2));
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, None, image(9))) },
         ));
-        frozen.portal_in_progress = true;
 
         poll_until_finished(&mut frozen, &mut input).await?;
 
@@ -471,12 +455,11 @@ mod tests {
         let mut input = make_test_input_state();
         frozen.set_active_geometry(Some(crop_geometry((0, 0))));
         let layout_generation = frozen.output_layout_generation;
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move { Ok((None, layout_generation, None, image(9))) },
         ));
-        frozen.portal_in_progress = true;
         frozen.set_active_geometry(Some(crop_geometry((6, 0))));
 
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -496,12 +479,11 @@ mod tests {
         let geometry = crop_geometry((0, 0));
         frozen.set_active_geometry(Some(geometry.clone()));
         let layout_generation = frozen.output_layout_generation;
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move { Ok((None, layout_generation, None, image(0))) },
         ));
-        frozen.portal_in_progress = true;
         frozen.set_active_geometry(Some(geometry));
 
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -517,18 +499,17 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
-        frozen.portal_task = Some(PortalTask::spawn(
+        frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             std::future::pending(),
         ));
-        frozen.portal_in_progress = true;
 
         frozen.capture_via_portal(&tokio::runtime::Handle::current())?;
-        assert!(frozen.portal_task.is_some());
+        assert!(frozen.portal.is_running());
         frozen.cancel(&mut input);
-        assert!(frozen.portal_task.is_none());
-        assert!(!frozen.portal_in_progress);
+        assert!(!frozen.portal.is_running());
+        assert!(!frozen.portal.is_running());
         assert!(frozen.take_capture_done());
         Ok(())
     }
