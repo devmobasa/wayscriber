@@ -301,3 +301,26 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod measurement {
+    use super::*;
+
+    #[test]
+    #[ignore = "release timing workload; run with --release --ignored --nocapture"]
+    fn measure_unchanged_toolbar_snapshot() {
+        let state = crate::input::state::test_support::make_test_input_state();
+        let start = Instant::now();
+        let mut changes = 0;
+        let mut previous = ToolbarSnapshot::from_input(&state);
+        for _ in 0..10_000 {
+            let snapshot = ToolbarSnapshot::from_input(&state);
+            changes += usize::from(snapshot != previous);
+            previous = std::hint::black_box(snapshot);
+        }
+        eprintln!(
+            "P05 constructions=10000 changed={changes} mean_us={:.2}",
+            start.elapsed().as_micros() as f64 / 10_000.0
+        );
+    }
+}
