@@ -507,3 +507,73 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod measurement {
+    use super::*;
+    use crate::draw::{Color, DrawnShape, Frame, Shape};
+
+    #[test]
+    #[ignore = "release timing workload; run with --release --ignored --nocapture"]
+    fn measure_unchanged_thumbnail_replay() {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 240, 160).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        let engine = UiTextEngine::default();
+        let measurer = crate::draw::TextMeasurer::default();
+        let mut caches = crate::draw::RenderCaches::default();
+        let mut render = crate::draw::RenderCtx {
+            cairo: &ctx,
+            caches: &mut caches,
+        };
+        for count in [100, 1_000, 10_000] {
+            let mut frame = Frame::new();
+            frame.shapes = (0..count)
+                .map(|i| {
+                    let x = (i % 100) * 18;
+                    let y = (i / 100) * 10;
+                    DrawnShape::with_metadata(
+                        i as u64,
+                        Shape::Line {
+                            x1: x,
+                            y1: y,
+                            x2: x + 8,
+                            y2: y + 5,
+                            color: Color {
+                                r: 1.0,
+                                g: 1.0,
+                                b: 1.0,
+                                a: 1.0,
+                            },
+                            thick: 2.0,
+                        },
+                        0,
+                        false,
+                    )
+                })
+                .collect();
+            let start = std::time::Instant::now();
+            for _ in 0..100 {
+                render_page_content(
+                    &engine,
+                    &measurer,
+                    PageContentArgs {
+                        render: &mut render,
+                        frame: &frame,
+                        background: &BoardBackground::Transparent,
+                        x: 0.0,
+                        y: 0.0,
+                        width: 240.0,
+                        height: 160.0,
+                        screen_width: 1920,
+                        screen_height: 1080,
+                        text_halo_enabled: true,
+                    },
+                );
+            }
+            eprintln!(
+                "P04 shapes={count} replays=100 mean_us={:.2}",
+                start.elapsed().as_micros() as f64 / 100.0
+            );
+        }
+    }
+}
