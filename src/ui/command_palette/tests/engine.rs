@@ -126,6 +126,7 @@ fn prepared_palette_paints_without_application_state() {
         rows: Vec::new(),
         geometry: (100.0, 100.0, 520.0, 180.0),
         scroll: 0,
+        visible_count: 8,
         selected: 0,
         bindings: Default::default(),
         tooltip: None,

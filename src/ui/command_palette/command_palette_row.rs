@@ -87,32 +87,6 @@ pub(super) fn render_command_row(
     }
     let label_x = inner_x + 10.0 + COMMAND_PALETTE_ROW_ICON_SIZE + COMMAND_PALETTE_ROW_ICON_GAP;
 
-    // Accent backdrop behind the label characters the query matched, so the
-    // user sees why a command surfaced. Drawn before the text so the glyphs
-    // sit on top; fuzzy-only (subsequence) matches draw nothing.
-    draw_label_match_highlights(
-        engine,
-        ctx,
-        query,
-        cmd.label,
-        label_x,
-        label_y,
-        styles.label.size,
-    );
-
-    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
-    render_command_row_label(engine, ctx, cmd.label, label_x, label_y, styles);
-
-    let label_extents = text_extents_for_with_engine(
-        engine,
-        ctx,
-        COMMAND_PALETTE_FONT_FAMILY,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        styles.label.size,
-        cmd.label,
-    );
-    let desc_x = label_x + label_extents.width() + 12.0;
     let configurable = KeybindingsConfig::default()
         .bindings_for_action(cmd.action)
         .is_some();
@@ -123,6 +97,43 @@ pub(super) fn render_command_row(
         0.0
     };
     let content_right = inner_x + inner_width - 8.0 - actions_width;
+
+    let label = ellipsize_to_width(
+        engine,
+        ctx,
+        cmd.label,
+        COMMAND_PALETTE_FONT_FAMILY,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        styles.label.size,
+        (content_right - label_x).max(0.0),
+    );
+    // Accent backdrop behind the label characters the query matched, so the
+    // user sees why a command surfaced. Drawn before the text so the glyphs
+    // sit on top; fuzzy-only (subsequence) matches draw nothing.
+    draw_label_match_highlights(
+        engine,
+        ctx,
+        query,
+        &label,
+        label_x,
+        label_y,
+        styles.label.size,
+    );
+
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
+    render_command_row_label(engine, ctx, &label, label_x, label_y, styles);
+
+    let label_extents = text_extents_for_with_engine(
+        engine,
+        ctx,
+        COMMAND_PALETTE_FONT_FAMILY,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        styles.label.size,
+        &label,
+    );
+    let desc_x = label_x + label_extents.width() + 12.0;
 
     let badge_left_edge = render_command_row_shortcut_badge(
         engine,

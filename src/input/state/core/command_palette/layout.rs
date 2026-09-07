@@ -147,8 +147,14 @@ impl CommandPaletteGeometry {
     }
 }
 
-pub(crate) fn command_palette_visible_count(total_items: usize) -> usize {
-    total_items.min(COMMAND_PALETTE_MAX_VISIBLE)
+pub(crate) fn command_palette_visible_count(total_items: usize, screen_height: u32) -> usize {
+    let available = (screen_height as f64
+        - 2.0 * COMMAND_PALETTE_HORIZONTAL_MARGIN
+        - command_palette_height(0))
+    .max(0.0);
+    total_items
+        .min(COMMAND_PALETTE_MAX_VISIBLE)
+        .min((available / COMMAND_PALETTE_ITEM_HEIGHT) as usize)
 }
 
 pub(crate) fn command_palette_height(visible_count: usize) -> f64 {
@@ -159,6 +165,16 @@ pub(crate) fn command_palette_height(visible_count: usize) -> f64 {
 }
 
 impl InputState {
+    pub(crate) fn command_palette_row_capacity(&self) -> usize {
+        let height = self.view.screen_height();
+        // Before the first output configure, retain the normal navigation window.
+        if height == 0 {
+            COMMAND_PALETTE_MAX_VISIBLE
+        } else {
+            command_palette_visible_count(usize::MAX, height).max(1)
+        }
+    }
+
     pub fn command_palette_width(&self, screen_width: u32) -> f64 {
         let commands = self.filtered_commands();
         self.command_palette_width_for_commands(screen_width, commands)
@@ -217,7 +233,7 @@ impl InputState {
 
         let requested_width = required_inner_width + COMMAND_PALETTE_PADDING * 2.0;
         let max_available =
-            (screen_width as f64 - COMMAND_PALETTE_HORIZONTAL_MARGIN * 2.0).max(240.0);
+            (screen_width as f64 - COMMAND_PALETTE_HORIZONTAL_MARGIN * 2.0).max(0.0);
         requested_width.clamp(
             COMMAND_PALETTE_MIN_WIDTH.min(max_available),
             COMMAND_PALETTE_MAX_WIDTH.min(max_available),
@@ -270,8 +286,16 @@ fn command_palette_geometry_for_width(
     total_items: usize,
 ) -> CommandPaletteGeometry {
     let x = (screen_width as f64 - width) / 2.0;
-    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
-    let visible_count = command_palette_visible_count(total_items);
+    let visible_count = command_palette_visible_count(total_items, screen_height);
+    let content_rows = if total_items == 0 {
+        command_palette_visible_count(2, screen_height)
+    } else {
+        visible_count
+    };
+    let height = command_palette_height(content_rows).min(screen_height as f64);
+    let margin = COMMAND_PALETTE_HORIZONTAL_MARGIN.min((screen_height as f64 - height) / 2.0);
+    let y = (screen_height as f64 * COMMAND_PALETTE_TOP_RATIO)
+        .clamp(margin, (screen_height as f64 - height - margin).max(margin));
 
     let input_top = COMMAND_PALETTE_PADDING;
     let input_bottom = input_top + COMMAND_PALETTE_INPUT_HEIGHT;
@@ -281,9 +305,9 @@ fn command_palette_geometry_for_width(
         x,
         y,
         width,
-        height: command_palette_height(visible_count),
+        height,
         inner_x: COMMAND_PALETTE_PADDING,
-        inner_width: width - COMMAND_PALETTE_PADDING * 2.0,
+        inner_width: (width - COMMAND_PALETTE_PADDING * 2.0).max(0.0),
         input_top,
         input_bottom,
         items_top,
@@ -313,11 +337,37 @@ mod tests {
     }
 
     #[test]
+    fn viewport_bounds_include_every_row_and_its_hit_target() {
+        for (width, height) in [(800, 480), (1024, 600), (1280, 720), (240, 320), (80, 80)] {
+            let geometry = command_palette_geometry_for_width(
+                (width as f64 - 24.0).max(0.0),
+                width,
+                height,
+                100,
+            );
+            assert!(geometry.x >= 0.0 && geometry.y >= 0.0);
+            assert!(geometry.x + geometry.width <= width as f64);
+            assert!(geometry.y + geometry.height <= height as f64);
+            for row in 0..geometry.visible_count {
+                let bottom = geometry.items_top + (row + 1) as f64 * COMMAND_PALETTE_ITEM_HEIGHT;
+                assert!(bottom <= geometry.height - COMMAND_PALETTE_PADDING_BOTTOM);
+                assert_eq!(
+                    geometry.visible_item_at(geometry.inner_x + 1.0, bottom - 1.0),
+                    Some(row)
+                );
+            }
+        }
+        assert_eq!(command_palette_visible_count(100, 480), 8);
+        assert_eq!(command_palette_visible_count(100, 320), 4);
+        assert_eq!(command_palette_visible_count(100, 80), 0);
+    }
+
+    #[test]
     fn visible_count_caps_at_max_visible() {
-        assert_eq!(command_palette_visible_count(0), 0);
-        assert_eq!(command_palette_visible_count(3), 3);
+        assert_eq!(command_palette_visible_count(0, 1080), 0);
+        assert_eq!(command_palette_visible_count(3, 1080), 3);
         assert_eq!(
-            command_palette_visible_count(99),
+            command_palette_visible_count(99, 1080),
             COMMAND_PALETTE_MAX_VISIBLE
         );
     }

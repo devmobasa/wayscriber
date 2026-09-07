@@ -1,7 +1,6 @@
 use super::super::base::{
     InputState, KeybindingEditOperation, KeybindingEditRequest, Toast, ToastPriority,
 };
-use super::layout;
 use super::search::{CommandPaletteListRow, command_palette_display_index};
 use super::{
     CommandPaletteCursorHint,
@@ -213,7 +212,7 @@ impl InputState {
                     self.command_palette.scroll = self
                         .command_palette_rows()
                         .len()
-                        .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
+                        .saturating_sub(self.command_palette_row_capacity());
                     self.needs_redraw = true;
                 }
                 true
@@ -318,6 +317,20 @@ impl InputState {
         self.command_palette.repeat.clear();
     }
 
+    pub(crate) fn reconcile_command_palette_scroll(&mut self) {
+        let rows = self.command_palette_rows();
+        let capacity = self.command_palette_row_capacity();
+        let selected = command_palette_display_index(&rows, self.command_palette.selected);
+        self.command_palette.scroll = self
+            .command_palette
+            .scroll
+            .min(rows.len().saturating_sub(capacity))
+            .min(selected);
+        if selected >= self.command_palette.scroll + capacity {
+            self.command_palette.scroll = selected + 1 - capacity;
+        }
+    }
+
     fn move_command_palette_selection(&mut self, key: Key) -> bool {
         match key {
             Key::Up => {
@@ -353,14 +366,15 @@ impl InputState {
                 let display_index =
                     command_palette_display_index(&rows, self.command_palette.selected);
                 if display_index
-                    >= self.command_palette.scroll + layout::COMMAND_PALETTE_MAX_VISIBLE
+                    >= self.command_palette.scroll + self.command_palette_row_capacity()
                 {
                     self.command_palette.scroll =
-                        display_index - layout::COMMAND_PALETTE_MAX_VISIBLE + 1;
+                        display_index - self.command_palette_row_capacity() + 1;
                 }
             }
             _ => return false,
         }
+        self.reconcile_command_palette_scroll();
         self.needs_redraw = true;
         true
     }
@@ -374,7 +388,7 @@ impl InputState {
         let rows = self.command_palette_rows();
         let max_scroll = rows
             .len()
-            .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
+            .saturating_sub(self.command_palette_row_capacity());
         if direction > 0 {
             if self.command_palette.scroll >= max_scroll {
                 return;
@@ -388,7 +402,7 @@ impl InputState {
         }
 
         let window_start = self.command_palette.scroll;
-        let window_end = window_start + layout::COMMAND_PALETTE_MAX_VISIBLE;
+        let window_end = window_start + self.command_palette_row_capacity();
         let selected_display = command_palette_display_index(&rows, self.command_palette.selected);
         if selected_display < window_start {
             if let Some(command_index) = rows[window_start..window_end.min(rows.len())]

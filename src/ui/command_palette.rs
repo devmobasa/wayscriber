@@ -4,8 +4,8 @@ use crate::config::action_label;
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
-    COMMAND_PALETTE_TOP_RATIO, CommandPaletteListRow,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_TOP_RATIO,
+    CommandPaletteListRow,
 };
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
@@ -81,6 +81,7 @@ pub(crate) struct PaletteListView {
     rows: Vec<CommandPaletteListRow>,
     geometry: (f64, f64, f64, f64),
     scroll: usize,
+    visible_count: usize,
     selected: usize,
     bindings: std::collections::HashMap<crate::config::Action, Vec<String>>,
     tooltip: Option<(String, i32, i32)>,
@@ -116,6 +117,7 @@ impl CommandPaletteView {
             rows,
             geometry: (geometry.x, geometry.y, geometry.width, geometry.height),
             scroll: state.command_palette.scroll,
+            visible_count: geometry.visible_count,
             selected: state.command_palette.selected,
             bindings,
             tooltip,
@@ -178,6 +180,9 @@ pub(crate) fn paint_command_palette(
         height,
     );
 
+    let _ = ctx.save();
+    ctx.rectangle(x, y, palette_width, height);
+    ctx.clip();
     let inner_x = x + COMMAND_PALETTE_PADDING;
     let inner_width = palette_width - COMMAND_PALETTE_PADDING * 2.0;
     let mut cursor_y = y + COMMAND_PALETTE_PADDING;
@@ -204,7 +209,11 @@ pub(crate) fn paint_command_palette(
         cursor_y,
         rows.len(),
         view.scroll,
+        view.visible_count,
     );
+
+    draw_command_palette_escape_hint(engine, ctx, x, y, palette_width, height);
+    let _ = ctx.restore();
 
     if let Some((tooltip, pointer_x, pointer_y)) = view.tooltip.as_ref() {
         draw_command_palette_action_tooltip(
@@ -217,8 +226,6 @@ pub(crate) fn paint_command_palette(
             screen_height as f64,
         );
     }
-
-    draw_command_palette_escape_hint(engine, ctx, x, y, palette_width, height);
 }
 
 /// Bounds of every pixel the command palette may change this frame, excluding
@@ -416,7 +423,7 @@ fn render_command_palette_rows(
     for (visible_idx, row) in rows
         .iter()
         .skip(scroll)
-        .take(COMMAND_PALETTE_MAX_VISIBLE)
+        .take(view.visible_count)
         .enumerate()
     {
         let item_y = start_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
@@ -546,13 +553,14 @@ fn render_command_palette_scroll_indicator(
     start_y: f64,
     total_items: usize,
     scroll: usize,
+    visible_count: usize,
 ) {
-    if total_items <= COMMAND_PALETTE_MAX_VISIBLE {
+    if visible_count == 0 || total_items <= visible_count {
         return;
     }
 
     let scroll_track_x = x + palette_width - 8.0;
-    let scroll_track_h = (COMMAND_PALETTE_MAX_VISIBLE as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
+    let scroll_track_h = (visible_count as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
     let scroll_track_w = 4.0;
 
     constants::set_color(ctx, SCROLL_TRACK);
@@ -566,9 +574,9 @@ fn render_command_palette_scroll_indicator(
     );
     let _ = ctx.fill();
 
-    let thumb_ratio = COMMAND_PALETTE_MAX_VISIBLE as f64 / total_items as f64;
+    let thumb_ratio = visible_count as f64 / total_items as f64;
     let thumb_h = (scroll_track_h * thumb_ratio).max(20.0);
-    let scroll_range = total_items - COMMAND_PALETTE_MAX_VISIBLE;
+    let scroll_range = total_items - visible_count;
     let scroll_progress = if scroll_range > 0 {
         scroll as f64 / scroll_range as f64
     } else {

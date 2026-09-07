@@ -62,6 +62,32 @@ mod tests {
         (x, y)
     }
 
+    #[test]
+    fn navigation_and_resize_keep_selection_in_the_viewport() {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        };
+        let mut state = make_state();
+        state.toggle_command_palette();
+        for (width, height) in [(800, 480), (1024, 600), (1280, 720), (240, 320), (240, 180)] {
+            state.update_screen_dimensions(width, height);
+            for _ in 0..24 {
+                state.handle_command_palette_key_with_resources(
+                    resources,
+                    crate::input::events::Key::Down,
+                );
+                let rows = state.command_palette_rows();
+                let geometry = state.command_palette_geometry_for_rows(width, height, &rows);
+                let display = command_palette_display_index(&rows, state.command_palette.selected);
+                assert!(display >= state.command_palette.scroll);
+                assert!(display < state.command_palette.scroll + geometry.visible_count);
+            }
+        }
+    }
+
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
         let _action_map = keybindings
