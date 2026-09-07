@@ -146,13 +146,6 @@ where
     pub(super) fn timed_out(&self, now: Instant) -> bool {
         self.timeout(now).is_zero()
     }
-
-    pub(super) fn cancel(&mut self) {
-        self.expected_cancel.store(true, Ordering::Release);
-        if let Some(worker) = self.worker.take() {
-            worker.abort();
-        }
-    }
 }
 
 impl<T> Drop for PortalTask<T> {
@@ -263,7 +256,7 @@ mod tests {
     #[tokio::test]
     async fn expected_cancel_aborts_without_waking_failure() {
         let wake = RuntimeWakeSource::new().unwrap();
-        let mut task = PortalTask::spawn(
+        let task = PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move {
@@ -271,7 +264,7 @@ mod tests {
                 1
             },
         );
-        task.cancel();
+        drop(task);
         tokio::task::yield_now().await;
         let mut pollfd = libc::pollfd {
             fd: wake.poll_fd().as_raw_fd(),
