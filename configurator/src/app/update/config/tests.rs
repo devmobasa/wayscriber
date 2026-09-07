@@ -1399,73 +1399,75 @@ fn document_operations_freeze_queued_edits_until_completion() {
 
 #[test]
 fn leave_dirty_draft_requires_a_current_decision_and_successful_save() {
-    use crate::messages::{CommandMessage, Message};
-
     for close in [false, true] {
         for save_succeeds in [false, true] {
-            let (mut app, _) = ConfiguratorApp::new_app();
-            let (path, document) = temp_config_document("leave-draft", "");
-            app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
-            let request = if close {
-                Message::CloseRequested
-            } else {
-                Message::ReloadRequested
-            };
-            let clean = app.update_message(request.clone());
-            assert!(matches!(
-                clean.as_slice(),
-                [Effect::CloseWindow] | [Effect::LoadConfig]
-            ));
-            if !close {
-                app.update_command(CommandMessage::ConfigLoaded(Err("failed reload".into())));
-            }
-            app.update_message(Message::ToggleChanged(
-                ToggleField::CaptureEnabled,
-                !app.draft.capture_enabled,
-            ));
-            assert!(app.update_message(request.clone()).is_empty());
-            assert!(app.pending_leave().is_some());
-            app.update_message(Message::LeaveCanceled);
-            assert!(app.pending_leave().is_none());
-            assert!(app.is_dirty);
-
-            app.update_message(request.clone());
-            app.update_message(Message::BoardsAddItem);
-            assert!(app.pending_leave().is_none());
-            assert!(
-                app.update_message(Message::LeaveDiscardRequested)
-                    .is_empty()
-            );
-            app.update_message(request.clone());
-            let effects = app.update_message(Message::LeaveSaveRequested);
-            let [Effect::SaveConfig { document, .. }]: [Effect; 1] = effects.try_into().unwrap()
-            else {
-                panic!("expected a save before leaving");
-            };
-            let effects = app.update_command(CommandMessage::ConfigSaved(if save_succeeds {
-                Ok((None, document))
-            } else {
-                Err((Some(document), "failed save".into()))
-            }));
-            if save_succeeds {
-                assert!(matches!(
-                    effects.as_slice(),
-                    [Effect::CloseWindow] | [Effect::LoadConfig]
-                ));
-            } else {
-                assert!(effects.is_empty());
-                assert!(app.is_dirty);
-                assert!(app.document.after_save.is_none());
-                app.update_message(request);
-                assert!(matches!(
-                    app.update_message(Message::LeaveDiscardRequested)
-                        .as_slice(),
-                    [Effect::CloseWindow] | [Effect::LoadConfig]
-                ));
-            }
-            std::fs::remove_file(path).unwrap();
+            check_leave_dirty_draft(close, save_succeeds);
         }
     }
+}
+
+fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
+    use crate::messages::{CommandMessage, Message};
+    let (mut app, _) = ConfiguratorApp::new_app();
+    let (path, document) = temp_config_document("leave-draft", "");
+    app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
+    let request = if close {
+        Message::CloseRequested
+    } else {
+        Message::ReloadRequested
+    };
+    let clean = app.update_message(request.clone());
+    assert!(matches!(
+        clean.as_slice(),
+        [Effect::CloseWindow] | [Effect::LoadConfig]
+    ));
+    if !close {
+        app.update_command(CommandMessage::ConfigLoaded(Err("failed reload".into())));
+    }
+    app.update_message(Message::ToggleChanged(
+        ToggleField::CaptureEnabled,
+        !app.draft.capture_enabled,
+    ));
+    assert!(app.update_message(request.clone()).is_empty());
+    assert!(app.pending_leave().is_some());
+    app.update_message(Message::LeaveCanceled);
+    assert!(app.pending_leave().is_none());
+    assert!(app.is_dirty);
+
+    app.update_message(request.clone());
+    app.update_message(Message::BoardsAddItem);
+    assert!(app.pending_leave().is_none());
+    assert!(
+        app.update_message(Message::LeaveDiscardRequested)
+            .is_empty()
+    );
+    app.update_message(request.clone());
+    let effects = app.update_message(Message::LeaveSaveRequested);
+    let [Effect::SaveConfig { document, .. }]: [Effect; 1] = effects.try_into().unwrap() else {
+        panic!("expected a save before leaving");
+    };
+    let effects = app.update_command(CommandMessage::ConfigSaved(if save_succeeds {
+        Ok((None, document))
+    } else {
+        Err((Some(document), "failed save".into()))
+    }));
+    if save_succeeds {
+        assert!(matches!(
+            effects.as_slice(),
+            [Effect::CloseWindow] | [Effect::LoadConfig]
+        ));
+    } else {
+        assert!(effects.is_empty());
+        assert!(app.is_dirty);
+        assert!(app.document.after_save.is_none());
+        app.update_message(request);
+        assert!(matches!(
+            app.update_message(Message::LeaveDiscardRequested)
+                .as_slice(),
+            [Effect::CloseWindow] | [Effect::LoadConfig]
+        ));
+    }
+    std::fs::remove_file(path).unwrap();
 }
 
 #[test]
