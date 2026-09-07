@@ -25,9 +25,9 @@ cd configurator
 cargo run
 ```
 
-The configurator renders through GTK 4 and libadwaita. It does not compile the
-overlay's GPU renderer or the portal D-Bus implementation into the configurator
-binary.
+The configurator renders through GTK 4 and libadwaita. The overlay paints with Cairo
+into Wayland shared-memory buffers. The configurator depends on the core crate with
+`default-features = false`, so it does not enable the optional portal or tray runtime.
 
 The window loads the current config, lets you tweak values across the tabbed sections, and writes
 changes back through the guarded `ConfigDocument` save interface when you press Save. Loading,
@@ -98,7 +98,26 @@ Each workflow module owns a related set of operations:
 - `app/shortcut_workflow.rs` keeps shortcut recording, text editing, and conflict resolution separate. Only one can be active at a time.
 - `app/daemon_workflow.rs` manages background setup actions, status request identities, and typed feedback.
 
-App update handlers coordinate draft changes and UI effects.
+The GTK shell and refresh code live in [component/](src/app/component/); page builders in
+[pages/](src/app/pages/) bind widgets to draft values and emit [messages](src/messages.rs).
+[Update handlers](src/app/update/) change the model and return typed [effects](src/app/effects.rs).
+[Effect execution](src/app/component/effects.rs) schedules work; [I/O](src/app/io.rs) uses
+[blocking jobs](src/app/blocking_jobs.rs) for filesystem operations. Page callbacks do not write files.
+[HistoryDraft](src/models/config/history.rs) shows the section-owned conversion and validation pattern.
+
+For a save, the handler validates the draft, transfers the guarded `ConfigDocument` from
+`DocumentWorkflow` to `SaveConfig`, and freezes editing. The blocking job merges known settings
+and performs the guarded atomic write. `ConfigSaved` returns the document on success or failure;
+success establishes the clean baseline, while failure restores editing and keeps useful errors.
+A pending Reload or close continues only after success. Canceling the unsaved-changes prompt
+keeps the draft; it does not attempt to cancel a durable write already in progress.
+
+See the [application map](../docs/codebase-overview.md) for shape edits and capture, and
+[CONTRIBUTING](../CONTRIBUTING.md) for setup. From the repository root, use
+`cargo test -p wayscriber-configurator` for focused coverage and `./tools/lint-and-test.sh`
+for the canonical workspace checks used by CI. `./tools/test-gtk-widgets.sh` runs required
+GTK toolbar assertions on a private headless compositor. These checks do not prove behavior
+on an installed desktop or screen-reader announcements.
 
 Saves use `Config::validate_for_save` from the core crate.
 It compares persisted typed values to detect changes outside keybindings and rejects those changes.
