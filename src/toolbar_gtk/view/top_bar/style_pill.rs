@@ -9,18 +9,6 @@
 
 use super::*;
 
-fn format_px(value: f64) -> String {
-    format!("{value:.0}px")
-}
-
-fn format_percent(value: f64) -> String {
-    format!("{:.0}%", value * 100.0)
-}
-
-fn format_pt(value: f64) -> String {
-    format!("{value:.0}pt")
-}
-
 /// Pill button on the shared `sized_button` chassis: non-focusable and
 /// releasing window keyboard focus on click, like every other top-bar
 /// control. The GTK bars must never retain keyboard focus — the popups the
@@ -175,43 +163,14 @@ impl TopBar {
                 | model::StylePillControl::SpotlightMagnificationSlider
                 | model::StylePillControl::FontSizeSlider => {
                     let (slider_spec, value) = control.slider_value(snapshot);
-                    let format = match control {
-                        model::StylePillControl::ThicknessSlider => format_px as fn(f64) -> String,
-                        model::StylePillControl::OpacitySlider => format_percent,
-                        model::StylePillControl::SpotlightMagnificationSlider => {
-                            crate::draw::format_spotlight_magnification
-                        }
-                        _ => format_pt,
-                    };
                     let sender = self.feedback.clone();
                     let slider = SliderRow::new(
                         scale,
-                        match control {
-                            model::StylePillControl::ThicknessSlider => "Stroke thickness",
-                            model::StylePillControl::OpacitySlider => "Marker opacity",
-                            model::StylePillControl::SpotlightMagnificationSlider => {
-                                "Spotlight magnification"
-                            }
-                            _ => "Font size",
-                        },
+                        control.label(snapshot).as_ref(),
                         slider_spec,
                         value,
-                        format,
-                        move |value| {
-                            let event = match control {
-                                model::StylePillControl::ThicknessSlider => {
-                                    ToolbarEvent::SetThickness(value)
-                                }
-                                model::StylePillControl::OpacitySlider => {
-                                    ToolbarEvent::SetMarkerOpacity(value)
-                                }
-                                model::StylePillControl::SpotlightMagnificationSlider => {
-                                    ToolbarEvent::SetSpotlightMagnification(value)
-                                }
-                                _ => ToolbarEvent::SetFontSize(value),
-                            };
-                            send_event(&sender, event);
-                        },
+                        control.slider_formatter(),
+                        move |value| send_event(&sender, control.slider_event(value)),
                     );
                     // Thickness/text-size use distinct numeral controls. The
                     // other readouts sit beside a full-width track, matching
@@ -238,14 +197,7 @@ impl TopBar {
                     slider.root.set_valign(gtk4::Align::Center);
                     append_gap(&pill, slider.root.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        let value = match control {
-                            model::StylePillControl::ThicknessSlider => snapshot.thickness,
-                            model::StylePillControl::OpacitySlider => snapshot.marker_opacity,
-                            model::StylePillControl::SpotlightMagnificationSlider => {
-                                snapshot.spotlight_magnification
-                            }
-                            _ => snapshot.font_size,
-                        };
+                        let value = control.slider_value(snapshot).1;
                         slider.set_value(value);
                     }));
                     self.append_style_status_label(&pill, control, snapshot, px(gap));

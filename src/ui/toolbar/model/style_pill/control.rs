@@ -68,13 +68,11 @@ impl StylePillControl {
                     index,
                 }
             }
-            Self::ThicknessSlider => ToolbarEvent::SetThickness(snapshot.thickness),
-            Self::OpacitySlider => ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
-            Self::SpotlightMagnificationSlider => {
-                ToolbarEvent::SetSpotlightMagnification(snapshot.spotlight_magnification)
-            }
+            Self::ThicknessSlider
+            | Self::OpacitySlider
+            | Self::SpotlightMagnificationSlider
+            | Self::FontSizeSlider => self.slider_event(self.slider_value(snapshot).1),
             Self::FontFamilyPicker => ToolbarEvent::OpenFontPicker,
-            Self::FontSizeSlider => ToolbarEvent::SetFontSize(snapshot.font_size),
             Self::FillToggle => ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             Self::FontWeightToggle => {
                 ToolbarEvent::SetFontBold(!snapshot.font_bold_target_is_bold())
@@ -162,6 +160,27 @@ impl StylePillControl {
             .expect("this style-pill control is a slider")
     }
 
+    /// Value policy shared by the live GTK callback and snapshot event adapters.
+    pub(crate) fn slider_event(self, value: f64) -> ToolbarEvent {
+        match self {
+            Self::ThicknessSlider => ToolbarEvent::SetThickness(value),
+            Self::OpacitySlider => ToolbarEvent::SetMarkerOpacity(value),
+            Self::SpotlightMagnificationSlider => ToolbarEvent::SetSpotlightMagnification(value),
+            Self::FontSizeSlider => ToolbarEvent::SetFontSize(value),
+            _ => panic!("this style-pill control is a slider"),
+        }
+    }
+
+    pub(crate) fn slider_formatter(self) -> fn(f64) -> String {
+        match self {
+            Self::ThicknessSlider | Self::ThicknessValue => |value| format!("{value:.0}px"),
+            Self::OpacitySlider => |value| format!("{:.0}%", value * 100.0),
+            Self::SpotlightMagnificationSlider => crate::draw::format_spotlight_magnification,
+            Self::FontSizeSlider | Self::FontSizeValue => |value| format!("{value:.0}pt"),
+            _ => panic!("this style-pill control has a numeric readout"),
+        }
+    }
+
     /// Live readout for sliders and their numeral buttons. The unit follows
     /// the tool context: px for thickness/size targets (the snapshot
     /// already routes eraser/marker sizes through `thickness`), pt for
@@ -169,12 +188,12 @@ impl StylePillControl {
     pub(crate) fn value_text(self, snapshot: &ToolbarSnapshot) -> Option<String> {
         match self {
             Self::ThicknessSlider | Self::ThicknessValue => {
-                Some(format!("{:.0}px", snapshot.thickness))
+                Some(self.slider_formatter()(snapshot.thickness))
             }
-            Self::OpacitySlider => Some(format!("{:.0}%", snapshot.marker_opacity * 100.0)),
-            Self::SpotlightMagnificationSlider => Some(
-                crate::draw::format_spotlight_magnification(snapshot.spotlight_magnification),
-            ),
+            Self::OpacitySlider => Some(self.slider_formatter()(snapshot.marker_opacity)),
+            Self::SpotlightMagnificationSlider => {
+                Some(self.slider_formatter()(snapshot.spotlight_magnification))
+            }
             // "Off" rather than "0": the number is a count of passes, and zero
             // of them is a state worth naming rather than a quantity.
             Self::PenSmoothingStepper => Some(if snapshot.pen_smoothing == 0 {
@@ -183,7 +202,7 @@ impl StylePillControl {
                 snapshot.pen_smoothing.to_string()
             }),
             Self::FontSizeSlider | Self::FontSizeValue => {
-                Some(format!("{:.0}pt", snapshot.font_size))
+                Some(self.slider_formatter()(snapshot.font_size))
             }
             Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
             Self::FontFamilyPicker => Some(short_family_label(&snapshot.font.family)),
