@@ -30,11 +30,11 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     page.group_in_area("Delays", SearchArea::HistoryMain)
         .entry_row_validated(
             "Undo all delay (ms)",
-            |app| app.draft.history_undo_all_delay_ms.clone(),
+            |app| app.draft.history.undo_all_delay_ms.clone(),
             |value| Message::TextChanged(TextField::HistoryUndoAllDelayMs, value),
             |app| {
                 validate_u32_range(
-                    &app.draft.history_undo_all_delay_ms,
+                    &app.draft.history.undo_all_delay_ms,
                     DELAY_RANGE.0,
                     DELAY_RANGE.1,
                 )
@@ -42,11 +42,11 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .entry_row_validated(
             "Redo all delay (ms)",
-            |app| app.draft.history_redo_all_delay_ms.clone(),
+            |app| app.draft.history.redo_all_delay_ms.clone(),
             |value| Message::TextChanged(TextField::HistoryRedoAllDelayMs, value),
             |app| {
                 validate_u32_range(
-                    &app.draft.history_redo_all_delay_ms,
+                    &app.draft.history.redo_all_delay_ms,
                     DELAY_RANGE.0,
                     DELAY_RANGE.1,
                 )
@@ -60,7 +60,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         &section,
         "Custom undo delay (ms)",
         TextField::HistoryCustomUndoDelayMs,
-        |app| app.draft.history_custom_undo_delay_ms.clone(),
+        |app| app.draft.history.custom_undo_delay_ms.clone(),
         DELAY_RANGE,
     );
     custom_field(
@@ -68,7 +68,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         &section,
         "Custom redo delay (ms)",
         TextField::HistoryCustomRedoDelayMs,
-        |app| app.draft.history_custom_redo_delay_ms.clone(),
+        |app| app.draft.history.custom_redo_delay_ms.clone(),
         DELAY_RANGE,
     );
     custom_field(
@@ -76,7 +76,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         &section,
         "Custom undo steps",
         TextField::HistoryCustomUndoSteps,
-        |app| app.draft.history_custom_undo_steps.clone(),
+        |app| app.draft.history.custom_undo_steps.clone(),
         STEPS_RANGE,
     );
     custom_field(
@@ -84,7 +84,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         &section,
         "Custom redo steps",
         TextField::HistoryCustomRedoSteps,
-        |app| app.draft.history_custom_redo_steps.clone(),
+        |app| app.draft.history.custom_redo_steps.clone(),
         STEPS_RANGE,
     );
 
@@ -113,7 +113,7 @@ fn custom_section(page: &mut PageBuilder) -> adw::ExpanderRow {
     {
         let row = row.clone();
         page.bind(move |app, _summary| {
-            let enabled = app.draft.history_custom_section_enabled;
+            let enabled = app.draft.history.custom_section_enabled;
             if row.enables_expansion() != enabled {
                 // Blocked: the draft decided this, and reporting it back as a
                 // user toggle resets the status line — which after a load is
@@ -155,7 +155,8 @@ fn custom_field(
         set_text_blocked(&row, &handler, &value);
         let error = app
             .draft
-            .history_custom_section_enabled
+            .history
+            .custom_section_enabled
             .then(|| validate_u32_range(&value, range.0, range.1))
             .flatten();
         show_error(&row, error);

@@ -294,7 +294,7 @@ impl ConfigDraft {
                 self.session_autosave_enabled = value;
             }
             ToggleField::HistoryCustomSectionEnabled => {
-                self.history_custom_section_enabled = value;
+                self.history.custom_section_enabled = value;
             }
             ToggleField::ArrowHeadAtEnd => {
                 self.arrow_head_at_end = value;
@@ -351,12 +351,12 @@ impl ConfigDraft {
             TextField::PerformanceUiAnimationFps => {
                 self.set_performance_text(PerformanceFieldId::UiAnimationFps, value);
             }
-            TextField::HistoryUndoAllDelayMs => self.history_undo_all_delay_ms = value,
-            TextField::HistoryRedoAllDelayMs => self.history_redo_all_delay_ms = value,
-            TextField::HistoryCustomUndoDelayMs => self.history_custom_undo_delay_ms = value,
-            TextField::HistoryCustomRedoDelayMs => self.history_custom_redo_delay_ms = value,
-            TextField::HistoryCustomUndoSteps => self.history_custom_undo_steps = value,
-            TextField::HistoryCustomRedoSteps => self.history_custom_redo_steps = value,
+            TextField::HistoryUndoAllDelayMs => self.history.undo_all_delay_ms = value,
+            TextField::HistoryRedoAllDelayMs => self.history.redo_all_delay_ms = value,
+            TextField::HistoryCustomUndoDelayMs => self.history.custom_undo_delay_ms = value,
+            TextField::HistoryCustomRedoDelayMs => self.history.custom_redo_delay_ms = value,
+            TextField::HistoryCustomUndoSteps => self.history.custom_undo_steps = value,
+            TextField::HistoryCustomRedoSteps => self.history.custom_redo_steps = value,
             TextField::UiPreferredOutput => self.ui_preferred_output = value,
             TextField::StatusFontSize => self.status_font_size = value,
             TextField::StatusPadding => self.status_padding = value,

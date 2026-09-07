@@ -69,13 +69,7 @@ pub struct ConfigDraft {
     pub arrow_head_at_end: bool,
     pub arrow_style: ArrowStyleOption,
 
-    pub history_undo_all_delay_ms: String,
-    pub history_redo_all_delay_ms: String,
-    pub history_custom_section_enabled: bool,
-    pub history_custom_undo_delay_ms: String,
-    pub history_custom_redo_delay_ms: String,
-    pub history_custom_undo_steps: String,
-    pub history_custom_redo_steps: String,
+    pub history: super::history::HistoryDraft,
 
     pub performance_buffer_count: u32,
     pub performance_enable_vsync: bool,

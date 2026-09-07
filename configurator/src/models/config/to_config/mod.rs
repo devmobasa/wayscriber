@@ -2,7 +2,6 @@ mod boards;
 mod capture;
 mod drawing;
 mod export;
-mod history;
 mod keybindings;
 mod performance;
 mod presenter_mode;
@@ -27,7 +26,7 @@ impl ConfigDraft {
             config.config_revision = revision;
         }
         self.apply_drawing(&mut config, &mut errors);
-        self.apply_history(&mut config, &mut errors);
+        self.history.apply_to(&mut config.history, &mut errors);
         self.apply_performance(&mut config, &mut errors);
         self.apply_ui(&mut config, &mut errors);
         self.apply_presenter_mode(&mut config);

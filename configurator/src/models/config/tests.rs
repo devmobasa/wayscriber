@@ -266,7 +266,7 @@ fn config_draft_to_config_rejects_out_of_range_numbers() {
     let mut draft = ConfigDraft::from_config(&Config::default());
     draft.drawing_default_thickness = "99".to_string();
     draft.arrow_angle = "90".to_string();
-    draft.history_undo_all_delay_ms = "1".to_string();
+    draft.history.undo_all_delay_ms = "1".to_string();
 
     let errors = draft
         .to_config(&Config::default())

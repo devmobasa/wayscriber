@@ -106,13 +106,7 @@ impl ConfigDraft {
             arrow_head_at_end: config.arrow.head_at_end,
             arrow_style: ArrowStyleOption::from_style(config.arrow.style),
 
-            history_undo_all_delay_ms: config.history.undo_all_delay_ms.to_string(),
-            history_redo_all_delay_ms: config.history.redo_all_delay_ms.to_string(),
-            history_custom_section_enabled: config.history.custom_section_enabled,
-            history_custom_undo_delay_ms: config.history.custom_undo_delay_ms.to_string(),
-            history_custom_redo_delay_ms: config.history.custom_redo_delay_ms.to_string(),
-            history_custom_undo_steps: config.history.custom_undo_steps.to_string(),
-            history_custom_redo_steps: config.history.custom_redo_steps.to_string(),
+            history: super::super::history::HistoryDraft::from_config(&config.history),
 
             performance_buffer_count: config.performance.buffer_count,
             performance_enable_vsync: config.performance.enable_vsync,

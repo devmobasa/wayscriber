@@ -1,6 +1,7 @@
 mod boards;
 mod draft;
 mod font_cycle;
+mod history;
 mod parse;
 mod performance_fields;
 mod presets;
