@@ -220,27 +220,6 @@ fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> O
     Some(spec.normalize_value(value))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn keyboard_uses_shared_snapping_and_clamps_endpoints() {
-        use gtk4::gdk::Key;
-        let spec = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION;
-        assert_eq!(keyboard_value(spec, spec.min, Key::Left), Some(spec.min));
-        assert_eq!(keyboard_value(spec, spec.max, Key::Up), Some(spec.max));
-        assert_eq!(keyboard_value(spec, spec.min, Key::End), Some(spec.max));
-        assert_eq!(keyboard_value(spec, spec.max, Key::Home), Some(spec.min));
-        let next = keyboard_value(spec, spec.min, Key::Right).unwrap();
-        assert_eq!(next, spec.value_from_t(spec.t_from_value(next)));
-        assert_eq!(
-            keyboard_value(spec, spec.min, Key::Page_Up),
-            Some(spec.normalize_value(spec.min + spec.step.unwrap() * 10.0))
-        );
-        assert_eq!(keyboard_value(spec, spec.min, Key::Escape), None);
-    }
-}
-
 /// Called by the isolated GTK widget test after initialization.
 #[cfg(test)]
 pub(super) fn assert_widget_contract() {
@@ -294,4 +273,25 @@ pub(super) fn assert_widget_contract() {
         &[5.5],
         "backend updates emit no user event"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn keyboard_uses_shared_snapping_and_clamps_endpoints() {
+        use gtk4::gdk::Key;
+        let spec = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION;
+        assert_eq!(keyboard_value(spec, spec.min, Key::Left), Some(spec.min));
+        assert_eq!(keyboard_value(spec, spec.max, Key::Up), Some(spec.max));
+        assert_eq!(keyboard_value(spec, spec.min, Key::End), Some(spec.max));
+        assert_eq!(keyboard_value(spec, spec.max, Key::Home), Some(spec.min));
+        let next = keyboard_value(spec, spec.min, Key::Right).unwrap();
+        assert_eq!(next, spec.value_from_t(spec.t_from_value(next)));
+        assert_eq!(
+            keyboard_value(spec, spec.min, Key::Page_Up),
+            Some(spec.normalize_value(spec.min + spec.step.unwrap() * 10.0))
+        );
+        assert_eq!(keyboard_value(spec, spec.min, Key::Escape), None);
+    }
 }
