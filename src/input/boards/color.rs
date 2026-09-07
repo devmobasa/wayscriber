@@ -33,16 +33,7 @@ pub fn board_color_to_config(color: Color) -> BoardColorConfig {
     BoardColorConfig::Rgb([color.r, color.g, color.b])
 }
 
-pub fn clamp_board_rgb(mut rgb: [f64; 3]) -> ([f64; 3], bool) {
-    let mut clamped = false;
-    for component in &mut rgb {
-        if !(0.0..=1.0).contains(component) {
-            *component = (*component).clamp(0.0, 1.0);
-            clamped = true;
-        }
-    }
-    (rgb, clamped)
-}
+pub use crate::domain::clamp_board_rgb;
 
 #[cfg(test)]
 mod tests {

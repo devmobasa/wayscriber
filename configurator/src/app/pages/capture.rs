@@ -29,48 +29,48 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         .switch_row(
             "Enable capture shortcuts",
             "",
-            |app| app.draft.capture_enabled,
+            |app| app.draft.capture.enabled,
             |value| Message::ToggleChanged(ToggleField::CaptureEnabled, value),
         )
         .entry_row(
             "Save directory",
-            |app| app.draft.capture_save_directory.clone(),
+            |app| app.draft.capture.save_directory.clone(),
             |value| Message::TextChanged(TextField::CaptureSaveDirectory, value),
         )
         .entry_row(
             "Filename template",
-            |app| app.draft.capture_filename_template.clone(),
+            |app| app.draft.capture.filename_template.clone(),
             |value| Message::TextChanged(TextField::CaptureFilename, value),
         )
         .entry_row(
             "Format (png, jpg, ...)",
-            |app| app.draft.capture_format.clone(),
+            |app| app.draft.capture.format.clone(),
             |value| Message::TextChanged(TextField::CaptureFormat, value),
         )
         .switch_row(
             "Copy to clipboard",
             "",
-            |app| app.draft.capture_copy_to_clipboard,
+            |app| app.draft.capture.copy_to_clipboard,
             |value| Message::ToggleChanged(ToggleField::CaptureCopyToClipboard, value),
         )
         .switch_row(
             "Include drawings in screenshots",
             "Composites the active board's committed annotations into full-screen and region captures by default. Interactive region capture can override this per screenshot.",
-            |app| app.draft.capture_include_drawings,
+            |app| app.draft.capture.include_drawings,
             |value| Message::ToggleChanged(ToggleField::CaptureIncludeDrawings, value),
         )
         .switch_row(
             "Always exit overlay after capture",
             "",
-            |app| app.draft.capture_exit_after,
+            |app| app.draft.capture.exit_after,
             |value| Message::ToggleChanged(ToggleField::CaptureExitAfter, value),
         )
         .entry_row_validated(
             "OCR languages (e.g. eng, eng+deu \u{2014} needs the matching Tesseract packages)",
-            |app| app.draft.capture_ocr_languages.clone(),
+            |app| app.draft.capture.ocr_languages.clone(),
             |value| Message::TextChanged(TextField::CaptureOcrLanguages, value),
             |app| {
-                validate_ocr_languages(&app.draft.capture_ocr_languages)
+                validate_ocr_languages(&app.draft.capture.ocr_languages)
                     .err()
                     .map(|reason| {
                         format!("{reason}. Use Tesseract codes joined by '+', such as eng+deu.")
@@ -84,25 +84,25 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "Native draws the picker over a frozen desktop image. Slurp uses the external selector.",
             RegionPickerOption::list(),
             labels(RegionPickerOption::list(), RegionPickerOption::label),
-            |app| app.draft.capture_region_picker,
+            |app| app.draft.capture.region_picker,
             Message::CaptureRegionPickerChanged,
         )
         .switch_row(
             "Show pointer position and selection size",
             "Shows coordinates while idle and the selected export size while dragging.",
-            |app| app.draft.capture_region_show_size_readout,
+            |app| app.draft.capture.region_show_size_readout,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowSizeReadout, value),
         )
         .switch_row(
             "Show magnified pixel loupe",
             "Shows a magnified pixel grid beside the pointer while selecting or reviewing.",
-            |app| app.draft.capture_region_show_loupe,
+            |app| app.draft.capture.region_show_loupe,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLoupe, value),
         )
         .switch_row(
             "Show hotkey legend",
             "Shows a short picker hotkey guide until the first drag.",
-            |app| app.draft.capture_region_show_legend,
+            |app| app.draft.capture.region_show_legend,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLegend, value),
         );
 

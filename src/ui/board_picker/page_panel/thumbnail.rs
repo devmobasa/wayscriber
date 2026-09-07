@@ -1,5 +1,7 @@
+mod cache;
 mod cards;
 mod content;
+pub(crate) use cache::ThumbnailCache;
 mod icons;
 mod types;
 

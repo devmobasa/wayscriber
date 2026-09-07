@@ -713,25 +713,22 @@ fn push_style_pill(
                 let is_last = index + 1 == swatch_count;
                 x += TOP_SWATCH_SIZE + if is_last { gap } else { TOP_SWATCH_GAP };
             }
-            model::StylePillControl::ThicknessSlider
-            | model::StylePillControl::OpacitySlider
-            | model::StylePillControl::SpotlightMagnificationSlider
-            | model::StylePillControl::FontSizeSlider => {
-                let (slider_spec, value) = control.slider_value(snapshot);
+            model::StylePillControl::Slider(slider_kind) => {
+                let (slider_spec, value) = slider_kind.value(snapshot);
                 let event = control.click_event(snapshot);
-                let kind = match control {
-                    model::StylePillControl::ThicknessSlider => HitKind::DragSetThickness {
+                let kind = match slider_kind {
+                    model::StylePillSlider::Thickness => HitKind::DragSetThickness {
                         min: slider_spec.min,
                         max: slider_spec.max,
                     },
-                    model::StylePillControl::OpacitySlider => HitKind::DragSetMarkerOpacity {
+                    model::StylePillSlider::Opacity => HitKind::DragSetMarkerOpacity {
                         min: slider_spec.min,
                         max: slider_spec.max,
                     },
-                    model::StylePillControl::SpotlightMagnificationSlider => {
+                    model::StylePillSlider::SpotlightMagnification => {
                         HitKind::DragSetSpotlightMagnification
                     }
-                    _ => HitKind::DragSetFontSize,
+                    model::StylePillSlider::FontSize => HitKind::DragSetFontSize,
                 };
                 let rect = (
                     x,

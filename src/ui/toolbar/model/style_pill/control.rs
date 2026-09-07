@@ -5,11 +5,11 @@ impl StylePillControl {
         match self {
             Self::ColorChip => Cow::Borrowed("top.style.color-chip"),
             Self::QuickSwatch(index) => Cow::Owned(format!("top.style.swatch.{index}")),
-            Self::ThicknessSlider => Cow::Borrowed("top.style.thickness"),
+            Self::Slider(StylePillSlider::Thickness) => Cow::Borrowed("top.style.thickness"),
             Self::ThicknessValue => Cow::Borrowed("top.style.thickness-value"),
-            Self::OpacitySlider => Cow::Borrowed("top.style.opacity"),
+            Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("top.style.opacity"),
             Self::PenSmoothingStepper => Cow::Borrowed("top.style.pen-smoothing"),
-            Self::SpotlightMagnificationSlider => {
+            Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
             Self::FillToggle => Cow::Borrowed("top.style.fill"),
@@ -24,7 +24,7 @@ impl StylePillControl {
             Self::CounterReset(StylePillCounter::Step) => {
                 Cow::Borrowed("top.style.counter-reset.step")
             }
-            Self::FontSizeSlider => Cow::Borrowed("top.style.font-size"),
+            Self::Slider(StylePillSlider::FontSize) => Cow::Borrowed("top.style.font-size"),
             Self::FontSizeValue => Cow::Borrowed("top.style.font-size-value"),
             Self::FontWeightToggle => Cow::Borrowed("top.style.font-bold"),
             Self::FontFamilyPicker => Cow::Borrowed("top.style.font-family-picker"),
@@ -38,10 +38,10 @@ impl StylePillControl {
     pub(crate) fn role(self) -> StylePillRole {
         match self {
             Self::ColorChip | Self::QuickSwatch(_) => StylePillRole::Swatch,
-            Self::ThicknessSlider
-            | Self::OpacitySlider
-            | Self::SpotlightMagnificationSlider
-            | Self::FontSizeSlider => StylePillRole::Slider,
+            Self::Slider(StylePillSlider::Thickness)
+            | Self::Slider(StylePillSlider::Opacity)
+            | Self::Slider(StylePillSlider::SpotlightMagnification)
+            | Self::Slider(StylePillSlider::FontSize) => StylePillRole::Slider,
             Self::ThicknessValue | Self::FontSizeValue => StylePillRole::Value,
             Self::FillToggle | Self::AutoNumberToggle | Self::FontWeightToggle => {
                 StylePillRole::Toggle
@@ -68,10 +68,7 @@ impl StylePillControl {
                     index,
                 }
             }
-            Self::ThicknessSlider
-            | Self::OpacitySlider
-            | Self::SpotlightMagnificationSlider
-            | Self::FontSizeSlider => self.slider_event(self.slider_value(snapshot).1),
+            Self::Slider(slider) => slider.event(slider.value(snapshot).1),
             Self::FontFamilyPicker => ToolbarEvent::OpenFontPicker,
             Self::FillToggle => ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             Self::FontWeightToggle => {
@@ -137,48 +134,12 @@ impl StylePillControl {
         }
     }
 
-    /// Slider range plus current value for the slider controls.
+    /// Checked conversion for callers inspecting a heterogeneous control list.
     pub(crate) fn slider(self, snapshot: &ToolbarSnapshot) -> Option<(ToolbarSliderSpec, f64)> {
-        match self {
-            Self::ThicknessSlider => Some((ToolbarSliderSpec::THICKNESS, snapshot.thickness)),
-            Self::OpacitySlider => {
-                Some((ToolbarSliderSpec::MARKER_OPACITY, snapshot.marker_opacity))
-            }
-            Self::SpotlightMagnificationSlider => Some((
-                ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION,
-                snapshot.spotlight_magnification,
-            )),
-            Self::FontSizeSlider => Some((ToolbarSliderSpec::FONT_SIZE, snapshot.font_size)),
-            _ => None,
-        }
-    }
-
-    /// Slider range plus current value. Callers that already matched a slider
-    /// variant use this instead of skipping the control.
-    pub(crate) fn slider_value(self, snapshot: &ToolbarSnapshot) -> (ToolbarSliderSpec, f64) {
-        self.slider(snapshot)
-            .expect("this style-pill control is a slider")
-    }
-
-    /// Value policy shared by the live GTK callback and snapshot event adapters.
-    pub(crate) fn slider_event(self, value: f64) -> ToolbarEvent {
-        match self {
-            Self::ThicknessSlider => ToolbarEvent::SetThickness(value),
-            Self::OpacitySlider => ToolbarEvent::SetMarkerOpacity(value),
-            Self::SpotlightMagnificationSlider => ToolbarEvent::SetSpotlightMagnification(value),
-            Self::FontSizeSlider => ToolbarEvent::SetFontSize(value),
-            _ => panic!("this style-pill control is a slider"),
-        }
-    }
-
-    pub(crate) fn slider_formatter(self) -> fn(f64) -> String {
-        match self {
-            Self::ThicknessSlider | Self::ThicknessValue => |value| format!("{value:.0}px"),
-            Self::OpacitySlider => |value| format!("{:.0}%", value * 100.0),
-            Self::SpotlightMagnificationSlider => crate::draw::format_spotlight_magnification,
-            Self::FontSizeSlider | Self::FontSizeValue => |value| format!("{value:.0}pt"),
-            _ => panic!("this style-pill control has a numeric readout"),
-        }
+        let Self::Slider(slider) = self else {
+            return None;
+        };
+        Some(slider.value(snapshot))
     }
 
     /// Live readout for sliders and their numeral buttons. The unit follows
@@ -187,12 +148,16 @@ impl StylePillControl {
     /// text size, % for marker opacity.
     pub(crate) fn value_text(self, snapshot: &ToolbarSnapshot) -> Option<String> {
         match self {
-            Self::ThicknessSlider | Self::ThicknessValue => {
-                Some(self.slider_formatter()(snapshot.thickness))
+            Self::Slider(StylePillSlider::Thickness) | Self::ThicknessValue => {
+                Some(StylePillSlider::Thickness.formatter()(snapshot.thickness))
             }
-            Self::OpacitySlider => Some(self.slider_formatter()(snapshot.marker_opacity)),
-            Self::SpotlightMagnificationSlider => {
-                Some(self.slider_formatter()(snapshot.spotlight_magnification))
+            Self::Slider(StylePillSlider::Opacity) => Some(StylePillSlider::Opacity.formatter()(
+                snapshot.marker_opacity,
+            )),
+            Self::Slider(StylePillSlider::SpotlightMagnification) => {
+                Some(StylePillSlider::SpotlightMagnification.formatter()(
+                    snapshot.spotlight_magnification,
+                ))
             }
             // "Off" rather than "0": the number is a count of passes, and zero
             // of them is a state worth naming rather than a quantity.
@@ -201,8 +166,8 @@ impl StylePillControl {
             } else {
                 snapshot.pen_smoothing.to_string()
             }),
-            Self::FontSizeSlider | Self::FontSizeValue => {
-                Some(self.slider_formatter()(snapshot.font_size))
+            Self::Slider(StylePillSlider::FontSize) | Self::FontSizeValue => {
+                Some(StylePillSlider::FontSize.formatter()(snapshot.font_size))
             }
             Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
             Self::FontFamilyPicker => Some(short_family_label(&snapshot.font.family)),
@@ -230,7 +195,8 @@ impl StylePillControl {
     pub(crate) fn carries_inline_readout(self) -> bool {
         matches!(
             self,
-            Self::OpacitySlider | Self::SpotlightMagnificationSlider
+            Self::Slider(StylePillSlider::Opacity)
+                | Self::Slider(StylePillSlider::SpotlightMagnification)
         )
     }
 
@@ -240,7 +206,7 @@ impl StylePillControl {
     pub(crate) fn has_status_slot(self) -> bool {
         matches!(
             self,
-            Self::SpotlightMagnificationSlider
+            Self::Slider(StylePillSlider::SpotlightMagnification)
                 | Self::SelectionCycle(SelectionPropertyKind::SpotlightMagnification)
                 | Self::SelectionStepper(SelectionPropertyKind::SpotlightMagnification)
         )
@@ -256,7 +222,9 @@ impl StylePillControl {
     /// leave a magnified selection with no explanation.
     pub(crate) fn status_text(self, snapshot: &ToolbarSnapshot) -> Option<&'static str> {
         let displayed_magnification = match self {
-            Self::SpotlightMagnificationSlider => Some(snapshot.spotlight_magnification),
+            Self::Slider(StylePillSlider::SpotlightMagnification) => {
+                Some(snapshot.spotlight_magnification)
+            }
             Self::SelectionCycle(SelectionPropertyKind::SpotlightMagnification)
             | Self::SelectionStepper(SelectionPropertyKind::SpotlightMagnification) => {
                 snapshot.selection_spotlight_magnification
@@ -277,13 +245,15 @@ impl StylePillControl {
                     .label
                     .clone(),
             ),
-            Self::ThicknessSlider => {
+            Self::Slider(StylePillSlider::Thickness) => {
                 Cow::Borrowed(ToolContext::from_snapshot(snapshot).thickness_label)
             }
-            Self::OpacitySlider => Cow::Borrowed("Marker opacity"),
+            Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("Marker opacity"),
             Self::PenSmoothingStepper => Cow::Borrowed("Smoothing"),
-            Self::SpotlightMagnificationSlider => Cow::Borrowed("Spotlight magnification"),
-            Self::FontSizeSlider => Cow::Borrowed("Text size"),
+            Self::Slider(StylePillSlider::SpotlightMagnification) => {
+                Cow::Borrowed("Spotlight magnification")
+            }
+            Self::Slider(StylePillSlider::FontSize) => Cow::Borrowed("Text size"),
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
             Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
             Self::FillToggle => Cow::Borrowed(action_short_label(Action::ToggleFill)),
@@ -318,7 +288,7 @@ impl StylePillControl {
                     .to_string(),
             ),
             Self::FontSizeValue => Some("Text size".to_string()),
-            Self::SpotlightMagnificationSlider => {
+            Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Some("Magnification; Freeze first when using a transparent board.".to_string())
             }
             Self::FillToggle => Some(format_binding_label(
@@ -358,16 +328,18 @@ impl StylePillControl {
             // The context decides the thickness wording because one slider
             // targets the pen, the marker, or the eraser depending on what is
             // active.
-            Self::ThicknessSlider => {
+            Self::Slider(StylePillSlider::Thickness) => {
                 Some(match ToolContext::from_snapshot(snapshot).thickness_label {
                     "Eraser size" => "How wide the eraser rubs out.".to_string(),
                     label => format!("{label} of the next stroke you draw."),
                 })
             }
-            Self::OpacitySlider => {
+            Self::Slider(StylePillSlider::Opacity) => {
                 Some("How much of the page shows through a highlighter stroke.".to_string())
             }
-            Self::FontSizeSlider => Some("Point size of the next label you type.".to_string()),
+            Self::Slider(StylePillSlider::FontSize) => {
+                Some("Point size of the next label you type.".to_string())
+            }
             Self::EraserModeSegment | Self::SelectionStepper(_) => None,
         }
     }

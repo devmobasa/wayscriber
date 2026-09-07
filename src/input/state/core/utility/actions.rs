@@ -49,6 +49,9 @@ impl InputState {
 
     pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<Shortcut>>) {
         self.keymap.set_action_bindings(action_bindings);
+        if self.command_palette.is_open() {
+            self.reconcile_command_palette_scroll();
+        }
     }
 
     pub(crate) fn keymap_revision(&self) -> u64 {
@@ -66,6 +69,9 @@ impl InputState {
         action_bindings: HashMap<Action, Vec<Shortcut>>,
     ) {
         self.keymap.set_maps(action_map, action_bindings);
+        if self.command_palette.is_open() {
+            self.reconcile_command_palette_scroll();
+        }
         self.needs_redraw = true;
     }
 

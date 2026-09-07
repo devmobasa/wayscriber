@@ -118,23 +118,6 @@ fn apply_parsed_text(
     Ok(parsed)
 }
 
-pub fn parsed_lists_equal(left: &str, right: &str) -> bool {
-    match (parse_keybindings(left), parse_keybindings(right)) {
-        (Ok(left), Ok(right)) => left == right,
-        _ => false,
-    }
-}
-
-pub fn field_matches_defaults(
-    draft: &KeybindingsDraft,
-    defaults: &KeybindingsDraft,
-    field: KeybindingField,
-) -> bool {
-    let current = draft.value_for(field).unwrap_or("");
-    let default = defaults.value_for(field).unwrap_or("");
-    parsed_lists_equal(current, default)
-}
-
 pub fn reset_tooltip(defaults: &KeybindingsDraft, field: KeybindingField) -> String {
     let default = defaults.value_for(field).unwrap_or("").trim();
     if default.is_empty() {
@@ -192,11 +175,12 @@ mod tests {
         let binding = Shortcut::parse("E").expect("parses");
         remove_binding(&mut draft, KeybindingField::ClearCanvas, &binding).expect("remove");
         assert_eq!(draft.value_for(KeybindingField::ClearCanvas), Some(""));
-        assert!(!field_matches_defaults(
-            &draft,
-            &defaults,
-            KeybindingField::ClearCanvas
-        ));
+        assert!(
+            super::super::ShortcutManagerSummary::from_drafts(&draft, &defaults)
+                .row(KeybindingField::ClearCanvas)
+                .unwrap()
+                .changed
+        );
     }
 
     #[test]
@@ -303,11 +287,12 @@ mod tests {
     fn whitespace_differences_are_not_a_change_from_defaults() {
         let (mut draft, defaults) = draft();
         draft.set(KeybindingField::Redo, "Ctrl+Shift+Z,Ctrl+Y".to_string());
-        assert!(field_matches_defaults(
-            &draft,
-            &defaults,
-            KeybindingField::Redo
-        ));
+        assert!(
+            !super::super::ShortcutManagerSummary::from_drafts(&draft, &defaults)
+                .row(KeybindingField::Redo)
+                .unwrap()
+                .changed
+        );
     }
 
     #[test]

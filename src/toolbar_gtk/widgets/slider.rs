@@ -144,6 +144,20 @@ impl SliderRow {
         let key_area = area.clone();
         let key_label = value_label.clone();
         key.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk4::gdk::Key::Escape {
+                if !key_state.dragging.get() {
+                    if let Some(popover) = key_area
+                        .ancestor(gtk4::Popover::static_type())
+                        .and_downcast::<gtk4::Popover>()
+                    {
+                        // Dismiss the grabbed native before changing layer focus.
+                        popover.popdown();
+                    } else {
+                        super::release_window_keyboard_focus(&key_area);
+                    }
+                }
+                return gtk4::glib::Propagation::Stop;
+            }
             let Some(value) = keyboard_value(key_state.spec, key_state.value.get(), key) else {
                 return gtk4::glib::Propagation::Proceed;
             };
@@ -262,10 +276,42 @@ pub(super) fn assert_widget_contract() {
     );
     assert_eq!(slider.state.value.get(), 5.5);
     assert_eq!(changes.borrow().as_slice(), &[5.5]);
+    let window = gtk4::Window::new();
+    window.set_child(Some(&slider.root));
+    gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
+    let escape = || {
+        key.emit_by_name::<bool>(
+            "key-pressed",
+            &[
+                &gtk4::gdk::Key::Escape,
+                &0u32,
+                &gtk4::gdk::ModifierType::empty(),
+            ],
+        )
+    };
     slider.state.dragging.set(true);
+    assert!(escape());
+    assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_some());
     slider.set_value(10.0);
     assert_eq!(slider.state.value.get(), 5.5);
     slider.state.dragging.set(false);
+    assert!(escape());
+    assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_none());
+    assert_eq!(slider.state.value.get(), 5.5);
+    window.set_child(None::<&gtk4::Widget>);
+    let anchor = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    window.set_child(Some(&anchor));
+    let popover = gtk4::Popover::new();
+    popover.set_parent(&anchor);
+    popover.set_child(Some(&slider.root));
+    popover.set_visible(true);
+    assert!(escape());
+    assert!(
+        !popover.is_visible(),
+        "Escape dismisses the slider's popover"
+    );
+    popover.set_child(None::<&gtk4::Widget>);
+    popover.unparent();
     slider.set_value(6.25);
     assert_eq!(slider.state.value.get(), 6.25);
     assert_eq!(

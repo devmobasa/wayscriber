@@ -20,6 +20,7 @@ fn rollback_restores_preview_without_touching_history_or_locked_shapes() {
     frame.shape_mut(locked).unwrap().locked = true;
     let history = frame.undo_stack_len();
     let measurer = TextMeasurer::default();
+    let revision = frame.content_revision();
     let edit = CanvasEdit::capture(&frame, &[first, locked]);
     let effects = edit.preview(&mut frame, &measurer, |shape, _| {
         shape.translate(25, 0);
@@ -29,7 +30,10 @@ fn rollback_restores_preview_without_touching_history_or_locked_shapes() {
     assert!(!effects.committed);
     assert_eq!(frame.shape(first).unwrap().shape, rectangle(35));
     assert_eq!(frame.shape(locked).unwrap().shape, rectangle(50));
+    assert_ne!(frame.content_revision(), revision);
+    let preview_revision = frame.content_revision();
     let effects = edit.rollback(&mut frame, &measurer);
+    assert_ne!(frame.content_revision(), preview_revision);
     assert_eq!(effects.regions.len(), 1);
     assert!(!effects.committed);
     assert_ne!(effects.regions[0].1, effects.regions[0].2);

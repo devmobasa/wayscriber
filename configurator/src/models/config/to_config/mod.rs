@@ -1,5 +1,4 @@
 mod boards;
-mod capture;
 mod drawing;
 mod export;
 mod keybindings;
@@ -33,7 +32,7 @@ impl ConfigDraft {
         self.apply_boards(&mut config, &mut errors);
         self.render_profiles
             .apply_to_config(&mut config, &mut errors);
-        self.apply_capture(&mut config, &mut errors);
+        self.capture.apply_to(&mut config.capture, &mut errors);
         self.apply_export(&mut config, &mut errors);
         self.apply_session(&mut config, &mut errors);
         self.apply_tablet(&mut config, &mut errors);

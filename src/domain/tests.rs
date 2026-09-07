@@ -396,7 +396,7 @@ fn production_domain_sources_have_no_upward_crate_dependencies() {
     }
 
     assert_eq!(
-        checked, 7,
+        checked, 8,
         "architecture test must cover every domain source"
     );
 }

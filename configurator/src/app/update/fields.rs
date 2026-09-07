@@ -77,7 +77,7 @@ impl ConfiguratorApp {
         option: RegionPickerOption,
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
-        self.draft.capture_region_picker = option;
+        self.draft.capture.region_picker = option;
         self.refresh_dirty_flag();
         Vec::new()
     }

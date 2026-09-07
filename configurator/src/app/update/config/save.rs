@@ -1,4 +1,5 @@
-use wayscriber::config::{Config, ConfigDocument};
+use crate::app::document_workflow::LeaveAction;
+use wayscriber::config::{Config, ConfigDocument, ConfigValidationReport};
 
 use crate::messages::ConfigSaveResult;
 use crate::models::ConfigDraft;
@@ -10,6 +11,13 @@ use super::status::{config_document_status, invalid_color_hex_message, save_vali
 
 impl ConfiguratorApp {
     pub(in crate::app::update) fn handle_save_requested(&mut self) -> Vec<Effect> {
+        self.save_with_continuation(None)
+    }
+
+    pub(in crate::app::update) fn save_with_continuation(
+        &mut self,
+        continuation: Option<LeaveAction>,
+    ) -> Vec<Effect> {
         // `is_loading` counts too: a reload replaces the draft and base
         // document when it lands, so a save started underneath it would write
         // the pre-reload draft and then be judged against a document it never
@@ -40,19 +48,19 @@ impl ConfiguratorApp {
             return Vec::new();
         }
 
-        // The write needs the document itself, so the model gives up its only
-        // copy here and gets one back from `handle_config_saved` either way.
-        // Taking it is also the "nothing loaded" check: there is one `Option`
-        // to read, and reading it is what moves the value.
-        let Some(document) = self.document.begin_save() else {
+        // Validate against the loaded document before starting any transfer.
+        let Some(document) = self.document.loaded() else {
             self.status = StatusMessage::error(
                 "Configuration has not loaded successfully. Reload before saving.",
             );
             return Vec::new();
         };
 
-        match self.prepare_config_to_save(&document) {
-            Ok(config) => {
+        match self.prepare_config_to_save(document) {
+            Ok((config, validation)) => {
+                let Some(document) = self.document.begin_save(validation, continuation) else {
+                    return Vec::new();
+                };
                 self.status = StatusMessage::info("Saving configuration...");
                 vec![Effect::SaveConfig {
                     document: Box::new(document),
@@ -60,9 +68,6 @@ impl ConfiguratorApp {
                 }]
             }
             Err(errors) => {
-                // No write starts, so the document goes straight back: this
-                // handler must not be a way to lose it.
-                self.document.finish_save(Some(document));
                 let message = errors
                     .into_iter()
                     .map(|err| format!("{}: {}", err.field, err.message))
@@ -86,20 +91,13 @@ impl ConfiguratorApp {
     /// file then spells both lists out — leaving nothing for the reloaded
     /// document to rediscover — so this is the only place the loss can be seen.
     fn prepare_config_to_save(
-        &mut self,
+        &self,
         document: &ConfigDocument,
-    ) -> Result<Config, Vec<FormError>> {
+    ) -> Result<(Config, ConfigValidationReport), Vec<FormError>> {
         let config = self.draft.to_config(document.config())?;
-        match config.validate_for_save() {
-            Ok((config, report)) => {
-                self.document.pending_validation = report;
-                Ok(config)
-            }
-            Err(error) => {
-                self.document.pending_validation = Default::default();
-                Err(vec![FormError::new("config", error.to_string())])
-            }
-        }
+        config
+            .validate_for_save()
+            .map_err(|error| vec![FormError::new("config", error.to_string())])
     }
 
     pub(in crate::app::update) fn handle_config_saved(
@@ -108,12 +106,12 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         // Either outcome answers this write; a failed one wrote nothing, so
         // there is no resolution to report for it.
-        let after_save = self.document.after_save.take();
-        let validation = std::mem::take(&mut self.document.pending_validation);
+        if !self.document.is_saving() {
+            return Vec::new();
+        }
         match result {
             Ok((backup, saved_document)) => {
                 let draft = ConfigDraft::from_config(saved_document.config());
-                self.document.last_backup_path = backup.clone();
                 self.draft = draft.clone();
                 self.baseline = draft;
                 self.boards_collapsed = vec![false; self.draft.boards.items.len()];
@@ -126,16 +124,19 @@ impl ConfiguratorApp {
                 // and an unrelated save leaves the same proposal standing.
                 self.refresh_migration_preview(&saved_document);
                 let mut msg = "Configuration saved successfully.".to_string();
-                if let Some(path) = backup {
+                if let Some(path) = &backup {
                     msg.push_str(&format!("\nBackup created at {}", path.display()));
                 }
                 let mut status = config_document_status(&saved_document, &msg);
-                if let Some(note) = save_validation_note(&validation) {
+                let completion = self
+                    .document
+                    .save_succeeded(*saved_document, backup)
+                    .expect("active save checked above");
+                if let Some(note) = save_validation_note(&completion.validation) {
                     status = status.with_note(&note);
                 }
                 self.status = status;
-                self.document.finish_save(Some(*saved_document));
-                if let Some(action) = after_save {
+                if let Some(action) = completion.after_save {
                     return self.continue_leave(action);
                 }
             }
@@ -146,7 +147,7 @@ impl ConfiguratorApp {
                 // returned, which leaves a reload as the way forward.
                 let restored = document.is_some();
                 self.document
-                    .finish_save(document.map(|document| *document));
+                    .save_failed(document.map(|document| *document));
                 let mut message = format!("Failed to save configuration: {err}");
                 if !restored {
                     message.push_str(

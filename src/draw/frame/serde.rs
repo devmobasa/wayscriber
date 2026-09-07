@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for Frame {
 
         let helper = FrameHelper::deserialize(deserializer)?;
         let mut frame = Frame {
-            shapes: helper.shapes,
+            shapes: helper.shapes.into(),
             page_name: helper.page_name,
             view_offset: helper.view_offset,
             undo_stack: helper.undo_stack,

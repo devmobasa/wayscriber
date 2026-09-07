@@ -103,12 +103,17 @@ The GTK shell and refresh code live in [component/](src/app/component/); page bu
 [Update handlers](src/app/update/) change the model and return typed [effects](src/app/effects.rs).
 [Effect execution](src/app/component/effects.rs) schedules work; [I/O](src/app/io.rs) uses
 [blocking jobs](src/app/blocking_jobs.rs) for filesystem operations. Page callbacks do not write files.
-[HistoryDraft](src/models/config/history.rs) shows the section-owned conversion and validation pattern.
+[HistoryDraft](src/models/config/history.rs) and [CaptureDraft](src/models/config/capture.rs)
+own their section values, conversion and validation, including intermediate text.
+Shortcut summaries parse each field once per draft for an analysis pass, then reuse those values
+for conflict detection, row flags and default comparisons. No parsed cache survives the refresh.
 
 For a save, the handler validates the draft, transfers the guarded `ConfigDocument` from
 `DocumentWorkflow` to `SaveConfig`, and freezes editing. The blocking job merges known settings
 and performs the guarded atomic write. `ConfigSaved` returns the document on success or failure;
 success establishes the clean baseline, while failure restores editing and keeps useful errors.
+`DocumentWorkflow` owns the active save's validation report and optional leave continuation in
+one private context. Success consumes that context once; failure discards the continuation.
 A pending Reload or close continues only after success. Canceling the unsaved-changes prompt
 keeps the draft; it does not attempt to cancel a durable write already in progress.
 

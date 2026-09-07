@@ -1,5 +1,5 @@
 use crate::config::types::{BoardBackgroundConfig, BoardColorConfig, BoardsConfig};
-use crate::input::boards::{BoundaryBoardIdSet, clamp_board_rgb};
+use crate::domain::{BoundaryBoardIdSet, clamp_board_rgb};
 use log::warn;
 
 use super::Config;

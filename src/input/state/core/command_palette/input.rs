@@ -110,6 +110,7 @@ impl InputState {
     fn open_command_palette_internal(&mut self, track_usage: bool) {
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::CommandPalette);
         self.command_palette.open();
+        self.reconcile_command_palette_scroll();
         self.clear_command_palette_repeat();
         if track_usage {
             self.pending_onboarding_usage.used_command_palette = true;
@@ -145,7 +146,7 @@ impl InputState {
             return self.handle_keybinding_capture_key(action, key);
         }
 
-        match key {
+        let handled = match key {
             // Every modifier a `KeyBinding` can carry is tracked here, because
             // the shortcut controls and the capture modal read all four:
             // without this arm the palette would swallow the press, Ctrl+Shift+E
@@ -241,7 +242,11 @@ impl InputState {
                 true
             }
             _ => true, // Consume all other keys while palette is open
+        };
+        if self.command_palette.is_open() {
+            self.reconcile_command_palette_scroll();
         }
+        handled
     }
 
     fn handle_keybinding_capture_key(&mut self, action: Action, key: Key) -> bool {
@@ -283,19 +288,25 @@ impl InputState {
         self.command_palette.clear_repeat();
     }
     pub(crate) fn reconcile_command_palette_scroll(&mut self) {
-        let rows = self.command_palette_rows();
+        self.prepare_command_palette();
+    }
+    fn prepare_command_palette(&mut self) -> Vec<CommandPaletteListRow> {
         let capacity = self.command_palette_row_capacity();
-        self.command_palette.reconcile_scroll(&rows, capacity);
+        self.command_palette.prepare(
+            self.keymap.revision(),
+            |action| self.keymap.action_binding_labels(action),
+            capacity,
+        )
     }
     fn move_command_palette_selection(&mut self, key: Key) -> bool {
-        let rows = self.command_palette_rows();
+        let rows = self.prepare_command_palette();
         let capacity = self.command_palette_row_capacity();
         let changed = self.command_palette.navigate(key, &rows, capacity);
         self.needs_redraw |= changed;
         changed
     }
     pub fn command_palette_wheel_scroll(&mut self, direction: i32) {
-        let rows = self.command_palette_rows();
+        let rows = self.prepare_command_palette();
         let capacity = self.command_palette_row_capacity();
         self.needs_redraw |= self
             .command_palette
@@ -308,9 +319,12 @@ impl InputState {
         self.command_palette.repeat_timeout(now)
     }
     pub(crate) fn tick_command_palette_repeat(&mut self, now: Instant) -> bool {
-        let rows = self.command_palette_rows();
         let capacity = self.command_palette_row_capacity();
-        let changed = self.command_palette.tick_repeat(now, &rows, capacity);
+        let changed =
+            self.command_palette
+                .tick_repeat(now, capacity, self.keymap.revision(), |action| {
+                    self.keymap.action_binding_labels(action)
+                });
         self.needs_redraw |= changed;
         changed
     }

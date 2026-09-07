@@ -157,6 +157,24 @@ impl Default for CommandPaletteState {
 }
 
 impl CommandPaletteState {
+    /// Single preparation seam for transitions and viewport changes.
+    pub(super) fn prepare(
+        &mut self,
+        revision: u64,
+        labels: impl Fn(Action) -> Vec<String>,
+        capacity: usize,
+    ) -> Vec<super::CommandPaletteListRow> {
+        let rows = self.rows(revision, labels, capacity);
+        self.selected = self.selected.min(
+            rows.iter()
+                .rev()
+                .find_map(|row| row.command_index())
+                .unwrap_or(0),
+        );
+        self.reconcile_scroll(&rows, capacity);
+        rows
+    }
+
     pub(super) fn reconcile_scroll(
         &mut self,
         rows: &[super::CommandPaletteListRow],
@@ -180,6 +198,9 @@ impl CommandPaletteState {
         capacity: usize,
     ) -> bool {
         use crate::input::Key;
+        if capacity == 0 {
+            return false;
+        }
         let Some(last) = rows.iter().rev().find_map(|row| row.command_index()) else {
             return false;
         };
@@ -215,7 +236,7 @@ impl CommandPaletteState {
         rows: &[super::CommandPaletteListRow],
         capacity: usize,
     ) -> bool {
-        if direction == 0 || !self.open {
+        if direction == 0 || !self.open || capacity == 0 {
             return false;
         }
         let capacity = capacity.max(1);
@@ -290,8 +311,9 @@ impl CommandPaletteState {
     pub(super) fn tick_repeat(
         &mut self,
         now: std::time::Instant,
-        rows: &[super::CommandPaletteListRow],
         capacity: usize,
+        revision: u64,
+        labels: impl Fn(Action) -> Vec<String>,
     ) -> bool {
         if !self.open {
             self.repeat.clear();
@@ -300,9 +322,62 @@ impl CommandPaletteState {
         let Some(key) = self.repeat.due_key(now) else {
             return false;
         };
-        let changed = self.navigate(key, rows, capacity);
+        let rows = self.prepare(revision, labels, capacity);
+        let changed = self.navigate(key, &rows, capacity);
         self.repeat
             .schedule_fixed(now, std::time::Duration::from_millis(55));
         changed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::Key;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn idle_repeat_ticks_do_not_prepare_results() {
+        let mut palette = CommandPaletteState::default();
+        let now = Instant::now();
+        let unexpected = |_| panic!("idle tick prepared search results");
+        assert!(!palette.tick_repeat(now, 8, 0, unexpected));
+        assert!(palette.results.borrow().is_none());
+        palette.open();
+        palette.set_query("zoom");
+        assert!(!palette.tick_repeat(now, 8, 0, unexpected));
+        palette.start_repeat(Key::Down, now);
+        assert!(!palette.tick_repeat(now + Duration::from_millis(279), 8, 0, unexpected));
+        assert!(palette.results.borrow().is_none());
+        let due = now + Duration::from_millis(280);
+        assert!(palette.tick_repeat(due, 8, 0, |_| Vec::new()));
+        assert_eq!(palette.selected(), 1);
+        assert_eq!(palette.repeat_timeout(due), Some(Duration::from_millis(55)));
+        assert!(!palette.tick_repeat(due, 8, 0, unexpected));
+        assert_eq!(palette.selected(), 1);
+    }
+
+    #[test]
+    fn preparation_keeps_first_command_visible_after_open_query_and_resize() {
+        let mut palette = CommandPaletteState::default();
+        palette.open();
+        for query in ["", "zoom", ""] {
+            palette.set_query(query);
+            let rows = palette.prepare(0, |_| Vec::new(), 1);
+            assert_eq!(
+                rows[palette.scroll()].command_index(),
+                Some(palette.selected())
+            );
+        }
+        let rows = palette.prepare(0, |_| Vec::new(), 8);
+        palette.navigate(Key::End, &rows, 8);
+        let rows = palette.prepare(0, |_| Vec::new(), 1);
+        assert_eq!(
+            rows[palette.scroll()].command_index(),
+            Some(palette.selected())
+        );
+        palette.set_query("no_matching_command_987654");
+        assert!(palette.prepare(0, |_| Vec::new(), 0).is_empty());
+        assert_eq!((palette.selected(), palette.scroll()), (0, 0));
     }
 }

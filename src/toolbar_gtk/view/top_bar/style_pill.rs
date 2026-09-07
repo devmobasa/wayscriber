@@ -158,19 +158,16 @@ impl TopBar {
                         swatch.set_selected(entry_color == snapshot.color);
                     }));
                 }
-                model::StylePillControl::ThicknessSlider
-                | model::StylePillControl::OpacitySlider
-                | model::StylePillControl::SpotlightMagnificationSlider
-                | model::StylePillControl::FontSizeSlider => {
-                    let (slider_spec, value) = control.slider_value(snapshot);
+                model::StylePillControl::Slider(slider_kind) => {
+                    let (slider_spec, value) = slider_kind.value(snapshot);
                     let sender = self.feedback.clone();
                     let slider = SliderRow::new(
                         scale,
                         control.label(snapshot).as_ref(),
                         slider_spec,
                         value,
-                        control.slider_formatter(),
-                        move |value| send_event(&sender, control.slider_event(value)),
+                        slider_kind.formatter(),
+                        move |value| send_event(&sender, slider_kind.event(value)),
                     );
                     // Thickness/text-size use distinct numeral controls. The
                     // other readouts sit beside a full-width track, matching
@@ -197,7 +194,7 @@ impl TopBar {
                     slider.root.set_valign(gtk4::Align::Center);
                     append_gap(&pill, slider.root.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        let value = control.slider_value(snapshot).1;
+                        let value = slider_kind.value(snapshot).1;
                         slider.set_value(value);
                     }));
                     self.append_style_status_label(&pill, control, snapshot, px(gap));

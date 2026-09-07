@@ -43,8 +43,8 @@ pub(crate) use settings::{
 };
 #[allow(unused_imports)]
 pub(crate) use style_pill::{
-    StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSpec,
-    StylePillState,
+    StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSlider,
+    StylePillSpec, StylePillState,
 };
 #[allow(unused_imports)]
 pub(crate) use tools::{

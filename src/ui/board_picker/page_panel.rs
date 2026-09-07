@@ -1,4 +1,5 @@
 mod thumbnail;
+pub(crate) use thumbnail::ThumbnailCache;
 
 use crate::input::InputState;
 use crate::input::state::{
@@ -31,6 +32,7 @@ pub(super) fn render_page_panel(
     engine: &UiTextEngine,
     measurer: &crate::draw::TextMeasurer,
     render: &mut crate::draw::RenderCtx<'_, '_>,
+    cache: &mut ThumbnailCache,
     input_state: &InputState,
     layout: &BoardPickerLayout,
     screen_width: u32,
@@ -144,6 +146,7 @@ pub(super) fn render_page_panel(
         render_page_thumbnail(
             engine,
             measurer,
+            cache,
             PageThumbnailArgs {
                 render,
                 frame: page,
@@ -183,6 +186,7 @@ pub(super) fn render_page_panel(
         render_page_preview(
             engine,
             measurer,
+            cache,
             PagePreviewArgs {
                 render,
                 frame: page,

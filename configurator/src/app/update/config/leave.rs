@@ -47,11 +47,7 @@ impl ConfiguratorApp {
             return Vec::new();
         };
         self.pending_confirmation = None;
-        let effects = self.handle_save_requested();
-        if self.document.is_saving() {
-            self.document.after_save = Some(action);
-        }
-        effects
+        self.save_with_continuation(Some(action))
     }
 
     pub(in crate::app::update) fn discard_before_leave(&mut self) -> Vec<Effect> {

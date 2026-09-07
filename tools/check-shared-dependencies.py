@@ -2,8 +2,8 @@
 """Guard explicit upward Rust paths in the agreed shared-layer source boundary.
 
 This is a source-path guard, not a full Rust dependency graph. Domain compatibility
-path tests deliberately mention old public paths. Board validation still uses its
-reviewed ID/color validation helpers; moving board lifecycle is outside this rule.
+path tests deliberately mention old public paths. Pure board normalization lives
+in the domain layer; runtime board lifecycle stays in input.
 """
 from pathlib import Path
 import re
@@ -19,8 +19,6 @@ for directory, forbidden in [
         if path == ROOT / "src/domain/tests.rs":
             continue  # #[cfg(test)] public-path compatibility assertions.
         source = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(), flags=re.S)
-        if path == ROOT / "src/config/validate/boards.rs":
-            source = source.replace("use crate::input::boards::{BoundaryBoardIdSet, clamp_board_rgb};", "")
         # Also catch multiline grouped imports such as use crate::{input::...}.
         pattern = rf"crate\s*::\s*(?:{forbidden})\b|use\s+crate\s*::\s*\{{[^;]*\b(?:{forbidden})\s*::"
         if re.search(pattern, source):

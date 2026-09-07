@@ -202,10 +202,16 @@ impl RenderRuntime {
         &mut self,
     ) -> (
         &mut crate::draw::RenderCaches,
+        &mut crate::ui::UiRenderCaches,
         &crate::ui_text::UiTextEngine,
         &crate::draw::TextMeasurer,
     ) {
-        (&mut self.draw_caches, &self.ui_text, &self.text_measurer)
+        (
+            &mut self.draw_caches,
+            &mut self.ui_caches,
+            &self.ui_text,
+            &self.text_measurer,
+        )
     }
 
     pub(in crate::backend::wayland::state) fn canvas_draw_parts_mut(

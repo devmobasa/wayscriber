@@ -617,6 +617,26 @@ The resulting edit effects invalidate the affected drawing regions and mark the 
 Undo/redo restores the grouped shapes; session snapshot capture later copies the configured
 history retention without mutating the live frame. Rendering and persistence are separate effects.
 
+`Frame::shapes` uses `FrameShapes`, whose mutable borrows advance a runtime content token.
+Read-only access leaves the token unchanged; cloned frames diverge on their next mutation.
+The serialized shape array is unchanged. `Frame::content_revision()` covers shape edits,
+previews, rollback and history application. View offsets and board backgrounds are separate
+render inputs.
+
+The UI render owner retains up to 24 page-content rasters and 16 MiB of raster/backdrop bytes.
+Keys include content, view, background, target geometry and scale, text halo, font-map serial,
+Cairo settings, and the exact card pixels beneath transparent content. Removed page content is
+pruned when the picker prepares a frame. Partial clips, unsupported targets and oversized cards
+use direct replay. Hover controls, labels and selection borders remain live. Pixel tests compare
+fresh and reused rasters with direct replay; fractional-scale Spotlight gradients allow at most
+one byte of rounding on less than 0.1% of channels.
+
+The command palette owns search freshness, result preparation, selection reconciliation and
+repeat timing. Idle repeat ticks do no row preparation. A one-row viewport omits headings;
+when no row fits, Enter does not execute an invisible command. GTK toolbar sliders retain arrow
+and endpoint keys; Escape releases a top-level slider to the canvas or dismisses its popover.
+
+
 Capture crosses [CapturePreflight](../src/backend/wayland/capture_preflight.rs), which coordinates
 suppression and the capture barrier before acquisition. Freeze and zoom own their pending portal
 operation, task result, deadline, and restore state in [frozen/](../src/backend/wayland/frozen/)

@@ -42,7 +42,7 @@ fn spotlight_state_is_a_magnification_slider_without_stroke_controls() {
     assert_eq!(spec.state(), StylePillState::Spotlight);
     assert_eq!(control_ids(&spec), ["top.style.spotlight-magnification"]);
 
-    let slider = StylePillControl::SpotlightMagnificationSlider;
+    let slider = StylePillControl::Slider(StylePillSlider::SpotlightMagnification);
     assert_eq!(
         slider.event(&snapshot),
         Some(ToolbarEvent::SetSpotlightMagnification(2.25))
@@ -91,10 +91,10 @@ fn every_slider_says_what_it_does_and_carries_a_name() {
     snapshot.show_text_controls = true;
 
     for control in [
-        StylePillControl::ThicknessSlider,
-        StylePillControl::OpacitySlider,
-        StylePillControl::FontSizeSlider,
-        StylePillControl::SpotlightMagnificationSlider,
+        StylePillControl::Slider(StylePillSlider::Thickness),
+        StylePillControl::Slider(StylePillSlider::Opacity),
+        StylePillControl::Slider(StylePillSlider::FontSize),
+        StylePillControl::Slider(StylePillSlider::SpotlightMagnification),
     ] {
         assert_eq!(control.role(), StylePillRole::Slider);
         assert!(
@@ -116,12 +116,12 @@ fn the_thickness_tooltip_follows_what_the_slider_is_actually_sizing() {
     // is active, so a fixed wording would be wrong two thirds of the time.
     let mut snapshot = snapshot_for_tool(Tool::Eraser);
     snapshot.thickness_targets_eraser = true;
-    let eraser = StylePillControl::ThicknessSlider
+    let eraser = StylePillControl::Slider(StylePillSlider::Thickness)
         .tooltip(&snapshot)
         .expect("a tooltip");
     assert!(eraser.to_lowercase().contains("eraser"), "got {eraser:?}");
 
-    let pen = StylePillControl::ThicknessSlider
+    let pen = StylePillControl::Slider(StylePillSlider::Thickness)
         .tooltip(&snapshot_for_tool(Tool::Pen))
         .expect("a tooltip");
     assert!(!pen.to_lowercase().contains("eraser"), "got {pen:?}");
@@ -275,7 +275,7 @@ fn spotlight_state_exposes_an_inline_missing_source_hint() {
     snapshot.spotlight_magnifier_source =
         Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
 
-    let slider = StylePillControl::SpotlightMagnificationSlider;
+    let slider = StylePillControl::Slider(StylePillSlider::SpotlightMagnification);
     assert_eq!(
         slider.status_text(&snapshot),
         Some("Freeze screen to preview")
@@ -377,7 +377,7 @@ fn stroke_state_orders_chip_swatches_slider_and_numeral() {
         })
     );
 
-    let slider = StylePillControl::ThicknessSlider;
+    let slider = StylePillControl::Slider(StylePillSlider::Thickness);
     assert_eq!(
         slider.event(&snapshot),
         Some(ToolbarEvent::SetThickness(snapshot.thickness))
@@ -575,7 +575,7 @@ fn marker_state_adds_the_opacity_slider() {
         "thickness before opacity: {ids:?}"
     );
 
-    let opacity = StylePillControl::OpacitySlider;
+    let opacity = StylePillControl::Slider(StylePillSlider::Opacity);
     assert_eq!(
         opacity.event(&snapshot),
         Some(ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity))
@@ -658,7 +658,7 @@ fn text_state_is_swatches_size_and_one_font_control() {
         "typing text draws no stroke for smoothing to reach"
     );
 
-    let slider = StylePillControl::FontSizeSlider;
+    let slider = StylePillControl::Slider(StylePillSlider::FontSize);
     assert_eq!(
         slider.event(&snapshot),
         Some(ToolbarEvent::SetFontSize(snapshot.font_size))
@@ -756,7 +756,7 @@ fn the_docked_selection_control_reports_on_the_selected_shape_not_the_tool_defau
 
     // The slider tracks the tool default, which is not magnified, so it stays quiet.
     assert_eq!(
-        StylePillControl::SpotlightMagnificationSlider.status_text(&snapshot),
+        StylePillControl::Slider(StylePillSlider::SpotlightMagnification).status_text(&snapshot),
         None
     );
 
@@ -768,9 +768,9 @@ fn the_docked_selection_control_reports_on_the_selected_shape_not_the_tool_defau
 #[test]
 fn controls_without_a_magnification_readout_have_no_status_slot() {
     for control in [
-        StylePillControl::ThicknessSlider,
-        StylePillControl::OpacitySlider,
-        StylePillControl::FontSizeSlider,
+        StylePillControl::Slider(StylePillSlider::Thickness),
+        StylePillControl::Slider(StylePillSlider::Opacity),
+        StylePillControl::Slider(StylePillSlider::FontSize),
         StylePillControl::ColorChip,
     ] {
         assert!(!control.has_status_slot(), "{control:?}");

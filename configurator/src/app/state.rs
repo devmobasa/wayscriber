@@ -332,7 +332,7 @@ mod tests {
         app.refresh_dirty_flag();
         assert!(!app.is_dirty);
 
-        app.draft.capture_enabled = !app.draft.capture_enabled;
+        app.draft.capture.enabled = !app.draft.capture.enabled;
         app.refresh_dirty_flag();
         assert!(app.is_dirty);
     }

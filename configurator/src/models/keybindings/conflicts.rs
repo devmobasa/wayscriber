@@ -31,7 +31,7 @@ impl ShortcutClaim {
         }
     }
 
-    fn legacy_tablet(action: Action, held: Shortcut) -> Self {
+    pub(super) fn legacy_tablet(action: Action, held: Shortcut) -> Self {
         Self {
             field: None,
             label: format!("{} (legacy tablet barrel button)", action_label(action)),
@@ -106,31 +106,14 @@ pub struct TextShortcutConflict {
     pub claimants: Vec<ShortcutClaim>,
 }
 
-fn shortcuts_conflict(left: &Shortcut, right: &Shortcut) -> bool {
+pub(super) fn shortcuts_conflict(left: &Shortcut, right: &Shortcut) -> bool {
     left == right || left.prefix_conflicts_with(right)
 }
 
 /// Every action in the draft that currently claims `binding`, including the
 /// target when it already lists that chord (a duplicate inside one action).
 pub fn claimants_for(draft: &KeybindingsDraft, binding: &Shortcut) -> Vec<ShortcutClaim> {
-    let mut claims = Vec::new();
-    for entry in &draft.entries {
-        if let Ok(parsed) = parse_keybindings(&entry.value) {
-            for candidate in parsed {
-                if shortcuts_conflict(&candidate, binding)
-                    && !claims.iter().any(|claim: &ShortcutClaim| {
-                        claim.field == Some(entry.field) && claim.held == candidate
-                    })
-                {
-                    claims.push(ShortcutClaim::from_field(entry.field, candidate));
-                }
-            }
-        }
-    }
-    if let Some(action) = legacy_action_for(draft, binding) {
-        claims.push(ShortcutClaim::legacy_tablet(action, binding.clone()));
-    }
-    claims
+    super::analysis::ParsedShortcuts::new(draft).claimants(binding)
 }
 
 pub fn other_claimants(
@@ -142,21 +125,6 @@ pub fn other_claimants(
         .into_iter()
         .filter(|claim| claim.field != Some(target) || claim.held != *binding)
         .collect()
-}
-
-pub fn field_has_internal_duplicate(draft: &KeybindingsDraft, field: KeybindingField) -> bool {
-    let Some(value) = draft.value_for(field) else {
-        return false;
-    };
-    let Ok(parsed) = parse_keybindings(value) else {
-        return false;
-    };
-    parsed.iter().enumerate().any(|(index, binding)| {
-        parsed
-            .iter()
-            .skip(index + 1)
-            .any(|other| shortcuts_conflict(other, binding))
-    })
 }
 
 pub fn text_conflicts_for(
@@ -324,7 +292,7 @@ pub fn recorded_conflict_prompt(binding: &Shortcut, claimants: &[ShortcutClaim])
     lines.join("\n")
 }
 
-fn legacy_action_for(draft: &KeybindingsDraft, binding: &Shortcut) -> Option<Action> {
+pub(super) fn legacy_action_for(draft: &KeybindingsDraft, binding: &Shortcut) -> Option<Action> {
     let trigger = binding.as_trigger()?;
     let ShortcutTrigger::Stylus(trigger) = trigger else {
         return None;
@@ -425,10 +393,10 @@ mod tests {
     fn duplicate_inside_one_action_is_a_conflict() {
         let mut draft = draft();
         draft.set(KeybindingField::ClearCanvas, "E, e".to_string());
-        assert!(field_has_internal_duplicate(
-            &draft,
-            KeybindingField::ClearCanvas
-        ));
+        assert!(
+            super::super::analysis::ParsedShortcuts::new(&draft)
+                .has_internal_duplicate(KeybindingField::ClearCanvas)
+        );
         let binding = Shortcut::parse("E").expect("parses");
         let claimants = claimants_for(&draft, &binding);
         assert_eq!(claimants.len(), 1);

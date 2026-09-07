@@ -16,7 +16,8 @@ const ADD_CARD_BG_HOVER: Rgba = (1.0, 1.0, 1.0, 0.10);
 const PREVIEW_LABEL_BG: Rgba = (0.0, 0.0, 0.0, 0.55);
 
 use super::super::super::helpers::draw_drag_handle;
-use super::content::{render_page_content, render_page_name_label};
+use super::cache::{ThumbnailCache, render_cached_page_content};
+use super::content::render_page_name_label;
 use super::icons::{
     draw_delete_icon, draw_duplicate_icon, draw_plus_icon, draw_rename_icon, icon_alpha,
 };
@@ -25,6 +26,7 @@ use super::types::{PREVIEW_SCALE, PageContentArgs, PagePreviewArgs, PageThumbnai
 pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
     engine: &UiTextEngine,
     measurer: &crate::draw::TextMeasurer,
+    cache: &mut ThumbnailCache,
     args: PageThumbnailArgs<'_, '_, '_>,
 ) {
     let PageThumbnailArgs {
@@ -62,9 +64,10 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    render_page_content(
+    render_cached_page_content(
         engine,
         measurer,
+        cache,
         PageContentArgs {
             render,
             frame,
@@ -307,6 +310,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
 pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     engine: &UiTextEngine,
     measurer: &crate::draw::TextMeasurer,
+    cache: &mut ThumbnailCache,
     args: PagePreviewArgs<'_, '_, '_>,
 ) {
     let PagePreviewArgs {
@@ -356,9 +360,10 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     ctx.set_line_width(1.2);
     let _ = ctx.stroke();
 
-    render_page_content(
+    render_cached_page_content(
         engine,
         measurer,
+        cache,
         PageContentArgs {
             render,
             frame,

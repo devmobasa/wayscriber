@@ -171,7 +171,7 @@ impl InputState {
         if height == 0 {
             COMMAND_PALETTE_MAX_VISIBLE
         } else {
-            command_palette_visible_count(usize::MAX, height).max(1)
+            command_palette_visible_count(usize::MAX, height)
         }
     }
 
