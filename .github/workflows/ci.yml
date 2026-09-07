@@ -69,43 +69,13 @@ jobs:
           workspaces: |
             .
 
-      - name: Check version metadata
-        run: bash tools/check-version-consistency.sh
-
-      - name: Check package repository layout
-        run: bash tools/test-package-repo-layout.sh
-
-      - name: Check release packaging contract
-        run: bash tools/test-release-packaging.sh
-
       - name: Check dynamic gtk4-layer-shell linkage
         run: |
           cargo build --locked --bin wayscriber
           readelf -d target/debug/wayscriber | grep -Eq 'Shared library: \[libgtk4-layer-shell\.so'
 
-      - name: Check nixpkgs recipe dependencies
-        run: ./tools/check-nixpkgs-recipe.py
-
-      - name: Check Rust source coverage
-        run: ./tools/check-rust-source-coverage.py
-
-      - name: Check process spawn sites
-        run: ./tools/check-process-sites.py
-
-      - name: Check config writers
-        run: ./tools/check-config-writers.py
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
-
-      - name: cargo clippy (all features)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-      - name: cargo test (all features)
-        run: cargo test --workspace --all-features
-
-      - name: cargo test (no default features)
-        run: cargo test --workspace --no-default-features
+      - name: Run canonical workspace validation
+        run: ./tools/lint-and-test.sh
 
       - name: Check static gtk4-layer-shell linkage
         env:

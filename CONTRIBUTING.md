@@ -212,3 +212,8 @@ not as a reason for mechanical splitting.
   `wayscriber 0.9.x` and look identical.
 
 See [tools/README.md](tools/README.md) for build, install, packaging, version, and release helpers.
+
+Local checks and the Rust CI job both run `./tools/lint-and-test.sh`. It lints,
+builds binaries, and tests the whole workspace with all features and with no
+default features, alongside source and packaging checks. CI additionally checks
+dynamic and static gtk4-layer-shell linkage and uploads its code-health report.
