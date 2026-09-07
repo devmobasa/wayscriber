@@ -103,6 +103,20 @@ fn try_render_cached(
     cache: &mut ThumbnailCache,
     args: &mut PageContentArgs<'_, '_, '_>,
 ) -> Option<()> {
+    // A magnifier samples the original target beyond the card's bounds. The
+    // card-sized raster and backdrop cannot preserve that sampling extent.
+    // Transparent previews only show a magnification label, so remain cacheable.
+    if matches!(args.background, BoardBackground::Solid(_))
+        && args.frame.shapes.iter().any(|drawn| {
+            matches!(
+                &drawn.shape,
+                crate::draw::Shape::Spotlight { magnification, .. }
+                    if crate::draw::spotlight_magnification_is_active(*magnification)
+            )
+        })
+    {
+        return None;
+    }
     let ctx = args.render.cairo;
     let matrix = ctx.matrix();
     let (dx, dy) = ctx.group_target().device_scale();
@@ -277,3 +291,6 @@ fn try_render_cached(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod spotlight_tests;

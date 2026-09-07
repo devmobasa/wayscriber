@@ -14,7 +14,7 @@ fn rect(x: i32, color: Color) -> Shape {
     }
 }
 
-fn sample_frame() -> Frame {
+pub(super) fn sample_frame() -> Frame {
     let mut frame = Frame::new();
     frame.add_shape(rect(30, Color::new(1.0, 0.1, 0.2, 0.65)));
     frame.add_shape(Shape::Text {
@@ -170,7 +170,7 @@ fn cache_prunes_removed_pages_and_stays_within_entry_and_byte_budgets() {
 }
 
 #[test]
-fn spotlight_cache_has_the_same_pixels_as_direct_replay() {
+fn transparent_spotlights_and_unmagnified_solid_spotlights_remain_cacheable() {
     let mut frame = sample_frame();
     frame.add_shape(Shape::Spotlight {
         cx: 140,
@@ -181,6 +181,9 @@ fn spotlight_cache_has_the_same_pixels_as_direct_replay() {
     });
     let mut cache = ThumbnailCache::default();
     assert_parity(&frame, &BoardBackground::Transparent, &mut cache);
+    if let Shape::Spotlight { magnification, .. } = &mut frame.shapes[2].shape {
+        *magnification = 1.0;
+    }
     assert_parity(
         &frame,
         &BoardBackground::Solid(Color::new(0.8, 0.9, 1.0, 1.0)),

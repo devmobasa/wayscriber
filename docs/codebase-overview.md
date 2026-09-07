@@ -626,8 +626,10 @@ render inputs.
 The UI render owner retains up to 24 page-content rasters and 16 MiB of raster/backdrop bytes.
 Keys include content, view, background, target geometry and scale, text halo, font-map serial,
 Cairo settings, and the exact card pixels beneath transparent content. Removed page content is
-pruned when the picker prepares a frame. Partial clips, unsupported targets and oversized cards
-use direct replay. Hover controls, labels and selection borders remain live. Pixel tests compare
+pruned when the picker prepares a frame. Partial clips, unsupported targets, oversized cards,
+and solid pages with magnified Spotlights use direct replay. Magnifiers need the original target's
+sampling area beyond the card; transparent pages only show a magnification label and remain
+cacheable. Hover controls, labels and selection borders remain live. Pixel tests compare
 fresh and reused rasters with direct replay; fractional-scale Spotlight gradients allow at most
 one byte of rounding on less than 0.1% of channels.
 
