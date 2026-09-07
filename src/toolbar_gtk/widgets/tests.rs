@@ -20,6 +20,7 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
             .arg("--exact")
             .arg("--test-threads=1")
             .env(CHILD_ENV, "1")
+            .env("GTK_A11Y", "test")
             .status()
             .expect("run isolated GTK focus-policy test");
         assert!(status.success(), "isolated GTK focus-policy test failed");
@@ -30,6 +31,8 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
         eprintln!("skipping GTK focus-policy test: {error}");
         return;
     }
+
+    super::slider::assert_widget_contract();
 
     let bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     let bar_button = gtk4::Button::new();

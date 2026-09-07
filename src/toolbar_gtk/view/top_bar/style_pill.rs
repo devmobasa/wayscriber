@@ -184,21 +184,35 @@ impl TopBar {
                         _ => format_pt,
                     };
                     let sender = self.feedback.clone();
-                    let slider = SliderRow::new(scale, slider_spec, value, format, move |value| {
-                        let event = match control {
-                            model::StylePillControl::ThicknessSlider => {
-                                ToolbarEvent::SetThickness(value)
-                            }
-                            model::StylePillControl::OpacitySlider => {
-                                ToolbarEvent::SetMarkerOpacity(value)
-                            }
+                    let slider = SliderRow::new(
+                        scale,
+                        match control {
+                            model::StylePillControl::ThicknessSlider => "Stroke thickness",
+                            model::StylePillControl::OpacitySlider => "Marker opacity",
                             model::StylePillControl::SpotlightMagnificationSlider => {
-                                ToolbarEvent::SetSpotlightMagnification(value)
+                                "Spotlight magnification"
                             }
-                            _ => ToolbarEvent::SetFontSize(value),
-                        };
-                        send_event(&sender, event);
-                    });
+                            _ => "Font size",
+                        },
+                        slider_spec,
+                        value,
+                        format,
+                        move |value| {
+                            let event = match control {
+                                model::StylePillControl::ThicknessSlider => {
+                                    ToolbarEvent::SetThickness(value)
+                                }
+                                model::StylePillControl::OpacitySlider => {
+                                    ToolbarEvent::SetMarkerOpacity(value)
+                                }
+                                model::StylePillControl::SpotlightMagnificationSlider => {
+                                    ToolbarEvent::SetSpotlightMagnification(value)
+                                }
+                                _ => ToolbarEvent::SetFontSize(value),
+                            };
+                            send_event(&sender, event);
+                        },
+                    );
                     // Thickness/text-size use distinct numeral controls. The
                     // other readouts sit beside a full-width track, matching
                     // the built-in toolbar instead of borrowing track space.
