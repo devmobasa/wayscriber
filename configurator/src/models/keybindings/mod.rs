@@ -33,3 +33,6 @@ pub use recording::{
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) use parse::take_parse_calls;

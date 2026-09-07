@@ -1,3 +1,4 @@
+use crate::models::{ShortcutManagerFilter, ShortcutManagerSort};
 use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, Shortcut};
 
 use crate::app::effects::Effect;
@@ -742,4 +743,54 @@ fn jump_to_conflict_selects_the_other_claimant() {
     assert_eq!(app.selected_keybinding, Some(jump));
     assert_eq!(app.active_keybindings_tab, keybinding_tab(jump));
     assert!(!app.is_dirty);
+}
+
+#[test]
+fn prepared_manager_refresh_reuses_analysis_for_filters() {
+    let (mut app, _) = ConfiguratorApp::new_app();
+    for filter in ShortcutManagerFilter::ALL {
+        for sort in ShortcutManagerSort::ALL {
+            app.shortcut_filter = filter;
+            app.shortcut_sort = sort;
+            let search = app.search_summary();
+            let expected = app.visible_keybinding_fields();
+            let (summary, fields) = app.prepare_shortcut_manager_refresh(&search);
+            assert_eq!(fields, expected);
+            assert_eq!(summary, app.shortcut_manager_summary());
+        }
+    }
+}
+
+#[test]
+#[ignore = "release measurement: cargo test --release shortcut_refresh_cost -- --ignored --nocapture"]
+fn shortcut_refresh_cost() {
+    use crate::models::keybindings::take_parse_calls;
+    use std::{hint::black_box, time::Instant};
+    let (mut app, _) = ConfiguratorApp::new_app();
+    for query in ["", "tool", "Ctrl"] {
+        app.handle_search_changed(query.into());
+        let search = app.search_summary();
+        take_parse_calls();
+        let start = Instant::now();
+        for _ in 0..20 {
+            black_box(app.shortcut_manager_summary());
+            black_box(app.visible_keybinding_fields());
+            black_box(app.visible_keybinding_fields().is_empty());
+            black_box(app.shortcut_manager_summary().has_conflicts());
+        }
+        let before = start.elapsed();
+        let before_calls = take_parse_calls();
+        let start = Instant::now();
+        for _ in 0..20 {
+            let (summary, fields) = app.prepare_shortcut_manager_refresh(&search);
+            black_box(fields.is_empty());
+            black_box(summary.has_conflicts());
+            black_box((summary, fields));
+        }
+        eprintln!(
+            "20 model refreshes, query={query:?}: old={before:?}/{before_calls} parser calls, shared={:?}/{} parser calls",
+            start.elapsed(),
+            take_parse_calls()
+        );
+    }
 }
