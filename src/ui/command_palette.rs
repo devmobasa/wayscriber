@@ -10,12 +10,10 @@ use crate::input::state::{
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
-    self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG, INPUT_BORDER_FOCUSED,
-    OVERLAY_DIM_MEDIUM, RADIUS_LG, RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER,
-    TEXT_WHITE,
+    self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, OVERLAY_DIM_MEDIUM, RADIUS_LG,
+    RADIUS_STD,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
-use super::theme::Rgba;
 
 mod command_palette_row;
 mod modals;
@@ -57,15 +55,6 @@ const FRAME_SHADOW_SOFT: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.22);
 const TOOLTIP_PADDING_X: f64 = 8.0;
 const TOOLTIP_PADDING_Y: f64 = 5.0;
 const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
-/// Action tooltip surface: darker than crate::ui::theme::popup::bg_command_palette() so the
-/// tooltip reads above the palette (no matching theme token; kept).
-const TOOLTIP_BG: Rgba = (0.04, 0.05, 0.07, 0.98);
-/// Scrollbar track/thumb white-alpha ladder.
-/// TODO(theme-consolidation): thumb duplicates
-/// `theme::toolbar::COLOR_SCROLLBAR_SLIDER`; track has no token.
-const SCROLL_TRACK: Rgba = (1.0, 1.0, 1.0, 0.1);
-const SCROLL_THUMB: Rgba = (1.0, 1.0, 1.0, 0.35);
-
 /// Prepared application values consumed by the painter.
 pub(crate) enum CommandPaletteView {
     Closed,
@@ -149,10 +138,18 @@ pub(crate) fn render_command_palette_with_engine(
     screen_height: u32,
 ) {
     let view = CommandPaletteView::prepare(input_state, screen_width, screen_height);
-    paint_command_palette(engine, ctx, &view, screen_width, screen_height);
+    paint_command_palette(
+        &super::theme::Theme::dark(),
+        engine,
+        ctx,
+        &view,
+        screen_width,
+        screen_height,
+    );
 }
 
 pub(crate) fn paint_command_palette(
+    theme: &super::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     view: &CommandPaletteView,
@@ -162,7 +159,15 @@ pub(crate) fn paint_command_palette(
     let view = match view {
         CommandPaletteView::Closed => return,
         CommandPaletteView::Capture { action, bindings } => {
-            render_keybinding_capture(engine, ctx, bindings, *action, screen_width, screen_height);
+            render_keybinding_capture(
+                theme,
+                engine,
+                ctx,
+                bindings,
+                *action,
+                screen_width,
+                screen_height,
+            );
             return;
         }
         CommandPaletteView::List(view) => view,
@@ -171,6 +176,7 @@ pub(crate) fn paint_command_palette(
     let (x, y, palette_width, height) = view.geometry;
 
     draw_command_palette_frame(
+        theme,
         ctx,
         screen_width as f64,
         screen_height as f64,
@@ -187,12 +193,30 @@ pub(crate) fn paint_command_palette(
     let inner_width = palette_width - COMMAND_PALETTE_PADDING * 2.0;
     let mut cursor_y = y + COMMAND_PALETTE_PADDING;
 
-    cursor_y = draw_command_palette_input(engine, ctx, inner_x, cursor_y, inner_width, &view.query);
+    cursor_y = draw_command_palette_input(
+        theme,
+        engine,
+        ctx,
+        inner_x,
+        cursor_y,
+        inner_width,
+        &view.query,
+    );
 
-    render_command_palette_rows(engine, ctx, view, rows, inner_x, inner_width, cursor_y);
+    render_command_palette_rows(
+        theme,
+        engine,
+        ctx,
+        view,
+        rows,
+        inner_x,
+        inner_width,
+        cursor_y,
+    );
 
     if rows.is_empty() && !view.query.is_empty() {
         draw_command_palette_empty_state(
+            theme,
             engine,
             ctx,
             inner_x,
@@ -202,6 +226,7 @@ pub(crate) fn paint_command_palette(
     }
 
     render_command_palette_scroll_indicator(
+        theme,
         ctx,
         x,
         y,
@@ -212,11 +237,12 @@ pub(crate) fn paint_command_palette(
         view.visible_count,
     );
 
-    draw_command_palette_escape_hint(engine, ctx, x, y, palette_width, height);
+    draw_command_palette_escape_hint(theme, engine, ctx, x, y, palette_width, height);
     let _ = ctx.restore();
 
     if let Some((tooltip, pointer_x, pointer_y)) = view.tooltip.as_ref() {
         draw_command_palette_action_tooltip(
+            theme,
             engine,
             ctx,
             tooltip,
@@ -313,7 +339,9 @@ fn command_palette_text_style(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_command_palette_frame(
+    theme: &super::theme::Theme,
     ctx: &cairo::Context,
     screen_width: f64,
     screen_height: f64,
@@ -339,7 +367,7 @@ fn draw_command_palette_frame(
     );
     let _ = ctx.fill();
 
-    constants::set_color(ctx, SHADOW);
+    constants::set_color(ctx, theme.shadow);
     draw_rounded_rect(
         ctx,
         x + FRAME_SHADOW_OFFSET * 0.5,
@@ -350,17 +378,18 @@ fn draw_command_palette_frame(
     );
     let _ = ctx.fill();
 
-    constants::set_color(ctx, crate::ui::theme::popup::bg_command_palette());
+    constants::set_color(ctx, theme.surface_popover);
     draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
     let _ = ctx.fill();
 
-    constants::set_color(ctx, crate::ui::theme::popup::border_command_palette());
+    constants::set_color(ctx, theme.border_hairline);
     draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 }
 
 fn draw_command_palette_input(
+    theme: &super::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     inner_x: f64,
@@ -376,9 +405,9 @@ fn draw_command_palette_input(
         COMMAND_PALETTE_INPUT_HEIGHT,
         RADIUS_STD,
     );
-    constants::set_color(ctx, INPUT_BG);
+    constants::set_color(ctx, theme.surface_card);
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, INPUT_BORDER_FOCUSED);
+    constants::set_color(ctx, theme.accent);
     ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 
@@ -390,7 +419,7 @@ fn draw_command_palette_input(
     let text_y = cursor_y + COMMAND_PALETTE_INPUT_HEIGHT / 2.0 + input_style.size / 3.0;
 
     if query.is_empty() {
-        constants::set_color(ctx, TEXT_PLACEHOLDER);
+        constants::set_color(ctx, theme.text_secondary);
         engine.draw_baseline(
             ctx,
             input_style,
@@ -400,7 +429,7 @@ fn draw_command_palette_input(
             None,
         );
     } else {
-        constants::set_color(ctx, TEXT_WHITE);
+        constants::set_color(ctx, theme.text_primary);
         engine.draw_baseline(ctx, input_style, query, inner_x + 10.0, text_y, None);
     }
 
@@ -408,7 +437,9 @@ fn draw_command_palette_input(
     cursor_y
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_command_palette_rows(
+    theme: &super::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     view: &PaletteListView,
@@ -429,7 +460,15 @@ fn render_command_palette_rows(
         let item_y = start_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
         match row {
             CommandPaletteListRow::Header(label) => {
-                render_command_group_header(engine, ctx, label, inner_x, inner_width, item_y);
+                render_command_group_header(
+                    theme,
+                    engine,
+                    ctx,
+                    label,
+                    inner_x,
+                    inner_width,
+                    item_y,
+                );
             }
             CommandPaletteListRow::Command {
                 command,
@@ -437,6 +476,7 @@ fn render_command_palette_rows(
             } => {
                 let is_selected = *command_index == view.selected;
                 render_command_row(
+                    theme,
                     engine,
                     ctx,
                     &view.query,
@@ -459,6 +499,7 @@ fn render_command_palette_rows(
 /// Group header row: small uppercase label with a hairline rule filling the
 /// remaining width. Occupies a full item row so hit-testing stays uniform.
 fn render_command_group_header(
+    theme: &super::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     label: &str,
@@ -473,13 +514,13 @@ fn render_command_group_header(
     );
     let text = label.to_uppercase();
     let baseline = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + style.size / 3.0;
-    constants::set_color(ctx, constants::TEXT_HINT);
+    constants::set_color(ctx, theme.text_secondary);
     let extents = engine.draw_baseline(ctx, style, &text, inner_x + 10.0, baseline, None);
 
     let rule_start = inner_x + 10.0 + extents.width() + 10.0;
     let rule_end = inner_x + inner_width - 8.0;
     if rule_end > rule_start {
-        constants::set_color(ctx, constants::DIVIDER_LIGHT);
+        constants::set_color(ctx, theme.border_hairline);
         ctx.set_line_width(1.0);
         ctx.move_to(rule_start, baseline - style.size / 3.0);
         ctx.line_to(rule_end, baseline - style.size / 3.0);
@@ -488,6 +529,7 @@ fn render_command_group_header(
 }
 
 fn draw_command_palette_empty_state(
+    theme: &super::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     inner_x: f64,
@@ -501,7 +543,7 @@ fn draw_command_palette_empty_state(
         cairo::FontWeight::Bold,
         cairo::FontSlant::Normal,
     );
-    constants::set_color(ctx, TEXT_DESCRIPTION);
+    constants::set_color(ctx, theme.text_secondary);
     let msg_extents = text_extents_for_with_engine(
         engine,
         ctx,
@@ -525,7 +567,7 @@ fn draw_command_palette_empty_state(
         cairo::FontWeight::Normal,
         cairo::FontSlant::Italic,
     );
-    constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, 0.7));
+    constants::set_color(ctx, theme.text_secondary);
     let suggest_extents = text_extents_for_with_engine(
         engine,
         ctx,
@@ -545,7 +587,9 @@ fn draw_command_palette_empty_state(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_command_palette_scroll_indicator(
+    theme: &super::theme::Theme,
     ctx: &cairo::Context,
     x: f64,
     _y: f64,
@@ -563,7 +607,7 @@ fn render_command_palette_scroll_indicator(
     let scroll_track_h = (visible_count as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
     let scroll_track_w = 4.0;
 
-    constants::set_color(ctx, SCROLL_TRACK);
+    constants::set_color(ctx, theme.surface_card);
     draw_rounded_rect(
         ctx,
         scroll_track_x,
@@ -584,12 +628,13 @@ fn render_command_palette_scroll_indicator(
     };
     let thumb_y = start_y + scroll_progress * (scroll_track_h - thumb_h);
 
-    constants::set_color(ctx, SCROLL_THUMB);
+    constants::set_color(ctx, theme.text_secondary);
     draw_rounded_rect(ctx, scroll_track_x, thumb_y, scroll_track_w, thumb_h, 2.0);
     let _ = ctx.fill();
 }
 
 fn draw_command_palette_escape_hint(
+    theme: &super::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
@@ -602,7 +647,7 @@ fn draw_command_palette_escape_hint(
         cairo::FontWeight::Normal,
         cairo::FontSlant::Normal,
     );
-    constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, 0.6));
+    constants::set_color(ctx, theme.text_secondary);
     let hint_y = y + height - HINT_BASELINE_BOTTOM_OFFSET;
     let hint_extents = text_extents_for_with_engine(
         engine,

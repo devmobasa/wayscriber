@@ -9,7 +9,7 @@ use crate::input::state::{
 use crate::ui::text_highlight::{HighlightStyle, draw_highlight_with_engine, find_match_range};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
-use super::super::constants::{self, BG_INPUT_SELECTION, RADIUS_SM, TEXT_DESCRIPTION, TEXT_WHITE};
+use super::super::constants::{self, RADIUS_SM};
 use super::super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::{
     COMMAND_PALETTE_FONT_FAMILY, COMMAND_PALETTE_SHORTCUT_BADGE_GAP,
@@ -46,6 +46,7 @@ pub(super) fn command_palette_row_styles() -> CommandPaletteRowStyle {
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row(
+    theme: &crate::ui::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     query: &str,
@@ -66,7 +67,7 @@ pub(super) fn render_command_row(
             COMMAND_PALETTE_ITEM_HEIGHT - 2.0,
             RADIUS_SM,
         );
-        constants::set_color(ctx, BG_INPUT_SELECTION);
+        constants::set_color(ctx, constants::with_alpha(theme.accent, 0.20));
         let _ = ctx.fill();
     }
 
@@ -77,7 +78,7 @@ pub(super) fn render_command_row(
     // whether or not the action has a glyph.
     if let Some(icon) = cmd.icon {
         let icon_alpha = if is_selected { 0.95 } else { 0.7 };
-        constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, icon_alpha));
+        constants::set_color(ctx, constants::with_alpha(theme.text_primary, icon_alpha));
         icon(
             ctx,
             inner_x + 10.0,
@@ -112,6 +113,7 @@ pub(super) fn render_command_row(
     // user sees why a command surfaced. Drawn before the text so the glyphs
     // sit on top; fuzzy-only (subsequence) matches draw nothing.
     draw_label_match_highlights(
+        theme,
         engine,
         ctx,
         query,
@@ -121,7 +123,7 @@ pub(super) fn render_command_row(
         styles.label.size,
     );
 
-    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
+    constants::set_color(ctx, constants::with_alpha(theme.text_primary, text_alpha));
     render_command_row_label(engine, ctx, &label, label_x, label_y, styles);
 
     let label_extents = text_extents_for_with_engine(
@@ -136,6 +138,7 @@ pub(super) fn render_command_row(
     let desc_x = label_x + label_extents.width() + 12.0;
 
     let badge_left_edge = render_command_row_shortcut_badge(
+        theme,
         engine,
         ctx,
         item_y,
@@ -149,6 +152,7 @@ pub(super) fn render_command_row(
     let max_desc_width = (badge_left_edge - 12.0 - desc_x).max(0.0);
     let desc_alpha = if is_selected { 0.9 } else { 0.75 };
     render_command_row_description(
+        theme,
         engine,
         ctx,
         &styles.desc,
@@ -159,11 +163,12 @@ pub(super) fn render_command_row(
         desc_alpha,
     );
     if configurable {
-        render_command_row_actions(ctx, inner_x + inner_width, item_y, is_selected);
+        render_command_row_actions(theme, ctx, inner_x + inner_width, item_y, is_selected);
     }
 }
 
 fn render_command_row_actions(
+    theme: &crate::ui::theme::Theme,
     ctx: &cairo::Context,
     content_right: f64,
     item_y: f64,
@@ -173,7 +178,7 @@ fn render_command_row_actions(
     let left = content_right - stride * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
     let icon_y = item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ACTION_SIZE) / 2.0;
     let alpha = if selected { 0.95 } else { 0.62 };
-    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha));
+    constants::set_color(ctx, constants::with_alpha(theme.text_primary, alpha));
     crate::toolbar_icons::draw_icon_pencil(
         ctx,
         left + 3.0,
@@ -208,7 +213,9 @@ fn render_command_row_label(
 /// Draw the accent match backdrop for each query token that appears in the
 /// label as a literal (case-insensitive) substring. The label text itself is
 /// drawn by the caller afterwards, over these boxes.
+#[allow(clippy::too_many_arguments)]
 fn draw_label_match_highlights(
+    theme: &crate::ui::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     query: &str,
@@ -222,7 +229,7 @@ fn draw_label_match_highlights(
         return;
     }
     let query_lower = query.to_ascii_lowercase();
-    let (hr, hg, hb, ha) = constants::with_alpha(constants::ACCENT_PRIMARY, 0.30);
+    let (hr, hg, hb, ha) = constants::with_alpha(theme.accent, 0.30);
     let style = HighlightStyle {
         font_family: COMMAND_PALETTE_FONT_FAMILY,
         font_size: label_size,
@@ -238,6 +245,7 @@ fn draw_label_match_highlights(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row_shortcut_badge(
+    theme: &crate::ui::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     item_y: f64,
@@ -288,8 +296,7 @@ pub(super) fn render_command_row_shortcut_badge(
 
                 // White-alpha ladder: badge fill and text both derive from
                 // the white root, brighter when the row is selected.
-                let badge_alpha = if is_selected { 0.35 } else { 0.25 };
-                constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, badge_alpha));
+                constants::set_color(ctx, theme.surface_card);
                 draw_rounded_rect(
                     ctx,
                     badge_x,
@@ -301,7 +308,10 @@ pub(super) fn render_command_row_shortcut_badge(
                 let _ = ctx.fill();
 
                 let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
-                constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, shortcut_alpha));
+                constants::set_color(
+                    ctx,
+                    constants::with_alpha(theme.text_primary, shortcut_alpha),
+                );
                 engine.draw_baseline(
                     ctx,
                     *shortcut_style,
@@ -318,6 +328,7 @@ pub(super) fn render_command_row_shortcut_badge(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row_description(
+    theme: &crate::ui::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     desc_style: &UiTextStyle,
@@ -327,7 +338,7 @@ pub(super) fn render_command_row_description(
     max_desc_width: f64,
     desc_alpha: f64,
 ) {
-    constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, desc_alpha));
+    constants::set_color(ctx, constants::with_alpha(theme.text_secondary, desc_alpha));
     if max_desc_width > 6.0 {
         let desc_display = ellipsize_to_width(
             engine,

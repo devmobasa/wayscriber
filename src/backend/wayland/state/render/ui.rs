@@ -432,7 +432,14 @@ impl WaylandState {
             );
         }
         let palette_view = crate::ui::CommandPaletteView::prepare(&self.input_state, width, height);
-        crate::ui::paint_command_palette(self.render.ui_text(), ctx, &palette_view, width, height);
+        crate::ui::paint_command_palette(
+            self.render.theme(),
+            self.render.ui_text(),
+            ctx,
+            &palette_view,
+            width,
+            height,
+        );
         crate::ui::render_tour_with_engine(
             self.render.ui_text(),
             ctx,

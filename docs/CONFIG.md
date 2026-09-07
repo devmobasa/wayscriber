@@ -1012,7 +1012,7 @@ enabled = true
 - `"bottom-right"`: Lower right corner
 
 **Theme & Motion:**
-- **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome; `"light"` takes effect progressively as overlay surfaces adopt the runtime theme (until then it also renders dark).
+- **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome. The command palette supports `"light"` throughout its search, results, shortcut editing, and tooltips. Other popups retain their complete dark palette until migrated.
 - **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
 
 **UI Styling:**

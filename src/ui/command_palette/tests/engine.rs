@@ -51,10 +51,20 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
             command_palette_action_tooltip_geometry(&engine, text, 740.0, 560.0, 800.0, 600.0)
                 .unwrap();
         let actual = pixels(density, |ctx| {
-            draw_command_palette_action_tooltip(&engine, ctx, text, 740.0, 560.0, 800.0, 600.0)
+            draw_command_palette_action_tooltip(
+                &crate::ui::theme::Theme::dark(),
+                &engine,
+                ctx,
+                text,
+                740.0,
+                560.0,
+                800.0,
+                600.0,
+            )
         });
         let expected = pixels(density, |ctx| {
             draw_command_palette_action_tooltip(
+                &crate::ui::theme::Theme::dark(),
                 &UiTextEngine::default(),
                 ctx,
                 text,
@@ -118,7 +128,14 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
 fn prepared_palette_paints_without_application_state() {
     let engine = UiTextEngine::default();
     let closed = pixels(1, |ctx| {
-        paint_command_palette(&engine, ctx, &CommandPaletteView::Closed, 800, 600)
+        paint_command_palette(
+            &crate::ui::theme::Theme::dark(),
+            &engine,
+            ctx,
+            &CommandPaletteView::Closed,
+            800,
+            600,
+        )
     });
     assert!(closed.iter().all(|byte| *byte == 0));
     let view = CommandPaletteView::List(PaletteListView {
@@ -132,11 +149,95 @@ fn prepared_palette_paints_without_application_state() {
         tooltip: None,
     });
     let painted = pixels(1, |ctx| {
-        paint_command_palette(&engine, ctx, &view, 800, 600)
+        paint_command_palette(
+            &crate::ui::theme::Theme::dark(),
+            &engine,
+            ctx,
+            &view,
+            800,
+            600,
+        )
     });
     assert!(painted.iter().any(|byte| *byte != 0));
     // The dimmer and the panel have different opacity, so this checks the
     // prepared geometry actually places a panel, beyond merely clearing Cairo.
     let alpha = |x: usize, y: usize| painted[(y * 800 + x) * 4 + 3];
     assert!(alpha(200, 150) > alpha(20, 20));
+}
+
+#[test]
+fn palette_theme_refresh_covers_list_capture_and_tooltip() {
+    let engine = UiTextEngine::default();
+    let mut input = crate::input::state::test_support::make_test_input_state();
+    input.toggle_command_palette();
+    for query in ["", "capture", "No match 測試 🖌️"] {
+        input.command_palette.set_query(query);
+        let view = CommandPaletteView::prepare(&input, 800, 480);
+        let paint = |theme: &crate::ui::theme::Theme| {
+            pixels(1, |ctx| {
+                paint_command_palette(theme, &engine, ctx, &view, 800, 480);
+            })
+        };
+        let dark = paint(&crate::ui::theme::Theme::dark());
+        let light = paint(&crate::ui::theme::Theme::light());
+        assert_ne!(dark, light, "query {query}");
+        assert_eq!(dark, paint(&crate::ui::theme::Theme::dark()));
+        if let Some(dir) = std::env::var_os("WAYSCRIBER_PALETTE_REFERENCES") {
+            let dir = std::path::PathBuf::from(dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            for (name, theme) in [
+                ("dark", crate::ui::theme::Theme::dark()),
+                ("light", crate::ui::theme::Theme::light()),
+            ] {
+                let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 480).unwrap();
+                let ctx = cairo::Context::new(&surface).unwrap();
+                paint_command_palette(&theme, &engine, &ctx, &view, 800, 480);
+                let name = format!(
+                    "palette-{name}-{}.png",
+                    if query.is_empty() {
+                        "groups"
+                    } else if query == "capture" {
+                        "selected"
+                    } else {
+                        "empty"
+                    }
+                );
+                surface
+                    .write_to_png(&mut std::fs::File::create(dir.join(name)).unwrap())
+                    .unwrap();
+            }
+        }
+    }
+    for capture in [false, true] {
+        let paint = |theme: &crate::ui::theme::Theme| {
+            pixels(1, |ctx| {
+                if capture {
+                    render_keybinding_capture(
+                        theme,
+                        &engine,
+                        ctx,
+                        &["Ctrl+C".into()],
+                        crate::config::Action::CopySelection,
+                        800,
+                        600,
+                    );
+                } else {
+                    draw_command_palette_action_tooltip(
+                        theme,
+                        &engine,
+                        ctx,
+                        "Edit shortcut",
+                        100.0,
+                        100.0,
+                        800.0,
+                        600.0,
+                    );
+                }
+            })
+        };
+        let dark = paint(&crate::ui::theme::Theme::dark());
+        let light = paint(&crate::ui::theme::Theme::light());
+        assert_ne!(dark, light);
+        assert_eq!(dark, paint(&crate::ui::theme::Theme::dark()));
+    }
 }
