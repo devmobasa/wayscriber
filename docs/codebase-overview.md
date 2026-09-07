@@ -270,8 +270,11 @@ phase. Their backend selection policies and acquisition identities remain separa
   retaining GTK sizing, CSS, updater closures, drag gestures, and popover lifecycle.
 - Shape-picker compound rows remain frontend-specific adapters over the shared top model. Canvas,
   Session, and Settings live in top popovers built from the same shared models; there is no side
-  palette layout path. The [toolbar item ID compatibility inventory](toolbar-item-id-compatibility.md)
-  records which historical `side.*` serialized IDs still feed those models.
+  palette layout path. Retained historical `side.*` IDs are defined in
+  [`ids.rs`](../src/config/types/toolbar/ids.rs) and
+  [`items/definitions.rs`](../src/config/types/toolbar/items/definitions.rs).
+  Changes to their serialized spellings require compatibility review and updates to the
+  owning model tests.
 
 ---
 
