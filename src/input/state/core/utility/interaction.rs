@@ -132,6 +132,9 @@ impl InputState {
     /// screen dimensions from the display server.
     pub fn update_screen_dimensions(&mut self, width: u32, height: u32) {
         self.view.set_screen_dimensions(width, height);
+        if self.command_palette.is_open() {
+            self.reconcile_command_palette_scroll();
+        }
         // A surface resize is painted with full damage by the backend. Make
         // that newly painted geometry the picker's damage baseline, or the
         // next narrowing query clears the panel from before the resize instead

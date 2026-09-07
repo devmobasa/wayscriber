@@ -4,9 +4,9 @@ use super::super::parse::{
 };
 use crate::models::error::FormError;
 use wayscriber::config::Config;
+use wayscriber::domain::{DragBindableTool, DragTool};
+use wayscriber::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::draw::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
-use wayscriber::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use wayscriber::input::{DragBindableTool, DragTool};
 
 impl ConfigDraft {
     pub(super) fn apply_drawing(&self, config: &mut Config, errors: &mut Vec<FormError>) {

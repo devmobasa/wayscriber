@@ -16,7 +16,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     page.group_in_area("General UI", SearchArea::UiGeneral)
         .combo_row(
             "Theme",
-            "\"Auto\" currently uses the dark theme; \"Light\" takes effect as overlay surfaces adopt the runtime theme.",
+            "\"Auto\" uses dark. \"Light\" supports the command palette, including shortcut editing and tooltips; other popups still use dark.",
             themes,
             theme_labels,
             |app| app.draft.ui_theme,

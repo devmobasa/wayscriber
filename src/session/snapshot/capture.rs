@@ -20,14 +20,11 @@ pub fn snapshot_from_input(
     let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit());
 
     let capture_pages = |pages: &crate::draw::BoardPages| -> Option<BoardPagesSnapshot> {
-        let mut cloned_pages = pages.pages().to_vec();
-        for page in &mut cloned_pages {
-            if history_limit == 0 {
-                page.clamp_history_depth(0);
-            } else if history_limit < usize::MAX {
-                page.clamp_history_depth(history_limit);
-            }
-        }
+        let cloned_pages = pages
+            .pages()
+            .iter()
+            .map(|page| page.clone_with_history_limit(history_limit))
+            .collect();
         let snapshot = BoardPagesSnapshot {
             pages: cloned_pages,
             active: pages.active_index(),

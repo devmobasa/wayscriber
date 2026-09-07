@@ -54,6 +54,7 @@ pub(crate) struct ConfiguratorApp {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfirmationPrompt {
+    LeaveDraft,
     DefaultsReset,
     SessionClear,
     ShortcutResetVisible,
@@ -62,6 +63,7 @@ pub(crate) enum ConfirmationPrompt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PendingConfirmation {
+    LeaveDraft(super::document_workflow::LeaveAction),
     DefaultsReset,
     SessionClear(String),
     ShortcutResetVisible(Vec<KeybindingField>),
@@ -71,6 +73,7 @@ pub(crate) enum PendingConfirmation {
 impl PendingConfirmation {
     pub(crate) fn prompt(&self) -> ConfirmationPrompt {
         match self {
+            PendingConfirmation::LeaveDraft(_) => ConfirmationPrompt::LeaveDraft,
             PendingConfirmation::DefaultsReset => ConfirmationPrompt::DefaultsReset,
             PendingConfirmation::SessionClear(_) => ConfirmationPrompt::SessionClear,
             PendingConfirmation::ShortcutResetVisible(_) => {
@@ -84,6 +87,9 @@ impl PendingConfirmation {
 impl ConfirmationPrompt {
     pub(crate) fn message(self) -> &'static str {
         match self {
+            ConfirmationPrompt::LeaveDraft => {
+                "You have unsaved changes. Save them, discard them, or cancel to keep editing."
+            }
             ConfirmationPrompt::DefaultsReset => {
                 "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue."
             }
@@ -326,7 +332,7 @@ mod tests {
         app.refresh_dirty_flag();
         assert!(!app.is_dirty);
 
-        app.draft.capture_enabled = !app.draft.capture_enabled;
+        app.draft.capture.enabled = !app.draft.capture.enabled;
         app.refresh_dirty_flag();
         assert!(app.is_dirty);
     }

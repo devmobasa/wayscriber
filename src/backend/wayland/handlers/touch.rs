@@ -253,7 +253,7 @@ impl WaylandState {
             );
             return Some(target);
         }
-        if !self.input_state.command_palette.open {
+        if !self.input_state.command_palette.is_open() {
             return None;
         }
         if self
@@ -429,7 +429,7 @@ impl WaylandState {
         }
 
         if self.input_state.help_overlay.is_visible()
-            || self.input_state.command_palette.open
+            || self.input_state.command_palette.is_open()
             || self.input_state.tour.is_active()
         {
             return;
@@ -507,7 +507,7 @@ impl WaylandState {
             self.pointer.clear_chrome_press();
             return true;
         }
-        if !self.input_state.command_palette.open && !self.input_state.tour.is_active() {
+        if !self.input_state.command_palette.is_open() && !self.input_state.tour.is_active() {
             return false;
         }
         self.pointer.clear_chrome_press();

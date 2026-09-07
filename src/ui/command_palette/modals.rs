@@ -25,7 +25,9 @@ pub(super) fn command_palette_action_tooltip_geometry(
     Some((x, y, width, height))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_command_palette_action_tooltip(
+    theme: &crate::ui::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     text: &str,
@@ -50,10 +52,10 @@ pub(super) fn draw_command_palette_action_tooltip(
         return;
     };
 
-    constants::set_color(ctx, TOOLTIP_BG);
+    constants::set_color(ctx, theme.surface_popover);
     draw_rounded_rect(ctx, x, y, width, height, 5.0);
     let _ = ctx.fill();
-    constants::set_color(ctx, TEXT_WHITE);
+    constants::set_color(ctx, theme.text_primary);
     engine.draw_baseline(
         ctx,
         style,
@@ -77,6 +79,7 @@ pub(super) fn keybinding_capture_geometry(
 }
 
 pub(super) fn render_keybinding_capture(
+    theme: &crate::ui::theme::Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     current: &[String],
@@ -86,6 +89,7 @@ pub(super) fn render_keybinding_capture(
 ) {
     let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
     draw_command_palette_frame(
+        theme,
         ctx,
         screen_width as f64,
         screen_height as f64,
@@ -99,7 +103,7 @@ pub(super) fn render_keybinding_capture(
         command_palette_text_style(18.0, cairo::FontWeight::Bold, cairo::FontSlant::Normal);
     let body_style =
         command_palette_text_style(13.0, cairo::FontWeight::Normal, cairo::FontSlant::Normal);
-    constants::set_color(ctx, TEXT_WHITE);
+    constants::set_color(ctx, theme.text_primary);
     engine.draw_baseline(
         ctx,
         title_style,
@@ -108,7 +112,7 @@ pub(super) fn render_keybinding_capture(
         y + 38.0,
         None,
     );
-    constants::set_color(ctx, TEXT_DESCRIPTION);
+    constants::set_color(ctx, theme.text_secondary);
     engine.draw_baseline(
         ctx,
         body_style,
@@ -124,7 +128,7 @@ pub(super) fn render_keybinding_capture(
         y + 70.0,
         None,
     );
-    constants::set_color(ctx, TEXT_WHITE);
+    constants::set_color(ctx, theme.text_primary);
     engine.draw_baseline(
         ctx,
         body_style,
@@ -133,7 +137,7 @@ pub(super) fn render_keybinding_capture(
         y + 108.0,
         None,
     );
-    constants::set_color(ctx, TEXT_DESCRIPTION);
+    constants::set_color(ctx, theme.text_secondary);
     engine.draw_baseline(
         ctx,
         body_style,

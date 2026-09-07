@@ -168,7 +168,7 @@ fn explicit_palette_enter_and_menu_command_preserve_text_undo_and_selection() {
     assert!(state.selected_shape_ids().is_empty());
 
     state.toggle_command_palette();
-    state.command_palette.query = "undo".into();
+    state.command_palette.set_query("undo");
     state.on_key_press_with_resources(resources, Key::Return);
     assert!(!state.command_palette_is_engaged());
     assert_restored(&state, id, &original, &measurer);

@@ -6,13 +6,10 @@
 
 use wayscriber::config::{Action, Shortcut, ShortcutTrigger};
 
-use super::conflicts::{
-    ShortcutClaim, claimants_for, field_has_internal_duplicate, other_claimants,
-};
+use super::analysis::ParsedShortcuts;
+use super::conflicts::ShortcutClaim;
 use super::draft::KeybindingsDraft;
-use super::edit::field_matches_defaults;
 use super::field::{KeybindingField, keybinding_fields, keybinding_tab};
-use super::parse::parse_keybindings;
 use crate::models::KeybindingsTabId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -122,6 +119,8 @@ pub struct ShortcutManagerRow {
     pub has_sequence: bool,
     pub has_unavailable: bool,
     pub parse_error: bool,
+    pub bindings: Result<Vec<Shortcut>, String>,
+    pub internal_conflict: bool,
 }
 
 impl ShortcutManagerRow {
@@ -153,10 +152,12 @@ pub struct ShortcutManagerSummary {
 
 impl ShortcutManagerSummary {
     pub fn from_drafts(draft: &KeybindingsDraft, defaults: &KeybindingsDraft) -> Self {
-        let contested = contested_fields(draft);
+        let parsed = ParsedShortcuts::new(draft);
+        let parsed_defaults = ParsedShortcuts::new(defaults);
+        let contested = contested_fields(&parsed);
         let rows = keybinding_fields()
             .into_iter()
-            .map(|field| row_for(draft, defaults, field, contested.contains(&field)))
+            .map(|field| row_for(&parsed, &parsed_defaults, field, contested.contains(&field)))
             .collect();
         Self { rows }
     }
@@ -220,15 +221,13 @@ pub fn next_review_conflict(
     Shortcut,
     Vec<super::conflicts::ShortcutClaim>,
 )> {
+    let analysis = ParsedShortcuts::new(draft);
     for field in keybinding_fields() {
-        let Some(value) = draft.value_for(field) else {
+        let Ok(parsed) = analysis.bindings(field) else {
             continue;
         };
-        let Ok(parsed) = parse_keybindings(value) else {
-            continue;
-        };
-        for binding in &parsed {
-            let mut claimants = other_claimants(draft, field, binding);
+        for binding in parsed {
+            let mut claimants = analysis.other_claimants(field, binding);
             if claimants.is_empty() {
                 let extras = parsed.iter().filter(|other| *other == binding).count();
                 if extras <= 1 {
@@ -243,16 +242,17 @@ pub fn next_review_conflict(
 }
 
 fn row_for(
-    draft: &KeybindingsDraft,
-    defaults: &KeybindingsDraft,
+    analysis: &ParsedShortcuts<'_>,
+    defaults: &ParsedShortcuts<'_>,
     field: KeybindingField,
     has_conflict: bool,
 ) -> ShortcutManagerRow {
-    let value = draft.value_for(field).unwrap_or_default();
-    let default_value = defaults.value_for(field).unwrap_or_default();
-    let parsed = parse_keybindings(value);
+    let draft = analysis.draft;
+    let default_value = defaults.draft.value_for(field).unwrap_or_default();
+    let parsed = analysis.bindings(field);
     let parse_error = parsed.is_err();
-    let changed = !field_matches_defaults(draft, defaults, field);
+    let changed =
+        !matches!((parsed, defaults.bindings(field)), (Ok(left), Ok(right)) if left == right);
     let (unbound, has_device, has_sequence, has_unavailable) = match &parsed {
         Ok(bindings) => flags_for_bindings(bindings),
         Err(_) => (false, false, false, false),
@@ -299,6 +299,10 @@ fn row_for(
         has_sequence,
         has_unavailable,
         parse_error,
+        bindings: parsed
+            .map(|bindings| bindings.to_vec())
+            .map_err(str::to_owned),
+        internal_conflict: analysis.has_internal_duplicate(field),
     }
 }
 
@@ -325,7 +329,7 @@ fn field_has_legacy_tablet(draft: &KeybindingsDraft, field: KeybindingField) -> 
         || draft.legacy_tablet.stylus_secondary == Some(action)
 }
 
-fn contested_fields(draft: &KeybindingsDraft) -> Vec<KeybindingField> {
+fn contested_fields(analysis: &ParsedShortcuts<'_>) -> Vec<KeybindingField> {
     let mut contested = Vec::new();
     let mut mark = |field: KeybindingField| {
         if !contested.contains(&field) {
@@ -333,26 +337,24 @@ fn contested_fields(draft: &KeybindingsDraft) -> Vec<KeybindingField> {
         }
     };
     for field in keybinding_fields() {
-        if field_has_internal_duplicate(draft, field) {
+        if analysis.has_internal_duplicate(field) {
             mark(field);
         }
-        let Some(value) = draft.value_for(field) else {
-            continue;
-        };
-        let Ok(parsed) = parse_keybindings(value) else {
+        let Ok(parsed) = analysis.bindings(field) else {
             continue;
         };
         for binding in parsed {
-            if !other_claimants(draft, field, &binding).is_empty() {
+            if !analysis.other_claimants(field, binding).is_empty() {
                 mark(field);
             }
         }
     }
-    mark_legacy_claimants(draft, &mut mark);
+    mark_legacy_claimants(analysis, &mut mark);
     contested
 }
 
-fn mark_legacy_claimants(draft: &KeybindingsDraft, mark: &mut impl FnMut(KeybindingField)) {
+fn mark_legacy_claimants(analysis: &ParsedShortcuts<'_>, mark: &mut impl FnMut(KeybindingField)) {
+    let draft = analysis.draft;
     for (action, name) in [
         (draft.legacy_tablet.stylus_primary, "StylusPrimary"),
         (draft.legacy_tablet.stylus_secondary, "StylusSecondary"),
@@ -363,7 +365,7 @@ fn mark_legacy_claimants(draft: &KeybindingsDraft, mark: &mut impl FnMut(Keybind
         let Ok(binding) = Shortcut::parse(name) else {
             continue;
         };
-        let claims = claimants_for(draft, &binding);
+        let claims = analysis.claimants(&binding);
         if claims.len() < 2 {
             continue;
         }

@@ -69,43 +69,13 @@ jobs:
           workspaces: |
             .
 
-      - name: Check version metadata
-        run: bash tools/check-version-consistency.sh
-
-      - name: Check package repository layout
-        run: bash tools/test-package-repo-layout.sh
-
-      - name: Check release packaging contract
-        run: bash tools/test-release-packaging.sh
-
       - name: Check dynamic gtk4-layer-shell linkage
         run: |
           cargo build --locked --bin wayscriber
           readelf -d target/debug/wayscriber | grep -Eq 'Shared library: \[libgtk4-layer-shell\.so'
 
-      - name: Check nixpkgs recipe dependencies
-        run: ./tools/check-nixpkgs-recipe.py
-
-      - name: Check Rust source coverage
-        run: ./tools/check-rust-source-coverage.py
-
-      - name: Check process spawn sites
-        run: ./tools/check-process-sites.py
-
-      - name: Check config writers
-        run: ./tools/check-config-writers.py
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
-
-      - name: cargo clippy (all features)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-      - name: cargo test (all features)
-        run: cargo test --workspace --all-features
-
-      - name: cargo test (no default features)
-        run: cargo test --workspace --no-default-features
+      - name: Run canonical workspace validation
+        run: ./tools/lint-and-test.sh
 
       - name: Check static gtk4-layer-shell linkage
         env:
@@ -128,6 +98,74 @@ jobs:
           name: wayscriber-code-health
           path: code-health-report.txt
           if-no-files-found: warn
+
+  gtk-widgets:
+    name: Required GTK widget contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            weston \
+            dbus-x11 \
+            fonts-dejavu-core \
+            build-essential \
+            pkg-config \
+            clang \
+            cmake \
+            libssl-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libdbus-1-dev \
+            libinput-dev \
+            libudev-dev \
+            libgtk-3-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            meson \
+            ninja-build \
+            wayland-protocols \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libpixman-1-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxcb-render0-dev \
+            libxcb-randr0-dev \
+            libxcb1-dev \
+            libx11-dev
+
+      - name: Build gtk4-layer-shell
+        # Build both forms privately: normal CI exercises the dynamic source
+        # build used by AUR/Nix, and a dedicated step checks release linkage.
+        run: |
+          GTK4_LAYER_SHELL_PREFIX="$RUNNER_TEMP/gtk4-layer-shell" \
+          GTK4_LAYER_SHELL_LIBRARY_MODE=both \
+            bash tools/install-gtk4-layer-shell.sh
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/gtk4-layer-shell/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/gtk4-layer-shell/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+
+      - name: Exercise widgets on an isolated display
+        run: ./tools/test-gtk-widgets.sh
 
   nix-flake:
     name: Nix flake

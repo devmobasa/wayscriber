@@ -123,12 +123,12 @@ fn config_draft_round_trips_text_halo_preference() {
 fn config_draft_round_trips_region_capture_settings() {
     let config = Config::default();
     let mut draft = ConfigDraft::from_config(&config);
-    assert_eq!(draft.capture_region_picker, RegionPickerOption::Native);
-    assert!(draft.capture_region_show_size_readout);
-    assert!(!draft.capture_region_show_loupe);
-    assert!(draft.capture_region_show_legend);
+    assert_eq!(draft.capture.region_picker, RegionPickerOption::Native);
+    assert!(draft.capture.region_show_size_readout);
+    assert!(!draft.capture.region_show_loupe);
+    assert!(draft.capture.region_show_legend);
 
-    draft.capture_region_picker = RegionPickerOption::Slurp;
+    draft.capture.region_picker = RegionPickerOption::Slurp;
     draft.set_toggle(ToggleField::CaptureRegionShowSizeReadout, false);
     draft.set_toggle(ToggleField::CaptureRegionShowLoupe, true);
     draft.set_toggle(ToggleField::CaptureRegionShowLegend, false);
@@ -219,7 +219,7 @@ fn blank_font_cycle_entries_are_dropped_on_save() {
 fn config_draft_round_trips_capture_drawing_preference() {
     let config = Config::default();
     let mut draft = ConfigDraft::from_config(&config);
-    assert!(draft.capture_include_drawings);
+    assert!(draft.capture.include_drawings);
 
     draft.set_toggle(ToggleField::CaptureIncludeDrawings, false);
     let round_trip = draft
@@ -266,7 +266,7 @@ fn config_draft_to_config_rejects_out_of_range_numbers() {
     let mut draft = ConfigDraft::from_config(&Config::default());
     draft.drawing_default_thickness = "99".to_string();
     draft.arrow_angle = "90".to_string();
-    draft.history_undo_all_delay_ms = "1".to_string();
+    draft.history.undo_all_delay_ms = "1".to_string();
 
     let errors = draft
         .to_config(&Config::default())
@@ -281,8 +281,8 @@ fn config_draft_to_config_rejects_out_of_range_numbers() {
 #[test]
 fn config_draft_rejects_path_escaping_save_names() {
     let mut draft = ConfigDraft::from_config(&Config::default());
-    draft.capture_filename_template = "../evil_%Y".to_string();
-    draft.capture_format = "png/../../x".to_string();
+    draft.capture.filename_template = "../evil_%Y".to_string();
+    draft.capture.format = "png/../../x".to_string();
     draft.export_pdf_filename_template = "foo/bar".to_string();
 
     let errors = draft

@@ -84,7 +84,8 @@ impl CaptureSession {
 impl FrozenState {
     /// Start a screencopy capture for the active output.
     pub fn start_capture(&mut self) -> Result<()> {
-        if self.direct_capture.is_some() || self.portal_in_progress || self.preflight.is_pending() {
+        if self.direct_capture.is_some() || self.portal.is_running() || self.preflight.is_pending()
+        {
             warn!("Frozen-mode capture already in progress; ignoring toggle");
             return Ok(());
         }

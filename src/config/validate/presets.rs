@@ -1,6 +1,6 @@
 use super::Config;
+use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides};
-use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 use super::super::types::{PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, ToolPresetConfig};
 

@@ -1,7 +1,7 @@
 use super::Config;
 use crate::config::types::DEFAULT_HIT_TEST_TOLERANCE;
+use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
-use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 impl Config {
     pub(super) fn validate_drawing(&mut self) {

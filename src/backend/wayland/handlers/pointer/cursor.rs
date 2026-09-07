@@ -279,7 +279,7 @@ impl WaylandState {
         {
             return Some(hint.icon());
         }
-        if self.input_state.command_palette.open
+        if self.input_state.command_palette.is_open()
             && let Some(hint) = self.input_state.command_palette_cursor_hint_at(
                 mx,
                 my,

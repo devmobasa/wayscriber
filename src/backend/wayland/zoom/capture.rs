@@ -126,7 +126,7 @@ impl ZoomState {
             self.source_terminal.is_none(),
             "a zoom capture terminal is still pending"
         );
-        if self.capture.is_some() || self.portal_in_progress || self.preflight.is_pending() {
+        if self.capture.is_some() || self.portal.is_running() || self.preflight.is_pending() {
             warn!("Zoom capture already in progress; ignoring request");
             return Ok(());
         }
@@ -474,7 +474,7 @@ mod tests {
             .expect("queue portal zoom capture");
 
         assert!(state.preflight_pending());
-        assert!(!state.portal_in_progress);
+        assert!(!state.portal.is_running());
         assert_eq!(state.take_preflight_pending(), Some(true));
     }
 

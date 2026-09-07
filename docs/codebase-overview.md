@@ -1,6 +1,6 @@
-# Wayscriber Codebase Overview (Except Configurator)
+# Wayscriber Codebase Overview
 
-This document explains how the application boots, how user input travels through the system, and how the major modules fit together. Use it as a map when adding features or debugging. The configurator binary lives in `configurator/` and is intentionally excluded here.
+This document explains how the application boots, how user input travels through the system, and how the major modules fit together. Use it as a map when adding features or debugging. The configurator binary lives in `configurator/`; its [workflow map](../configurator/README.md#workflow-ownership) covers GTK bindings, messages, updates, jobs, and document saves.
 
 ---
 
@@ -26,7 +26,7 @@ This document explains how the application boots, how user input travels through
 
 ## 2. Daemon Mode Lifecycle
 
-**Modules:** `src/daemon/` (control, core, overlay, tray, shortcuts, and setup), plus the public
+**Modules:** `src/daemon/` (control, core, overlay, tray, shortcuts, and setup), plus the internal
 backend entry in `src/backend/mod.rs`.
 
 1. The app creates the authenticated process broker before any singleton lock. `Daemon::run` then
@@ -58,7 +58,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
 ## 3. Active Mode / Wayland Backend
 
 **Modules:**
-- `src/backend/mod.rs`: exported API (`run_wayland`)
+- `src/backend/mod.rs`: internal runtime entry (`run_wayland`); the public application facade is `wayscriber::run_from_env()`
 - `src/backend/wayland/backend/`: high-level bootstrap, setup, and event loop
 - `src/backend/wayland/state.rs`: runtime state (surfaces, buffers, runtime handles)
 - `src/backend/wayland/handlers/`: Smithay trait implementations and protocol handlers
@@ -270,8 +270,11 @@ phase. Their backend selection policies and acquisition identities remain separa
   retaining GTK sizing, CSS, updater closures, drag gestures, and popover lifecycle.
 - Shape-picker compound rows remain frontend-specific adapters over the shared top model. Canvas,
   Session, and Settings live in top popovers built from the same shared models; there is no side
-  palette layout path. The [toolbar item ID compatibility inventory](toolbar-item-id-compatibility.md)
-  records which historical `side.*` serialized IDs still feed those models.
+  palette layout path. Retained historical `side.*` IDs are defined in
+  [`ids.rs`](../src/config/types/toolbar/ids.rs) and
+  [`items/definitions.rs`](../src/config/types/toolbar/items/definitions.rs).
+  Changes to their serialized spellings require compatibility review and updates to the
+  owning model tests.
 
 ---
 
@@ -604,3 +607,52 @@ capture suppression operates on the paired resources without runtime pairing che
 8. **Config** module ensures user preferences are honored everywhere.
 
 Use this document to trace any feature: locate the entry point (CLI, tray, keybinding), follow it through the backend/input/capture stacks, and consult the relevant modules listed above for details.
+
+
+## Operation traces and validation
+
+A selected-shape edit captures originals through [CanvasEdit](../src/input/state/core/editing.rs).
+Motion may update the preview, but commit records one compound undo action for the gesture.
+The resulting edit effects invalidate the affected drawing regions and mark the session dirty.
+Undo/redo restores the grouped shapes; session snapshot capture later copies the configured
+history retention without mutating the live frame. Rendering and persistence are separate effects.
+
+`Frame::shapes` uses `FrameShapes`, whose mutable borrows advance a runtime content token.
+Read-only access leaves the token unchanged; cloned frames diverge on their next mutation.
+The serialized shape array is unchanged. `Frame::content_revision()` covers shape edits,
+previews, rollback and history application. View offsets and board backgrounds are separate
+render inputs.
+
+The UI render owner retains up to 24 page-content rasters and 16 MiB of raster/backdrop bytes.
+Keys include content, view, background, target geometry and scale, text halo, font-map serial,
+Cairo settings, and the exact card pixels beneath transparent content. Removed page content is
+pruned when the picker prepares a frame. Partial clips, unsupported targets, oversized cards,
+and solid pages with magnified Spotlights use direct replay. Magnifiers need the original target's
+sampling area beyond the card; transparent pages only show a magnification label and remain
+cacheable. Hover controls, labels and selection borders remain live. Pixel tests compare
+fresh and reused rasters with direct replay; fractional-scale Spotlight gradients allow at most
+one byte of rounding on less than 0.1% of channels.
+
+The command palette owns search freshness, result preparation, selection reconciliation and
+repeat timing. Idle repeat ticks do no row preparation. A one-row viewport omits headings;
+when no row fits, Enter does not execute an invisible command. GTK toolbar sliders retain arrow
+and endpoint keys; Escape releases a top-level slider to the canvas or dismisses its popover.
+
+
+Capture crosses [CapturePreflight](../src/backend/wayland/capture_preflight.rs), which coordinates
+suppression and the capture barrier before acquisition. Freeze and zoom own their pending portal
+operation, task result, deadline, and restore state in [frozen/](../src/backend/wayland/frozen/)
+and [zoom/](../src/backend/wayland/zoom/). Cancellation, task failure, and stale output geometry
+restore or reject the operation through those owners; a late result does not activate a newer request.
+The backend owns protocol and surface effects, while capture/export owners handle delivery.
+
+A configurator save follows the [document workflow trace](../configurator/README.md#workflow-ownership).
+Its editable draft is distinct from the guarded source document and from a durable write in flight.
+Raw invalid editor input remains visible and must be resolved before saving.
+
+Use `./tools/lint-and-test.sh` for package/source checks, formatting, linting, binary builds,
+and tests under both workspace feature configurations. Required GTK widget coverage is
+`./tools/test-gtk-widgets.sh`. For the native font crash, use the separate reproducer in
+[tools/diagnostics](../tools/diagnostics/); a passing application suite or serial run does not
+establish a native-library fix. Live Wayland focus, layer-shell, capture, and installed-binary
+checks remain separate from these automated checks.

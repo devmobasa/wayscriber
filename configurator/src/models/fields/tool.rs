@@ -1,5 +1,5 @@
 use wayscriber::config::ColorSpec;
-use wayscriber::input::{DragBindableTool, DragTool, Tool};
+use wayscriber::domain::{DragBindableTool, DragTool, Tool};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DragMouseButton {

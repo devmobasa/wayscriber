@@ -5,8 +5,8 @@ use super::super::super::fields::{
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    RegionPickerOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -106,13 +106,7 @@ impl ConfigDraft {
             arrow_head_at_end: config.arrow.head_at_end,
             arrow_style: ArrowStyleOption::from_style(config.arrow.style),
 
-            history_undo_all_delay_ms: config.history.undo_all_delay_ms.to_string(),
-            history_redo_all_delay_ms: config.history.redo_all_delay_ms.to_string(),
-            history_custom_section_enabled: config.history.custom_section_enabled,
-            history_custom_undo_delay_ms: config.history.custom_undo_delay_ms.to_string(),
-            history_custom_redo_delay_ms: config.history.custom_redo_delay_ms.to_string(),
-            history_custom_undo_steps: config.history.custom_undo_steps.to_string(),
-            history_custom_redo_steps: config.history.custom_redo_steps.to_string(),
+            history: super::super::history::HistoryDraft::from_config(&config.history),
 
             performance_buffer_count: config.performance.buffer_count,
             performance_enable_vsync: config.performance.enable_vsync,
@@ -249,18 +243,7 @@ impl ConfigDraft {
 
             render_profiles: RenderProfilesDraft::from_config(config),
 
-            capture_enabled: config.capture.enabled,
-            capture_save_directory: config.capture.save_directory.clone(),
-            capture_filename_template: config.capture.filename_template.clone(),
-            capture_format: config.capture.format.clone(),
-            capture_copy_to_clipboard: config.capture.copy_to_clipboard,
-            capture_include_drawings: config.capture.include_drawings,
-            capture_exit_after: config.capture.exit_after_capture,
-            capture_ocr_languages: config.capture.ocr_languages.clone(),
-            capture_region_picker: RegionPickerOption::from_picker(config.capture.region.picker),
-            capture_region_show_size_readout: config.capture.region.show_size_readout,
-            capture_region_show_loupe: config.capture.region.show_loupe,
-            capture_region_show_legend: config.capture.region.show_legend,
+            capture: super::super::capture::CaptureDraft::from_config(&config.capture),
             export_pdf_filename_template: config
                 .export
                 .pdf

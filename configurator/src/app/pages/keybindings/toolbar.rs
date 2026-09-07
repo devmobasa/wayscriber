@@ -14,6 +14,7 @@ use super::widgets::{connect_clicked, set_accessible_label, set_sensitive, set_v
 pub(super) fn build_chrome(
     sender: &ComponentSender<ConfiguratorApp>,
     bindings: &mut Vec<Binding>,
+    refresh: super::row::ManagerRefresh,
 ) -> gtk::Box {
     let chrome = gtk::Box::new(gtk::Orientation::Vertical, 8);
     chrome.set_margin_top(8);
@@ -22,7 +23,7 @@ pub(super) fn build_chrome(
 
     chrome.append(&category_bar(sender, bindings));
     chrome.append(&filter_bar(sender, bindings));
-    chrome.append(&actions_bar(sender, bindings));
+    chrome.append(&actions_bar(sender, bindings, refresh));
     chrome.append(&reset_banner(sender, bindings));
     chrome
 }
@@ -90,7 +91,11 @@ fn filter_bar(
     filters
 }
 
-fn actions_bar(sender: &ComponentSender<ConfiguratorApp>, bindings: &mut Vec<Binding>) -> gtk::Box {
+fn actions_bar(
+    sender: &ComponentSender<ConfiguratorApp>,
+    bindings: &mut Vec<Binding>,
+    refresh: super::row::ManagerRefresh,
+) -> gtk::Box {
     let labels: Vec<&str> = ShortcutManagerSort::ALL
         .iter()
         .map(|sort| sort.title())
@@ -136,7 +141,11 @@ fn actions_bar(sender: &ComponentSender<ConfiguratorApp>, bindings: &mut Vec<Bin
         if sort_for_bind.selected() != selected {
             sort_for_bind.set_selected(selected);
         }
-        let visible_empty = app.visible_keybinding_fields().is_empty();
+        let refresh = refresh.borrow();
+        let Some((summary, visible)) = refresh.as_ref() else {
+            return;
+        };
+        let visible_empty = visible.is_empty();
         let reset_armed = app.shortcut_reset_visible_pending() || app.shortcut_reset_all_pending();
         set_visible(&reset_visible, !reset_armed);
         set_visible(&reset_all, !reset_armed);
@@ -150,7 +159,7 @@ fn actions_bar(sender: &ComponentSender<ConfiguratorApp>, bindings: &mut Vec<Bin
         );
         set_sensitive(
             &review,
-            app.shortcut_manager_summary().has_conflicts() && app.shortcuts.conflict().is_none(),
+            summary.has_conflicts() && app.shortcuts.conflict().is_none(),
         );
     }));
     row

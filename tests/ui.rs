@@ -130,8 +130,8 @@ fn render_command_palette_with_query_draws_content() {
     // and draw pixels (highlight boxes + rows).
     let (mut surface, ctx) = surface_with_context(900, 700);
     let mut input = make_input_state();
-    input.command_palette.open = true;
-    input.command_palette.query = "tool".to_string();
+    input.command_palette.open();
+    input.command_palette.set_query("tool".to_string());
 
     wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
 
@@ -369,4 +369,29 @@ fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
         Some(HelpOverlayRegion::Row(Action::OpenAbout)),
         "another paint must not replace the owned result"
     );
+}
+
+#[test]
+fn small_palette_surface_and_shadow_fit_the_screen() {
+    // These samples are away from glyphs, so native font rasterization does
+    // not hide a panel-size regression behind a platform-specific image diff.
+    for (width, height) in [(800, 480), (1024, 600), (1280, 720)] {
+        let mut input = make_input_state();
+        input.update_screen_dimensions(width, height);
+        input.command_palette.open();
+        let (x, y, panel_width, panel_height) =
+            wayscriber::ui::command_palette_visual_geometry(&input, width, height).unwrap();
+        assert!(x >= 0.0 && y >= 0.0);
+        assert!(x + panel_width <= width as f64);
+        assert!(y + panel_height <= height as f64);
+        let (mut surface, ctx) = surface_with_context(width as i32, height as i32);
+        wayscriber::ui::render_command_palette(&ctx, &input, width, height);
+        drop(ctx);
+        let dimmer = alpha_at(&mut surface, 0, 0);
+        let panel = alpha_at(&mut surface, (x + 20.0) as i32, (y + 20.0) as i32);
+        assert!(
+            panel > dimmer + 80,
+            "panel must remain distinct from its dimmer"
+        );
+    }
 }

@@ -421,7 +421,7 @@ fn opening_the_command_palette_routes_help_close_through_the_canonical_closer() 
     state.toggle_command_palette();
 
     assert!(!state.help_overlay.visible);
-    assert!(state.command_palette.open);
+    assert!(state.command_palette.is_open());
     assert_eq!(state.help_overlay.region_at(150.0, 215.0), None);
 }
 

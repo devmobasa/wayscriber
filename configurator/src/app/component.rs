@@ -64,6 +64,10 @@ pub(crate) fn run(startup: StartupRequest) {
 pub(crate) struct AppWidgets {
     window_title: adw::WindowTitle,
     status_label: gtk::Label,
+    leave_actions: gtk::Box,
+    leave_cancel: gtk::Button,
+    root: adw::ApplicationWindow,
+    leave_previous_focus: Option<gtk::Widget>,
     status_revealer: gtk::Revealer,
     migration_revealer: gtk::Revealer,
     migration_label: gtk::Label,
@@ -108,16 +112,16 @@ impl Component for ConfiguratorApp {
     ) -> ComponentParts<Self> {
         let (model, effects) = ConfiguratorApp::new_app_with_startup(startup);
         for effect in effects {
-            spawn_effect(effect, &sender);
+            spawn_effect(effect, &sender, &root);
         }
 
         let widgets = shell::build(&root, &sender);
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Message, sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update(&mut self, message: Message, sender: ComponentSender<Self>, root: &Self::Root) {
         for effect in self.update_message(message) {
-            spawn_effect(effect, &sender);
+            spawn_effect(effect, &sender, root);
         }
     }
 
@@ -125,10 +129,10 @@ impl Component for ConfiguratorApp {
         &mut self,
         message: Self::CommandOutput,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         for effect in self.update_command(message) {
-            spawn_effect(effect, &sender);
+            spawn_effect(effect, &sender, root);
         }
     }
 

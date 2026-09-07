@@ -239,7 +239,7 @@ fn advance_post_dispatch_state(
 
 fn persist_post_dispatch_state(state: &mut WaylandState) {
     if state.input_state.command_palette_recents_dirty() {
-        let recents = state.input_state.command_palette.recent.clone();
+        let recents = state.input_state.command_palette.recents().to_vec();
         if state.preferences.palette_recents_mut().request(&recents) {
             state.input_state.clear_command_palette_recents_dirty();
         }

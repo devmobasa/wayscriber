@@ -11,7 +11,7 @@ std::thread_local! {
 #[derive(Debug, Clone, Serialize)]
 pub struct Frame {
     #[serde(with = "frame_storage")]
-    pub shapes: Vec<DrawnShape>,
+    pub shapes: super::FrameShapes,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_name: Option<String>,
     #[serde(default, skip_serializing_if = "is_origin_offset")]
@@ -39,7 +39,7 @@ impl Frame {
     /// Creates a new empty frame.
     pub fn new() -> Self {
         Self {
-            shapes: Vec::new(),
+            shapes: super::FrameShapes::default(),
             page_name: None,
             view_offset: (0, 0),
             undo_stack: Vec::new(),
@@ -69,6 +69,20 @@ impl Frame {
         frame.page_name = self.page_name.clone();
         frame.view_offset = self.view_offset;
         frame.rebuild_next_id();
+        frame
+    }
+
+    /// Copy exactly the newest undo/redo entries retained by clamp_history_depth,
+    /// without first allocating copies of discarded actions or their payloads.
+    pub fn clone_with_history_limit(&self, limit: usize) -> Self {
+        if limit == usize::MAX {
+            return self.clone();
+        }
+        let mut frame = self.clone_without_history();
+        frame.next_shape_id = self.next_shape_id;
+        frame.shape_order_generation = self.shape_order_generation;
+        frame.undo_stack = self.undo_stack[self.undo_stack.len().saturating_sub(limit)..].to_vec();
+        frame.redo_stack = self.redo_stack[self.redo_stack.len().saturating_sub(limit)..].to_vec();
         frame
     }
 
@@ -114,6 +128,11 @@ impl Frame {
             || self.page_name.is_some()
             || self.view_offset != (0, 0)
             || (history_limit > 0 && (!self.undo_stack.is_empty() || !self.redo_stack.is_empty()))
+    }
+
+    /// Runtime token for the shape content; view/background are separate cache inputs.
+    pub fn content_revision(&self) -> u64 {
+        self.shapes.revision()
     }
 
     pub fn view_offset(&self) -> (i32, i32) {

@@ -8,7 +8,11 @@ use super::AppWidgets;
 
 pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     // Header chrome.
-    let subtitle = if app.is_dirty { "Unsaved changes" } else { "" };
+    let subtitle = if app.has_unsaved_work() {
+        "Unsaved changes"
+    } else {
+        ""
+    };
     if widgets.window_title.subtitle() != subtitle {
         widgets.window_title.set_subtitle(subtitle);
     }
@@ -18,12 +22,16 @@ pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     let save_enabled = app.is_dirty
         && !app.document.is_saving()
         && !app.document.is_loading()
-        && app.invalid_color_hex_count() == 0
-        && app.shortcuts.conflict().is_none();
+        && !app.has_unresolved_editor();
     if widgets.save_button.is_sensitive() != save_enabled {
         widgets.save_button.set_sensitive(save_enabled);
     }
-    let busy = app.document.is_loading() || app.document.is_saving();
+    let busy = !app.document.allows_editing();
+    widgets.stack.set_sensitive(!busy);
+    widgets.defaults_button.set_sensitive(!busy);
+    widgets.defaults_confirm_button.set_sensitive(!busy);
+    widgets.defaults_cancel_button.set_sensitive(!busy);
+    widgets.migration_revealer.set_sensitive(!busy);
     if widgets.reload_button.is_sensitive() == busy {
         widgets.reload_button.set_sensitive(!busy);
     }
@@ -48,6 +56,21 @@ pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
         // Cancel and Confirm both remove the answer controls. Return the
         // keyboard user to the action that owns this header location.
         widgets.defaults_button.grab_focus();
+    }
+
+    let leave_pending = app.pending_leave().is_some();
+    let leave_was_pending = widgets.leave_actions.get_visible();
+    if leave_pending && !leave_was_pending {
+        widgets.leave_previous_focus = gtk::prelude::GtkWindowExt::focus(&widgets.root);
+    }
+    set_visible(&widgets.leave_actions, leave_pending);
+    if leave_pending && !leave_was_pending {
+        widgets.leave_cancel.grab_focus();
+    } else if !leave_pending
+        && leave_was_pending
+        && let Some(previous) = widgets.leave_previous_focus.take()
+    {
+        previous.grab_focus();
     }
 
     // Status strip.

@@ -30,11 +30,8 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let refresh: ManagerRefresh = Rc::new(RefCell::new(None));
     {
         let refresh = refresh.clone();
-        bindings.push(Box::new(move |app, _summary| {
-            *refresh.borrow_mut() = Some((
-                app.shortcut_manager_summary(),
-                app.visible_keybinding_fields(),
-            ));
+        bindings.push(Box::new(move |app, search| {
+            *refresh.borrow_mut() = Some(app.prepare_shortcut_manager_refresh(search));
         }));
     }
 
@@ -113,7 +110,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     }
 
     let conflict = conflict_banner(sender, &mut bindings);
-    let chrome = build_chrome(sender, &mut bindings);
+    let chrome = build_chrome(sender, &mut bindings, refresh);
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.append(&chrome);

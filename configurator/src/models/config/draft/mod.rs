@@ -7,8 +7,8 @@ use super::super::fields::{
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    RegionPickerOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -69,13 +69,7 @@ pub struct ConfigDraft {
     pub arrow_head_at_end: bool,
     pub arrow_style: ArrowStyleOption,
 
-    pub history_undo_all_delay_ms: String,
-    pub history_redo_all_delay_ms: String,
-    pub history_custom_section_enabled: bool,
-    pub history_custom_undo_delay_ms: String,
-    pub history_custom_redo_delay_ms: String,
-    pub history_custom_undo_steps: String,
-    pub history_custom_redo_steps: String,
+    pub history: super::history::HistoryDraft,
 
     pub performance_buffer_count: u32,
     pub performance_enable_vsync: bool,
@@ -185,18 +179,7 @@ pub struct ConfigDraft {
 
     pub render_profiles: RenderProfilesDraft,
 
-    pub capture_enabled: bool,
-    pub capture_save_directory: String,
-    pub capture_filename_template: String,
-    pub capture_format: String,
-    pub capture_copy_to_clipboard: bool,
-    pub capture_include_drawings: bool,
-    pub capture_exit_after: bool,
-    pub capture_ocr_languages: String,
-    pub capture_region_picker: RegionPickerOption,
-    pub capture_region_show_size_readout: bool,
-    pub capture_region_show_loupe: bool,
-    pub capture_region_show_legend: bool,
+    pub capture: super::capture::CaptureDraft,
     pub export_pdf_filename_template: String,
     pub export_pdf_all_boards_filename_template: String,
     pub export_pdf_page_size: PdfPageSizeOption,

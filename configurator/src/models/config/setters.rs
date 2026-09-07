@@ -259,15 +259,15 @@ impl ConfigDraft {
             ToggleField::BoardsPersistCustomizations => {
                 self.boards.persist_customizations = value;
             }
-            ToggleField::CaptureEnabled => self.capture_enabled = value,
-            ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
-            ToggleField::CaptureIncludeDrawings => self.capture_include_drawings = value,
-            ToggleField::CaptureExitAfter => self.capture_exit_after = value,
+            ToggleField::CaptureEnabled => self.capture.enabled = value,
+            ToggleField::CaptureCopyToClipboard => self.capture.copy_to_clipboard = value,
+            ToggleField::CaptureIncludeDrawings => self.capture.include_drawings = value,
+            ToggleField::CaptureExitAfter => self.capture.exit_after = value,
             ToggleField::CaptureRegionShowSizeReadout => {
-                self.capture_region_show_size_readout = value;
+                self.capture.region_show_size_readout = value;
             }
-            ToggleField::CaptureRegionShowLoupe => self.capture_region_show_loupe = value,
-            ToggleField::CaptureRegionShowLegend => self.capture_region_show_legend = value,
+            ToggleField::CaptureRegionShowLoupe => self.capture.region_show_loupe = value,
+            ToggleField::CaptureRegionShowLegend => self.capture.region_show_legend = value,
             ToggleField::ExportPdfLabelsEnabled => self.export_pdf_labels_enabled = value,
             ToggleField::ExportPdfLabelBackgroundEnabled => {
                 self.export_pdf_label_background_enabled = value;
@@ -294,7 +294,7 @@ impl ConfigDraft {
                 self.session_autosave_enabled = value;
             }
             ToggleField::HistoryCustomSectionEnabled => {
-                self.history_custom_section_enabled = value;
+                self.history.custom_section_enabled = value;
             }
             ToggleField::ArrowHeadAtEnd => {
                 self.arrow_head_at_end = value;
@@ -351,12 +351,12 @@ impl ConfigDraft {
             TextField::PerformanceUiAnimationFps => {
                 self.set_performance_text(PerformanceFieldId::UiAnimationFps, value);
             }
-            TextField::HistoryUndoAllDelayMs => self.history_undo_all_delay_ms = value,
-            TextField::HistoryRedoAllDelayMs => self.history_redo_all_delay_ms = value,
-            TextField::HistoryCustomUndoDelayMs => self.history_custom_undo_delay_ms = value,
-            TextField::HistoryCustomRedoDelayMs => self.history_custom_redo_delay_ms = value,
-            TextField::HistoryCustomUndoSteps => self.history_custom_undo_steps = value,
-            TextField::HistoryCustomRedoSteps => self.history_custom_redo_steps = value,
+            TextField::HistoryUndoAllDelayMs => self.history.undo_all_delay_ms = value,
+            TextField::HistoryRedoAllDelayMs => self.history.redo_all_delay_ms = value,
+            TextField::HistoryCustomUndoDelayMs => self.history.custom_undo_delay_ms = value,
+            TextField::HistoryCustomRedoDelayMs => self.history.custom_redo_delay_ms = value,
+            TextField::HistoryCustomUndoSteps => self.history.custom_undo_steps = value,
+            TextField::HistoryCustomRedoSteps => self.history.custom_redo_steps = value,
             TextField::UiPreferredOutput => self.ui_preferred_output = value,
             TextField::StatusFontSize => self.status_font_size = value,
             TextField::StatusPadding => self.status_padding = value,
@@ -376,10 +376,10 @@ impl ConfigDraft {
             TextField::UiCommandPaletteToastDurationMs => {
                 self.ui_command_palette_toast_duration_ms = value
             }
-            TextField::CaptureSaveDirectory => self.capture_save_directory = value,
-            TextField::CaptureFilename => self.capture_filename_template = value,
-            TextField::CaptureFormat => self.capture_format = value,
-            TextField::CaptureOcrLanguages => self.capture_ocr_languages = value,
+            TextField::CaptureSaveDirectory => self.capture.save_directory = value,
+            TextField::CaptureFilename => self.capture.filename_template = value,
+            TextField::CaptureFormat => self.capture.format = value,
+            TextField::CaptureOcrLanguages => self.capture.ocr_languages = value,
             TextField::ExportPdfFilenameTemplate => self.export_pdf_filename_template = value,
             TextField::ExportPdfAllBoardsFilenameTemplate => {
                 self.export_pdf_all_boards_filename_template = value

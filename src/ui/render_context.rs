@@ -7,6 +7,7 @@ use super::theme::Theme;
 pub(crate) struct UiRenderCaches {
     help: HelpLayoutCache,
     radial: RadialBaseCache,
+    pub(crate) thumbnails: super::board_picker::ThumbnailCache,
 }
 
 impl UiRenderCaches {

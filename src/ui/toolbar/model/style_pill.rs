@@ -32,6 +32,8 @@ use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnap
 use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};
 
 mod control;
+mod slider;
+pub(crate) use slider::StylePillSlider;
 
 /// Morph state of the style pill, derived from the active tool's options
 /// kind. `Hidden` covers Select without a selection plus the
@@ -86,19 +88,15 @@ pub(crate) enum StylePillControl {
     QuickSwatch(usize),
     /// Thickness/size slider. The snapshot's `thickness` already targets
     /// the eraser or marker size when those are active.
-    ThicknessSlider,
+    Slider(StylePillSlider),
     /// Live thickness numeral; clicking opens the precise-entry popup.
     ThicknessValue,
-    /// Marker opacity slider.
-    OpacitySlider,
     /// Pen/marker smoothing, as a −/value/+ stepper.
     ///
     /// A stepper rather than a slider: the range is seven whole passes, which
     /// on a 110px track is 18px of travel per step and fiddly to land on. It
     /// also keeps the pill from reading as a row of near-identical bars.
     PenSmoothingStepper,
-    /// Spotlight magnification slider.
-    SpotlightMagnificationSlider,
     /// Shape fill toggle.
     FillToggle,
     /// Arrow style cycle button, showing the style the next arrow will use.
@@ -110,8 +108,6 @@ pub(crate) enum StylePillControl {
     AutoNumberToggle,
     /// Reset the arrow/step counter; tooltip carries the next number.
     CounterReset(StylePillCounter),
-    /// Text size slider.
-    FontSizeSlider,
     /// Live text-size numeral; clicking opens the precise-entry popup.
     FontSizeValue,
     /// Bold on/off for selected text, or for the next label when no text is
@@ -268,17 +264,19 @@ impl StylePillSpec {
             }
         }
         if context.needs_thickness {
-            controls.push(StylePillControl::ThicknessSlider);
+            controls.push(StylePillControl::Slider(StylePillSlider::Thickness));
             controls.push(StylePillControl::ThicknessValue);
         }
         if context.show_marker_opacity {
-            controls.push(StylePillControl::OpacitySlider);
+            controls.push(StylePillControl::Slider(StylePillSlider::Opacity));
         }
         if context.show_pen_smoothing && !plan.drop_style_extras {
             controls.push(StylePillControl::PenSmoothingStepper);
         }
         if context.tool_options_kind == ToolOptionsKind::Spotlight {
-            controls.push(StylePillControl::SpotlightMagnificationSlider);
+            controls.push(StylePillControl::Slider(
+                StylePillSlider::SpotlightMagnification,
+            ));
         }
         if context.show_fill_toggle {
             controls.push(StylePillControl::FillToggle);
@@ -296,7 +294,7 @@ impl StylePillSpec {
             controls.push(StylePillControl::CounterReset(StylePillCounter::Step));
         }
         if context.show_font_controls {
-            controls.push(StylePillControl::FontSizeSlider);
+            controls.push(StylePillControl::Slider(StylePillSlider::FontSize));
             controls.push(StylePillControl::FontSizeValue);
             if !plan.drop_style_extras {
                 controls.push(StylePillControl::FontWeightToggle);

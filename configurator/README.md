@@ -25,9 +25,9 @@ cd configurator
 cargo run
 ```
 
-The configurator renders through GTK 4 and libadwaita. It does not compile the
-overlay's GPU renderer or the portal D-Bus implementation into the configurator
-binary.
+The configurator renders through GTK 4 and libadwaita. The overlay paints with Cairo
+into Wayland shared-memory buffers. The configurator depends on the core crate with
+`default-features = false`, so it does not enable the optional portal or tray runtime.
 
 The window loads the current config, lets you tweak values across the tabbed sections, and writes
 changes back through the guarded `ConfigDocument` save interface when you press Save. Loading,
@@ -65,7 +65,7 @@ if its UI task is no longer observed.
 
 ### Handy actions
 
-- **Reload** – re-read `config.toml` from disk and refresh the guarded source revision. A transient load error leaves the last good document and current draft in place.
+- **Reload** – asks you to Save, Discard, or Cancel if there are unsaved changes, including unfinished color or shortcut input. Closing the window uses the same choice. Save must succeed before the requested reload or close continues. Re-read `config.toml` from disk and refresh the guarded source revision. A transient load error leaves the last good document and current draft in place.
 - **Configuration update available** – shown when the file's `config_revision` predates this build's keybinding defaults. The banner lists every proposed shortcut change as before → after; **Apply Update** edits the draft only, and **Dismiss** hides the offer for this run. Nothing reaches disk until you Save, and saving an unrelated setting without applying leaves both the old bindings and the old revision on disk.
 - **Defaults** – drop in the built-in defaults without saving. Pressing it asks first: **Confirm Defaults** replaces the draft and **Cancel** withdraws the question, and editing anything withdraws it too. Pressing **Defaults** again changes nothing.
 - **Save** – validate inputs (including numeric ranges and color arrays), merge known changes into the source TOML, and write it atomically. An existing file is backed up with a timestamp. Save is refused if the file was created, deleted, retargeted through a symlink, or changed byte-for-byte after loading; reload before retrying. If a readable file cannot be parsed, the configurator offers a warning-marked defaults-based repair draft and backs up the unreadable source before saving it. Unknown settings are retained only when the TOML structure is parseable and safely separable; malformed content remains in the backup.
@@ -78,7 +78,7 @@ if its UI task is no longer observed.
 - **Default color** – toggle between named colors and custom RGB triples.
 - **Keybindings** – a bulk shortcut manager over the same per-action chips, recorder, and conflict flow. Filter by All / Changed / Conflicts / Unbound / Device / Sequences, sort by category, name, or changed status, and reset visible or all keybindings with confirmation (draft-only until Save). Review Conflicts walks each collision without picking a winner. `--open keybindings/<section>?search=...` still opens that category and now selects the matching action. Press-to-bind recording covers keys, auxiliary mouse buttons, and stylus barrel buttons, plus **Record Sequence** for two- or three-chord keyboard sequences (`Ctrl+K then Ctrl+C`). Per-row reset and a raw comma-separated text editor remain available (`F5, Ctrl+K > Ctrl+C`). Super/Meta chords record when the desktop delivers them. Legacy `[tablet.stylus_button]` assignments can be moved into the keybinding list with an explicit confirmation. Source badges mark Default, Authored, Legacy Tablet, and Unavailable shortcuts.
 - **Session** – persistence settings plus named-session catalog management. Rename display labels, reveal files, and forget metadata without touching files. Clear Tool State preserves boards/history while removing persisted tool defaults. Duplicate, Move, Clear Tool State, and Clear are disabled while an overlay, manually started daemon, or background service is active.
-- Live dirty-state indicator plus status banner for success/error details.
+- Live dirty-state indicator plus status banner for success/error details. Editing is temporarily disabled during loading and saving; failed operations restore editing and retain the draft.
 - Non-fatal warnings list unrecognized config paths. Those values are preserved for forward compatibility instead of being deleted.
 
 ## Building Releases
@@ -98,7 +98,31 @@ Each workflow module owns a related set of operations:
 - `app/shortcut_workflow.rs` keeps shortcut recording, text editing, and conflict resolution separate. Only one can be active at a time.
 - `app/daemon_workflow.rs` manages background setup actions, status request identities, and typed feedback.
 
-App update handlers coordinate draft changes and UI effects.
+The GTK shell and refresh code live in [component/](src/app/component/); page builders in
+[pages/](src/app/pages/) bind widgets to draft values and emit [messages](src/messages.rs).
+[Update handlers](src/app/update/) change the model and return typed [effects](src/app/effects.rs).
+[Effect execution](src/app/component/effects.rs) schedules work; [I/O](src/app/io.rs) uses
+[blocking jobs](src/app/blocking_jobs.rs) for filesystem operations. Page callbacks do not write files.
+[HistoryDraft](src/models/config/history.rs) and [CaptureDraft](src/models/config/capture.rs)
+own their section values, conversion and validation, including intermediate text.
+Shortcut summaries parse each field once per draft for an analysis pass, then reuse those values
+for conflict detection, row flags and default comparisons. No parsed cache survives the refresh.
+
+For a save, the handler validates the draft, transfers the guarded `ConfigDocument` from
+`DocumentWorkflow` to `SaveConfig`, and freezes editing. The blocking job merges known settings
+and performs the guarded atomic write. `ConfigSaved` returns the document on success or failure;
+success establishes the clean baseline, while failure restores editing and keeps useful errors.
+`DocumentWorkflow` owns the active save's validation report and optional leave continuation in
+one private context. Success consumes that context once; failure discards the continuation.
+A pending Reload or close continues only after success. Canceling the unsaved-changes prompt
+keeps the draft; it does not attempt to cancel a durable write already in progress.
+
+See the [application map](../docs/codebase-overview.md) for shape edits and capture, and
+[CONTRIBUTING](../CONTRIBUTING.md) for setup. From the repository root, use
+`cargo test -p wayscriber-configurator` for focused coverage and `./tools/lint-and-test.sh`
+for the canonical workspace checks used by CI. `./tools/test-gtk-widgets.sh` runs required
+GTK toolbar assertions on a private headless compositor. These checks do not prove behavior
+on an installed desktop or screen-reader announcements.
 
 Saves use `Config::validate_for_save` from the core crate.
 It compares persisted typed values to detect changes outside keybindings and rejects those changes.

@@ -1,5 +1,5 @@
+use wayscriber::domain::EraserMode;
 use wayscriber::draw::EraserKind;
-use wayscriber::input::EraserMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EraserModeOption {

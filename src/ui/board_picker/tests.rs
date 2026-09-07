@@ -17,6 +17,7 @@ fn pixels(
         render_board_picker_with_halo(
             engine,
             measurer,
+            &mut ThumbnailCache::default(),
             &mut crate::draw::RenderCtx::new(&ctx, caches),
             state,
             size.0 as u32,

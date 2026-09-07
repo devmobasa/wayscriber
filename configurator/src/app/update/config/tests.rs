@@ -70,7 +70,7 @@ fn handle_config_loaded_error_preserves_the_last_good_document_and_draft() {
     let (path, document) = temp_config_document("before-reload-error", "");
     let destination = document.destination().to_path_buf();
     let _ = app.handle_config_loaded(Ok((document, None)));
-    app.draft.capture_enabled = !app.draft.capture_enabled;
+    app.draft.capture.enabled = !app.draft.capture.enabled;
     let draft = app.draft.clone();
 
     let _ = app.handle_config_loaded(Err("broken".to_string()));
@@ -511,7 +511,7 @@ fn every_invalid_color_field_is_counted_for_the_refusal() {
 fn reset_to_defaults_requires_confirmation() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_loading_for_test(false);
-    app.draft.capture_enabled = !app.defaults.capture_enabled;
+    app.draft.capture.enabled = !app.defaults.capture.enabled;
     let changed_draft = app.draft.clone();
 
     let _ = app.handle_reset_to_defaults_requested();
@@ -528,7 +528,7 @@ fn reset_to_defaults_requires_confirmation() {
 fn reset_to_defaults_repeated_request_is_a_no_op() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_loading_for_test(false);
-    app.draft.capture_enabled = !app.defaults.capture_enabled;
+    app.draft.capture.enabled = !app.defaults.capture.enabled;
     let changed_draft = app.draft.clone();
 
     let _ = app.handle_reset_to_defaults_requested();
@@ -545,8 +545,8 @@ fn reset_to_defaults_repeated_request_is_a_no_op() {
 fn reset_to_defaults_confirmed_applies_the_defaults() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_loading_for_test(false);
-    app.draft.capture_enabled = !app.defaults.capture_enabled;
-    app.baseline.capture_enabled = !app.defaults.capture_enabled;
+    app.draft.capture.enabled = !app.defaults.capture.enabled;
+    app.baseline.capture.enabled = !app.defaults.capture.enabled;
 
     let _ = app.handle_reset_to_defaults_requested();
     let _ = app.handle_reset_to_defaults_confirmed();
@@ -566,7 +566,7 @@ fn reset_to_defaults_confirmed_applies_the_defaults() {
 fn reset_to_defaults_confirmed_without_a_request_changes_nothing() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_loading_for_test(false);
-    app.draft.capture_enabled = !app.defaults.capture_enabled;
+    app.draft.capture.enabled = !app.defaults.capture.enabled;
     let changed_draft = app.draft.clone();
 
     let _ = app.handle_reset_to_defaults_confirmed();
@@ -585,7 +585,7 @@ fn reset_to_defaults_confirmed_without_a_request_changes_nothing() {
 fn reset_to_defaults_canceled_disarms_and_clears_the_hint() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_loading_for_test(false);
-    app.draft.capture_enabled = !app.defaults.capture_enabled;
+    app.draft.capture.enabled = !app.defaults.capture.enabled;
     let changed_draft = app.draft.clone();
 
     let _ = app.handle_reset_to_defaults_requested();
@@ -661,7 +661,7 @@ fn reset_to_defaults_confirmation_is_canceled_by_draft_edit() {
     app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
-    let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
+    let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture.enabled);
 
     assert!(!app.defaults_reset_pending());
     assert!(matches!(app.status, StatusMessage::Idle));
@@ -675,7 +675,7 @@ fn a_draft_edit_between_request_and_confirm_refuses_the_confirm() {
     app.document.set_loading_for_test(false);
 
     let _ = app.handle_reset_to_defaults_requested();
-    let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
+    let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture.enabled);
     let edited_draft = app.draft.clone();
     let _ = app.handle_reset_to_defaults_confirmed();
 
@@ -829,7 +829,7 @@ fn handle_config_saved_success_clears_dirty_and_records_backup() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_saving_for_test(true);
     app.is_dirty = true;
-    app.draft.capture_enabled = !app.draft.capture_enabled;
+    app.draft.capture.enabled = !app.draft.capture.enabled;
     let backup = PathBuf::from("/tmp/wayscriber-config.bak");
     let (path, document) = temp_config_document("saved", "");
 
@@ -838,7 +838,7 @@ fn handle_config_saved_success_clears_dirty_and_records_backup() {
 
     assert!(!app.document.is_saving());
     assert!(!app.is_dirty);
-    assert_eq!(app.document.last_backup_path, Some(backup));
+    assert_eq!(app.document.last_backup_path(), Some(&backup));
     assert_eq!(app.draft, app.baseline);
     assert!(status_contains(
         &app.status,
@@ -1333,4 +1333,169 @@ fn applying_marks_the_draft_dirty_when_only_the_revision_changes() {
 
     load_config_file(&mut app, &path);
     assert!(app.pending_migration().is_none());
+}
+
+#[test]
+fn document_operations_freeze_queued_edits_until_completion() {
+    use crate::messages::{CommandMessage, Message};
+
+    for saving in [false, true] {
+        for success in [false, true] {
+            let (mut app, _) = ConfiguratorApp::new_app();
+            let (path, document) = temp_config_document("busy-edits", "");
+            app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
+            let original = app.draft.clone();
+            let effects = app.update_message(if saving {
+                Message::SaveRequested
+            } else {
+                Message::ReloadRequested
+            });
+            assert_eq!(effects.len(), 1);
+            assert!(!app.document.allows_editing());
+            for message in [
+                Message::ToggleChanged(ToggleField::CaptureEnabled, !original.capture.enabled),
+                Message::BoardsAddItem,
+                Message::QuickColorAdded,
+                Message::PresetSlotCountChanged(2),
+                Message::ResetToDefaultsConfirmed,
+                Message::MigrationApplyRequested,
+                Message::ShortcutTextEditChanged("F9".into()),
+                Message::ColorPickerHexChanged(ColorPickerId::DrawingColor, "invalid".into()),
+            ] {
+                assert!(app.update_message(message).is_empty());
+                assert_eq!(app.draft, original);
+                assert_eq!(app.invalid_color_hex_count(), 0);
+            }
+            let effect = effects.into_iter().next().unwrap();
+            let completion = match effect {
+                Effect::SaveConfig { document, .. } => CommandMessage::ConfigSaved(if success {
+                    Ok((None, document))
+                } else {
+                    Err((Some(document), "write failed".into()))
+                }),
+                Effect::LoadConfig => CommandMessage::ConfigLoaded(if success {
+                    Ok((
+                        Box::new(ConfigDocument::load_from_path(&path).unwrap()),
+                        None,
+                    ))
+                } else {
+                    Err("load failed".into())
+                }),
+                _ => panic!("unexpected effect"),
+            };
+            app.update_command(completion);
+            assert!(app.document.allows_editing());
+            assert!(app.document.loaded().is_some());
+            assert_eq!(app.draft, original);
+            app.update_message(Message::ToggleChanged(
+                ToggleField::CaptureEnabled,
+                !original.capture.enabled,
+            ));
+            assert_ne!(app.draft, original);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+}
+
+#[test]
+fn leave_dirty_draft_requires_a_current_decision_and_successful_save() {
+    for close in [false, true] {
+        for save_succeeds in [false, true] {
+            check_leave_dirty_draft(close, save_succeeds);
+        }
+    }
+}
+
+fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
+    use crate::messages::{CommandMessage, Message};
+    let (mut app, _) = ConfiguratorApp::new_app();
+    let (path, document) = temp_config_document("leave-draft", "");
+    app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
+    let request = if close {
+        Message::CloseRequested
+    } else {
+        Message::ReloadRequested
+    };
+    let clean = app.update_message(request.clone());
+    assert!(matches!(
+        clean.as_slice(),
+        [Effect::CloseWindow] | [Effect::LoadConfig]
+    ));
+    if !close {
+        app.update_command(CommandMessage::ConfigLoaded(Err("failed reload".into())));
+    }
+    app.update_message(Message::ToggleChanged(
+        ToggleField::CaptureEnabled,
+        !app.draft.capture.enabled,
+    ));
+    assert!(app.update_message(request.clone()).is_empty());
+    assert!(app.pending_leave().is_some());
+    app.update_message(Message::LeaveCanceled);
+    assert!(app.pending_leave().is_none());
+    assert!(app.is_dirty);
+
+    app.update_message(request.clone());
+    app.update_message(Message::BoardsAddItem);
+    assert!(app.pending_leave().is_none());
+    assert!(
+        app.update_message(Message::LeaveDiscardRequested)
+            .is_empty()
+    );
+    app.update_message(request.clone());
+    let effects = app.update_message(Message::LeaveSaveRequested);
+    let [Effect::SaveConfig { document, .. }]: [Effect; 1] = effects.try_into().unwrap() else {
+        panic!("expected a save before leaving");
+    };
+    let effects = app.update_command(CommandMessage::ConfigSaved(if save_succeeds {
+        Ok((None, document))
+    } else {
+        Err((Some(document), "failed save".into()))
+    }));
+    if save_succeeds {
+        assert!(matches!(
+            effects.as_slice(),
+            [Effect::CloseWindow] | [Effect::LoadConfig]
+        ));
+    } else {
+        assert!(effects.is_empty());
+        assert!(app.is_dirty);
+        assert!(app.document.allows_editing());
+        app.update_message(request);
+        assert!(matches!(
+            app.update_message(Message::LeaveDiscardRequested)
+                .as_slice(),
+            [Effect::CloseWindow] | [Effect::LoadConfig]
+        ));
+    }
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn leave_protects_raw_color_and_unapplied_shortcut_input() {
+    use crate::messages::{CommandMessage, Message};
+
+    for shortcut in [false, true] {
+        let (mut app, _) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document("leave-editor", "");
+        app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
+        if shortcut {
+            app.update_message(Message::ShortcutTextEditStarted(
+                KeybindingField::ToggleToolbar,
+            ));
+            app.update_message(Message::ShortcutTextEditChanged("unfinished".into()));
+        } else {
+            app.update_message(Message::ColorPickerHexChanged(
+                ColorPickerId::DrawingColor,
+                "#12".into(),
+            ));
+        }
+        assert!(app.has_unsaved_work());
+        assert!(app.update_message(Message::CloseRequested).is_empty());
+        assert!(app.pending_leave().is_some());
+        assert!(app.update_message(Message::LeaveSaveRequested).is_empty());
+        assert!(app.has_unresolved_editor());
+        assert!(!app.document.is_saving());
+        assert!(matches!(app.status, StatusMessage::Error(_)));
+        std::fs::remove_file(path).unwrap();
+    }
 }

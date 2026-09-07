@@ -1,3 +1,4 @@
+mod analysis;
 mod conflicts;
 mod draft;
 mod edit;
@@ -7,13 +8,13 @@ mod parse;
 mod recording;
 
 pub use conflicts::{
-    PendingShortcutConflict, apply_recorded_replace, apply_text_replace,
-    field_has_internal_duplicate, other_claimants, text_conflicts_for,
+    PendingShortcutConflict, apply_recorded_replace, apply_text_replace, other_claimants,
+    text_conflicts_for,
 };
 pub use draft::KeybindingsDraft;
 pub use edit::{
-    AppendOutcome, ShortcutTextEditor, append_binding, field_matches_defaults, remove_binding,
-    reset_field, reset_fields, reset_tooltip, serialize_bindings,
+    AppendOutcome, ShortcutTextEditor, append_binding, remove_binding, reset_field, reset_fields,
+    reset_tooltip, serialize_bindings,
 };
 pub use field::{KeybindingField, keybinding_fields, keybinding_tab};
 pub use manager::{
@@ -33,3 +34,6 @@ pub use recording::{
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) use parse::take_parse_calls;

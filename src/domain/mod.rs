@@ -6,7 +6,9 @@
 
 mod action;
 mod board;
+mod board_validation;
 pub mod color;
+mod drawing;
 mod onboarding;
 mod tool;
 
@@ -14,7 +16,11 @@ pub use action::Action;
 pub use board::{
     BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardSpec,
 };
+pub use board_validation::{
+    BoardIdChangeSet, BoundaryBoardId, BoundaryBoardIdSet, clamp_board_rgb,
+};
 pub use color::Color;
+pub use drawing::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 pub use onboarding::OnboardingTip;
 pub use tool::{DragBindableTool, DragTool, EraserMode, Tool};
 

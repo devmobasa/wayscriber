@@ -22,6 +22,42 @@ pub(super) enum PortalPoll<T> {
     Disconnected,
 }
 
+/// Single-flight portal phase. A running operation is exactly one task; its
+/// immutable output/layout identity travels inside that task's result. There
+/// is no separately writable busy bit or stale target left after cancellation.
+pub(super) struct PortalOperation<T> {
+    active: Option<PortalTask<T>>,
+}
+impl<T> Default for PortalOperation<T> {
+    fn default() -> Self {
+        Self { active: None }
+    }
+}
+impl<T: Send + 'static> PortalOperation<T> {
+    pub(super) fn is_running(&self) -> bool {
+        self.active.is_some()
+    }
+    pub(super) fn start(&mut self, task: PortalTask<T>) {
+        assert!(self.active.is_none(), "portal operation already running");
+        self.active = Some(task);
+    }
+    pub(super) fn finish(&mut self) {
+        self.active.take();
+    }
+    pub(super) fn poll(&mut self) -> PortalPoll<T> {
+        self.active
+            .as_mut()
+            .map(PortalTask::poll)
+            .unwrap_or(PortalPoll::Disconnected)
+    }
+    pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
+        self.active.as_ref().map(|task| task.timeout(now))
+    }
+    pub(super) fn timed_out(&self, now: Instant) -> bool {
+        self.active.as_ref().is_some_and(|task| task.timed_out(now))
+    }
+}
+
 pub(super) struct PortalTask<T> {
     receiver: Receiver<PortalMessage<T>>,
     worker: Option<tokio::task::JoinHandle<()>>,
@@ -109,13 +145,6 @@ where
 
     pub(super) fn timed_out(&self, now: Instant) -> bool {
         self.timeout(now).is_zero()
-    }
-
-    pub(super) fn cancel(&mut self) {
-        self.expected_cancel.store(true, Ordering::Release);
-        if let Some(worker) = self.worker.take() {
-            worker.abort();
-        }
     }
 }
 
@@ -227,7 +256,7 @@ mod tests {
     #[tokio::test]
     async fn expected_cancel_aborts_without_waking_failure() {
         let wake = RuntimeWakeSource::new().unwrap();
-        let mut task = PortalTask::spawn(
+        let task = PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move {
@@ -235,7 +264,7 @@ mod tests {
                 1
             },
         );
-        task.cancel();
+        drop(task);
         tokio::task::yield_now().await;
         let mut pollfd = libc::pollfd {
             fd: wake.poll_fd().as_raw_fd(),

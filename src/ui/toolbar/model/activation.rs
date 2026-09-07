@@ -1,4 +1,4 @@
-use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 use super::super::ToolbarEvent;
 

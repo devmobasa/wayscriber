@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use super::{CommandEntry, command_palette_entries};
+use super::{CommandEntry, CommandPaletteState, command_palette_entries};
 use crate::config::action_meta::{ActionCategory, ActionMeta};
 use crate::domain::Action;
 use crate::input::state::core::search::fuzzy_score;
@@ -38,13 +38,13 @@ impl CommandPaletteListRow {
 /// from are unchanged.
 #[derive(Debug)]
 pub(in crate::input::state::core) struct CommandPaletteResults {
-    query: String,
-    recents: Vec<Action>,
-    keymap_revision: u64,
-    results: Vec<&'static CommandEntry>,
+    pub(super) query: String,
+    pub(super) recents: Vec<Action>,
+    pub(super) keymap_revision: u64,
+    pub(super) results: Vec<&'static CommandEntry>,
 }
 
-impl InputState {
+impl CommandPaletteState {
     /// Get the filtered list of commands matching the current query.
     ///
     /// Memoized: scoring walks the whole registry and allocates per entry,
@@ -52,32 +52,30 @@ impl InputState {
     /// keystroke and repeat tick. The key is everything `score_command` reads:
     /// the query, the recents that bias it, and the keymap revision behind the
     /// shortcut labels it folds in.
-    pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
-        if let Some(cached) = self.command_palette.results.borrow().as_ref()
-            && cached.query == self.command_palette.query
-            && cached.keymap_revision == self.keymap.revision()
-            && cached.recents == self.command_palette.recent
-        {
-            return cached.results.clone();
+    pub(super) fn filtered_commands(
+        &self,
+        revision: u64,
+        labels: impl Fn(Action) -> Vec<String>,
+    ) -> Vec<&'static CommandEntry> {
+        if let Some(results) = self.cached_results(revision) {
+            return results;
         }
-        let results = self.score_filtered_commands();
-        *self.command_palette.results.borrow_mut() = Some(CommandPaletteResults {
-            query: self.command_palette.query.clone(),
-            recents: self.command_palette.recent.clone(),
-            keymap_revision: self.keymap.revision(),
-            results: results.clone(),
-        });
+        let results = self.score_filtered_commands(&labels);
+        self.cache_results(revision, results.clone());
         results
     }
 
-    fn score_filtered_commands(&self) -> Vec<&'static CommandEntry> {
-        let query = normalize_query(&self.command_palette.query);
+    fn score_filtered_commands(
+        &self,
+        labels: &impl Fn(Action) -> Vec<String>,
+    ) -> Vec<&'static CommandEntry> {
+        let query = normalize_query(&self.query);
         let tokens = query_tokens(&query);
 
         let mut results: Vec<CommandMatch> = command_palette_entries()
             .enumerate()
             .filter_map(|(index, command)| {
-                self.score_command(command, &query, &tokens)
+                self.score_command(command, &query, &tokens, labels)
                     .map(|score| CommandMatch {
                         command,
                         score,
@@ -99,23 +97,28 @@ impl InputState {
     /// registry-ordered categories), so headers always show. With a query,
     /// headers show only when every category present forms exactly one
     /// contiguous run in score order; any interleaving renders flat.
-    pub fn command_palette_rows(&self) -> Vec<CommandPaletteListRow> {
-        let filtered = self.filtered_commands();
-        let query_empty = normalize_query(&self.command_palette.query).is_empty();
+    pub(super) fn rows(
+        &self,
+        revision: u64,
+        labels: impl Fn(Action) -> Vec<String>,
+        capacity: usize,
+    ) -> Vec<CommandPaletteListRow> {
+        let filtered = self.filtered_commands(revision, labels);
+        let query_empty = normalize_query(&self.query).is_empty();
         let recent_len = if query_empty {
             filtered
                 .iter()
-                .take_while(|command| self.command_palette.recent.contains(&command.action))
+                .take_while(|command| self.recent.contains(&command.action))
                 .count()
         } else {
             0
         };
-        build_command_palette_rows(&filtered, query_empty, recent_len)
-    }
-
-    pub(super) fn selected_command(&self) -> Option<&'static CommandEntry> {
-        let filtered = self.filtered_commands();
-        filtered.get(self.command_palette.selected).copied()
+        let mut rows = build_command_palette_rows(&filtered, query_empty, recent_len);
+        // A heading must never occupy the sole clickable row.
+        if capacity <= 1 {
+            rows.retain(|row| row.command_index().is_some());
+        }
+        rows
     }
 
     fn score_command(
@@ -123,13 +126,14 @@ impl InputState {
         command: &'static CommandEntry,
         query: &str,
         tokens: &[&str],
+        labels: &impl Fn(Action) -> Vec<String>,
     ) -> Option<i32> {
-        let recent_bonus = self.command_palette.recent_bonus(command.action);
+        let recent_bonus = self.recent_bonus(command.action);
         if query.is_empty() {
             return Some(recent_bonus);
         }
 
-        let shortcuts = self.action_binding_labels(command.action).join(" ");
+        let shortcuts = labels(command.action).join(" ");
         let mut score = 0;
 
         // Require all tokens to match somewhere for cleaner result sets. The
@@ -154,6 +158,32 @@ impl InputState {
 
         Some(score + (recent_bonus / 2))
     }
+}
+
+impl InputState {
+    pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
+        self.command_palette
+            .filtered_commands(self.keymap.revision(), |action| {
+                self.keymap.action_binding_labels(action)
+            })
+    }
+
+    pub fn command_palette_rows(&self) -> Vec<CommandPaletteListRow> {
+        self.command_palette.rows(
+            self.keymap.revision(),
+            |action| self.keymap.action_binding_labels(action),
+            self.command_palette_row_capacity(),
+        )
+    }
+
+    pub(super) fn selected_command(&self) -> Option<&'static CommandEntry> {
+        if self.command_palette_row_capacity() == 0 {
+            return None;
+        }
+        self.filtered_commands()
+            .get(self.command_palette.selected)
+            .copied()
+    }
 
     pub(super) fn record_command_palette_action(&mut self, action: Action) {
         self.command_palette.record_action(action);
@@ -172,6 +202,9 @@ impl InputState {
     /// Seed the in-memory recents from the persisted store at startup.
     pub fn set_command_palette_recents(&mut self, recents: Vec<Action>) {
         self.command_palette.set_recents(recents);
+        if self.command_palette.is_open() {
+            self.reconcile_command_palette_scroll();
+        }
     }
 
     /// True (and reset) when the recents changed since the last drain; the
@@ -185,7 +218,7 @@ impl InputState {
     /// backend can retain the pending write when persistence fails and only
     /// [`Self::clear_command_palette_recents_dirty`] once the write succeeds.
     pub fn command_palette_recents_dirty(&self) -> bool {
-        self.command_palette.recents_dirty
+        self.command_palette.recents_dirty()
     }
 
     /// Clear the pending-persist flag after the recents were durably written.

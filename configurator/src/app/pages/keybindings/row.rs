@@ -9,10 +9,7 @@ use wayscriber::config::Shortcut;
 
 use crate::messages::Message;
 use crate::models::KeybindingField;
-use crate::models::keybindings::{
-    ShortcutManagerSummary, field_has_internal_duplicate, field_matches_defaults,
-    parse_keybindings, reset_tooltip, serialize_bindings,
-};
+use crate::models::keybindings::{ShortcutManagerSummary, reset_tooltip, serialize_bindings};
 
 use super::super::super::state::ConfiguratorApp;
 use super::super::Binding;
@@ -198,7 +195,10 @@ pub(super) fn binding_row(
         set_visible(&row_for_bind, row_is_visible);
 
         let value = app.draft.keybindings.value_for(field).unwrap_or_default();
-        let parsed = parse_keybindings(value);
+        let Some(manager_row) = summary.row(field) else {
+            return;
+        };
+        let parsed = &manager_row.bindings;
         let parse_error = parsed.as_ref().err().cloned();
         match &parsed {
             Ok(bindings) => {
@@ -228,15 +228,14 @@ pub(super) fn binding_row(
         let default_tooltip = reset_tooltip(&app.defaults.keybindings, field);
         set_tooltip(&reset, Some(&default_tooltip));
         set_accessible_label(&reset, &default_tooltip);
-        let at_defaults =
-            field_matches_defaults(&app.draft.keybindings, &app.defaults.keybindings, field);
+        let at_defaults = !manager_row.changed;
         set_sensitive(&add, parse_error.is_none());
         set_sensitive(&record_sequence, parse_error.is_none());
         set_sensitive(&reset, !at_defaults);
 
         let caption_text = match &parse_error {
             Some(message) => message.clone(),
-            None if field_has_internal_duplicate(&app.draft.keybindings, field) => {
+            None if manager_row.internal_conflict => {
                 "This action lists the same shortcut twice.".to_string()
             }
             None => {
@@ -253,7 +252,7 @@ pub(super) fn binding_row(
             }
         };
         set_label(&caption, &caption_text);
-        if parse_error.is_some() || field_has_internal_duplicate(&app.draft.keybindings, field) {
+        if parse_error.is_some() || manager_row.internal_conflict {
             if !caption.has_css_class("error") {
                 caption.add_css_class("error");
             }

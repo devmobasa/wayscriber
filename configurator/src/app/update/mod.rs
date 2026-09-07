@@ -42,8 +42,50 @@ impl ConfiguratorApp {
     }
 
     pub(crate) fn update_message(&mut self, message: Message) -> Vec<Effect> {
+        // Freeze all page actions, including queued widget signals and open
+        // shortcut/color editors, while a document replacement is in flight.
+        // Effect completions use update_command and must always be processed.
+        if !self.document.allows_editing()
+            && !matches!(
+                message,
+                Message::SearchChanged(_)
+                    | Message::SearchCleared
+                    | Message::SearchFocusRequested
+                    | Message::StartupInteractionObserved
+                    | Message::TabSelected(_)
+                    | Message::UiTabSelected(_)
+                    | Message::KeybindingsTabSelected(_)
+            )
+        {
+            return Vec::new();
+        }
+        // A queued answer must never apply to an edit made after the question.
+        // Navigation preserves it; other page actions conservatively withdraw it.
+        if !matches!(
+            message,
+            Message::ReloadRequested
+                | Message::CloseRequested
+                | Message::LeaveSaveRequested
+                | Message::LeaveDiscardRequested
+                | Message::LeaveCanceled
+                | Message::SearchChanged(_)
+                | Message::SearchCleared
+                | Message::SearchFocusRequested
+                | Message::StartupInteractionObserved
+                | Message::TabSelected(_)
+                | Message::UiTabSelected(_)
+                | Message::KeybindingsTabSelected(_)
+        ) {
+            self.cancel_leave();
+        }
         match message {
             Message::ReloadRequested => self.handle_reload_requested(),
+            Message::CloseRequested => {
+                self.request_leave(super::document_workflow::LeaveAction::Close)
+            }
+            Message::LeaveSaveRequested => self.save_before_leave(),
+            Message::LeaveDiscardRequested => self.discard_before_leave(),
+            Message::LeaveCanceled => self.cancel_leave(),
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
             Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
             Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),

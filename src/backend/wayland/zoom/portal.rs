@@ -19,7 +19,7 @@ impl ZoomState {
         &mut self,
         tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
-        if self.portal_in_progress {
+        if self.portal.is_running() {
             warn!("Zoom portal capture already running; ignoring new request");
             return Ok(());
         }
@@ -34,8 +34,6 @@ impl ZoomState {
             "portal zoom capture",
         )
         .map_err(anyhow::Error::msg)?;
-        self.portal_in_progress = true;
-        self.portal_target_output_id = Some(target_output_id);
 
         let layout_generation = self.output_layout_generation;
         let provenance = ScreenImageProvenance::new(
@@ -51,18 +49,20 @@ impl ZoomState {
             "Requesting screen capture...".to_string(),
             Some("camera-photo".to_string()),
         );
-        self.portal_task = Some(PortalTask::spawn(tokio_handle, runtime_wake, async move {
-            async {
-                let bytes = capture_via_portal_fullscreen_bytes().await?;
+        self.portal
+            .start(PortalTask::spawn(tokio_handle, runtime_wake, async move {
+                async {
+                    let bytes = capture_via_portal_fullscreen_bytes().await?;
 
-                let (data, width, height) = decode_image_to_argb(&bytes)
-                    .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
-                let image = crop_portal_image(data, width, height, &geo)?;
+                    let (data, width, height) = decode_image_to_argb(&bytes).map_err(|error| {
+                        CaptureError::ImageError(format!("Decode failed: {error}"))
+                    })?;
+                    let image = crop_portal_image(data, width, height, &geo)?;
 
-                Ok((Some(target_output_id), layout_generation, provenance, image))
-            }
-            .await
-        }));
+                    Ok((Some(target_output_id), layout_generation, provenance, image))
+                }
+                .await
+            }));
 
         Ok(())
     }
@@ -73,15 +73,11 @@ impl ZoomState {
         now: Instant,
         live_output_count: Option<u32>,
     ) {
-        if !self.portal_in_progress {
+        if !self.portal.is_running() {
             return;
         }
 
-        if self
-            .portal_task
-            .as_ref()
-            .is_some_and(|task| task.timed_out(now))
-        {
+        if self.portal.timed_out(now) {
             warn!("Portal zoom capture timed out; restoring overlay");
             self.finish_failed_portal_task(
                 input_state,
@@ -90,11 +86,7 @@ impl ZoomState {
             return;
         }
 
-        let poll = self
-            .portal_task
-            .as_mut()
-            .map(PortalTask::poll)
-            .unwrap_or(PortalPoll::Disconnected);
+        let poll = self.portal.poll();
         match poll {
             PortalPoll::Ready(Ok((target_output, layout_generation, provenance, image))) => {
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
@@ -174,13 +166,11 @@ impl ZoomState {
     }
 
     pub fn portal_timeout(&self, now: Instant) -> Option<Duration> {
-        self.portal_task.as_ref().map(|task| task.timeout(now))
+        self.portal.timeout(now)
     }
 
     fn finish_portal_task(&mut self) {
-        self.portal_in_progress = false;
-        self.portal_task.take();
-        self.portal_target_output_id = None;
+        self.portal.finish();
     }
 
     fn finish_failed_portal_task(
@@ -312,16 +302,16 @@ mod tests {
             .capture_via_portal(&tokio::runtime::Handle::current())
             .expect_err("missing geometry must fail closed");
         assert!(error.to_string().contains("geometry is unavailable"));
-        assert!(!zoom.portal_in_progress);
-        assert!(zoom.portal_task.is_none());
+        assert!(!zoom.portal.is_running());
+        assert!(!zoom.portal.is_running());
 
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
         let error = zoom
             .capture_via_portal(&tokio::runtime::Handle::current())
             .expect_err("missing output identity must fail closed");
         assert!(error.to_string().contains("identity is unavailable"));
-        assert!(!zoom.portal_in_progress);
-        assert!(zoom.portal_task.is_none());
+        assert!(!zoom.portal.is_running());
+        assert!(!zoom.portal.is_running());
         Ok(())
     }
 
@@ -387,7 +377,7 @@ mod tests {
     ) {
         for _ in 0..100 {
             zoom.poll_portal_capture(input, Instant::now(), live_output_count);
-            if !zoom.portal_in_progress {
+            if !zoom.portal.is_running() {
                 return;
             }
             tokio::task::yield_now().await;
@@ -403,12 +393,11 @@ mod tests {
         let id = zoom.begin_identified_capture();
         zoom.set_active_output(None, Some(1));
         zoom.request_activation();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, provenance(1, 0), image(3))) },
         ));
-        zoom.portal_in_progress = true;
 
         poll_until_finished(&mut zoom, &mut input).await;
 
@@ -437,7 +426,7 @@ mod tests {
             let mut input = make_test_input_state();
             let id = zoom.begin_identified_capture();
             zoom.request_activation();
-            zoom.portal_task = Some(if panic_task {
+            zoom.portal.start(if panic_task {
                 PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
                     panic!("expected zoom portal panic")
                 })
@@ -446,14 +435,13 @@ mod tests {
                     Err(CaptureError::PermissionDenied)
                 })
             });
-            zoom.portal_in_progress = true;
 
             poll_until_finished(&mut zoom, &mut input).await;
 
             assert!(!zoom.is_in_progress());
             assert!(!zoom.active);
             assert!(!zoom.pending_activation);
-            assert!(zoom.portal_task.is_none());
+            assert!(!zoom.portal.is_running());
             assert!(zoom.take_capture_done());
             assert!(matches!(
                 zoom.take_source_terminal(),
@@ -472,12 +460,11 @@ mod tests {
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async { Err(CaptureError::Cancelled("dismissed".to_string())) },
         ));
-        zoom.portal_in_progress = true;
 
         poll_until_finished(&mut zoom, &mut input).await;
 
@@ -501,7 +488,7 @@ mod tests {
             let mut input = make_test_input_state();
             let id = zoom.begin_identified_capture();
             zoom.request_activation();
-            zoom.portal_task = Some(if timed_out {
+            zoom.portal.start(if timed_out {
                 PortalTask::spawn_at_for_test(
                     &tokio::runtime::Handle::current(),
                     wake.handle(),
@@ -511,14 +498,13 @@ mod tests {
             } else {
                 PortalTask::disconnected_for_test(now)
             });
-            zoom.portal_in_progress = true;
 
             zoom.poll_portal_capture(&mut input, now, None);
 
             assert!(!zoom.is_in_progress());
             assert!(!zoom.active);
             assert!(!zoom.pending_activation);
-            assert!(zoom.portal_task.is_none());
+            assert!(!zoom.portal.is_running());
             assert!(zoom.take_capture_done());
             assert!(matches!(
                 zoom.take_source_terminal(),
@@ -541,12 +527,11 @@ mod tests {
         let generation = zoom.image_generation();
         zoom.set_active_output(None, Some(2));
         zoom.request_activation();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, provenance(1, 0), image(9))) },
         ));
-        zoom.portal_in_progress = true;
 
         poll_until_finished(&mut zoom, &mut input).await;
 
@@ -578,7 +563,7 @@ mod tests {
         zoom.set_active_output(None, Some(1));
         let layout_generation = zoom.output_layout_generation;
         zoom.request_activation();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move {
@@ -590,7 +575,6 @@ mod tests {
                 ))
             },
         ));
-        zoom.portal_in_progress = true;
         zoom.set_active_geometry(Some(crop_geometry((6, 0))));
 
         poll_until_finished(&mut zoom, &mut input).await;
@@ -622,7 +606,7 @@ mod tests {
         zoom.set_active_output(None, Some(1));
         let layout_generation = zoom.output_layout_generation;
         zoom.request_activation();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move {
@@ -634,7 +618,6 @@ mod tests {
                 ))
             },
         ));
-        zoom.portal_in_progress = true;
         zoom.set_active_geometry(Some(geometry));
 
         poll_until_finished(&mut zoom, &mut input).await;
@@ -667,7 +650,7 @@ mod tests {
         zoom.set_active_output(None, Some(1));
         let layout_generation = zoom.output_layout_generation;
         zoom.request_activation();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             async move {
@@ -679,7 +662,6 @@ mod tests {
                 ))
             },
         ));
-        zoom.portal_in_progress = true;
 
         poll_until_finished_with_live_outputs(&mut zoom, &mut input, Some(2)).await;
 
@@ -705,19 +687,18 @@ mod tests {
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let id = zoom.begin_identified_capture();
         zoom.request_activation();
-        zoom.portal_task = Some(PortalTask::spawn(
+        zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
             std::future::pending(),
         ));
-        zoom.portal_in_progress = true;
 
         zoom.capture_via_portal(&tokio::runtime::Handle::current())
             .unwrap();
-        assert!(zoom.portal_task.is_some());
+        assert!(zoom.portal.is_running());
         assert!(zoom.abort_capture());
-        assert!(zoom.portal_task.is_none());
-        assert!(!zoom.portal_in_progress);
+        assert!(!zoom.portal.is_running());
+        assert!(!zoom.portal.is_running());
         assert_eq!(
             zoom.take_source_terminal(),
             Some(super::super::state::ZoomSourceTerminal {

@@ -11,15 +11,12 @@ use super::bridge::FeedbackPublisher;
 use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
-use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
-use crate::ui::toolbar::{ToolbarEvent, model::ToolbarSliderSpec};
+use crate::ui::theme::set_color;
+use crate::ui::toolbar::ToolbarEvent;
+mod slider;
+pub(super) use slider::SliderRow;
 
 pub(super) use crate::ui::theme::toolbar::COLOR_SWATCH_HAIRLINE;
-/// Filled (dragged) portion of the slider track: the accent at reduced
-/// alpha so it stays quieter than the knob (same tint as
-/// COLOR_SEGMENT_ACTIVE).
-const COLOR_TRACK_FILL: Rgba = rgba(ACCENT_RGB, 0.55);
-
 /// Sender the view hands to every control closure. Clones share the configured
 /// rebind chord and modifier state captured from the actual GTK click.
 #[derive(Clone)]
@@ -261,7 +258,8 @@ fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
 fn focus_change_releases_keyboard(focus: &gtk4::Widget) -> bool {
     let entry_focused = focus.ancestor(gtk4::Entry::static_type()).is_some();
     let popover_focused = focus.ancestor(gtk4::Popover::static_type()).is_some();
-    !entry_focused && !popover_focused
+    let slider_focused = focus.accessible_role() == gtk4::AccessibleRole::Slider;
+    !entry_focused && !popover_focused && !slider_focused
 }
 
 /// Drop keyboard ownership when GTK focuses any non-entry control. Buttons
@@ -302,7 +300,9 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &Fe
         let entry_clicked = window
             .pick(x, y, gtk4::PickFlags::DEFAULT)
             .is_some_and(|target| {
-                target.is::<gtk4::Entry>() || target.ancestor(gtk4::Entry::static_type()).is_some()
+                target.is::<gtk4::Entry>()
+                    || target.ancestor(gtk4::Entry::static_type()).is_some()
+                    || target.accessible_role() == gtk4::AccessibleRole::Slider
             });
         if !entry_clicked {
             release_window_keyboard_focus(&window);
@@ -320,7 +320,9 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &Fe
             .upgrade()
             .and_then(|window| window.pick(x, y, gtk4::PickFlags::DEFAULT))
             .is_some_and(|target| {
-                target.is::<gtk4::Entry>() || target.ancestor(gtk4::Entry::static_type()).is_some()
+                target.is::<gtk4::Entry>()
+                    || target.ancestor(gtk4::Entry::static_type()).is_some()
+                    || target.accessible_role() == gtk4::AccessibleRole::Slider
             });
         begin_entry_drag.set(entry_target);
     });
@@ -508,154 +510,6 @@ impl SwatchButton {
             self.color.set(value);
             self.area.queue_draw();
         }
-    }
-}
-
-/// Custom slider matching the built-in track + knob (a `DrawingArea` with
-/// a drag gesture), so a live backend update never fights an in-flight
-/// drag: incoming values are ignored while `dragging` is set.
-pub(super) struct SliderRow {
-    pub(super) root: gtk4::Box,
-    value_label: gtk4::Label,
-    area: gtk4::DrawingArea,
-    state: Rc<SliderState>,
-    format: fn(f64) -> String,
-}
-
-pub(super) struct SliderState {
-    spec: ToolbarSliderSpec,
-    value: Cell<f64>,
-    dragging: Cell<bool>,
-}
-
-impl SliderRow {
-    /// `on_change` fires continuously during a drag with the new value.
-    pub(super) fn new(
-        scale: f64,
-        spec: ToolbarSliderSpec,
-        initial: f64,
-        format: fn(f64) -> String,
-        on_change: impl Fn(f64) + 'static,
-    ) -> Self {
-        let root = gtk4::Box::new(gtk4::Orientation::Horizontal, (6.0 * scale).round() as i32);
-        // Backend/config values are valid throughout the continuous range and
-        // stay visible exactly as stored. Snapping begins only when the user
-        // interacts with the slider.
-        let initial = spec.clamp(initial);
-        let state = Rc::new(SliderState {
-            spec,
-            value: Cell::new(initial),
-            dragging: Cell::new(false),
-        });
-
-        let area = gtk4::DrawingArea::new();
-        area.set_content_height((16.0 * scale).round() as i32);
-        area.set_hexpand(true);
-        area.set_valign(gtk4::Align::Center);
-        let draw_state = state.clone();
-        area.set_draw_func(move |_, ctx, width, height| {
-            let w = width as f64;
-            let h = height as f64;
-            let track_h = (h * 0.5).min(8.0);
-            let track_y = (h - track_h) / 2.0;
-            let radius = track_h / 2.0;
-            let t = draw_state.spec.t_from_value(draw_state.value.get());
-            // Track
-            rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
-            set_color(ctx, super::css::TRACK_BACKGROUND);
-            let _ = ctx.fill();
-            // Filled portion (accent at reduced alpha)
-            rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
-            set_color(ctx, COLOR_TRACK_FILL);
-            let _ = ctx.fill();
-            // Knob
-            let knob_r = (h / 2.0).min(7.0);
-            let knob_x = knob_r + t * (w - knob_r * 2.0);
-            ctx.arc(knob_x, h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            set_color(ctx, super::css::TRACK_KNOB);
-            let _ = ctx.fill();
-        });
-
-        let value_label = gtk4::Label::new(Some(&format(initial)));
-        value_label.set_width_chars(5);
-        value_label.set_xalign(1.0);
-
-        let drag = gtk4::GestureDrag::new();
-        let drag_state = state.clone();
-        let drag_area = area.clone();
-        let start_value = Rc::new(Cell::new((0.0f64, 0.0f64)));
-        let begin_start = start_value.clone();
-        let begin_label = value_label.clone();
-        drag.connect_drag_begin(move |gesture, x, _| {
-            drag_state.dragging.set(true);
-            // Jump the knob to the pressed position, like the built-in track.
-            let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
-            let t = (x / width).clamp(0.0, 1.0);
-            let value = drag_state.spec.value_from_t(t);
-            drag_state.value.set(value);
-            begin_label.set_text(&format(value));
-            begin_start.set((x, value));
-            drag_area.queue_draw();
-        });
-        let update_state = state.clone();
-        let update_area = area.clone();
-        let update_start = start_value.clone();
-        let update_label = value_label.clone();
-        let change = Rc::new(on_change);
-        let update_change = change.clone();
-        drag.connect_drag_update(move |gesture, dx, _| {
-            let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
-            let (sx, _) = update_start.get();
-            let t = ((sx + dx) / width).clamp(0.0, 1.0);
-            let value = update_state.spec.value_from_t(t);
-            update_state.value.set(value);
-            update_label.set_text(&format(value));
-            update_area.queue_draw();
-            update_change(value);
-        });
-        let end_state = state.clone();
-        let end_change = change.clone();
-        drag.connect_drag_end(move |_, _, _| {
-            end_state.dragging.set(false);
-            end_change(end_state.value.get());
-        });
-        area.add_controller(drag);
-
-        root.append(&area);
-        root.append(&value_label);
-        Self {
-            root,
-            value_label,
-            area,
-            state,
-            format,
-        }
-    }
-
-    /// Show an inline readout in a fixed slot immediately after the track.
-    /// Other slider rows keep their natural five-character, right-aligned
-    /// readout; the style pill instead mirrors the built-in toolbar's track +
-    /// readout geometry.
-    pub(super) fn configure_inline_readout(&self, visible: bool, width: i32) {
-        self.value_label.set_visible(visible);
-        if visible {
-            self.value_label.set_width_chars(-1);
-            self.value_label.set_size_request(width, -1);
-            self.value_label.set_xalign(0.0);
-        }
-    }
-
-    /// Applies a backend value unless the user is mid-drag.
-    pub(super) fn set_value(&self, value: f64) {
-        if self.state.dragging.get() {
-            return;
-        }
-        let clamped = self.state.spec.clamp(value);
-        if (self.state.value.get() - clamped).abs() > f64::EPSILON {
-            self.state.value.set(clamped);
-            self.area.queue_draw();
-        }
-        self.value_label.set_text(&(self.format)(clamped));
     }
 }
 

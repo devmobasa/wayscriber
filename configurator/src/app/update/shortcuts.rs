@@ -268,13 +268,27 @@ impl ConfiguratorApp {
 
     pub(crate) fn visible_keybinding_fields(&self) -> Vec<KeybindingField> {
         let search = self.search_summary();
+        self.visible_keybinding_fields_with(&self.shortcut_manager_summary(), &search)
+    }
+
+    pub(crate) fn prepare_shortcut_manager_refresh(
+        &self,
+        search: &crate::app::search::AppSearchSummary,
+    ) -> (ShortcutManagerSummary, Vec<KeybindingField>) {
+        let summary = self.shortcut_manager_summary();
+        let fields = self.visible_keybinding_fields_with(&summary, search);
+        (summary, fields)
+    }
+
+    fn visible_keybinding_fields_with(
+        &self,
+        summary: &ShortcutManagerSummary,
+        search: &crate::app::search::AppSearchSummary,
+    ) -> Vec<KeybindingField> {
         let scope = (!self.keybindings_show_all).then_some(self.active_keybindings_tab);
-        self.shortcut_manager_summary().visible_fields(
-            self.shortcut_filter,
-            self.shortcut_sort,
-            scope,
-            |field| keybinding_row_visible(&search, field),
-        )
+        summary.visible_fields(self.shortcut_filter, self.shortcut_sort, scope, |field| {
+            keybinding_row_visible(search, field)
+        })
     }
 
     pub(crate) fn select_keybinding_field(&mut self, field: KeybindingField) {

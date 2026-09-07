@@ -62,6 +62,61 @@ mod tests {
         (x, y)
     }
 
+    #[test]
+    fn first_one_row_frame_is_visible_and_clickable_after_query_resets() {
+        let mut state = make_state();
+        state.update_screen_dimensions(240, 180);
+        state.toggle_command_palette();
+        for query in ["", "zoom", ""] {
+            state.command_palette.set_query(query);
+            let rows = state.command_palette_rows();
+            let geometry = state.command_palette_geometry_for_rows(240, 180, &rows);
+            assert_eq!(geometry.visible_count, 1);
+            assert_eq!(
+                rows[state.command_palette.scroll()].command_index(),
+                Some(state.command_palette.selected())
+            );
+            let x = (geometry.x + geometry.inner_x + 4.0) as i32;
+            let y = (geometry.y + geometry.items_top + 10.0) as i32;
+            assert_eq!(
+                state.command_palette_cursor_hint_at(x, y, 240, 180),
+                Some(CommandPaletteCursorHint::Pointer)
+            );
+        }
+        state.update_screen_dimensions(80, 80);
+        assert_eq!(state.command_palette_row_capacity(), 0);
+        assert!(
+            state.selected_command().is_none(),
+            "Enter cannot run an invisible command when no row fits"
+        );
+    }
+
+    #[test]
+    fn navigation_and_resize_keep_selection_in_the_viewport() {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        };
+        let mut state = make_state();
+        state.toggle_command_palette();
+        for (width, height) in [(800, 480), (1024, 600), (1280, 720), (240, 320), (240, 180)] {
+            state.update_screen_dimensions(width, height);
+            for _ in 0..24 {
+                state.handle_command_palette_key_with_resources(
+                    resources,
+                    crate::input::events::Key::Down,
+                );
+                let rows = state.command_palette_rows();
+                let geometry = state.command_palette_geometry_for_rows(width, height, &rows);
+                let display = command_palette_display_index(&rows, state.command_palette.selected);
+                assert!(display >= state.command_palette.scroll);
+                assert!(display < state.command_palette.scroll + geometry.visible_count);
+            }
+        }
+    }
+
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
         let _action_map = keybindings

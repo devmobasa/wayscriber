@@ -12,6 +12,7 @@ mod page_panel;
 mod palette;
 mod rows;
 
+pub(crate) use page_panel::ThumbnailCache;
 use page_panel::render_page_panel;
 use palette::render_board_palette;
 use rows::render_board_rows;
@@ -30,6 +31,7 @@ pub fn render_board_picker(
     render_board_picker_with_halo(
         &engine,
         &measurer,
+        &mut ThumbnailCache::default(),
         &mut crate::draw::RenderCtx::new(ctx, &mut caches),
         input_state,
         screen_width,
@@ -38,9 +40,11 @@ pub fn render_board_picker(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_board_picker_with_halo(
     engine: &UiTextEngine,
     measurer: &crate::draw::TextMeasurer,
+    cache: &mut ThumbnailCache,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     screen_width: u32,
@@ -52,6 +56,13 @@ pub(crate) fn render_board_picker_with_halo(
         return;
     }
 
+    cache.retain_revisions(input_state.boards.board_states().iter().flat_map(|board| {
+        board
+            .pages
+            .pages()
+            .iter()
+            .map(crate::draw::Frame::content_revision)
+    }));
     let layout = match input_state.board_picker_layout() {
         Some(layout) => layout,
         None => return,
@@ -167,6 +178,7 @@ pub(crate) fn render_board_picker_with_halo(
         engine,
         measurer,
         render,
+        cache,
         input_state,
         layout,
         screen_width,

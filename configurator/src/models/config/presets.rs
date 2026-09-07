@@ -9,7 +9,7 @@ use wayscriber::config::{
     Config, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig,
     PresetToolStatesConfig, ToolPresetConfig,
 };
-use wayscriber::input::Tool;
+use wayscriber::domain::Tool;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PresetSlotDraft {

@@ -2516,6 +2516,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             .arg(TEST_NAME)
             .arg("--exact")
             .arg("--test-threads=1")
+            .arg("--nocapture")
             .env(CHILD_ENV, "1")
             .status()
             .expect("run isolated GTK widget contract test");
@@ -2524,6 +2525,10 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     }
 
     if let Err(error) = gtk4::init() {
+        assert!(
+            std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none(),
+            "Required GTK widget coverage could not initialize: {error}"
+        );
         eprintln!("skipping GTK widget contract test: {error}");
         return;
     }
@@ -2548,6 +2553,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert_style_pill_interactions(&regular);
 
     assert_menu_popover_contracts(&regular);
+    eprintln!("EXECUTED: GTK widget contract assertions");
 }
 
 fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {

@@ -160,7 +160,7 @@ impl WaylandState {
 
         // Handle command palette scrolling (display-row space; selection is
         // kept inside the window, skipping group headers).
-        if self.input_state.command_palette.open {
+        if self.input_state.command_palette.is_open() {
             if scroll_direction != 0 {
                 self.input_state
                     .command_palette_wheel_scroll(scroll_direction);

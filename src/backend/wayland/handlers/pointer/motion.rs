@@ -228,7 +228,7 @@ impl WaylandState {
         let previous = self.pointer.position();
         let next = (sx as i32, sy as i32);
         self.pointer.set_position(next);
-        if self.input_state.command_palette.open {
+        if self.input_state.command_palette.is_open() {
             let (wx, wy) = self.zoomed_world_coords(sx, sy);
             self.input_state
                 .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
