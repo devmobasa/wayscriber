@@ -16,7 +16,7 @@ fn retained_palette_engine_matches_public_paint_and_geometry_across_targets() {
     let mut input = crate::input::state::test_support::make_test_input_state();
     input.toggle_command_palette();
     for query in ["", "capture", "No match 測試 🖌️"] {
-        input.command_palette.query = query.into();
+        input.command_palette.set_query(query);
         for density in [1, 2, 1] {
             let bounds =
                 command_palette_visual_geometry_with_engine(&engine, &input, 800, 600).unwrap();

@@ -51,7 +51,7 @@ impl WaylandState {
         }
 
         // Block pointer input when modal overlays are active
-        if self.input_state.command_palette.open || self.input_state.tour.is_active() {
+        if self.input_state.command_palette.is_open() || self.input_state.tour.is_active() {
             // For command palette, press handles the click - release is a no-op
             self.pointer.clear_chrome_press();
             return;

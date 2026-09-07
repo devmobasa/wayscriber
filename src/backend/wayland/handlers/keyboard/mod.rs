@@ -529,7 +529,7 @@ impl WaylandState {
                 _ => {}
             }
         }
-        if self.input_state.command_palette.open && matches!(key, Key::Up | Key::Down) {
+        if self.input_state.command_palette.is_open() && matches!(key, Key::Up | Key::Down) {
             return;
         }
         let modal_capture = self.input_state.modal_owns_text_input();

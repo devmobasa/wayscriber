@@ -38,10 +38,10 @@ impl CommandPaletteListRow {
 /// from are unchanged.
 #[derive(Debug)]
 pub(in crate::input::state::core) struct CommandPaletteResults {
-    query: String,
-    recents: Vec<Action>,
-    keymap_revision: u64,
-    results: Vec<&'static CommandEntry>,
+    pub(super) query: String,
+    pub(super) recents: Vec<Action>,
+    pub(super) keymap_revision: u64,
+    pub(super) results: Vec<&'static CommandEntry>,
 }
 
 impl InputState {
@@ -53,20 +53,12 @@ impl InputState {
     /// the query, the recents that bias it, and the keymap revision behind the
     /// shortcut labels it folds in.
     pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
-        if let Some(cached) = self.command_palette.results.borrow().as_ref()
-            && cached.query == self.command_palette.query
-            && cached.keymap_revision == self.keymap.revision()
-            && cached.recents == self.command_palette.recent
-        {
-            return cached.results.clone();
+        if let Some(results) = self.command_palette.cached_results(self.keymap.revision()) {
+            return results;
         }
         let results = self.score_filtered_commands();
-        *self.command_palette.results.borrow_mut() = Some(CommandPaletteResults {
-            query: self.command_palette.query.clone(),
-            recents: self.command_palette.recent.clone(),
-            keymap_revision: self.keymap.revision(),
-            results: results.clone(),
-        });
+        self.command_palette
+            .cache_results(self.keymap.revision(), results.clone());
         results
     }
 
@@ -185,7 +177,7 @@ impl InputState {
     /// backend can retain the pending write when persistence fails and only
     /// [`Self::clear_command_palette_recents_dirty`] once the write succeeds.
     pub fn command_palette_recents_dirty(&self) -> bool {
-        self.command_palette.recents_dirty
+        self.command_palette.recents_dirty()
     }
 
     /// Clear the pending-persist flag after the recents were durably written.

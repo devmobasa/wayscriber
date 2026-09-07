@@ -113,12 +113,12 @@ impl CommandPaletteView {
             .command_palette_action_tooltip_for_layout(&rows, geometry)
             .map(|(text, x, y)| (text.to_string(), x, y));
         Self::List(PaletteListView {
-            query: state.command_palette.query.clone(),
+            query: state.command_palette.query().to_string(),
             rows,
             geometry: (geometry.x, geometry.y, geometry.width, geometry.height),
-            scroll: state.command_palette.scroll,
+            scroll: state.command_palette.scroll(),
             visible_count: geometry.visible_count,
-            selected: state.command_palette.selected,
+            selected: state.command_palette.selected(),
             bindings,
             tooltip,
         })

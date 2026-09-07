@@ -216,7 +216,7 @@ impl WaylandState {
         }
         if self.input_state.presenter_mode_active()
             || self.input_state.help_overlay.is_visible()
-            || self.input_state.command_palette.open
+            || self.input_state.command_palette.is_open()
             || self.input_state.tour.is_active()
         {
             return;
@@ -281,7 +281,7 @@ impl WaylandState {
         }
         if self.input_state.presenter_mode_active()
             || self.input_state.help_overlay.is_visible()
-            || self.input_state.command_palette.open
+            || self.input_state.command_palette.is_open()
             || self.input_state.tour.is_active()
         {
             return;

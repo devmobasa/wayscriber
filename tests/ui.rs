@@ -130,8 +130,8 @@ fn render_command_palette_with_query_draws_content() {
     // and draw pixels (highlight boxes + rows).
     let (mut surface, ctx) = surface_with_context(900, 700);
     let mut input = make_input_state();
-    input.command_palette.open = true;
-    input.command_palette.query = "tool".to_string();
+    input.command_palette.open();
+    input.command_palette.set_query("tool".to_string());
 
     wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
 
@@ -378,7 +378,7 @@ fn small_palette_surface_and_shadow_fit_the_screen() {
     for (width, height) in [(800, 480), (1024, 600), (1280, 720)] {
         let mut input = make_input_state();
         input.update_screen_dimensions(width, height);
-        input.command_palette.open = true;
+        input.command_palette.open();
         let (x, y, panel_width, panel_height) =
             wayscriber::ui::command_palette_visual_geometry(&input, width, height).unwrap();
         assert!(x >= 0.0 && y >= 0.0);
