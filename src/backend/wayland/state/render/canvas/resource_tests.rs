@@ -336,3 +336,92 @@ fn each_scene_key_rebakes_without_shape_identity_changes() {
         );
     }
 }
+
+#[test]
+#[ignore = "release timing workload; run with --release --ignored --nocapture"]
+fn measure_sparse_damage_scan() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let layer = CanvasLayerCache::new();
+    let mut caches = crate::draw::RenderCaches::default();
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1920, 1080).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let geometry = FrameGeometry::new(1920, 1080, 1);
+    let frame = CanvasFrame {
+        draw_committed: true,
+        render_transients: false,
+        transform_active: false,
+        origin: (0.0, 0.0),
+        zoom_scale: None,
+        text_halo_enabled: true,
+        layer_cache_eligible: false,
+    };
+    let damage = [crate::util::Rect {
+        x: 0,
+        y: 0,
+        width: 32,
+        height: 32,
+    }];
+    let canvas = CanvasRenderCtx {
+        cairo: &ctx,
+        geometry: &geometry,
+        canvas: &frame,
+        damage_world: &damage,
+        now: Instant::now(),
+    };
+    let replay = crate::draw::EraserReplayContext {
+        pattern: None,
+        surface: None,
+        backdrop_cache_key: None,
+        bg_color: None,
+        logical_to_image_scale_x: 1.0,
+        logical_to_image_scale_y: 1.0,
+        logical_image_origin_x: 0.0,
+        logical_image_origin_y: 0.0,
+    };
+    for count in [100, 1_000, 10_000] {
+        let shapes: Vec<_> = (0..count)
+            .map(|i| {
+                let x = (i % 100) * 18;
+                let y = (i / 100) * 10;
+                DrawnShape::with_metadata(
+                    i as u64,
+                    Shape::Line {
+                        x1: x,
+                        y1: y,
+                        x2: x + 8,
+                        y2: y + 5,
+                        color: Color {
+                            r: 1.0,
+                            g: 1.0,
+                            b: 1.0,
+                            a: 1.0,
+                        },
+                        thick: 2.0,
+                    },
+                    0,
+                    false,
+                )
+            })
+            .collect();
+        let mut perf = PerfRenderBreakdown::default();
+        let start = Instant::now();
+        for _ in 0..500 {
+            render_committed_canvas_shapes(
+                &measurer,
+                &shapes,
+                &layer,
+                &mut caches,
+                &canvas,
+                false,
+                &replay,
+                Some(&mut perf),
+            );
+        }
+        eprintln!(
+            "P03 shapes={count} tested={} rendered={} mean_us={:.2}",
+            perf.shapes_tested,
+            perf.shapes_rendered,
+            start.elapsed().as_micros() as f64 / 500.0
+        );
+    }
+}
