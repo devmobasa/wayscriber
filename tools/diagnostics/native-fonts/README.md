@@ -47,3 +47,12 @@ run does not establish that mechanism or validate that patch. No library or
 application fix is claimed. A passing rerun or serial run would not prove the
 race fixed. Keep native diagnosis separate from Rust regression results and
 from compositor verification.
+
+The final 2026-09-07 canonical all-feature test run also terminated with signal
+11 in `retained_context_menu_owner_preserves_layout_pixels_and_row_hits`.
+The captured stack passed through HarfBuzz `hb_shape_full`, FreeType
+`FT_Load_Glyph`, Cairo `cairo_show_glyphs`, and Pango rendering. This is additional
+current native-path evidence, not proof that this crash and the standalone
+harness have the same root cause. Serial regression checks are reported
+separately in the implementation status; they do not turn this failure into a
+passing canonical run.
