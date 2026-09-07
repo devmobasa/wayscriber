@@ -51,6 +51,10 @@ impl ConfiguratorApp {
     }
 
     pub(in crate::app::update) fn handle_reload_requested(&mut self) -> Vec<Effect> {
+        self.request_leave(crate::app::document_workflow::LeaveAction::Reload)
+    }
+
+    pub(in crate::app::update) fn begin_config_reload(&mut self) -> Vec<Effect> {
         if self.document.begin_reload() {
             self.clear_defaults_confirmation();
             self.status = StatusMessage::info("Reloading configuration...");

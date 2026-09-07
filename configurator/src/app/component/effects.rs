@@ -8,8 +8,14 @@ use super::super::{daemon_setup, io, session_catalog};
 
 /// Runs one effect as a Relm4 command; its result re-enters the component
 /// as an ordinary message through `update_cmd`.
-pub(super) fn spawn_effect(effect: Effect, sender: &ComponentSender<ConfiguratorApp>) {
+pub(super) fn spawn_effect(
+    effect: Effect,
+    sender: &ComponentSender<ConfiguratorApp>,
+    root: &relm4::adw::ApplicationWindow,
+) {
+    use relm4::gtk::prelude::*;
     match effect {
+        Effect::CloseWindow => root.destroy(),
         Effect::LoadConfig => sender.oneshot_command(async {
             CommandMessage::ConfigLoaded(io::load_config_from_disk().await)
         }),

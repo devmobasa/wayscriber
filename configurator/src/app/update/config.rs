@@ -1,4 +1,5 @@
 mod defaults;
+mod leave;
 mod load;
 mod migration;
 mod save;

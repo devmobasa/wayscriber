@@ -9,12 +9,19 @@ enum DocumentPhase {
     Saving,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LeaveAction {
+    Reload,
+    Close,
+}
+
 #[derive(Debug)]
 pub(crate) struct DocumentWorkflow {
     loaded: Option<ConfigDocument>,
     phase: DocumentPhase,
     pub(crate) pending_validation: ConfigValidationReport,
     pub(crate) last_backup_path: Option<PathBuf>,
+    pub(crate) after_save: Option<LeaveAction>,
 }
 impl DocumentWorkflow {
     pub(crate) fn loading() -> Self {
@@ -23,6 +30,7 @@ impl DocumentWorkflow {
             phase: DocumentPhase::Loading,
             pending_validation: Default::default(),
             last_backup_path: None,
+            after_save: None,
         }
     }
     pub(crate) fn loaded(&self) -> Option<&ConfigDocument> {

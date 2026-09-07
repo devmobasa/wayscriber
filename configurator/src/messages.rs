@@ -54,6 +54,10 @@ pub enum CommandMessage {
 #[derive(Debug, Clone)]
 pub enum Message {
     ReloadRequested,
+    CloseRequested,
+    LeaveSaveRequested,
+    LeaveDiscardRequested,
+    LeaveCanceled,
     /// Asks for the reset and arms the confirmation; it never replaces the
     /// draft on its own.
     ResetToDefaultsRequested,

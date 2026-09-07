@@ -16,6 +16,7 @@ use crate::models::DaemonAction;
 /// the job needs, so running it reads nothing back out of the model.
 #[derive(Debug)]
 pub(crate) enum Effect {
+    CloseWindow,
     LoadConfig,
     /// The document leaves the model with the write and comes back with its
     /// result, so exactly one owner holds it at any moment.

@@ -29,6 +29,12 @@ impl ConfiguratorApp {
             return Vec::new();
         }
 
+        if self.shortcuts.editor().is_some() || self.shortcuts.recorder().is_some() {
+            self.status =
+                StatusMessage::error("Apply or cancel the unfinished shortcut edit before saving.");
+            return Vec::new();
+        }
+
         if self.shortcuts.conflict().is_some() {
             self.status = StatusMessage::error("Resolve the shortcut conflict before saving.");
             return Vec::new();
@@ -102,6 +108,7 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         // Either outcome answers this write; a failed one wrote nothing, so
         // there is no resolution to report for it.
+        let after_save = self.document.after_save.take();
         let validation = std::mem::take(&mut self.document.pending_validation);
         match result {
             Ok((backup, saved_document)) => {
@@ -128,6 +135,9 @@ impl ConfiguratorApp {
                 }
                 self.status = status;
                 self.document.finish_save(Some(*saved_document));
+                if let Some(action) = after_save {
+                    return self.continue_leave(action);
+                }
             }
             Err((document, err)) => {
                 // The write borrowed the model's only document; a failure hands

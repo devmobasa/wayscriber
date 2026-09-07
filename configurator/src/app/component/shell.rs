@@ -14,6 +14,13 @@ pub(super) fn build(
     root: &adw::ApplicationWindow,
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> AppWidgets {
+    {
+        let sender = sender.clone();
+        root.connect_close_request(move |_| {
+            sender.input(Message::CloseRequested);
+            gtk::glib::Propagation::Stop
+        });
+    }
     // ---- Sidebar ----------------------------------------------------
     let search_entry = gtk::SearchEntry::builder()
         .placeholder_text("Search settings")
@@ -226,8 +233,30 @@ pub(super) fn build(
         ));
     }
 
+    let leave_actions = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    leave_actions.set_visible(false);
+    leave_actions.set_margin_start(12);
+    leave_actions.set_margin_bottom(6);
+    let leave_cancel = gtk::Button::with_label("Cancel");
+    for (button, message) in [
+        (
+            gtk::Button::with_label("Save changes"),
+            Message::LeaveSaveRequested,
+        ),
+        (
+            gtk::Button::with_label("Discard changes"),
+            Message::LeaveDiscardRequested,
+        ),
+        (leave_cancel.clone(), Message::LeaveCanceled),
+    ] {
+        let sender = sender.clone();
+        button.connect_clicked(move |_| sender.input(message.clone()));
+        leave_actions.append(&button);
+    }
+
     let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content_box.append(&status_revealer);
+    content_box.append(&leave_actions);
     content_box.append(&migration_revealer);
     content_box.append(&stack);
 
@@ -291,6 +320,10 @@ pub(super) fn build(
     }
 
     AppWidgets {
+        leave_actions,
+        leave_cancel,
+        root: root.clone(),
+        leave_previous_focus: None,
         window_title,
         status_label,
         status_revealer,
