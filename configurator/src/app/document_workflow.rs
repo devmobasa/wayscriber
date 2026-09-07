@@ -34,6 +34,9 @@ impl DocumentWorkflow {
     pub(crate) fn is_saving(&self) -> bool {
         self.phase == DocumentPhase::Saving
     }
+    pub(crate) fn allows_editing(&self) -> bool {
+        self.phase == DocumentPhase::Idle
+    }
     pub(crate) fn begin_reload(&mut self) -> bool {
         if self.phase != DocumentPhase::Idle {
             return false;

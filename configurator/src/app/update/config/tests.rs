@@ -1334,3 +1334,65 @@ fn applying_marks_the_draft_dirty_when_only_the_revision_changes() {
     load_config_file(&mut app, &path);
     assert!(app.pending_migration().is_none());
 }
+
+#[test]
+fn document_operations_freeze_queued_edits_until_completion() {
+    use crate::messages::{CommandMessage, Message};
+
+    for saving in [false, true] {
+        for success in [false, true] {
+            let (mut app, _) = ConfiguratorApp::new_app();
+            let (path, document) = temp_config_document("busy-edits", "");
+            app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
+            let original = app.draft.clone();
+            let effects = app.update_message(if saving {
+                Message::SaveRequested
+            } else {
+                Message::ReloadRequested
+            });
+            assert_eq!(effects.len(), 1);
+            assert!(!app.document.allows_editing());
+            for message in [
+                Message::ToggleChanged(ToggleField::CaptureEnabled, !original.capture_enabled),
+                Message::BoardsAddItem,
+                Message::QuickColorAdded,
+                Message::PresetSlotCountChanged(2),
+                Message::ResetToDefaultsConfirmed,
+                Message::MigrationApplyRequested,
+                Message::ShortcutTextEditChanged("F9".into()),
+                Message::ColorPickerHexChanged(ColorPickerId::DrawingColor, "invalid".into()),
+            ] {
+                assert!(app.update_message(message).is_empty());
+                assert_eq!(app.draft, original);
+                assert_eq!(app.invalid_color_hex_count(), 0);
+            }
+            let effect = effects.into_iter().next().unwrap();
+            let completion = match effect {
+                Effect::SaveConfig { document, .. } => CommandMessage::ConfigSaved(if success {
+                    Ok((None, document))
+                } else {
+                    Err((Some(document), "write failed".into()))
+                }),
+                Effect::LoadConfig => CommandMessage::ConfigLoaded(if success {
+                    Ok((
+                        Box::new(ConfigDocument::load_from_path(&path).unwrap()),
+                        None,
+                    ))
+                } else {
+                    Err("load failed".into())
+                }),
+                _ => panic!("unexpected effect"),
+            };
+            app.update_command(completion);
+            assert!(app.document.allows_editing());
+            assert!(app.document.loaded().is_some());
+            assert_eq!(app.draft, original);
+            app.update_message(Message::ToggleChanged(
+                ToggleField::CaptureEnabled,
+                !original.capture_enabled,
+            ));
+            assert_ne!(app.draft, original);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+}

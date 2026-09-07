@@ -23,7 +23,12 @@ pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     if widgets.save_button.is_sensitive() != save_enabled {
         widgets.save_button.set_sensitive(save_enabled);
     }
-    let busy = app.document.is_loading() || app.document.is_saving();
+    let busy = !app.document.allows_editing();
+    widgets.stack.set_sensitive(!busy);
+    widgets.defaults_button.set_sensitive(!busy);
+    widgets.defaults_confirm_button.set_sensitive(!busy);
+    widgets.defaults_cancel_button.set_sensitive(!busy);
+    widgets.migration_revealer.set_sensitive(!busy);
     if widgets.reload_button.is_sensitive() == busy {
         widgets.reload_button.set_sensitive(!busy);
     }

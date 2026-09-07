@@ -42,6 +42,23 @@ impl ConfiguratorApp {
     }
 
     pub(crate) fn update_message(&mut self, message: Message) -> Vec<Effect> {
+        // Freeze all page actions, including queued widget signals and open
+        // shortcut/color editors, while a document replacement is in flight.
+        // Effect completions use update_command and must always be processed.
+        if !self.document.allows_editing()
+            && !matches!(
+                message,
+                Message::SearchChanged(_)
+                    | Message::SearchCleared
+                    | Message::SearchFocusRequested
+                    | Message::StartupInteractionObserved
+                    | Message::TabSelected(_)
+                    | Message::UiTabSelected(_)
+                    | Message::KeybindingsTabSelected(_)
+            )
+        {
+            return Vec::new();
+        }
         match message {
             Message::ReloadRequested => self.handle_reload_requested(),
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
