@@ -217,3 +217,10 @@ Local checks and the Rust CI job both run `./tools/lint-and-test.sh`. It lints,
 builds binaries, and tests the whole workspace with all features and with no
 default features, alongside source and packaging checks. CI additionally checks
 dynamic and static gtk4-layer-shell linkage and uploads its code-health report.
+
+GTK widget coverage runs separately with `./tools/test-gtk-widgets.sh` (Weston and
+`dbus-run-session` required). It creates a private headless display and requires
+GTK initialization; an unavailable display fails this check. Successful widget
+bodies print `EXECUTED` markers. Ordinary tests without a display report an
+optional skip. Neither route proves layer-shell focus or screen capture behavior
+on a user's compositor.

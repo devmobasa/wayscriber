@@ -19,6 +19,7 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
             .arg(TEST_NAME)
             .arg("--exact")
             .arg("--test-threads=1")
+            .arg("--nocapture")
             .env(CHILD_ENV, "1")
             .env("GTK_A11Y", "test")
             .status()
@@ -28,6 +29,10 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
     }
 
     if let Err(error) = gtk4::init() {
+        assert!(
+            std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none(),
+            "Required GTK widget coverage could not initialize: {error}"
+        );
         eprintln!("skipping GTK focus-policy test: {error}");
         return;
     }
@@ -67,6 +72,7 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
     );
 
     popover.unparent();
+    eprintln!("EXECUTED: GTK focus and slider assertions");
 }
 
 #[test]
