@@ -1,5 +1,5 @@
 use super::Config;
-use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 impl Config {
     pub(super) fn validate_tablet(&mut self) {

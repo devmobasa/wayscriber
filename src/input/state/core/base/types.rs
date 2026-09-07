@@ -1,7 +1,6 @@
 //! Drawing state machine and input state management.
 
-pub const MIN_STROKE_THICKNESS: f64 = 1.0;
-pub const MAX_STROKE_THICKNESS: f64 = 50.0;
+pub use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 pub const UI_TOAST_DURATION_MS: u64 = 5000;
