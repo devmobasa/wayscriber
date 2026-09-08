@@ -652,7 +652,5 @@ Raw invalid editor input remains visible and must be resolved before saving.
 
 Use `./tools/lint-and-test.sh` for package/source checks, formatting, linting, binary builds,
 and tests under both workspace feature configurations. Required GTK widget coverage is
-`./tools/test-gtk-widgets.sh`. For the native font crash, use the separate reproducer in
-[tools/diagnostics](../tools/diagnostics/); a passing application suite or serial run does not
-establish a native-library fix. Live Wayland focus, layer-shell, capture, and installed-binary
+`./tools/test-gtk-widgets.sh`. Live Wayland focus, layer-shell, capture, and installed-binary
 checks remain separate from these automated checks.
