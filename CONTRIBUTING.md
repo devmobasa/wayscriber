@@ -38,6 +38,13 @@ Git hash, and tells Cargo which Git metadata should trigger a rebuild. Cargo fea
 
 ## Development
 
+GitHub CI uses the C# file app. To run that route locally, build it once with
+`dotnet build tools/wayscriber.cs`, then run commands with
+`dotnet run tools/wayscriber.cs --no-build -- ...`. The standalone scripts remain
+available for development and installation on machines without .NET. Nix does
+not provide .NET; `global.json` selects the required SDK when it is installed
+separately.
+
 Build both packages without launching a window:
 
 ```bash
@@ -121,10 +128,21 @@ Before submitting a broad or cross-package change, run the local CI entry point:
 ./tools/lint-and-test.sh
 ```
 
-It checks release/package metadata, package layout, Rust source coverage, formatting, strict
-all-feature Clippy, all-feature tests, and no-default-feature tests. The source-coverage gate uses
-current rustc dep-info and rejects tracked or unignored `.rs` files that are outside the supported
-Cargo target/feature matrix.
+It checks release/package metadata, all three retained release contracts, package layout, Rust
+source coverage, formatting, strict all-feature Clippy, all-feature tests, and no-default-feature
+tests. When the pinned .NET SDK is installed, it also builds and runs the C# repository-tool tests;
+otherwise it reports that optional local check as skipped. The source-coverage gate uses current
+rustc dep-info and rejects tracked or unignored `.rs` files that are outside the supported Cargo
+target/feature matrix.
+
+The canonical gate serializes the Rust test harness because parallel rendering tests have
+crashed in the native font stack through context-menu, board-picker, and region-capture paths.
+This changes scheduling, not test selection; tests may still create their own threads.
+The context-menu and board-picker retained-text rendering regressions each run in a separate
+process under both feature configurations. Both have crashed inside Cairo/FreeType during
+parallel tests. This isolation covers these observed failures; it does not prove that the
+native race is fixed. Direct parallel `cargo test` runs can still hit it. See [Releasing](docs/RELEASING.md) for
+the full release and website handoff.
 
 For offline work, prefetch dependencies first:
 
@@ -213,10 +231,11 @@ not as a reason for mechanical splitting.
 
 See [tools/README.md](tools/README.md) for build, install, packaging, version, and release helpers.
 
-Local checks and the Rust CI job both run `./tools/lint-and-test.sh`. It lints,
-builds binaries, and tests the whole workspace with all features and with no
-default features, alongside source and packaging checks. CI additionally checks
-dynamic and static gtk4-layer-shell linkage and uploads its code-health report.
+Run `./tools/lint-and-test.sh` for the standalone local gate. It lints, builds
+binaries, and tests the whole workspace with all features and with no default
+features, alongside source, packaging, retained release-contract, and C# tool
+checks when .NET is installed. CI runs the equivalent C# command and additionally checks dynamic
+and static gtk4-layer-shell linkage and uploads its code-health report.
 
 GTK widget coverage runs separately with `./tools/test-gtk-widgets.sh` (Weston and
 `dbus-run-session` required). It creates a private headless display and requires

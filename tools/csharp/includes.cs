@@ -1,0 +1,14 @@
+#:include Infrastructure/Core.cs
+#:include Infrastructure/ToolConstants.cs
+#:include Infrastructure/RepositoryNames.cs
+#:include Infrastructure/ProcessRunner.cs
+#:include Infrastructure/Files.cs
+#:include Application/ToolApplication.cs
+#:include Commands/AssetsCommand.cs
+#:include Commands/DevelopmentCommands.cs
+#:include Commands/ChecksCommand.cs
+#:include Commands/VersionCommands.cs
+#:include Commands/NativeDesktopCommands.cs
+#:include Commands/PackagingCommands.cs
+#:include Commands/ReleaseAurCommands.cs
+#:include Commands/ReportCommands.cs

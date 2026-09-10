@@ -12,6 +12,7 @@ Checks that release/version metadata agrees across:
   * packaging/PKGBUILD
   * packaging/.SRCINFO
   * flake.nix
+  * global.json
 
 Also keeps the configurator's supported libadwaita floor at 1.4 across its
 Cargo feature, package metadata, release assertions, and AUR generation.
@@ -74,6 +75,7 @@ if [[ -z "$PYTHON" ]]; then
 fi
 
 "$PYTHON" - "$REPO_ROOT" "$release_version" <<'PY'
+import json
 import pathlib
 import re
 import sys
@@ -90,6 +92,7 @@ errors = []
 version_re = re.compile(r"^\d+\.\d+\.\d+(?:\.\d+)?$")
 checksum_re = re.compile(r"^[0-9a-fA-F]{64}$")
 supported_libadwaita_floor = "1.4"
+repository_tool_sdk = "11.0.100-rc.1.26425.128"
 # A floor raise must add a reviewed runner contract instead of inheriting the
 # previous Ubuntu base image by accident.
 release_runner_libadwaita_floors = {
@@ -98,6 +101,24 @@ release_runner_libadwaita_floors = {
 
 def read_text(path):
     return (root / path).read_text(encoding="utf-8")
+
+def global_json_sdk(path):
+    try:
+        document = json.loads(read_text(path))
+        sdk = document["sdk"]
+        version = sdk["version"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
+        errors.append(f"{path} SDK metadata is invalid: {error}")
+        return None
+
+    if not isinstance(version, str) or not version.strip():
+        errors.append(f"{path} SDK metadata is invalid: sdk.version must be a non-empty string")
+        return None
+    if sdk.get("rollForward") != "disable":
+        errors.append(f"{path} SDK rollForward must be disable")
+    if sdk.get("allowPrerelease") is not True:
+        errors.append(f"{path} SDK allowPrerelease must be true")
+    return version.strip()
 
 def cargo_version(path):
     text = read_text(path)
@@ -227,6 +248,7 @@ def require_template_sha256sums(label, values):
 root_version = cargo_version("Cargo.toml")
 config_version = cargo_version("configurator/Cargo.toml")
 require_equal("configurator/Cargo.toml", config_version, root_version)
+require_equal("global.json SDK", global_json_sdk("global.json"), repository_tool_sdk)
 
 expected_libadwaita_feature = "v" + supported_libadwaita_floor.replace(".", "_")
 libadwaita_features = cargo_libadwaita_features("configurator/Cargo.toml")
@@ -256,16 +278,6 @@ libadwaita_floors = {
         "packaging/.SRCINFO libadwaita floor",
         "packaging/.SRCINFO",
         r"^\s*depends = libadwaita>=([0-9]+\.[0-9]+)\s*$",
-    ),
-    "release workflow deb libadwaita floor": single_metadata_floor(
-        "release workflow deb libadwaita floor",
-        ".github/workflows/build-packages.yml",
-        r'''^\s*grep -Fq 'libadwaita-1-0 \(>= ([0-9]+\.[0-9]+)\)' <<< "\$configurator_deb_depends"\s*$''',
-    ),
-    "release workflow rpm libadwaita floor": single_metadata_floor(
-        "release workflow rpm libadwaita floor",
-        ".github/workflows/build-packages.yml",
-        r'''^\s*grep -Fxq 'libadwaita >= ([0-9]+\.[0-9]+)' <<< "\$configurator_rpm_requires"\s*$''',
     ),
     "AUR updater generated libadwaita floor": single_metadata_floor(
         "AUR updater generated libadwaita floor",

@@ -30,6 +30,18 @@
           rustc = rustToolchain;
         };
         servicePath = pkgs.lib.makeBinPath [ pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
+        developmentInputs = with pkgs; [
+          rustToolchain
+          util-linux
+          pkg-config
+          cairo
+          pango
+          wayland
+          libxkbcommon
+          gtk4
+          gtk4-layer-shell
+          libadwaita
+        ];
       in
       # Instantiation (and CI `nix eval`) must fail before cargoBuildHook
       # when the selected compiler lags Cargo.toml's rust-version.
@@ -140,17 +152,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            rustToolchain
-            pkg-config
-            cairo
-            pango
-            wayland
-            libxkbcommon
-            gtk4
-            gtk4-layer-shell
-            libadwaita
-          ];
+          buildInputs = developmentInputs;
         };
       });
 }

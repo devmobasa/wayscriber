@@ -1,0 +1,49 @@
+# C# helper style: spaced parentheses and braced guards, with repository LF endings.
+[*.cs]
+indent_style = space
+indent_size = 4
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 140
+dotnet_diagnostic.CA1502.severity = error
+dotnet_sort_system_directives_first = true
+csharp_prefer_braces = true:warning
+csharp_style_throw_expression = false:warning
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_method_declaration_parameter_list_parentheses = true
+csharp_space_between_method_call_parameter_list_parentheses = true
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = true
+csharp_space_between_method_call_empty_parameter_list_parentheses = true
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_after_cast = true
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_between_parentheses = control_flow_statements, type_casts
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = true
+
+# Keep explicit braced guards and their exception construction visible.
+dotnet_diagnostic.CA1510.severity = none
+dotnet_diagnostic.CA1513.severity = none
+
+# Match Rider's handling of the method-parenthesis rules above.
+resharper_braces_for_for = required
+resharper_braces_for_foreach = required
+resharper_braces_for_ifelse = required
+resharper_braces_for_while = required
+resharper_space_within_method_declaration_parentheses = true
+resharper_space_within_method_call_parentheses = true
+resharper_csharp_keep_user_linebreaks = false
+resharper_csharp_align_first_arg_by_paren = false
+resharper_csharp_align_multiline_argument = false
+resharper_csharp_wrap_arguments_style = wrap_if_long
+resharper_csharp_max_invocation_arguments_on_line = 6
+resharper_csharp_keep_existing_invocation_parens_arrangement = false

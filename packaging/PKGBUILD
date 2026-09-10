@@ -56,9 +56,8 @@ package() {
     # Install systemd user service
     install -Dm644 packaging/wayscriber.service "$pkgdir/usr/lib/systemd/user/wayscriber.service"
 
-    # Install desktop entries and icons
+# Wayscriber desktop integration
     install -Dm644 packaging/wayscriber.desktop "$pkgdir/usr/share/applications/wayscriber.desktop"
-    install -Dm644 packaging/wayscriber-configurator.desktop "$pkgdir/usr/share/applications/wayscriber-configurator.desktop"
     install -Dm644 packaging/icons/wayscriber-16.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/wayscriber.png"
     install -Dm644 packaging/icons/wayscriber-19.png "$pkgdir/usr/share/icons/hicolor/19x19/apps/wayscriber.png"
     install -Dm644 packaging/icons/wayscriber-22.png "$pkgdir/usr/share/icons/hicolor/22x22/apps/wayscriber.png"
@@ -76,6 +75,10 @@ package() {
     install -Dm644 packaging/icons/wayscriber-128.png "$pkgdir/usr/share/pixmaps/wayscriber.png"
     install -Dm644 packaging/icons/wayscriber.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber.svg"
     install -Dm644 packaging/icons/wayscriber-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg"
+# End Wayscriber desktop integration
+
+# Wayscriber configurator desktop integration
+    install -Dm644 packaging/wayscriber-configurator.desktop "$pkgdir/usr/share/applications/wayscriber-configurator.desktop"
     install -Dm644 packaging/icons/wayscriber-configurator-16.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-19.png "$pkgdir/usr/share/icons/hicolor/19x19/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-22.png "$pkgdir/usr/share/icons/hicolor/22x22/apps/wayscriber-configurator.png"
@@ -85,6 +88,7 @@ package() {
     install -Dm644 packaging/icons/wayscriber-configurator-128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-128.png "$pkgdir/usr/share/pixmaps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg"
+# End Wayscriber configurator desktop integration
 
     # Install documentation and example config
     install -Dm644 config.example.toml "$pkgdir/usr/share/doc/$pkgname/config.example.toml"

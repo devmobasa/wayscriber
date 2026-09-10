@@ -2,6 +2,59 @@
 
 Helper scripts for development, installation, packaging, and release workflows.
 
+## C# automation
+
+CI uses the file-based app at `tools/wayscriber.cs`. It also provides C# versions
+of the local commands below, while the standalone shell and Python tools remain
+available for contributors who do not have .NET installed. Production C# commands
+never call those scripts.
+
+The exact SDK is pinned by `global.json` and installed by GitHub Actions through
+`actions/setup-dotnet`. Nix does not provide .NET. Local users who choose the C#
+route install the pinned SDK separately. Build the file app once, then reuse that
+build:
+
+```bash
+dotnet build tools/wayscriber.cs
+dotnet run tools/wayscriber.cs --no-build -- --help
+```
+
+The C# regression suite uses the same pattern:
+
+```bash
+dotnet build tools/wayscriber.tests.cs
+dotnet run tools/wayscriber.tests.cs --no-build
+```
+
+For a one-command C# source installation, use the executable file app. It
+builds the C# entry point as needed, then builds and installs Wayscriber through
+the same `install app` command:
+
+```bash
+./tools/install.cs
+```
+
+Installer options can be passed directly, for example
+`./tools/install.cs --replace-other`. Use `./tools/install.cs configurator` to
+install only the configurator. The standalone `./tools/install.sh` remains
+available when .NET is not installed. Use `./tools/install.cs help` to show the
+C# installation commands; `--help` is reserved by `dotnet run` when the file is
+launched through its shebang.
+
+The regression suite also executes the retained package-repository, release-packaging,
+and AUR desktop-asset shell contracts. Production C# commands do not invoke those
+fallback scripts.
+
+`./tools/lint-and-test.sh` always runs those three retained shell contracts. When
+the pinned .NET SDK is available, it also builds and runs the C# regression suite;
+without .NET, it reports that optional local check as skipped and continues with
+the standalone checks.
+
+Common equivalents are `dev build`, `dev test`, `dev fetch`, `ci lint-and-test`,
+`ci gtk-widgets`, `install app`, `install configurator`, `version bump`,
+`package build`, `release publish-tag`, and `aur update`. Run `--help` for the
+complete command list and options.
+
 ## Development
 
 - **build.sh** - Build wayscriber release binary
@@ -59,7 +112,9 @@ Helper scripts for development, installation, packaging, and release workflows.
 ## Version & Release
 
 - **bump-version.sh** - Bump version numbers
+  - Checks offline dependency resolution before changing version files; run `./tools/fetch-all-deps.sh` if the cache is incomplete.
   - Updates Cargo.toml, configurator/Cargo.toml, the workspace Cargo.lock, PKGBUILD, and .SRCINFO
+  - Updates only workspace packages in the lockfile, offline; existing dependency versions stay locked
   - flake.nix package version follows Cargo.toml automatically
   - Auto-increments patch version if no version specified
   - Use this in the same change as a user-visible overlay/settings/config toggle, or immediately
@@ -90,6 +145,9 @@ Packaging-only hotfix policy:
   - Auto-detects version from Cargo.toml if not specified
   - Runs version consistency checks before tagging
   - Usage: `./tools/publish-release-tag.sh [--version X.Y.Z[.N]] [--dry-run]`
+
+See [Releasing](../docs/RELEASING.md) for validation, website release notes, and the
+final update-manifest publication step. Pushing a tag does not update the website notice.
 
 ## Packaging
 
@@ -138,13 +196,24 @@ hashes, so build-level changes still need a pull request from us. See
 
 ## AUR (Arch User Repository)
 
+- **aur-desktop-assets.sh** / **aur-desktop-assets.py** - Standalone asset recipe generator
+  - Reads and validates the package manifests without .NET.
+  - Usage: `bash tools/aur-desktop-assets.sh REPO_ROOT`.
+
+- **wayscriber assets emit** - C# asset recipe generator used by CI
+  - Reads both package YAML manifests and validates asset paths and integer permissions.
+  - Standalone shell tools keep their own implementation and do not require .NET.
+
 - **update-aur.sh** - Interactive AUR update
   - Updates PKGBUILD, tests build locally, pushes to AUR
   - Prompts for confirmation at each step
   - Usage: `./tools/update-aur.sh`
 
 - **update-aur-from-manifest.sh** - CI-friendly AUR update
+  - Remains a standalone shell implementation for local use and does not require .NET.
+  - Regenerates managed desktop asset blocks, including incomplete blocks from older updater versions.
   - Updates multiple AUR packages using checksums from manifest.json
+  - Adds and validates desktop launchers and icons for the main source/binary packages and configurator
   - Designed for CI automation after artifacts are built
   - Requires the configurator AUR clone unless `--no-configurator` is passed explicitly
   - Supports `--source-sha256` for offline/recovery runs

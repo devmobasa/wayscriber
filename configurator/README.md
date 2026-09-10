@@ -120,7 +120,7 @@ keeps the draft; it does not attempt to cancel a durable write already in progre
 See the [application map](../docs/codebase-overview.md) for shape edits and capture, and
 [CONTRIBUTING](../CONTRIBUTING.md) for setup. From the repository root, use
 `cargo test -p wayscriber-configurator` for focused coverage and `./tools/lint-and-test.sh`
-for the canonical workspace checks used by CI. `./tools/test-gtk-widgets.sh` runs required
+for the standalone workspace checks mirrored by CI. `./tools/test-gtk-widgets.sh` runs required
 GTK toolbar assertions on a private headless compositor. These checks do not prove behavior
 on an installed desktop or screen-reader announcements.
 

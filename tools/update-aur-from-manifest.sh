@@ -297,15 +297,99 @@ rewrite_packaging_asset_paths() {
     ' PKGBUILD
 }
 
+remove_complete_desktop_asset_block() {
+    local marker="$1" end_marker="$2"
+    DESKTOP_ASSET_MARKER="$marker" DESKTOP_ASSET_END_MARKER="$end_marker" perl -0pi -e '
+        s{^\Q$ENV{DESKTOP_ASSET_MARKER}\E\n.*?^\Q$ENV{DESKTOP_ASSET_END_MARKER}\E\n?}{}ms
+            or die "Failed to remove managed desktop asset block\n";
+    ' PKGBUILD
+}
+
+remove_markerless_desktop_assets() {
+    local package="$1"
+    DESKTOP_ASSET_PACKAGE="${package}" perl -ni -e '
+        my $is_asset = /^\s*install\s+.*\$pkgdir\/usr\/share\/(?:applications|icons|pixmaps)\//;
+        my $is_configurator = index($_, "wayscriber-configurator") >= 0;
+        $is_configurator ||= index($_, "configurator") >= 0;
+        my $matches_package = $ENV{DESKTOP_ASSET_PACKAGE} eq "wayscriber-configurator" || !$is_configurator;
+        print unless $is_asset && $matches_package;
+    ' PKGBUILD
+}
+
+has_unmanaged_desktop_assets() {
+    local package="$1" line
+    while IFS= read -r line; do
+        if [[ "${package}" == wayscriber-configurator ]] \
+            || [[ "${package}" == wayscriber && "${line}" != *configurator* ]]; then
+            return 0
+        fi
+    done < <(grep -E '^[[:space:]]*install[[:space:]].*\$pkgdir/usr/share/(applications|icons|pixmaps)/' PKGBUILD || true)
+    return 1
+}
+
+# shellcheck disable=SC2016
+configurator_desktop_install_lines() {
+    printf '%s\n' \
+        '    install -Dm644 packaging/wayscriber-configurator.desktop "$pkgdir/usr/share/applications/wayscriber-configurator.desktop"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-16.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-19.png "$pkgdir/usr/share/icons/hicolor/19x19/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-22.png "$pkgdir/usr/share/icons/hicolor/22x22/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-24.png "$pkgdir/usr/share/icons/hicolor/24x24/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-38.png "$pkgdir/usr/share/icons/hicolor/38x38/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-64.png "$pkgdir/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg"' \
+        '    install -Dm644 packaging/icons/wayscriber-configurator-128.png "$pkgdir/usr/share/pixmaps/wayscriber-configurator.png"'
+}
+
+validate_configurator_desktop_assets() {
+    local dir="$1"
+    local marker='# Wayscriber configurator desktop integration'
+    local end_marker='# End Wayscriber configurator desktop integration'
+    local expected_block actual_block marker_count end_count
+    expected_block="$(configurator_desktop_install_lines)"
+    marker_count="$(grep -Fxc "$marker" "$dir/PKGBUILD" || true)"
+    end_count="$(grep -Fxc "$end_marker" "$dir/PKGBUILD" || true)"
+    [[ "$marker_count" == 1 && "$end_count" == 1 ]] || {
+        echo "wayscriber-configurator PKGBUILD has a missing or malformed desktop asset block" >&2
+        return 1
+    }
+    actual_block="$(awk -v marker="$marker" -v end_marker="$end_marker" '
+        $0 == marker { inside = 1; next }
+        $0 == end_marker { inside = 0; found_end = 1; next }
+        inside { print }
+        END { if (inside || !found_end) exit 1 }
+    ' "$dir/PKGBUILD")" || {
+        echo "wayscriber-configurator PKGBUILD has a malformed desktop asset block" >&2
+        return 1
+    }
+    [[ "$actual_block" == "$expected_block" ]] || {
+        echo "wayscriber-configurator PKGBUILD has a stale desktop asset block" >&2
+        return 1
+    }
+}
+
 ensure_configurator_desktop_assets() {
     local marker='# Wayscriber configurator desktop integration'
+    local end_marker='# End Wayscriber configurator desktop integration'
     local binary_install='    install -Dm755 "target/release/wayscriber-configurator" "$pkgdir/usr/bin/wayscriber-configurator"'
-    local asset_block
+    local asset_block expected_lines
+
+    expected_lines="$(configurator_desktop_install_lines)"
 
     if grep -Fq "$marker" PKGBUILD; then
-        return
+        if grep -Fxq "$end_marker" PKGBUILD; then
+            remove_complete_desktop_asset_block "$marker" "$end_marker"
+        else
+            sed -E -i \
+                -e "\\|^${marker}$|d" \
+                -e '/install .*\$pkgdir\/usr\/share\/(applications|icons|pixmaps)\/.*wayscriber-configurator/d' \
+                PKGBUILD
+        fi
+    elif has_unmanaged_desktop_assets wayscriber-configurator; then
+        remove_markerless_desktop_assets wayscriber-configurator
     fi
-    if grep -Fq 'packaging/wayscriber-configurator.desktop' PKGBUILD; then
+    if has_unmanaged_desktop_assets wayscriber-configurator; then
         echo "wayscriber-configurator PKGBUILD has unmanaged desktop integration" >&2
         return 1
     fi
@@ -314,22 +398,114 @@ ensure_configurator_desktop_assets() {
         return 1
     }
 
-    asset_block="${marker}
-    install -Dm644 packaging/wayscriber-configurator.desktop \"\$pkgdir/usr/share/applications/wayscriber-configurator.desktop\"
-    install -Dm644 packaging/icons/wayscriber-configurator-16.png \"\$pkgdir/usr/share/icons/hicolor/16x16/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator-19.png \"\$pkgdir/usr/share/icons/hicolor/19x19/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator-22.png \"\$pkgdir/usr/share/icons/hicolor/22x22/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator-24.png \"\$pkgdir/usr/share/icons/hicolor/24x24/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator-38.png \"\$pkgdir/usr/share/icons/hicolor/38x38/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator-64.png \"\$pkgdir/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator-128.png \"\$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png\"
-    install -Dm644 packaging/icons/wayscriber-configurator.svg \"\$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg\"
-    install -Dm644 packaging/icons/wayscriber-configurator-128.png \"\$pkgdir/usr/share/pixmaps/wayscriber-configurator.png\""
+    asset_block="${marker}"$'\n'"${expected_lines}"$'\n'"${end_marker}"
     CONFIGURATOR_ASSET_BLOCK="$asset_block" perl -0pi -e '
         my $anchor = q{    install -Dm755 "target/release/wayscriber-configurator" "$pkgdir/usr/bin/wayscriber-configurator"};
         s{^\Q$anchor\E$}{$anchor . "\n\n" . $ENV{CONFIGURATOR_ASSET_BLOCK}}me
             or die "Failed to add wayscriber-configurator desktop integration\n";
     ' PKGBUILD
+}
+
+wayscriber_desktop_files() {
+    printf '%s\n' 'packaging/wayscriber.desktop usr/share/applications/wayscriber.desktop'
+    local size kind
+    for size in 16 19 22 24 38 64 128; do
+        for kind in apps status; do
+            printf 'packaging/icons/wayscriber-%s.png usr/share/icons/hicolor/%sx%s/%s/wayscriber.png\n' \
+                "$size" "$size" "$size" "$kind"
+        done
+    done
+    printf '%s\n' \
+        'packaging/icons/wayscriber.svg usr/share/icons/hicolor/scalable/apps/wayscriber.svg' \
+        'packaging/icons/wayscriber-symbolic.svg usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg' \
+        'packaging/icons/wayscriber-128.png usr/share/pixmaps/wayscriber.png'
+}
+
+has_unmanaged_wayscriber_desktop_assets() {
+    has_unmanaged_desktop_assets wayscriber
+}
+
+# Emit package-time variables literally, just like the existing recipe templates.
+# shellcheck disable=SC2016
+wayscriber_desktop_install_lines() {
+    local channel="$1" source destination
+    while read -r source destination; do
+        if [[ "$channel" == bin ]]; then
+            source='${srcdir_tmp}/'"$destination"
+            printf '    install -Dm644 "%s" "$pkgdir/%s"\n' "$source" "$destination"
+        else
+            printf '    install -Dm644 %s "$pkgdir/%s"\n' "$source" "$destination"
+        fi
+    done < <(wayscriber_desktop_files)
+}
+
+# shellcheck disable=SC2016
+ensure_wayscriber_desktop_assets() {
+    local channel="$1" marker='# Wayscriber desktop integration' end_marker='# End Wayscriber desktop integration' anchor asset_block
+    # The interactive updater copies the complete packaging/PKGBUILD template.
+    # Accept its existing assets without inserting a second block.
+    if validate_wayscriber_desktop_assets "$channel" . 2>/dev/null; then
+        return
+    fi
+    if grep -Fxq "$marker" PKGBUILD; then
+        if grep -Fxq "$end_marker" PKGBUILD; then
+            remove_complete_desktop_asset_block "$marker" "$end_marker"
+        else
+            sed -i "\\|^${marker}$|d" PKGBUILD
+            remove_markerless_desktop_assets wayscriber
+        fi
+    elif has_unmanaged_wayscriber_desktop_assets; then
+        remove_markerless_desktop_assets wayscriber
+    fi
+    if has_unmanaged_wayscriber_desktop_assets; then
+        echo "wayscriber ${channel} PKGBUILD has unmanaged desktop integration" >&2
+        return 1
+    fi
+    if [[ "$channel" == bin ]]; then
+        anchor='    install -Dm755 "${srcdir_tmp}/usr/bin/wayscriber" "$pkgdir/usr/bin/wayscriber"'
+    else
+        anchor='    install -Dm755 "target/release/wayscriber" "$pkgdir/usr/bin/wayscriber"'
+    fi
+    asset_block="$(wayscriber_desktop_install_lines "$channel")"
+    WAYSCRIBER_ASSET_ANCHOR="$anchor" WAYSCRIBER_ASSET_BLOCK="$marker"$'\n'"$asset_block"$'\n'"$end_marker" \
+        perl -0pi -e '
+            my $anchor = $ENV{WAYSCRIBER_ASSET_ANCHOR};
+            s{^\Q$anchor\E$}{$anchor . "\n\n" . $ENV{WAYSCRIBER_ASSET_BLOCK}}me
+                or die "wayscriber PKGBUILD has no binary install line to extend\n";
+        ' PKGBUILD
+}
+
+validate_wayscriber_desktop_assets() {
+    local channel="$1" dir="$2" line
+    local marker='# Wayscriber desktop integration'
+    local end_marker='# End Wayscriber desktop integration'
+    local expected_block actual_block marker_count end_count
+    expected_block="$(wayscriber_desktop_install_lines "$channel")"
+    marker_count="$(grep -Fxc "$marker" "$dir/PKGBUILD" || true)"
+    end_count="$(grep -Fxc "$end_marker" "$dir/PKGBUILD" || true)"
+    if [[ "$marker_count" != 0 || "$end_count" != 0 ]]; then
+        [[ "$marker_count" == 1 && "$end_count" == 1 ]] || {
+            echo "wayscriber ${channel} PKGBUILD has a malformed desktop asset block" >&2
+            return 1
+        }
+        actual_block="$(awk -v marker="$marker" -v end_marker="$end_marker" '
+            $0 == marker { inside = 1; next }
+            $0 == end_marker { inside = 0; found_end = 1; next }
+            inside { print }
+            END { if (inside || !found_end) exit 1 }
+        ' "$dir/PKGBUILD")" || {
+            echo "wayscriber ${channel} PKGBUILD has a malformed desktop asset block" >&2
+            return 1
+        }
+        [[ "$actual_block" == "$expected_block" ]] || {
+            echo "wayscriber ${channel} PKGBUILD has a stale desktop asset block" >&2
+            return 1
+        }
+        return 0
+    fi
+
+    echo "wayscriber ${channel} PKGBUILD lacks a managed desktop asset block" >&2
+    return 1
 }
 
 ensure_libxkbcommon_dependency() {
@@ -459,22 +635,7 @@ validate_configurator_recipe() {
         echo "wayscriber-configurator recipe lacks GTK4/libadwaita metadata" >&2
         return 1
     }
-    grep -Fq 'packaging/wayscriber-configurator.desktop' PKGBUILD \
-        && grep -Fq 'packaging/icons/wayscriber-configurator.svg' PKGBUILD \
-        && grep -Fq '$pkgdir/usr/share/applications/wayscriber-configurator.desktop' PKGBUILD \
-        && grep -Fq '$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg' PKGBUILD \
-        && grep -Fq '$pkgdir/usr/share/pixmaps/wayscriber-configurator.png' PKGBUILD || {
-        echo "wayscriber-configurator recipe lacks desktop launcher assets" >&2
-        return 1
-    }
-    local size
-    for size in 16 19 22 24 38 64 128; do
-        grep -Fq "packaging/icons/wayscriber-configurator-${size}.png" PKGBUILD \
-            && grep -Fq "\$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/wayscriber-configurator.png" PKGBUILD || {
-            echo "wayscriber-configurator recipe lacks the ${size}x${size} launcher icon" >&2
-            return 1
-        }
-    done
+    validate_configurator_desktop_assets .
     popd >/dev/null
 }
 
@@ -517,6 +678,7 @@ update_bin() {
     # aligned with the binary instead of inheriting source-build dependencies.
     remove_runtime_dependency gtk4-layer-shell
     ensure_bin_layer_shell_license
+    ensure_wayscriber_desktop_assets bin
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_pkgbuild_array PKGBUILD source_x86_64 "source_x86_64=(\"wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz\")"
@@ -553,6 +715,7 @@ update_source() {
     replace_pkgbuild_array PKGBUILD sha256sums "sha256sums=('${source_sha}')"
     replace_line PKGBUILD 'cd "\$pkgname"' 'cd "$pkgname-$pkgver"'
     rewrite_packaging_asset_paths
+    ensure_wayscriber_desktop_assets source
 
     set_srcinfo_field .SRCINFO pkgver "${VERSION}"
     set_srcinfo_field .SRCINFO pkgrel "${pkgrel}"
@@ -625,10 +788,12 @@ validate_selected_recipes() {
     local source_dir="$1" bin_dir="$2" config_dir="$3"
     if [[ "$SOURCE_SELECTED" -eq 1 ]]; then
         validate_recipe_pair "wayscriber" "$source_dir" sha256sums "$SOURCE_ARCHIVE_SHA"
+        validate_wayscriber_desktop_assets source "$source_dir"
     fi
     if [[ "$BIN_SELECTED" -eq 1 ]]; then
         validate_recipe_pair \
             "wayscriber-bin" "$bin_dir" sha256sums_x86_64 "$BIN_ARCHIVE_SHA"
+        validate_wayscriber_desktop_assets bin "$bin_dir"
     fi
     if [[ "$CONFIGURATOR_SELECTED" -eq 1 ]]; then
         validate_configurator_recipe "$config_dir"

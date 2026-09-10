@@ -5,6 +5,7 @@
 
 ## Architecture
 - Package manifests describe the wayscriber binary and configurator package outputs.
+- Package YAML manifests own the desktop asset lists used by `tools/wayscriber.cs assets emit`; its implementation is in `tools/csharp/Commands/AssetsCommand.cs`.
 - `PKGBUILD` and `.SRCINFO` represent Arch/AUR packaging metadata.
 - `nixpkgs/package.nix` mirrors the recipe owned by nixpkgs; it is a submission draft, not a build input.
 - Desktop files, icons, and `wayscriber.service` define installed desktop and daemon integration.

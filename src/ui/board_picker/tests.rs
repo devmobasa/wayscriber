@@ -28,7 +28,11 @@ fn pixels(
     surface.data().unwrap().to_vec()
 }
 
+// A parallel-suite core dump reached Cairo/FreeType glyph loading through this
+// test. tools/lint-and-test.sh runs it alone under both feature configurations;
+// process isolation preserves assertions but does not fix cairo/cairo!81.
 #[test]
+#[ignore = "isolated by tools/lint-and-test.sh; Cairo race: https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81"]
 fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts() {
     let engine = UiTextEngine::default();
     let measurer = crate::draw::TextMeasurer::default();

@@ -47,6 +47,7 @@ if [[ -n "${GPG_PRIVATE_KEY_B64:-}" ]]; then
     need_cmd gpg
 fi
 if [[ "${SIGN_RPMS}" == "1" ]]; then
+    need_cmd rpm
     need_cmd rpmsign
 fi
 
@@ -61,7 +62,43 @@ RPM_CFG="${ARTIFACT_ROOT}/wayscriber-configurator-${RPM_ARCH}.rpm"
 [[ -f "${RPM_MAIN}" ]] || die "Missing rpm package at ${RPM_MAIN}"
 
 GNUPGHOME_TMP=""
+RPM_MACRO_HOME=""
 ACTIVE_KEY=""
+
+rpm_major_version() {
+    local version_output
+    version_output="$(rpm --version)"
+    if [[ "${version_output}" =~ ([0-9]+)(\.[0-9]+)+ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        return
+    fi
+
+    die "Cannot determine RPM version from: ${version_output}"
+}
+
+write_rpm_signing_macros() {
+    local rpm_major
+    rpm_major="$(rpm_major_version)"
+    RPM_MACRO_HOME="${GNUPGHOME_TMP}/rpm-home"
+    mkdir -p "${RPM_MACRO_HOME}"
+
+    cat > "${RPM_MACRO_HOME}/.rpmmacros" <<EOF
+%_signature gpg
+%_gpg_name ${ACTIVE_KEY}
+%_gpg_path ${GNUPGHOME}
+%__gpg $(command -v gpg)
+EOF
+    if ((rpm_major >= 6)); then
+        cat >> "${RPM_MACRO_HOME}/.rpmmacros" <<EOF
+%_openpgp_sign_id ${ACTIVE_KEY}
+%_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback --passphrase-fd 3
+EOF
+    else
+        cat >> "${RPM_MACRO_HOME}/.rpmmacros" <<'EOF'
+%__gpg_sign_cmd %{__gpg} --batch --pinentry-mode loopback --passphrase-fd 3 --no-armor --detach-sign --sign --local-user "%{_gpg_name}" --output %{__signature_filename} %{__plaintext_filename}
+EOF
+    fi
+}
 
 setup_gpg() {
     [[ -n "${GPG_PRIVATE_KEY_B64:-}" ]] || { warn "GPG_PRIVATE_KEY_B64 not set; repos will be unsigned"; return; }
@@ -86,13 +123,9 @@ setup_gpg() {
         --export "${ACTIVE_KEY}" | gpg --dearmor > "${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.gpg"
     log "Exported public key: ${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.asc"
 
-    cat > "${HOME}/.rpmmacros" <<EOF
-%_signature gpg
-%_gpg_name ${ACTIVE_KEY}
-%_gpg_path ${GNUPGHOME}
-%__gpg $(command -v gpg)
-%__gpg_sign_cmd %{__gpg} --batch --pinentry-mode loopback --passphrase-fd 3 --no-armor --detach-sign --sign --local-user "%{_gpg_name}" --output %{__signature_filename} %{__plaintext_filename}
-EOF
+    if [[ "${SIGN_RPMS}" == "1" ]]; then
+        write_rpm_signing_macros
+    fi
 }
 
 cleanup() {
@@ -107,7 +140,7 @@ sign_rpm() {
     [[ -n "${ACTIVE_KEY}" ]] || { warn "Skipping rpm signing (no GPG key)"; return; }
     [[ "${SIGN_RPMS}" == "1" ]] || { warn "Skipping rpm signing (SIGN_RPMS=0)"; return; }
 
-    if rpmsign --addsign "${rpm_path}" 3<<<"${GPG_PASSPHRASE:-}"; then
+    if HOME="${RPM_MACRO_HOME}" rpmsign --addsign "${rpm_path}" 3<<<"${GPG_PASSPHRASE:-}"; then
         log "Signed rpm: ${rpm_path}"
     else
         warn "rpmsign failed for ${rpm_path}; package left unsigned"

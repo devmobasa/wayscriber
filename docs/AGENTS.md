@@ -6,6 +6,7 @@
 ## Architecture
 - `docs/CONFIG.md` is the user-facing config guide.
 - `docs/SETUP.md` documents installation/setup workflows.
+- For release preparation, tagging, or website publication, follow `docs/RELEASING.md`.
 - `docs/codebase-overview.md` is architecture reference material for the main crate.
 - `docs/temp/` is draft and planning material unless a file explicitly says otherwise.
 

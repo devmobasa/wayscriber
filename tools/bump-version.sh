@@ -12,7 +12,7 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
 - Updates:
   * Cargo.toml (wayscriber)
   * configurator/Cargo.toml
-  * Cargo.lock (via cargo generate-lockfile)
+  * Cargo.lock (workspace versions only; preserves locked dependencies)
   * flake.nix package version follows Cargo.toml automatically
   * packaging/PKGBUILD pkgver and template sha256sums=('SKIP')
   * packaging/.SRCINFO (via makepkg --printsrcinfo)
@@ -130,14 +130,23 @@ update_version_field() {
     fi
 }
 
+# Resolve against the existing manifests without writing the lockfile. An empty
+# registry cache must fail before either manifest or any package metadata changes.
+if [[ -f Cargo.lock ]]; then
+    if ! cargo update --workspace --offline --dry-run >/dev/null; then
+        echo "error: cannot resolve locked dependencies offline; run ./tools/fetch-all-deps.sh before bumping the version. No version files changed." >&2
+        exit 1
+    fi
+fi
+
 update_version_field "Cargo.toml"
 update_version_field "configurator/Cargo.toml"
 
 if [[ -f Cargo.lock ]]; then
     if $DRY_RUN; then
-        echo "dry-run: would regenerate Cargo.lock"
+        echo "dry-run: would update workspace versions in Cargo.lock, preserving dependencies"
     else
-        cargo generate-lockfile >/dev/null
+        cargo update --workspace --offline >/dev/null
     fi
 else
     echo "warn: Cargo.lock not found, skipping lockfile update" >&2

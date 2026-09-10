@@ -19,5 +19,6 @@
 - UI changes may affect `src/input/`, `src/backend/wayland/state/render/`, action metadata, keybindings, toolbar rendering, docs, and tests.
 
 ## Validation
+- The retained-text context-menu and board-picker regressions are ignored by the ordinary harness and run in separate processes through `tools/lint-and-test.sh`; keep those explicit runs when renaming tests or changing test routing.
 - Add focused layout/render tests for complex UI paths where possible.
 - Run targeted UI/input tests for command palette, board picker, help overlay, or toolbar behavior.

@@ -22,6 +22,7 @@ CLAUDE.md
 # Test scripts
 test_run.sh
 run.sh
+!/tools/run.sh
 
 # Local release helper
 tools/release.sh

@@ -208,13 +208,35 @@ done < "$MANIFEST"
 SERVICE_FILE="$STAGED_ROOT/usr/lib/systemd/user/wayscriber.service"
 [[ -f "$SERVICE_FILE" ]] || die "archive does not contain the Wayscriber user service"
 awk '
-    $0 == "ExecStart=/usr/bin/wayscriber --daemon" ||
-    $0 == "ExecStart=\"/usr/bin/wayscriber\" --daemon" {
-        matches++
-        next
+    function check_command(command) {
+        sub(/^[[:space:]]+/, "", command)
+        if (command !~ /^Exec[[:alpha:]]*=/ || index(command, "wayscriber") == 0) {
+            return
+        }
+        if (command == "ExecStart=/usr/bin/wayscriber --daemon" ||
+            command == "ExecStart=\"/usr/bin/wayscriber\" --daemon") {
+            matches++
+        } else {
+            unexpected = 1
+        }
     }
-    index($0, "/usr/bin/wayscriber") { unexpected = 1 }
-    END { exit !(matches == 1 && !unexpected) }
+    {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        if (command != "" && line ~ /^[#;]/) {
+            next
+        }
+        command = command line
+        if (sub(/\\[[:space:]]*$/, " ", command)) {
+            next
+        }
+        check_command(command)
+        command = ""
+    }
+    END {
+        if (command != "") check_command(command)
+        exit !(matches == 1 && !unexpected)
+    }
 ' "$SERVICE_FILE" \
     || die "release user service is incompatible with the direct installer rewrite"
 

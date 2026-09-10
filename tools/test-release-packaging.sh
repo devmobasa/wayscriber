@@ -219,6 +219,7 @@ cp "${REPO_ROOT}/Cargo.toml" \
     "${REPO_ROOT}/Cargo.lock" \
     "${REPO_ROOT}/README.md" \
     "${REPO_ROOT}/flake.nix" \
+    "${REPO_ROOT}/global.json" \
     "${LIBADWAITA_FLOOR_REPO}/"
 cp "${REPO_ROOT}/configurator/Cargo.toml" \
     "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
@@ -236,6 +237,34 @@ cp "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
     cd "${LIBADWAITA_FLOOR_REPO}"
     bash tools/check-version-consistency.sh >/dev/null
 )
+
+printf '%s\n' '{"sdk":{"version":"11.0.100-rc.1.26425.128","rollForward":"disable","allowPrerelease":true}}' \
+    > "${LIBADWAITA_FLOOR_REPO}/global.json"
+(
+    cd "${LIBADWAITA_FLOOR_REPO}"
+    bash tools/check-version-consistency.sh >/dev/null
+)
+
+printf '%s\n' '{"sdk":{}}' > "${LIBADWAITA_FLOOR_REPO}/global.json"
+expect_version_consistency_failure \
+    "global.json SDK metadata is invalid" \
+    "${LIBADWAITA_FLOOR_REPO}"
+
+printf '%s\n' '{"sdk":{"version":"11.0.100-rc.1.26425.127","rollForward":"disable","allowPrerelease":true}}' \
+    > "${LIBADWAITA_FLOOR_REPO}/global.json"
+expect_version_consistency_failure \
+    "global.json SDK: expected 11.0.100-rc.1.26425.128, got 11.0.100-rc.1.26425.127" \
+    "${LIBADWAITA_FLOOR_REPO}"
+
+printf '%s\n' '{"sdk":{"version":"11.0.100-rc.1.26425.128","rollForward":"latestPatch","allowPrerelease":false}}' \
+    > "${LIBADWAITA_FLOOR_REPO}/global.json"
+expect_version_consistency_failure \
+    "global.json SDK rollForward must be disable" \
+    "${LIBADWAITA_FLOOR_REPO}"
+expect_version_consistency_failure \
+    "global.json SDK allowPrerelease must be true" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/global.json" "${LIBADWAITA_FLOOR_REPO}/global.json"
 
 sed -i 's/features = \["v1_4"\]/features = ["v1_5"]/' \
     "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
@@ -277,21 +306,6 @@ expect_version_consistency_failure \
 
 cp "${REPO_ROOT}/packaging/.SRCINFO" \
     "${LIBADWAITA_FLOOR_REPO}/packaging/.SRCINFO"
-sed -i '/configurator_deb_depends/ s/libadwaita-1-0 (>= 1.4)/libadwaita-1-0 (>= 1.5)/' \
-    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
-expect_version_consistency_failure \
-    "release workflow deb libadwaita floor: expected 1.4, got 1.5" \
-    "${LIBADWAITA_FLOOR_REPO}"
-cp "${RELEASE_WORKFLOW}" \
-    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
-
-sed -i '/configurator_rpm_requires/ s/libadwaita >= 1.4/libadwaita >= 1.5/' \
-    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
-expect_version_consistency_failure \
-    "release workflow rpm libadwaita floor: expected 1.4, got 1.5" \
-    "${LIBADWAITA_FLOOR_REPO}"
-cp "${RELEASE_WORKFLOW}" \
-    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
 
 sed -i \
     "s/ensure_runtime_dependency 'libadwaita>=1.4'/ensure_runtime_dependency 'libadwaita>=1.5'/" \
@@ -343,24 +357,18 @@ sed -n '/^  package:/,/^  package-repos:/p' "${RELEASE_WORKFLOW}" \
     > "${WORK_DIR}/release-package-job.yml"
 assert_contains "${WORK_DIR}/release-package-job.yml" "runs-on: ubuntu-24.04"
 assert_not_contains "${RELEASE_WORKFLOW}" "runs-on: ubuntu-latest"
-assert_contains "${WORK_DIR}/release-package-job.yml" 'dpkg-deb -f dist/wayscriber-amd64.deb Version'
-assert_contains "${WORK_DIR}/release-package-job.yml" 'dpkg-deb -f dist/wayscriber-configurator-amd64.deb Version'
-assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n' dist/wayscriber-x86_64.rpm"
-assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n' dist/wayscriber-configurator-x86_64.rpm"
-assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber$'"
+# Recipe URLs must not become public while GitHub asset upload is still running.
+sed -n '/^  aur:/,/^  [a-z][a-z-]*:/p' "${RELEASE_WORKFLOW}" \
+    > "${WORK_DIR}/release-aur-job.yml"
+assert_contains "${WORK_DIR}/release-aur-job.yml" 'needs: [package, release]'
+assert_contains "${WORK_DIR}/release-package-job.yml" 'package verify-artifacts --artifact-root dist'
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
-assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber-configurator$'"
 assert_contains "${WORK_DIR}/release-package-job.yml" \
-    "grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< \"\$configurator_deb_depends\""
-assert_contains "${WORK_DIR}/release-package-job.yml" \
-    "grep -Fxq 'libadwaita >= 1.4' <<< \"\$configurator_rpm_requires\""
-assert_contains "${WORK_DIR}/release-package-job.yml" \
-    "/dist/wayscriber-configurator-amd64.deb"
+    'package smoke-ubuntu --artifact-root dist'
 assert_contains "${WORK_DIR}/release-package-job.yml" "Check direct Arch installer compatibility"
-assert_contains "${WORK_DIR}/release-package-job.yml" "https://wayscriber.com/arch-install.sh"
-assert_contains "${WORK_DIR}/release-package-job.yml" "./tools/check-arch-installer-manifest.sh"
+assert_contains "${WORK_DIR}/release-package-job.yml" "package check-live-arch-installer"
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
-assert_not_contains "${WORK_DIR}/release-package-job.yml" 'sh "$RUNNER_TEMP/arch-install.sh"'
+assert_not_contains "${RELEASE_WORKFLOW}" 'bash '
 assert_contains "${REPO_ROOT}/README.md" "--replace-other"
 assert_contains "${REPO_ROOT}/README.md" "--no-restart"
 assert_contains "${REPO_ROOT}/README.md" "--remove-unmanaged-usr"
@@ -375,6 +383,7 @@ ARCH_INSTALLER_FIXTURE_ARCHIVE="${WORK_DIR}/arch-installer.tar.gz"
 ARCH_INSTALLER_VALID_FIXTURE="${WORK_DIR}/arch-installer-valid.sh"
 ARCH_INSTALLER_MALFORMED_FIXTURE="${WORK_DIR}/arch-installer-malformed.sh"
 ARCH_INSTALLER_MALFORMED_OUTPUT="${WORK_DIR}/arch-installer-malformed-output"
+ARCH_INSTALLER_SERVICE_OUTPUT="${WORK_DIR}/arch-installer-service-output"
 mkdir -p \
     "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin" \
     "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user"
@@ -401,6 +410,30 @@ EOF
 "${ARCH_INSTALLER_CHECKER}" \
     --installer "${ARCH_INSTALLER_VALID_FIXTURE}" \
     --archive "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" >/dev/null
+
+printf '%s\n' 'ExecStartPost=/usr/bin/env \' '# ignored by systemd' '    wayscriber --active' \
+    >> "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user/wayscriber.service"
+tar -czf "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" \
+    -C "${ARCH_INSTALLER_FIXTURE_STAGE}" "${ARCH_INSTALLER_FIXTURE_ROOT}"
+set +e
+"${ARCH_INSTALLER_CHECKER}" \
+    --installer "${ARCH_INSTALLER_VALID_FIXTURE}" \
+    --archive "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" \
+    >"${ARCH_INSTALLER_SERVICE_OUTPUT}" 2>&1
+ARCH_INSTALLER_SERVICE_STATUS=$?
+set -e
+if [[ ${ARCH_INSTALLER_SERVICE_STATUS} -eq 0 ]]; then
+    echo "Expected an alternate Wayscriber service command to fail" >&2
+    exit 1
+fi
+assert_contains "${ARCH_INSTALLER_SERVICE_OUTPUT}" \
+    "release user service is incompatible"
+cat > "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user/wayscriber.service" <<'EOF'
+[Service]
+ExecStart="/usr/bin/wayscriber" --daemon
+EOF
+tar -czf "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" \
+    -C "${ARCH_INSTALLER_FIXTURE_STAGE}" "${ARCH_INSTALLER_FIXTURE_ROOT}"
 
 cat > "${ARCH_INSTALLER_MALFORMED_FIXTURE}" <<'EOF'
 #!/bin/sh
@@ -429,7 +462,7 @@ assert_contains "${ARCH_INSTALLER_MALFORMED_OUTPUT}" \
 
 # Ordinary CI exercises the dynamic source-build path, while a dedicated step
 # checks the static release path.
-assert_contains "${CI_WORKFLOW}" "GTK4_LAYER_SHELL_LIBRARY_MODE=both"
+assert_contains "${CI_WORKFLOW}" "ci prepare-gtk4-layer-shell --library-mode both"
 assert_contains "${CI_WORKFLOW}" "Check dynamic gtk4-layer-shell linkage"
 assert_contains "${CI_WORKFLOW}" "Check static gtk4-layer-shell linkage"
 if grep -Eq 'SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK.*GITHUB_ENV|GITHUB_ENV.*SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK' \
@@ -1175,6 +1208,7 @@ source=("old.tar.gz::https://example.invalid/old.tar.gz")
 sha256sums=('old')
 package() {
     cd "\$pkgname"
+    install -Dm755 "target/release/wayscriber" "\$pkgdir/usr/bin/wayscriber"
 }
 EOF
     cat > "${dir}/.SRCINFO" <<EOF
@@ -1515,5 +1549,229 @@ assert_clean_checkout_at_head \
     echo "AUR updater pushed before every selected checkout was prepared" >&2
     exit 1
 }
+
+# Reapply to prove idempotence, then execute both generated package() bodies.
+# Compare installed assets with the canonical package manifest, rather than
+# only matching the updater's own generated text.
+run_aur_updater "${WORK_DIR}" \
+    --source-dir "${AUR_SOURCE_HOTFIX}" \
+    --bin-dir "${AUR_BIN_DIR}" \
+    --no-configurator \
+    --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+for recipe in "${AUR_SOURCE_HOTFIX}" "${AUR_BIN_DIR}"; do
+    [[ "$(grep -Fxc '# Wayscriber desktop integration' "$recipe/PKGBUILD")" == 1 ]] || {
+        echo "Expected exactly one managed desktop block in $recipe/PKGBUILD" >&2
+        exit 1
+    }
+done
+
+# A managed block is exact state, so assets removed from the manifest must not
+# survive merely because every current line is also present.
+STALE_AUR_ASSET_LINE='    install -Dm644 packaging/icons/retired-icon.png "$pkgdir/usr/share/icons/hicolor/obsolete/retired-icon.png"'
+STALE_CONFIGURATOR_ASSET_LINE='    install -Dm644 packaging/icons/retired-legacy-icon.png "$pkgdir/usr/share/icons/hicolor/obsolete/retired-legacy-icon.png"'
+STALE_AUR_ASSET_LINE="${STALE_AUR_ASSET_LINE}" perl -0pi -e '
+    s{^# End Wayscriber desktop integration$}{$ENV{STALE_AUR_ASSET_LINE} . "\n" . $&}me
+' "${AUR_SOURCE_HOTFIX}/PKGBUILD"
+STALE_CONFIGURATOR_ASSET_LINE="${STALE_CONFIGURATOR_ASSET_LINE}" perl -0pi -e '
+    s{^# End Wayscriber configurator desktop integration$}{$ENV{STALE_CONFIGURATOR_ASSET_LINE} . "\n" . $&}me
+' "${AUR_CONFIG_HOTFIX}/PKGBUILD"
+run_aur_updater "${WORK_DIR}" \
+    --source-dir "${AUR_SOURCE_HOTFIX}" --bin-dir missing-bin \
+    --config-dir "${AUR_CONFIG_HOTFIX}" --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+assert_not_contains "${AUR_SOURCE_HOTFIX}/PKGBUILD" "${STALE_AUR_ASSET_LINE}"
+assert_not_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "${STALE_CONFIGURATOR_ASSET_LINE}"
+
+# Pre-marker recipes can contain an older manifest subset and retain removed
+# assets. Migrate each legacy set to an exact managed block.
+AUR_MARKERLESS_SOURCE="${WORK_DIR}/aur-markerless-source"
+AUR_MARKERLESS_BIN="${WORK_DIR}/aur-markerless-bin"
+AUR_MARKERLESS_CONFIG="${WORK_DIR}/aur-markerless-config"
+cp -a "${AUR_SOURCE_HOTFIX}" "${AUR_MARKERLESS_SOURCE}"
+cp -a "${AUR_BIN_DIR}" "${AUR_MARKERLESS_BIN}"
+cp -a "${AUR_CONFIG_HOTFIX}" "${AUR_MARKERLESS_CONFIG}"
+for recipe in "${AUR_MARKERLESS_SOURCE}" "${AUR_MARKERLESS_BIN}"; do
+    sed -i '/^# \(End \)\?Wayscriber desktop integration$/d' "${recipe}/PKGBUILD"
+    sed -i '/wayscriber-symbolic\.svg/d' "${recipe}/PKGBUILD"
+    printf '%s\n' "${STALE_AUR_ASSET_LINE}" >> "${recipe}/PKGBUILD"
+done
+sed -i '/^# \(End \)\?Wayscriber configurator desktop integration$/d' "${AUR_MARKERLESS_CONFIG}/PKGBUILD"
+sed -i '/wayscriber-configurator\.svg/d' "${AUR_MARKERLESS_CONFIG}/PKGBUILD"
+printf '%s\n' "${STALE_CONFIGURATOR_ASSET_LINE}" >> "${AUR_MARKERLESS_CONFIG}/PKGBUILD"
+run_aur_updater "${WORK_DIR}" \
+    --source-dir "${AUR_MARKERLESS_SOURCE}" --bin-dir "${AUR_MARKERLESS_BIN}" \
+    --config-dir "${AUR_MARKERLESS_CONFIG}" --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+for recipe in "${AUR_MARKERLESS_SOURCE}" "${AUR_MARKERLESS_BIN}"; do
+    [[ "$(grep -Fxc '# Wayscriber desktop integration' "${recipe}/PKGBUILD")" == 1 ]] || {
+        echo "Markerless Wayscriber desktop assets were not normalized in ${recipe}" >&2
+        exit 1
+    }
+    assert_not_contains "${recipe}/PKGBUILD" "${STALE_AUR_ASSET_LINE}"
+done
+[[ "$(grep -Fxc '# Wayscriber configurator desktop integration' "${AUR_MARKERLESS_CONFIG}/PKGBUILD")" == 1 ]] || {
+    echo "Markerless configurator desktop assets were not normalized" >&2
+    exit 1
+}
+assert_not_contains "${AUR_MARKERLESS_CONFIG}/PKGBUILD" "${STALE_CONFIGURATOR_ASSET_LINE}"
+
+AUR_ASSET_SOURCE="${WORK_DIR}/aur-asset-source"
+AUR_ASSET_STAGE="${WORK_DIR}/aur-asset-stage"
+mkdir -p "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/target/release"
+cp -a "${REPO_ROOT}/packaging" "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/"
+printf '#!/usr/bin/env bash\nexit 0\n' > "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/target/release/wayscriber"
+srcdir="${AUR_ASSET_SOURCE}" pkgdir="${AUR_ASSET_STAGE}" \
+    bash -c 'source "$1"; cd "$srcdir"; package' -- "${AUR_SOURCE_HOTFIX}/PKGBUILD"
+
+# Complete the mock release tarball's non-desktop payload for the binary recipe.
+mkdir -p "${AUR_ASSET_STAGE}/usr/lib/systemd/user" \
+    "${AUR_ASSET_STAGE}/usr/share/doc/wayscriber" \
+    "${AUR_ASSET_STAGE}/usr/share/licenses/wayscriber"
+cp "${REPO_ROOT}/packaging/wayscriber.service" "${AUR_ASSET_STAGE}/usr/lib/systemd/user/"
+cp "${REPO_ROOT}/config.example.toml" "${REPO_ROOT}/README.md" "${REPO_ROOT}/LICENSE" \
+    "${AUR_ASSET_STAGE}/usr/share/doc/wayscriber/"
+cp "${REPO_ROOT}/packaging/licenses/gtk4-layer-shell.LICENSE" \
+    "${AUR_ASSET_STAGE}/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"
+tar -czf "${AUR_ASSET_SOURCE}/wayscriber-v9.9.9-linux-x86_64.tar.gz" \
+    -C "${WORK_DIR}" aur-asset-stage
+AUR_BIN_STAGE="${WORK_DIR}/aur-bin-stage"
+srcdir="${AUR_ASSET_SOURCE}" pkgdir="${AUR_BIN_STAGE}" CARCH=x86_64 \
+    bash -c 'source "$1"; cd "$srcdir"; package' -- "${AUR_BIN_DIR}/PKGBUILD"
+while read -r asset; do
+    for stage in "${AUR_ASSET_STAGE}" "${AUR_BIN_STAGE}"; do
+        [[ -f "$stage$asset" && "$(stat -c '%a' "$stage$asset")" == 644 ]] || {
+            echo "Expected installed desktop asset with mode 644: $stage$asset" >&2
+            exit 1
+        }
+    done
+    cmp "${AUR_ASSET_STAGE}${asset}" "${AUR_BIN_STAGE}${asset}" || {
+        echo "Source and binary package assets differ: $asset" >&2
+        exit 1
+    }
+done < <(awk '/^    dst: \/usr\/share\/(applications|icons|pixmaps)\// { print $2 }' "${PACKAGE_CONFIG}")
+[[ ! -e "${AUR_BIN_STAGE}/usr/bin/wayscriber-configurator" ]] || {
+    echo 'The binary package unexpectedly includes the configurator' >&2
+    exit 1
+}
+
+# Repair missing assets in both current and legacy managed blocks.
+SOURCE_CONFIGURATOR_BLOCK_BEFORE="$(awk '
+    /^# Wayscriber configurator desktop integration$/ { inside = 1 }
+    inside { print }
+    /^# End Wayscriber configurator desktop integration$/ { exit }
+' "${AUR_SOURCE_HOTFIX}/PKGBUILD")"
+sed -i '/^# End Wayscriber configurator desktop integration$/d; /install .*scalable\/apps\/wayscriber-configurator.svg/d' "${AUR_CONFIG_HOTFIX}/PKGBUILD"
+sed -i '/install .*symbolic\/apps\/wayscriber-symbolic.svg/d' "${AUR_BIN_DIR}/PKGBUILD"
+sed -i '/^# End Wayscriber desktop integration$/d; /install .*symbolic\/apps\/wayscriber-symbolic.svg/d' "${AUR_SOURCE_HOTFIX}/PKGBUILD"
+run_aur_updater "${WORK_DIR}" \
+    --source-dir "${AUR_SOURCE_HOTFIX}" --bin-dir "${AUR_BIN_DIR}" \
+    --config-dir "${AUR_CONFIG_HOTFIX}" --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+for recipe in "${AUR_SOURCE_HOTFIX}" "${AUR_BIN_DIR}"; do
+    assert_contains "$recipe/PKGBUILD" 'symbolic/apps/wayscriber-symbolic.svg'
+    assert_contains "$recipe/PKGBUILD" '# End Wayscriber desktop integration'
+done
+SOURCE_CONFIGURATOR_BLOCK_AFTER="$(awk '
+    /^# Wayscriber configurator desktop integration$/ { inside = 1 }
+    inside { print }
+    /^# End Wayscriber configurator desktop integration$/ { exit }
+' "${AUR_SOURCE_HOTFIX}/PKGBUILD")"
+[[ "${SOURCE_CONFIGURATOR_BLOCK_AFTER}" == "${SOURCE_CONFIGURATOR_BLOCK_BEFORE}" ]] || {
+    echo 'Repairing the source desktop block changed configurator assets' >&2
+    exit 1
+}
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" 'scalable/apps/wayscriber-configurator.svg'
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" '# End Wayscriber configurator desktop integration'
+
+# The interactive updater installs the canonical template, which already has
+# desktop assets. The manifest updater must accept that route without duplicates.
+AUR_TEMPLATE_SOURCE="${WORK_DIR}/aur-template-source"
+mkdir -p "${AUR_TEMPLATE_SOURCE}"
+cp "${REPO_ROOT}/packaging/PKGBUILD" "${REPO_ROOT}/packaging/.SRCINFO" "${AUR_TEMPLATE_SOURCE}/"
+git -C "${AUR_TEMPLATE_SOURCE}" init -q
+run_aur_updater "${WORK_DIR}" \
+    --source-dir "${AUR_TEMPLATE_SOURCE}" --bin-dir missing-bin \
+    --no-configurator --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+[[ "$(grep -Fc 'packaging/wayscriber.desktop' "${AUR_TEMPLATE_SOURCE}/PKGBUILD")" == 1 ]] || {
+    echo 'Canonical template received duplicate desktop integration' >&2
+    exit 1
+}
+
+# A version bump must retain a locked registry dependency even when a newer
+# compatible release exists. A local directory source makes this fully offline.
+BUMP_REPO="${WORK_DIR}/bump-repo"
+BUMP_FAKE_BIN="${WORK_DIR}/bump-fake-bin"
+mkdir -p "${BUMP_REPO}/tools" "${BUMP_REPO}/src" \
+    "${BUMP_REPO}/configurator/src" "${BUMP_REPO}/packaging" \
+    "${BUMP_REPO}/.cargo" "${BUMP_FAKE_BIN}"
+cp "${REPO_ROOT}/tools/bump-version.sh" "${BUMP_REPO}/tools/"
+# This test isolates the bump's Cargo operation; real metadata consistency is
+# checked separately by the canonical gate on this repository.
+printf '#!/usr/bin/env bash\nexit 0\n' > "${BUMP_REPO}/tools/check-version-consistency.sh"
+printf '#!/usr/bin/env bash\nprintf "pkgbase = wayscriber\\n"\n' > "${BUMP_FAKE_BIN}/makepkg"
+chmod +x "${BUMP_FAKE_BIN}/makepkg"
+cat > "${BUMP_REPO}/Cargo.toml" <<'EOF'
+[package]
+name = "wayscriber"
+version = "1.0.0"
+edition = "2024"
+[workspace]
+members = ["configurator"]
+[dependencies]
+release-fixture = "1"
+EOF
+cat > "${BUMP_REPO}/configurator/Cargo.toml" <<'EOF'
+[package]
+name = "wayscriber-configurator"
+version = "1.0.0"
+edition = "2024"
+[dependencies]
+wayscriber = { path = ".." }
+EOF
+touch "${BUMP_REPO}/src/lib.rs" "${BUMP_REPO}/configurator/src/lib.rs"
+printf "pkgver=1.0.0\nsha256sums=('SKIP')\n" > "${BUMP_REPO}/packaging/PKGBUILD"
+cat > "${BUMP_REPO}/.cargo/config.toml" <<EOF
+[source.crates-io]
+replace-with = "fixture"
+[source.fixture]
+directory = "${BUMP_REPO}/vendor"
+EOF
+for fixture_version in 1.0.0 1.1.0; do
+    fixture_dir="${BUMP_REPO}/vendor/release-fixture-${fixture_version}"
+    mkdir -p "${fixture_dir}/src"
+    printf '[package]\nname = "release-fixture"\nversion = "%s"\nedition = "2024"\n' \
+        "${fixture_version}" > "${fixture_dir}/Cargo.toml"
+    touch "${fixture_dir}/src/lib.rs"
+    printf '{"files":{},"package":"%s"}\n' "${AUR_SOURCE_SHA}" > "${fixture_dir}/.cargo-checksum.json"
+    if [[ "$fixture_version" == 1.0.0 ]]; then
+        (cd "${BUMP_REPO}" && cargo generate-lockfile --offline)
+    fi
+done
+BUMP_FAIL_BIN="${WORK_DIR}/bump-fail-bin"
+BUMP_DRY_RUN_OUTPUT="${WORK_DIR}/bump-dry-run-output"
+mkdir -p "${BUMP_FAIL_BIN}"
+cat > "${BUMP_FAIL_BIN}/cargo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "update --workspace --offline --dry-run" ]]; then
+    exit 1
+fi
+exec "${BUMP_REAL_CARGO:?}" "$@"
+EOF
+chmod +x "${BUMP_FAIL_BIN}/cargo"
+if BUMP_REAL_CARGO="$(command -v cargo)" PATH="${BUMP_FAIL_BIN}:${BUMP_FAKE_BIN}:${PATH}" \
+    bash "${BUMP_REPO}/tools/bump-version.sh" --dry-run 1.0.1 >"${BUMP_DRY_RUN_OUTPUT}" 2>&1; then
+    echo 'Expected the version-bump dry run to fail when offline resolution fails' >&2
+    exit 1
+fi
+assert_contains "${BUMP_DRY_RUN_OUTPUT}" 'cannot resolve locked dependencies offline'
+
+cp "${BUMP_REPO}/Cargo.lock" "${WORK_DIR}/before-bump.lock"
+for version in 1.0.1 1.0.1.1; do
+    PATH="${BUMP_FAKE_BIN}:${PATH}" bash "${BUMP_REPO}/tools/bump-version.sh" "$version" >/dev/null
+    # Both workspace packages change, but all remaining bytes must stay put.
+    sed 's/version = "1.0.1"/version = "1.0.0"/g' "${BUMP_REPO}/Cargo.lock" \
+        > "${WORK_DIR}/normalized-bump.lock"
+    cmp "${WORK_DIR}/before-bump.lock" "${WORK_DIR}/normalized-bump.lock"
+done
+# Prove the fixture exposes the original bug: resolving afresh selects 1.1.0.
+(cd "${BUMP_REPO}" && cargo generate-lockfile --offline)
+assert_contains "${BUMP_REPO}/Cargo.lock" 'version = "1.1.0"'
 
 echo "Release packaging contract checks passed."

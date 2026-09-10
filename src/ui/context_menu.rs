@@ -218,14 +218,12 @@ mod engine_tests {
         surface.data().unwrap().to_vec()
     }
 
-    // Disabled: this test has died with SIGSEGV under the parallel all-features
-    // run. The fault is a use-after-free inside Cairo's FreeType face cache,
-    // which evicts faces another thread still holds once more than ten font
-    // files are open in one process. Wayscriber code is not involved. Upstream
-    // fix, unmerged: https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81
-    // Run on demand with: cargo test --all-features -- --ignored retained_context_menu_owner
+    // Runs separately in tools/lint-and-test.sh under both feature configurations.
+    // Parallel font rendering has triggered a native Cairo/FreeType crash; the
+    // related upstream race is tracked at cairo/cairo!81. Process isolation keeps
+    // these assertions covered without claiming the native race is fixed.
     #[test]
-    #[ignore = "crashes in Cairo's FreeType face cache under parallel tests; see https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81"]
+    #[ignore = "isolated by tools/lint-and-test.sh; Cairo race: https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81"]
     fn retained_context_menu_owner_preserves_layout_pixels_and_row_hits() {
         let engine = UiTextEngine::default();
         let mut state = crate::input::state::test_support::make_test_input_state();

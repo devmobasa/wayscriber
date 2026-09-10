@@ -18,40 +18,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up repository tool SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache repository tool packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tools/**/*.cs') }}
+
+      - name: Build repository tool once
+        run: dotnet build tools/wayscriber.cs
+
       - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libwayland-dev \
-            libxkbcommon-dev \
-            libcairo2-dev \
-            libpango1.0-dev \
-            libgtk-3-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            meson \
-            ninja-build \
-            wayland-protocols \
-            libssl-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxcb-render0-dev \
-            libxcb1-dev \
-            libx11-dev \
-            rpm
+        run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies package
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.98.1
 
       - name: Install nfpm
-        run: |
-          NFPM_VERSION=2.43.4
-          curl -sSfL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" \
-            | tar -xz nfpm
-          sudo mv nfpm /usr/local/bin/
-          nfpm --version
+        run: dotnet run tools/wayscriber.cs --no-build -- ci install-nfpm
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -61,20 +49,13 @@ jobs:
 
       - name: Read release version
         id: meta
-        run: |
-          if [[ "${GITHUB_REF_NAME:-}" == v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          if [[ -z "${VERSION:-}" ]]; then
-            VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        run: dotnet run tools/wayscriber.cs --no-build -- release resolve-version
 
       - name: Check version metadata
-        run: bash tools/check-version-consistency.sh --release-version "${{ steps.meta.outputs.version }}"
+        run: dotnet run tools/wayscriber.cs --no-build -- version check --release-version "${{ steps.meta.outputs.version }}"
 
       - name: Check nixpkgs recipe dependencies
-        run: ./tools/check-nixpkgs-recipe.py
+        run: dotnet run tools/wayscriber.cs --no-build -- check nixpkgs-recipe
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -84,96 +65,25 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Check Nix flake package versions
-        run: |
-          cargo_version="$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)"
-          wayscriber_version="$(nix eval .#packages.x86_64-linux.wayscriber.version --raw)"
-          configurator_version="$(nix eval .#packages.x86_64-linux.wayscriber-configurator.version --raw)"
+        run: dotnet run tools/wayscriber.cs --no-build -- check nix-versions
 
-          test "$wayscriber_version" = "$cargo_version"
-          test "$configurator_version" = "$cargo_version"
-
-      - name: Check Nix flake package instantiation
-        run: nix build .#wayscriber .#wayscriber-configurator --no-link --dry-run
+      - name: Check Nix flake package and development shell instantiation
+        run: dotnet run tools/wayscriber.cs --no-build -- check nix-instantiation
 
       - name: Pre-fetch Cargo dependencies (locked)
-        env:
-          CARGO_TARGET_DIR: target
-        run: |
-          cargo fetch --locked --target x86_64-unknown-linux-gnu
-          if [ -f configurator/Cargo.toml ]; then
-            cargo fetch --locked --manifest-path configurator/Cargo.toml --target x86_64-unknown-linux-gnu
-          fi
+        run: dotnet run tools/wayscriber.cs --no-build -- dev fetch --target x86_64-unknown-linux-gnu
 
-      - name: Build & package (tar/deb/rpm)
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
-          FORMATS: tar,deb,rpm
-          ARTIFACT_ROOT: dist
-          CARGO_TARGET_DIR: target
-        run: |
-          ./tools/package.sh
+      - name: Build and package (tar/deb/rpm)
+        run: dotnet run tools/wayscriber.cs --no-build -- package build --version "${{ steps.meta.outputs.version }}" --formats tar,deb,rpm --artifact-root dist
 
       - name: Check direct Arch installer compatibility
-        run: |
-          curl --disable --fail --silent --show-error --location \
-            --proto '=https' --proto-redir '=https' \
-            --retry 3 --connect-timeout 15 --max-time 60 --max-filesize 1048576 \
-            --output "$RUNNER_TEMP/arch-install.sh" \
-            https://wayscriber.com/arch-install.sh
-          ./tools/check-arch-installer-manifest.sh \
-            --installer "$RUNNER_TEMP/arch-install.sh" \
-            --archive "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz"
+        run: dotnet run tools/wayscriber.cs --no-build -- package check-live-arch-installer --archive "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz"
 
       - name: Verify packaged metadata and retained licenses
-        run: |
-          # Keep these floors aligned with MAX_GLIBC_VERSION in tools/package.sh.
-          expected_package_version="${{ steps.meta.outputs.version }}-1"
-          test "$(dpkg-deb -f dist/wayscriber-amd64.deb Version)" = "$expected_package_version"
-          test "$(dpkg-deb -f dist/wayscriber-configurator-amd64.deb Version)" = "$expected_package_version"
-          deb_depends="$(dpkg-deb -f dist/wayscriber-amd64.deb Depends)"
-          deb_files="$(dpkg-deb -c dist/wayscriber-amd64.deb)"
-          grep -Fq 'libc6 (>= 2.39)' <<< "$deb_depends"
-          grep -Fq 'libgtk-4-1 (>= 4.12)' <<< "$deb_depends"
-          ! grep -Fq 'libgtk4-layer-shell' <<< "$deb_depends"
-          grep -Fq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$deb_files"
-          configurator_deb_depends="$(dpkg-deb -f dist/wayscriber-configurator-amd64.deb Depends)"
-          grep -Fq 'libc6 (>= 2.39)' <<< "$configurator_deb_depends"
-          grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< "$configurator_deb_depends"
-
-          mkdir -p "$RUNNER_TEMP/rpmdb"
-          test "$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --qf '%{VERSION}-%{RELEASE}\n' dist/wayscriber-x86_64.rpm)" = "$expected_package_version"
-          test "$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --qf '%{VERSION}-%{RELEASE}\n' dist/wayscriber-configurator-x86_64.rpm)" = "$expected_package_version"
-          rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-x86_64.rpm)"
-          rpm_files="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qlp dist/wayscriber-x86_64.rpm)"
-          grep -Fxq 'glibc >= 2.39' <<< "$rpm_requires"
-          grep -Fxq 'gtk4 >= 4.12' <<< "$rpm_requires"
-          ! grep -Fq 'gtk4-layer-shell' <<< "$rpm_requires"
-          grep -Fxq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$rpm_files"
-          configurator_rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-configurator-x86_64.rpm)"
-          grep -Fxq 'glibc >= 2.39' <<< "$configurator_rpm_requires"
-          grep -Fxq 'libadwaita >= 1.4' <<< "$configurator_rpm_requires"
-
-          tar_files="$(tar -tzf "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
-          grep -Eq '/usr/bin/wayscriber$' <<< "$tar_files"
-          grep -Eq '/usr/share/licenses/wayscriber/LICENSE\.gtk4-layer-shell$' <<< "$tar_files"
-          configurator_tar_files="$(tar -tzf "dist/wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
-          grep -Eq '/usr/bin/wayscriber-configurator$' <<< "$configurator_tar_files"
+        run: dotnet run tools/wayscriber.cs --no-build -- package verify-artifacts --artifact-root dist --version "${{ steps.meta.outputs.version }}"
 
       - name: Clean Ubuntu 24.04 install smoke
-        run: |
-          docker run --rm \
-            -v "$PWD/dist:/dist:ro" \
-            ubuntu:24.04 \
-            bash -euxo pipefail -c '
-              apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                /dist/wayscriber-amd64.deb \
-                /dist/wayscriber-configurator-amd64.deb
-              wayscriber --version
-              # Installing proves the configurator runtime dependencies resolve
-              # on the supported LTS. Do not launch this foreground GUI here.
-              test -x /usr/bin/wayscriber-configurator
-            '
+        run: dotnet run tools/wayscriber.cs --no-build -- package smoke-ubuntu --artifact-root dist
 
       - name: Upload tarball
         uses: actions/upload-artifact@v4
@@ -239,16 +149,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install repo tooling
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            apt-utils \
-            dpkg-dev \
-            rpm \
-            createrepo-c \
-            rsync \
-            gnupg
+      - name: Set up repository tool SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build repository tool once
+        run: dotnet build tools/wayscriber.cs
+
+      - name: Install repository tooling
+        run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies repositories
 
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
@@ -256,7 +166,7 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Build apt + rpm repositories
+      - name: Build apt and rpm repositories
         env:
           ARTIFACT_ROOT: dist
           OUTPUT_ROOT: repo-out
@@ -267,9 +177,7 @@ jobs:
           REPO_ORIGIN: Wayscriber
           REPO_LABEL: Wayscriber
           SIGN_RPMS: 1
-        run: |
-          chmod +x tools/build-package-repos.sh
-          tools/build-package-repos.sh
+        run: dotnet run tools/wayscriber.cs --no-build -- package build-repositories
 
       - name: Upload repo bundle
         uses: actions/upload-artifact@v4
@@ -286,22 +194,7 @@ jobs:
           DEPLOY_HOST: ${{ env.PACKAGE_REPO_REMOTE_HOST }}
           DEPLOY_PATH: ${{ env.PACKAGE_REPO_REMOTE_PATH }}
           DEPLOY_USER: ${{ env.PACKAGE_REPO_REMOTE_USER }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$PACKAGE_REPO_SSH_KEY" > ~/.ssh/repo_key
-          chmod 600 ~/.ssh/repo_key
-          if [ -n "$PACKAGE_REPO_SSH_KNOWN_HOSTS" ]; then
-            echo "$PACKAGE_REPO_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          else
-            ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-          fi
-          DEPLOY_USER="${DEPLOY_USER:-root}"
-          ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p '${DEPLOY_PATH}/apt' '${DEPLOY_PATH}/rpm'"
-          rsync -rlvz --omit-dir-times --delete --no-perms --no-owner --no-group -e "ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes" repo-out/apt/ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/apt/"
-          rsync -rlvz --omit-dir-times --delete --no-perms --no-owner --no-group -e "ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes" repo-out/rpm/ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/rpm/"
-          # The public key is already copied into /apt/ and /rpm/ above. The
-          # legacy top-level alias is not an install path and is not writable
-          # by this deployment account.
+        run: dotnet run tools/wayscriber.cs --no-build -- release deploy-package-repositories
 
   release:
     needs: package
@@ -323,7 +216,7 @@ jobs:
           generate_release_notes: true
 
   aur:
-    needs: package
+    needs: [package, release]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     env:
@@ -331,72 +224,28 @@ jobs:
       AUR_SSH_KNOWN_HOSTS: ${{ secrets.AUR_SSH_KNOWN_HOSTS }}
       AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}
     steps:
-      - name: Fail if AUR secret missing
-        if: env.AUR_SSH_PRIVATE_KEY == ''
-        run: |
-          echo "AUR secrets not set; failing AUR job."
-          exit 1
-
-      - name: Configure SSH for AUR (and test)
-        run: |
-          mkdir -p ~/.ssh
-          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          {
-            echo "Host aur.archlinux.org"
-            echo "  HostName aur.archlinux.org"
-            echo "  User aur"
-            echo "  IdentityFile ~/.ssh/aur"
-            echo "  StrictHostKeyChecking yes"
-          } >> ~/.ssh/config
-          if [ -n "$AUR_SSH_KNOWN_HOSTS" ]; then
-            echo "$AUR_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          else
-            ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
-          fi
-          SSH_CMD="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes"
-          if [ -n "$AUR_SSH_PASSPHRASE" ]; then
-            cat <<'EOS' > /tmp/aur-askpass.sh
-          #!/usr/bin/env bash
-          printf '%s\n' "${AUR_SSH_PASSPHRASE:-}"
-          EOS
-            chmod +x /tmp/aur-askpass.sh
-            export SSH_ASKPASS=/tmp/aur-askpass.sh
-            export SSH_ASKPASS_REQUIRE=force
-            export DISPLAY=:0
-            eval "$(ssh-agent -s)"
-            if ! setsid -w env SSH_ASKPASS=$SSH_ASKPASS SSH_ASKPASS_REQUIRE=$SSH_ASKPASS_REQUIRE DISPLAY=$DISPLAY ssh-add ~/.ssh/aur </dev/null; then
-              echo "ssh-add failed; ensure AUR_SSH_PASSPHRASE is set correctly if the key is encrypted."
-              exit 1
-            fi
-            SSH_CMD="ssh -o StrictHostKeyChecking=yes"
-            {
-              echo "SSH_ASKPASS=$SSH_ASKPASS"
-              echo "SSH_ASKPASS_REQUIRE=$SSH_ASKPASS_REQUIRE"
-              echo "DISPLAY=$DISPLAY"
-              echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
-              echo "SSH_AGENT_PID=$SSH_AGENT_PID"
-            } >> "$GITHUB_ENV"
-          else
-            echo "No AUR_SSH_PASSPHRASE provided; using key directly with -i."
-          fi
-          echo "GIT_SSH_COMMAND=$SSH_CMD" >> "$GITHUB_ENV"
-          ls -l ~/.ssh
-          echo "ssh config:"
-          cat ~/.ssh/config
-          ssh-add -l || true
-          echo "Key fingerprint:"
-          ssh-keygen -lf ~/.ssh/aur || true
-          echo "Testing SSH connectivity..."
-          GIT_SSH_COMMAND="$SSH_CMD" git ls-remote ssh://aur@aur.archlinux.org/wayscriber.git HEAD
-
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install helpers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
+      - name: Set up repository tool SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache repository tool packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tools/**/*.cs') }}
+
+      - name: Build repository tool once
+        run: dotnet build tools/wayscriber.cs
+
+      - name: Require AUR credentials
+        run: dotnet run tools/wayscriber.cs --no-build -- ci require-environment AUR_SSH_PRIVATE_KEY
+
+      - name: Configure SSH for AUR and test it
+        run: dotnet run tools/wayscriber.cs --no-build -- aur prepare-ssh
 
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
@@ -408,30 +257,10 @@ jobs:
         env:
           AUR_GIT_USERNAME: ${{ secrets.AUR_GIT_USERNAME }}
           AUR_GIT_EMAIL: ${{ secrets.AUR_GIT_EMAIL }}
-        run: |
-          if [ -z "$AUR_GIT_USERNAME" ] || [ -z "$AUR_GIT_EMAIL" ]; then
-            echo "AUR_GIT_USERNAME and AUR_GIT_EMAIL secrets must be set."
-            exit 1
-          fi
-          git config --global user.name "$AUR_GIT_USERNAME"
-          git config --global user.email "$AUR_GIT_EMAIL"
+        run: dotnet run tools/wayscriber.cs --no-build -- aur configure-git
 
       - name: Clone AUR repos
-        run: |
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber.git aur-wayscriber
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-bin.git aur-wayscriber-bin
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator
+        run: dotnet run tools/wayscriber.cs --no-build -- aur clone
 
       - name: Update AUR from manifest
-        env:
-          PUSH: "1"
-        run: |
-          VERSION=$(jq -r '.version' dist/manifest.json)
-          chmod +x tools/update-aur-from-manifest.sh
-          ./tools/update-aur-from-manifest.sh \
-            --version "$VERSION" \
-            --manifest dist/manifest.json \
-            --source-dir aur-wayscriber \
-            --bin-dir aur-wayscriber-bin \
-            --config-dir aur-wayscriber-configurator \
-            --push
+        run: dotnet run tools/wayscriber.cs --no-build -- aur update --manifest dist/manifest.json --source-dir aur-wayscriber --bin-dir aur-wayscriber-bin --config-dir aur-wayscriber-configurator --push
