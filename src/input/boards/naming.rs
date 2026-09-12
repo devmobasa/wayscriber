@@ -92,6 +92,7 @@ impl BoardManager {
                 id: id.to_string(),
                 name: "Overlay".to_string(),
                 background: BoardBackground::Transparent,
+                grid: Default::default(),
                 default_pen_color: None,
                 auto_adjust_pen: false,
                 persist: true,

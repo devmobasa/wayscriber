@@ -10,6 +10,7 @@ fn board(id: &str, name: &str, background: BoardBackground, pages: Vec<Frame>) -
             id: id.to_string(),
             name: name.to_string(),
             background,
+            grid: Default::default(),
             default_pen_color: None,
             auto_adjust_pen: false,
             persist: true,

@@ -365,6 +365,7 @@ fn established_public_paths_reexport_domain_types() {
         id: "board".to_string(),
         name: "Board".to_string(),
         background: BoardBackground::Transparent,
+        grid: Default::default(),
         default_pen_color: None,
         auto_adjust_pen: false,
         persist: true,
