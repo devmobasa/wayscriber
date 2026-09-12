@@ -152,3 +152,31 @@ fn board_grid_spacing_and_isometric_basis_are_stable() {
     assert!((width.hypot(height) / 2.0 - f64::from(g.spacing())).abs() < 1e-10);
     assert_eq!(indices(-41.0, -1.0, 20.0), -3..=0);
 }
+
+#[test]
+fn board_grid_tiles_stay_opaque_and_show_expected_vertices() {
+    for kind in BoardGridKind::ALL.into_iter().skip(1) {
+        for scale in [1.0, 1.25, 2.0] {
+            let data = pixels(kind, scale, (0.0, 0.0), true);
+            assert!(
+                data.chunks_exact(4).all(|pixel| pixel[3] == 255),
+                "{kind:?} has a transparent tile seam"
+            );
+            let (x, y) = if kind == BoardGridKind::Cartesian {
+                (20.0, 20.0)
+            } else {
+                (3.0_f64.sqrt() * 10.0, 10.0)
+            };
+            let (x, y) = ((x * scale) as usize, (y * scale) as usize);
+            let darkest = (y - 1..=y + 1)
+                .flat_map(|y| (x - 1..=x + 1).map(move |x| (y * 180 + x) * 4))
+                .map(|i| data[i])
+                .min()
+                .unwrap();
+            assert!(
+                darkest < 240,
+                "{kind:?} missing grid vertex at scale {scale}"
+            );
+        }
+    }
+}

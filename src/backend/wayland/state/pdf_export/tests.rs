@@ -5,19 +5,18 @@ use crate::input::BoardSpec;
 use std::sync::Arc;
 
 fn board(id: &str, name: &str, background: BoardBackground, pages: Vec<Frame>) -> BoardState {
-    BoardState {
-        spec: BoardSpec {
-            id: id.to_string(),
-            name: name.to_string(),
-            background,
-            grid: Default::default(),
-            default_pen_color: None,
-            auto_adjust_pen: false,
-            persist: true,
-            pinned: false,
-        },
-        pages: crate::draw::BoardPages::from_pages(pages, 0),
-    }
+    let mut board = BoardState::new(BoardSpec {
+        id: id.to_string(),
+        name: name.to_string(),
+        background,
+        grid: Default::default(),
+        default_pen_color: None,
+        auto_adjust_pen: false,
+        persist: true,
+        pinned: false,
+    });
+    board.pages = crate::draw::BoardPages::from_pages(pages, 0);
+    board
 }
 
 fn snapshot_context<'a>(

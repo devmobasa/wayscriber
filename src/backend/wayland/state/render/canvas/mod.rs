@@ -110,7 +110,7 @@ impl WaylandState {
         }
 
         let background_start = perf.as_ref().map(|_| Instant::now());
-        let eraser_ctx = self.render_canvas_background(ctx, scale, phys_width, phys_height)?;
+        let mut eraser_ctx = self.render_canvas_background(ctx, scale, phys_width, phys_height)?;
         if let (Some(perf), Some(background_start)) = (perf.as_mut(), background_start) {
             perf.stages.background = perf
                 .stages
@@ -150,6 +150,7 @@ impl WaylandState {
             ctx.translate(-canvas_origin_x, -canvas_origin_y);
         }
 
+        eraser_ctx.prepare_paper(ctx, self.input_state.boards.active_board().spec.grid)?;
         let replay_ctx = eraser_ctx.replay_context();
 
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());

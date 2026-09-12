@@ -48,6 +48,7 @@ fn sample_snapshot() -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![sample_frame()],
@@ -118,6 +119,7 @@ fn sample_session_file() -> SessionFile {
         active_board_id: Some("transparent".to_string()),
         active_mode: None,
         boards: vec![BoardFile {
+            appearance: None,
             id: "transparent".to_string(),
             pages: vec![sample_frame()],
             active_page: 0,
@@ -1895,6 +1897,7 @@ fn save_snapshot_refuses_compressed_payload_over_expanded_limit() {
     let snapshot = SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],
@@ -2239,6 +2242,7 @@ fn save_snapshot_preserves_multiple_pages() {
     let snapshot = SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![first, second],
@@ -2273,6 +2277,7 @@ fn save_snapshot_keeps_empty_pages() {
     let snapshot = SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![Frame::new(), Frame::new(), Frame::new()],
@@ -2358,6 +2363,7 @@ fn save_snapshot_serializes_compound_undo_history() {
     let snapshot = SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],
@@ -2465,6 +2471,7 @@ fn load_snapshot_inner_falls_back_when_active_board_is_missing() {
         active_board_id: Some("missing".to_string()),
         active_mode: None,
         boards: vec![BoardFile {
+            appearance: None,
             id: "transparent".to_string(),
             pages: vec![sample_frame()],
             active_page: 0,

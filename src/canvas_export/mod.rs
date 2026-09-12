@@ -1,4 +1,7 @@
 #[cfg(test)]
+#[path = "tests/board_grid.rs"]
+mod board_grid_tests;
+#[cfg(test)]
 #[path = "tests/cache_tests.rs"]
 mod cache_tests;
 mod page;

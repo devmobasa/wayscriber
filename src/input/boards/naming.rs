@@ -144,6 +144,9 @@ impl BoardManager {
         let mut new_board = BoardState::new(new_spec.clone());
         // Clone pages from the active board
         new_board.pages = active.pages.clone();
+        new_board.appearance_explicit = active.appearance_explicit;
+        new_board.pen_origin = active.pen_origin;
+        new_board.configured_appearance = active.configured_appearance.clone();
 
         let insert_at = self.active_index + 1;
         self.pin_seeds.insert(new_spec.id.clone(), source_pin_seed);

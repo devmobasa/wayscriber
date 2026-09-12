@@ -73,6 +73,10 @@ impl InputState {
             return false;
         }
 
+        if self.board_appearance_key(key) {
+            return true;
+        }
+
         if self.board_picker_page_edit_state().is_some() {
             match key {
                 Key::Escape => {

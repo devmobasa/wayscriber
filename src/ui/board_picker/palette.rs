@@ -19,12 +19,19 @@ pub(super) fn render_board_palette(
     let palette_x = layout.origin_x + layout.padding_x;
     let palette_y = layout.palette_top;
     let edit_state = input_state.board_picker_edit_state();
-    let active_color = edit_state
-        .and_then(|(_, edit_index, _)| input_state.board_picker_board_index_for_row(edit_index))
-        .and_then(|board_index| input_state.boards.board_states().get(board_index))
-        .and_then(|board| match board.spec.background {
-            BoardBackground::Solid(color) => Some(color),
-            BoardBackground::Transparent => None,
+    let active_color = input_state
+        .board_appearance_edit()
+        .map(|edit| edit.preview().0)
+        .or_else(|| {
+            edit_state
+                .and_then(|(_, edit_index, _)| {
+                    input_state.board_picker_board_index_for_row(edit_index)
+                })
+                .and_then(|board_index| input_state.boards.board_states().get(board_index))
+                .and_then(|board| match board.spec.background {
+                    BoardBackground::Solid(color) => Some(color),
+                    BoardBackground::Transparent => None,
+                })
         });
 
     let mut idx = 0usize;

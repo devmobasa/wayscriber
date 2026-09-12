@@ -30,6 +30,7 @@ impl std::fmt::Display for BoardBackgroundOption {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardItemTextField {
+    GridSpacing,
     Id,
     Name,
 }

@@ -923,6 +923,9 @@ persist = true
 [[boards.items]]
 id = "whiteboard"
 name = "Whiteboard"
+# Paper: none, cartesian, isometric, or isometric-dots. Spacing: 8–200 logical px.
+# Spacing is the square/triangle side length; 20 and 40 are convenient presets.
+grid = { kind = "none", spacing = 40 }
 background = { rgb = [0.992, 0.992, 0.992] }
 # Tuned black #241F31; the built-in default bit-matches the "black" quick color
 default_pen_color = { rgb = [0.141, 0.122, 0.192] }

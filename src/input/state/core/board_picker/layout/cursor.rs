@@ -30,6 +30,9 @@ impl InputState {
             return None;
         }
         let layout = self.board_picker.layout?;
+        if self.board_appearance_edit().is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
 
         // Check if point is within the panel
         if !self.board_picker_contains_point(x, y) {

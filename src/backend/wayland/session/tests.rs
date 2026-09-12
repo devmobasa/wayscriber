@@ -168,6 +168,7 @@ fn board_snapshot(id: &str, x2: i32) -> stored_session::BoardSnapshot {
         thick: 2.0,
     });
     stored_session::BoardSnapshot {
+        appearance: None,
         id: id.to_string(),
         pages: stored_session::BoardPagesSnapshot {
             pages: vec![frame],

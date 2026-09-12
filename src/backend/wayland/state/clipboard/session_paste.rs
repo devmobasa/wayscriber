@@ -174,6 +174,7 @@ fn snapshot_after_external_image_paste_from_input(
             return None;
         }
         snapshot.boards.push(session::BoardSnapshot {
+            appearance: Some(session::BoardAppearanceSnapshot::capture(target_board)),
             id: target_board.spec.id.clone(),
             pages: snapshot_pages_for_preflight(target_board, input, options),
         });

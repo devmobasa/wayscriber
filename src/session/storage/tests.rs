@@ -29,6 +29,7 @@ fn transparent_line_snapshot() -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],
@@ -292,6 +293,7 @@ fn inspect_session_reports_counts_and_flags() {
     let snapshot = SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],

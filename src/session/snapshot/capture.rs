@@ -19,17 +19,16 @@ pub fn snapshot_from_input(
 
     let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit());
 
-    let capture_pages = |pages: &crate::draw::BoardPages| -> Option<BoardPagesSnapshot> {
+    let capture_pages = |pages: &crate::draw::BoardPages| -> BoardPagesSnapshot {
         let cloned_pages = pages
             .pages()
             .iter()
             .map(|page| page.clone_with_history_limit(history_limit))
             .collect();
-        let snapshot = BoardPagesSnapshot {
+        BoardPagesSnapshot {
             pages: cloned_pages,
             active: pages.active_index(),
-        };
-        snapshot.has_persistable_data().then_some(snapshot)
+        }
     };
 
     let persist_non_transparent = options.persist_whiteboard || options.persist_blackboard;
@@ -43,8 +42,10 @@ pub fn snapshot_from_input(
         if !should_persist {
             continue;
         }
-        if let Some(pages) = capture_pages(&board.pages) {
+        let pages = capture_pages(&board.pages);
+        if pages.has_persistable_data() || board.appearance_explicit {
             snapshot.boards.push(BoardSnapshot {
+                appearance: Some(super::BoardAppearanceSnapshot::capture(board)),
                 id: board.spec.id.clone(),
                 pages,
             });

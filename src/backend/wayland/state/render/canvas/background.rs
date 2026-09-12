@@ -7,6 +7,7 @@ use crate::backend::wayland::state::screen_image::{
 use crate::draw::Color;
 
 pub(super) struct CanvasEraserContext {
+    paper: Option<crate::draw::BoardPaper>,
     surface: Option<cairo::ImageSurface>,
     pattern: Option<cairo::SurfacePattern>,
     backdrop_cache_key: Option<u64>,
@@ -21,9 +22,27 @@ pub(super) struct CanvasEraserContext {
 }
 
 impl CanvasEraserContext {
+    pub(super) fn prepare_paper(
+        &mut self,
+        ctx: &cairo::Context,
+        grid: crate::domain::BoardGrid,
+    ) -> Result<()> {
+        if let Some(color) = self.bg_color
+            && grid.kind != crate::domain::BoardGridKind::None
+        {
+            let paper = crate::draw::BoardPaper::for_context(color, grid, ctx)?;
+            paper.paint(ctx)?;
+            self.paper = Some(paper);
+        }
+        Ok(())
+    }
     pub(super) fn replay_context(&self) -> crate::draw::EraserReplayContext<'_> {
         crate::draw::EraserReplayContext {
-            pattern: self.pattern.as_ref().map(|p| p as &cairo::Pattern),
+            pattern: self
+                .paper
+                .as_ref()
+                .map(crate::draw::BoardPaper::pattern)
+                .or_else(|| self.pattern.as_ref().map(|p| p as &cairo::Pattern)),
             surface: self.surface.as_ref(),
             backdrop_cache_key: self.backdrop_cache_key,
             bg_color: self.bg_color,
@@ -226,6 +245,7 @@ impl WaylandState {
         }
 
         Ok(CanvasEraserContext {
+            paper: None,
             surface: eraser_surface,
             pattern: eraser_pattern,
             backdrop_cache_key,

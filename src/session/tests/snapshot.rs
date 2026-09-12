@@ -593,6 +593,7 @@ fn apply_snapshot_keeps_current_board_when_active_board_is_missing() {
     let snapshot = SessionSnapshot {
         active_board_id: "missing".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![Frame::new()],
@@ -627,6 +628,7 @@ fn apply_snapshot_clears_pending_board_delete_confirmation() {
     let snapshot = SessionSnapshot {
         active_board_id: BOARD_ID_BLACKBOARD.to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: BOARD_ID_BLACKBOARD.to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![Frame::new()],
@@ -666,6 +668,7 @@ fn apply_snapshot_clears_pending_page_delete_confirmation() {
     let snapshot = SessionSnapshot {
         active_board_id: BOARD_ID_BLACKBOARD.to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: BOARD_ID_BLACKBOARD.to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![Frame::new()],

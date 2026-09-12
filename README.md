@@ -133,6 +133,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 
 ### Boards
 - Named boards with transparent overlay or custom backgrounds
+- Cartesian graph paper, isometric lines, and isometric dots with adjustable spacing
 - Isolated pages per board with auto-contrast pens
 - Pan solid boards with <kbd>Space</kbd> + left-drag; reset from the context menu
 - Jump slots: <kbd>Ctrl+Shift+1..9</kbd>

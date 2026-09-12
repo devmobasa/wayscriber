@@ -5,6 +5,7 @@ use crate::draw::{Color, DrawnShape, EmbeddedImage, EraserBrush, EraserKind, Sha
 
 fn inputs() -> CanvasLayerInputs {
     CanvasLayerInputs {
+        grid: Default::default(),
         width: 80,
         height: 64,
         scale: 1,
@@ -109,8 +110,15 @@ fn paint(
             damage_world: &[],
             now: Instant::now(),
         };
+        let paper = inputs
+            .background
+            .filter(|_| inputs.grid.kind != crate::domain::BoardGridKind::None)
+            .map(|color| crate::draw::BoardPaper::for_context(color, inputs.grid, &cairo).unwrap());
+        if let Some(paper) = &paper {
+            paper.paint(&cairo).unwrap();
+        }
         let replay = crate::draw::EraserReplayContext {
-            pattern: None,
+            pattern: paper.as_ref().map(crate::draw::BoardPaper::pattern),
             surface: None,
             backdrop_cache_key: None,
             bg_color: inputs.background,
@@ -425,3 +433,37 @@ fn measure_sparse_damage_scan() {
         );
     }
 }
+
+#[test]
+fn board_grid_baked_pan_matches_direct_and_invalidates_on_pattern_and_spacing() {
+    use crate::domain::{BoardGrid, BoardGridKind};
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut cache = CanvasLayerCache::new();
+    let mut caches = crate::draw::RenderCaches::default();
+    let shapes = shapes();
+    for origin in [(0.0, 0.0), (-71.0, -53.0), (-1_000_021.0, -2_000_003.0)] {
+        for kind in BoardGridKind::ALL {
+            for spacing in [8, 40] {
+                let request = CanvasLayerInputs {
+                    grid: BoardGrid::new(kind, spacing),
+                    origin,
+                    ..inputs()
+                };
+                assert!(cache.ensure(&measurer, &mut caches, &shapes, request));
+                let direct = paint(&measurer, &shapes, &cache, &mut caches, request, false);
+                let cached = paint(&measurer, &shapes, &cache, &mut caches, request, true);
+                let error: u64 = direct
+                    .iter()
+                    .zip(&cached)
+                    .map(|(a, b)| u64::from(a.abs_diff(*b)))
+                    .sum();
+                assert!(
+                    error as f64 / (direct.len() as f64) < 1.0,
+                    "{kind:?} {spacing} {origin:?}: cached phase differs"
+                );
+            }
+        }
+    }
+}
+
+mod grid_performance;
