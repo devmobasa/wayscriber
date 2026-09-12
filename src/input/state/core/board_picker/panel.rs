@@ -13,6 +13,7 @@ pub struct BoardPickerPanel {
     pub(in crate::input::state) state: BoardPickerState,
     pub(in crate::input::state) drag: Option<BoardPickerDrag>,
     pub(in crate::input::state) page_drag: Option<BoardPickerPageDrag>,
+    pub(in crate::input::state) appearance: Option<super::appearance::BoardAppearanceEdit>,
     pub(in crate::input::state) page_edit: Option<BoardPickerPageEdit>,
     pub(in crate::input::state) layout: Option<BoardPickerLayout>,
     pub(in crate::input::state) search: String,
@@ -47,6 +48,7 @@ impl BoardPickerPanel {
         self.drag = None;
         self.page_drag = None;
         self.page_edit = None;
+        self.appearance = None;
         self.state = BoardPickerState::Open {
             selected: selected_row.unwrap_or(active_index),
             hover_index: None,
@@ -69,6 +71,7 @@ impl BoardPickerPanel {
         self.drag = None;
         self.page_drag = None;
         self.page_edit = None;
+        self.appearance = None;
         self.last_click = None;
         self.clear_search();
         layout
@@ -185,6 +188,7 @@ impl Default for BoardPickerPanel {
             drag: None,
             page_drag: None,
             page_edit: None,
+            appearance: None,
             layout: None,
             search: String::new(),
             search_last_input: None,

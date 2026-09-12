@@ -5,6 +5,41 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+#[test]
+fn board_grid_guarded_save_preserves_inline_and_nested_unknown_settings() {
+    for grid in [
+        "grid = { kind = 'cartesian', spacing = 20, future = 7 } # paper",
+        "[boards.items.grid] # paper\nkind = 'cartesian'\nspacing = 20\nfuture = 7",
+    ] {
+        let temp = TempConfig::new("board-grid");
+        temp.write(&format!("# personal boards\n[[boards.items]]\nid = 'paper'\nname = 'Paper'\nbackground = [1.0,1.0,1.0]\n{grid}\n"));
+        let document = ConfigDocument::load_from_path(&temp.path).unwrap();
+        let mut config = document.config().clone();
+        let board = config
+            .boards
+            .as_mut()
+            .unwrap()
+            .items
+            .iter_mut()
+            .find(|b| b.id == "paper")
+            .unwrap();
+        board.grid.kind = crate::config::BoardGridKindConfig::IsometricDots;
+        board.grid.spacing = 40;
+        document.save_with_backup(config).unwrap();
+        let saved = fs::read_to_string(&temp.path).unwrap();
+        assert!(saved.contains("# personal boards") && saved.contains("# paper"));
+        let value: toml::Value = toml::from_str(&saved).unwrap();
+        let boards = value["boards"]["items"].as_array().unwrap();
+        let paper = boards
+            .iter()
+            .find(|v| v["id"].as_str() == Some("paper"))
+            .unwrap();
+        assert_eq!(paper["grid"]["future"].as_integer(), Some(7));
+        assert_eq!(paper["grid"]["spacing"].as_integer(), Some(40));
+        assert_eq!(paper["grid"]["kind"].as_str(), Some("isometric-dots"));
+    }
+}
+
 struct TempConfig {
     root: PathBuf,
     path: PathBuf,

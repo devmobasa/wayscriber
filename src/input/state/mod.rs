@@ -22,6 +22,7 @@ mod tests;
 pub(crate) use actions::key_press::bindings::key_to_action_label_for_test;
 pub(crate) use core::board_picker::BoardPickerEditMode;
 pub(crate) use core::board_picker::BoardPickerFocus;
+pub(crate) use core::board_picker::appearance::AppearanceField;
 pub(crate) use core::board_picker::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };

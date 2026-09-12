@@ -131,6 +131,9 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_set_selected(&mut self, index: usize) {
+        if self.board_picker_selected_index() != Some(index) {
+            self.board_picker_clear_edit();
+        }
         let row_count = self.board_picker_row_count().max(1);
         let next = index.min(row_count.saturating_sub(1));
         let previous_board = self.board_picker_page_panel_board_index();

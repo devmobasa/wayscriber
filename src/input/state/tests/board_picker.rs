@@ -1461,8 +1461,10 @@ fn board_picker_commit_edit_rejects_invalid_colors_and_keeps_edit_open() {
 
     assert!(!input.board_picker_commit_edit());
     assert_eq!(
-        input.active_toast().map(|toast| toast.message.as_str()),
-        Some("Invalid color. Use #RRGGBB or RRGGBB.")
+        input
+            .board_appearance_edit()
+            .and_then(|edit| edit.error.as_deref()),
+        Some("Use a color in #RRGGBB format.")
     );
     assert_eq!(
         input.board_picker_edit_state(),

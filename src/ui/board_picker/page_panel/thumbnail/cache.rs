@@ -16,6 +16,7 @@ struct ThumbnailKey {
     content: u64,
     view: (i32, i32),
     background: Option<[u64; 3]>,
+    grid: crate::domain::BoardGrid,
     backdrop: Vec<u8>,
     geometry: [u64; 4],
     matrix: [u64; 6],
@@ -182,6 +183,7 @@ fn try_render_cached(
     let key = ThumbnailKey {
         content: args.frame.content_revision(),
         view: args.frame.view_offset(),
+        grid: args.grid,
         background: match args.background {
             BoardBackground::Solid(color) => {
                 Some([color.r.to_bits(), color.g.to_bits(), color.b.to_bits()])
@@ -258,6 +260,7 @@ fn try_render_cached(
                 render: &mut RenderCtx::new(&target, args.render.caches),
                 frame: args.frame,
                 background: args.background,
+                grid: args.grid,
                 x: args.x,
                 y: args.y,
                 width: args.width,

@@ -654,3 +654,13 @@ Use `./tools/lint-and-test.sh` for package/source checks, formatting, linting, b
 and tests under both workspace feature configurations. Required GTK widget coverage is
 `./tools/test-gtk-widgets.sh`. Live Wayland focus, layer-shell, capture, and installed-binary
 checks remain separate from these automated checks.
+
+## Board paper
+
+Board pattern values live in `src/domain/board_grid.rs`; config adapters validate
+and serialize them. `src/draw/render/board_grid.rs` builds the procedural source
+shared by the canvas, erasers, pan cache, thumbnails, and canvas exports.
+`src/input/state/core/board/appearance.rs` publishes appearance edits once;
+the board picker owns only its draft. Session format 7 carries appearance and
+its explicit-override provenance independently of page history. See
+[board paper validation](board-paper-validation.md) for regression and performance evidence.

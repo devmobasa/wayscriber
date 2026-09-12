@@ -110,12 +110,14 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     let mut snapshot = if !boards.is_empty() || active_board_id.is_some() {
         let mut board_snaps = Vec::new();
         for BoardFile {
+            appearance,
             id,
             pages,
             active_page,
         } in boards
         {
             board_snaps.push(BoardSnapshot {
+                appearance,
                 id,
                 pages: normalized_board_pages_snapshot(pages, Some(active_page)),
             });
@@ -132,6 +134,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
             board_pages_from_file(transparent_pages, transparent_active_page, transparent)
         {
             board_snaps.push(BoardSnapshot {
+                appearance: None,
                 id: "transparent".to_string(),
                 pages,
             });
@@ -140,6 +143,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
             board_pages_from_file(whiteboard_pages, whiteboard_active_page, whiteboard)
         {
             board_snaps.push(BoardSnapshot {
+                appearance: None,
                 id: "whiteboard".to_string(),
                 pages,
             });
@@ -148,6 +152,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
             board_pages_from_file(blackboard_pages, blackboard_active_page, blackboard)
         {
             board_snaps.push(BoardSnapshot {
+                appearance: None,
                 id: "blackboard".to_string(),
                 pages,
             });
@@ -170,6 +175,10 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     for board in &mut snapshot.boards {
         apply_history_policies(&mut board.pages, &board.id, disk_history_limit);
     }
+
+    snapshot
+        .boards
+        .retain(|board| board.appearance.is_none() || board.has_recoverable_user_data());
 
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         debug!(

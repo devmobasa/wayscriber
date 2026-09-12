@@ -39,6 +39,7 @@ fn pixels(
             render: &mut render,
             frame,
             background,
+            grid: Default::default(),
             x: 35.5,
             y: 27.25,
             width: 128.0,

@@ -1,3 +1,4 @@
+mod appearance;
 mod delete_restore;
 mod lifecycle;
 mod pages;
