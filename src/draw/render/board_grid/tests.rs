@@ -159,7 +159,7 @@ fn board_grid_tiles_stay_opaque_and_show_expected_vertices() {
         for scale in [1.0, 1.25, 2.0] {
             let data = pixels(kind, scale, (0.0, 0.0), true);
             assert!(
-                data.chunks_exact(4).all(|pixel| pixel[3] == 255),
+                data.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255),
                 "{kind:?} has a transparent tile seam"
             );
             let (x, y) = if kind == BoardGridKind::Cartesian {

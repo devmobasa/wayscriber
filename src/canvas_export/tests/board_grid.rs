@@ -135,6 +135,24 @@ fn board_grid_pdf_stays_vector_without_erasers_and_leaves_margins_plain() {
         );
         assert!(bytes.windows(b"/Pattern".len()).any(|v| v == b"/Pattern"));
         check_pdf_pixels(&bytes, &surface);
+        let mut erased = document.clone();
+        erased.pages[0].page.frame.add_shape(Shape::Rect {
+            x: -4,
+            y: -4,
+            w: 8,
+            h: 8,
+            fill: true,
+            color: RED,
+            thick: 1.0,
+        });
+        erased.pages[0].page.frame.add_shape(Shape::EraserStroke {
+            points: vec![(-10, 0), (10, 0)],
+            brush: EraserBrush {
+                kind: EraserKind::Circle,
+                size: 32.0,
+            },
+        });
+        check_pdf_pixels(&render_board_pdf(&erased).unwrap(), &surface);
     }
 }
 
@@ -167,6 +185,13 @@ fn check_pdf_pixels(pdf: &[u8], expected: &cairo::ImageSurface) {
         (expected.width(), expected.height())
     );
     let actual = image.data().unwrap();
+    // World origin is a vertex in every mode and maps to (91,73) here.
+    let darkest = (71..=75)
+        .flat_map(|y| (89..=93).map(move |x| (y * 200 + x) * 4))
+        .map(|i| actual[i])
+        .min()
+        .unwrap();
+    assert!(darkest < 240, "PDF paper lost the origin vertex");
     expected
         .with_data(|expected| {
             let error: u64 = expected
@@ -179,7 +204,13 @@ fn check_pdf_pixels(pdf: &[u8], expected: &cairo::ImageSurface) {
                 "PDF paper phase differs from raster: mean error {}",
                 error as f64 / expected.len() as f64
             );
-            assert!(actual.chunks_exact(4).all(|pixel| pixel[3] == 255));
+            assert!(
+                actual
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| pixel[3] == 255)
+            );
         })
         .unwrap();
 }

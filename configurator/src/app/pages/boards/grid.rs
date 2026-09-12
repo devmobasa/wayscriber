@@ -37,8 +37,15 @@ pub(super) fn build(
             grid_sender.input(Message::BoardsGridKindChanged(index, *kind));
         }
     });
+    let spacing_title = match layout.grid_kind {
+        BoardGridKind::None => "Grid spacing (8–200 logical pixels)",
+        BoardGridKind::Cartesian => "Square side (8–200 logical pixels)",
+        BoardGridKind::Isometric | BoardGridKind::IsometricDots => {
+            "Equilateral triangle side (8–200 logical pixels)"
+        }
+    };
     let spacing = build_text_row(
-        "Grid spacing (8–200 logical pixels)",
+        spacing_title,
         index,
         BoardItemTextField::GridSpacing,
         sender,

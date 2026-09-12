@@ -8,12 +8,30 @@ transparent-board behavior, and screenshot source provenance keep their existing
 owners. This document records implementation decisions and headless evidence;
 it does not claim a live Wayland or GTK interaction test.
 
+## Final local checks
+
+`./tools/lint-and-test.sh` passed on 2026-09-12, including packaging and source
+audits, 75 C# tooling tests, formatting, builds, and strict workspace Clippy in
+both feature configurations. The all-feature suite passed 4,582 root and 491
+configurator tests; no-default-features passed 4,422 root and 490 configurator
+tests. CLI, daemon fixture, UI integration, documentation, and the separately
+invoked retained context-menu/board-picker render tests also passed.
+
+The headless appearance sheet was inspected at 420×300 and its bounds tested
+at 420×300 and 900×700. Poppler PDF raster comparisons ran on this machine.
+No live Wayland overlay or GTK configurator was launched, and no GitHub Actions
+run was triggered by the feature-branch pushes. The performance measurements
+below are separate opt-in runs, not timings collected during the CI suite.
+
 ## State and recovery
 
 Appearance lives with the board, outside drawing history. The picker owns an
 identity-bound draft and applies a field-level patch once. The small appearance
 sheet has the same control geometry for painting and mouse input. Invalid raw
 spacing remains editable, and Cancel or an invalidated identity cannot commit.
+Draft differences are computed from final values, so changing a field and then
+reverting it preserves later external changes. Preview updates and dismissal
+damage the sheet's screen rectangle without publishing a board or session edit.
 
 Each `BoardState` owns its immutable configured/template appearance seed. Keeping
 this seed on the identity-bearing state, instead of a second manager map, lets
@@ -92,6 +110,8 @@ wholly vector.
   Cairo path/state preservation, and circular/rectangular eraser replay.
 - Direct versus baked pan rendering, pattern/spacing cache invalidation, PNG
   eraser pixels, immutable exports, and plain PDF margins with vector paper.
+  Actual PDFs are also rasterized with Poppler when available to check paper
+  phase and eraser restoration against the raster renderer.
 - Draft Cancel/no-op/invalid input, conflict and identity checks, field-level
   merge, pen preservation on grid-only edits, and unchanged drawing history.
 - Empty-board persistence, exact optional pen restoration, legacy appearance
@@ -113,7 +133,7 @@ not construct the paper again.
 | Warm pan-cache check and blit | 0.19–1.73 ms | 1.94–3.34 ms |
 | PNG render and encoding | 34.73–305.44 ms | 138.62–660.61 ms |
 
-Ranges include all tested origins, densities, patterns, and eraser counts, so
+Ranges include all tested origins, spacings, patterns, and eraser counts, so
 an occasional slower local sample is retained rather than removed. Live pan
 reuse stays a blit. Export time is worker-side work, not event-loop rendering.
 The simultaneous surface allocation proxy is approximately 30.6 MiB at 1080p

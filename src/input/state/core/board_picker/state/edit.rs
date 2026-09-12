@@ -12,6 +12,7 @@ use super::super::{
 
 impl InputState {
     pub(crate) fn board_picker_clear_edit(&mut self) {
+        self.mark_board_appearance_region();
         self.board_picker.appearance = None;
         if let BoardPickerState::Open { edit, .. } = &mut self.board_picker.state {
             *edit = None;

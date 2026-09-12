@@ -35,7 +35,7 @@ pub(super) fn render(engine: &UiTextEngine, ctx: &cairo::Context, input: &InputS
     engine.draw_baseline(
         ctx,
         style,
-        &format!("Paper color: {}", edit.color),
+        &format!("Session paper color: {}", edit.color),
         x + 4.0,
         y - 44.0,
         None,
@@ -73,10 +73,15 @@ pub(super) fn render(engine: &UiTextEngine, ctx: &cairo::Context, input: &InputS
             TEXT_PRIMARY
         },
     );
+    let spacing_label = match edit.kind {
+        BoardGridKind::None => "Spacing",
+        BoardGridKind::Cartesian => "Square side",
+        BoardGridKind::Isometric | BoardGridKind::IsometricDots => "Triangle side",
+    };
     engine.draw_baseline(
         ctx,
         style,
-        &format!("Spacing: {} px", edit.spacing),
+        &format!("{spacing_label}: {} px", edit.spacing),
         x + 4.0,
         y + 79.0,
         None,

@@ -20,18 +20,23 @@ pub(crate) struct BoardAppearanceEdit {
     pub(crate) color: String,
     pub(crate) kind: BoardGridKind,
     pub(crate) spacing: String,
-    color_dirty: bool,
-    kind_dirty: bool,
-    spacing_dirty: bool,
     pub(crate) focus: AppearanceField,
     pub(crate) error: Option<String>,
 }
 
 impl BoardAppearanceEdit {
     pub(super) fn set_color_text(&mut self, value: String) {
-        self.color_dirty = self.color != value;
         self.color = value;
     }
+    // Compare the displayed color with its original displayed value, preserving
+    // the exact configured float color when an edit is reverted.
+    fn color_is_dirty(&self) -> bool {
+        let BoardBackground::Solid(original) = self.original.background else {
+            return false;
+        };
+        parse_hex_color(&self.color) != parse_hex_color(&color_to_hex(original))
+    }
+
     pub(crate) fn validation_error(&self) -> Option<&'static str> {
         if parse_hex_color(&self.color).is_none() {
             return Some("Use a color in #RRGGBB format.");
@@ -52,7 +57,7 @@ impl BoardAppearanceEdit {
             _ => crate::draw::WHITE,
         };
         (
-            if self.color_dirty {
+            if self.color_is_dirty() {
                 parse_hex_color(&self.color).unwrap_or(base)
             } else {
                 base
@@ -74,38 +79,40 @@ impl BoardAppearanceEdit {
             .ok()
             .filter(|s| (8..=200).contains(s))
             .ok_or("Spacing must be a whole number from 8 to 200.")?;
+        let kind_dirty = self.kind != self.original.grid.kind;
+        let spacing_dirty = spacing != i64::from(self.original.grid.spacing());
         let mut desired = current.clone();
         fn conflict<T: PartialEq>(dirty: bool, current: &T, original: &T, desired: &T) -> bool {
             dirty && current != original && current != desired
         }
         if conflict(
-            self.color_dirty,
+            self.color_is_dirty(),
             &current.background,
             &self.original.background,
             &BoardBackground::Solid(color),
         ) || conflict(
-            self.kind_dirty,
+            kind_dirty,
             &current.grid.kind,
             &self.original.grid.kind,
             &self.kind,
         ) || conflict(
-            self.spacing_dirty,
+            spacing_dirty,
             &current.grid.spacing(),
             &self.original.grid.spacing(),
             &(spacing as u16),
         ) {
             return Err("Board appearance changed. Cancel and reopen to edit it.");
         }
-        if self.color_dirty {
+        if self.color_is_dirty() {
             desired.background = BoardBackground::Solid(color);
         }
         desired.grid = BoardGrid::new(
-            if self.kind_dirty {
+            if kind_dirty {
                 self.kind
             } else {
                 current.grid.kind
             },
-            if self.spacing_dirty {
+            if spacing_dirty {
                 spacing
             } else {
                 i64::from(current.grid.spacing())
@@ -134,16 +141,15 @@ impl InputState {
             color: color_to_hex(color),
             kind: board.spec.grid.kind,
             spacing: board.spec.grid.spacing().to_string(),
-            color_dirty: false,
-            kind_dirty: false,
-            spacing_dirty: false,
             focus: AppearanceField::Color,
             error: None,
         });
+        self.mark_board_appearance_region();
         true
     }
 
     pub(crate) fn apply_board_appearance(&mut self) -> bool {
+        self.mark_board_appearance_region();
         let Some(edit) = &self.board_picker.appearance else {
             return false;
         };
@@ -180,17 +186,18 @@ impl InputState {
     }
 
     pub(crate) fn board_appearance_palette(&mut self, color: Color) -> bool {
+        self.mark_board_appearance_region();
         let Some(edit) = &mut self.board_picker.appearance else {
             return false;
         };
         edit.color = color_to_hex(color);
-        edit.color_dirty = true;
         edit.error = None;
         self.needs_redraw = true;
         true
     }
 
     pub(crate) fn board_appearance_key(&mut self, key: Key) -> bool {
+        self.mark_board_appearance_region();
         let Some(edit) = &mut self.board_picker.appearance else {
             return false;
         };
@@ -220,16 +227,13 @@ impl InputState {
                     1
                 };
                 edit.kind = BoardGridKind::ALL[(index + step) % 4];
-                edit.kind_dirty = true;
             }
             Key::Backspace | Key::Delete => match edit.focus {
                 AppearanceField::Color => {
                     edit.color.pop();
-                    edit.color_dirty = true;
                 }
                 AppearanceField::Spacing => {
                     edit.spacing.pop();
-                    edit.spacing_dirty = true;
                 }
                 _ => {}
             },
@@ -238,11 +242,9 @@ impl InputState {
                     if (ch.is_ascii_hexdigit() || ch == '#') && edit.color.len() < 7 =>
                 {
                     edit.color.push(ch);
-                    edit.color_dirty = true;
                 }
                 AppearanceField::Spacing if !ch.is_control() && edit.spacing.len() < 8 => {
                     edit.spacing.push(ch);
-                    edit.spacing_dirty = true;
                 }
                 _ => {}
             },
@@ -264,10 +266,30 @@ impl InputState {
         ))
     }
 
+    pub(in crate::input::state) fn mark_board_appearance_region(&mut self) {
+        if self.board_picker.appearance.is_none() {
+            return;
+        }
+        if let Some((x, y, width)) = self.board_appearance_rect()
+            && let Some(rect) = crate::util::Rect::new(
+                (x - 13.0).floor() as i32,
+                (y - 71.0).floor() as i32,
+                width.ceil() as i32 + 27,
+                295,
+            )
+        {
+            self.dirty_tracker.mark_rect(rect);
+        } else {
+            self.dirty_tracker.mark_full();
+        }
+        self.needs_redraw = true;
+    }
+
     pub(crate) fn board_appearance_click(&mut self, x: i32, y: i32) -> bool {
         let Some((left, top, width)) = self.board_appearance_rect() else {
             return false;
         };
+        self.mark_board_appearance_region();
         let x = f64::from(x) - left;
         let y = f64::from(y) - top;
         if !(-12.0..width + 12.0).contains(&x) || !(-70.0..222.0).contains(&y) {
@@ -281,23 +303,19 @@ impl InputState {
                 let index = (x / (width / 11.0)).floor() as usize;
                 if let Some(color) = super::board_palette_colors().get(index) {
                     edit.color = color_to_hex(*color);
-                    edit.color_dirty = true;
                 }
             }
             0..=55 => {
                 edit.kind = BoardGridKind::ALL
                     [((y / 28.0) as usize * 2 + (x / (width / 2.0)) as usize).min(3)];
-                edit.kind_dirty = true;
                 edit.focus = AppearanceField::Pattern;
             }
             60..=87 => {
                 edit.focus = AppearanceField::Spacing;
                 if x > width - 40.0 {
                     edit.spacing = "40".into();
-                    edit.spacing_dirty = true;
                 } else if x > width - 80.0 {
                     edit.spacing = "20".into();
-                    edit.spacing_dirty = true;
                 }
             }
             160..=187 => {
