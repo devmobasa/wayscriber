@@ -76,6 +76,14 @@ pub(crate) fn handle_board_picker_press(
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
+    // Board and page menus open above the picker, so they take its left
+    // presses; a press away from the menu only dismisses the menu.
+    if button == MouseButton::Left
+        && state.is_board_picker_open()
+        && let Some(outcome) = handle_left_context_menu_press(state, points)
+    {
+        return Some(outcome);
+    }
     let screen = points.screen();
     state
         .handle_board_picker_press(button, screen.x(), screen.y())
@@ -105,6 +113,9 @@ pub(crate) fn handle_left_context_menu_press(
     state.update_pointer_positions(screen.x(), screen.y(), canvas.x(), canvas.y());
     state.trigger_click_highlight(canvas.x(), canvas.y());
     state.handle_context_menu_press(screen.x(), screen.y());
+    if !state.is_context_menu_open() {
+        state.context_menu.set_dismissal_release_pending();
+    }
     Some(RoutingOutcome::Consumed(ConsumedBy::ContextMenu))
 }
 
@@ -426,7 +437,14 @@ pub(crate) fn handle_board_picker_motion(
     if !state.is_board_picker_open() {
         return None;
     }
+    // Board and page menus open above the picker, so they take its hover.
+    if let Some(outcome) = handle_context_menu_motion(state, points) {
+        return Some(outcome);
+    }
     let screen = points.screen();
+    if state.board_appearance_drag_to(screen.x(), screen.y()) {
+        return Some(RoutingOutcome::Consumed(ConsumedBy::BoardPicker));
+    }
     if state.board_picker_is_page_dragging() {
         state.board_picker_update_page_drag_from_pointer(screen.x(), screen.y());
     } else if state.board_picker_is_dragging() {

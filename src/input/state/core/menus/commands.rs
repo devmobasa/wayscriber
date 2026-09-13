@@ -32,6 +32,23 @@ impl InputState {
         self.board_picker_page_panel_board_index() == Some(board_index)
     }
 
+    fn context_menu_board_target_index(&self) -> Option<usize> {
+        let id = self.context_menu.board_target.as_deref()?;
+        self.boards
+            .board_states()
+            .iter()
+            .position(|board| board.spec.id == id)
+    }
+
+    /// Picker row actions act on the selected row, so select the target first.
+    fn select_board_picker_row_for(&mut self, board_index: usize) -> bool {
+        let Some(row) = self.board_picker_row_for_board(board_index) else {
+            return false;
+        };
+        self.board_picker_set_selected(row);
+        true
+    }
+
     fn context_submenu_anchor(&self) -> (i32, i32) {
         if let Some(layout) = self.context_menu.layout {
             (
@@ -331,6 +348,39 @@ impl InputState {
             MenuCommand::BoardDelete => {
                 self.delete_active_board_with_measurer(resources.measurer);
                 self.close_context_menu();
+            }
+            MenuCommand::BoardEditPaper => {
+                self.close_context_menu();
+                let active = self.boards.active_index();
+                self.board_picker_edit_board_paper_with_measurer(resources.measurer, active);
+            }
+            MenuCommand::BoardEditPaperFromContext => {
+                let target = self.context_menu_board_target_index();
+                self.close_context_menu();
+                if let Some(board_index) = target {
+                    self.board_picker_edit_board_paper_with_measurer(
+                        resources.measurer,
+                        board_index,
+                    );
+                }
+            }
+            MenuCommand::BoardRenameFromContext => {
+                let target = self.context_menu_board_target_index();
+                self.close_context_menu();
+                if let Some(board_index) = target
+                    && self.select_board_picker_row_for(board_index)
+                {
+                    self.board_picker_rename_selected_with_measurer(resources.measurer);
+                }
+            }
+            MenuCommand::BoardTogglePinFromContext => {
+                let target = self.context_menu_board_target_index();
+                self.close_context_menu();
+                if let Some(board_index) = target
+                    && self.select_board_picker_row_for(board_index)
+                {
+                    self.board_picker_toggle_pin_selected();
+                }
             }
             MenuCommand::SwitchToBoard { id } => {
                 self.switch_board_with_measurer(resources.measurer, &id);

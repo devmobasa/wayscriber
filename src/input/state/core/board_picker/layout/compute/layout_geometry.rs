@@ -49,6 +49,8 @@ impl InputState {
             list_width: final_list_width,
             page_panel_x,
             page_panel_y: origin_y,
+            screen_width: screen_width as f64,
+            screen_height: screen_height as f64,
         }
     }
 }

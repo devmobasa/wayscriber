@@ -137,6 +137,10 @@ impl InputState {
             return false;
         }
         if self.board_appearance_edit().is_some() {
+            // The size slider acts on press so it can be dragged.
+            if matches!(button, MouseButton::Left) {
+                self.board_appearance_press(x, y);
+            }
             return true;
         }
         self.update_pointer_position(x, y);
@@ -159,8 +163,17 @@ impl InputState {
                 }
             }
             MouseButton::Right => {
-                if self.board_picker_contains_point(x, y)
-                    && let Some(page_index) = self.board_picker_page_index_at(x, y)
+                if !self.board_picker_contains_point(x, y) {
+                    self.close_board_picker();
+                } else if let Some(row) = self.board_picker_index_at(x, y)
+                    && !self.board_picker_is_new_row(row)
+                    && let Some(board_index) = self.board_picker_board_index_for_row(row)
+                {
+                    // Like a left click, a right click selects the row it acts on.
+                    self.board_picker_set_selected(row);
+                    self.update_pointer_position_synthetic(x, y);
+                    self.open_board_context_menu((x, y), board_index);
+                } else if let Some(page_index) = self.board_picker_page_index_at(x, y)
                     && let Some(board_index) = self.board_picker_page_panel_board_index()
                 {
                     self.update_pointer_position_synthetic(x, y);

@@ -125,6 +125,8 @@ struct BoardPickerLayoutGeometry {
     list_width: f64,
     page_panel_x: f64,
     page_panel_y: f64,
+    screen_width: f64,
+    screen_height: f64,
 }
 
 impl InputState {
@@ -281,6 +283,8 @@ impl InputState {
             page_count: page_panel.count,
             page_visible_count: page_panel.visible_count,
             page_board_index: page_panel.board_index,
+            screen_width: geometry.screen_width,
+            screen_height: geometry.screen_height,
         }
     }
 }

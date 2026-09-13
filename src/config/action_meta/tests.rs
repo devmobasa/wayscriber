@@ -217,6 +217,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::BoardNew,
     Action::BoardDelete,
     Action::BoardPicker,
+    Action::BoardPaperEdit,
     Action::BoardRestoreDeleted,
     Action::BoardDuplicate,
     Action::BoardSwitchRecent,

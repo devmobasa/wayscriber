@@ -315,6 +315,22 @@ impl InputState {
         }
     }
 
+    /// Opens the paper sheet for a board, opening the full picker when needed.
+    pub(crate) fn board_picker_edit_board_paper_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        board_index: usize,
+    ) {
+        if !self.is_board_picker_open() || self.board_picker_is_quick() {
+            self.open_board_picker_with_measurer(measurer);
+        }
+        if let Some(row) = self.board_picker_row_for_board(board_index) {
+            self.board_picker_set_selected(row);
+        }
+
+        self.board_picker_edit_color_selected_with_measurer(measurer);
+    }
+
     pub(crate) fn board_picker_edit_color_selected_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,

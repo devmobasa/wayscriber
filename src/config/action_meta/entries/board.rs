@@ -297,4 +297,24 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         false
     ),
+    meta!(
+        BoardPaperEdit,
+        "Edit Board Paper",
+        Some("Paper"),
+        "Choose the active board's paper color, pattern, and size",
+        Board,
+        true,
+        false,
+        false,
+        &[
+            "grid",
+            "graph paper",
+            "cartesian",
+            "isometric",
+            "dots",
+            "pattern",
+            "background",
+            "board color",
+        ]
+    ),
 ];

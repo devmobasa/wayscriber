@@ -134,6 +134,7 @@ fn action_serialization_matches_established_contract() {
         (Action::BoardRestoreDeleted, "board_restore_deleted"),
         (Action::BoardDuplicate, "board_duplicate"),
         (Action::BoardSwitchRecent, "board_switch_recent"),
+        (Action::BoardPaperEdit, "board_paper_edit"),
         (Action::FocusNextOutput, "focus_next_output"),
         (Action::FocusPrevOutput, "focus_prev_output"),
         (Action::PagePrev, "page_prev"),

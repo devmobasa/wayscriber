@@ -102,6 +102,7 @@ pub enum Action {
     BoardRestoreDeleted,
     BoardDuplicate,
     BoardSwitchRecent,
+    BoardPaperEdit,
     FocusNextOutput,
     FocusPrevOutput,
 

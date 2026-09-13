@@ -179,6 +179,8 @@ board_new = ["Ctrl+Shift+N"]
 board_duplicate = ["Ctrl+Shift+D"]
 board_delete = ["Ctrl+Shift+Delete"]
 board_picker = ["Ctrl+Shift+B"]
+# Edit the active board's paper (unbound by default; also in the command palette)
+board_paper_edit = []
 
 # Page navigation
 # Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).

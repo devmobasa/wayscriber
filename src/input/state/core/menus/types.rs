@@ -10,6 +10,8 @@ pub enum ContextMenuKind {
     Boards,
     Page,
     PageMove,
+    /// Actions for one board row in the board picker.
+    Board,
 }
 
 /// Tracks the context menu lifecycle.
@@ -66,6 +68,10 @@ pub enum MenuCommand {
     BoardNew,
     BoardDuplicate,
     BoardDelete,
+    BoardEditPaper,
+    BoardEditPaperFromContext,
+    BoardRenameFromContext,
+    BoardTogglePinFromContext,
     SwitchToBoard { id: String },
     SwitchToWhiteboard,
     SwitchToBlackboard,

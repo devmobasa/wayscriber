@@ -57,6 +57,29 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    /// Opens actions for one board row, keeping the board picker underneath.
+    pub fn open_board_context_menu(&mut self, anchor: (i32, i32), board_index: usize) {
+        if !self.context_menu.enabled {
+            return;
+        }
+        let Some(board_id) = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.spec.id.clone())
+        else {
+            return;
+        };
+
+        self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Board, None);
+        self.context_menu.set_board_target(board_id);
+        self.pointer.clear_menu_hover_recalc();
+        self.set_context_menu_focus(None);
+        self.focus_first_context_menu_entry();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
     pub fn toggle_context_menu_via_keyboard(&mut self) {
         let measurer = TextMeasurer::default();
         self.toggle_context_menu_via_keyboard_with(&measurer);

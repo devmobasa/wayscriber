@@ -153,6 +153,11 @@ impl InputState {
                 self.switch_board_recent_with_measurer(measurer);
                 true
             }
+            Action::BoardPaperEdit => {
+                let board_index = self.boards.active_index();
+                self.board_picker_edit_board_paper_with_measurer(measurer, board_index);
+                true
+            }
             _ => false,
         }
     }

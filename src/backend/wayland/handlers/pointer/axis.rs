@@ -180,6 +180,10 @@ impl WaylandState {
         if self.try_handle_help_axis(scroll_direction) {
             return;
         }
+        if try_handle_board_appearance_axis(&mut self.input_state, event.position, scroll_direction)
+        {
+            return;
+        }
         if try_handle_board_picker_page_panel_axis(
             &mut self.input_state,
             event.position,
@@ -328,6 +332,21 @@ impl WaylandState {
             }
         }
     }
+}
+
+/// The paper sheet steps its size with the wheel and keeps the page panel
+/// behind it from scrolling.
+fn try_handle_board_appearance_axis(
+    input_state: &mut InputState,
+    position: (f64, f64),
+    scroll_direction: i32,
+) -> bool {
+    if !input_state.is_board_picker_open() || input_state.is_context_menu_open() {
+        return false;
+    }
+    let x = position.0.round() as i32;
+    let y = position.1.round() as i32;
+    input_state.board_appearance_wheel(x, y, scroll_direction)
 }
 
 fn try_handle_board_picker_page_panel_axis(

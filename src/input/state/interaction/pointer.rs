@@ -16,6 +16,12 @@ pub(crate) fn route_pointer_press(
     // interaction.
     state.clear_status_hud_press_pending();
     state.clear_zoom_chip_press_pending();
+    // Recover if the previous dismissal's release never reached this router.
+    // Other buttons must not relinquish ownership of the pending left release.
+    if event.button() == MouseButton::Left {
+        state.context_menu.take_dismissal_release_pending();
+    }
+
     if let Some(outcome) = adapters::handle_building_polygon_non_left_press(
         state,
         resources.measurer,
@@ -122,6 +128,12 @@ pub(crate) fn route_pointer_release(
 ) -> RoutingOutcome {
     let points = event.points();
     adapters::update_pointer_positions(state, points);
+
+    // The menu has already closed on press. Consume its release before any
+    // newly exposed control can act on it.
+    if event.button() == MouseButton::Left && state.context_menu.take_dismissal_release_pending() {
+        return RoutingOutcome::Consumed(ConsumedBy::ContextMenu);
+    }
 
     // Status HUD press→release contract for paths that route presses through
     // this chain (tablet, touch fallbacks): a HUD press consumed by

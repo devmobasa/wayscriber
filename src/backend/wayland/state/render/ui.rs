@@ -357,7 +357,10 @@ impl WaylandState {
         height: u32,
         capture_picker: bool,
     ) {
-        if capture_picker || self.zoom.active || self.input_state.is_board_picker_open() {
+        // Board and page menus open on top of the board picker, so the picker
+        // must not hide this pass. It never shares the screen with the
+        // properties panel.
+        if capture_picker || self.zoom.active {
             self.input_state.clear_context_menu_layout();
             self.input_state.clear_properties_panel_layout();
             return;

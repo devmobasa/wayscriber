@@ -34,7 +34,7 @@ fn pixels(
 #[test]
 #[ignore = "isolated by tools/lint-and-test.sh; Cairo race: https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81"]
 fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts() {
-    check_appearance_sheet_on_small_surfaces();
+    check_appearance_sheet_fits_each_surface();
     let engine = UiTextEngine::default();
     let measurer = crate::draw::TextMeasurer::default();
     let mut caches = crate::draw::RenderCaches::default();
@@ -97,7 +97,7 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
     }
 }
 
-fn check_appearance_sheet_on_small_surfaces() {
+fn check_appearance_sheet_fits_each_surface() {
     let engine = UiTextEngine::default();
     let measurer = crate::draw::TextMeasurer::default();
     let mut state = crate::input::state::test_support::make_test_input_state();
@@ -107,13 +107,13 @@ fn check_appearance_sheet_on_small_surfaces() {
     state.board_appearance_key(crate::input::events::Key::Tab);
     state.board_appearance_key(crate::input::events::Key::Right);
     state.board_appearance_key(crate::input::events::Key::Right);
-    for (width, height) in [(900, 700), (420, 300)] {
+    for (width, height) in [(1920, 1080), (1280, 720), (900, 700), (420, 300)] {
         let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         state.update_board_picker_layout(&ctx, width as u32, height as u32);
-        let (x, y, w) = state.board_appearance_rect().unwrap();
-        assert!(x >= 12.0 && x + w + 12.0 <= f64::from(width));
-        assert!(y >= 70.0 && y + 222.0 <= f64::from(height));
+        let (x, y, w, h) = state.board_appearance_frame().unwrap().bounds();
+        assert!(x >= 0.0 && x + w <= f64::from(width));
+        assert!(y >= 0.0 && y + h <= f64::from(height));
         let data = pixels(
             &engine,
             &measurer,

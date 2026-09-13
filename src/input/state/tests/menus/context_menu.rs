@@ -516,6 +516,112 @@ fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() 
     assert!(delete_entry.disabled);
 }
 
+fn menu_entry(state: &InputState, command: MenuCommand) -> ContextMenuEntry {
+    state
+        .context_menu_entries()
+        .into_iter()
+        .find(|entry| entry.command == Some(command.clone()))
+        .unwrap_or_else(|| panic!("missing {command:?} entry"))
+}
+
+#[test]
+fn boards_menu_edits_active_board_paper_and_skips_the_overlay() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+    assert!(!menu_entry(&state, MenuCommand::BoardEditPaper).disabled);
+    state.execute_menu_command(MenuCommand::BoardEditPaper);
+
+    assert!(!state.is_context_menu_open());
+    assert!(state.is_board_picker_open());
+    assert_eq!(
+        state.board_appearance_edit().map(|edit| edit.board_id()),
+        Some(BOARD_ID_WHITEBOARD)
+    );
+
+    state.close_board_picker();
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+    assert!(menu_entry(&state, MenuCommand::BoardEditPaper).disabled);
+}
+
+#[test]
+fn board_row_menu_edits_renames_and_pins_its_own_board() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    let overlay = board_index(&state, BOARD_ID_TRANSPARENT);
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+
+    state.open_board_context_menu((5, 5), overlay);
+    assert_eq!(state.context_menu_entries()[0].label, "Overlay");
+    assert!(menu_entry(&state, MenuCommand::BoardEditPaperFromContext).disabled);
+
+    state.open_board_context_menu((5, 5), blackboard);
+    assert!(
+        state.is_board_picker_open(),
+        "row menus keep the picker open"
+    );
+    assert_eq!(state.context_menu_entries()[0].label, "Blackboard");
+    state.execute_menu_command(MenuCommand::BoardEditPaperFromContext);
+    assert!(!state.is_context_menu_open());
+    assert_eq!(
+        state.board_appearance_edit().map(|edit| edit.board_id()),
+        Some(BOARD_ID_BLACKBOARD)
+    );
+
+    state.board_picker_cancel_edit();
+    state.open_board_context_menu((5, 5), blackboard);
+    state.execute_menu_command(MenuCommand::BoardRenameFromContext);
+    let row = state.board_picker_row_for_board(blackboard).unwrap();
+    assert_eq!(
+        state
+            .board_picker_edit_state()
+            .map(|(mode, index, _)| (mode, index)),
+        Some((crate::input::state::BoardPickerEditMode::Name, row))
+    );
+
+    state.board_picker_cancel_edit();
+    let _ = state.take_pending_board_runtime_ui_actions();
+    state.open_board_context_menu((5, 5), blackboard);
+    state.execute_menu_command(MenuCommand::BoardTogglePinFromContext);
+    assert!(matches!(
+        state.take_pending_board_runtime_ui_actions().as_slice(),
+        [crate::input::boards::PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
+            if board_id == BOARD_ID_BLACKBOARD
+    ));
+}
+
+#[test]
+fn right_clicking_a_board_row_selects_it_and_opens_its_menu() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    state.update_board_picker_layout(&ctx, 1280, 720);
+    let layout = *state.board_picker_layout().unwrap();
+    let row = state.board_picker_row_for_board(blackboard).unwrap();
+    let x = (layout.origin_x + layout.padding_x + 60.0) as i32;
+    let y = (layout.origin_y
+        + layout.padding_y
+        + layout.header_height
+        + layout.row_height * (row as f64 + 0.5)) as i32;
+
+    assert!(state.handle_board_picker_press(crate::input::MouseButton::Right, x, y));
+
+    assert!(state.is_board_picker_open());
+    assert_eq!(state.board_picker_selected_index(), Some(row));
+    assert!(matches!(
+        state.context_menu.state,
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Board,
+            ..
+        }
+    ));
+    assert_eq!(state.context_menu_entries()[0].label, "Blackboard");
+}
+
 #[test]
 fn open_pages_menu_command_switches_to_pages_submenu_with_actionable_focus() {
     let mut state = create_test_input_state();

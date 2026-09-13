@@ -783,6 +783,7 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("board_delete", &["Ctrl+Shift+Delete"]),
     ("board_picker", &["Ctrl+Shift+B"]),
     ("board_duplicate", &["Ctrl+Shift+D"]),
+    ("board_paper_edit", &[]),
     ("focus_next_output", &["Ctrl+Alt+Shift+ArrowRight"]),
     ("focus_prev_output", &["Ctrl+Alt+Shift+ArrowLeft"]),
     ("page_prev", &["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]),

@@ -56,6 +56,7 @@ impl InputState {
                 ContextMenuKind::Boards => self.boards_menu_entries(),
                 ContextMenuKind::Page => self.page_context_menu_entries(),
                 ContextMenuKind::PageMove => self.page_move_menu_entries(),
+                ContextMenuKind::Board => self.board_context_menu_entries(),
             },
         }
     }

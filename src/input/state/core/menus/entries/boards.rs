@@ -106,6 +106,14 @@ impl InputState {
             false,
             Some(MenuCommand::BoardDuplicate),
         ));
+        // The overlay has no paper to edit.
+        entries.push(ContextMenuEntry::new(
+            "Edit Board Paper…",
+            self.shortcut_for_action(Action::BoardPaperEdit),
+            false,
+            self.board_is_transparent(),
+            Some(MenuCommand::BoardEditPaper),
+        ));
 
         // Can't delete the transparent board or if only one board left
         let can_delete = !self.board_is_transparent() && board_count > 1;
@@ -118,5 +126,48 @@ impl InputState {
         ));
 
         entries
+    }
+
+    /// Actions for the board row right-clicked in the board picker. Shortcut
+    /// hints name the picker's own keys for the same actions.
+    pub(super) fn board_context_menu_entries(&self) -> Vec<ContextMenuEntry> {
+        let Some(board) = self.context_menu.board_target.as_deref().and_then(|id| {
+            self.boards
+                .board_states()
+                .iter()
+                .find(|board| board.spec.id == id)
+        }) else {
+            return Vec::new();
+        };
+        let pin_label = if board.spec.pinned {
+            "Unpin Board"
+        } else {
+            "Pin Board"
+        };
+
+        vec![
+            ContextMenuEntry::new(board.spec.name.clone(), None::<String>, false, true, None),
+            ContextMenuEntry::new(
+                "Edit Paper…",
+                Some("Ctrl+C"),
+                false,
+                board.spec.background.is_transparent(),
+                Some(MenuCommand::BoardEditPaperFromContext),
+            ),
+            ContextMenuEntry::new(
+                "Rename Board",
+                Some("F2"),
+                false,
+                false,
+                Some(MenuCommand::BoardRenameFromContext),
+            ),
+            ContextMenuEntry::new(
+                pin_label,
+                Some("Ctrl+P"),
+                false,
+                false,
+                Some(MenuCommand::BoardTogglePinFromContext),
+            ),
+        ]
     }
 }

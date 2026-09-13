@@ -1502,6 +1502,10 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 
 **Board Picker:**
 - Modal list for switching, renaming, and recoloring boards.
+- Right-click a board for **Edit Paper…**, **Rename Board**, and **Pin Board**. The canvas
+  context menu's **Boards** submenu also has **Edit Board Paper…** for the active board.
+- The command palette's **Edit Board Paper** opens the same editor for the active board. It
+  is unbound by default; bind `board_paper_edit` to give it a shortcut.
 - Inline edits apply to the active session, not to the templates in `config.toml`. Edit the
   templates in the configurator's Boards screen.
 
@@ -1532,7 +1536,8 @@ values are clamped with a warning; invalid text or unknown kinds fail validation
 Transparent boards disable the pattern while retaining its spacing.
 
 Open the board picker (`Ctrl+Shift+B`), select a solid board, and click its color
-swatch or press `Ctrl+C`. Choose a pattern and spacing, or use the 20/40 presets.
+swatch or press `Ctrl+C`, or run **Edit Board Paper** from the command palette.
+Choose a pattern, then drag the size slider or type a size.
 The preview is local to the editor; **Apply** changes the board and **Cancel** or
 Escape discards the draft. Tab cycles color, pattern, and spacing; arrow keys
 change the focused pattern and Enter applies. Switching to another board or
@@ -2207,6 +2212,8 @@ board_new = ["Ctrl+Shift+N"]
 board_duplicate = ["Ctrl+Shift+D"]
 board_delete = ["Ctrl+Shift+Delete"]
 board_picker = ["Ctrl+Shift+B"]
+# Edit the active board's paper (unbound by default; also in the command palette)
+board_paper_edit = []
 
 # Page navigation
 # Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).
