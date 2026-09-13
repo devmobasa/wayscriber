@@ -1,6 +1,7 @@
 use super::super::base::InputState;
 use super::{CommandEntry, CommandPaletteState, command_palette_entries};
 use crate::config::action_meta::{ActionCategory, ActionMeta};
+use crate::config::keybindings::canonical_key_names;
 use crate::domain::Action;
 use crate::input::state::core::search::fuzzy_score;
 /// Group label shown above recent commands when the query is empty.
@@ -133,7 +134,7 @@ impl CommandPaletteState {
             return Some(recent_bonus);
         }
 
-        let shortcuts = labels(command.action).join(" ");
+        let shortcuts = shortcut_search_text(&labels(command.action));
         let mut score = 0;
 
         // Require all tokens to match somewhere for cleaner result sets. The
@@ -330,6 +331,18 @@ fn action_meta_query_bonus(meta: &ActionMeta, query: &str) -> i32 {
     bonus
 }
 
+/// The shortcut haystack a query is scored against: the labels exactly as the
+/// palette shows them, plus the config key names behind any glyph they use.
+/// Without the second half, a binding rendered `Ctrl+Alt+←` would stop
+/// answering to "arrow" or "left", which is how it is spelled in `config.toml`.
+fn shortcut_search_text(labels: &[String]) -> String {
+    let shown = labels.join(" ");
+    match canonical_key_names(&shown) {
+        Some(canonical) => format!("{shown} {canonical}"),
+        None => shown,
+    }
+}
+
 fn normalize_query(query: &str) -> String {
     query.trim().to_lowercase()
 }
@@ -408,6 +421,40 @@ mod tests {
         // model indexes aliases.
         assert!(action_meta_token_score(radial, "pie") > 0);
         assert_eq!(action_meta_token_score(radial, "zznomatch"), 0);
+    }
+
+    #[test]
+    fn shortcut_search_still_reaches_the_config_name_behind_a_glyph() {
+        use crate::config::{KeybindingsConfig, Shortcut};
+        use crate::input::state::test_support::make_test_input_state;
+
+        let mut bindings = KeybindingsConfig::default()
+            .build_action_bindings()
+            .expect("default bindings");
+        bindings.insert(
+            Action::ClearCanvas,
+            vec![Shortcut::parse("Ctrl+Alt+ArrowLeft").expect("binding")],
+        );
+        let mut state = make_test_input_state();
+        state.set_action_bindings(bindings);
+
+        // The palette shows the glyph ...
+        assert_eq!(
+            state.action_binding_labels(Action::ClearCanvas),
+            vec!["Ctrl+Alt+←".to_string()]
+        );
+
+        // ... and the name the config file spells still finds the command.
+        for query in ["arrow", "left", "arrowleft"] {
+            state.command_palette.query = query.to_string();
+            assert!(
+                state
+                    .filtered_commands()
+                    .iter()
+                    .any(|entry| entry.action == Action::ClearCanvas),
+                "query {query:?} did not reach the ArrowLeft binding"
+            );
+        }
     }
 
     #[test]

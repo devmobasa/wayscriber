@@ -375,12 +375,17 @@ impl Shortcut {
     }
 
     /// Label for chips, help, and the command palette (`Ctrl+K then Ctrl+C`).
+    ///
+    /// Keyboard chords render their key as a glyph or short name
+    /// ([`KeyBinding::display_label`]); device buttons keep their reserved
+    /// name, which is already the readable form.
     pub fn display_label(&self) -> String {
         match self {
+            Self::Single(ShortcutTrigger::Keyboard(binding)) => binding.display_label(),
             Self::Single(trigger) => trigger.to_string(),
             Self::Sequence(steps) => steps
                 .iter()
-                .map(ToString::to_string)
+                .map(KeyBinding::display_label)
                 .collect::<Vec<_>>()
                 .join(" then "),
         }
@@ -694,6 +699,23 @@ mod tests {
         let three = Shortcut::parse("Ctrl+K > Ctrl+C > Ctrl+V").unwrap();
         assert_eq!(three.to_string(), "Ctrl+K > Ctrl+C > Ctrl+V");
         assert_eq!(three.display_label(), "Ctrl+K then Ctrl+C then Ctrl+V");
+    }
+
+    #[test]
+    fn display_labels_use_glyphs_while_storage_keeps_the_config_spelling() {
+        let single = Shortcut::parse("Ctrl+Alt+ArrowLeft").unwrap();
+        assert_eq!(single.display_label(), "Ctrl+Alt+←");
+        assert_eq!(single.to_string(), "Ctrl+Alt+ArrowLeft");
+
+        let sequence = Shortcut::parse("Ctrl+K > Shift+PageUp").unwrap();
+        assert_eq!(sequence.display_label(), "Ctrl+K then Shift+PgUp");
+        assert_eq!(sequence.to_string(), "Ctrl+K > Shift+PageUp");
+
+        // Device buttons already read as names, so they show as stored.
+        assert_eq!(
+            Shortcut::parse("Ctrl+MouseBack").unwrap().display_label(),
+            "Ctrl+MouseBack"
+        );
     }
 
     #[test]

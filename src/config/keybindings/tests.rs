@@ -1055,3 +1055,66 @@ fn ordinary_bindings_are_not_flagged() {
         );
     }
 }
+
+#[test]
+fn key_display_name_shows_glyphs_for_named_keys_and_leaves_the_rest_alone() {
+    assert_eq!(key_display_name("ArrowLeft"), "←");
+    assert_eq!(key_display_name("ArrowRight"), "→");
+    assert_eq!(key_display_name("ArrowUp"), "↑");
+    assert_eq!(key_display_name("ArrowDown"), "↓");
+    assert_eq!(key_display_name("Return"), "Enter");
+    assert_eq!(key_display_name("Escape"), "Esc");
+    assert_eq!(key_display_name("Backspace"), "⌫");
+    assert_eq!(key_display_name("Delete"), "Del");
+    assert_eq!(key_display_name("PageUp"), "PgUp");
+    assert_eq!(key_display_name("PageDown"), "PgDn");
+    // Case-insensitive, like every other key-name comparison.
+    assert_eq!(key_display_name("arrowleft"), "←");
+    // Names that already read well, and ordinary keys, pass through.
+    for key in ["Space", "Home", "End", "Menu", "F5", "K", "+"] {
+        assert_eq!(key_display_name(key), key);
+    }
+}
+
+#[test]
+fn display_label_renders_glyphs_while_display_stays_the_config_spelling() {
+    let arrow = KeyBinding::parse("Ctrl+Alt+ArrowLeft").unwrap();
+    assert_eq!(arrow.display_label(), "Ctrl+Alt+←");
+    assert_eq!(arrow.to_string(), "Ctrl+Alt+ArrowLeft");
+
+    let page_up = KeyBinding::parse("Shift+PageUp").unwrap();
+    assert_eq!(page_up.display_label(), "Shift+PgUp");
+    assert_eq!(page_up.to_string(), "Shift+PageUp");
+
+    // Modifiers stay words, and keys without a display form are untouched.
+    assert_eq!(
+        KeyBinding::parse("Ctrl+Shift+Alt+Super+K")
+            .unwrap()
+            .display_label(),
+        "Ctrl+Shift+Alt+Super+K"
+    );
+    assert_eq!(KeyBinding::parse("F5").unwrap().display_label(), "F5");
+    assert_eq!(
+        KeyBinding::parse("Ctrl++").unwrap().display_label(),
+        "Ctrl++"
+    );
+}
+
+#[test]
+fn canonical_key_names_restores_the_config_spelling_behind_a_glyph_label() {
+    // Search boxes see the rendered label, so they need the name back.
+    let arrow = KeyBinding::parse("Ctrl+Alt+ArrowLeft").unwrap();
+    assert_eq!(
+        canonical_key_names(&arrow.display_label()).as_deref(),
+        Some(arrow.to_string().as_str())
+    );
+    assert_eq!(
+        canonical_key_names("Shift+PgUp / Esc").as_deref(),
+        Some("Shift+PageUp / Escape")
+    );
+    // A label with nothing substituted has nothing to restore.
+    assert_eq!(canonical_key_names("Ctrl+Shift+K"), None);
+    // A short display form inside a longer word is left alone, so hand-written
+    // help text does not come back as "Deleteete".
+    assert_eq!(canonical_key_names("Backspace/Delete, +Ctrl"), None);
+}

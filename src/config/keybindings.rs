@@ -11,7 +11,10 @@ mod shortcut;
 
 pub use crate::domain::Action;
 pub use authorship::KeybindingAuthorship;
-pub use binding::{KeyBinding, NAMED_KEYS, is_deliverable_key_name, suggest_key_name};
+pub use binding::{
+    KeyBinding, NAMED_KEYS, canonical_key_names, is_deliverable_key_name, key_display_name,
+    suggest_key_name,
+};
 pub use config::{ConfigurableAction, KeybindingConflict, KeybindingsConfig};
 pub use shortcut::{
     MAX_POINTER_EXTRA, MAX_SEQUENCE_STEPS, PointerButton, PointerTrigger, Shortcut,

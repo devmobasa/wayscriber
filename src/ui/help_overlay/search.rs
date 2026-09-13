@@ -2,6 +2,7 @@ use super::types::Row;
 // The palette's fuzzy scorer/tokenizer and its shared static search-model
 // scorer, reused directly so help search and the command palette rank
 // identically (no per-surface reimplementation).
+use crate::config::keybindings::canonical_key_names;
 use crate::input::state::{action_meta_token_score, fuzzy_score, query_tokens};
 use crate::ui_text::UiTextStyle;
 
@@ -20,14 +21,22 @@ pub(crate) use crate::ui::primitives::ellipsize_to_fit_with_engine;
 /// description + category + aliases). Reusing that model is what lets an alias
 /// query like "pie menu" resolve the radial-menu row, whose shortcut and label
 /// never spell "pie". Mirrors the palette's all-tokens rule.
+///
+/// The shortcut string is the rendered one, so a key shown as a glyph is also
+/// matched against the config name behind it ("arrowleft" finds a row drawn
+/// `Ctrl+Alt+←`).
 pub(crate) fn row_matches(row: &Row, needle_lower: &str) -> bool {
     let tokens = query_tokens(needle_lower);
     if tokens.is_empty() {
         return false;
     }
     let meta = row.action_id.and_then(crate::config::action_meta);
+    let key_names = canonical_key_names(&row.key);
     tokens.iter().all(|token| {
         fuzzy_score(token, &row.key) > 0
+            || key_names
+                .as_deref()
+                .is_some_and(|names| fuzzy_score(token, names) > 0)
             || fuzzy_score(token, row.action) > 0
             || meta.is_some_and(|meta| action_meta_token_score(meta, token) > 0)
     })
@@ -89,6 +98,16 @@ mod tests {
         let r = row("Middle Click / M", "Radial Menu").with_action(Action::ToggleRadialMenu);
         assert!(row_matches(&r, "pie"));
         assert!(row_matches(&r, "pie menu"));
+    }
+
+    #[test]
+    fn row_matches_the_config_key_name_behind_a_glyph() {
+        // The row draws the glyph, but users search for what their config
+        // file spells. Neither query is reachable through the rendered
+        // shortcut ("Ctrl+Alt+←") or the description.
+        let r = row("Ctrl+Alt+←", "Previous Page");
+        assert!(row_matches(&r, "arrowleft"));
+        assert!(row_matches(&r, "left"));
     }
 
     #[test]

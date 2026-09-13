@@ -73,6 +73,95 @@ pub const NAMED_KEYS: &[&str] = &[
     "F12",
 ];
 
+/// Named keys whose config spelling is replaced by a glyph or a short name in
+/// every user-facing label, paired as (config name, display form).
+///
+/// Only the display side changes: config files, [`fmt::Display`], and anything
+/// persisted keep the left column. Names absent here (`Space`, `Home`, `End`,
+/// the function keys) already read well and stay as they are.
+const KEY_DISPLAY_NAMES: &[(&str, &str)] = &[
+    ("ArrowLeft", "←"),
+    ("ArrowRight", "→"),
+    ("ArrowUp", "↑"),
+    ("ArrowDown", "↓"),
+    ("Return", "Enter"),
+    ("Escape", "Esc"),
+    ("Backspace", "⌫"),
+    ("Delete", "Del"),
+    ("PageUp", "PgUp"),
+    ("PageDown", "PgDn"),
+];
+
+/// How a key name is shown to the user.
+///
+/// Case-insensitive like every other key-name comparison, so a config that
+/// spells `arrowleft` still displays `←`. Anything without a display form —
+/// single characters, `+`, `Space`, the function keys — comes back unchanged.
+pub fn key_display_name(key: &str) -> &str {
+    KEY_DISPLAY_NAMES
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(key))
+        .map_or(key, |(_, display)| *display)
+}
+
+/// The config key names behind the display forms in `label`, or `None` when it
+/// has none.
+///
+/// Search boxes see the label a surface renders, not the binding behind it, so
+/// a query still has to reach the name the config file spells: typing
+/// `arrowleft` (or `left`) must find the action shown as `←`. Rewriting the
+/// rendered label is what lets pre-formatted label text — joined alternatives,
+/// compacted ranges, `then` sequences — stay searchable without every surface
+/// carrying a second string.
+pub fn canonical_key_names(label: &str) -> Option<String> {
+    let mut restored: Option<String> = None;
+    for (name, display) in KEY_DISPLAY_NAMES {
+        let current = restored.as_deref().unwrap_or(label);
+        if let Some(next) = replace_key_token(current, display, name) {
+            restored = Some(next);
+        }
+    }
+    restored
+}
+
+/// Swap every whole-word `display` in `label` for `name`, or `None` when there
+/// is none.
+///
+/// Whole-word because a short display form can sit inside a longer word the
+/// label wrote itself: hand-written help text spells `Backspace/Delete`, and a
+/// blind substring swap would turn the `Del` in it into `Deleteete`.
+fn replace_key_token(label: &str, display: &str, name: &str) -> Option<String> {
+    let mut restored = String::new();
+    let mut rest = label;
+    let mut replaced = false;
+    while let Some(index) = rest.find(display) {
+        let (before, at_match) = rest.split_at(index);
+        let after = &at_match[display.len()..];
+        let stands_alone = !ends_in_word_char(before) && !starts_with_word_char(after);
+        restored.push_str(before);
+        if stands_alone {
+            restored.push_str(name);
+            replaced = true;
+        } else {
+            restored.push_str(display);
+        }
+        rest = after;
+    }
+    if !replaced {
+        return None;
+    }
+    restored.push_str(rest);
+    Some(restored)
+}
+
+fn ends_in_word_char(text: &str) -> bool {
+    text.chars().next_back().is_some_and(char::is_alphanumeric)
+}
+
+fn starts_with_word_char(text: &str) -> bool {
+    text.chars().next().is_some_and(char::is_alphanumeric)
+}
+
 /// Whether a key event can ever carry this name.
 ///
 /// Single characters come through as themselves, so any one-character key is
@@ -233,6 +322,19 @@ impl KeyBinding {
             alt: parts.alt,
             logo: parts.logo,
         })
+    }
+
+    /// Label for chips, keycaps, menus, and help: modifiers as words, the key
+    /// as its glyph or short name (`Ctrl+Alt+←`).
+    ///
+    /// [`fmt::Display`] stays the canonical config spelling, because that is
+    /// what gets written back to `config.toml`.
+    pub fn display_label(&self) -> String {
+        format_modifiers(self.ctrl, self.shift, self.alt, self.logo)
+            .into_iter()
+            .chain(std::iter::once(key_display_name(&self.key)))
+            .collect::<Vec<_>>()
+            .join("+")
     }
 
     /// Check if this keybinding matches the current input state.
