@@ -136,6 +136,9 @@ impl InputState {
         if !self.is_board_picker_open() {
             return false;
         }
+        if self.board_appearance_edit().is_some() {
+            return true;
+        }
         self.update_pointer_position(x, y);
         match button {
             MouseButton::Left => {

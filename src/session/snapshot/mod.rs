@@ -1,4 +1,6 @@
+mod appearance;
 mod apply;
+pub use appearance::BoardAppearanceSnapshot;
 mod capture;
 mod compression;
 mod history;

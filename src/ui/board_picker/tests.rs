@@ -34,6 +34,7 @@ fn pixels(
 #[test]
 #[ignore = "isolated by tools/lint-and-test.sh; Cairo race: https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81"]
 fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts() {
+    check_appearance_sheet_on_small_surfaces();
     let engine = UiTextEngine::default();
     let measurer = crate::draw::TextMeasurer::default();
     let mut caches = crate::draw::RenderCaches::default();
@@ -93,5 +94,48 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
                 density
             ) == before
         );
+    }
+}
+
+fn check_appearance_sheet_on_small_surfaces() {
+    let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut state = crate::input::state::test_support::make_test_input_state();
+    state.switch_board_force("whiteboard");
+    state.open_board_picker_with_measurer(&measurer);
+    state.board_picker_edit_color_selected_with_measurer(&measurer);
+    state.board_appearance_key(crate::input::events::Key::Tab);
+    state.board_appearance_key(crate::input::events::Key::Right);
+    state.board_appearance_key(crate::input::events::Key::Right);
+    for (width, height) in [(900, 700), (420, 300)] {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        state.update_board_picker_layout(&ctx, width as u32, height as u32);
+        let (x, y, w) = state.board_appearance_rect().unwrap();
+        assert!(x >= 12.0 && x + w + 12.0 <= f64::from(width));
+        assert!(y >= 70.0 && y + 222.0 <= f64::from(height));
+        let data = pixels(
+            &engine,
+            &measurer,
+            &mut crate::draw::RenderCaches::default(),
+            &state,
+            (width, height),
+            1,
+        );
+        if let Ok(folder) = std::env::var("WAYSCRIBER_GRID_UI_ARTIFACTS") {
+            let surface = cairo::ImageSurface::create_for_data(
+                data,
+                cairo::Format::ARgb32,
+                width,
+                height,
+                width * 4,
+            )
+            .unwrap();
+            let mut file = std::fs::File::create(
+                std::path::Path::new(&folder).join(format!("paper-editor-{width}x{height}.png")),
+            )
+            .unwrap();
+            surface.write_to_png(&mut file).unwrap();
+        }
     }
 }

@@ -30,6 +30,7 @@ impl std::fmt::Display for BoardBackgroundOption {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardItemTextField {
+    GridSpacing,
     Id,
     Name,
 }
@@ -53,6 +54,8 @@ pub struct BoardItemDraft {
     pub name: String,
     pub background_kind: BoardBackgroundOption,
     pub background_color: ColorTripletInput,
+    pub grid_kind: wayscriber::domain::BoardGridKind,
+    pub grid_spacing: String,
     pub default_pen_color: OptionalTripletInput,
     pub auto_adjust_pen: bool,
     pub persist: bool,

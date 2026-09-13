@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub(crate) mod appearance;
 mod layout;
 mod panel;
 mod search;

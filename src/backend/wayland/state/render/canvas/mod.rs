@@ -110,7 +110,13 @@ impl WaylandState {
         }
 
         let background_start = perf.as_ref().map(|_| Instant::now());
-        let eraser_ctx = self.render_canvas_background(ctx, scale, phys_width, phys_height)?;
+        let mut eraser_ctx = self.render_canvas_background(
+            ctx,
+            scale,
+            phys_width,
+            phys_height,
+            !canvas.canvas.draw_committed,
+        )?;
         if let (Some(perf), Some(background_start)) = (perf.as_mut(), background_start) {
             perf.stages.background = perf
                 .stages
@@ -150,8 +156,6 @@ impl WaylandState {
             ctx.translate(-canvas_origin_x, -canvas_origin_y);
         }
 
-        let replay_ctx = eraser_ctx.replay_context();
-
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
         let (layer_cache, draw_caches, measurer) = self.render.canvas_draw_parts_mut();
         render_committed_canvas_shapes(
@@ -161,9 +165,10 @@ impl WaylandState {
             draw_caches,
             canvas,
             layer_cache_ready,
-            &replay_ctx,
+            &mut eraser_ctx,
+            self.input_state.boards.active_board().spec.grid,
             perf.as_deref_mut(),
-        );
+        )?;
         if let (Some(perf), Some(completed_shapes_start)) = (perf.as_mut(), completed_shapes_start)
         {
             perf.stages.completed_shapes = perf
@@ -285,6 +290,7 @@ impl WaylandState {
 
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 
+        let replay_ctx = eraser_ctx.replay_context();
         let provisional = self.input_state.provisional_tool_stroke(mx, my);
         let provisional_points = provisional_point_count(&provisional);
         let provisional_start = perf.as_ref().map(|_| Instant::now());
@@ -341,9 +347,10 @@ fn render_committed_canvas_shapes(
     draw_caches: &mut crate::draw::RenderCaches,
     canvas: &CanvasRenderCtx<'_>,
     layer_cache_ready: bool,
-    replay_ctx: &crate::draw::EraserReplayContext<'_>,
+    eraser_ctx: &mut background::CanvasEraserContext,
+    grid: crate::domain::BoardGrid,
     mut perf: Option<&mut PerfRenderBreakdown>,
-) {
+) -> Result<()> {
     let ctx = canvas.cairo;
     let width = canvas.geometry.width;
     let height = canvas.geometry.height;
@@ -356,8 +363,12 @@ fn render_committed_canvas_shapes(
             perf.shapes_total = shapes.len();
             perf.canvas_layer_cache_used = true;
         }
-        return;
+        return Ok(());
     }
+    // A successful blit already includes the board paper. Build and paint its
+    // source only on the direct path, including a failed-cache fallback.
+    eraser_ctx.prepare_paper(ctx, grid)?;
+    let replay_ctx = eraser_ctx.replay_context();
     debug!("Rendering {} completed shapes", shapes.len());
     if let Some(perf) = perf.as_mut() {
         perf.shapes_total = shapes.len();
@@ -371,7 +382,7 @@ fn render_committed_canvas_shapes(
             measurer,
             &mut render,
             shape,
-            replay_ctx,
+            &replay_ctx,
             text_halo_enabled,
         )
     };
@@ -383,12 +394,12 @@ fn render_committed_canvas_shapes(
             perf.shapes_tested = shapes.len();
             perf.shapes_rendered = shapes.len();
         }
-        return;
+        return Ok(());
     };
     let Some(safe_bounds) =
         safe_shape_damage_bounds(bounds, width, height, canvas_transform_active)
     else {
-        return;
+        return Ok(());
     };
     let mut shapes_rendered = 0usize;
     for shape in shapes {
@@ -404,6 +415,7 @@ fn render_committed_canvas_shapes(
         perf.shapes_tested = shapes.len();
         perf.shapes_rendered = shapes_rendered;
     }
+    Ok(())
 }
 
 fn union_damage_bounds(regions: &[crate::util::Rect]) -> Option<crate::util::Rect> {

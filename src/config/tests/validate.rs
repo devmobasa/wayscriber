@@ -113,6 +113,7 @@ fn validate_boards_uses_boundary_id_normalization() {
                     id: " Transparent ".to_string(),
                     name: "Overlay".to_string(),
                     background: BoardBackgroundConfig::Transparent("transparent".to_string()),
+                    grid: Default::default(),
                     default_pen_color: None,
                     auto_adjust_pen: false,
                     persist: true,
@@ -124,6 +125,7 @@ fn validate_boards_uses_boundary_id_normalization() {
                     background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([
                         1.2, 0.5, -0.1,
                     ])),
+                    grid: Default::default(),
                     default_pen_color: Some(BoardColorConfig::Rgb([0.2, 1.4, 0.6])),
                     auto_adjust_pen: true,
                     persist: true,
@@ -135,6 +137,7 @@ fn validate_boards_uses_boundary_id_normalization() {
                     background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([
                         0.2, 0.3, 0.4,
                     ])),
+                    grid: Default::default(),
                     default_pen_color: None,
                     auto_adjust_pen: true,
                     persist: true,
@@ -146,6 +149,7 @@ fn validate_boards_uses_boundary_id_normalization() {
                     background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([
                         0.2, 0.3, 0.4,
                     ])),
+                    grid: Default::default(),
                     default_pen_color: None,
                     auto_adjust_pen: true,
                     persist: true,

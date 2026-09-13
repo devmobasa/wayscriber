@@ -1521,6 +1521,38 @@ wayscriber --active --mode blueprint
 wayscriber --daemon --mode transparent
 ```
 
+#### Board paper patterns
+
+Each solid board can use `grid = { kind = "cartesian", spacing = 40 }` in its
+`[[boards.items]]` entry. Kinds are `none` (the default), `cartesian`, `isometric`
+(lines), and `isometric-dots`. Spacing is an integer from 8 through 200 logical
+pixels: a square edge for Cartesian paper or an equilateral triangle edge for
+isometric paper. Isometric lines run vertically and at ±30°. Out-of-range config
+values are clamped with a warning; invalid text or unknown kinds fail validation.
+Transparent boards disable the pattern while retaining its spacing.
+
+Open the board picker (`Ctrl+Shift+B`), select a solid board, and click its color
+swatch or press `Ctrl+C`. Choose a pattern and spacing, or use the 20/40 presets.
+The preview is local to the editor; **Apply** changes the board and **Cancel** or
+Escape discards the draft. Tab cycles color, pattern, and spacing; arrow keys
+change the focused pattern and Enter applies. Switching to another board or
+renaming cancels the draft. The configurator's Boards page edits the templates
+used for new sessions; it does not replace an existing session's saved paper.
+
+Paper is anchored to board coordinates, follows pan and zoom, and appears behind
+all annotations. It cannot be selected or erased and does not participate in
+undo/redo. Clear Canvas keeps the paper. Thumbnails and canvas PNG/PDF exports use
+the same pattern; PDF margins retain the plain board color. Native region capture
+continues to use the frozen desktop. Lines and dots automatically contrast with
+the board, and fade at very small preview scales to avoid dense visual noise.
+
+Session format 7 saves appearance with drawings and preserves explicitly edited
+empty boards. Unchanged empty templates remain contentless for backup recovery.
+Older sessions use configured/template appearance; opening another named session
+resets missing appearance to those seeds. Clear Saved Data removes the saved
+appearance override as well as drawing data. A grid-only edit preserves the pen
+color; changing the background retains the board's existing auto-contrast policy.
+
 ### `[board]` - Legacy Board Modes
 
 This section is still recognized for backward compatibility. If `[boards]` is missing,

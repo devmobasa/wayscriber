@@ -33,6 +33,7 @@ pub(super) fn render_page_content(
         render,
         frame,
         background,
+        grid,
         x,
         y,
         width,
@@ -83,6 +84,7 @@ pub(super) fn render_page_content(
         render,
         frame,
         background,
+        grid,
         screen_width,
         screen_height,
         text_halo_enabled,
@@ -98,13 +100,29 @@ fn render_frame_shapes(
     render: &mut crate::draw::RenderCtx<'_, '_>,
     frame: &crate::draw::Frame,
     background: &BoardBackground,
+    grid: crate::domain::BoardGrid,
     target_width: u32,
     target_height: u32,
     text_halo_enabled: bool,
 ) {
     let ctx = render.cairo;
+    let (view_x, view_y) = if background.is_transparent() {
+        (0, 0)
+    } else {
+        frame.view_offset()
+    };
+    ctx.translate(-f64::from(view_x), -f64::from(view_y));
+    let paper = match background {
+        BoardBackground::Solid(color) => {
+            crate::draw::BoardPaper::for_context(*color, grid, ctx).ok()
+        }
+        BoardBackground::Transparent => None,
+    };
+    if let Some(paper) = &paper {
+        let _ = paper.paint(ctx);
+    }
     let eraser_ctx = EraserReplayContext {
-        pattern: None,
+        pattern: paper.as_ref().map(crate::draw::BoardPaper::pattern),
         surface: None,
         backdrop_cache_key: None,
         bg_color: match background {
@@ -310,6 +328,7 @@ mod tests {
                     ),
                     frame: &frame,
                     background,
+                    grid: Default::default(),
                     x: 0.0,
                     y: 0.0,
                     width: 120.0,
@@ -351,6 +370,7 @@ mod tests {
                     ),
                     frame: &frame,
                     background: &BoardBackground::Solid(Color::new(1.0, 1.0, 1.0, 1.0)),
+                    grid: Default::default(),
                     x: 0.0,
                     y: 0.0,
                     width: 120.0,
@@ -451,6 +471,7 @@ mod tests {
                             render: &mut RenderCtx::new(&ctx, caches),
                             frame: &frame,
                             background: &BoardBackground::Solid(crate::draw::WHITE),
+                            grid: Default::default(),
                             x: 0.0,
                             y: 0.0,
                             width: 124.0,
@@ -560,6 +581,7 @@ mod measurement {
                         render: &mut render,
                         frame: &frame,
                         background: &BoardBackground::Transparent,
+                        grid: Default::default(),
                         x: 0.0,
                         y: 0.0,
                         width: 240.0,

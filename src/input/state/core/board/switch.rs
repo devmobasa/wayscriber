@@ -21,6 +21,36 @@ impl InputState {
         self.board_transitions.replace_recent_for_test(recent);
     }
 
+    /// Resolve appearance before saved tools, including a restore to the same board ID.
+    pub(crate) fn restore_board_pen_after_snapshot(
+        &mut self,
+        previous_auto: bool,
+        previous_pen: crate::draw::Color,
+        previous_color: Option<crate::draw::Color>,
+    ) {
+        let spec = &self.boards.active_board().spec;
+        let target_auto = spec.auto_adjust_pen && !spec.background.is_transparent();
+        let color = spec.effective_pen_color();
+        if target_auto {
+            self.set_board_previous_color(if previous_auto {
+                previous_color
+            } else {
+                Some(previous_pen)
+            });
+            if let Some(color) = color {
+                self.set_pen_color_from_board(color);
+            }
+        } else if previous_auto {
+            self.set_board_previous_color(None);
+            if let Some(color) = previous_color {
+                self.set_pen_color_from_board(color);
+            }
+        } else {
+            self.set_board_previous_color(previous_color);
+            self.set_pen_color_from_board(previous_pen);
+        }
+    }
+
     /// Returns the active board id.
     pub fn board_id(&self) -> &str {
         self.boards.active_board_id()

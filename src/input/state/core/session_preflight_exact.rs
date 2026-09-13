@@ -111,6 +111,9 @@ fn duplicate_page_in_snapshot(
     let insert_at = (page_index + 1).min(pages.len());
     pages.insert(insert_at, cloned_page);
     snapshot.boards.push(BoardSnapshot {
+        appearance: Some(crate::session::BoardAppearanceSnapshot::capture(
+            source_board,
+        )),
         id: source_board.spec.id.clone(),
         pages: BoardPagesSnapshot {
             active: insert_at,
@@ -164,6 +167,9 @@ fn copy_page_between_boards_in_snapshot(
     let mut pages = pages_for_snapshot(&target_board.pages, history_limit);
     pages.push(cloned_page);
     snapshot.boards.push(BoardSnapshot {
+        appearance: Some(crate::session::BoardAppearanceSnapshot::capture(
+            target_board,
+        )),
         id: target_board.spec.id.clone(),
         pages: BoardPagesSnapshot {
             active: pages.len().saturating_sub(1),
@@ -184,6 +190,7 @@ fn duplicate_active_board_in_snapshot(input: &InputState, snapshot: &mut Session
     };
 
     let mut cloned = BoardSnapshot {
+        appearance: snapshot.boards[source_index].appearance.clone(),
         id: duplicate_board_id_for_preflight(input, &source_board.spec.id),
         pages: snapshot.boards[source_index].pages.clone(),
     };

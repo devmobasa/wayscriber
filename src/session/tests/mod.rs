@@ -1,3 +1,4 @@
+mod board_appearance;
 mod helpers;
 mod history;
 mod limits;

@@ -350,6 +350,7 @@ fn serialize_payload(snapshot: &SessionSnapshot, last_modified: &str) -> Result<
             .boards
             .iter()
             .map(|board| BoardFile {
+                appearance: board.appearance.clone(),
                 id: board.id.clone(),
                 pages: board.pages.pages.clone(),
                 active_page: board.pages.active,
@@ -411,9 +412,14 @@ fn snapshot_with_history_depth(snapshot: &SessionSnapshot, depth: usize) -> Sess
         }
     }
     candidate
+        .boards
+        .retain(BoardSnapshot::has_recoverable_user_data);
+    candidate
 }
 
-pub(super) fn snapshot_without_history(snapshot: &SessionSnapshot) -> SessionSnapshot {
+pub(in crate::session::snapshot) fn snapshot_without_history(
+    snapshot: &SessionSnapshot,
+) -> SessionSnapshot {
     let mut boards = Vec::with_capacity(snapshot.boards.len());
     for board in &snapshot.boards {
         let pages = BoardPagesSnapshot {
@@ -425,8 +431,14 @@ pub(super) fn snapshot_without_history(snapshot: &SessionSnapshot) -> SessionSna
                 .collect(),
             active: board.pages.active,
         };
-        if pages.has_persistable_data() {
+        if pages.has_persistable_data()
+            || board
+                .appearance
+                .as_ref()
+                .is_some_and(|a| a.explicit && a.is_valid())
+        {
             boards.push(BoardSnapshot {
+                appearance: board.appearance.clone(),
                 id: board.id.clone(),
                 pages,
             });

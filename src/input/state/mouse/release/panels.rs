@@ -113,6 +113,9 @@ pub(super) fn handle_board_picker_release(
     if !state.is_board_picker_open() {
         return false;
     }
+    if state.board_appearance_click(x, y) {
+        return true;
+    }
     if state.board_picker_is_page_dragging() {
         state.board_picker_finish_page_drag_with_measurer(resources.measurer);
         return true;
