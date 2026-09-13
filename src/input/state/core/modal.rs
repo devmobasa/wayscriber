@@ -163,6 +163,28 @@ impl InputState {
         }
     }
 
+    /// [`Self::close_modals_for_open`] for a surface opened *from* `kept`,
+    /// which stays open underneath it. The pairing is per opening rather than
+    /// a registry rule because the same surface opened from anywhere else
+    /// still excludes `kept`: the color picker keeps the board picker only
+    /// while it edits the picker's paper sheet.
+    pub(crate) fn close_modals_for_open_keeping(
+        &mut self,
+        opening: ModalSurface,
+        kept: ModalSurface,
+    ) {
+        self.clear_pending_sequence();
+        for other in ModalSurface::ALL {
+            if other != opening
+                && other != kept
+                && !opening.keeps_open(other)
+                && self.modal_is_open(other)
+            {
+                self.close_modal(other);
+            }
+        }
+    }
+
     /// Close everything a screen-region modal must not compete with, and
     /// cancel any unfinished gesture. Shared by the eyedropper and OCR: both
     /// take over pointer input entirely while they are up.

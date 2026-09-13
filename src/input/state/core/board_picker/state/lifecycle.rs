@@ -38,6 +38,9 @@ impl InputState {
     }
 
     pub(crate) fn close_board_picker(&mut self) {
+        if self.color_picker_popup_edits_board_paper() {
+            self.close_color_picker_popup(false);
+        }
         if let Some(layout) = self.board_picker.close() {
             self.mark_board_picker_region(&layout);
         }

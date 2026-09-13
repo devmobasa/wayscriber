@@ -662,5 +662,6 @@ and serialize them. `src/draw/render/board_grid.rs` builds the procedural source
 shared by the canvas, erasers, pan cache, thumbnails, and canvas exports.
 `src/input/state/core/board/appearance.rs` publishes appearance edits once;
 the board picker owns only its draft. Session format 7 carries appearance and
-its explicit-override provenance independently of page history. See
-[board paper validation](board-paper-validation.md) for regression and performance evidence.
+its explicit-override provenance independently of page history. The regression
+and performance evidence for this work is kept with the internal documentation
+rather than in this repository.

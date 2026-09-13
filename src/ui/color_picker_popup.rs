@@ -95,7 +95,7 @@ pub(crate) fn color_picker_popup_visual_geometry_with_engine(
     let layout = ColorPickerPopupLayout::compute(
         screen_width,
         screen_height,
-        input_state.color_picker_popup_shows_default_button(),
+        input_state.color_picker_popup_layout_options()?,
     );
     let mut bounds = (
         layout.origin_x,
@@ -257,17 +257,20 @@ pub(crate) fn render_color_picker_popup_with_engine(
 
     // Alpha bar: the current colour ramped from transparent to opaque over a
     // checkerboard, so the swatch under the pointer previews the result.
-    let alpha = input_state.color_picker_popup_alpha().unwrap_or(1.0);
-    draw_alpha_bar(
-        ctx,
-        layout.alpha_x,
-        layout.alpha_y,
-        layout.alpha_w,
-        layout.alpha_h,
-        current_color,
-    );
-    let alpha_marker_x = layout.alpha_x + alpha * layout.alpha_w;
-    draw_bar_marker(ctx, alpha_marker_x, layout.alpha_y, layout.alpha_h);
+    // Hidden entirely for a target without alpha, such as paper.
+    if layout.alpha_h > 0.0 {
+        let alpha = input_state.color_picker_popup_alpha().unwrap_or(1.0);
+        draw_alpha_bar(
+            ctx,
+            layout.alpha_x,
+            layout.alpha_y,
+            layout.alpha_w,
+            layout.alpha_h,
+            current_color,
+        );
+        let alpha_marker_x = layout.alpha_x + alpha * layout.alpha_w;
+        draw_bar_marker(ctx, alpha_marker_x, layout.alpha_y, layout.alpha_h);
+    }
 
     // Recent colors, most-recent-first. Empty until something has been
     // applied, so a fresh session shows no strip rather than dead slots.
@@ -326,15 +329,17 @@ pub(crate) fn render_color_picker_popup_with_engine(
         crate::toolbar_icons::draw_icon_paste,
         16.0,
     );
-    draw_action_button(
-        ctx,
-        layout.eyedropper_btn_x,
-        layout.eyedropper_btn_y,
-        size,
-        eyedropper_hover,
-        crate::toolbar_icons::draw_icon_eyedropper,
-        18.0,
-    );
+    if layout.eyedropper_enabled {
+        draw_action_button(
+            ctx,
+            layout.eyedropper_btn_x,
+            layout.eyedropper_btn_y,
+            size,
+            eyedropper_hover,
+            crate::toolbar_icons::draw_icon_eyedropper,
+            18.0,
+        );
+    }
 
     // Determine button hover states
     let ok_hover = hover_pos
@@ -489,7 +494,11 @@ mod tests {
     fn wide_titles_are_trimmed_to_the_panel_not_a_character_budget() {
         let engine = &UiTextEngine::default();
         let ctx = test_context();
-        let layout = ColorPickerPopupLayout::compute(1920, 1080, true);
+        let layout = ColorPickerPopupLayout::compute(
+            1920,
+            1080,
+            crate::input::state::ColorPickerPopupLayoutOptions::ALL,
+        );
         let content_width = layout.width - TITLE_INSET * 2.0;
 
         // Wide glyphs: few characters, far more pixels than a Latin label of

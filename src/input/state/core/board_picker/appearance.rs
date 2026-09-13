@@ -3,6 +3,7 @@ use crate::domain::{
     BOARD_GRID_MAX_SPACING, BOARD_GRID_MIN_SPACING, BoardBackground, BoardGrid, BoardGridKind,
     Color,
 };
+use crate::draw::TextMeasurer;
 use crate::input::InputState;
 use crate::input::boards::{BoardAppearance, BoardIdentityGeneration};
 use crate::input::events::Key;
@@ -384,6 +385,12 @@ impl InputState {
                 self.apply_board_appearance();
             }
             Key::F2 => return false,
+            // Space on the color field opens the full picker on the draft.
+            Key::Space if edit.focus == AppearanceField::Color => {
+                let measurer = TextMeasurer::default();
+                self.open_color_picker_popup_for_board_paper_with_measurer(&measurer);
+                return true;
+            }
             Key::Tab => {
                 edit.focus = match edit.focus {
                     AppearanceField::Color => AppearanceField::Pattern,
@@ -652,6 +659,11 @@ impl InputState {
     /// The wheel steps the size over its row. While the sheet is open it also
     /// consumes wheel events over the picker so nothing behind it scrolls.
     pub(crate) fn board_appearance_wheel(&mut self, x: i32, y: i32, direction: i32) -> bool {
+        // A color picker open on the draft owns the wheel; the modal registry
+        // swallows it after this returns.
+        if self.is_color_picker_popup_open() {
+            return false;
+        }
         let Some(frame) = self.board_appearance_frame() else {
             return false;
         };
@@ -673,6 +685,16 @@ impl InputState {
     }
 
     pub(crate) fn board_appearance_click(&mut self, x: i32, y: i32) -> bool {
+        let measurer = TextMeasurer::default();
+        self.board_appearance_click_with_measurer(&measurer, x, y)
+    }
+
+    pub(crate) fn board_appearance_click_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> bool {
         // A slider drag ends on release wherever the pointer is.
         if let Some(edit) = self.board_picker.appearance.as_mut()
             && edit.size_dragging
@@ -713,7 +735,11 @@ impl InputState {
         match y.floor() as i32 {
             -65..=-35 => {
                 if in_color_field {
+                    // The field is the picker's trigger, like a toolbar swatch;
+                    // typing a hex still works while the field has focus.
                     edit.focus = AppearanceField::Color;
+                    self.open_color_picker_popup_for_board_paper_with_measurer(measurer);
+                    return true;
                 }
             }
             -30..=-5 => {

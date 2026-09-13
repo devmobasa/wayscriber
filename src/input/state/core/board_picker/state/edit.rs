@@ -13,6 +13,11 @@ use super::super::{
 impl InputState {
     pub(crate) fn board_picker_clear_edit(&mut self) {
         if self.board_picker.appearance.take().is_some() {
+            // A picker open on the draft has nothing left to edit. The draft is
+            // gone, so there is nothing to restore either.
+            if self.color_picker_popup_edits_board_paper() {
+                self.close_color_picker_popup(false);
+            }
             // Closing the paper sheet removes the dim over the whole surface.
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;

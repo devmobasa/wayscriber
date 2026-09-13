@@ -450,3 +450,211 @@ fn command_palette_edit_board_paper_opens_the_sheet_on_the_active_board() {
         Some("whiteboard")
     );
 }
+
+/// The sheet's hex field opens the full color picker on the draft, with the
+/// picker and its sheet left open underneath.
+fn open_paper_picker(input: &mut InputState) {
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    input.update_board_picker_layout(&ctx, 1280, 720);
+    let frame = input.board_appearance_frame().expect("sheet frame");
+    let header = input.board_appearance_header().expect("sheet header");
+    let (fx, fy, fw, fh) = frame.to_surface(header.color_field);
+    let (x, y) = ((fx + fw / 2.0) as i32, (fy + fh / 2.0) as i32);
+    assert!(input.board_appearance_click(x, y));
+}
+
+#[test]
+fn clicking_the_color_field_opens_the_picker_on_the_draft_and_keeps_the_sheet() {
+    let mut input = editing();
+    let draft = input.board_appearance_edit().unwrap().color.clone();
+
+    open_paper_picker(&mut input);
+
+    assert!(input.is_color_picker_popup_open());
+    assert!(input.color_picker_popup_edits_board_paper());
+    assert!(input.is_board_picker_open());
+    assert!(input.board_appearance_edit().is_some());
+    assert_eq!(
+        input.color_picker_popup_current_color().map(color_to_hex),
+        Some(draft),
+        "the popup starts on the draft color"
+    );
+    assert_eq!(input.color_picker_popup_title(), "Paper Color");
+    assert!(!input.color_picker_popup_shows_default_button());
+    input.update_color_picker_popup_layout(1280, 720);
+    let layout = input.color_picker_popup_layout().unwrap();
+    assert_eq!(layout.alpha_h, 0.0, "paper has no alpha bar");
+    // Sampling from the screen would close the sheet and land on the pen, so
+    // the paper popup has no eyedropper.
+    assert!(!layout.eyedropper_enabled);
+    let (bx, by) = (
+        layout.eyedropper_btn_x + layout.action_btn_size / 2.0,
+        layout.eyedropper_btn_y + layout.action_btn_size / 2.0,
+    );
+    assert_eq!(layout.action_at(bx, by), None);
+    assert_eq!(layout.action_tooltip_at(bx, by), None);
+}
+
+#[test]
+fn the_wheel_does_not_reach_the_size_control_under_the_paper_picker() {
+    let mut input = editing();
+    open_paper_picker(&mut input);
+    let frame = input.board_appearance_frame().unwrap();
+    let row = input.board_appearance_size_row().unwrap();
+    let (rx, ry, rw, rh) = frame.to_surface(row.track);
+    let spacing = input.board_appearance_edit().unwrap().spacing.clone();
+
+    assert!(!input.board_appearance_wheel((rx + rw / 2.0) as i32, (ry + rh / 2.0) as i32, 1));
+    assert!(input.modal_owns_wheel(), "the registry swallows the tick");
+    assert_eq!(input.board_appearance_edit().unwrap().spacing, spacing);
+}
+
+#[test]
+fn picker_edits_preview_on_the_draft_and_cancel_restores_it() {
+    let mut input = editing();
+    let original = input.board_appearance_edit().unwrap().color.clone();
+    let pen = input.color_for_tool(crate::input::Tool::Pen);
+    open_paper_picker(&mut input);
+
+    input.color_picker_popup_set_color(RED);
+    assert_eq!(
+        input.board_appearance_edit().unwrap().color,
+        color_to_hex(RED)
+    );
+    assert_eq!(input.board_appearance_edit().unwrap().preview().0, RED);
+    // Nothing behind the sheet moves until the sheet's own Apply.
+    assert_ne!(
+        input.boards.active_board().spec.background,
+        BoardBackground::Solid(RED)
+    );
+    assert_eq!(input.color_for_tool(crate::input::Tool::Pen), pen);
+    assert!(!input.is_session_dirty());
+
+    input.close_color_picker_popup(true);
+    assert!(!input.is_color_picker_popup_open());
+    assert!(input.board_appearance_edit().is_some(), "the sheet stays");
+    assert_eq!(input.board_appearance_edit().unwrap().color, original);
+}
+
+#[test]
+fn picker_ok_keeps_the_draft_color_and_only_apply_writes_the_board() {
+    let mut input = editing();
+    let pen = input.color_for_tool(crate::input::Tool::Pen);
+    let recents = input.recent_colors().len();
+    open_paper_picker(&mut input);
+
+    input.color_picker_popup_set_color(BLUE);
+    input.apply_color_picker_popup();
+
+    assert!(!input.is_color_picker_popup_open());
+    assert_eq!(
+        input.board_appearance_edit().unwrap().color,
+        color_to_hex(BLUE)
+    );
+    assert_eq!(input.color_for_tool(crate::input::Tool::Pen), pen);
+    assert_eq!(
+        input.recent_colors().len(),
+        recents,
+        "paper is not a pen color"
+    );
+    assert!(!input.is_session_dirty());
+
+    assert!(input.apply_board_appearance());
+    assert_eq!(
+        input.boards.active_board().spec.background,
+        BoardBackground::Solid(BLUE)
+    );
+    assert!(input.is_session_dirty());
+}
+
+#[test]
+fn ok_with_the_opening_color_typed_back_undoes_an_earlier_preview() {
+    let mut input = editing();
+    // A color with a three-digit spelling, so it is only parsed on OK.
+    assert!(input.board_appearance_palette(crate::draw::WHITE));
+    open_paper_picker(&mut input);
+    input.color_picker_popup_set_color(RED);
+    assert_eq!(
+        input.board_appearance_edit().unwrap().color,
+        color_to_hex(RED)
+    );
+
+    input.color_picker_popup_set_hex_editing(true);
+    for ch in "#FFF".chars() {
+        input.color_picker_popup_hex_append(ch);
+    }
+    input.apply_color_picker_popup();
+
+    assert!(!input.is_color_picker_popup_open());
+    assert_eq!(input.board_appearance_edit().unwrap().color, "#FFFFFF");
+    assert!(!input.is_session_dirty());
+}
+
+#[test]
+fn picker_colors_for_paper_are_always_opaque() {
+    let mut input = editing();
+    open_paper_picker(&mut input);
+
+    input.color_picker_popup_set_alpha(0.25);
+    assert_eq!(input.color_picker_popup_alpha(), Some(1.0));
+    input.color_picker_popup_set_color(Color { a: 0.5, ..RED });
+    assert_eq!(input.color_picker_popup_current_color(), Some(RED));
+    assert_eq!(input.board_appearance_edit().unwrap().color, "#FF0000");
+
+    // Typed hex is another way in: an alpha pair previews, commits, and
+    // copies as opaque, so the popup never shows a color the paper cannot be.
+    input.color_picker_popup_set_hex_editing(true);
+    for ch in "#0000FF80".chars() {
+        input.color_picker_popup_hex_append(ch);
+    }
+    assert_eq!(input.color_picker_popup_current_color(), Some(BLUE));
+    assert!(input.color_picker_popup_commit_hex());
+    assert_eq!(input.color_picker_popup_current_color(), Some(BLUE));
+    assert_eq!(input.color_picker_popup_hex_buffer(), Some("#0000FF"));
+    assert_eq!(input.board_appearance_edit().unwrap().color, "#0000FF");
+
+    // And through OK with an uncommitted buffer.
+    input.color_picker_popup_set_hex_editing(true);
+    for ch in "#00FF0080".chars() {
+        input.color_picker_popup_hex_append(ch);
+    }
+    input.apply_color_picker_popup();
+    assert_eq!(input.board_appearance_edit().unwrap().color, "#00FF00");
+}
+
+#[test]
+fn closing_the_sheet_or_picker_takes_the_paper_picker_with_it() {
+    let mut input = editing();
+    open_paper_picker(&mut input);
+    input.board_picker_cancel_edit();
+    assert!(!input.is_color_picker_popup_open());
+    assert!(input.is_board_picker_open());
+
+    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    open_paper_picker(&mut input);
+    input.close_board_picker();
+    assert!(!input.is_color_picker_popup_open());
+    assert!(input.board_appearance_edit().is_none());
+}
+
+#[test]
+fn space_on_the_color_field_opens_the_picker_and_escape_closes_only_the_picker() {
+    let mut input = editing();
+    assert_eq!(
+        input.board_appearance_edit().unwrap().focus,
+        AppearanceField::Color
+    );
+    assert!(input.board_appearance_key(Key::Space));
+    assert!(input.color_picker_popup_edits_board_paper());
+    // A typed space is not the shortcut; it reaches the field like other text.
+    input.close_color_picker_popup(true);
+    assert!(input.board_appearance_key(Key::Char(' ')));
+    assert!(!input.is_color_picker_popup_open());
+    assert!(input.board_appearance_key(Key::Space));
+
+    // The picker has key precedence over the board picker.
+    assert!(input.handle_color_picker_popup_key(Key::Escape));
+    assert!(!input.is_color_picker_popup_open());
+    assert!(input.board_appearance_edit().is_some());
+}

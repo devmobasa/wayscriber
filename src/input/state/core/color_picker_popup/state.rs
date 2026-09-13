@@ -8,9 +8,25 @@ use crate::input::state::InputState;
 use crate::input::state::QuickColorEdit;
 
 use super::{
-    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, PickerDrag,
-    color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
+    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, ColorPickerTarget,
+    PickerDrag, color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
 };
+use crate::input::state::core::modal::ModalSurface;
+
+/// Paper has no alpha, so every color the paper target takes is opaque.
+fn opaque(color: Color) -> Color {
+    Color { a: 1.0, ..color }
+}
+
+/// A color as the target can hold it: typed and pasted hex can carry an
+/// alpha pair the paper target must drop, like every other way in.
+fn constrain_for_target(target: ColorPickerTarget, color: Color) -> Color {
+    if target.edits_alpha() {
+        color
+    } else {
+        opaque(color)
+    }
+}
 
 fn hex_is_complete_for_live_preview(value: &str) -> bool {
     // Six digits is a complete opaque color and eight a complete translucent
@@ -54,7 +70,39 @@ impl InputState {
     pub fn open_color_picker_popup_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.discard_open_color_picker_recolor();
         let color = self.color_for_tool(self.active_tool());
-        self.open_color_picker_popup_for(measurer, None, color);
+        self.open_color_picker_popup_for(measurer, ColorPickerTarget::Tool, color);
+    }
+
+    /// Opens the popup on the paper sheet's color draft. The board picker and
+    /// its sheet stay open underneath: the popup edits the draft, and only the
+    /// sheet's Apply writes the board. Returns false when no sheet is open.
+    pub fn open_color_picker_popup_for_board_paper_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+    ) -> bool {
+        let Some(edit) = self.board_appearance_edit() else {
+            return false;
+        };
+        let (color, _) = edit.preview();
+        self.discard_open_color_picker_recolor();
+        self.open_color_picker_popup_for(measurer, ColorPickerTarget::BoardPaper, opaque(color));
+        true
+    }
+
+    /// Whether the open popup edits the paper sheet's color draft.
+    pub fn color_picker_popup_edits_board_paper(&self) -> bool {
+        self.color_picker_popup.target() == Some(ColorPickerTarget::BoardPaper)
+    }
+
+    /// The optional controls the open popup's layout includes.
+    pub fn color_picker_popup_layout_options(
+        &self,
+    ) -> Option<super::ColorPickerPopupLayoutOptions> {
+        let target = self.color_picker_popup.target()?;
+        Some(super::ColorPickerPopupLayoutOptions::for_target(
+            target,
+            self.color_picker_popup_shows_default_button(),
+        ))
     }
 
     /// Opens the color picker popup bound to a quick-color slot, so editing it
@@ -80,7 +128,7 @@ impl InputState {
         let Some(color) = self.style.quick_colors.color_for_index(index) else {
             return false;
         };
-        self.open_color_picker_popup_for(measurer, Some(index), color);
+        self.open_color_picker_popup_for(measurer, ColorPickerTarget::QuickColor(index), color);
         true
     }
 
@@ -89,7 +137,11 @@ impl InputState {
     /// dropping the state and leaving the swatch changed but unsaved. A
     /// tool-color preview is left in place, as reopening has always done.
     fn discard_open_color_picker_recolor(&mut self) {
-        if self.color_picker_popup_slot().is_some() {
+        if self
+            .color_picker_popup
+            .target()
+            .is_some_and(|target| target != ColorPickerTarget::Tool)
+        {
             self.close_color_picker_popup(true);
         }
     }
@@ -97,15 +149,24 @@ impl InputState {
     fn open_color_picker_popup_for(
         &mut self,
         measurer: &TextMeasurer,
-        slot: Option<usize>,
+        target: ColorPickerTarget,
         color: Color,
     ) {
         self.cancel_pending_color_picker_paste();
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ColorPicker);
+        if target == ColorPickerTarget::BoardPaper {
+            // The paper draft lives in the board picker, so the picker is the
+            // one surface this popup must not close.
+            self.close_modals_for_open_keeping(
+                ModalSurface::ColorPicker,
+                ModalSurface::BoardPicker,
+            );
+        } else {
+            self.close_modals_for_open(ModalSurface::ColorPicker);
+        }
         self.cancel_active_interaction_with(measurer);
 
         let tool = self.active_tool();
-        self.color_picker_popup.open(tool, slot, color);
+        self.color_picker_popup.open(tool, target, color);
 
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -115,15 +176,17 @@ impl InputState {
     /// target is never ambiguous. This is the semantic title; the renderer
     /// trims the shaped text to the panel it draws into.
     pub fn color_picker_popup_title(&self) -> Cow<'static, str> {
-        let ColorPickerPopupState::Open {
-            slot: Some(index), ..
-        } = &self.color_picker_popup.state
-        else {
-            return Cow::Borrowed("Select Color");
-        };
-        match self.style.quick_colors.entry(*index) {
-            Some(entry) => Cow::Owned(format!("Recolor {}", single_line_slot_label(&entry.label))),
-            None => Cow::Borrowed("Recolor swatch"),
+        match self.color_picker_popup.target() {
+            Some(ColorPickerTarget::QuickColor(index)) => {
+                match self.style.quick_colors.entry(index) {
+                    Some(entry) => {
+                        Cow::Owned(format!("Recolor {}", single_line_slot_label(&entry.label)))
+                    }
+                    None => Cow::Borrowed("Recolor swatch"),
+                }
+            }
+            Some(ColorPickerTarget::BoardPaper) => Cow::Borrowed("Paper Color"),
+            Some(ColorPickerTarget::Tool) | None => Cow::Borrowed("Select Color"),
         }
     }
 
@@ -152,7 +215,8 @@ impl InputState {
     fn color_picker_popup_preview(&mut self, color: Color) {
         match self.color_picker_popup.state {
             ColorPickerPopupState::Open {
-                slot: Some(index), ..
+                target: ColorPickerTarget::QuickColor(index),
+                ..
             } => {
                 if self.style.quick_colors.set_color_for_index(index, color) {
                     self.dirty_tracker.mark_full();
@@ -160,9 +224,18 @@ impl InputState {
                 }
             }
             ColorPickerPopupState::Open {
-                tool, slot: None, ..
+                tool,
+                target: ColorPickerTarget::Tool,
+                ..
             } => {
                 let _ = self.preview_color_for_tool(tool, color);
+            }
+            ColorPickerPopupState::Open {
+                target: ColorPickerTarget::BoardPaper,
+                ..
+            } => {
+                // The sheet's draft is the target; its own Apply commits.
+                let _ = self.board_appearance_palette(opaque(color));
             }
             ColorPickerPopupState::Hidden => {}
         }
@@ -173,14 +246,14 @@ impl InputState {
         self.cancel_pending_color_picker_paste();
         let mut restored_color = None;
         if let ColorPickerPopupState::Open {
-            slot,
+            target,
             original_color,
             ..
         } = &self.color_picker_popup.state
             // A recolor edits durable config, so even an implicit close (light
             // mode, session restore) must not leave the palette changed and
             // unsaved. A tool-color preview stays put, as callers expect.
-            && (restore_original || slot.is_some())
+            && (restore_original || *target != ColorPickerTarget::Tool)
         {
             restored_color = Some(*original_color);
         }
@@ -200,7 +273,7 @@ impl InputState {
         let mut applied_color = None;
         if let ColorPickerPopupState::Open {
             tool,
-            slot,
+            target,
             original_color,
             current_color,
             hex_buffer,
@@ -218,18 +291,24 @@ impl InputState {
             if !buffered_digits.eq_ignore_ascii_case(current_digits)
                 && let Some(color) = parse_hex_color(hex_buffer)
             {
-                *current_color = color;
+                *current_color = constrain_for_target(*target, color);
             }
-            applied_color = Some((*tool, *slot, *original_color, *current_color));
+            applied_color = Some((*tool, *target, *original_color, *current_color));
         }
-        if let Some((tool, slot, original_color, color)) = applied_color
+        if let Some((_, _, _, color)) = applied_color {
+            // The target always ends on the accepted color, which also catches
+            // a three-digit hex first parsed just above. This cannot be gated
+            // on the color having changed: a preview may have moved the target
+            // away from the opening color, and typing that color back then
+            // has to put it back.
+            self.color_picker_popup_preview(color);
+        }
+        if let Some((tool, target, original_color, color)) = applied_color
             && original_color != color
         {
-            // Commit on the popup's own target, which also catches a
-            // three-digit hex first parsed just above.
-            self.color_picker_popup_preview(color);
-            match slot {
-                Some(index) => {
+            // Persistence and history only when something actually changed.
+            match target {
+                ColorPickerTarget::QuickColor(index) => {
                     self.request_quick_color_edit(index, color);
                     // The swatch the tool was already painting with follows its
                     // own recolor, so the palette's selection ring and the live
@@ -242,7 +321,7 @@ impl InputState {
                         self.mark_session_dirty();
                     }
                 }
-                None => {
+                ColorPickerTarget::Tool => {
                     self.preset_slots.clear_active();
                     // Accepting is where a mixed color becomes the color in
                     // use, so it belongs in recents. This commits on the
@@ -252,6 +331,9 @@ impl InputState {
                     self.note_recent_color(color);
                     self.mark_session_dirty();
                 }
+                // The draft already holds the color; the sheet's Apply decides
+                // whether the board changes, so nothing is dirty yet.
+                ColorPickerTarget::BoardPaper => {}
             }
         }
         self.color_picker_popup.hide();
@@ -369,10 +451,17 @@ impl InputState {
     /// Sets the color's alpha from a position on the alpha bar.
     pub fn color_picker_popup_set_alpha(&mut self, norm_x: f64) {
         let alpha = norm_x.clamp(0.0, 1.0);
-        let ColorPickerPopupState::Open { current_color, .. } = &self.color_picker_popup.state
+        let ColorPickerPopupState::Open {
+            current_color,
+            target,
+            ..
+        } = &self.color_picker_popup.state
         else {
             return;
         };
+        if !target.edits_alpha() {
+            return;
+        }
         let color = Color {
             a: alpha,
             ..*current_color
@@ -420,9 +509,11 @@ impl InputState {
             hex_buffer,
             hex_editing,
             hex_selected,
+            target,
             ..
         } = &mut self.color_picker_popup.state
         {
+            let color = constrain_for_target(*target, color);
             *current_color = color;
             *hex_buffer = color_to_hex(color);
             *hex_editing = false;
@@ -529,6 +620,7 @@ impl InputState {
                 hex_editing,
                 hex_selected,
                 current_color,
+                target,
                 ..
             } = &mut self.color_picker_popup.state
             else {
@@ -569,6 +661,7 @@ impl InputState {
                 if hex_is_complete_for_live_preview(hex_buffer)
                     && let Some(color) = parse_hex_color(hex_buffer)
                 {
+                    let color = constrain_for_target(*target, color);
                     *current_color = color;
                     live_color = Some(color);
                 }
@@ -588,6 +681,7 @@ impl InputState {
                 hex_editing,
                 hex_selected,
                 current_color,
+                target,
                 ..
             } = &mut self.color_picker_popup.state
                 && *hex_editing
@@ -606,6 +700,7 @@ impl InputState {
                 if hex_is_complete_for_live_preview(hex_buffer)
                     && let Some(color) = parse_hex_color(hex_buffer)
                 {
+                    let color = constrain_for_target(*target, color);
                     *current_color = color;
                     live_color = Some(color);
                 }
@@ -623,6 +718,7 @@ impl InputState {
                 hex_buffer,
                 hex_editing,
                 current_color,
+                target,
                 ..
             } = &mut self.color_picker_popup.state
             else {
@@ -634,6 +730,9 @@ impl InputState {
             }
 
             if let Some(color) = parse_hex_color(hex_buffer) {
+                // The buffer is rewritten from the constrained color, so a
+                // typed alpha pair disappears on commit for paper.
+                let color = constrain_for_target(*target, color);
                 *current_color = color;
                 *hex_buffer = color_to_hex(color);
                 *hex_editing = false;
