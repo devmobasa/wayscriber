@@ -160,6 +160,10 @@ impl WaylandState {
                 render_ui && self.input_state.is_color_picker_popup_open(),
             )
             .with(
+                UiEffect::ContextMenu,
+                render_ui && self.input_state.is_context_menu_open(),
+            )
+            .with(
                 UiEffect::ToolPreview,
                 render_ui && self.mouse_tool_preview_eligible(),
             )

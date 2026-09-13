@@ -1,5 +1,5 @@
 use super::super::base::{InputState, PasteAnchor};
-use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
+use super::types::{ContextMenuState, MenuCommand};
 use crate::domain::Action;
 use crate::draw::ShapeId;
 use crate::input::state::{Toast, ToastPriority};
@@ -47,19 +47,6 @@ impl InputState {
         };
         self.board_picker_set_selected(row);
         true
-    }
-
-    fn context_submenu_anchor(&self) -> (i32, i32) {
-        if let Some(layout) = self.context_menu.layout {
-            (
-                (layout.origin_x + layout.width + 8.0).round() as i32,
-                layout.origin_y.round() as i32,
-            )
-        } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu.state {
-            *anchor
-        } else {
-            self.pointer.screen()
-        }
     }
 
     fn select_hovered_context_menu_shape_with(&mut self, measurer: &crate::draw::TextMeasurer) {
@@ -169,14 +156,13 @@ impl InputState {
                 self.reset_active_canvas_position();
                 self.close_context_menu();
             }
-            MenuCommand::OpenZoomMenu => {
-                let anchor = self.context_submenu_anchor();
-                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Zoom, None);
-                self.pointer.clear_menu_hover_recalc();
-                self.set_context_menu_focus(None);
-                self.focus_first_context_menu_entry();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+            MenuCommand::OpenZoomMenu
+            | MenuCommand::OpenPagesMenu
+            | MenuCommand::OpenBoardsMenu
+            | MenuCommand::OpenPageMoveMenu => {
+                // Beside the parent row that holds it, keeping this menu open;
+                // on its own when no such row is open.
+                self.open_menu_for_command(&command);
             }
             MenuCommand::ZoomIn => {
                 self.request_zoom_action(crate::input::ZoomAction::In);
@@ -196,37 +182,6 @@ impl InputState {
                 // chrome commands in this menu already route the same way.
                 self.handle_action_with_resources(resources, Action::ToggleHighlightTool);
                 self.close_context_menu();
-            }
-            MenuCommand::OpenPagesMenu => {
-                let anchor = self.context_submenu_anchor();
-                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Pages, None);
-                self.pointer.clear_menu_hover_recalc();
-                self.set_context_menu_focus(None);
-                self.focus_first_context_menu_entry();
-                // Mark full screen dirty to ensure submenu renders completely
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
-            MenuCommand::OpenBoardsMenu => {
-                let anchor = self.context_submenu_anchor();
-                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Boards, None);
-                self.pointer.clear_menu_hover_recalc();
-                self.set_context_menu_focus(None);
-                self.focus_first_context_menu_entry();
-                // Mark full screen dirty to ensure submenu renders completely
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
-            MenuCommand::OpenPageMoveMenu => {
-                let anchor = self.context_submenu_anchor();
-                let target = self.context_menu.page_target;
-                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::PageMove, None);
-                self.context_menu.page_target = target;
-                self.pointer.clear_menu_hover_recalc();
-                self.set_context_menu_focus(None);
-                self.focus_first_context_menu_entry();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
             }
             MenuCommand::PagePrev => {
                 self.page_prev_with_measurer(resources.measurer);
@@ -327,7 +282,10 @@ impl InputState {
             }
             MenuCommand::OpenBoardPicker => {
                 self.close_context_menu();
-                self.toggle_board_picker_with_measurer(resources.measurer);
+                // A menu opened from the picker itself leaves it open.
+                if !self.is_board_picker_open() {
+                    self.open_board_picker_with_measurer(resources.measurer);
+                }
             }
             MenuCommand::BoardPrev => {
                 self.switch_board_prev_with_measurer(resources.measurer);

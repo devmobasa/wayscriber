@@ -253,6 +253,28 @@ impl WaylandState {
             .ui_damage_mut()
             .roll(UiEffect::ColorPicker, color_picker_rect, &mut regions);
 
+        // Context menus lay out here, once per frame before painting, so damage,
+        // painting, and pointer hit-testing share one layout. The submenu has its
+        // own slot, so opening, switching, or closing it repaints only its pane.
+        let (menu_rect, submenu_rect) = if flags.active(UiEffect::ContextMenu) {
+            self.input_state.update_context_menu_layout_with_engine(
+                self.render.ui_text(),
+                width,
+                height,
+            );
+            (
+                crate::ui::context_menu_visual_geometry(&self.input_state)
+                    .and_then(|bounds| effect_rect(bounds, width, height)),
+                crate::ui::context_submenu_visual_geometry(&self.input_state)
+                    .and_then(|bounds| effect_rect(bounds, width, height)),
+            )
+        } else {
+            (None, None)
+        };
+        let history = self.render.ui_damage_mut();
+        history.roll(UiEffect::ContextMenu, menu_rect, &mut regions);
+        history.roll(UiEffect::ContextSubmenu, submenu_rect, &mut regions);
+
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
             let (x, y) = self.pointer.position();
             (x as f64, y as f64)

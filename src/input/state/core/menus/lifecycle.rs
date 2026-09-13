@@ -6,9 +6,7 @@ use crate::draw::TextMeasurer;
 impl InputState {
     /// Closes the currently open context menu.
     pub fn close_context_menu(&mut self) {
-        if let Some(layout) = self.context_menu.close() {
-            self.mark_context_menu_region(layout);
-        }
+        self.context_menu.close();
         self.pointer.clear_menu_hover_recalc();
         self.needs_redraw = true;
     }
@@ -30,13 +28,10 @@ impl InputState {
             return;
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ContextMenu);
-        if let Some(layout) = self
-            .context_menu
-            .open(anchor, shape_ids, kind, hovered_shape_id)
-        {
-            self.mark_context_menu_region(layout);
-        }
+        self.context_menu
+            .open(anchor, shape_ids, kind, hovered_shape_id);
         self.pointer.request_menu_hover_recalc();
+        self.needs_redraw = true;
     }
 
     pub fn open_page_context_menu(

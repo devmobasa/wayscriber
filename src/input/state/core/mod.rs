@@ -116,8 +116,10 @@ pub use ime::ImePreedit;
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
 pub use menus::{
-    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
+    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuLayout, ContextMenuState,
+    ContextSubmenu, MenuCommand, SubmenuSide,
 };
+pub use menus::{SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY};
 pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,

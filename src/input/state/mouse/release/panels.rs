@@ -254,20 +254,8 @@ pub(super) fn handle_context_menu_release(
     if !state.is_context_menu_open() {
         return false;
     }
-    if let Some(index) = state.context_menu_index_at(x, y) {
-        let entries = state.context_menu_entries();
-        if let Some(entry) = entries.get(index) {
-            if !entry.disabled {
-                if let Some(command) = entry.command.clone() {
-                    state.execute_menu_command_with_resources(resources, command);
-                } else {
-                    state.close_context_menu();
-                }
-            } else {
-                state.close_context_menu();
-            }
-        }
-    } else {
+    // Rows run their command or open their submenu; anywhere else dismisses.
+    if !state.activate_context_menu_row_at_with_resources(resources, x, y) {
         state.close_context_menu();
     }
     state.needs_redraw = true;

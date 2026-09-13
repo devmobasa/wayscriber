@@ -331,7 +331,7 @@ mod tests {
                 } else {
                     state.open_board_context_menu((1000, 50), blackboard);
                 }
-                state.update_context_menu_layout(&ctx, 1280, 720);
+                state.update_context_menu_layout(1280, 720);
                 let target = if over_swatch {
                     at(swatch_x, swatch_y)
                 } else {
@@ -418,7 +418,7 @@ mod tests {
         );
         assert!(state.is_board_picker_open() && state.is_context_menu_open());
 
-        state.update_context_menu_layout(&ctx, 1280, 720);
+        state.update_context_menu_layout(1280, 720);
         let menu = state.context_menu_layout().unwrap();
         let (menu_x, menu_y, menu_bottom) = (
             (menu.origin_x + menu.width / 2.0) as i32,

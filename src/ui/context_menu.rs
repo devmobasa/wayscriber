@@ -1,12 +1,13 @@
 use crate::input::InputState;
-use crate::input::state::ContextMenuState;
+use crate::input::state::{ContextMenuEntry, ContextMenuLayout, ContextMenuState, SubmenuSide};
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
-    self, BG_HOVER, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU,
-    RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+    self, BG_EXPANDED, BG_HOVER, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU,
+    NAV_HINT_MENU_SUBMENUS, NAV_HINT_SUBMENU, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, SHADOW,
+    TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
 };
 
 /// Footer strip below the menu: darker than the menu surface so the hint reads
@@ -15,37 +16,36 @@ const HINT_FOOTER_BG: Rgba = (0.08, 0.10, 0.14, 0.9);
 /// Footer hint text: slightly brighter than TEXT_TERTIARY for legibility on
 /// the darker strip (kept from pre-theme literals).
 const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
+/// Gap between the menu and its hint footer.
+const HINT_GAP: f64 = 4.0;
+const HINT_PADDING: f64 = 6.0;
+/// Accent bar on the parent row of an open submenu.
+const EXPANDED_BAR_WIDTH: f64 = 3.0;
+/// The submenu's shadow: a few layers stepping outward stand in for a blur.
+const SHADOW_LAYERS: u32 = 3;
+const SHADOW_SPREAD: f64 = 2.0;
+const SHADOW_OFFSET_Y: f64 = 2.0;
+/// How far the submenu's shadow reaches past its pane.
+const SHADOW_EXTENT: f64 = SHADOW_LAYERS as f64 * SHADOW_SPREAD + SHADOW_OFFSET_Y;
 
 /// Renders a floating context menu for shape or canvas actions.
-pub fn render_context_menu(
-    ctx: &cairo::Context,
-    input_state: &InputState,
-    _screen_width: u32,
-    _screen_height: u32,
-) {
-    render_context_menu_with_engine(
-        &UiTextEngine::default(),
-        ctx,
-        input_state,
-        _screen_width,
-        _screen_height,
-    );
+pub fn render_context_menu(ctx: &cairo::Context, input_state: &InputState) {
+    render_context_menu_with_engine(&UiTextEngine::default(), ctx, input_state);
 }
 
 pub(crate) fn render_context_menu_with_engine(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
-    _screen_width: u32,
-    _screen_height: u32,
 ) {
-    let (hover_index, focus_index) = match input_state.context_menu.state() {
-        ContextMenuState::Open {
-            hover_index,
-            keyboard_focus,
-            ..
-        } => (*hover_index, *keyboard_focus),
-        ContextMenuState::Hidden => return,
+    let ContextMenuState::Open {
+        hover_index,
+        keyboard_focus,
+        submenu,
+        ..
+    } = input_state.context_menu.state()
+    else {
+        return;
     };
 
     let entries = input_state.context_menu_entries();
@@ -53,18 +53,126 @@ pub(crate) fn render_context_menu_with_engine(
         return;
     }
 
-    let layout = match input_state.context_menu_layout() {
-        Some(layout) => *layout,
-        None => return,
+    let Some(layout) = input_state.context_menu_layout().copied() else {
+        return;
     };
 
     let _ = ctx.save();
+    let side = input_state.context_submenu_side();
+    draw_menu(
+        engine,
+        ctx,
+        &layout,
+        &entries,
+        MenuStyle {
+            surface: crate::ui::theme::popup::bg_context_menu(),
+            arrow_side: side,
+            shadow: false,
+        },
+        RowHighlight {
+            hover: *hover_index,
+            focus: *keyboard_focus,
+            expanded: submenu.map(|submenu| submenu.parent_index),
+        },
+    );
+    let hint = if input_state.context_submenu_is_active() {
+        NAV_HINT_SUBMENU
+    } else if entries.iter().any(|entry| entry.submenu.is_some()) {
+        NAV_HINT_MENU_SUBMENUS
+    } else {
+        NAV_HINT_MENU
+    };
+    draw_hint_footer(engine, ctx, &layout, hint);
+
+    // An open submenu paints above the menu it opens from.
+    let submenu_entries = input_state.context_submenu_entries();
+    if let (Some(submenu), Some(pane)) = (submenu, input_state.context_submenu_layout())
+        && !submenu_entries.is_empty()
+    {
+        draw_menu(
+            engine,
+            ctx,
+            pane,
+            &submenu_entries,
+            MenuStyle {
+                surface: crate::ui::theme::popup::bg_context_submenu(),
+                arrow_side: side,
+                shadow: true,
+            },
+            RowHighlight {
+                hover: submenu.hover_index,
+                focus: submenu.keyboard_focus,
+                expanded: None,
+            },
+        );
+    }
+
+    let _ = ctx.restore();
+}
+
+/// Bounds of the open menu and its hint footer, as laid out for this frame.
+pub(crate) fn context_menu_visual_geometry(
+    input_state: &InputState,
+) -> Option<(f64, f64, f64, f64)> {
+    let layout = input_state.context_menu_layout()?;
+    Some((
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height + HINT_GAP + hint_footer_height(layout),
+    ))
+}
+
+/// Bounds of the open submenu and its shadow, as laid out for this frame.
+pub(crate) fn context_submenu_visual_geometry(
+    input_state: &InputState,
+) -> Option<(f64, f64, f64, f64)> {
+    let pane = input_state.context_submenu_layout()?;
+    Some((
+        pane.origin_x - SHADOW_EXTENT,
+        pane.origin_y - SHADOW_EXTENT,
+        pane.width + SHADOW_EXTENT * 2.0,
+        pane.height + SHADOW_EXTENT * 2.0,
+    ))
+}
+
+/// The highlighted rows of one menu.
+#[derive(Clone, Copy)]
+struct RowHighlight {
+    hover: Option<usize>,
+    focus: Option<usize>,
+    /// The row whose submenu is open.
+    expanded: Option<usize>,
+}
+
+/// How one menu pane is dressed.
+#[derive(Clone, Copy)]
+struct MenuStyle {
+    surface: Rgba,
+    /// Where submenu arrows point.
+    arrow_side: SubmenuSide,
+    /// A drop shadow lifts a pane above the menu it opens from.
+    shadow: bool,
+}
+
+fn draw_menu(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    layout: &ContextMenuLayout,
+    entries: &[ContextMenuEntry],
+    style: MenuStyle,
+    highlight: RowHighlight,
+) {
     let text_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
         size: layout.font_size,
     };
+
+    if style.shadow {
+        draw_shadow(ctx, layout);
+    }
 
     // Background and hairline border (popover radius, matching the other
     // overlay popups)
@@ -76,7 +184,7 @@ pub(crate) fn render_context_menu_with_engine(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, crate::ui::theme::popup::bg_context_menu());
+    constants::set_color(ctx, style.surface);
     let _ = ctx.fill_preserve();
     constants::set_color(ctx, crate::ui::theme::popup::border_context_menu());
     ctx.set_line_width(1.0);
@@ -86,12 +194,14 @@ pub(crate) fn render_context_menu_with_engine(
         let row_top = layout.origin_y + layout.padding_y + layout.row_height * index as f64;
         let row_center = row_top + layout.row_height * 0.5;
 
-        // Distinguish hover (filled background) from keyboard focus (border ring)
-        let is_hovered = hover_index == Some(index) && !entry.disabled;
-        let is_focused = focus_index == Some(index) && !entry.disabled;
+        // Hover fills the row, keyboard focus rings it, and the parent of an
+        // open submenu keeps a quieter fill with an accent bar.
+        let is_hovered = highlight.hover == Some(index) && !entry.disabled;
+        let is_expanded = highlight.expanded == Some(index) && !entry.disabled;
+        let is_focused = highlight.focus == Some(index) && !entry.disabled;
 
-        if is_hovered {
-            constants::set_color(ctx, BG_HOVER);
+        if is_hovered || is_expanded {
+            constants::set_color(ctx, if is_hovered { BG_HOVER } else { BG_EXPANDED });
             draw_rounded_rect(
                 ctx,
                 layout.origin_x + 4.0,
@@ -99,6 +209,20 @@ pub(crate) fn render_context_menu_with_engine(
                 layout.width - 8.0,
                 layout.row_height,
                 RADIUS_SM,
+            );
+            let _ = ctx.fill();
+        }
+        if is_expanded {
+            constants::set_color(ctx, BORDER_FOCUS);
+            let bar_x = match style.arrow_side {
+                SubmenuSide::Right => layout.origin_x + layout.width - 4.0 - EXPANDED_BAR_WIDTH,
+                SubmenuSide::Left => layout.origin_x + 4.0,
+            };
+            ctx.rectangle(
+                bar_x,
+                row_top + 3.0,
+                EXPANDED_BAR_WIDTH,
+                layout.row_height - 6.0,
             );
             let _ = ctx.fill();
         }
@@ -152,53 +276,86 @@ pub(crate) fn render_context_menu_with_engine(
             );
         }
 
-        if entry.has_submenu {
+        if entry.submenu.is_some() {
             let arrow_x =
                 layout.origin_x + layout.width - layout.padding_x - layout.arrow_width * 0.6;
             let arrow_y = row_center;
-            constants::set_color(ctx, constants::with_alpha(ICON_SUBMENU_ARROW, text_a));
-            ctx.move_to(arrow_x, arrow_y - 5.0);
-            ctx.line_to(arrow_x + 6.0, arrow_y);
-            ctx.line_to(arrow_x, arrow_y + 5.0);
+            let arrow_color = if is_expanded {
+                BORDER_FOCUS
+            } else {
+                ICON_SUBMENU_ARROW
+            };
+            constants::set_color(ctx, constants::with_alpha(arrow_color, text_a));
+            // The arrow points to the side the pane opens on.
+            let (base_x, tip_x) = match style.arrow_side {
+                SubmenuSide::Right => (arrow_x, arrow_x + 6.0),
+                SubmenuSide::Left => (arrow_x + 6.0, arrow_x),
+            };
+            ctx.move_to(base_x, arrow_y - 5.0);
+            ctx.line_to(tip_x, arrow_y);
+            ctx.line_to(base_x, arrow_y + 5.0);
             let _ = ctx.fill();
         }
     }
+}
 
-    // Navigation hint footer with background for visibility
+/// A soft shadow under a pane: stacked translucent rects widening outward.
+fn draw_shadow(ctx: &cairo::Context, layout: &ContextMenuLayout) {
+    let alpha = SHADOW.3 / SHADOW_LAYERS as f64;
+    for layer in 1..=SHADOW_LAYERS {
+        let spread = SHADOW_SPREAD * layer as f64;
+        constants::set_color(ctx, constants::with_alpha(SHADOW, alpha));
+        draw_rounded_rect(
+            ctx,
+            layout.origin_x - spread,
+            layout.origin_y - spread + SHADOW_OFFSET_Y,
+            layout.width + spread * 2.0,
+            layout.height + spread * 2.0,
+            RADIUS_PANEL + spread,
+        );
+        let _ = ctx.fill();
+    }
+}
+
+fn hint_footer_height(layout: &ContextMenuLayout) -> f64 {
+    layout.font_size * 0.8 + HINT_PADDING * 2.0
+}
+
+/// Navigation hint footer with background for visibility.
+fn draw_hint_footer(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    layout: &ContextMenuLayout,
+    hint: &str,
+) {
     let hint_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
         size: layout.font_size * 0.8,
     };
-    let hint_padding = 6.0;
-    let hint_height = layout.font_size * 0.8 + hint_padding * 2.0;
-    let hint_y = layout.origin_y + layout.height + 4.0;
+    let hint_y = layout.origin_y + layout.height + HINT_GAP;
 
-    // Draw hint background
     constants::set_color(ctx, HINT_FOOTER_BG);
     draw_rounded_rect(
         ctx,
         layout.origin_x,
         hint_y,
         layout.width,
-        hint_height,
+        hint_footer_height(layout),
         RADIUS_STD,
     );
     let _ = ctx.fill();
 
-    // Draw hint text
     constants::set_color(ctx, HINT_FOOTER_TEXT);
     engine.draw_baseline(
         ctx,
         hint_style,
-        NAV_HINT_MENU,
+        hint,
         layout.origin_x + layout.padding_x,
-        hint_y + hint_padding + layout.font_size * 0.65,
+        hint_y + HINT_PADDING + layout.font_size * 0.65,
         None,
     );
-
-    let _ = ctx.restore();
 }
 
 #[cfg(test)]
@@ -213,7 +370,7 @@ mod engine_tests {
         {
             let ctx = cairo::Context::new(&surface).unwrap();
             ctx.scale(f64::from(density), f64::from(density));
-            render_context_menu_with_engine(engine, &ctx, state, 640, 480);
+            render_context_menu_with_engine(engine, &ctx, state);
         }
         surface.data().unwrap().to_vec()
     }
@@ -233,13 +390,11 @@ mod engine_tests {
             (ContextMenuKind::Canvas, 1),
         ] {
             state.open_context_menu((620, 460), Vec::new(), kind, None);
-            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 640, 480).unwrap();
-            let ctx = cairo::Context::new(&surface).unwrap();
-            state.update_context_menu_layout_with_engine(&engine, &ctx, 640, 480);
+            state.update_context_menu_layout_with_engine(&engine, 640, 480);
             let layout = *state.context_menu_layout().unwrap();
             let actual = paint(&engine, &state, density);
             assert!(actual.iter().any(|&byte| byte != 0));
-            state.update_context_menu_layout_with_engine(&UiTextEngine::default(), &ctx, 640, 480);
+            state.update_context_menu_layout_with_engine(&UiTextEngine::default(), 640, 480);
             let fresh = state.context_menu_layout().unwrap();
             assert_eq!(
                 (fresh.origin_x, fresh.origin_y, fresh.width, fresh.height),
@@ -262,6 +417,27 @@ mod engine_tests {
                     + layout.row_height * (index as f64 + 0.5)) as i32;
                 assert_eq!(state.context_menu_index_at(x, y), Some(index));
             }
+        }
+
+        // A submenu paints with its menu and hit-tests its own entries. It sits
+        // beside the menu, or over it when 640px leaves no room on either side.
+        state.open_context_menu((20, 20), Vec::new(), ContextMenuKind::Canvas, None);
+        let boards = state
+            .context_menu_entries()
+            .iter()
+            .position(|entry| entry.label == "Boards")
+            .unwrap();
+        assert!(state.open_context_submenu(boards, false));
+        state.update_context_menu_layout_with_engine(&engine, 640, 480);
+        let pane = *state.context_submenu_layout().unwrap();
+        assert!(pane.origin_x >= 6.0 && pane.origin_x + pane.width <= 634.0);
+        let actual = paint(&engine, &state, 1);
+        assert!(actual == paint(&UiTextEngine::default(), &state, 1));
+        for index in 0..state.context_submenu_entries().len() {
+            let x = (pane.origin_x + pane.padding_x) as i32;
+            let y =
+                (pane.origin_y + pane.padding_y + pane.row_height * (index as f64 + 0.5)) as i32;
+            assert_eq!(state.context_submenu_index_at(x, y), Some(index));
         }
     }
 }

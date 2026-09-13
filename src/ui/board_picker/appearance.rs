@@ -75,7 +75,7 @@ pub(super) fn render(
             weight: cairo::FontWeight::Bold,
             ..style
         },
-        &format!("Paper — {board_name}"),
+        &format!("Paper: {board_name}"),
         4.0,
         -45.0,
         None,

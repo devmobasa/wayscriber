@@ -5,16 +5,7 @@ use super::super::super::InputState;
 
 impl InputState {
     fn is_point_in_context_menu(&self, x: i32, y: i32) -> bool {
-        if let Some(layout) = self.context_menu_layout() {
-            let xf = x as f64;
-            let yf = y as f64;
-            xf >= layout.origin_x
-                && xf <= layout.origin_x + layout.width
-                && yf >= layout.origin_y
-                && yf <= layout.origin_y + layout.height
-        } else {
-            false
-        }
+        self.context_menu_level_at(x, y).is_some()
     }
 
     pub(in crate::input::state) fn handle_context_menu_press(

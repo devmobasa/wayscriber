@@ -384,23 +384,11 @@ impl WaylandState {
             width,
             height,
         );
-        if self.input_state.is_context_menu_open() {
-            self.input_state.update_context_menu_layout_with_engine(
-                self.render.ui_text(),
-                ctx,
-                width,
-                height,
-            );
-        } else {
+        // An open menu was already laid out along with this frame's damage.
+        if !self.input_state.is_context_menu_open() {
             self.input_state.clear_context_menu_layout();
         }
-        crate::ui::render_context_menu_with_engine(
-            self.render.ui_text(),
-            ctx,
-            &self.input_state,
-            width,
-            height,
-        );
+        crate::ui::render_context_menu_with_engine(self.render.ui_text(), ctx, &self.input_state);
     }
 
     fn render_inline_and_modal_ui(
