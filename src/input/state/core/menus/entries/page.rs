@@ -1,5 +1,5 @@
 use super::super::super::base::InputState;
-use super::super::types::{ContextMenuEntry, MenuCommand};
+use super::super::types::{ContextMenuEntry, ContextMenuKind, MenuCommand};
 use crate::domain::Action;
 
 impl InputState {
@@ -23,17 +23,10 @@ impl InputState {
         } else {
             format!("Page {} ({}/{})", page_number, page_number, page_count)
         };
-        entries.push(ContextMenuEntry::new(
-            header,
-            None::<String>,
-            false,
-            true,
-            None,
-        ));
+        entries.push(ContextMenuEntry::new(header, None::<String>, true, None));
         entries.push(ContextMenuEntry::new(
             "Rename Page",
             None::<String>,
-            false,
             false,
             Some(MenuCommand::PageRename),
         ));
@@ -41,25 +34,20 @@ impl InputState {
             "Duplicate Page",
             self.shortcut_for_action(Action::PageDuplicate),
             false,
-            false,
             Some(MenuCommand::PageDuplicateFromContext),
         ));
         entries.push(ContextMenuEntry::new(
             "Delete Page",
             self.shortcut_for_action(Action::PageDelete),
             false,
-            false,
             Some(MenuCommand::PageDeleteFromContext),
         ));
 
         let can_move = self.boards.board_count() > 1;
-        entries.push(ContextMenuEntry::new(
-            "Move to Board",
-            None::<String>,
-            true,
-            !can_move,
-            Some(MenuCommand::OpenPageMoveMenu),
-        ));
+        entries.push(
+            ContextMenuEntry::new("Move to Board", None::<String>, !can_move, None)
+                .with_submenu(ContextMenuKind::PageMove),
+        );
         entries
     }
 
@@ -72,7 +60,6 @@ impl InputState {
             return vec![ContextMenuEntry::new(
                 "No other boards",
                 None::<String>,
-                false,
                 true,
                 None,
             )];
@@ -87,7 +74,6 @@ impl InputState {
                 board.spec.name.clone(),
                 None::<String>,
                 false,
-                false,
                 Some(MenuCommand::PageMoveToBoard {
                     id: board.spec.id.clone(),
                 }),
@@ -97,7 +83,6 @@ impl InputState {
             entries.push(ContextMenuEntry::new(
                 "No other boards",
                 None::<String>,
-                false,
                 true,
                 None,
             ));

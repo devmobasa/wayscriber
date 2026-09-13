@@ -114,8 +114,11 @@ fn build_board_pdf_export_snapshot(
         let board = &boards[app_board_index];
         let board_page_count = board.pages.pages().len().max(1);
         for (board_page_index, frame) in board.pages.pages().iter().enumerate() {
-            let backdrop =
-                backdrop_from_background(&board.spec.background, desktop_backdrop.as_ref());
+            let backdrop = backdrop_from_background(
+                &board.spec.background,
+                board.spec.grid,
+                desktop_backdrop.as_ref(),
+            );
             let use_page_offsets = pan_enabled && !board.spec.background.is_transparent();
             let (origin_x, origin_y) = if use_page_offsets {
                 frame.view_offset()
@@ -240,13 +243,14 @@ fn pdf_export_scope_has_transparent_pages(
 
 fn backdrop_from_background(
     background: &BoardBackground,
+    grid: crate::domain::BoardGrid,
     desktop_backdrop: Option<&CanvasExportBackdropSnapshot>,
 ) -> CanvasExportBackdropSnapshot {
     match background {
         BoardBackground::Transparent => desktop_backdrop
             .cloned()
             .unwrap_or(CanvasExportBackdropSnapshot::Transparent),
-        BoardBackground::Solid(color) => CanvasExportBackdropSnapshot::Solid(*color),
+        BoardBackground::Solid(color) => CanvasExportBackdropSnapshot::board_paper(*color, grid),
     }
 }
 

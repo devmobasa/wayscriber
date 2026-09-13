@@ -86,6 +86,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::BoardRestoreDeleted
         | Action::BoardDuplicate
         | Action::BoardSwitchRecent
+        | Action::BoardPaperEdit
         | Action::PagePrev
         | Action::PageNext
         | Action::PageNew

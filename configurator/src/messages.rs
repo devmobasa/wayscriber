@@ -147,6 +147,7 @@ pub enum Message {
     BoardsCollapseToggled(usize),
     BoardsDefaultChanged(String),
     BoardsItemTextChanged(usize, BoardItemTextField, String),
+    BoardsGridKindChanged(usize, wayscriber::domain::BoardGridKind),
     BoardsBackgroundKindChanged(usize, BoardBackgroundOption),
     BoardsBackgroundColorChanged(usize, usize, String),
     BoardsDefaultPenEnabledChanged(usize, bool),

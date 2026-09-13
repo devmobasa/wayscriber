@@ -44,6 +44,7 @@ impl Config {
             }
 
             normalize_background(&mut item.background, &item.id);
+            normalize_grid(item);
             if let Some(color) = item.default_pen_color.as_mut() {
                 clamp_color(
                     color,
@@ -82,6 +83,23 @@ impl Config {
             boards.default_board = fallback;
         }
     }
+}
+
+fn normalize_grid(item: &mut crate::config::BoardItemConfig) {
+    let mut grid = crate::domain::BoardGrid::from(item.grid);
+    if i64::from(grid.spacing()) != item.grid.spacing {
+        warn!(
+            "Board '{}' grid spacing {} is outside 8–200; using {}",
+            item.id,
+            item.grid.spacing,
+            grid.spacing()
+        );
+    }
+    if item.background.is_transparent() && grid.kind != crate::domain::BoardGridKind::None {
+        warn!("Board '{}' is transparent; disabling its grid", item.id);
+        grid = grid.disabled();
+    }
+    item.grid = grid.into();
 }
 
 fn ensure_transparent_board_in_range(boards: &mut BoardsConfig) {

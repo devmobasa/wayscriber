@@ -6,7 +6,17 @@ use crate::domain::Action;
 const MAX_VISIBLE_BOARDS: usize = 8;
 
 impl InputState {
-    pub(super) fn boards_menu_entries(&self) -> Vec<ContextMenuEntry> {
+    /// The active board, shown on the parent row of the boards submenu.
+    pub(super) fn boards_summary(&self) -> String {
+        format!(
+            "{} ({}/{})",
+            self.boards.active_board_name(),
+            self.boards.active_index() + 1,
+            self.boards.board_count()
+        )
+    }
+
+    pub(super) fn boards_menu_entries(&self, with_header: bool) -> Vec<ContextMenuEntry> {
         let board_count = self.boards.board_count();
         let board_index = self.boards.active_index();
         let can_prev = board_count > 1;
@@ -15,14 +25,14 @@ impl InputState {
         let mut entries = Vec::new();
 
         // Current board indicator
-        let current_name = self.boards.active_board_name();
-        entries.push(ContextMenuEntry::new(
-            format!("{} ({}/{})", current_name, board_index + 1, board_count),
-            None::<String>,
-            false,
-            true,
-            None,
-        ));
+        if with_header {
+            entries.push(ContextMenuEntry::new(
+                self.boards_summary(),
+                None::<String>,
+                true,
+                None,
+            ));
+        }
 
         // List boards for quick switching (limited to MAX_VISIBLE_BOARDS)
         let boards = self.boards.board_states();
@@ -42,7 +52,6 @@ impl InputState {
                 format!("  ... {} above (open picker)", start),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
-                false,
                 Some(MenuCommand::OpenBoardPicker),
             ));
         }
@@ -57,7 +66,6 @@ impl InputState {
             entries.push(ContextMenuEntry::new(
                 label,
                 None::<String>,
-                false,
                 is_active,
                 Some(MenuCommand::SwitchToBoard {
                     id: board.spec.id.clone(),
@@ -70,7 +78,6 @@ impl InputState {
                 format!("  ... {} below (open picker)", board_count - end),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
-                false,
                 Some(MenuCommand::OpenBoardPicker),
             ));
         }
@@ -79,14 +86,12 @@ impl InputState {
         entries.push(ContextMenuEntry::new(
             "Previous Board",
             self.shortcut_for_action(Action::BoardPrev),
-            false,
             !can_prev,
             Some(MenuCommand::BoardPrev),
         ));
         entries.push(ContextMenuEntry::new(
             "Next Board",
             self.shortcut_for_action(Action::BoardNext),
-            false,
             !can_next,
             Some(MenuCommand::BoardNext),
         ));
@@ -96,15 +101,20 @@ impl InputState {
             "New Board",
             self.shortcut_for_action(Action::BoardNew),
             false,
-            false,
             Some(MenuCommand::BoardNew),
         ));
         entries.push(ContextMenuEntry::new(
             "Duplicate Board",
             self.shortcut_for_action(Action::BoardDuplicate),
             false,
-            false,
             Some(MenuCommand::BoardDuplicate),
+        ));
+        // The overlay has no paper to edit.
+        entries.push(ContextMenuEntry::new(
+            "Edit Board Paper…",
+            self.shortcut_for_action(Action::BoardPaperEdit),
+            self.board_is_transparent(),
+            Some(MenuCommand::BoardEditPaper),
         ));
 
         // Can't delete the transparent board or if only one board left
@@ -112,11 +122,50 @@ impl InputState {
         entries.push(ContextMenuEntry::new(
             "Delete Board",
             self.shortcut_for_action(Action::BoardDelete),
-            false,
             !can_delete,
             Some(MenuCommand::BoardDelete),
         ));
 
         entries
+    }
+
+    /// Actions for the board row right-clicked in the board picker. Shortcut
+    /// hints name the picker's own keys for the same actions.
+    pub(super) fn board_context_menu_entries(&self) -> Vec<ContextMenuEntry> {
+        let Some(board) = self.context_menu.board_target.as_deref().and_then(|id| {
+            self.boards
+                .board_states()
+                .iter()
+                .find(|board| board.spec.id == id)
+        }) else {
+            return Vec::new();
+        };
+        let pin_label = if board.spec.pinned {
+            "Unpin Board"
+        } else {
+            "Pin Board"
+        };
+
+        vec![
+            ContextMenuEntry::new(board.spec.name.clone(), None::<String>, true, None),
+            ContextMenuEntry::new(
+                "Edit Paper…",
+                Some("Ctrl+C"),
+                board.spec.background.is_transparent(),
+                Some(MenuCommand::BoardEditPaperFromContext),
+            ),
+            ContextMenuEntry::new(
+                "Rename Board",
+                Some("F2"),
+                false,
+                Some(MenuCommand::BoardRenameFromContext),
+            ),
+            ContextMenuEntry::new(
+                pin_label,
+                Some("Ctrl+P"),
+                false,
+                Some(MenuCommand::BoardTogglePinFromContext),
+            ),
+        ]
     }
 }

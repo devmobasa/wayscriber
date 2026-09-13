@@ -1,4 +1,6 @@
+mod appearance;
 mod color;
+pub use appearance::{BoardAppearance, BoardPenOrigin};
 mod core;
 mod identity;
 mod mapping;
@@ -36,11 +38,17 @@ pub use operations::{
 pub struct BoardState {
     pub spec: BoardSpec,
     pub pages: BoardPages,
+    pub appearance_explicit: bool,
+    pub pen_origin: BoardPenOrigin,
+    configured_appearance: BoardAppearance,
 }
 
 impl BoardState {
     pub fn new(spec: BoardSpec) -> Self {
         Self {
+            configured_appearance: BoardAppearance::from_spec(&spec),
+            appearance_explicit: false,
+            pen_origin: BoardPenOrigin::Configured,
             spec,
             pages: BoardPages::new(),
         }

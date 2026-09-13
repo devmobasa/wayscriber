@@ -392,7 +392,10 @@ impl WaylandState {
                     CanvasExportBackdropSnapshot::Transparent
                 }
                 crate::input::BoardBackground::Solid(color) => {
-                    CanvasExportBackdropSnapshot::Solid(*color)
+                    CanvasExportBackdropSnapshot::board_paper(
+                        *color,
+                        self.input_state.boards.active_board().spec.grid,
+                    )
                 }
             },
             board: BoardExportSnapshot {

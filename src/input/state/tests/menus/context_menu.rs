@@ -266,8 +266,8 @@ fn context_menu_includes_zoom_submenu_entry() {
         .into_iter()
         .find(|entry| entry.label == "Zoom")
         .expect("zoom submenu entry should exist in context menu");
-    assert_eq!(zoom_entry.command, Some(MenuCommand::OpenZoomMenu));
-    assert!(zoom_entry.has_submenu);
+    assert_eq!(zoom_entry.submenu, Some(ContextMenuKind::Zoom));
+    assert_eq!(zoom_entry.shortcut.as_deref(), Some("100%"));
 }
 
 #[test]
@@ -331,24 +331,32 @@ fn context_menu_radial_entry_shows_keyboard_shortcut_when_mouse_binding_disabled
     assert_eq!(radial_entry.shortcut.as_deref(), Some("Ctrl+R"));
 }
 
+/// The canvas menu stays open under the submenu, whose keyboard focus sits on
+/// an entry it can run.
+fn assert_submenu_has_actionable_focus(state: &InputState, kind: ContextMenuKind) {
+    assert!(matches!(
+        state.context_menu.state,
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Canvas,
+            ..
+        }
+    ));
+    let submenu = state.context_submenu().expect("submenu open");
+    assert_eq!(submenu.kind, kind);
+    let focus = submenu.keyboard_focus.expect("submenu focus");
+    let entries = state.context_submenu_entries();
+    assert!(!entries[focus].disabled);
+    assert!(entries[focus].command.is_some());
+}
+
 #[test]
-fn open_zoom_menu_command_switches_to_zoom_submenu_with_actionable_focus() {
+fn open_zoom_menu_command_opens_zoom_submenu_with_actionable_focus() {
     let mut state = create_test_input_state();
     state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
 
     state.execute_menu_command(MenuCommand::OpenZoomMenu);
 
-    let focus_index = match &state.context_menu.state {
-        ContextMenuState::Open {
-            kind: ContextMenuKind::Zoom,
-            keyboard_focus,
-            ..
-        } => keyboard_focus.expect("zoom submenu focus"),
-        _ => panic!("expected zoom submenu to be open"),
-    };
-    let entries = state.context_menu_entries();
-    assert!(!entries[focus_index].disabled);
-    assert!(entries[focus_index].command.is_some());
+    assert_submenu_has_actionable_focus(&state, ContextMenuKind::Zoom);
 }
 
 #[test]
@@ -446,24 +454,42 @@ fn page_context_menu_header_uses_page_name_and_enables_move_submenu() {
     assert_eq!(entries[0].label, "Agenda — Page 2 (2/2)");
     let move_entry = entries
         .iter()
-        .find(|entry| entry.command == Some(MenuCommand::OpenPageMoveMenu))
+        .find(|entry| entry.submenu == Some(ContextMenuKind::PageMove))
         .expect("move entry");
-    assert!(move_entry.has_submenu);
     assert!(!move_entry.disabled);
 }
 
 #[test]
-fn page_move_menu_excludes_source_board_and_lists_other_boards() {
+fn page_move_submenu_excludes_source_board_and_moves_the_menu_page() {
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
-    state.open_page_context_menu((5, 5), blackboard, 0);
+    let whiteboard = board_index(&state, BOARD_ID_WHITEBOARD);
+    set_named_pages(&mut state, blackboard, &[Some("Keep"), Some("Move me")], 1);
+    state.open_page_context_menu((5, 5), blackboard, 1);
 
     state.execute_menu_command(MenuCommand::OpenPageMoveMenu);
 
-    let entries = state.context_menu_entries();
+    assert!(matches!(
+        state.context_menu.state,
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Page,
+            ..
+        }
+    ));
+    let entries = state.context_submenu_entries();
     assert!(entries.iter().any(|entry| entry.label == "Overlay"));
     assert!(entries.iter().any(|entry| entry.label == "Whiteboard"));
     assert!(!entries.iter().any(|entry| entry.label == "Blackboard"));
+
+    // The submenu keeps the page its parent menu was opened for.
+    let pages = state.boards.board_states()[whiteboard].pages.page_count();
+    state.execute_menu_command(MenuCommand::PageMoveToBoard {
+        id: BOARD_ID_WHITEBOARD.to_string(),
+    });
+    assert_eq!(
+        state.boards.board_states()[whiteboard].pages.page_count(),
+        pages + 1
+    );
 }
 
 #[test]
@@ -482,8 +508,17 @@ fn pages_menu_shows_window_indicators_around_active_page() {
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Pages, None);
 
     let entries = state.context_menu_entries();
-    assert!(entries.iter().any(|entry| entry.label == "  ... 1 above"));
-    assert!(entries.iter().any(|entry| entry.label == "  ... 1 below"));
+    // Overflow rows lead to the board picker's page panel.
+    assert!(entries.iter().any(|entry| {
+        entry.label == "  ... 1 above (open picker)"
+            && entry.command == Some(MenuCommand::OpenBoardPicker)
+            && !entry.disabled
+    }));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.label == "  ... 1 below (open picker)")
+    );
     assert!(
         entries
             .iter()
@@ -516,44 +551,130 @@ fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() 
     assert!(delete_entry.disabled);
 }
 
+fn menu_entry(state: &InputState, command: MenuCommand) -> ContextMenuEntry {
+    state
+        .context_menu_entries()
+        .into_iter()
+        .find(|entry| entry.command == Some(command.clone()))
+        .unwrap_or_else(|| panic!("missing {command:?} entry"))
+}
+
 #[test]
-fn open_pages_menu_command_switches_to_pages_submenu_with_actionable_focus() {
+fn boards_menu_edits_active_board_paper_and_skips_the_overlay() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+    assert!(!menu_entry(&state, MenuCommand::BoardEditPaper).disabled);
+    state.execute_menu_command(MenuCommand::BoardEditPaper);
+
+    assert!(!state.is_context_menu_open());
+    assert!(state.is_board_picker_open());
+    assert_eq!(
+        state.board_appearance_edit().map(|edit| edit.board_id()),
+        Some(BOARD_ID_WHITEBOARD)
+    );
+
+    state.close_board_picker();
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+    assert!(menu_entry(&state, MenuCommand::BoardEditPaper).disabled);
+}
+
+#[test]
+fn board_row_menu_edits_renames_and_pins_its_own_board() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    let overlay = board_index(&state, BOARD_ID_TRANSPARENT);
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+
+    state.open_board_context_menu((5, 5), overlay);
+    assert_eq!(state.context_menu_entries()[0].label, "Overlay");
+    assert!(menu_entry(&state, MenuCommand::BoardEditPaperFromContext).disabled);
+
+    state.open_board_context_menu((5, 5), blackboard);
+    assert!(
+        state.is_board_picker_open(),
+        "row menus keep the picker open"
+    );
+    assert_eq!(state.context_menu_entries()[0].label, "Blackboard");
+    state.execute_menu_command(MenuCommand::BoardEditPaperFromContext);
+    assert!(!state.is_context_menu_open());
+    assert_eq!(
+        state.board_appearance_edit().map(|edit| edit.board_id()),
+        Some(BOARD_ID_BLACKBOARD)
+    );
+
+    state.board_picker_cancel_edit();
+    state.open_board_context_menu((5, 5), blackboard);
+    state.execute_menu_command(MenuCommand::BoardRenameFromContext);
+    let row = state.board_picker_row_for_board(blackboard).unwrap();
+    assert_eq!(
+        state
+            .board_picker_edit_state()
+            .map(|(mode, index, _)| (mode, index)),
+        Some((crate::input::state::BoardPickerEditMode::Name, row))
+    );
+
+    state.board_picker_cancel_edit();
+    let _ = state.take_pending_board_runtime_ui_actions();
+    state.open_board_context_menu((5, 5), blackboard);
+    state.execute_menu_command(MenuCommand::BoardTogglePinFromContext);
+    assert!(matches!(
+        state.take_pending_board_runtime_ui_actions().as_slice(),
+        [crate::input::boards::PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
+            if board_id == BOARD_ID_BLACKBOARD
+    ));
+}
+
+#[test]
+fn right_clicking_a_board_row_selects_it_and_opens_its_menu() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    state.update_board_picker_layout(&ctx, 1280, 720);
+    let layout = *state.board_picker_layout().unwrap();
+    let row = state.board_picker_row_for_board(blackboard).unwrap();
+    let x = (layout.origin_x + layout.padding_x + 60.0) as i32;
+    let y = (layout.origin_y
+        + layout.padding_y
+        + layout.header_height
+        + layout.row_height * (row as f64 + 0.5)) as i32;
+
+    assert!(state.handle_board_picker_press(crate::input::MouseButton::Right, x, y));
+
+    assert!(state.is_board_picker_open());
+    assert_eq!(state.board_picker_selected_index(), Some(row));
+    assert!(matches!(
+        state.context_menu.state,
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Board,
+            ..
+        }
+    ));
+    assert_eq!(state.context_menu_entries()[0].label, "Blackboard");
+}
+
+#[test]
+fn open_pages_menu_command_opens_pages_submenu_with_actionable_focus() {
     let mut state = create_test_input_state();
     state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
 
     state.execute_menu_command(MenuCommand::OpenPagesMenu);
 
-    let focus_index = match &state.context_menu.state {
-        ContextMenuState::Open {
-            kind: ContextMenuKind::Pages,
-            keyboard_focus,
-            ..
-        } => keyboard_focus.expect("pages submenu focus"),
-        _ => panic!("expected pages submenu to be open"),
-    };
-    let entries = state.context_menu_entries();
-    assert!(!entries[focus_index].disabled);
-    assert!(entries[focus_index].command.is_some());
+    assert_submenu_has_actionable_focus(&state, ContextMenuKind::Pages);
 }
 
 #[test]
-fn open_boards_menu_command_switches_to_boards_submenu_with_actionable_focus() {
+fn open_boards_menu_command_opens_boards_submenu_with_actionable_focus() {
     let mut state = create_test_input_state();
     state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
 
     state.execute_menu_command(MenuCommand::OpenBoardsMenu);
 
-    let focus_index = match &state.context_menu.state {
-        ContextMenuState::Open {
-            kind: ContextMenuKind::Boards,
-            keyboard_focus,
-            ..
-        } => keyboard_focus.expect("boards submenu focus"),
-        _ => panic!("expected boards submenu to be open"),
-    };
-    let entries = state.context_menu_entries();
-    assert!(!entries[focus_index].disabled);
-    assert!(entries[focus_index].command.is_some());
+    assert_submenu_has_actionable_focus(&state, ContextMenuKind::Boards);
 }
 
 #[test]

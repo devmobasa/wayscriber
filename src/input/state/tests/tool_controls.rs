@@ -587,6 +587,38 @@ fn sync_modifiers_resyncs_current_settings_to_compositor_tool() {
 }
 
 #[test]
+fn color_picker_ok_with_the_opening_color_typed_back_undoes_the_preview() {
+    let mut state = create_test_input_state();
+    let white = Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    assert!(state.set_color(white));
+    state.clear_session_dirty();
+
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_from_gradient(0.6, 0.1);
+    assert_ne!(
+        state.color_for_tool(Tool::Pen),
+        white,
+        "the preview moved the pen"
+    );
+
+    // The opening color spelled with three digits is parsed only on OK, so
+    // OK must sync the pen back even though nothing changed on paper.
+    state.color_picker_popup_set_hex_editing(true);
+    for ch in "#FFF".chars() {
+        state.color_picker_popup_hex_append(ch);
+    }
+    state.apply_color_picker_popup();
+
+    assert_eq!(state.color_for_tool(Tool::Pen), white);
+    assert!(!state.is_session_dirty(), "no change, nothing to persist");
+}
+
+#[test]
 fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
     let mut state = create_test_input_state();
     let original = state.color_for_tool(Tool::Pen);

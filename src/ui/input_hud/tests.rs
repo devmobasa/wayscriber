@@ -123,7 +123,8 @@ fn repeat_counter_is_appended_to_the_chip_text() {
     let layout =
         compute_input_hud_layout(&UiTextEngine::default(), &state, 1920, 1080).expect("layout");
     assert_eq!(layout.chips.len(), 1);
-    assert_eq!(layout.chips[0].text, "Backspace \u{00d7}7");
+    // Backspace shows as the shared display glyph; the counter is appended to it.
+    assert_eq!(layout.chips[0].text, "\u{232b} \u{00d7}7");
 }
 
 #[test]

@@ -1,3 +1,4 @@
+mod board_grid;
 mod document;
 mod file_io;
 mod immutability;

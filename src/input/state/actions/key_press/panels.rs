@@ -73,6 +73,10 @@ impl InputState {
             return false;
         }
 
+        if self.board_appearance_key(key) {
+            return true;
+        }
+
         if self.board_picker_page_edit_state().is_some() {
             match key {
                 Key::Escape => {
@@ -442,8 +446,21 @@ impl InputState {
         key: Key,
     ) -> bool {
         match key {
+            // Escape and Left step back out of a submenu; Escape then closes.
             Key::Escape => {
-                self.close_context_menu();
+                if !self.close_context_submenu(true) {
+                    self.close_context_menu();
+                }
+                true
+            }
+            // The menu owns every arrow key while open, so a Left with no
+            // submenu or a Right on a plain row cannot reach the canvas.
+            Key::Left => {
+                self.close_context_submenu(true);
+                true
+            }
+            Key::Right => {
+                self.open_focused_context_submenu();
                 true
             }
             Key::Up => self.focus_previous_context_menu_entry(),

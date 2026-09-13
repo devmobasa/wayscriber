@@ -55,6 +55,7 @@ fn partial_output_load_clears_boards_omitted_from_snapshot() {
     let snapshot = SessionSnapshot {
         active_board_id: "whiteboard".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "whiteboard".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![Frame::new()],
@@ -83,6 +84,7 @@ fn failed_output_replacement_preserves_source_board_contents() {
     add_test_line(&mut input);
     let boards = (0..=input.boards.max_count())
         .map(|index| BoardSnapshot {
+            appearance: None,
             id: format!("replacement-{index}"),
             pages: BoardPagesSnapshot {
                 pages: vec![Frame::new()],

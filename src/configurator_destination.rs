@@ -179,6 +179,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::BoardDuplicate
         | Action::BoardDelete
         | Action::BoardPicker
+        | Action::BoardPaperEdit
         | Action::FocusNextOutput
         | Action::FocusPrevOutput => KeybindingsSection::Boards,
         Action::ToggleHelp

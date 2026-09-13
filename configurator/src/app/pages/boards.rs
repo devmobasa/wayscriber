@@ -23,6 +23,7 @@
 //! components to whatever the 8-bit hex said.
 
 mod color;
+mod grid;
 mod header;
 mod rows;
 mod section;
@@ -207,6 +208,7 @@ fn add_board_list(page: &mut PageBuilder) {
             let values = BoardValues {
                 id: &item.id,
                 name: &item.name,
+                grid_spacing: &item.grid_spacing,
                 background: ColorValues {
                     hex: picker_hex(app, ColorPickerId::BoardBackground(index)),
                     color: &item.background_color,
@@ -234,6 +236,7 @@ struct SectionLayout {
     visible: bool,
     expanded: bool,
     background_kind: BoardBackgroundOption,
+    grid_kind: wayscriber::domain::BoardGridKind,
     pen_enabled: bool,
     auto_adjust: bool,
     persist: bool,
@@ -256,6 +259,7 @@ fn section_layouts(app: &ConfiguratorApp, summary: &AppSearchSummary) -> Vec<Sec
             // that stays folded shut is a match the user cannot read.
             expanded: !show_all || !is_collapsed(app, index),
             background_kind: item.background_kind,
+            grid_kind: item.grid_kind,
             pen_enabled: item.default_pen_color.enabled,
             auto_adjust: item.auto_adjust_pen,
             persist: item.persist,
@@ -268,6 +272,7 @@ fn section_layouts(app: &ConfiguratorApp, summary: &AppSearchSummary) -> Vec<Sec
 struct BoardValues<'a> {
     id: &'a str,
     name: &'a str,
+    grid_spacing: &'a str,
     background: ColorValues<'a>,
     pen: ColorValues<'a>,
 }

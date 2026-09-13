@@ -12,12 +12,42 @@ use super::super::{
 
 impl InputState {
     pub(crate) fn board_picker_clear_edit(&mut self) {
+        if self.board_picker.appearance.take().is_some() {
+            // A picker open on the draft has nothing left to edit. The draft is
+            // gone, so there is nothing to restore either.
+            if self.color_picker_popup_edits_board_paper() {
+                self.close_color_picker_popup(false);
+            }
+            // Closing the paper sheet removes the dim over the whole surface.
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+        }
         if let BoardPickerState::Open { edit, .. } = &mut self.board_picker.state {
             *edit = None;
         }
     }
 
     pub(crate) fn board_picker_start_edit(&mut self, mode: BoardPickerEditMode, buffer: String) {
+        self.board_picker_clear_edit();
+        if mode == BoardPickerEditMode::Color {
+            let Some(index) = self
+                .board_picker_selected_index()
+                .and_then(|row| self.board_picker_board_index_for_row(row))
+            else {
+                return;
+            };
+            if !self.begin_board_appearance(index) {
+                return;
+            }
+            if let Some(draft) = &mut self.board_picker.appearance {
+                draft.set_color_text(buffer.clone());
+            }
+        }
+        let buffer = if mode == BoardPickerEditMode::Color {
+            String::new()
+        } else {
+            buffer
+        };
         if let BoardPickerState::Open { edit, .. } = &mut self.board_picker.state {
             *edit = Some(BoardPickerEdit { mode, buffer });
         }
@@ -29,7 +59,14 @@ impl InputState {
             return None;
         };
         let edit = edit.as_ref()?;
-        Some((edit.mode, *selected, edit.buffer.as_str()))
+        Some((
+            edit.mode,
+            *selected,
+            self.board_picker
+                .appearance
+                .as_ref()
+                .map_or(edit.buffer.as_str(), |draft| draft.color.as_str()),
+        ))
     }
 
     pub(crate) fn board_picker_edit_buffer_mut(&mut self) -> Option<&mut BoardPickerEdit> {
@@ -283,6 +320,22 @@ impl InputState {
         }
     }
 
+    /// Opens the paper sheet for a board, opening the full picker when needed.
+    pub(crate) fn board_picker_edit_board_paper_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        board_index: usize,
+    ) {
+        if !self.is_board_picker_open() || self.board_picker_is_quick() {
+            self.open_board_picker_with_measurer(measurer);
+        }
+        if let Some(row) = self.board_picker_row_for_board(board_index) {
+            self.board_picker_set_selected(row);
+        }
+
+        self.board_picker_edit_color_selected_with_measurer(measurer);
+    }
+
     pub(crate) fn board_picker_edit_color_selected_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,
@@ -320,6 +373,9 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_commit_edit(&mut self) -> bool {
+        if self.board_picker.appearance.is_some() {
+            return self.apply_board_appearance();
+        }
         let Some((mode, index, buffer)) = self.board_picker_edit_state() else {
             return false;
         };
@@ -365,6 +421,9 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_backspace(&mut self) {
+        if self.board_appearance_key(crate::input::events::Key::Backspace) {
+            return;
+        }
         if let Some(edit) = self.board_picker_edit_buffer_mut() {
             edit.buffer.pop();
             self.needs_redraw = true;
@@ -372,6 +431,9 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_append(&mut self, ch: char) {
+        if self.board_appearance_key(crate::input::events::Key::Char(ch)) {
+            return;
+        }
         let Some(edit) = self.board_picker_edit_buffer_mut() else {
             return;
         };
@@ -404,24 +466,6 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_apply_palette_color(&mut self, color: Color) -> bool {
-        let Some(index) = self.board_picker_selected_index() else {
-            return false;
-        };
-        if self.board_picker_is_new_row(index) {
-            return false;
-        }
-        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
-            return false;
-        };
-        if !self.set_board_background_color(board_index, color) {
-            return false;
-        }
-        if let Some(edit) = self.board_picker_edit_buffer_mut()
-            && edit.mode == BoardPickerEditMode::Color
-        {
-            edit.buffer = color_to_hex(color);
-        }
-        self.needs_redraw = true;
-        true
+        self.board_appearance_palette(color)
     }
 }

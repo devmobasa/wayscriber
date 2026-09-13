@@ -509,7 +509,14 @@ fn startup_interaction_cancels_the_deferred_search_focus() {
 
 #[test]
 fn board_item_static_labels_match_board_rows() {
-    for query in ["display name", "board id", "override default pen color"] {
+    for query in [
+        "display name",
+        "board id",
+        "override default pen color",
+        "graph paper",
+        "isometric",
+        "grid spacing",
+    ] {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         app.search_query = SearchQuery::new(query);
 

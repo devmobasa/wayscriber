@@ -240,6 +240,9 @@ impl ConfiguratorApp {
             Message::BoardsItemTextChanged(index, field, value) => {
                 self.handle_boards_item_text_changed(index, field, value)
             }
+            Message::BoardsGridKindChanged(index, value) => {
+                self.handle_boards_grid_kind_changed(index, value)
+            }
             Message::BoardsBackgroundKindChanged(index, value) => {
                 self.handle_boards_background_kind_changed(index, value)
             }

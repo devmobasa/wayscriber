@@ -1,6 +1,6 @@
 use super::{
-    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, PickerDrag,
-    color_to_hex, rgb_to_hsv,
+    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupLayoutOptions,
+    ColorPickerPopupState, ColorPickerTarget, PickerDrag, color_to_hex, rgb_to_hsv,
 };
 use crate::draw::Color;
 use crate::input::Tool;
@@ -19,12 +19,12 @@ impl ColorPickerPopupPanel {
         matches!(self.state, ColorPickerPopupState::Open { .. })
     }
 
-    pub(crate) fn open(&mut self, tool: Tool, slot: Option<usize>, color: Color) {
+    pub(crate) fn open(&mut self, tool: Tool, target: ColorPickerTarget, color: Color) {
         self.generation = self.generation.wrapping_add(1);
         self.pressed_action = None;
         self.state = ColorPickerPopupState::Open {
             tool,
-            slot,
+            target,
             original_color: color,
             current_color: color,
             hex_editing: false,
@@ -42,11 +42,15 @@ impl ColorPickerPopupPanel {
         self.pressed_action = None;
     }
 
-    pub fn slot(&self) -> Option<usize> {
+    pub fn target(&self) -> Option<ColorPickerTarget> {
         match &self.state {
-            ColorPickerPopupState::Open { slot, .. } => *slot,
+            ColorPickerPopupState::Open { target, .. } => Some(*target),
             ColorPickerPopupState::Hidden => None,
         }
+    }
+
+    pub fn slot(&self) -> Option<usize> {
+        self.target().and_then(ColorPickerTarget::slot)
     }
 
     pub fn current_color(&self) -> Option<Color> {
@@ -83,8 +87,12 @@ impl ColorPickerPopupPanel {
         screen_height: u32,
         show_default_button: bool,
     ) {
-        self.layout = self.is_open().then(|| {
-            ColorPickerPopupLayout::compute(screen_width, screen_height, show_default_button)
+        self.layout = self.target().map(|target| {
+            ColorPickerPopupLayout::compute(
+                screen_width,
+                screen_height,
+                ColorPickerPopupLayoutOptions::for_target(target, show_default_button),
+            )
         });
     }
 
@@ -123,11 +131,11 @@ mod tests {
     #[test]
     fn reopening_advances_generation_and_resets_transient_state() {
         let mut panel = ColorPickerPopupPanel::default();
-        panel.open(Tool::Pen, Some(2), RED);
+        panel.open(Tool::Pen, ColorPickerTarget::QuickColor(2), RED);
         let first = panel.current_generation().expect("open generation");
         panel.set_dragging(Some(PickerDrag::Hue));
         panel.hide();
-        panel.open(Tool::Marker, None, RED);
+        panel.open(Tool::Marker, ColorPickerTarget::Tool, RED);
 
         assert!(panel.current_generation().expect("reopened generation") > first);
         assert_eq!(panel.slot(), None);
@@ -138,7 +146,7 @@ mod tests {
     #[test]
     fn taking_a_drag_target_ends_the_drag() {
         let mut panel = ColorPickerPopupPanel::default();
-        panel.open(Tool::Pen, None, RED);
+        panel.open(Tool::Pen, ColorPickerTarget::Tool, RED);
         panel.set_dragging(Some(PickerDrag::SatVal));
 
         assert_eq!(panel.take_drag_target(), Some(PickerDrag::SatVal));

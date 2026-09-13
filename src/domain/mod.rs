@@ -6,6 +6,7 @@
 
 mod action;
 mod board;
+mod board_grid;
 mod board_validation;
 pub mod color;
 mod drawing;
@@ -15,6 +16,10 @@ mod tool;
 pub use action::Action;
 pub use board::{
     BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardSpec,
+};
+pub use board_grid::{
+    BOARD_GRID_DEFAULT_SPACING, BOARD_GRID_MAX_SPACING, BOARD_GRID_MIN_SPACING, BoardGrid,
+    BoardGridKind,
 };
 pub use board_validation::{
     BoardIdChangeSet, BoundaryBoardId, BoundaryBoardIdSet, clamp_board_rgb,

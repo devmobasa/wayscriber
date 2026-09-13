@@ -134,6 +134,7 @@ fn action_serialization_matches_established_contract() {
         (Action::BoardRestoreDeleted, "board_restore_deleted"),
         (Action::BoardDuplicate, "board_duplicate"),
         (Action::BoardSwitchRecent, "board_switch_recent"),
+        (Action::BoardPaperEdit, "board_paper_edit"),
         (Action::FocusNextOutput, "focus_next_output"),
         (Action::FocusPrevOutput, "focus_prev_output"),
         (Action::PagePrev, "page_prev"),
@@ -365,6 +366,7 @@ fn established_public_paths_reexport_domain_types() {
         id: "board".to_string(),
         name: "Board".to_string(),
         background: BoardBackground::Transparent,
+        grid: Default::default(),
         default_pen_color: None,
         auto_adjust_pen: false,
         persist: true,
@@ -396,7 +398,7 @@ fn production_domain_sources_have_no_upward_crate_dependencies() {
     }
 
     assert_eq!(
-        checked, 8,
+        checked, 9,
         "architecture test must cover every domain source"
     );
 }

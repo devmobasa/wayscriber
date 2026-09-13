@@ -76,6 +76,9 @@ pub mod overlay {
     // Theme's surface tokens as surfaces migrate.
     /// Context menu background
     pub const PANEL_BG_CONTEXT_MENU: Rgba = (0.10, 0.13, 0.17, 0.95);
+    /// Submenu surface: one shade lighter than the menu it opens from, so
+    /// the stacking reads even where the panes overlap.
+    pub const PANEL_BG_CONTEXT_SUBMENU: Rgba = (0.13, 0.16, 0.21, 0.96);
     /// Board picker panel background
     pub const PANEL_BG_BOARD_PICKER: Rgba = (0.09, 0.11, 0.15, 0.96);
     /// Properties panel background
@@ -125,6 +128,9 @@ pub mod overlay {
     // ---- Interactive states ----
     /// Hover state background (mouse hover)
     pub const BG_HOVER: Rgba = (0.25, 0.32, 0.45, 0.9);
+    /// A parent row whose submenu is open: a quieter fill than hover, so the
+    /// pointer's row and the pane's owner stay distinguishable.
+    pub const BG_EXPANDED: Rgba = (0.25, 0.32, 0.45, 0.5);
     /// State-ladder hover wash: white at 8% painted over the resting
     /// surface. Sits below the accent-filled selected state.
     pub const BG_HOVER_WASH: Rgba = (1.0, 1.0, 1.0, 0.08);
@@ -298,6 +304,10 @@ pub mod overlay {
     // ---- Keyboard navigation hint text ----
     /// Context menu navigation hint
     pub const NAV_HINT_MENU: &str = "↑↓ to navigate • Enter to select • Esc to close";
+    /// Context menu navigation hint when a row opens a submenu
+    pub const NAV_HINT_MENU_SUBMENUS: &str = "↑↓ navigate • → open • Enter select • Esc close";
+    /// Context menu navigation hint while a submenu holds the selection
+    pub const NAV_HINT_SUBMENU: &str = "↑↓ navigate • ← back • Enter select • Esc close";
     /// Board picker navigation hint
     pub const NAV_HINT_BOARD_PICKER: &str = "↑↓ Navigate • Type to search";
     /// Modal close hint
@@ -789,6 +799,10 @@ pub mod popup {
         overlay::PANEL_BG_CONTEXT_MENU
     }
 
+    pub fn bg_context_submenu() -> Rgba {
+        overlay::PANEL_BG_CONTEXT_SUBMENU
+    }
+
     pub fn bg_board_picker() -> Rgba {
         overlay::PANEL_BG_BOARD_PICKER
     }
@@ -1055,6 +1069,10 @@ mod popup_theme_tests {
     fn popup_accessors_keep_the_complete_legacy_palette() {
         for (actual, expected) in [
             (popup::bg_context_menu(), overlay::PANEL_BG_CONTEXT_MENU),
+            (
+                popup::bg_context_submenu(),
+                overlay::PANEL_BG_CONTEXT_SUBMENU,
+            ),
             (popup::bg_board_picker(), overlay::PANEL_BG_BOARD_PICKER),
             (popup::bg_properties(), overlay::PANEL_BG_PROPERTIES),
             (

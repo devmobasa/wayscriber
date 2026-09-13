@@ -86,6 +86,33 @@ pub(crate) enum HexPasteTarget {
     ColorPickerPopup { generation: u64 },
 }
 
+/// What the popup edits: live preview and OK both write here, and Cancel
+/// restores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorPickerTarget {
+    /// The color the opening tool paints with.
+    Tool,
+    /// A quick-color palette slot, recolored in place.
+    QuickColor(usize),
+    /// The paper color draft of the board picker's appearance sheet.
+    BoardPaper,
+}
+
+impl ColorPickerTarget {
+    /// The quick-color slot this target recolors, if any.
+    pub fn slot(self) -> Option<usize> {
+        match self {
+            ColorPickerTarget::QuickColor(index) => Some(index),
+            ColorPickerTarget::Tool | ColorPickerTarget::BoardPaper => None,
+        }
+    }
+
+    /// Paper is opaque, so the popup neither shows nor edits alpha for it.
+    pub fn edits_alpha(self) -> bool {
+        self != ColorPickerTarget::BoardPaper
+    }
+}
+
 /// State of the color picker popup.
 #[derive(Debug, Clone, Default)]
 pub enum ColorPickerPopupState {
@@ -94,16 +121,13 @@ pub enum ColorPickerPopupState {
     Hidden,
     /// Popup is open with current editing state.
     Open {
-        /// Tool whose color is being edited.
+        /// Tool that was active when the popup opened; the edit target when
+        /// `target` is [`ColorPickerTarget::Tool`].
         tool: Tool,
-        /// Quick-color slot being recolored, when the popup was opened by
-        /// secondary-clicking a swatch. `None` edits the tool's own color.
-        /// The slot is the edit target for both live preview and accept, so a
-        /// recolor never hijacks what the tool is currently painting with.
-        slot: Option<usize>,
-        /// Original color when popup was opened (for cancel restoration). This
-        /// is the edit target's color: the tool's, or the slot's when
-        /// recoloring.
+        /// What live preview and accept write to. A slot or paper target never
+        /// hijacks what the tool is currently painting with.
+        target: ColorPickerTarget,
+        /// The target's color when the popup opened, for cancel restoration.
         original_color: Color,
         /// Currently selected color (live updates).
         current_color: Color,
@@ -124,6 +148,35 @@ pub enum ColorPickerPopupState {
         /// Current hover position (for button hover states).
         hover_pos: Option<(f64, f64)>,
     },
+}
+
+/// Which optional controls a layout includes; the edit target decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColorPickerPopupLayoutOptions {
+    /// The "Default" button, offered while recoloring a shipped palette slot.
+    pub show_default_button: bool,
+    /// The alpha bar; paper has no alpha.
+    pub show_alpha: bool,
+    /// The screen eyedropper. Sampling closes every popup and lands on the
+    /// drawing color, which would discard a paper draft, so paper hides it.
+    pub show_eyedropper: bool,
+}
+
+impl ColorPickerPopupLayoutOptions {
+    /// Every control, as the tool-color popup shows them.
+    pub const ALL: Self = Self {
+        show_default_button: true,
+        show_alpha: true,
+        show_eyedropper: true,
+    };
+
+    pub fn for_target(target: ColorPickerTarget, show_default_button: bool) -> Self {
+        Self {
+            show_default_button,
+            show_alpha: target.edits_alpha(),
+            show_eyedropper: target != ColorPickerTarget::BoardPaper,
+        }
+    }
 }
 
 /// Cached layout metrics for the color picker popup.
@@ -191,6 +244,8 @@ pub struct ColorPickerPopupLayout {
     pub eyedropper_btn_y: f64,
     /// Size of the square action buttons (copy / paste / eyedropper).
     pub action_btn_size: f64,
+    /// Whether the eyedropper button is present.
+    pub eyedropper_enabled: bool,
     /// Top-left of the "Default" button, present only while recoloring a
     /// quick-color slot that the shipped palette defines. It shares the
     /// button row with OK/Cancel, which is why its absence has to change the
@@ -214,9 +269,24 @@ impl ColorPickerPopupLayout {
     /// Compute the layout for given screen dimensions. `show_default_button`
     /// comes from the popup's target: recoloring a slot with a built-in color
     /// adds a third button to the bottom row.
-    pub fn compute(screen_width: u32, screen_height: u32, show_default_button: bool) -> Self {
+    pub fn compute(
+        screen_width: u32,
+        screen_height: u32,
+        options: ColorPickerPopupLayoutOptions,
+    ) -> Self {
+        let ColorPickerPopupLayoutOptions {
+            show_default_button,
+            show_alpha,
+            show_eyedropper,
+        } = options;
         let width = POPUP_WIDTH;
-        let height = POPUP_HEIGHT;
+        // Without an alpha bar the rows below it move up and the panel shrinks.
+        let (alpha_h, alpha_room) = if show_alpha {
+            (ALPHA_HEIGHT, ALPHA_HEIGHT + SLIDER_GAP)
+        } else {
+            (0.0, 0.0)
+        };
+        let height = POPUP_HEIGHT - (ALPHA_HEIGHT + SLIDER_GAP - alpha_room);
 
         // Center the popup on screen
         let origin_x = (screen_width as f64 - width) / 2.0;
@@ -236,7 +306,7 @@ impl ColorPickerPopupLayout {
         let alpha_y = hue_y + HUE_HEIGHT + SLIDER_GAP;
 
         // Preview row (preview swatch + hex input)
-        let preview_row_y = alpha_y + ALPHA_HEIGHT + ELEMENT_GAP;
+        let preview_row_y = hue_y + HUE_HEIGHT + alpha_room + ELEMENT_GAP;
         let preview_x = content_x;
         let preview_y = preview_row_y;
 
@@ -290,7 +360,7 @@ impl ColorPickerPopupLayout {
             alpha_x,
             alpha_y,
             alpha_w: GRADIENT_WIDTH,
-            alpha_h: ALPHA_HEIGHT,
+            alpha_h,
             recents_y,
             recents_x,
             hue_x,
@@ -309,6 +379,7 @@ impl ColorPickerPopupLayout {
             paste_btn_y,
             eyedropper_btn_x,
             eyedropper_btn_y,
+            eyedropper_enabled: show_eyedropper,
             action_btn_size,
             default_btn,
             ok_btn_x,
@@ -347,7 +418,8 @@ impl ColorPickerPopupLayout {
 
     /// Check if a point is within the alpha bar.
     pub fn point_in_alpha(&self, x: f64, y: f64) -> bool {
-        x >= self.alpha_x
+        self.alpha_h > 0.0
+            && x >= self.alpha_x
             && x <= self.alpha_x + self.alpha_w
             && y >= self.alpha_y
             && y <= self.alpha_y + self.alpha_h
@@ -410,7 +482,8 @@ impl ColorPickerPopupLayout {
 
     /// Check if a point is within the screen eyedropper button.
     pub fn point_in_eyedropper_button(&self, x: f64, y: f64) -> bool {
-        x >= self.eyedropper_btn_x
+        self.eyedropper_enabled
+            && x >= self.eyedropper_btn_x
             && x <= self.eyedropper_btn_x + self.action_btn_size
             && y >= self.eyedropper_btn_y
             && y <= self.eyedropper_btn_y + self.action_btn_size

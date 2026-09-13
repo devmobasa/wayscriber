@@ -269,13 +269,14 @@ impl WaylandState {
                     .icon(),
             );
         }
-        if self.input_state.is_board_picker_open()
-            && let Some(hint) = self.input_state.board_picker_cursor_hint_at(mx, my)
+        // Board and page menus open on top of the board picker.
+        if self.input_state.is_context_menu_open()
+            && let Some(hint) = self.input_state.context_menu_cursor_hint_at(mx, my)
         {
             return Some(hint.icon());
         }
-        if self.input_state.is_context_menu_open()
-            && let Some(hint) = self.input_state.context_menu_cursor_hint_at(mx, my)
+        if self.input_state.is_board_picker_open()
+            && let Some(hint) = self.input_state.board_picker_cursor_hint_at(mx, my)
         {
             return Some(hint.icon());
         }

@@ -294,6 +294,7 @@ fn saved_line_snapshot(with_tool_state: bool) -> wayscriber::session::SessionSna
     wayscriber::session::SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![wayscriber::session::BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: wayscriber::session::BoardPagesSnapshot {
                 pages: vec![frame],
@@ -865,6 +866,7 @@ fn session_info_reports_saved_snapshot() {
     let snapshot = wayscriber::session::SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![wayscriber::session::BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: wayscriber::session::BoardPagesSnapshot {
                 pages: vec![frame],

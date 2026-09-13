@@ -10,6 +10,8 @@ pub enum ContextMenuKind {
     Boards,
     Page,
     PageMove,
+    /// Actions for one board row in the board picker.
+    Board,
 }
 
 /// Tracks the context menu lifecycle.
@@ -23,7 +25,34 @@ pub enum ContextMenuState {
         hover_index: Option<usize>,
         keyboard_focus: Option<usize>,
         hovered_shape_id: Option<ShapeId>,
+        /// A submenu cascading from one of this menu's rows.
+        submenu: Option<ContextSubmenu>,
     },
+}
+
+/// A submenu open beside the parent row that opened it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ContextSubmenu {
+    pub(crate) kind: ContextMenuKind,
+    /// The parent menu row this submenu belongs to.
+    pub(crate) parent_index: usize,
+    pub(crate) hover_index: Option<usize>,
+    pub(crate) keyboard_focus: Option<usize>,
+}
+
+/// Which open menu an operation targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContextMenuLevel {
+    Root,
+    Submenu,
+}
+
+/// The side of the parent menu a submenu opens on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SubmenuSide {
+    #[default]
+    Right,
+    Left,
 }
 
 /// Commands triggered by context menu selection.
@@ -66,6 +95,10 @@ pub enum MenuCommand {
     BoardNew,
     BoardDuplicate,
     BoardDelete,
+    BoardEditPaper,
+    BoardEditPaperFromContext,
+    BoardRenameFromContext,
+    BoardTogglePinFromContext,
     SwitchToBoard { id: String },
     SwitchToWhiteboard,
     SwitchToBlackboard,
@@ -82,8 +115,11 @@ pub enum MenuCommand {
 #[derive(Debug, Clone)]
 pub struct ContextMenuEntry {
     pub label: String,
+    /// Text in the right-hand column: a shortcut, or a parent row's summary
+    /// of its submenu's current state.
     pub shortcut: Option<String>,
-    pub has_submenu: bool,
+    /// The menu this row opens beside itself instead of running a command.
+    pub submenu: Option<ContextMenuKind>,
     pub disabled: bool,
     pub command: Option<MenuCommand>,
 }
@@ -92,17 +128,22 @@ impl ContextMenuEntry {
     pub fn new(
         label: impl Into<String>,
         shortcut: Option<impl Into<String>>,
-        has_submenu: bool,
         disabled: bool,
         command: Option<MenuCommand>,
     ) -> Self {
         Self {
             label: label.into(),
             shortcut: shortcut.map(|s| s.into()),
-            has_submenu,
+            submenu: None,
             disabled,
             command,
         }
+    }
+
+    /// Makes this a parent row that opens `kind` as a submenu.
+    pub fn with_submenu(mut self, kind: ContextMenuKind) -> Self {
+        self.submenu = Some(kind);
+        self
     }
 }
 

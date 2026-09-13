@@ -1502,6 +1502,10 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 
 **Board Picker:**
 - Modal list for switching, renaming, and recoloring boards.
+- Right-click a board for **Edit Paper…**, **Rename Board**, and **Pin Board**. The canvas
+  context menu's **Boards** submenu also has **Edit Board Paper…** for the active board.
+- The command palette's **Edit Board Paper** opens the same editor for the active board. It
+  is unbound by default; bind `board_paper_edit` to give it a shortcut.
 - Inline edits apply to the active session, not to the templates in `config.toml`. Edit the
   templates in the configurator's Boards screen.
 
@@ -1510,6 +1514,10 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 - Transparent overlay does not pan; it stays anchored to the live screen.
 - The canvas context menu includes **Reset Canvas Position** when board panning is enabled.
 - The same right-click menu exposes **Zoom** → **Zoom In**, **Zoom Out**, and **Reset Zoom**.
+- Submenus such as **Zoom**, **Boards**, and **Pages** open beside their row once the pointer
+  rests on it, or on click, and the menu stays open. Clicking the row again collapses it. From
+  the keyboard, → opens a submenu and ← or Esc returns to its row. The parent row shows the
+  submenu's current state, such as the zoom level or the active page.
 - Right-click menus expose **Paste**; shape menus also expose **Copy** for the selected annotations.
 - Pan offsets are stored per page, so each page keeps its own position.
 
@@ -1520,6 +1528,39 @@ wayscriber --active --mode whiteboard
 wayscriber --active --mode blueprint
 wayscriber --daemon --mode transparent
 ```
+
+#### Board paper patterns
+
+Each solid board can use `grid = { kind = "cartesian", spacing = 40 }` in its
+`[[boards.items]]` entry. Kinds are `none` (the default), `cartesian`, `isometric`
+(lines), and `isometric-dots`. Spacing is an integer from 8 through 200 logical
+pixels: a square edge for Cartesian paper or an equilateral triangle edge for
+isometric paper. Isometric lines run vertically and at ±30°. Out-of-range config
+values are clamped with a warning; invalid text or unknown kinds fail validation.
+Transparent boards disable the pattern while retaining its spacing.
+
+Open the board picker (`Ctrl+Shift+B`), select a solid board, and click its color
+swatch or press `Ctrl+C`, or run **Edit Board Paper** from the command palette.
+Choose a pattern, then drag the size slider or type a size.
+The preview is local to the editor; **Apply** changes the board and **Cancel** or
+Escape discards the draft. Tab cycles color, pattern, and spacing; arrow keys
+change the focused pattern and Enter applies. Switching to another board or
+renaming cancels the draft. The configurator's Boards page edits the templates
+used for new sessions; it does not replace an existing session's saved paper.
+
+Paper is anchored to board coordinates, follows pan and zoom, and appears behind
+all annotations. It cannot be selected or erased and does not participate in
+undo/redo. Clear Canvas keeps the paper. Thumbnails and canvas PNG/PDF exports use
+the same pattern; PDF margins retain the plain board color. Native region capture
+continues to use the frozen desktop. Lines and dots automatically contrast with
+the board, and fade at very small preview scales to avoid dense visual noise.
+
+Session format 7 saves appearance with drawings and preserves explicitly edited
+empty boards. Unchanged empty templates remain contentless for backup recovery.
+Older sessions use configured/template appearance; opening another named session
+resets missing appearance to those seeds. Clear Saved Data removes the saved
+appearance override as well as drawing data. A grid-only edit preserves the pen
+color; changing the background retains the board's existing auto-contrast policy.
 
 ### `[board]` - Legacy Board Modes
 
@@ -2175,6 +2216,8 @@ board_new = ["Ctrl+Shift+N"]
 board_duplicate = ["Ctrl+Shift+D"]
 board_delete = ["Ctrl+Shift+Delete"]
 board_picker = ["Ctrl+Shift+B"]
+# Edit the active board's paper (unbound by default; also in the command palette)
+board_paper_edit = []
 
 # Page navigation
 # Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).

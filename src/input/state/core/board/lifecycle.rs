@@ -8,7 +8,7 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(super) fn mark_board_surface_changed(&mut self) {
+    pub(in crate::input::state::core) fn mark_board_surface_changed(&mut self) {
         self.mark_board_surface_dirty();
         self.mark_session_dirty();
     }

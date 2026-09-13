@@ -21,10 +21,8 @@ mod save_as;
 #[cfg(test)]
 mod tests;
 
-use payload::{
-    PayloadCandidate, estimate_from_candidate, payload_candidate, payload_within_limit,
-    snapshot_without_history,
-};
+pub(super) use payload::snapshot_without_history;
+use payload::{PayloadCandidate, estimate_from_candidate, payload_candidate, payload_within_limit};
 use recovery::{
     remove_backup_file, remove_backup_recovery_marker_file, remove_clear_marker_file,
     remove_recoverable_artifacts_suppressed_by_clear_marker, remove_recovery_file,

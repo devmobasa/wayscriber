@@ -166,6 +166,7 @@ fn save_snapshot_rotates_backup_when_enabled() {
     let snapshot = SessionSnapshot {
         active_board_id: BOARD_ID_TRANSPARENT.to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: BOARD_ID_TRANSPARENT.to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],
@@ -213,6 +214,7 @@ fn save_snapshot_skips_backup_when_disabled() {
     let snapshot = SessionSnapshot {
         active_board_id: BOARD_ID_TRANSPARENT.to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: BOARD_ID_TRANSPARENT.to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],

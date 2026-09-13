@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub(crate) mod appearance;
 mod layout;
 mod panel;
 mod search;
@@ -202,6 +203,9 @@ pub struct BoardPickerLayout {
     pub page_count: usize,
     pub page_visible_count: usize,
     pub page_board_index: Option<usize>,
+    /// Output size the picker was laid out for.
+    pub screen_width: f64,
+    pub screen_height: f64,
 }
 
 fn truncate_search_label(value: &str, max_chars: usize) -> String {

@@ -7,6 +7,7 @@ use crate::backend::wayland::state::screen_image::{
 use crate::draw::Color;
 
 pub(super) struct CanvasEraserContext {
+    paper: Option<crate::draw::BoardPaper>,
     surface: Option<cairo::ImageSurface>,
     pattern: Option<cairo::SurfacePattern>,
     backdrop_cache_key: Option<u64>,
@@ -21,9 +22,46 @@ pub(super) struct CanvasEraserContext {
 }
 
 impl CanvasEraserContext {
+    pub(super) fn for_board(bg_color: Option<Color>) -> Self {
+        Self {
+            paper: None,
+            surface: None,
+            pattern: None,
+            backdrop_cache_key: None,
+            bg_color,
+            logical_to_image_scale_x: 1.0,
+            logical_to_image_scale_y: 1.0,
+            magnifier_source: crate::draw::SpotlightMagnifierSource::from_backdrop(
+                None,
+                bg_color.is_some(),
+            ),
+        }
+    }
+
+    pub(super) fn prepare_paper(
+        &mut self,
+        ctx: &cairo::Context,
+        grid: crate::domain::BoardGrid,
+    ) -> Result<()> {
+        if let Some(color) = self.bg_color {
+            if grid.kind == crate::domain::BoardGridKind::None {
+                ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+                ctx.paint()?;
+            } else {
+                let paper = crate::draw::BoardPaper::for_context(color, grid, ctx)?;
+                paper.paint(ctx)?;
+                self.paper = Some(paper);
+            }
+        }
+        Ok(())
+    }
     pub(super) fn replay_context(&self) -> crate::draw::EraserReplayContext<'_> {
         crate::draw::EraserReplayContext {
-            pattern: self.pattern.as_ref().map(|p| p as &cairo::Pattern),
+            pattern: self
+                .paper
+                .as_ref()
+                .map(crate::draw::BoardPaper::pattern)
+                .or_else(|| self.pattern.as_ref().map(|p| p as &cairo::Pattern)),
             surface: self.surface.as_ref(),
             backdrop_cache_key: self.backdrop_cache_key,
             bg_color: self.bg_color,
@@ -126,13 +164,13 @@ impl WaylandState {
         scale: i32,
         phys_width: u32,
         phys_height: u32,
+        paint_board: bool,
     ) -> Result<CanvasEraserContext> {
-        let mut eraser_surface: Option<cairo::ImageSurface> = None;
-        let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
-        let mut backdrop_cache_key: Option<u64> = None;
-        let mut eraser_bg_color: Option<Color> = None;
-        let mut logical_to_image_scale_x = 1.0;
-        let mut logical_to_image_scale_y = 1.0;
+        let eraser_surface;
+        let eraser_pattern;
+        let backdrop_cache_key;
+        let logical_to_image_scale_x;
+        let logical_to_image_scale_y;
 
         // One provenance answer decides both what is painted and what the loupe
         // may sample, so the pixels on screen and the availability reported can
@@ -215,21 +253,23 @@ impl WaylandState {
             eraser_pattern = Some(pattern);
             backdrop_cache_key = Some(cache_key);
         } else {
-            match self.input_state.boards.active_background() {
-                crate::input::BoardBackground::Solid(color) => {
-                    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-                    let _ = ctx.paint();
-                    eraser_bg_color = Some(*color);
-                }
-                crate::input::BoardBackground::Transparent => {}
+            let color = match self.input_state.boards.active_background() {
+                crate::input::BoardBackground::Solid(color) => Some(*color),
+                crate::input::BoardBackground::Transparent => None,
+            };
+            let mut backdrop = CanvasEraserContext::for_board(color);
+            if paint_board {
+                backdrop.prepare_paper(ctx, crate::domain::BoardGrid::default())?;
             }
+            return Ok(backdrop);
         }
 
         Ok(CanvasEraserContext {
+            paper: None,
             surface: eraser_surface,
             pattern: eraser_pattern,
             backdrop_cache_key,
-            bg_color: eraser_bg_color,
+            bg_color: None,
             logical_to_image_scale_x,
             logical_to_image_scale_y,
             magnifier_source,

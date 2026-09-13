@@ -1,4 +1,29 @@
 use super::super::color::ColorInput;
+
+#[test]
+fn board_grid_draft_preserves_patterns_and_rejects_invalid_spacing() {
+    let mut config = Config::default();
+    let mut boards = wayscriber::config::BoardsConfig::default();
+    boards.items[1].grid = wayscriber::config::BoardGridConfig {
+        kind: wayscriber::config::BoardGridKindConfig::IsometricDots,
+        spacing: 20,
+    };
+    config.boards = Some(boards);
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(
+        draft.boards.items[1].grid_kind,
+        wayscriber::domain::BoardGridKind::IsometricDots
+    );
+    assert_eq!(
+        draft.to_config(&config).unwrap().boards.unwrap().items[1].grid,
+        config.boards.as_ref().unwrap().items[1].grid
+    );
+    for invalid in ["", "-1", "7", "201", "20.5", "paper"] {
+        draft.boards.items[1].grid_spacing = invalid.to_string();
+        assert!(draft.to_config(&config).is_err(), "{invalid}");
+        assert_eq!(draft.boards.items[1].grid_spacing, invalid);
+    }
+}
 use super::super::fields::{
     ArrowStyleOption, DragMouseButton, DragToolField, DragToolOption, FontWeightOption,
     InputHudModeOption, InputHudPositionOption, OverrideOption, PdfFitModeOption,

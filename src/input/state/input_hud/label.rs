@@ -1,9 +1,9 @@
 //! Display labels for input HUD chips.
 //!
-//! Key names follow the vocabulary `docs/CONFIG.md` and the help overlay
-//! already print, so a chip always reads like the binding it would match.
-//! Arrows are the only deliberate divergence: the HUD is a visual surface, so
-//! `ArrowUp` renders as the glyph.
+//! A chip reads like the binding it would match: the key's config name run
+//! through the same [`crate::config::keybindings::key_display_name`] every
+//! other surface uses, so `ArrowUp` is the glyph on the HUD exactly as it is
+//! in the help overlay.
 
 use crate::input::events::Key;
 use crate::input::modifiers::Modifiers;
@@ -36,6 +36,11 @@ pub fn is_bare_modifier(key: Key) -> bool {
 /// Display name of a single key without modifiers, or `None` for keys the HUD
 /// deliberately skips (unmapped keysyms and control characters that would
 /// render as an empty or invisible chip).
+///
+/// The match names each key the way `config.toml` spells it; the shared
+/// display mapping then turns the named keys into their glyph or short name,
+/// so this surface can never drift from the rest of the app. `Tab` and the
+/// bare modifiers are HUD-only chips no binding can carry, and pass through.
 pub(crate) fn key_display_name(key: Key) -> Option<String> {
     let name = match key {
         Key::Char(c) => {
@@ -44,15 +49,15 @@ pub(crate) fn key_display_name(key: Key) -> Option<String> {
             }
             return Some(c.to_uppercase().to_string());
         }
-        Key::Escape => "Esc",
-        Key::Return => "Enter",
+        Key::Escape => "Escape",
+        Key::Return => "Return",
         Key::Backspace => "Backspace",
         Key::Tab => "Tab",
         Key::Space => "Space",
-        Key::Up => "\u{2191}",
-        Key::Down => "\u{2193}",
-        Key::Left => "\u{2190}",
-        Key::Right => "\u{2192}",
+        Key::Up => "ArrowUp",
+        Key::Down => "ArrowDown",
+        Key::Left => "ArrowLeft",
+        Key::Right => "ArrowRight",
         Key::Delete => "Delete",
         Key::Home => "Home",
         Key::End => "End",
@@ -77,7 +82,7 @@ pub(crate) fn key_display_name(key: Key) -> Option<String> {
         Key::F12 => "F12",
         Key::Unknown => return None,
     };
-    Some(name.to_string())
+    Some(crate::config::keybindings::key_display_name(name).to_string())
 }
 
 /// Chord label for a key press: the held modifiers in canonical order plus the
@@ -141,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn special_keys_use_the_help_overlay_names_and_arrow_glyphs() {
+    fn special_keys_use_the_shared_display_names_and_arrow_glyphs() {
         assert_eq!(
             input_hud_key_label(Key::Space, mods(false, false, false, false)).as_deref(),
             Some("Space")
@@ -157,6 +162,23 @@ mod tests {
         assert_eq!(
             input_hud_key_label(Key::Left, mods(false, false, false, false)).as_deref(),
             Some("\u{2190}")
+        );
+        // The chip agrees with what a binding on the same key would show.
+        for (key, name) in [
+            (Key::PageUp, "PageUp"),
+            (Key::Delete, "Delete"),
+            (Key::Backspace, "Backspace"),
+            (Key::Return, "Return"),
+        ] {
+            assert_eq!(
+                input_hud_key_label(key, mods(false, false, false, false)).as_deref(),
+                Some(crate::config::keybindings::key_display_name(name))
+            );
+        }
+        // Tab is a HUD-only chip: no binding can carry it, so it stays a word.
+        assert_eq!(
+            input_hud_key_label(Key::Tab, mods(false, false, false, false)).as_deref(),
+            Some("Tab")
         );
     }
 

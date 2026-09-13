@@ -128,3 +128,7 @@ pub(crate) fn default_board_delete() -> Vec<String> {
 pub(crate) fn default_board_picker() -> Vec<String> {
     vec!["Ctrl+Shift+B".to_string()]
 }
+
+pub(crate) fn default_board_paper_edit() -> Vec<String> {
+    Vec::new()
+}

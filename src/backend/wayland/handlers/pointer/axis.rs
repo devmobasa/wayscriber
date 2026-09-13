@@ -180,6 +180,10 @@ impl WaylandState {
         if self.try_handle_help_axis(scroll_direction) {
             return;
         }
+        if try_handle_board_appearance_axis(&mut self.input_state, event.position, scroll_direction)
+        {
+            return;
+        }
         if try_handle_board_picker_page_panel_axis(
             &mut self.input_state,
             event.position,
@@ -330,6 +334,29 @@ impl WaylandState {
     }
 }
 
+/// Whether a surface that deliberately stays open over the board picker is
+/// covering it: a page row's context menu, or the color picker on the paper
+/// sheet's draft. Either owns the wheel, so nothing in the picker may scroll
+/// or step out from under it. The modal registry swallows the tick afterwards.
+fn board_picker_wheel_is_covered(input_state: &InputState) -> bool {
+    input_state.is_context_menu_open() || input_state.is_color_picker_popup_open()
+}
+
+/// The paper sheet steps its size with the wheel and keeps the page panel
+/// behind it from scrolling.
+fn try_handle_board_appearance_axis(
+    input_state: &mut InputState,
+    position: (f64, f64),
+    scroll_direction: i32,
+) -> bool {
+    if !input_state.is_board_picker_open() || board_picker_wheel_is_covered(input_state) {
+        return false;
+    }
+    let x = position.0.round() as i32;
+    let y = position.1.round() as i32;
+    input_state.board_appearance_wheel(x, y, scroll_direction)
+}
+
 fn try_handle_board_picker_page_panel_axis(
     input_state: &mut InputState,
     position: (f64, f64),
@@ -338,9 +365,7 @@ fn try_handle_board_picker_page_panel_axis(
     if !input_state.is_board_picker_open() || scroll_direction == 0 {
         return false;
     }
-    // A page context menu is the one surface that deliberately stays open over
-    // the picker, so it is also the one that can be scrolled out from under.
-    if input_state.is_context_menu_open() {
+    if board_picker_wheel_is_covered(input_state) {
         return false;
     }
     let x = position.0.round() as i32;
@@ -401,6 +426,70 @@ mod tests {
 
         let layout = *input_state.board_picker_layout().expect("layout");
         assert_eq!(layout.page_scroll_row, 1);
+    }
+
+    #[test]
+    fn the_paper_color_picker_takes_the_wheel_from_the_picker_under_it() {
+        // The color picker opened from the paper sheet is the other surface
+        // that stays open over the board picker, so the same rule applies to
+        // both board-picker wheel routes before the registry swallows the tick.
+        let mut input_state = make_test_input_state();
+        input_state.switch_board_force("whiteboard");
+        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        let board_index = input_state
+            .board_picker_page_panel_board_index()
+            .expect("page panel board index");
+        set_board_page_count(&mut input_state, board_index, 80);
+        update_picker_layout(&mut input_state);
+        let layout = *input_state.board_picker_layout().expect("layout");
+        let page_panel = (layout.page_viewport_x + 1.0, layout.page_viewport_y + 1.0);
+        input_state.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+        input_state
+            .board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+        assert!(
+            input_state.open_color_picker_popup_for_board_paper_with_measurer(
+                &crate::draw::TextMeasurer::default()
+            )
+        );
+        assert!(input_state.is_board_picker_open());
+        let frame = input_state.board_appearance_frame().expect("sheet frame");
+        let row = input_state.board_appearance_size_row().expect("size row");
+        let (rx, ry, rw, rh) = frame.to_surface(row.track);
+        let size_row = (rx + rw / 2.0, ry + rh / 2.0);
+        let spacing = input_state.board_appearance_edit().unwrap().spacing.clone();
+
+        assert!(
+            !try_handle_board_appearance_axis(&mut input_state, size_row, 1),
+            "the sheet's size control is under the popup"
+        );
+        assert!(
+            !try_handle_board_picker_page_panel_axis(&mut input_state, page_panel, 1),
+            "the page panel is under the popup"
+        );
+        assert!(
+            input_state.modal_owns_wheel(),
+            "the registry swallows the tick after both routes decline it"
+        );
+        update_picker_layout(&mut input_state);
+        let layout = *input_state.board_picker_layout().expect("layout");
+        assert_eq!(layout.page_scroll_row, 0, "the list behind must not move");
+        assert_eq!(
+            input_state.board_appearance_edit().unwrap().spacing,
+            spacing
+        );
+
+        // Cancelling the popup hands the wheel back to the sheet.
+        input_state.close_color_picker_popup(true);
+        assert!(try_handle_board_appearance_axis(
+            &mut input_state,
+            size_row,
+            1
+        ));
+        assert_ne!(
+            input_state.board_appearance_edit().unwrap().spacing,
+            spacing
+        );
     }
 
     #[test]

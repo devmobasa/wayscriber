@@ -6,6 +6,17 @@ use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
+    pub(super) fn handle_boards_grid_kind_changed(
+        &mut self,
+        index: usize,
+        value: wayscriber::domain::BoardGridKind,
+    ) -> Vec<Effect> {
+        if let Some(item) = self.draft.boards.items.get_mut(index) {
+            item.grid_kind = value;
+        }
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
     pub(super) fn handle_boards_add_item(&mut self) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         let new_item = self.draft.boards.new_item();
@@ -99,6 +110,7 @@ impl ConfiguratorApp {
         let old_effective_id = self.draft.boards.effective_id_for_index(index);
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             match field {
+                BoardItemTextField::GridSpacing => item.grid_spacing = value,
                 BoardItemTextField::Id => {
                     let trimmed = value.trim();
                     let new_effective_id = if trimmed.is_empty() {

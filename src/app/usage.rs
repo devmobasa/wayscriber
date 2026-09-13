@@ -13,10 +13,17 @@ fn default_action_bindings() -> HashMap<Action, Vec<Shortcut>> {
     }
 }
 
+/// Bindings as the config file spells them.
+///
+/// The terminal control listing is what a user copies into `config.toml`, so it
+/// stays on the canonical [`std::fmt::Display`] form: raw key names
+/// (`ArrowLeft`), and `>` rather than `then` between sequence steps. The glyph
+/// labels ([`Shortcut::display_label`]) belong to the on-screen surfaces, which
+/// can render a glyph the terminal has no font for.
 fn action_binding_labels(bindings: &HashMap<Action, Vec<Shortcut>>, action: Action) -> Vec<String> {
     bindings
         .get(&action)
-        .map(|list| list.iter().map(Shortcut::display_label).collect())
+        .map(|list| list.iter().map(Shortcut::to_string).collect())
         .unwrap_or_default()
 }
 
@@ -31,7 +38,7 @@ fn action_primary_binding_label(
     bindings
         .get(&action)
         .and_then(|list| list.first())
-        .map(Shortcut::display_label)
+        .map(Shortcut::to_string)
 }
 
 fn color_binding_labels(bindings: &HashMap<Action, Vec<Shortcut>>) -> String {

@@ -6,6 +6,7 @@ pub use backdrop_probe::painted_luminance as painted_background_luminance;
 pub use backdrop_probe::perceived_luminance;
 mod background;
 mod blur;
+mod board_grid;
 mod context;
 mod highlight;
 mod image;
@@ -20,6 +21,7 @@ mod types;
 
 pub use background::{fill_transparent, render_board_background};
 pub use blur::{BlurRectParams, render_blur_rect};
+pub use board_grid::{BoardPaper, board_paper_device_scale};
 pub use context::{RenderCaches, RenderCtx};
 pub use highlight::render_click_highlight;
 #[allow(unused_imports)]

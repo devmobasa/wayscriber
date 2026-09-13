@@ -2,6 +2,7 @@
 
 mod arrow;
 mod board;
+mod board_grid;
 mod boards;
 mod capture;
 mod click_highlight;
@@ -29,6 +30,7 @@ pub use arrow::{
     ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN, ArrowConfig,
 };
 pub use board::BoardConfig;
+pub use board_grid::{BoardGridConfig, BoardGridKindConfig};
 pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig};
 pub use capture::{
     CaptureConfig, DEFAULT_OCR_LANGUAGES, RegionCaptureConfig, validate_capture_format,

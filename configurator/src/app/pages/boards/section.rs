@@ -94,6 +94,10 @@ fn build_section(
         .set_visible(layout.expanded && layout.background_kind == BoardBackgroundOption::Color);
     section.append(&background.row);
 
+    let (grid_kind, grid_spacing) = super::grid::build(index, layout, sender);
+    section.append(&grid_kind);
+    section.append(&grid_spacing.row);
+
     let pen_enabled = adw::SwitchRow::builder()
         .title("Override default pen color")
         .active(layout.pen_enabled)
@@ -148,6 +152,20 @@ fn build_section(
         set_text_blocked(&id.row, &id.handler, values.id);
         set_text_blocked(&name.row, &name.handler, values.name);
         background.refresh(&values.background);
+        set_text_blocked(
+            &grid_spacing.row,
+            &grid_spacing.handler,
+            values.grid_spacing,
+        );
+        let valid = values
+            .grid_spacing
+            .parse::<i64>()
+            .is_ok_and(|s| (8..=200).contains(&s));
+        if valid {
+            grid_spacing.row.remove_css_class("error");
+        } else {
+            grid_spacing.row.add_css_class("error");
+        }
         pen.refresh(&values.pen);
     });
 

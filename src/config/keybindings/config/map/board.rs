@@ -35,6 +35,7 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.board.board_duplicate, Action::BoardDuplicate)?;
         inserter.insert_all(&self.board.board_delete, Action::BoardDelete)?;
         inserter.insert_all(&self.board.board_picker, Action::BoardPicker)?;
+        inserter.insert_all(&self.board.board_paper_edit, Action::BoardPaperEdit)?;
         Ok(())
     }
 }

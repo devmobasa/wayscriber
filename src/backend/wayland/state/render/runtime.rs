@@ -15,10 +15,12 @@ pub(super) enum UiEffect {
     ToolPreview,
     ShapeMeasureBadge,
     OcrScan,
+    ContextMenu,
+    ContextSubmenu,
 }
 
 impl UiEffect {
-    const COUNT: usize = 11;
+    const COUNT: usize = 13;
 
     const fn index(self) -> usize {
         self as usize
@@ -284,6 +286,8 @@ mod tests {
             UiEffect::ToolPreview,
             UiEffect::ShapeMeasureBadge,
             UiEffect::OcrScan,
+            UiEffect::ContextMenu,
+            UiEffect::ContextSubmenu,
         ];
         let mut history = UiDamageHistory::default();
 

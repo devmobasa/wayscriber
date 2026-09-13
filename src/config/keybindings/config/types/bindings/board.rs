@@ -79,6 +79,9 @@ pub struct BoardKeybindingsConfig {
 
     #[serde(default = "default_board_picker")]
     pub board_picker: Vec<String>,
+
+    #[serde(default = "default_board_paper_edit")]
+    pub board_paper_edit: Vec<String>,
 }
 
 impl Default for BoardKeybindingsConfig {
@@ -109,6 +112,7 @@ impl Default for BoardKeybindingsConfig {
             board_duplicate: default_board_duplicate(),
             board_delete: default_board_delete(),
             board_picker: default_board_picker(),
+            board_paper_edit: default_board_paper_edit(),
         }
     }
 }

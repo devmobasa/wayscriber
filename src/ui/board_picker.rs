@@ -7,6 +7,7 @@ use super::constants::{
     TEXT_PRIMARY, TEXT_TERTIARY,
 };
 
+mod appearance;
 mod helpers;
 mod page_panel;
 mod palette;
@@ -186,6 +187,7 @@ pub(crate) fn render_board_picker_with_halo(
         text_halo_enabled,
     );
 
+    appearance::render(engine, ctx, input_state, screen_width, screen_height);
     let _ = ctx.restore();
 }
 

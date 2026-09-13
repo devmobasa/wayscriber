@@ -1,9 +1,9 @@
 use super::super::base::InputState;
 use crate::draw::Color;
 use crate::draw::TextMeasurer;
+use crate::input::BoardBackground;
 use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::{Toast, ToastPriority};
-use crate::input::{BoardBackground, runtime_contrast_pen_color};
 
 impl InputState {
     pub(crate) fn reset_active_canvas_position(&mut self) -> bool {
@@ -45,8 +45,7 @@ impl InputState {
     }
 
     pub(crate) fn set_board_background_color(&mut self, index: usize, color: Color) -> bool {
-        let is_active = self.boards.active_index() == index;
-        let Some(board) = self.boards.board_state_mut(index) else {
+        let Some(board) = self.boards.board_states().get(index) else {
             return false;
         };
         if board.spec.background.is_transparent() {
@@ -57,22 +56,9 @@ impl InputState {
             );
             return false;
         }
-        if matches!(board.spec.background, BoardBackground::Solid(existing) if existing == color) {
-            return false;
-        }
-
-        board.spec.background = BoardBackground::Solid(color);
-        let active_pen_color = if board.spec.auto_adjust_pen {
-            board.spec.default_pen_color = Some(runtime_contrast_pen_color(color));
-            is_active.then(|| board.spec.effective_pen_color().unwrap_or(color))
-        } else {
-            None
-        };
-        if let Some(color) = active_pen_color {
-            self.set_pen_color_from_board(color);
-        }
-        self.mark_board_surface_dirty();
-        true
+        let mut appearance = crate::input::boards::BoardAppearance::from_spec(&board.spec);
+        appearance.background = BoardBackground::Solid(color);
+        self.apply_board_appearance_value(index, appearance)
     }
 
     pub(crate) fn request_board_pin_toggle(&mut self, index: usize) -> bool {

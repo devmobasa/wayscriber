@@ -6,7 +6,16 @@ use crate::domain::Action;
 const MAX_VISIBLE_PAGES: usize = 8;
 
 impl InputState {
-    pub(super) fn pages_menu_entries(&self) -> Vec<ContextMenuEntry> {
+    /// The active page position, shown on the parent row of the pages submenu.
+    pub(super) fn pages_summary(&self) -> String {
+        format!(
+            "Page {}/{}",
+            self.boards.active_page_index() + 1,
+            self.boards.page_count().max(1)
+        )
+    }
+
+    pub(super) fn pages_menu_entries(&self, with_header: bool) -> Vec<ContextMenuEntry> {
         let page_count = self.boards.page_count();
         let page_index = self.boards.active_page_index();
         let can_prev = page_index > 0;
@@ -15,19 +24,18 @@ impl InputState {
         let mut entries = Vec::new();
 
         // Current page indicator
-        let board_name = self.boards.active_board_name();
-        entries.push(ContextMenuEntry::new(
-            format!(
-                "{} - Page {}/{}",
-                board_name,
-                page_index + 1,
-                page_count.max(1)
-            ),
-            None::<String>,
-            false,
-            true,
-            None,
-        ));
+        if with_header {
+            entries.push(ContextMenuEntry::new(
+                format!(
+                    "{} - {}",
+                    self.boards.active_board_name(),
+                    self.pages_summary()
+                ),
+                None::<String>,
+                true,
+                None,
+            ));
+        }
 
         // List pages for quick switching (limited to MAX_VISIBLE_PAGES)
         // Window around the active page index
@@ -40,14 +48,14 @@ impl InputState {
         };
         let end = start + show_count;
 
-        // Show "above" indicator if there are pages before the window
+        // Pages outside the window are reachable through the board picker's
+        // page panel, like the boards submenu's overflow rows.
         if start > 0 {
             entries.push(ContextMenuEntry::new(
-                format!("  ... {} above", start),
-                None::<String>,
+                format!("  ... {} above (open picker)", start),
+                self.shortcut_for_action(Action::BoardPicker),
                 false,
-                true,
-                None,
+                Some(MenuCommand::OpenBoardPicker),
             ));
         }
 
@@ -61,20 +69,17 @@ impl InputState {
             entries.push(ContextMenuEntry::new(
                 label,
                 None::<String>,
-                false,
                 is_active,
                 Some(MenuCommand::SwitchToPage(i)),
             ));
         }
 
-        // Show "below" indicator if there are pages after the window
         if end < page_count {
             entries.push(ContextMenuEntry::new(
-                format!("  ... {} below", page_count - end),
-                None::<String>,
+                format!("  ... {} below (open picker)", page_count - end),
+                self.shortcut_for_action(Action::BoardPicker),
                 false,
-                true,
-                None,
+                Some(MenuCommand::OpenBoardPicker),
             ));
         }
 
@@ -82,14 +87,12 @@ impl InputState {
         entries.push(ContextMenuEntry::new(
             "Previous Page",
             self.shortcut_for_action(Action::PagePrev),
-            false,
             !can_prev,
             Some(MenuCommand::PagePrev),
         ));
         entries.push(ContextMenuEntry::new(
             "Next Page",
             self.shortcut_for_action(Action::PageNext),
-            false,
             !can_next,
             Some(MenuCommand::PageNext),
         ));
@@ -99,20 +102,17 @@ impl InputState {
             "New Page",
             self.shortcut_for_action(Action::PageNew),
             false,
-            false,
             Some(MenuCommand::PageNew),
         ));
         entries.push(ContextMenuEntry::new(
             "Duplicate Page",
             self.shortcut_for_action(Action::PageDuplicate),
             false,
-            false,
             Some(MenuCommand::PageDuplicate),
         ));
         entries.push(ContextMenuEntry::new(
             "Delete Page",
             self.shortcut_for_action(Action::PageDelete),
-            false,
             false,
             Some(MenuCommand::PageDelete),
         ));

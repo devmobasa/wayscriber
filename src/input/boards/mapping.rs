@@ -32,6 +32,11 @@ impl BoardSpec {
             id: item.id.clone(),
             name: item.name.clone(),
             background: board_background_from_config(&item.background),
+            grid: if item.background.is_transparent() {
+                crate::domain::BoardGrid::from(item.grid).disabled()
+            } else {
+                item.grid.into()
+            },
             default_pen_color: item.default_pen_color.as_ref().map(board_color_from_config),
             auto_adjust_pen: item.auto_adjust_pen,
             persist: item.persist,
@@ -118,6 +123,7 @@ impl BoardManager {
                     id: board.spec.id.clone(),
                     name: board.spec.name.clone(),
                     background: board_background_to_config(&board.spec.background),
+                    grid: board.spec.grid.into(),
                     default_pen_color: board.spec.default_pen_color.map(board_color_to_config),
                     auto_adjust_pen: board.spec.auto_adjust_pen,
                     persist: board.spec.persist,
@@ -161,6 +167,7 @@ fn default_overlay_board() -> BoardState {
         id: BOARD_ID_TRANSPARENT.to_string(),
         name: "Overlay".to_string(),
         background: BoardBackground::Transparent,
+        grid: Default::default(),
         default_pen_color: None,
         auto_adjust_pen: false,
         persist: true,
@@ -202,6 +209,7 @@ fn pick_template(boards: &[BoardState]) -> BoardSpec {
                 b: 0.992,
                 a: 1.0,
             }),
+            grid: Default::default(),
             default_pen_color: Some(PALETTE_BLACK),
             auto_adjust_pen: true,
             persist: true,

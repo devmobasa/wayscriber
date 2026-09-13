@@ -43,6 +43,10 @@ impl Default for SpotlightPassSnapshot {
 pub enum CanvasExportBackdropSnapshot {
     Transparent,
     Solid(Color),
+    BoardPaper {
+        color: Color,
+        grid: crate::domain::BoardGrid,
+    },
     PersistedImage {
         data: Arc<[u8]>,
         width: i32,
@@ -54,6 +58,13 @@ pub enum CanvasExportBackdropSnapshot {
 }
 
 impl CanvasExportBackdropSnapshot {
+    pub fn board_paper(color: Color, grid: crate::domain::BoardGrid) -> Self {
+        if grid.kind == crate::domain::BoardGridKind::None {
+            Self::Solid(color)
+        } else {
+            Self::BoardPaper { color, grid }
+        }
+    }
     /// Loupe availability for this backdrop, answered without decoding it.
     ///
     /// Mirrors what [`ExportBackdrop::new`] will produce for the same variant,
@@ -62,7 +73,9 @@ impl CanvasExportBackdropSnapshot {
     pub(crate) fn magnifier_source(&self) -> SpotlightMagnifierSource {
         match self {
             Self::Transparent => SpotlightMagnifierSource::from_backdrop(None, false),
-            Self::Solid(_) => SpotlightMagnifierSource::from_backdrop(None, true),
+            Self::Solid(_) | Self::BoardPaper { .. } => {
+                SpotlightMagnifierSource::from_backdrop(None, true)
+            }
             Self::PersistedImage { .. } => SpotlightMagnifierSource::immutable_raster(),
         }
     }
@@ -183,8 +196,10 @@ pub(crate) fn paint_pdf_page_background(
     width: f64,
     height: f64,
 ) {
-    let CanvasExportBackdropSnapshot::Solid(color) = page.backdrop else {
-        return;
+    let color = match page.backdrop {
+        CanvasExportBackdropSnapshot::Solid(color)
+        | CanvasExportBackdropSnapshot::BoardPaper { color, .. } => color,
+        _ => return,
     };
     let _ = ctx.save();
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -229,7 +244,8 @@ impl ExportBackdrop {
                 logical_image_origin_y: 0.0,
                 _region_source: None,
             }),
-            CanvasExportBackdropSnapshot::Solid(color) => Ok(Self {
+            CanvasExportBackdropSnapshot::Solid(color)
+            | CanvasExportBackdropSnapshot::BoardPaper { color, .. } => Ok(Self {
                 surface: None,
                 pattern: None,
                 bg_color: Some(*color),
@@ -402,7 +418,23 @@ fn draw_canvas_page_contents(
     if paint_backdrop {
         backdrop.paint(ctx);
     }
-    let replay_ctx = backdrop.replay_context();
+    let paper = match page.backdrop {
+        CanvasExportBackdropSnapshot::BoardPaper { color, grid } => Some(
+            crate::draw::BoardPaper::for_context(color, grid, ctx).map_err(|err| {
+                CaptureError::ImageError(format!("Failed to render board paper: {err}"))
+            })?,
+        ),
+        _ => None,
+    };
+    if let Some(paper) = &paper {
+        paper.paint(ctx).map_err(|err| {
+            CaptureError::ImageError(format!("Failed to paint board paper: {err}"))
+        })?;
+    }
+    let mut replay_ctx = backdrop.replay_context();
+    if let Some(paper) = &paper {
+        replay_ctx.pattern = Some(paper.pattern());
+    }
     // What text should contrast with when the target cannot be read back. A PDF
     // page is a vector surface with no pixels to probe, so without this a board
     // exported to PDF would pick a different halo from the same board on screen.

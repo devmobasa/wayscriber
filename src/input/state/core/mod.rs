@@ -88,9 +88,9 @@ pub(crate) use captured_image::BoardPasteTarget;
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;
 pub use color_picker_popup::{
-    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupPanel, ColorPickerPopupState,
-    POPUP_HEIGHT as COLOR_PICKER_POPUP_HEIGHT, POPUP_WIDTH as COLOR_PICKER_POPUP_WIDTH,
-    PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE,
+    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupLayoutOptions,
+    ColorPickerPopupPanel, ColorPickerPopupState, POPUP_HEIGHT as COLOR_PICKER_POPUP_HEIGHT,
+    POPUP_WIDTH as COLOR_PICKER_POPUP_WIDTH, PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE,
     RECENT_SWATCH_COUNT as COLOR_PICKER_RECENT_SWATCH_COUNT,
     RECENT_SWATCH_SIZE as COLOR_PICKER_RECENT_SWATCH_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,
 };
@@ -116,8 +116,10 @@ pub use ime::ImePreedit;
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
 pub use menus::{
-    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
+    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuLayout, ContextMenuState,
+    ContextSubmenu, MenuCommand, SubmenuSide,
 };
+pub use menus::{SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY};
 pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,

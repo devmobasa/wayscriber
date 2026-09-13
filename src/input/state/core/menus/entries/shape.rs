@@ -1,5 +1,5 @@
 use super::super::super::base::InputState;
-use super::super::types::{ContextMenuEntry, MenuCommand};
+use super::super::types::{ContextMenuEntry, ContextMenuKind, MenuCommand};
 use crate::domain::Action;
 use crate::draw::{Shape, ShapeId};
 
@@ -24,7 +24,6 @@ impl InputState {
                 "Select This Shape",
                 Some("Alt+Click"), // Mouse action, not configurable
                 false,
-                false,
                 Some(MenuCommand::SelectHoveredShape),
             ));
         }
@@ -32,14 +31,12 @@ impl InputState {
         entries.push(ContextMenuEntry::new(
             "Delete",
             self.shortcut_for_action(Action::DeleteSelection),
-            false,
             all_locked,
             Some(MenuCommand::Delete),
         ));
         entries.push(ContextMenuEntry::new(
             "Copy",
             self.shortcut_for_action(Action::CopySelection),
-            false,
             all_locked,
             Some(MenuCommand::Copy),
         ));
@@ -47,13 +44,11 @@ impl InputState {
             "Paste",
             self.shortcut_for_action(Action::PasteSelection),
             false,
-            false,
             Some(MenuCommand::Paste),
         ));
         entries.push(ContextMenuEntry::new(
             "Duplicate",
             self.shortcut_for_action(Action::DuplicateSelection),
-            false,
             false,
             Some(MenuCommand::Duplicate),
         ));
@@ -61,20 +56,17 @@ impl InputState {
             "Move to Front",
             self.shortcut_for_action(Action::MoveSelectionToFront),
             false,
-            false,
             Some(MenuCommand::MoveToFront),
         ));
         entries.push(ContextMenuEntry::new(
             "Move to Back",
             self.shortcut_for_action(Action::MoveSelectionToBack),
             false,
-            false,
             Some(MenuCommand::MoveToBack),
         ));
         entries.push(ContextMenuEntry::new(
             if locked { "Unlock" } else { "Lock" },
             None::<String>, // Lock/unlock not a configurable keybinding
-            false,
             false,
             Some(if locked {
                 MenuCommand::Unlock
@@ -86,7 +78,6 @@ impl InputState {
             "Properties",
             self.shortcut_for_action(Action::ToggleSelectionProperties),
             false,
-            false,
             Some(MenuCommand::Properties),
         ));
         if self.boards.pan_enabled() && !self.board_is_transparent() {
@@ -94,22 +85,17 @@ impl InputState {
             entries.push(ContextMenuEntry::new(
                 "Reset Canvas Position",
                 Some("Space+Drag"),
-                false,
                 reset_disabled,
                 Some(MenuCommand::ResetCanvasPosition),
             ));
         }
-        entries.push(ContextMenuEntry::new(
-            "Zoom",
-            None::<String>,
-            true,
-            false,
-            Some(MenuCommand::OpenZoomMenu),
-        ));
+        entries.push(
+            ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
+                .with_submenu(ContextMenuKind::Zoom),
+        );
         entries.push(ContextMenuEntry::new(
             "Radial Menu",
             self.shortcut_for_action(Action::ToggleRadialMenu),
-            false,
             false,
             Some(MenuCommand::OpenRadialMenu),
         ));
@@ -126,7 +112,6 @@ impl InputState {
                     entries.push(ContextMenuEntry::new(
                         label,
                         None::<String>, // Edit text not a configurable keybinding
-                        false,
                         drawn.locked,
                         Some(MenuCommand::EditText),
                     ));

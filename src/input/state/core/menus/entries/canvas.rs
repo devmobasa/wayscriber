@@ -1,5 +1,5 @@
 use super::super::super::base::InputState;
-use super::super::types::{ContextMenuEntry, MenuCommand};
+use super::super::types::{ContextMenuEntry, ContextMenuKind, MenuCommand};
 use crate::domain::Action;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
@@ -29,13 +29,11 @@ impl InputState {
             "Paste",
             self.shortcut_for_action(Action::PasteSelection),
             false,
-            false,
             Some(MenuCommand::Paste),
         ));
         entries.push(ContextMenuEntry::new(
             clear_label,
             self.shortcut_for_action(Action::ClearCanvas),
-            false,
             clear_disabled,
             Some(MenuCommand::ClearAll),
         ));
@@ -44,39 +42,29 @@ impl InputState {
             entries.push(ContextMenuEntry::new(
                 "Reset Canvas Position",
                 Some("Space+Drag"),
-                false,
                 reset_disabled,
                 Some(MenuCommand::ResetCanvasPosition),
             ));
         }
-        entries.push(ContextMenuEntry::new(
-            "Zoom",
-            None::<String>,
-            true,
-            false,
-            Some(MenuCommand::OpenZoomMenu),
-        ));
+        // Parent rows show their submenu's current state in the shortcut column.
+        entries.push(
+            ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
+                .with_submenu(ContextMenuKind::Zoom),
+        );
         entries.push(ContextMenuEntry::new(
             "Toggle Highlight (tool + click)",
             self.shortcut_for_action(Action::ToggleHighlightTool),
             false,
-            false,
             Some(MenuCommand::ToggleHighlightTool),
         ));
-        entries.push(ContextMenuEntry::new(
-            "Boards",
-            None::<String>,
-            true,
-            false,
-            Some(MenuCommand::OpenBoardsMenu),
-        ));
-        entries.push(ContextMenuEntry::new(
-            "Pages",
-            None::<String>,
-            true,
-            false,
-            Some(MenuCommand::OpenPagesMenu),
-        ));
+        entries.push(
+            ContextMenuEntry::new("Boards", Some(self.boards_summary()), false, None)
+                .with_submenu(ContextMenuKind::Boards),
+        );
+        entries.push(
+            ContextMenuEntry::new("Pages", Some(self.pages_summary()), false, None)
+                .with_submenu(ContextMenuKind::Pages),
+        );
 
         // Quick board switching options
         let current_id = self.board_id();
@@ -89,7 +77,6 @@ impl InputState {
                     "Switch to Whiteboard",
                     self.shortcut_for_action(Action::ToggleWhiteboard),
                     false,
-                    false,
                     Some(MenuCommand::SwitchToWhiteboard),
                 ));
             }
@@ -97,7 +84,6 @@ impl InputState {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Blackboard",
                     self.shortcut_for_action(Action::ToggleBlackboard),
-                    false,
                     false,
                     Some(MenuCommand::SwitchToBlackboard),
                 ));
@@ -107,7 +93,6 @@ impl InputState {
                 "Return to Transparent",
                 self.shortcut_for_action(Action::ReturnToTransparent),
                 false,
-                false,
                 Some(MenuCommand::ReturnToTransparent),
             ));
             if current_id == BOARD_ID_WHITEBOARD && has_blackboard {
@@ -115,14 +100,12 @@ impl InputState {
                     "Switch to Blackboard",
                     self.shortcut_for_action(Action::ToggleBlackboard),
                     false,
-                    false,
                     Some(MenuCommand::SwitchToBlackboard),
                 ));
             } else if current_id == BOARD_ID_BLACKBOARD && has_whiteboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Whiteboard",
                     self.shortcut_for_action(Action::ToggleWhiteboard),
-                    false,
                     false,
                     Some(MenuCommand::SwitchToWhiteboard),
                 ));
@@ -133,13 +116,11 @@ impl InputState {
             "Command Palette",
             self.shortcut_for_action(Action::ToggleCommandPalette),
             false,
-            false,
             Some(MenuCommand::OpenCommandPalette),
         ));
         entries.push(ContextMenuEntry::new(
             "Radial Menu",
             self.shortcut_for_action(Action::ToggleRadialMenu),
-            false,
             false,
             Some(MenuCommand::OpenRadialMenu),
         ));
@@ -148,13 +129,11 @@ impl InputState {
             "Help",
             self.shortcut_for_action(Action::ToggleHelp),
             false,
-            false,
             Some(MenuCommand::ToggleHelp),
         ));
         entries.push(ContextMenuEntry::new(
             "Open Config File",
             None::<String>,
-            false,
             false,
             Some(MenuCommand::OpenConfigFile),
         ));

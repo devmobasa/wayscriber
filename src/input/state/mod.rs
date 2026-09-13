@@ -22,6 +22,7 @@ mod tests;
 pub(crate) use actions::key_press::bindings::key_to_action_label_for_test;
 pub(crate) use core::board_picker::BoardPickerEditMode;
 pub(crate) use core::board_picker::BoardPickerFocus;
+pub(crate) use core::board_picker::appearance::AppearanceField;
 pub(crate) use core::board_picker::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
@@ -34,10 +35,11 @@ pub use core::{
     BLOCKED_ACTION_DURATION_MS, BoardPickerCursorHint, BoardPickerLayout,
     COLOR_PICKER_POPUP_HEIGHT, COLOR_PICKER_POPUP_WIDTH, COLOR_PICKER_PREVIEW_SIZE,
     COLOR_PICKER_RECENT_SWATCH_COUNT, COLOR_PICKER_RECENT_SWATCH_SIZE, COMMAND_PALETTE_MAX_VISIBLE,
-    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState, CommandPaletteCursorHint,
-    CommandPaletteListRow, CommandPaletteState, CompassDir, CompositorCapabilities,
-    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, DesktopEnvironment,
-    DrawingState, EyedropperCaptureSource, EyedropperUiState, FontPickerFilter, FontPickerLayout,
+    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupLayoutOptions,
+    ColorPickerPopupState, CommandPaletteCursorHint, CommandPaletteListRow, CommandPaletteState,
+    CompassDir, CompositorCapabilities, ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind,
+    ContextMenuLayout, ContextMenuState, ContextSubmenu, DesktopEnvironment, DrawingState,
+    EyedropperCaptureSource, EyedropperUiState, FontPickerFilter, FontPickerLayout,
     FontPickerResults, FontPickerRow, FontPickerTarget, HelpOverlayClick, HelpOverlayCursorHint,
     HelpOverlayReleaseOutcome, ImePreedit, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PickerDrag,
@@ -46,11 +48,12 @@ pub use core::{
     RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent, RadialRingSwatch,
     RadialSegmentId, RadialSlice, RadialSliceKind, RegionInputSource, RegionPurposeTag,
     RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
-    ScreenCaptureSource, SelectionAxis, SelectionHandle, SelectionPolicy, SelectionPropertyEntry,
-    SelectionPropertyKind, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome,
-    TourStep, UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction, color_picker_rgb_to_hsv,
-    compass_slice, font_picker_layout, font_picker_rows, size_ring_angle_for_value,
-    size_ring_value_for_angle, slice_parent, sub_ring_child_count, sub_ring_children,
+    SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY, ScreenCaptureSource, SelectionAxis, SelectionHandle,
+    SelectionPolicy, SelectionPropertyEntry, SelectionPropertyKind, ShellMode, SubmenuSide,
+    TextInputMode, Toast, ToastPriority, ToastPushOutcome, TourStep, UI_TOAST_DURATION_MS,
+    UiToastKind, UiVisibility, ZoomAction, color_picker_rgb_to_hsv, compass_slice,
+    font_picker_layout, font_picker_rows, size_ring_angle_for_value, size_ring_value_for_angle,
+    slice_parent, sub_ring_child_count, sub_ring_children,
 };
 #[allow(unused_imports)]
 pub(crate) use core::{

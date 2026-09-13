@@ -246,6 +246,19 @@ pub(crate) fn draw_pill(
 const KEYCAP_PAD_X_FACTOR: f64 = 0.5;
 const KEYCAP_PAD_Y_FACTOR: f64 = 0.3;
 
+/// Chip footprint for a label's ink extents: padding on each side, then
+/// widened to at least the chip's own height.
+///
+/// The minimum keeps a one-glyph cap square rather than a sliver, so `←`, `1`,
+/// and `W` sit in caps of the same shape instead of caps as narrow as their
+/// ink. Every keycap sizer goes through here, so measuring and drawing cannot
+/// disagree about the footprint.
+fn keycap_box_for_ink(ink_width: f64, ink_height: f64, font_size: f64) -> (f64, f64) {
+    let height = ink_height + font_size * KEYCAP_PAD_Y_FACTOR * 2.0;
+    let width = (ink_width + font_size * KEYCAP_PAD_X_FACTOR * 2.0).max(height);
+    (width, height)
+}
+
 /// Measured (width, height) the [`draw_keycap_with_engine`] chip occupies for `label` at
 /// `font_size`, for callers that need to center the chip before drawing it.
 pub(crate) fn keycap_size_with_engine(
@@ -266,10 +279,7 @@ pub(crate) fn keycap_size_with_engine(
         None,
     );
     let extents = layout.ink_extents();
-    (
-        extents.width() + font_size * KEYCAP_PAD_X_FACTOR * 2.0,
-        extents.height() + font_size * KEYCAP_PAD_Y_FACTOR * 2.0,
-    )
+    keycap_box_for_ink(extents.width(), extents.height(), font_size)
 }
 
 /// Draw a flat keycap chip (rounded rect + centered label) and return its
@@ -298,20 +308,19 @@ pub(crate) fn draw_keycap_with_engine(
         None,
     );
     let extents = layout.ink_extents();
-    let pad_x = font_size * KEYCAP_PAD_X_FACTOR;
-    let pad_y = font_size * KEYCAP_PAD_Y_FACTOR;
-    let width = extents.width() + pad_x * 2.0;
-    let height = extents.height() + pad_y * 2.0;
+    let (width, height) = keycap_box_for_ink(extents.width(), extents.height(), font_size);
 
     theme::set_color(ctx, fill);
     draw_rounded_rect(ctx, x, y, width, height, theme::overlay::RADIUS_SM);
     let _ = ctx.fill();
 
+    // Centred rather than padded from the left edge, because the box can be
+    // wider than ink plus padding once the square minimum applies.
     theme::set_color(ctx, text_color);
     layout.show_at_baseline(
         ctx,
-        x + pad_x - extents.x_bearing(),
-        y + pad_y - extents.y_bearing(),
+        x + (width - extents.width()) / 2.0 - extents.x_bearing(),
+        y + (height - extents.height()) / 2.0 - extents.y_bearing(),
     );
     (width, height)
 }
@@ -336,9 +345,10 @@ pub(crate) fn keycap_box_size(
     font_size: f64,
 ) -> Option<(f64, f64)> {
     let extents = engine.measure(keycap_text_style(font_size), label, None)?;
-    Some((
-        extents.width() + font_size * KEYCAP_PAD_X_FACTOR * 2.0,
-        extents.height() + font_size * KEYCAP_PAD_Y_FACTOR * 2.0,
+    Some(keycap_box_for_ink(
+        extents.width(),
+        extents.height(),
+        font_size,
     ))
 }
 
@@ -568,6 +578,52 @@ mod tests {
         }
         let mut surface = surface;
         (pixel_at(&mut surface, 32, 32), pixel_at(&mut surface, 1, 1))
+    }
+
+    /// A cap holding one narrow glyph would otherwise be a sliver next to the
+    /// caps around it, so the box is widened to at least its own height.
+    #[test]
+    fn a_narrow_keycap_is_widened_to_a_square_and_a_wide_one_is_not() {
+        let engine = UiTextEngine::default();
+        let font_size = 14.0;
+
+        let (width, height) = keycap_box_size(&engine, "←", font_size).expect("arrow measurement");
+        assert!(
+            width + 1e-6 >= height,
+            "narrow glyph cap stayed narrower than it is tall: {width} x {height}"
+        );
+
+        let (wide_width, wide_height) =
+            keycap_box_size(&engine, "Ctrl", font_size).expect("word measurement");
+        assert!(
+            wide_width > wide_height,
+            "a wide label must still size from its ink: {wide_width} x {wide_height}"
+        );
+    }
+
+    /// The pre-measured footprint is what callers center and lay out with, so
+    /// it has to be the footprint the chip actually draws.
+    #[test]
+    fn keycap_measurement_matches_the_drawn_chip() {
+        let engine = UiTextEngine::default();
+        let surface = ImageSurface::create(Format::Rgb24, 64, 64).expect("surface");
+        let ctx = Context::new(&surface).expect("context");
+        let fill = (0.0, 0.0, 0.0, 1.0);
+        let text = (1.0, 1.0, 1.0, 1.0);
+
+        for label in ["←", "W", "Ctrl"] {
+            let measured = keycap_size_with_engine(&engine, &ctx, label, 14.0);
+            let drawn = draw_keycap_with_engine(&engine, &ctx, 0.0, 0.0, label, 14.0, fill, text);
+            assert_eq!(
+                measured, drawn,
+                "measuring and drawing disagreed on {label:?}"
+            );
+            assert_eq!(
+                keycap_box_size(&engine, label, 14.0),
+                Some(measured),
+                "headless measurement disagreed on {label:?}"
+            );
+        }
     }
 
     #[test]

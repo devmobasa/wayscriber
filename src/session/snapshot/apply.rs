@@ -18,6 +18,13 @@ fn apply_snapshot_inner(
     options: &SessionOptions,
     replacement_board_ids: Option<&HashSet<String>>,
 ) {
+    let previous_spec = &input.boards.active_board().spec;
+    let previous_auto = previous_spec.auto_adjust_pen && !previous_spec.background.is_transparent();
+    let previous_pen = input.color_for_tool(crate::input::Tool::Pen);
+    let previous_color = input.board_previous_color();
+    if replacement_board_ids.is_some() {
+        input.boards.reset_appearances();
+    }
     let runtime_history_limit =
         options.effective_history_limit(input.history_limits.undo_stack_limit());
     let board_generation_before = input.boards.board_identity_generation();
@@ -39,6 +46,10 @@ fn apply_snapshot_inner(
                 .iter_mut()
                 .find(|state| state.spec.id == board.id)
         {
+            board_state.reset_appearance();
+            if let Some(appearance) = &board.appearance {
+                appearance.apply(board_state);
+            }
             clamp_runtime_history(&mut board_state.pages, runtime_history_limit);
         }
     }
@@ -53,6 +64,8 @@ fn apply_snapshot_inner(
             input.board_id()
         );
     }
+
+    input.restore_board_pen_after_snapshot(previous_auto, previous_pen, previous_color);
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {

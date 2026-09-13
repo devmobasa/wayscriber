@@ -61,6 +61,7 @@ fn sample_snapshot() -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],

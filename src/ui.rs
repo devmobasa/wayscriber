@@ -42,7 +42,9 @@ pub(crate) use command_palette::{
 };
 pub use command_palette::{command_palette_visual_geometry, render_command_palette};
 pub use context_menu::render_context_menu;
-pub(crate) use context_menu::render_context_menu_with_engine;
+pub(crate) use context_menu::{
+    context_menu_visual_geometry, context_submenu_visual_geometry, render_context_menu_with_engine,
+};
 pub(crate) use eyedropper_loupe::{compute_eyedropper_loupe_layout, render_eyedropper_loupe};
 pub use font_picker::render_font_picker;
 #[allow(unused_imports)]

@@ -33,8 +33,8 @@ pub use options::{
 };
 #[allow(unused_imports)]
 pub use snapshot::{
-    BoardPagesSnapshot, BoardSnapshot, SessionSnapshot, ToolStateSnapshot, apply_snapshot,
-    load_snapshot, save_snapshot, snapshot_from_input,
+    BoardAppearanceSnapshot, BoardPagesSnapshot, BoardSnapshot, SessionSnapshot, ToolStateSnapshot,
+    apply_snapshot, load_snapshot, save_snapshot, snapshot_from_input,
 };
 #[allow(unused_imports)]
 pub(crate) use snapshot::{

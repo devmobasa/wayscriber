@@ -203,6 +203,7 @@ define_action_binding_accessors! {
     BoardDelete => board.board_delete,
     BoardPicker => board.board_picker,
     BoardDuplicate => board.board_duplicate,
+    BoardPaperEdit => board.board_paper_edit,
     FocusNextOutput => board.focus_next_output,
     FocusPrevOutput => board.focus_prev_output,
     PagePrev => board.page_prev,

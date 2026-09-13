@@ -54,6 +54,8 @@ impl BoardItemDraft {
             name: item.name.clone(),
             background_kind,
             background_color,
+            grid_kind: item.grid.kind.into(),
+            grid_spacing: item.grid.spacing.to_string(),
             default_pen_color: OptionalTripletInput::from_option(
                 item.default_pen_color.as_ref(),
                 fallback_pen,
@@ -97,10 +99,37 @@ impl BoardItemDraft {
             .default_pen_color
             .to_option(&format!("boards.items[{index}].default_pen_color"), errors);
 
+        let spacing = match self.grid_spacing.trim().parse::<i64>() {
+            Ok(value)
+                if (i64::from(wayscriber::domain::BOARD_GRID_MIN_SPACING)
+                    ..=i64::from(wayscriber::domain::BOARD_GRID_MAX_SPACING))
+                    .contains(&value) =>
+            {
+                value
+            }
+            _ => {
+                errors.push(FormError::new(
+                    format!("boards.items[{index}].grid.spacing"),
+                    "Enter a whole number from 8 to 200.",
+                ));
+                return None;
+            }
+        };
+        let grid = wayscriber::config::BoardGridConfig {
+            kind: if background.is_transparent() {
+                wayscriber::domain::BoardGridKind::None
+            } else {
+                self.grid_kind
+            }
+            .into(),
+            spacing,
+        };
+
         Some(BoardItemConfig {
             id,
             name,
             background,
+            grid,
             default_pen_color,
             auto_adjust_pen: self.auto_adjust_pen,
             persist: self.persist,
@@ -196,6 +225,8 @@ impl BoardsDraft {
             name,
             background_kind: BoardBackgroundOption::Color,
             background_color: ColorTripletInput::from([0.992, 0.992, 0.992]),
+            grid_kind: wayscriber::domain::BoardGridKind::None,
+            grid_spacing: wayscriber::domain::BOARD_GRID_DEFAULT_SPACING.to_string(),
             default_pen_color: OptionalTripletInput::from_option(
                 Some(&BoardColorConfig::Rgb([0.0, 0.0, 0.0])),
                 [0.0, 0.0, 0.0],

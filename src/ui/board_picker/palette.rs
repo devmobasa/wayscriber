@@ -4,8 +4,8 @@ use crate::ui::primitives::draw_rounded_rect;
 use super::constants::{self, INPUT_CARET, RADIUS_SM};
 use super::helpers::{BOARD_PALETTE, SWATCH_EDGE};
 
-const PALETTE_SWATCH_SIZE: f64 = 18.0;
-const PALETTE_SWATCH_GAP: f64 = 6.0;
+pub(super) const PALETTE_SWATCH_SIZE: f64 = 18.0;
+pub(super) const PALETTE_SWATCH_GAP: f64 = 6.0;
 
 pub(super) fn render_board_palette(
     ctx: &cairo::Context,
@@ -19,12 +19,19 @@ pub(super) fn render_board_palette(
     let palette_x = layout.origin_x + layout.padding_x;
     let palette_y = layout.palette_top;
     let edit_state = input_state.board_picker_edit_state();
-    let active_color = edit_state
-        .and_then(|(_, edit_index, _)| input_state.board_picker_board_index_for_row(edit_index))
-        .and_then(|board_index| input_state.boards.board_states().get(board_index))
-        .and_then(|board| match board.spec.background {
-            BoardBackground::Solid(color) => Some(color),
-            BoardBackground::Transparent => None,
+    let active_color = input_state
+        .board_appearance_edit()
+        .map(|edit| edit.preview().0)
+        .or_else(|| {
+            edit_state
+                .and_then(|(_, edit_index, _)| {
+                    input_state.board_picker_board_index_for_row(edit_index)
+                })
+                .and_then(|board_index| input_state.boards.board_states().get(board_index))
+                .and_then(|board| match board.spec.background {
+                    BoardBackground::Solid(color) => Some(color),
+                    BoardBackground::Transparent => None,
+                })
         });
 
     let mut idx = 0usize;

@@ -226,6 +226,7 @@ fn advance_post_dispatch_state(
         state.input_state.needs_redraw = true;
     }
     state.input_state.tick_radial_menu_paint(Instant::now());
+    state.input_state.tick_context_menu_hover(Instant::now());
     capture::handle_pending_actions(state, qh);
     if break_on_requested_exit(state) {
         return true;
@@ -311,6 +312,7 @@ fn event_loop_timeout(
         durable_action_retry_timeout(state, now),
         pending_backend_action_timeout,
         state.input_state.radial_menu_paint_timeout(now),
+        state.input_state.context_menu_hover_timeout(now),
         state.key_repeat_timeout(now),
         state.input_state.sequence_timeout(now),
     ]

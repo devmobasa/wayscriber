@@ -5,16 +5,7 @@ use super::super::super::InputState;
 
 impl InputState {
     fn is_point_in_context_menu(&self, x: i32, y: i32) -> bool {
-        if let Some(layout) = self.context_menu_layout() {
-            let xf = x as f64;
-            let yf = y as f64;
-            xf >= layout.origin_x
-                && xf <= layout.origin_x + layout.width
-                && yf >= layout.origin_y
-                && yf <= layout.origin_y + layout.height
-        } else {
-            false
-        }
+        self.context_menu_level_at(x, y).is_some()
     }
 
     pub(in crate::input::state) fn handle_context_menu_press(
@@ -136,6 +127,13 @@ impl InputState {
         if !self.is_board_picker_open() {
             return false;
         }
+        if self.board_appearance_edit().is_some() {
+            // The size slider acts on press so it can be dragged.
+            if matches!(button, MouseButton::Left) {
+                self.board_appearance_press(x, y);
+            }
+            return true;
+        }
         self.update_pointer_position(x, y);
         match button {
             MouseButton::Left => {
@@ -156,8 +154,17 @@ impl InputState {
                 }
             }
             MouseButton::Right => {
-                if self.board_picker_contains_point(x, y)
-                    && let Some(page_index) = self.board_picker_page_index_at(x, y)
+                if !self.board_picker_contains_point(x, y) {
+                    self.close_board_picker();
+                } else if let Some(row) = self.board_picker_index_at(x, y)
+                    && !self.board_picker_is_new_row(row)
+                    && let Some(board_index) = self.board_picker_board_index_for_row(row)
+                {
+                    // Like a left click, a right click selects the row it acts on.
+                    self.board_picker_set_selected(row);
+                    self.update_pointer_position_synthetic(x, y);
+                    self.open_board_context_menu((x, y), board_index);
+                } else if let Some(page_index) = self.board_picker_page_index_at(x, y)
                     && let Some(board_index) = self.board_picker_page_panel_board_index()
                 {
                     self.update_pointer_position_synthetic(x, y);

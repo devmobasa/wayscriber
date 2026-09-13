@@ -5,7 +5,7 @@ use crate::draw::{
 use crate::input::{DrawingStyle, EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
-pub(super) const CURRENT_VERSION: u32 = 6;
+pub(super) const CURRENT_VERSION: u32 = 7;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]
@@ -18,6 +18,7 @@ pub struct SessionSnapshot {
 #[derive(Debug, Clone)]
 pub struct BoardSnapshot {
     pub id: String,
+    pub appearance: Option<super::BoardAppearanceSnapshot>,
     pub pages: BoardPagesSnapshot,
 }
 
@@ -25,6 +26,16 @@ pub struct BoardSnapshot {
 pub struct BoardPagesSnapshot {
     pub pages: Vec<Frame>,
     pub active: usize,
+}
+
+impl BoardSnapshot {
+    pub(crate) fn has_recoverable_user_data(&self) -> bool {
+        self.pages.has_persistable_data()
+            || self
+                .appearance
+                .as_ref()
+                .is_some_and(|a| a.explicit && a.is_valid())
+    }
 }
 
 impl BoardPagesSnapshot {
@@ -40,7 +51,7 @@ impl SessionSnapshot {
     pub(crate) fn has_board_data(&self) -> bool {
         self.boards
             .iter()
-            .any(|board| board.pages.has_persistable_data())
+            .any(BoardSnapshot::has_recoverable_user_data)
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -206,6 +217,12 @@ pub(super) struct SessionFile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct BoardFile {
     pub id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::appearance::deserialize_appearance"
+    )]
+    pub appearance: Option<super::BoardAppearanceSnapshot>,
     pub pages: Vec<Frame>,
     pub active_page: usize,
 }

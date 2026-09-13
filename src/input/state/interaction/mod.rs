@@ -289,4 +289,188 @@ mod tests {
         assert_eq!(classify_action(Action::ApplyPreset1), ActionRoute::Preset);
         assert_eq!(classify_action(Action::PickScreenColor), ActionRoute::Color);
     }
+
+    #[test]
+    fn dismissing_picker_menus_consumes_release_without_activating_the_picker() {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        };
+        let at = |x, y| PointerPoints::new(ScreenPoint::new(x, y), CanvasPoint::new(x, y));
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+
+        for page_menu in [false, true] {
+            for over_swatch in [false, true] {
+                let mut state = make_test_input_state();
+                state.open_board_picker_with_measurer(&measurer);
+                state.update_board_picker_layout(&ctx, 1280, 720);
+                let layout = *state.board_picker_layout().unwrap();
+                let blackboard = state
+                    .boards
+                    .board_states()
+                    .iter()
+                    .position(|board| board.spec.id == BOARD_ID_BLACKBOARD)
+                    .unwrap();
+                let row = state.board_picker_row_for_board(blackboard).unwrap();
+                let swatch_x =
+                    (layout.origin_x + layout.padding_x + layout.swatch_size / 2.0) as i32;
+                let swatch_y = (layout.origin_y
+                    + layout.padding_y
+                    + layout.header_height
+                    + layout.row_height * (row as f64 + 0.5)) as i32;
+                assert_eq!(
+                    state.board_picker_swatch_index_at(swatch_x, swatch_y),
+                    Some(row)
+                );
+
+                if page_menu {
+                    state.open_page_context_menu((1000, 50), blackboard, 0);
+                } else {
+                    state.open_board_context_menu((1000, 50), blackboard);
+                }
+                state.update_context_menu_layout(1280, 720);
+                let target = if over_swatch {
+                    at(swatch_x, swatch_y)
+                } else {
+                    at(0, 0)
+                };
+
+                assert_eq!(
+                    route_pointer_press(
+                        &mut state,
+                        resources,
+                        PointerPress::new(MouseButton::Left, target)
+                    ),
+                    RoutingOutcome::Consumed(ConsumedBy::ContextMenu)
+                );
+                assert!(!state.is_context_menu_open());
+                assert!(state.is_board_picker_open());
+                assert_eq!(
+                    route_pointer_release(
+                        &mut state,
+                        resources,
+                        PointerRelease::new(MouseButton::Left, target)
+                    ),
+                    RoutingOutcome::Consumed(ConsumedBy::ContextMenu)
+                );
+                assert!(state.is_board_picker_open());
+                assert!(state.board_appearance_edit().is_none());
+
+                // Only the dismissal click is swallowed; the next click works normally.
+                route_pointer_press(
+                    &mut state,
+                    resources,
+                    PointerPress::new(MouseButton::Left, target),
+                );
+                route_pointer_release(
+                    &mut state,
+                    resources,
+                    PointerRelease::new(MouseButton::Left, target),
+                );
+                if over_swatch {
+                    assert!(state.board_appearance_edit().is_some());
+                } else {
+                    assert!(!state.is_board_picker_open());
+                }
+            }
+        }
+    }
+
+    /// Board-row menus open above the board picker, so pointer hover and clicks
+    /// must reach the menu before the picker underneath it.
+    #[test]
+    fn board_picker_row_menu_gets_hover_and_clicks_before_the_picker() {
+        use crate::input::state::core::ContextMenuState;
+
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        };
+        let at = |x, y| PointerPoints::new(ScreenPoint::new(x, y), CanvasPoint::new(x, y));
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+
+        let mut state = make_test_input_state();
+        state.open_board_picker_with_measurer(&measurer);
+        state.update_board_picker_layout(&ctx, 1280, 720);
+        let layout = *state.board_picker_layout().unwrap();
+        let blackboard = state
+            .boards
+            .board_states()
+            .iter()
+            .position(|board| board.spec.id == BOARD_ID_BLACKBOARD)
+            .unwrap();
+        let row = state.board_picker_row_for_board(blackboard).unwrap();
+        let row_y = layout.origin_y
+            + layout.padding_y
+            + layout.header_height
+            + layout.row_height * (row as f64 + 0.5);
+        let row_x = layout.origin_x + layout.padding_x + 60.0;
+        route_pointer_press(
+            &mut state,
+            resources,
+            PointerPress::new(MouseButton::Right, at(row_x as i32, row_y as i32)),
+        );
+        assert!(state.is_board_picker_open() && state.is_context_menu_open());
+
+        state.update_context_menu_layout(1280, 720);
+        let menu = state.context_menu_layout().unwrap();
+        let (menu_x, menu_y, menu_bottom) = (
+            (menu.origin_x + menu.width / 2.0) as i32,
+            menu.origin_y as i32,
+            (menu.origin_y + menu.height) as i32,
+        );
+        // Entries: the board name, Edit Paper, Rename Board, then Pin Board.
+        let entry_at = |state: &crate::input::state::InputState, index: usize| {
+            let y = (menu_y..menu_bottom)
+                .find(|&y| state.context_menu_index_at(menu_x, y) == Some(index))
+                .unwrap();
+            at(menu_x, y)
+        };
+
+        let rename = entry_at(&state, 2);
+        assert_eq!(
+            route_pointer_motion(&mut state, &measurer, PointerMotion::new(rename)),
+            RoutingOutcome::Consumed(ConsumedBy::ContextMenu)
+        );
+        assert!(matches!(
+            state.context_menu.state,
+            ContextMenuState::Open {
+                hover_index: Some(2),
+                ..
+            }
+        ));
+
+        // The backend applies pins, so the click only queues the request.
+        let _ = state.take_pending_board_runtime_ui_actions();
+        let pin = entry_at(&state, 3);
+        assert_eq!(
+            route_pointer_press(
+                &mut state,
+                resources,
+                PointerPress::new(MouseButton::Left, pin)
+            ),
+            RoutingOutcome::Consumed(ConsumedBy::ContextMenu)
+        );
+        assert!(!state.board_picker_is_dragging());
+        assert_eq!(
+            route_pointer_release(
+                &mut state,
+                resources,
+                PointerRelease::new(MouseButton::Left, pin)
+            ),
+            RoutingOutcome::Consumed(ConsumedBy::ContextMenu)
+        );
+        assert!(state.is_board_picker_open() && !state.is_context_menu_open());
+        assert!(matches!(
+            state.take_pending_board_runtime_ui_actions().as_slice(),
+            [crate::input::boards::PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
+                if board_id == BOARD_ID_BLACKBOARD
+        ));
+    }
 }

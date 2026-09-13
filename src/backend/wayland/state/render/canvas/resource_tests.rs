@@ -5,6 +5,7 @@ use crate::draw::{Color, DrawnShape, EmbeddedImage, EraserBrush, EraserKind, Sha
 
 fn inputs() -> CanvasLayerInputs {
     CanvasLayerInputs {
+        grid: Default::default(),
         width: 80,
         height: 64,
         scale: 1,
@@ -87,10 +88,6 @@ fn paint(
     .unwrap();
     {
         let cairo = cairo::Context::new(&surface).unwrap();
-        if let Some(color) = inputs.background {
-            cairo.set_source_rgba(color.r, color.g, color.b, color.a);
-            cairo.paint().unwrap();
-        }
         cairo.scale(inputs.scale as f64, inputs.scale as f64);
         cairo.translate(-inputs.origin.0, -inputs.origin.1);
         let frame = CanvasFrame {
@@ -109,19 +106,26 @@ fn paint(
             damage_world: &[],
             now: Instant::now(),
         };
-        let replay = crate::draw::EraserReplayContext {
-            pattern: None,
-            surface: None,
-            backdrop_cache_key: None,
-            bg_color: inputs.background,
-            logical_to_image_scale_x: 1.0,
-            logical_to_image_scale_y: 1.0,
-            logical_image_origin_x: 0.0,
-            logical_image_origin_y: 0.0,
-        };
+        let mut backdrop = background::CanvasEraserContext::for_board(inputs.background);
+        let mut perf = PerfRenderBreakdown::default();
         render_committed_canvas_shapes(
-            measurer, shapes, layer, caches, &canvas, cached, &replay, None,
-        );
+            measurer,
+            shapes,
+            layer,
+            caches,
+            &canvas,
+            cached,
+            &mut backdrop,
+            inputs.grid,
+            Some(&mut perf),
+        )
+        .unwrap();
+        if perf.canvas_layer_cache_used {
+            assert!(
+                backdrop.replay_context().pattern.is_none(),
+                "cache hits must not construct or paint a paper source"
+            );
+        }
     }
     surface.flush();
     surface.data().unwrap().to_vec()
@@ -368,16 +372,8 @@ fn measure_sparse_damage_scan() {
         damage_world: &damage,
         now: Instant::now(),
     };
-    let replay = crate::draw::EraserReplayContext {
-        pattern: None,
-        surface: None,
-        backdrop_cache_key: None,
-        bg_color: None,
-        logical_to_image_scale_x: 1.0,
-        logical_to_image_scale_y: 1.0,
-        logical_image_origin_x: 0.0,
-        logical_image_origin_y: 0.0,
-    };
+    let mut backdrop = background::CanvasEraserContext::for_board(None);
+
     for count in [100, 1_000, 10_000] {
         let shapes: Vec<_> = (0..count)
             .map(|i| {
@@ -413,9 +409,11 @@ fn measure_sparse_damage_scan() {
                 &mut caches,
                 &canvas,
                 false,
-                &replay,
+                &mut backdrop,
+                Default::default(),
                 Some(&mut perf),
-            );
+            )
+            .unwrap();
         }
         eprintln!(
             "P03 shapes={count} tested={} rendered={} mean_us={:.2}",
@@ -424,4 +422,66 @@ fn measure_sparse_damage_scan() {
             start.elapsed().as_micros() as f64 / 500.0
         );
     }
+}
+
+#[test]
+fn board_grid_baked_pan_matches_direct_and_invalidates_on_pattern_and_spacing() {
+    use crate::domain::{BoardGrid, BoardGridKind};
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut cache = CanvasLayerCache::new();
+    let mut caches = crate::draw::RenderCaches::default();
+    let shapes = shapes();
+    for origin in [(0.0, 0.0), (-71.0, -53.0), (-1_000_021.0, -2_000_003.0)] {
+        for kind in BoardGridKind::ALL {
+            for spacing in [8, 40] {
+                let request = CanvasLayerInputs {
+                    grid: BoardGrid::new(kind, spacing),
+                    origin,
+                    ..inputs()
+                };
+                assert!(cache.ensure(&measurer, &mut caches, &shapes, request));
+                let direct = paint(&measurer, &shapes, &cache, &mut caches, request, false);
+                let cached = paint(&measurer, &shapes, &cache, &mut caches, request, true);
+                let error: u64 = direct
+                    .iter()
+                    .zip(&cached)
+                    .map(|(a, b)| u64::from(a.abs_diff(*b)))
+                    .sum();
+                assert!(
+                    error as f64 / (direct.len() as f64) < 1.0,
+                    "{kind:?} {spacing} {origin:?}: cached phase differs"
+                );
+            }
+        }
+    }
+}
+
+mod grid_performance;
+
+#[test]
+fn warm_4k_paper_render_skips_source_and_failed_blit_restores_paper() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let request = CanvasLayerInputs {
+        width: 3840,
+        height: 2160,
+        grid: crate::domain::BoardGrid::new(crate::domain::BoardGridKind::Isometric, 40),
+        ..inputs()
+    };
+    let mut cache = CanvasLayerCache::new();
+    let mut caches = crate::draw::RenderCaches::default();
+    assert!(cache.ensure(&measurer, &mut caches, &[], request));
+    let warm = paint(&measurer, &[], &cache, &mut caches, request, true);
+    // Simulate an unavailable cache even though readiness was reported. The
+    // production dispatcher must paint the backdrop before replaying shapes.
+    cache.clear();
+    let fallback = paint(&measurer, &[], &cache, &mut caches, request, true);
+    let direct = paint(&measurer, &[], &cache, &mut caches, request, false);
+    assert_eq!(fallback, direct);
+    let mean_error = warm
+        .iter()
+        .zip(&direct)
+        .map(|(a, b)| u64::from(a.abs_diff(*b)))
+        .sum::<u64>() as f64
+        / warm.len() as f64;
+    assert!(mean_error < 1.0, "cached paper differs: {mean_error}");
 }

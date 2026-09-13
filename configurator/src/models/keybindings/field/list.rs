@@ -86,6 +86,7 @@ const PREFERRED_ORDER: &[KeybindingField] = &[
     KeybindingField::BoardDuplicate,
     KeybindingField::BoardDelete,
     KeybindingField::BoardPicker,
+    KeybindingField::BoardPaperEdit,
     KeybindingField::ToggleHelp,
     KeybindingField::ToggleQuickHelp,
     KeybindingField::ToggleStatusBar,

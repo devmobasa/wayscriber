@@ -205,6 +205,7 @@ fn single_page_snapshot(frame: crate::draw::Frame) -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
+            appearance: None,
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
                 pages: vec![frame],

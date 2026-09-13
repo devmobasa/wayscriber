@@ -230,11 +230,13 @@ fn board_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut TabSe
     );
     for (index, item) in app.draft.boards.items.iter().enumerate() {
         let text = format!(
-            "board {} board id display name background background color override default pen color pen color auto-adjust pen auto adjust pen persist pinned duplicate remove up down collapse expand {} {} {} background pen persist pinned auto adjust",
+            "board {} board id display name background background color override default pen color pen color auto-adjust pen auto adjust pen persist pinned duplicate remove up down collapse expand {} {} {} background pen persist pinned auto adjust graph paper pattern grid spacing cartesian isometric dots spacing logical pixels {} {}",
             index + 1,
             item.id,
             item.name,
             item.background_kind.label(),
+            item.grid_kind.label(),
+            item.grid_spacing,
         );
         if query.matches_text(&text) {
             summary.add_board_index(index);
