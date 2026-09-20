@@ -19,7 +19,7 @@
 
 ## Coupled Changes
 - Failure categories couple to the toasts in `src/backend/wayland/state/ocr.rs`.
-- The invocation policy couples to `src/process_broker/manifest.rs` and its tests.
+- The invocation policy couples to `broker/src/manifest.rs` and its tests.
 - `capture.ocr_languages` couples to `src/config/types/capture.rs`, the configurator Capture page, `config.example.toml`, and `docs/CONFIG.md`.
 - Packaging guidance for Tesseract lives in `packaging/` and `README.md`.
 
