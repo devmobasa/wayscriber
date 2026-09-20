@@ -19,3 +19,35 @@ An isolated `--freeze` smoke test completed the capture suppression frame, used 
 Five fresh-process pairs compared `performance.buffer_count = 3` and `2` with the same `96e78010` release binary and the fixed 120 FPS drawing workload. Median paired saving from two buffers was **−0.89 MiB** (range **−2.68 to +0.51 MiB**), below the predeclared +2 MiB threshold. All ten runs touched one painted slot, reached one peak in-flight slot, and had no deferral episodes. Input-to-commit p95/p99 stayed within the declared tolerances. One additional pair each with vsync on and uncapped rendering also touched only one slot and had no deferrals. The compositor released buffers promptly in this fixture, so delayed-release ownership remains untested. **The default remains three buffers.**
 
 These measurements used an integer-scale nested output and synthetic input. They do not establish presentation latency, compositor/GPU memory, larger or fractional-output behavior, repeated close/reopen retention, or the full active scenario matrix. The private test session and disposable data did not alter the existing user service or drawings. Raw per-process samples, logs, screenshots, and exact artifact hashes are retained outside the repository.
+
+## Extracted broker companion
+
+Commit `946808cc` moved the process broker into a private package with a small
+`wayscriber-broker` executable. The application opens a sibling companion,
+checks executable ownership and mode, executes the opened descriptor, and
+requires a bounded protocol/cohort hello before helper work. The broker's
+direct ELF dependencies are only `libgcc_s`, `libc`, and the ELF loader; the
+isolated live exec smoke test reached a ready portal listener. The separate
+delivery contract is [documented here](broker-delivery-decision.md).
+
+Five matched, fresh-process idle pairs compared the pinned M1 artifact
+(`cdf47bb9caa96ad8af9415a5bc65bd0bdb42afba7543c38dc83d29c8ea8f4032`)
+with the extracted-broker artifact
+(`c87be642ad9fbc30e7926334b768fad876e16a6c7f7a974970443b3eeb220b57`;
+broker `b341387d7a4fb8fbc618e1746a11eec55c74210f6578ce5bf4c70d6bc478bf3d`).
+Both were default-feature release builds. Each private portal and nested
+compositor run settled for 10 seconds and supplied 30 complete 1 Hz
+application-tree PSS samples. Paired savings were **15.44, 17.18, 15.00,
+16.82, and 15.10 MiB**; median **15.44 MiB**, or about **36%** of the matched
+baseline. Every pair exceeded the predeclared 5 MiB threshold and the 2.60 MiB
+baseline noise bound. Candidate idle tree PSS ranged from **27.20 to 27.67
+MiB**, within the 20–30 MiB idle target. Tree threads remained five; sampled
+CPU time was 0.01–0.03 seconds per 30-second observation. All portal listeners
+became ready. The private bus had no live tray watcher, so tray interaction is
+not proved by this series.
+
+This accepts M2 for idle memory. M3 requires an attributed, material residual
+graphics cost in the daemon; the accepted idle result does not justify that
+additional executable split. Active-memory and startup/helper peaks still need
+their separate acceptance measurements. The paired source artifacts and raw
+observations remain outside the repository.
