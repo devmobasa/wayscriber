@@ -312,6 +312,17 @@ mod tests {
     use std::time::Duration;
 
     #[test]
+    fn portal_request_path_uses_sender_and_handle_token() {
+        let path = expected_request_path(":1.42", "wayscribergsreq_123").unwrap();
+
+        assert_eq!(
+            path.as_str(),
+            "/org/freedesktop/portal/desktop/request/1_42/wayscribergsreq_123"
+        );
+        assert!(expected_request_path(":1.42", "bad/token").is_err());
+    }
+
+    #[test]
     fn global_shortcut_publication_wakes_daemon_owner() {
         let toggle = Arc::new(AtomicBool::new(false));
         let (event, wake) = DaemonControlEvent::for_test(Arc::clone(&toggle));
@@ -391,10 +402,11 @@ async fn create_global_shortcuts_session(
     portal_app_id: &str,
     shutdown: &mut tokio::sync::oneshot::Receiver<()>,
 ) -> Result<OwnedObjectPath> {
+    let handle_token = make_handle_token("wayscribergsreq");
     let mut options: HashMap<String, Value<'static>> = HashMap::new();
     options.insert(
         PORTAL_KEY_HANDLE_TOKEN.to_string(),
-        Value::from(make_handle_token("wayscribergsreq")),
+        Value::from(handle_token.clone()),
     );
     options.insert(
         PORTAL_KEY_SESSION_HANDLE_TOKEN.to_string(),
@@ -405,15 +417,14 @@ async fn create_global_shortcuts_session(
         Value::from(portal_app_id.to_string()),
     );
 
-    let request_path = await_portal_operation(
+    let (response, results) = perform_portal_request(
+        connection,
+        &handle_token,
         proxy.create_session(options),
         shutdown,
         "GlobalShortcuts.CreateSession call",
     )
-    .await?
-    .context("GlobalShortcuts.CreateSession call failed")?;
-
-    let (response, results) = wait_for_request_response(connection, request_path, shutdown).await?;
+    .await?;
     if response != 0 {
         return Err(anyhow!(
             "GlobalShortcuts.CreateSession denied by portal (response code {})",
@@ -448,24 +459,24 @@ async fn bind_toggle_shortcut(
 
     let shortcuts = vec![(TOGGLE_SHORTCUT_ID.to_string(), shortcut_options)];
 
+    let handle_token = make_handle_token("wayscribergsbind");
     let mut bind_options: HashMap<String, Value<'static>> = HashMap::new();
     bind_options.insert(
         PORTAL_KEY_HANDLE_TOKEN.to_string(),
-        Value::from(make_handle_token("wayscribergsbind")),
+        Value::from(handle_token.clone()),
     );
 
     let session_path = zbus::zvariant::ObjectPath::try_from(session_handle.as_str())
         .map_err(|err| anyhow!("invalid GlobalShortcuts session path: {}", err))?;
 
-    let request_path = await_portal_operation(
+    let (response, _) = perform_portal_request(
+        connection,
+        &handle_token,
         proxy.bind_shortcuts(session_path, shortcuts, "", bind_options),
         shutdown,
         "GlobalShortcuts.BindShortcuts call",
     )
-    .await?
-    .context("GlobalShortcuts.BindShortcuts call failed")?;
-
-    let (response, _) = wait_for_request_response(connection, request_path, shutdown).await?;
+    .await?;
     if response != 0 {
         return Err(anyhow!(
             "GlobalShortcuts.BindShortcuts denied by portal (response code {})",
@@ -489,6 +500,81 @@ async fn await_portal_operation<T>(
         }
         output = operation => Ok(output),
     }
+}
+
+#[cfg(feature = "portal")]
+fn expected_request_path(unique_name: &str, handle_token: &str) -> Result<OwnedObjectPath> {
+    if handle_token.is_empty()
+        || !handle_token
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err(anyhow!("invalid portal request handle token"));
+    }
+
+    let sender = unique_name
+        .strip_prefix(':')
+        .context("session D-Bus connection has no unique name")?
+        .replace('.', "_");
+    OwnedObjectPath::try_from(format!(
+        "/org/freedesktop/portal/desktop/request/{sender}/{handle_token}"
+    ))
+    .context("invalid portal request path")
+}
+
+#[cfg(feature = "portal")]
+async fn perform_portal_request<F>(
+    connection: &Connection,
+    handle_token: &str,
+    operation: F,
+    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
+    description: &str,
+) -> Result<(u32, HashMap<String, OwnedValue>)>
+where
+    F: Future<Output = zbus::Result<OwnedObjectPath>>,
+{
+    let unique_name = connection
+        .unique_name()
+        .context("session D-Bus connection has no unique name")?;
+    let expected_path = expected_request_path(unique_name.as_str(), handle_token)?;
+    let request_proxy = RequestProxy::builder(connection)
+        .path(expected_path.clone())
+        .context("invalid expected portal request path")?
+        .build();
+    let request_proxy =
+        await_portal_operation(request_proxy, shutdown, "portal Request proxy creation")
+            .await?
+            .context("failed to build Request proxy")?;
+    let mut response_stream = await_portal_operation(
+        request_proxy.receive_response(),
+        shutdown,
+        "portal Request.Response subscription",
+    )
+    .await?
+    .context("failed to subscribe to Request.Response")?;
+
+    let returned_path = await_portal_operation(operation, shutdown, description)
+        .await?
+        .with_context(|| format!("{description} failed"))?;
+    if returned_path != expected_path {
+        warn!(
+            "Portal returned a legacy request path; subscribing to {} after the call",
+            returned_path
+        );
+        return wait_for_request_response(connection, returned_path, shutdown).await;
+    }
+
+    let response_signal = await_portal_operation(
+        crate::zbus_stream::next(&mut response_stream),
+        shutdown,
+        "portal Request.Response",
+    )
+    .await?
+    .ok_or_else(|| anyhow!("portal request completed without Response signal"))?;
+    let args = response_signal
+        .args()
+        .context("failed to parse Request.Response signal arguments")?;
+    Ok((args.response, args.results.clone()))
 }
 
 #[cfg(feature = "portal")]
