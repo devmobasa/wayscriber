@@ -12,7 +12,7 @@ impl WaylandState {
     ) -> Result<()> {
         let width = plan.geometry.width;
         let height = plan.geometry.height;
-        let scale = plan.geometry.scale;
+        let scale = plan.geometry.wire_scale;
         let scaled_damage = &plan.damage.buffer;
         let buffer = acquired.buffer;
         record_stage!(breakdown, damage_commit, {
@@ -24,6 +24,13 @@ impl WaylandState {
                 .cloned()
                 .context("Surface not created")?;
             wl_surface.set_buffer_scale(scale);
+            if let Some(viewport) = self.surface.viewport() {
+                if plan.geometry.preferred_scale.is_some() {
+                    viewport.set_destination(width as i32, height as i32);
+                } else {
+                    viewport.set_destination(-1, -1);
+                }
+            }
             // `attach_to` marks the slot active until the compositor releases the
             // buffer. Attaching the raw `wl_buffer()` instead leaves the slot free,
             // so the pool hands the same memory back on the next frame and the next

@@ -19,7 +19,7 @@ impl WaylandState {
             physical_height: phys_height,
             ..
         } = plan.geometry;
-        let damage_screen = &plan.damage.screen;
+        let damage_buffer = &plan.damage.buffer;
         let render_canvas = plan.render_canvas;
         let render_ui = plan.render_ui;
         // The acquired SHM slot supplies width * height * 4 bytes in ARgb32.
@@ -52,14 +52,14 @@ impl WaylandState {
             // avoiding redraws of static content (which is preserved in the back-buffer).
             // Note: Cairo works in logical coordinates if we scale it, but here we are
             // pre-scale (identity transform). We must scale the logical damage rects to pixels.
-            if !damage_screen.is_empty() {
-                for rect in damage_screen {
-                    // Scale logical rect to physical pixels
-                    let x = rect.x as f64 * scale as f64;
-                    let y = rect.y as f64 * scale as f64;
-                    let w = rect.width as f64 * scale as f64;
-                    let h = rect.height as f64 * scale as f64;
-                    ctx.rectangle(x, y, w, h);
+            if !damage_buffer.is_empty() {
+                for rect in damage_buffer {
+                    ctx.rectangle(
+                        rect.x as f64,
+                        rect.y as f64,
+                        rect.width as f64,
+                        rect.height as f64,
+                    );
                 }
                 ctx.clip();
             }
@@ -111,7 +111,14 @@ impl WaylandState {
         });
 
         record_stage!(breakdown, ui, {
-            self.render_ui_layer(&ctx, width, height, scale, render_ui);
+            self.render_ui_layer(
+                &ctx,
+                width,
+                height,
+                plan.geometry.scale_x(),
+                plan.geometry.scale_y(),
+                render_ui,
+            );
         });
 
         // Flush Cairo

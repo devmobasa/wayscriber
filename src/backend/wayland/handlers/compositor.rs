@@ -1,6 +1,6 @@
 // Handles compositor callbacks (frame pacing, surface enter/leave) so the backend
 // can throttle rendering; invoked by smithay through the delegate in `mod.rs`.
-use log::{debug, info};
+use log::{debug, info, warn};
 use smithay_client_toolkit::compositor::CompositorHandler;
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
@@ -51,7 +51,13 @@ impl CompositorHandler for WaylandState {
 
         let scale = new_factor.max(1);
         debug!("Scale factor changed to {}", scale);
-        self.surface.set_scale(scale);
+        if let Err(err) = self
+            .surface
+            .set_scale(scale, self.config.performance.buffer_count as usize)
+        {
+            warn!("Rejected invalid surface scale: {err:#}");
+            return;
+        }
         self.refresh_freeze_zoom_geometry();
         self.buffer_damage
             .mark_all_full(FullDamageReason::ScaleChanged);
@@ -127,7 +133,13 @@ impl CompositorHandler for WaylandState {
 
         if let Some(info) = self.protocol.output().info(output) {
             let scale = info.scale_factor.max(1);
-            self.surface.set_scale(scale);
+            if let Err(err) = self
+                .surface
+                .set_scale(scale, self.config.performance.buffer_count as usize)
+            {
+                warn!("Rejected invalid output scale: {err:#}");
+                return;
+            }
             // Mark full damage when entering output - scale may have changed, pool may be new
             self.buffer_damage
                 .mark_all_full(FullDamageReason::OutputChanged);

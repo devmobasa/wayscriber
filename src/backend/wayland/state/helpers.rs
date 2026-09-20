@@ -9,27 +9,6 @@ use crate::env_vars::{
 };
 use crate::{config::Config, util::Rect};
 
-pub(in crate::backend::wayland) fn scale_damage_regions(
-    regions: Vec<Rect>,
-    scale: i32,
-) -> Vec<Rect> {
-    if scale <= 1 {
-        return regions;
-    }
-
-    regions
-        .into_iter()
-        .filter_map(|r| {
-            let x = r.x.saturating_mul(scale);
-            let y = r.y.saturating_mul(scale);
-            let w = r.width.saturating_mul(scale);
-            let h = r.height.saturating_mul(scale);
-
-            Rect::new(x, y, w, h)
-        })
-        .collect()
-}
-
 pub(in crate::backend::wayland) fn damage_summary(regions: &[Rect]) -> String {
     if regions.is_empty() {
         return "[]".to_string();

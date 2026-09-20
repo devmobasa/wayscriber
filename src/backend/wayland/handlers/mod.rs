@@ -26,6 +26,7 @@ mod activation;
 mod buffer;
 mod compositor;
 mod ext_image_copy;
+mod fractional_scale;
 pub(in crate::backend::wayland) mod keyboard;
 mod layer;
 mod output;

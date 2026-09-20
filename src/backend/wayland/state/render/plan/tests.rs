@@ -100,33 +100,23 @@ fn transformed_world_viewport_does_not_depend_on_screen_damage() {
 }
 
 #[test]
-fn zero_dimensions_do_not_create_a_world_viewport() {
+fn zero_dimensions_are_rejected_before_frame_planning() {
     for (width, height) in [(0, 79), (101, 0), (0, 0)] {
-        let mut input = prepared();
-        input.geometry = FrameGeometry::new(width, height, 2);
-        input.canvas.transform_active = true;
-        input.damage_screen.clear();
-        let plan = plan_frame(input);
-        assert!(plan.damage.world.is_empty());
-        assert_eq!(plan.geometry.byte_len, 0);
+        assert!(SurfaceGeometry::new(width, height, 2, None, 3).is_err());
     }
 }
 
 #[test]
 fn geometry_normalizes_buffer_scale_and_preserves_argb_layout() {
     for scale in [-2, 0, 1] {
+        let geometry = FrameGeometry::new(101, 79, scale);
         assert_eq!(
-            FrameGeometry::new(101, 79, scale),
-            FrameGeometry {
-                width: 101,
-                height: 79,
-                scale: 1,
-                physical_width: 101,
-                physical_height: 79,
-                stride: 404,
-                byte_len: 31_916,
-            }
+            (geometry.physical_width, geometry.physical_height),
+            (101, 79)
         );
+        assert_eq!(geometry.wire_scale, 1);
+        assert_eq!(geometry.stride, 404);
+        assert_eq!(geometry.byte_len, 31_916);
     }
     let geometry = FrameGeometry::new(101, 79, 2);
     assert_eq!(

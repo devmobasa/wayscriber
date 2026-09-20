@@ -6,6 +6,10 @@ use smithay_client_toolkit::{
     shm::slot::SlotPool,
 };
 use wayland_client::{Proxy, protocol::wl_surface};
+use wayland_protocols::wp::{
+    fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
+    viewporter::client::wp_viewport::WpViewport,
+};
 
 use crate::backend::wayland::toolbar::events::ToolbarCursorHint;
 use crate::backend::wayland::toolbar::hit::HitRegion;
@@ -22,6 +26,9 @@ pub struct ToolbarSurface {
     pub(super) width: u32,
     pub(super) height: u32,
     pub(super) scale: i32,
+    pub(super) preferred_scale: Option<u32>,
+    pub(super) fractional_scale: Option<WpFractionalScaleV1>,
+    pub(super) viewport: Option<WpViewport>,
     pub(super) ui_scale: f64,
     pub(crate) configured: bool,
     pub(super) dirty: bool,
@@ -53,6 +60,9 @@ impl ToolbarSurface {
             width: 0,
             height: 0,
             scale: 1,
+            preferred_scale: None,
+            fractional_scale: None,
+            viewport: None,
             ui_scale: 1.0,
             configured: false,
             dirty: false,
@@ -83,6 +93,36 @@ impl ToolbarSurface {
             .as_ref()
             .map(|s| s.id() == surface.id())
             .unwrap_or(false)
+    }
+
+    pub(in crate::backend::wayland) fn set_preferred_scale(
+        &mut self,
+        source: &WpFractionalScaleV1,
+        preferred: u32,
+    ) -> anyhow::Result<bool> {
+        if preferred == 0
+            || self.fractional_scale.as_ref() != Some(source)
+            || self.preferred_scale == Some(preferred)
+        {
+            return Ok(false);
+        }
+        if self.width > 0 && self.height > 0 {
+            crate::backend::wayland::surface_geometry::SurfaceGeometry::new(
+                self.width,
+                self.height,
+                self.scale,
+                Some(preferred),
+                1,
+            )?;
+        }
+        self.preferred_scale = Some(preferred);
+        log::info!(
+            "Preferred fractional scale {preferred}/120 for {} toolbar",
+            self.name
+        );
+        self.pool = None;
+        self.dirty = true;
+        Ok(true)
     }
 
     /// Get cursor hint for the current hover position.

@@ -96,12 +96,13 @@ impl WaylandState {
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
         let layer_cache_start = perf.as_ref().map(|_| Instant::now());
-        let layer_cache_ready = if canvas.canvas.layer_cache_eligible {
-            self.ensure_canvas_layer_cache(width, height, scale)
-        } else {
-            self.render.canvas_layer_cache_mut().clear();
-            false
-        };
+        let layer_cache_ready =
+            if canvas.canvas.layer_cache_eligible && canvas.geometry.preferred_scale.is_none() {
+                self.ensure_canvas_layer_cache(width, height, scale)
+            } else {
+                self.render.canvas_layer_cache_mut().clear();
+                false
+            };
         if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
             perf.stages.completed_shapes = perf
                 .stages
@@ -112,7 +113,8 @@ impl WaylandState {
         let background_start = perf.as_ref().map(|_| Instant::now());
         let mut eraser_ctx = self.render_canvas_background(
             ctx,
-            scale,
+            canvas.geometry.scale_x(),
+            canvas.geometry.scale_y(),
             phys_width,
             phys_height,
             !canvas.canvas.draw_committed,
@@ -144,9 +146,7 @@ impl WaylandState {
 
         // Scale subsequent drawing to logical coordinates
         let _ = ctx.save();
-        if scale > 1 {
-            ctx.scale(scale as f64, scale as f64);
-        }
+        ctx.scale(canvas.geometry.scale_x(), canvas.geometry.scale_y());
 
         if canvas_transform_active {
             let _ = ctx.save();

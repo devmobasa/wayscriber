@@ -19,6 +19,10 @@ use wayland_protocols::ext::{
     image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
 };
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
+use wayland_protocols::wp::{
+    fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+    viewporter::client::wp_viewporter::WpViewporter,
+};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
@@ -208,6 +212,20 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
     // the compositor lacks it, editing falls back to the raw keysym path
     // (single-key characters only).
     let text_input_manager = bind_text_input_manager(&globals, &qh);
+    let fractional_scale = globals
+        .bind::<WpFractionalScaleManagerV1, _, _>(&qh, 1..=1, ())
+        .ok();
+    let viewporter = globals.bind::<WpViewporter, _, _>(&qh, 1..=1, ()).ok();
+    let (fractional_scale, viewporter) = match (fractional_scale, viewporter) {
+        (Some(fractional_scale), Some(viewporter)) => {
+            debug!("Bound fractional-scale and viewporter");
+            (Some(fractional_scale), Some(viewporter))
+        }
+        _ => {
+            debug!("Fractional-scale pair unavailable; using integer buffer scale");
+            (None, None)
+        }
+    };
 
     let layer_shell_available = layer_shell.is_some();
 
@@ -222,6 +240,8 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         relative_pointer: relative_pointer_state,
         output: output_state,
         seat: seat_state,
+        fractional_scale,
+        viewporter,
     });
 
     Ok(WaylandSetup {

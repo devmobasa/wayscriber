@@ -201,12 +201,28 @@ impl ToolbarSurface {
     pub fn set_scale(&mut self, scale: i32) {
         let scale = scale.max(1);
         if self.scale != scale {
+            if self.width > 0
+                && self.height > 0
+                && self.preferred_scale.is_none()
+                && let Err(err) = crate::backend::wayland::surface_geometry::SurfaceGeometry::new(
+                    self.width,
+                    self.height,
+                    scale,
+                    None,
+                    1,
+                )
+            {
+                log::warn!("Rejected invalid toolbar integer scale: {err:#}");
+                return;
+            }
             self.scale = scale;
-            self.pool = None;
-            if let Some(layer) = self.layer_surface.as_mut() {
-                let _ = layer.set_buffer_scale(scale as u32);
-            } else if let Some(surface) = self.wl_surface.as_ref() {
-                surface.set_buffer_scale(scale);
+            if self.preferred_scale.is_none() {
+                self.pool = None;
+                if let Some(layer) = self.layer_surface.as_mut() {
+                    let _ = layer.set_buffer_scale(scale as u32);
+                } else if let Some(surface) = self.wl_surface.as_ref() {
+                    surface.set_buffer_scale(scale);
+                }
             }
             self.dirty = true;
         }

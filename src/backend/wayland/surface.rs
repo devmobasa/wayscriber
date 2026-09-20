@@ -19,6 +19,15 @@ use wayland_client::{
     Proxy,
     protocol::{wl_output, wl_shm, wl_surface},
 };
+use wayland_protocols::wp::{
+    fractional_scale::v1::client::{
+        wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+        wp_fractional_scale_v1::WpFractionalScaleV1,
+    },
+    viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
+};
+
+use super::{state::WaylandState, surface_geometry::SurfaceGeometry};
 
 const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
 
@@ -196,6 +205,9 @@ pub struct SurfaceState {
     width: u32,
     height: u32,
     scale: i32,
+    preferred_scale: Option<u32>,
+    fractional_scale: Option<WpFractionalScaleV1>,
+    viewport: Option<WpViewport>,
     configured: bool,
     frame_callbacks: FrameCallbackTracker,
 }
@@ -215,6 +227,9 @@ impl SurfaceState {
             width: 0,
             height: 0,
             scale: 1,
+            preferred_scale: None,
+            fractional_scale: None,
+            viewport: None,
             configured: false,
             frame_callbacks: FrameCallbackTracker::default(),
         }
@@ -230,6 +245,7 @@ impl SurfaceState {
 
     /// Assigns the layer surface produced during startup.
     pub fn set_layer_surface(&mut self, surface: LayerSurface) {
+        self.clear_scaling_objects();
         self.wl_surface = Some(surface.wl_surface().clone());
         self.kind = Some(SurfaceKind::Layer(surface));
         // A new shell surface invalidates current buffer resources/state.
@@ -241,6 +257,7 @@ impl SurfaceState {
 
     /// Assigns an xdg-shell window produced during startup.
     pub fn set_xdg_window(&mut self, window: Window) {
+        self.clear_scaling_objects();
         self.wl_surface = Some(window.wl_surface().clone());
         self.kind = Some(SurfaceKind::Xdg { window });
         // A new shell surface invalidates current buffer resources/state.
@@ -304,28 +321,119 @@ impl SurfaceState {
     /// Updates the surface dimensions, returning `true` if the size changed.
     ///
     /// When the size changes, any existing buffer pool becomes invalid and is dropped.
-    pub fn update_dimensions(&mut self, width: u32, height: u32) -> bool {
+    pub fn update_dimensions(
+        &mut self,
+        width: u32,
+        height: u32,
+        buffer_count: usize,
+    ) -> Result<bool> {
+        SurfaceGeometry::new(
+            width,
+            height,
+            self.scale,
+            self.preferred_scale,
+            buffer_count,
+        )?;
         let changed = self.width != width || self.height != height;
         self.width = width;
         self.height = height;
         if changed {
             self.drop_pool();
         }
-        changed
+        Ok(changed)
     }
 
     /// Updates the buffer scale (defaults to 1). Drops the pool when scale changes.
-    pub fn set_scale(&mut self, scale: i32) {
+    pub fn set_scale(&mut self, scale: i32, buffer_count: usize) -> Result<bool> {
         let scale = scale.max(1);
         if self.scale != scale {
-            self.scale = scale;
-            self.drop_pool();
-            if let Some(layer_surface) = self.layer_surface_mut() {
-                let _ = layer_surface.set_buffer_scale(scale as u32);
-            } else if let Some(wl_surface) = self.wl_surface() {
-                wl_surface.set_buffer_scale(scale);
+            if self.width > 0 && self.height > 0 && self.preferred_scale.is_none() {
+                SurfaceGeometry::new(self.width, self.height, scale, None, buffer_count)?;
             }
+            self.scale = scale;
+            if self.preferred_scale.is_none() {
+                self.drop_pool();
+                if let Some(layer_surface) = self.layer_surface_mut() {
+                    let _ = layer_surface.set_buffer_scale(scale as u32);
+                } else if let Some(wl_surface) = self.wl_surface() {
+                    wl_surface.set_buffer_scale(scale);
+                }
+            }
+            return Ok(true);
         }
+        Ok(false)
+    }
+
+    pub(in crate::backend::wayland) fn install_fractional_scale(
+        &mut self,
+        manager: &WpFractionalScaleManagerV1,
+        viewporter: &WpViewporter,
+        qh: &wayland_client::QueueHandle<WaylandState>,
+    ) {
+        let Some(surface) = self.wl_surface.as_ref() else {
+            return;
+        };
+        self.viewport = Some(viewporter.get_viewport(surface, qh, ()));
+        self.fractional_scale = Some(manager.get_fractional_scale(surface, qh, ()));
+    }
+
+    pub(in crate::backend::wayland) fn is_fractional_scale(
+        &self,
+        scale: &WpFractionalScaleV1,
+    ) -> bool {
+        self.fractional_scale
+            .as_ref()
+            .is_some_and(|current| current == scale)
+    }
+
+    pub(in crate::backend::wayland) fn set_preferred_scale(
+        &mut self,
+        preferred: u32,
+        buffer_count: usize,
+    ) -> Result<bool> {
+        if preferred == 0 || self.viewport.is_none() || self.preferred_scale == Some(preferred) {
+            return Ok(false);
+        }
+        if self.width > 0 && self.height > 0 {
+            SurfaceGeometry::new(
+                self.width,
+                self.height,
+                self.scale,
+                Some(preferred),
+                buffer_count,
+            )?;
+        }
+        self.preferred_scale = Some(preferred);
+        info!("Preferred fractional scale {preferred}/120 for main surface");
+        self.drop_pool();
+        Ok(true)
+    }
+
+    fn clear_scaling_objects(&mut self) {
+        if let Some(scale) = self.fractional_scale.take() {
+            scale.destroy();
+        }
+        if let Some(viewport) = self.viewport.take() {
+            viewport.destroy();
+        }
+        self.preferred_scale = None;
+    }
+
+    pub(in crate::backend::wayland) fn geometry(
+        &self,
+        buffer_count: usize,
+    ) -> Result<SurfaceGeometry> {
+        SurfaceGeometry::new(
+            self.width,
+            self.height,
+            self.scale,
+            self.preferred_scale,
+            buffer_count,
+        )
+    }
+
+    pub(in crate::backend::wayland) fn viewport(&self) -> Option<&WpViewport> {
+        self.viewport.as_ref()
     }
 
     /// Returns current buffer scale.
@@ -335,10 +443,14 @@ impl SurfaceState {
 
     /// Returns physical dimensions (logical * scale).
     pub fn physical_dimensions(&self) -> (u32, u32) {
-        (
-            self.width.saturating_mul(self.scale as u32),
-            self.height.saturating_mul(self.scale as u32),
-        )
+        let dimension = |logical: u32| {
+            if let Some(scale) = self.preferred_scale {
+                ((u64::from(logical) * u64::from(scale) + 60) / 120).min(u64::from(u32::MAX)) as u32
+            } else {
+                logical.saturating_mul(self.scale as u32)
+            }
+        };
+        (dimension(self.width), dimension(self.height))
     }
 
     /// Current surface width in pixels.
@@ -427,17 +539,23 @@ impl SurfaceState {
     /// The generation counter is incremented when a new pool is created, which
     /// lets the damage tracker detect pool reallocation (all previous canvas
     /// pointers become invalid).
-    fn ensure_pool(&mut self, shm: &Shm, buffer_count: usize, slot_len: usize) -> Result<()> {
+    fn ensure_pool(
+        &mut self,
+        shm: &Shm,
+        buffer_count: usize,
+        geometry: SurfaceGeometry,
+    ) -> Result<()> {
         if self.pool.is_some() {
             return Ok(());
         }
         let (phys_w, phys_h) = self.physical_dimensions();
-        let initial_pool_size = slot_len * buffer_count;
+        let initial_pool_size = geometry.pool_len;
         info!(
-            "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers, gen {})",
+            "Creating new SlotPool ({}x{} @ integer scale {}, preferred {:?}/120, {} bytes, {} buffers, gen {})",
             phys_w,
             phys_h,
             self.scale,
+            self.preferred_scale,
             initial_pool_size,
             buffer_count,
             self.pool_generation + 1
@@ -463,14 +581,10 @@ impl SurfaceState {
         &mut self,
         shm: &Shm,
         buffer_count: usize,
-        width: i32,
-        height: i32,
-        stride: i32,
+        geometry: SurfaceGeometry,
     ) -> Result<Option<AcquiredBuffer>> {
         let buffer_count = buffer_count.max(1);
-        // sctk rounds slot lengths up to 64 bytes; size the pool the same way
-        // so the last slot does not trigger a growth on the first frame.
-        let slot_len = ((height as usize) * (stride as usize)).next_multiple_of(64);
+        let slot_len = geometry.slot_len;
         // Slots are never dropped individually: an in-flight buffer still
         // references its slot, so clearing them piecemeal would strand that
         // memory and let the next allocation grow the pool. Outgrowing the
@@ -479,7 +593,7 @@ impl SurfaceState {
         if self.slots.iter().any(|slot| slot.len() < slot_len) {
             self.drop_pool();
         }
-        self.ensure_pool(shm, buffer_count, slot_len)?;
+        self.ensure_pool(shm, buffer_count, geometry)?;
 
         let pool_generation = self.pool_generation;
         let Self { pool, slots, .. } = self;
@@ -496,7 +610,13 @@ impl SurfaceState {
         };
 
         let buffer = pool
-            .create_buffer_in(slot, width, height, stride, wl_shm::Format::Argb8888)
+            .create_buffer_in(
+                slot,
+                geometry.pixel_width as i32,
+                geometry.pixel_height as i32,
+                geometry.stride,
+                wl_shm::Format::Argb8888,
+            )
             .context("Failed to create buffer")?;
         let canvas_ptr = pool.raw_data_mut(slot).as_mut_ptr() as usize;
         let pool_size = pool.len();

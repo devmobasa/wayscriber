@@ -188,9 +188,7 @@ impl RenderRuntime {
         )
     }
 
-    pub(in crate::backend::wayland::state) fn canvas_layer_cache_mut(
-        &mut self,
-    ) -> &mut CanvasLayerCache {
+    pub(in crate::backend::wayland) fn canvas_layer_cache_mut(&mut self) -> &mut CanvasLayerCache {
         &mut self.canvas_layer_cache
     }
 

@@ -93,7 +93,18 @@ impl WindowHandler for WaylandState {
         }
         self.refresh_active_output_label();
 
-        if self.surface.update_dimensions(width, height) {
+        let size_changed = match self.surface.update_dimensions(
+            width,
+            height,
+            self.config.performance.buffer_count as usize,
+        ) {
+            Ok(changed) => changed,
+            Err(err) => {
+                warn!("Rejected invalid xdg surface geometry: {err:#}");
+                return;
+            }
+        };
+        if size_changed {
             info!("xdg window configured: {}x{}", width, height);
             self.buffer_damage
                 .mark_all_full(FullDamageReason::SurfaceResized);

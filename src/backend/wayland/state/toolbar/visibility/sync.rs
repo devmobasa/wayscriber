@@ -193,6 +193,7 @@ impl WaylandState {
                     scale,
                     output.as_ref(),
                     &snapshot,
+                    self.protocol.fractional_scaling(),
                 );
             }
         }

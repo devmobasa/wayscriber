@@ -135,6 +135,10 @@ impl WaylandState {
         layer_surface.commit();
 
         self.surface.set_layer_surface(layer_surface);
+        if let Some((fractional, viewporter)) = self.protocol.fractional_scaling() {
+            self.surface
+                .install_fractional_scale(fractional, viewporter, qh);
+        }
         self.focus
             .set_keyboard_interactivity(Some(desired_keyboard_mode));
         self.force_sync_overlay_interactivity();

@@ -11,13 +11,12 @@ impl WaylandState {
         ctx: &cairo::Context,
         width: u32,
         height: u32,
-        scale: i32,
+        scale_x: f64,
+        scale_y: f64,
         render_ui: bool,
     ) {
         let _ = ctx.save();
-        if scale > 1 {
-            ctx.scale(scale as f64, scale as f64);
-        }
+        ctx.scale(scale_x, scale_y);
         self.render_ui_layers(ctx, width, height, render_ui);
         let _ = ctx.restore();
     }

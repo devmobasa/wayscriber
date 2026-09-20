@@ -39,6 +39,11 @@ pub(super) fn create_overlay_surface(
         layer_surface.commit();
 
         state.surface.set_layer_surface(layer_surface);
+        if let Some((fractional, viewporter)) = state.protocol.fractional_scaling() {
+            state
+                .surface
+                .install_fractional_scale(fractional, viewporter, qh);
+        }
         state
             .focus
             .set_keyboard_interactivity(Some(desired_keyboard_mode));
@@ -62,6 +67,11 @@ pub(super) fn create_overlay_surface(
         }
         window.commit();
         state.surface.set_xdg_window(window);
+        if let Some((fractional, viewporter)) = state.protocol.fractional_scaling() {
+            state
+                .surface
+                .install_fractional_scale(fractional, viewporter, qh);
+        }
         if !state.activate_xdg_window_with_startup_token_if_present() {
             state.request_xdg_activation(qh);
         }

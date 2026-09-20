@@ -8,6 +8,7 @@ use smithay_client_toolkit::{
 };
 
 use super::structs::ToolbarSurface;
+use crate::backend::wayland::surface_geometry::SurfaceGeometry;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::render_profiles::RenderColorProfile;
 use crate::ui::toolbar::ToolbarSnapshot;
@@ -42,16 +43,15 @@ impl ToolbarSurface {
             return Ok(());
         }
 
-        let (phys_w, phys_h) = (
-            self.width.saturating_mul(self.scale as u32),
-            self.height.saturating_mul(self.scale as u32),
-        );
+        let geometry =
+            SurfaceGeometry::new(self.width, self.height, self.scale, self.preferred_scale, 1)?;
+        let (phys_w, phys_h) = (geometry.pixel_width, geometry.pixel_height);
 
         // Every failure below leaves `dirty` set so the next frame retries, and
         // is reported rather than swallowed: returning Ok here used to leave
         // the toolbar permanently blank with nothing in the log to say why.
         if self.pool.is_none() {
-            let buffer_size = (phys_w * phys_h * 4) as usize;
+            let buffer_size = geometry.pool_len;
             match SlotPool::new(buffer_size, shm) {
                 Ok(pool) => self.pool = Some(pool),
                 Err(err) => {
@@ -70,7 +70,7 @@ impl ToolbarSurface {
             .create_buffer(
                 phys_w as i32,
                 phys_h as i32,
-                (phys_w * 4) as i32,
+                geometry.stride,
                 wayland_client::protocol::wl_shm::Format::Argb8888,
             )
             .map_err(|err| anyhow!("failed to create a {phys_w}x{phys_h} buffer: {err}"))?;
@@ -84,7 +84,7 @@ impl ToolbarSurface {
                 cairo::Format::ARgb32,
                 phys_w as i32,
                 phys_h as i32,
-                (phys_w * 4) as i32,
+                geometry.stride,
             )
         }
         .map_err(|err| anyhow!("failed to wrap the buffer in a cairo surface: {err}"))?;
@@ -106,9 +106,10 @@ impl ToolbarSurface {
             let (logical_w, logical_h) =
                 (self.width as f64 / ui_scale, self.height as f64 / ui_scale);
             let hover_scaled = hover.map(|(x, y)| (x / ui_scale, y / ui_scale));
-            if self.scale > 1 {
-                ctx.scale(self.scale as f64, self.scale as f64);
-            }
+            ctx.scale(
+                phys_w as f64 / self.width as f64,
+                phys_h as f64 / self.height as f64,
+            );
             if (ui_scale - 1.0).abs() > f64::EPSILON {
                 ctx.scale(ui_scale, ui_scale);
             }
@@ -142,14 +143,21 @@ impl ToolbarSurface {
                 canvas,
                 phys_w as i32,
                 phys_h as i32,
-                (phys_w * 4) as i32,
+                geometry.stride,
                 &[full],
             );
         }
 
         if let Some(layer) = self.layer_surface.as_ref() {
             let wl_surface = layer.wl_surface();
-            wl_surface.set_buffer_scale(self.scale);
+            wl_surface.set_buffer_scale(geometry.buffer_scale);
+            if let Some(viewport) = self.viewport.as_ref() {
+                if self.preferred_scale.is_some() {
+                    viewport.set_destination(self.width as i32, self.height as i32);
+                } else {
+                    viewport.set_destination(-1, -1);
+                }
+            }
             if let Err(err) = buffer.attach_to(wl_surface) {
                 return Err(anyhow!("failed to attach the toolbar buffer: {err}"));
             }

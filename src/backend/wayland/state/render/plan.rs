@@ -1,10 +1,9 @@
 use std::time::Instant;
 
+use crate::backend::wayland::surface_geometry::SurfaceGeometry;
 use crate::util::Rect;
 
-use super::super::{
-    FullDamageReason, OverlaySuppression, PerfDamageDiagnostics, scale_damage_regions,
-};
+use super::super::{FullDamageReason, OverlaySuppression, PerfDamageDiagnostics};
 use super::profile::FrameProfile;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12,6 +11,8 @@ pub(super) struct FrameGeometry {
     pub(super) width: u32,
     pub(super) height: u32,
     pub(super) scale: i32,
+    pub(super) preferred_scale: Option<u32>,
+    pub(super) wire_scale: i32,
     pub(super) physical_width: u32,
     pub(super) physical_height: u32,
     pub(super) stride: i32,
@@ -19,21 +20,54 @@ pub(super) struct FrameGeometry {
 }
 
 impl FrameGeometry {
-    pub(super) fn new(width: u32, height: u32, scale: i32) -> Self {
-        let scale = scale.max(1);
-        let physical_width = width.saturating_mul(scale as u32);
-        let physical_height = height.saturating_mul(scale as u32);
-        let stride = (physical_width * 4) as i32;
-        let byte_len = physical_height as usize * stride as usize;
+    pub(super) fn from_surface(geometry: SurfaceGeometry) -> Self {
+        let SurfaceGeometry {
+            logical_width: width,
+            logical_height: height,
+            preferred_scale,
+            buffer_scale: wire_scale,
+            pixel_width: physical_width,
+            pixel_height: physical_height,
+            stride,
+            byte_len,
+            ..
+        } = geometry;
         Self {
             width,
             height,
-            scale,
+            scale: if preferred_scale.is_some() {
+                1
+            } else {
+                wire_scale
+            },
+            preferred_scale,
+            wire_scale,
             physical_width,
             physical_height,
             stride,
             byte_len,
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn new(width: u32, height: u32, scale: i32) -> Self {
+        Self::from_surface(SurfaceGeometry::new(width, height, scale, None, 3).unwrap())
+    }
+
+    pub(super) fn scale_x(self) -> f64 {
+        self.physical_width as f64 / self.width as f64
+    }
+
+    pub(super) fn scale_y(self) -> f64 {
+        self.physical_height as f64 / self.height as f64
+    }
+
+    pub(super) fn damage(self, rect: Rect) -> Option<Rect> {
+        SurfaceGeometry::map_damage(
+            rect,
+            (self.width, self.height),
+            (self.physical_width, self.physical_height),
+        )
     }
 }
 
@@ -136,7 +170,11 @@ pub(super) fn plan_frame(prepared: PreparedFrame) -> FramePlan {
     } else {
         prepared.damage_screen.clone()
     };
-    let buffer = scale_damage_regions(prepared.damage_screen.clone(), prepared.geometry.scale);
+    let buffer = prepared
+        .damage_screen
+        .iter()
+        .filter_map(|region| prepared.geometry.damage(*region))
+        .collect();
     FramePlan {
         geometry: prepared.geometry,
         canvas,

@@ -68,25 +68,17 @@ impl WaylandState {
             self.suppression.reason(),
             self.input_state.board_is_transparent(),
         );
-        let geometry = FrameGeometry::new(
-            self.surface.width(),
-            self.surface.height(),
-            self.surface.scale(),
-        );
         let buffer_count = self.config.performance.buffer_count as usize;
+        let surface_geometry = self.surface.geometry(buffer_count)?;
+        let geometry = FrameGeometry::from_surface(surface_geometry);
         let mut breakdown = self.perf_enabled().then(|| PerfRenderBreakdown {
             surface_px: u64::from(geometry.physical_width)
                 .saturating_mul(u64::from(geometry.physical_height)),
             ..PerfRenderBreakdown::default()
         });
         let acquired = record_stage!(breakdown, buffer_acquire, {
-            self.surface.acquire_buffer(
-                self.protocol.shm(),
-                buffer_count,
-                geometry.physical_width as i32,
-                geometry.physical_height as i32,
-                geometry.stride,
-            )
+            self.surface
+                .acquire_buffer(self.protocol.shm(), buffer_count, surface_geometry)
         })?;
         let submitted_slot = acquired
             .as_ref()

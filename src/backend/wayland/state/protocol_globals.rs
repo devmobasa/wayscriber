@@ -10,6 +10,10 @@ use smithay_client_toolkit::{
     shell::{wlr_layer::LayerShell, xdg::XdgShell},
     shm::Shm,
 };
+use wayland_protocols::wp::{
+    fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+    viewporter::client::wp_viewporter::WpViewporter,
+};
 
 pub(in crate::backend::wayland) struct ProtocolGlobalsSeed {
     pub registry: RegistryState,
@@ -22,6 +26,8 @@ pub(in crate::backend::wayland) struct ProtocolGlobalsSeed {
     pub relative_pointer: RelativePointerState,
     pub output: OutputState,
     pub seat: SeatState,
+    pub fractional_scale: Option<WpFractionalScaleManagerV1>,
+    pub viewporter: Option<WpViewporter>,
 }
 
 /// Bound Wayland globals and the toolkit state that dispatches their events.
@@ -36,6 +42,8 @@ pub(in crate::backend::wayland) struct ProtocolGlobals {
     relative_pointer: RelativePointerState,
     output: OutputState,
     seat: SeatState,
+    fractional_scale: Option<WpFractionalScaleManagerV1>,
+    viewporter: Option<WpViewporter>,
 }
 
 impl ProtocolGlobals {
@@ -51,6 +59,8 @@ impl ProtocolGlobals {
             relative_pointer: seed.relative_pointer,
             output: seed.output,
             seat: seed.seat,
+            fractional_scale: seed.fractional_scale,
+            viewporter: seed.viewporter,
         }
     }
 
@@ -104,5 +114,11 @@ impl ProtocolGlobals {
 
     pub(in crate::backend::wayland) fn seat_mut(&mut self) -> &mut SeatState {
         &mut self.seat
+    }
+
+    pub(in crate::backend::wayland) fn fractional_scaling(
+        &self,
+    ) -> Option<(&WpFractionalScaleManagerV1, &WpViewporter)> {
+        Some((self.fractional_scale.as_ref()?, self.viewporter.as_ref()?))
     }
 }

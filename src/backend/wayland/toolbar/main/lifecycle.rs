@@ -5,6 +5,13 @@ use smithay_client_toolkit::{
     shell::wlr_layer::{LayerShell, LayerSurfaceConfigure},
 };
 use wayland_client::{QueueHandle, protocol::wl_output};
+use wayland_protocols::wp::{
+    fractional_scale::v1::client::{
+        wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+        wp_fractional_scale_v1::WpFractionalScaleV1,
+    },
+    viewporter::client::wp_viewporter::WpViewporter,
+};
 
 use super::structs::ToolbarSurfaceManager;
 use crate::backend::wayland::state::WaylandState;
@@ -21,6 +28,7 @@ impl ToolbarSurfaceManager {
         scale: i32,
         output: Option<&wl_output::WlOutput>,
         snapshot: &ToolbarSnapshot,
+        scaling: Option<(&WpFractionalScaleManagerV1, &WpViewporter)>,
     ) {
         let top_size = crate::backend::wayland::toolbar::top_size(engine, snapshot);
 
@@ -37,7 +45,7 @@ impl ToolbarSurfaceManager {
                 self.top.resize(top_size);
             }
             self.top
-                .ensure_created(qh, compositor, layer_shell, scale, output);
+                .ensure_created(qh, compositor, layer_shell, scale, output, scaling);
         }
 
         if self.suppressed {
@@ -58,5 +66,13 @@ impl ToolbarSurfaceManager {
 
     pub fn maybe_update_scale(&mut self, output: Option<&wl_output::WlOutput>, scale: i32) {
         self.top.maybe_update_scale(output, scale);
+    }
+
+    pub(in crate::backend::wayland) fn set_preferred_scale(
+        &mut self,
+        source: &WpFractionalScaleV1,
+        preferred: u32,
+    ) -> anyhow::Result<bool> {
+        self.top.set_preferred_scale(source, preferred)
     }
 }

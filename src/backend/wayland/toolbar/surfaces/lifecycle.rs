@@ -7,6 +7,10 @@ use smithay_client_toolkit::{
     },
 };
 use wayland_client::{QueueHandle, protocol::wl_output};
+use wayland_protocols::wp::{
+    fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+    viewporter::client::wp_viewporter::WpViewporter,
+};
 
 use super::structs::ToolbarSurface;
 use crate::backend::wayland::state::WaylandState;
@@ -19,6 +23,7 @@ impl ToolbarSurface {
         layer_shell: &LayerShell,
         scale: i32,
         output: Option<&wl_output::WlOutput>,
+        scaling: Option<(&WpFractionalScaleManagerV1, &WpViewporter)>,
     ) {
         if self.layer_surface.is_some() {
             return;
@@ -51,6 +56,11 @@ impl ToolbarSurface {
         layer_surface.commit();
 
         self.wl_surface = Some(wl_surface);
+        if let (Some((fractional, viewporter)), Some(surface)) = (scaling, self.wl_surface.as_ref())
+        {
+            self.viewport = Some(viewporter.get_viewport(surface, qh, ()));
+            self.fractional_scale = Some(fractional.get_fractional_scale(surface, qh, ()));
+        }
         self.layer_surface = Some(layer_surface);
         self.scale = scale.max(1);
         self.dirty = true;
@@ -82,6 +92,13 @@ impl ToolbarSurface {
     }
 
     pub fn destroy(&mut self) {
+        if let Some(scale) = self.fractional_scale.take() {
+            scale.destroy();
+        }
+        if let Some(viewport) = self.viewport.take() {
+            viewport.destroy();
+        }
+        self.preferred_scale = None;
         self.layer_surface = None;
         self.wl_surface = None;
         self.pool = None;
@@ -106,6 +123,16 @@ impl ToolbarSurface {
         }
 
         if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
+            if let Err(err) = crate::backend::wayland::surface_geometry::SurfaceGeometry::new(
+                configure.new_size.0,
+                configure.new_size.1,
+                self.scale,
+                self.preferred_scale,
+                1,
+            ) {
+                log::warn!("Rejected invalid toolbar geometry: {err:#}");
+                return false;
+            }
             let changed = self.width != configure.new_size.0 || self.height != configure.new_size.1;
             self.width = configure.new_size.0;
             self.height = configure.new_size.1;

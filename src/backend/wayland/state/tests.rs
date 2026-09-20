@@ -14,19 +14,6 @@ fn per_buffer_damage_tracking_is_implemented() {
 }
 
 #[test]
-fn scale_damage_regions_multiplies_by_scale() {
-    let regions = vec![Rect {
-        x: 2,
-        y: 3,
-        width: 4,
-        height: 5,
-    }];
-    let scaled = scale_damage_regions(regions, 2);
-    assert_eq!(scaled.len(), 1);
-    assert_eq!(scaled[0], Rect::new(4, 6, 8, 10).unwrap());
-}
-
-#[test]
 fn debug_damage_logging_env_parses_falsey() {
     assert!(!helpers::parse_debug_damage_env(""));
     assert!(!helpers::parse_debug_damage_env("0"));
@@ -60,14 +47,6 @@ fn damage_summary_truncates_after_five_regions() {
         summary,
         "(0,0) 1x2, (1,1) 1x2, (2,2) 1x2, (3,3) 1x2, (4,4) 1x2, ... +1 more"
     );
-}
-
-#[test]
-fn scale_damage_regions_scales_by_buffer_scale() {
-    let regions = vec![Rect::new(0, 0, 100, 50).unwrap()];
-    let scaled = scale_damage_regions(regions, 2);
-    assert_eq!(scaled.len(), 1);
-    assert_eq!(scaled[0], Rect::new(0, 0, 200, 100).unwrap());
 }
 
 #[test]

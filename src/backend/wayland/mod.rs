@@ -16,6 +16,7 @@ mod runtime_ui_state;
 mod session;
 mod state;
 mod surface;
+mod surface_geometry;
 #[cfg(feature = "tablet-input")]
 mod tablet_types;
 mod toolbar;

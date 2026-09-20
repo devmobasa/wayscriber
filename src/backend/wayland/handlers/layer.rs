@@ -55,9 +55,17 @@ impl LayerShellHandler for WaylandState {
                 prev_dims.1,
                 self.surface.scale()
             );
-            let size_changed = self
-                .surface
-                .update_dimensions(configure.new_size.0, configure.new_size.1);
+            let size_changed = match self.surface.update_dimensions(
+                configure.new_size.0,
+                configure.new_size.1,
+                self.config.performance.buffer_count as usize,
+            ) {
+                Ok(changed) => changed,
+                Err(err) => {
+                    log::warn!("Rejected invalid layer surface geometry: {err:#}");
+                    return;
+                }
+            };
 
             if size_changed {
                 info!("Surface size changed - recreating SlotPool");
