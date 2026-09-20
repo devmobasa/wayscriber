@@ -80,7 +80,10 @@ impl WayscriberTray {
                             Some("dialog-error".to_string()),
                         ),
                         Err(_) => {
-                            if let Ok(rt) = tokio::runtime::Runtime::new() {
+                            if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                            {
                                 let _ = rt.block_on(crate::notification::send_notification(
                                     "Configurator unavailable",
                                     body,

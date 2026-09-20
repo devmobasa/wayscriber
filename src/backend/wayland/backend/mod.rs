@@ -31,7 +31,10 @@ impl WaylandBackend {
         exit_after_capture_mode: ExitAfterCaptureMode,
         named_session_file: Option<PathBuf>,
     ) -> Result<Self> {
-        let tokio_runtime = tokio::runtime::Runtime::new()
+        let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
             .context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,

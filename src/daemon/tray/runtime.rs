@@ -79,7 +79,10 @@ pub(crate) fn start_system_tray(
 
     let runtime = TrayRuntime::start(
         move |worker| {
-            let rt = match tokio::runtime::Runtime::new() {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
                 Ok(runtime) => runtime,
                 Err(e) => {
                     warn!("Failed to create Tokio runtime for system tray: {}", e);

@@ -94,7 +94,10 @@ pub(super) fn start_global_shortcuts_listener(
             .unwrap_or_else(|| DEFAULT_PORTAL_APP_ID.to_string());
 
         let thread = std::thread::spawn(move || {
-            let runtime = match tokio::runtime::Runtime::new() {
+            let runtime = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
                 Ok(runtime) => runtime,
                 Err(err) => {
                     warn!(
