@@ -9,6 +9,7 @@ fn inputs() -> CanvasLayerInputs {
         width: 80,
         height: 64,
         scale: 1,
+        raster_dimensions: None,
         origin: (0.0, 0.0),
         background: Some(Color {
             r: 0.1,
@@ -79,7 +80,15 @@ fn paint(
     inputs: CanvasLayerInputs,
     cached: bool,
 ) -> Vec<u8> {
-    let geometry = FrameGeometry::new(inputs.width, inputs.height, inputs.scale);
+    let mut geometry = FrameGeometry::new(inputs.width, inputs.height, inputs.scale);
+    if let Some((pixel_width, pixel_height)) = inputs.raster_dimensions {
+        geometry.physical_width = pixel_width;
+        geometry.physical_height = pixel_height;
+        geometry.stride = (pixel_width * 4) as i32;
+        geometry.byte_len = pixel_height as usize * geometry.stride as usize;
+        geometry.preferred_scale = Some(180);
+        geometry.wire_scale = 1;
+    }
     let mut surface = cairo::ImageSurface::create(
         cairo::Format::ARgb32,
         geometry.physical_width as i32,
@@ -88,7 +97,7 @@ fn paint(
     .unwrap();
     {
         let cairo = cairo::Context::new(&surface).unwrap();
-        cairo.scale(inputs.scale as f64, inputs.scale as f64);
+        cairo.scale(geometry.scale_x(), geometry.scale_y());
         cairo.translate(-inputs.origin.0, -inputs.origin.1);
         let frame = CanvasFrame {
             draw_committed: true,
@@ -170,6 +179,16 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
             ..initial
         },
         CanvasLayerInputs {
+            raster_dimensions: Some((100, 80)),
+            origin: (12.5, 8.25),
+            ..initial
+        },
+        CanvasLayerInputs {
+            raster_dimensions: Some((133, 107)),
+            origin: (12.5, 8.25),
+            ..initial
+        },
+        CanvasLayerInputs {
             board_key: (1, 1),
             ..initial
         },
@@ -230,6 +249,27 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
 }
 
 #[test]
+fn fractional_baked_pan_matches_direct_rendering() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut layer = CanvasLayerCache::new();
+    let mut caches = crate::draw::RenderCaches::default();
+    let shapes = shapes();
+    let request = CanvasLayerInputs {
+        raster_dimensions: Some((120, 96)),
+        ..inputs()
+    };
+    assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
+    let direct = paint(&measurer, &shapes, &layer, &mut caches, request, false);
+    let cached = paint(&measurer, &shapes, &layer, &mut caches, request, true);
+    let error: u64 = direct
+        .iter()
+        .zip(&cached)
+        .map(|(left, right)| u64::from(left.abs_diff(*right)))
+        .sum();
+    assert!(error as f64 / (direct.len() as f64) < 1.0);
+}
+
+#[test]
 fn rejected_bake_clears_previous_layer_and_direct_fallback_still_paints() {
     let measurer = crate::draw::TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
@@ -243,6 +283,15 @@ fn rejected_bake_clears_previous_layer_and_direct_fallback_still_paints() {
         &shapes,
         CanvasLayerInputs {
             width: 40_000,
+            ..request
+        }
+    ));
+    assert!(!layer.ensure(
+        &measurer,
+        &mut caches,
+        &shapes,
+        CanvasLayerInputs {
+            raster_dimensions: Some((0, 96)),
             ..request
         }
     ));

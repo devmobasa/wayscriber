@@ -96,13 +96,20 @@ impl WaylandState {
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
         let layer_cache_start = perf.as_ref().map(|_| Instant::now());
-        let layer_cache_ready =
-            if canvas.canvas.layer_cache_eligible && canvas.geometry.preferred_scale.is_none() {
-                self.ensure_canvas_layer_cache(width, height, scale)
-            } else {
-                self.render.canvas_layer_cache_mut().clear();
-                false
-            };
+        let layer_cache_ready = if canvas.canvas.layer_cache_eligible {
+            self.ensure_canvas_layer_cache(
+                width,
+                height,
+                scale,
+                canvas
+                    .geometry
+                    .preferred_scale
+                    .map(|_| (phys_width, phys_height)),
+            )
+        } else {
+            self.render.canvas_layer_cache_mut().clear();
+            false
+        };
         if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
             perf.stages.completed_shapes = perf
                 .stages

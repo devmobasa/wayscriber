@@ -441,7 +441,7 @@ impl SurfaceState {
         self.scale
     }
 
-    /// Returns physical dimensions (logical * scale).
+    /// Returns rounded raster dimensions for the active scale policy.
     pub fn physical_dimensions(&self) -> (u32, u32) {
         let dimension = |logical: u32| {
             if let Some(scale) = self.preferred_scale {

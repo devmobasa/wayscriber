@@ -31,7 +31,8 @@ pub(in crate::backend::wayland) struct CanvasLayerCache {
     world_y: i32,
     width: i32,
     height: i32,
-    scale: i32,
+    raster_scale_x: f64,
+    raster_scale_y: f64,
     content_generation: u64,
     shapes_len: usize,
     last_shape_id: Option<ShapeId>,
@@ -50,7 +51,8 @@ impl CanvasLayerCache {
             world_y: 0,
             width: 0,
             height: 0,
-            scale: 1,
+            raster_scale_x: 1.0,
+            raster_scale_y: 1.0,
             content_generation: 0,
             shapes_len: 0,
             last_shape_id: None,
@@ -80,8 +82,7 @@ impl CanvasLayerCache {
         };
         let _ = ctx.save();
         ctx.translate(self.world_x as f64, self.world_y as f64);
-        let inv = 1.0 / self.scale.max(1) as f64;
-        ctx.scale(inv, inv);
+        ctx.scale(1.0 / self.raster_scale_x, 1.0 / self.raster_scale_y);
         let ok = ctx.set_source_surface(surface, 0.0, 0.0).is_ok();
         if ok {
             let _ = ctx.paint();
@@ -155,6 +156,7 @@ impl WaylandState {
         width: u32,
         height: u32,
         scale: i32,
+        raster_dimensions: Option<(u32, u32)>,
     ) -> bool {
         let origin = self.canvas_view_origin();
         if width == 0 || height == 0 {
@@ -180,6 +182,7 @@ impl WaylandState {
                 width,
                 height,
                 scale,
+                raster_dimensions,
                 origin,
                 background,
                 grid: self.input_state.boards.active_board().spec.grid,
@@ -196,6 +199,8 @@ pub(super) struct CanvasLayerInputs {
     pub(super) width: u32,
     pub(super) height: u32,
     pub(super) scale: i32,
+    /// The main surface's rounded pixel dimensions when it uses a viewport.
+    pub(super) raster_dimensions: Option<(u32, u32)>,
     pub(super) origin: (f64, f64),
     pub(super) background: Option<Color>,
     pub(super) grid: crate::domain::BoardGrid,
@@ -216,6 +221,7 @@ impl CanvasLayerCache {
             width,
             height,
             scale,
+            raster_dimensions,
             origin,
             background,
             grid,
@@ -223,21 +229,36 @@ impl CanvasLayerCache {
             board_key,
             generation,
         } = inputs;
+        let logical_w = width.min(i32::MAX as u32) as i32;
+        let logical_h = height.min(i32::MAX as u32) as i32;
+        if logical_w <= 0
+            || logical_h <= 0
+            || raster_dimensions
+                .is_some_and(|(pixel_width, pixel_height)| pixel_width == 0 || pixel_height == 0)
+        {
+            self.clear();
+            return false;
+        }
+
         let scale = scale.max(1);
+        let (raster_scale_x, raster_scale_y) = raster_dimensions
+            .map(|(pixel_width, pixel_height)| {
+                (
+                    pixel_width as f64 / width as f64,
+                    pixel_height as f64 / height as f64,
+                )
+            })
+            .unwrap_or((scale as f64, scale as f64));
         let (origin_x, origin_y) = origin;
         let view_x = origin_x.floor() as i32;
         let view_y = origin_y.floor() as i32;
-        let logical_w = width.min(i32::MAX as u32) as i32;
-        let logical_h = height.min(i32::MAX as u32) as i32;
-        if logical_w <= 0 || logical_h <= 0 {
-            return false;
-        }
         let shapes_len = shapes.len();
         let last_shape_id = shapes.last().map(|shape| shape.id);
         let cache = self;
         let params_match = cache.valid
             && cache.surface.is_some()
-            && cache.scale == scale
+            && cache.raster_scale_x == raster_scale_x
+            && cache.raster_scale_y == raster_scale_y
             && cache.content_generation == generation
             && cache.shapes_len == shapes_len
             && cache.last_shape_id == last_shape_id
@@ -258,13 +279,36 @@ impl CanvasLayerCache {
         let world_y = view_y.saturating_sub(CANVAS_LAYER_MARGIN);
         let bake_w = logical_w.saturating_add(CANVAS_LAYER_MARGIN * 2);
         let bake_h = logical_h.saturating_add(CANVAS_LAYER_MARGIN * 2);
-        let phys_w = bake_w.saturating_mul(scale);
-        let phys_h = bake_h.saturating_mul(scale);
+        let rounded_bake_size = |logical: i32, axis: u32, pixels: u32| -> Option<i32> {
+            let value = u64::try_from(logical)
+                .ok()?
+                .checked_mul(u64::from(pixels))?
+                .checked_add(u64::from(axis) / 2)?
+                / u64::from(axis);
+            i32::try_from(value).ok()
+        };
+        let (phys_w, phys_h) = if let Some((pixel_width, pixel_height)) = raster_dimensions {
+            let Some(phys_w) = rounded_bake_size(bake_w, width, pixel_width) else {
+                cache.clear();
+                return false;
+            };
+            let Some(phys_h) = rounded_bake_size(bake_h, height, pixel_height) else {
+                cache.clear();
+                return false;
+            };
+            (phys_w, phys_h)
+        } else {
+            (bake_w.saturating_mul(scale), bake_h.saturating_mul(scale))
+        };
         if phys_w <= 0 || phys_h <= 0 || phys_w > CAIRO_MAX_DIM || phys_h > CAIRO_MAX_DIM {
             cache.clear();
             return false;
         }
-        if phys_w as usize * phys_h as usize * 4 > MAX_CACHE_BYTES {
+        if (phys_w as usize)
+            .checked_mul(phys_h as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .is_none_or(|bytes| bytes > MAX_CACHE_BYTES)
+        {
             cache.clear();
             return false;
         }
@@ -300,7 +344,7 @@ impl CanvasLayerCache {
                 bake_ctx.set_source_rgba(color.r, color.g, color.b, color.a);
                 let _ = bake_ctx.paint();
             }
-            bake_ctx.scale(scale as f64, scale as f64);
+            bake_ctx.scale(raster_scale_x, raster_scale_y);
             bake_ctx.translate(-(world_x as f64), -(world_y as f64));
 
             let paper = match background.filter(|_| grid.kind != crate::domain::BoardGridKind::None)
@@ -366,7 +410,8 @@ impl CanvasLayerCache {
         cache.world_y = world_y;
         cache.width = bake_w;
         cache.height = bake_h;
-        cache.scale = scale;
+        cache.raster_scale_x = raster_scale_x;
+        cache.raster_scale_y = raster_scale_y;
         cache.content_generation = generation;
         cache.shapes_len = shapes_len;
         cache.last_shape_id = last_shape_id;
