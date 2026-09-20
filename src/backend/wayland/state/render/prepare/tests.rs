@@ -55,7 +55,13 @@ fn empty_damage_fallback_reaches_every_reused_slot_and_retains_merge_counts() {
 
 #[test]
 fn empty_surface_does_not_manufacture_full_damage_fallback() {
-    let geometry = FrameGeometry::new(0, 600, 1);
+    let geometry = FrameGeometry {
+        width: 0,
+        physical_width: 0,
+        stride: 0,
+        byte_len: 0,
+        ..FrameGeometry::new(1, 600, 1)
+    };
     let mut tracker = BufferDamageTracker::new(1);
     let first = take_frame_damage(&mut tracker, &geometry, 1, GENERATION, POOL_SIZE);
     assert!(first.regions.is_empty());
