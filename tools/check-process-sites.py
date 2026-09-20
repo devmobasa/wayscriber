@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-BROKER_ROOT = Path("src/process_broker")
+BROKER_ROOT = Path("broker/src")
 BROKER_BOOTSTRAP = BROKER_ROOT / "bootstrap.rs"
 DIRECT_PRODUCTION_ALLOWLIST = {
     Path("configurator/src/app/session_catalog.rs"),  # separate configurator process
@@ -32,7 +32,7 @@ def is_test_source(path: Path) -> bool:
 
 
 def rust_sources() -> list[Path]:
-    roots = (ROOT / "src", ROOT / "configurator" / "src", ROOT / "tests")
+    roots = (ROOT / "src", ROOT / "broker" / "src", ROOT / "configurator" / "src", ROOT / "tests")
     return sorted(path for root in roots for path in root.rglob("*.rs"))
 
 
@@ -90,7 +90,7 @@ def audit_child_stub() -> list[str]:
         "setpgid",
         "exit_group",
         "close_range",
-        "execve",
+        "execveat",
     }
     if unexpected_syscalls:
         failures.append(

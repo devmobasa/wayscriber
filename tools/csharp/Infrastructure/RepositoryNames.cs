@@ -3,6 +3,8 @@ namespace Wayscriber.Tools;
 internal static class RepositoryNames
 {
     public const string MainPackage = "wayscriber";
+    public const string BrokerPackage = "wayscriber-process-broker";
+    public const string BrokerBinary = "wayscriber-broker";
     public const string BinaryPackage = "wayscriber-bin";
     public const string ConfiguratorPackage = "wayscriber-configurator";
     public const string Gtk4LayerShell = "gtk4-layer-shell";

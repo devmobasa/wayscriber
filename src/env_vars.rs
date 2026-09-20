@@ -5,13 +5,13 @@ pub const PORTAL_APP_ID_ENV: &str = "WAYSCRIBER_PORTAL_APP_ID";
 pub const PORTAL_SHORTCUT_ENV: &str = "WAYSCRIBER_PORTAL_SHORTCUT";
 pub const PORTAL_SHORTCUT_OPT_IN_ENV: &str = "WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS";
 
-pub const CONFIGURATOR_ENV: &str = "WAYSCRIBER_CONFIGURATOR";
+pub use wayscriber_process_broker::CONFIGURATOR_ENV;
 pub const BIN_ENV: &str = "WAYSCRIBER_BIN";
 pub const DETACHED_ENV: &str = "WAYSCRIBER_DETACHED";
 pub const NO_DETACH_ENV: &str = "WAYSCRIBER_NO_DETACH";
 pub const NO_TRAY_ENV: &str = "WAYSCRIBER_NO_TRAY";
 pub(crate) const OVERLAY_CHILD_GENERATION_ENV: &str = "WAYSCRIBER_OVERLAY_CHILD_GENERATION";
-pub(crate) const DAEMON_WATCHDOG_FD_ENV: &str = "WAYSCRIBER_INTERNAL_DAEMON_WATCHDOG_FD";
+pub(crate) use wayscriber_process_broker::DAEMON_WATCHDOG_FD_ENV;
 pub const CATALOG_HOOKS_TEST_ENV: &str = "WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS";
 /// Disables the periodic update check regardless of `[updates] check`.
 pub const DISABLE_UPDATE_CHECK_ENV: &str = "WAYSCRIBER_DISABLE_UPDATE_CHECK";

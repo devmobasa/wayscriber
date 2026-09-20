@@ -1872,6 +1872,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
+ "wayscriber-process-broker",
  "xkbcommon",
  "zbus",
  "zune-jpeg",
@@ -1886,6 +1887,16 @@ dependencies = [
  "relm4",
  "tokio",
  "wayscriber",
+]
+
+[[package]]
+name = "wayscriber-process-broker"
+version = "0.9.25"
+dependencies = [
+ "anyhow",
+ "libc",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

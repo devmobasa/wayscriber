@@ -6,16 +6,20 @@ use std::sync::{Arc, Mutex};
 #[cfg(not(test))]
 use std::ffi::CString;
 #[cfg(not(test))]
+use std::fs::File;
+#[cfg(not(test))]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(not(test))]
+use std::os::unix::fs::MetadataExt;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::client::{BrokerInner, ProcessBroker};
-use super::wire::BrokerOperation;
 #[cfg(not(test))]
 use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
 };
+use super::wire::{BrokerOperation, BrokerOutcome};
 
 #[cfg(test)]
 pub(super) fn start() -> Result<ProcessBroker> {
@@ -46,9 +50,7 @@ pub(super) fn start() -> Result<ProcessBroker> {
             test_thread: Mutex::new(Some(thread)),
         }),
     };
-    broker
-        .request(BrokerOperation::Ping)
-        .context("test process broker handshake failed")?;
+    verify_hello(&broker).context("test process broker handshake failed")?;
     Ok(broker)
 }
 
@@ -59,8 +61,7 @@ pub(super) fn start() -> Result<ProcessBroker> {
     let token = crate::daemon::protocol_v2::ProtocolToken::generate()
         .context("failed to generate broker authentication token")?
         .to_string();
-    let exe = std::env::current_exe().context("failed to resolve broker executable")?;
-    let exe = CString::new(exe.as_os_str().as_bytes())?;
+    let (exe, companion) = open_companion()?;
     let argv = [exe.as_ptr(), std::ptr::null()];
     let mut environment = std::env::vars_os()
         .filter(|(name, _)| {
@@ -89,8 +90,10 @@ pub(super) fn start() -> Result<ProcessBroker> {
 
     let child_socket_exec = duplicate_for_exec(&child_socket)?;
     let shutdown_exec = duplicate_for_exec(&shutdown_reader)?;
+    let companion_exec = duplicate_for_exec(&companion)?;
     let child_fd = child_socket_exec.as_raw_fd();
     let shutdown_fd = shutdown_exec.as_raw_fd();
+    let companion_fd = companion_exec.as_raw_fd();
     // SAFETY: clone has fork-like SIGCHLD semantics; the child branch uses
     // only fixed syscalls over buffers prepared above before exec.
     let pid = unsafe { libc::syscall(libc::SYS_clone, libc::SIGCHLD, 0, 0, 0, 0) as libc::pid_t };
@@ -109,11 +112,21 @@ pub(super) fn start() -> Result<ProcessBroker> {
             if libc::syscall(libc::SYS_dup3, shutdown_fd, BROKER_SHUTDOWN_FD, 0) < 0 {
                 libc::syscall(libc::SYS_exit_group, 126);
             }
+            if libc::syscall(libc::SYS_dup3, companion_fd, 5, libc::O_CLOEXEC) < 0 {
+                libc::syscall(libc::SYS_exit_group, 126);
+            }
             if libc::syscall(libc::SYS_setpgid, 0, 0) < 0 {
                 libc::syscall(libc::SYS_exit_group, 126);
             }
-            let _ = libc::syscall(libc::SYS_close_range, 5_u32, u32::MAX, 0_u32);
-            libc::syscall(libc::SYS_execve, exe.as_ptr(), argv.as_ptr(), envp.as_ptr());
+            let _ = libc::syscall(libc::SYS_close_range, 6_u32, u32::MAX, 0_u32);
+            libc::syscall(
+                libc::SYS_execveat,
+                5,
+                c"".as_ptr(),
+                argv.as_ptr(),
+                envp.as_ptr(),
+                libc::AT_EMPTY_PATH,
+            );
             libc::syscall(libc::SYS_exit_group, 127);
             libc::_exit(127);
         }
@@ -122,6 +135,8 @@ pub(super) fn start() -> Result<ProcessBroker> {
     drop(child_socket_exec);
     drop(shutdown_reader);
     drop(shutdown_exec);
+    drop(companion);
+    drop(companion_exec);
     let broker = ProcessBroker {
         inner: Arc::new(BrokerInner {
             socket: parent_socket,
@@ -132,21 +147,84 @@ pub(super) fn start() -> Result<ProcessBroker> {
             healthy: AtomicBool::new(true),
         }),
     };
-    if let Err(error) = broker.request(BrokerOperation::Ping) {
+    if let Err(error) = verify_hello(&broker) {
         // SAFETY: pid is the raw-clone broker child created above.
         unsafe {
             libc::kill(pid, libc::SIGKILL);
         }
         wait_for_broker_process(pid);
-        return Err(error).context("process broker exec/authentication handshake failed");
+        return Err(error).context(
+            "process broker handshake failed; install a matching wayscriber and wayscriber-broker pair, then restart the daemon",
+        );
     }
     Ok(broker)
 }
 
 #[cfg(not(test))]
+fn open_companion() -> Result<(CString, OwnedFd)> {
+    let current = std::env::current_exe().context("failed to resolve running wayscriber")?;
+    let directory = current
+        .parent()
+        .context("running wayscriber has no parent directory")?;
+    let path = directory.join("wayscriber-broker");
+    let path_c = CString::new(path.as_os_str().as_bytes())?;
+    // SAFETY: path_c is NUL-terminated; open returns a fresh descriptor.
+    let fd = unsafe {
+        libc::open(
+            path_c.as_ptr(),
+            libc::O_PATH | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err(io::Error::last_os_error()).with_context(|| {
+            format!(
+                "missing broker companion beside {}; install a matching wayscriber and wayscriber-broker pair",
+                current.display()
+            )
+        });
+    }
+    // SAFETY: open returned a fresh owned descriptor.
+    let file = unsafe { File::from_raw_fd(fd) };
+    let metadata = file
+        .metadata()
+        .context("failed to inspect broker companion")?;
+    let owner = unsafe { libc::geteuid() };
+    if !metadata.is_file()
+        || metadata.mode() & 0o111 == 0
+        || metadata.mode() & 0o022 != 0
+        || (metadata.uid() != 0 && metadata.uid() != owner)
+    {
+        bail!(
+            "broker companion must be an executable, non-writable regular file owned by root or the current user"
+        );
+    }
+    Ok((path_c, file.into()))
+}
+
+fn verify_hello(broker: &ProcessBroker) -> Result<()> {
+    match broker.request(BrokerOperation::Hello)? {
+        BrokerOutcome::Hello {
+            protocol_generation,
+            cohort,
+        } if protocol_generation == super::BROKER_PROTOCOL_GENERATION
+            && cohort == super::BROKER_COHORT =>
+        {
+            Ok(())
+        }
+        BrokerOutcome::Hello {
+            protocol_generation,
+            cohort,
+        } => bail!(
+            "broker companion mismatch (generation {protocol_generation}, cohort {cohort}); install a matching wayscriber and wayscriber-broker pair, then restart the daemon"
+        ),
+        _ => bail!("broker companion did not provide its compatibility hello"),
+    }
+}
+
+#[cfg(not(test))]
 fn duplicate_for_exec(descriptor: &OwnedFd) -> Result<OwnedFd> {
-    // SAFETY: F_DUPFD_CLOEXEC duplicates the live descriptor at or above five.
-    let duplicate = unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 5) };
+    // SAFETY: F_DUPFD_CLOEXEC duplicates the live descriptor above child slot five.
+    let duplicate = unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 6) };
     if duplicate < 0 {
         return Err(io::Error::last_os_error()).context("failed to stage broker descriptor");
     }

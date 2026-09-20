@@ -12,6 +12,7 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
 - Updates:
   * Cargo.toml (wayscriber)
   * configurator/Cargo.toml
+  * broker/Cargo.toml
   * Cargo.lock (workspace versions only; preserves locked dependencies)
   * flake.nix package version follows Cargo.toml automatically
   * packaging/PKGBUILD pkgver and template sha256sums=('SKIP')
@@ -141,6 +142,7 @@ fi
 
 update_version_field "Cargo.toml"
 update_version_field "configurator/Cargo.toml"
+update_version_field "broker/Cargo.toml"
 
 if [[ -f Cargo.lock ]]; then
     if $DRY_RUN; then

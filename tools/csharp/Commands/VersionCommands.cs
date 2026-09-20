@@ -117,6 +117,8 @@ internal static class VersionCommands
     {
         var configurator = ReadCargoVersion( Path.Combine( root, RepositoryPaths.ConfiguratorCargoManifest ) );
         RequireEqual( errors, RepositoryPaths.ConfiguratorCargoManifest, configurator, cargo );
+        var broker = ReadCargoVersion( Path.Combine( root, RepositoryPaths.BrokerCargoManifest ) );
+        RequireEqual( errors, RepositoryPaths.BrokerCargoManifest, broker, cargo );
         var configManifest = read( [RepositoryPaths.ConfiguratorCargoManifest] );
         var featureMatch = Regex.Match( configManifest, @"(?m)^libadwaita\s*=\s*\{[^\n]*features\s*=\s*\[([^]]*)\]" );
         var features = featureMatch.Success
@@ -168,6 +170,8 @@ internal static class VersionCommands
             cargo );
         RequireEqual( errors, "Cargo.lock wayscriber-configurator",
             LockVersion( read( [RepositoryPaths.CargoLock] ), RepositoryNames.ConfiguratorPackage ), cargo );
+        RequireEqual( errors, "Cargo.lock wayscriber-process-broker",
+            LockVersion( read( [RepositoryPaths.CargoLock] ), "wayscriber-process-broker" ), cargo );
         var baseVersion = ReleaseVersion.Parse( cargo );
         ReleaseVersion? release = releaseText is null ? null : ReleaseVersion.Parse( releaseText );
         if ( release is not null && release.CargoVersion != cargo )
@@ -241,7 +245,7 @@ internal static class VersionCommands
         }
 
         var outputs = new AtomicFileSet( );
-        foreach ( var relative in new[] { RepositoryPaths.CargoManifest, RepositoryPaths.ConfiguratorCargoManifest } )
+        foreach ( var relative in new[] { RepositoryPaths.CargoManifest, RepositoryPaths.ConfiguratorCargoManifest, RepositoryPaths.BrokerCargoManifest } )
         {
             var path = context.Path( relative.Split( '/' ) );
             outputs.Add( path,
@@ -256,7 +260,7 @@ internal static class VersionCommands
         if ( dryRun )
         {
             await context.Output.WriteLineAsync(
-                "dry-run: would update Cargo.toml, configurator/Cargo.toml, Cargo.lock, packaging/PKGBUILD, and packaging/.SRCINFO" );
+                "dry-run: would update Cargo.toml, configurator/Cargo.toml, broker/Cargo.toml, Cargo.lock, packaging/PKGBUILD, and packaging/.SRCINFO" );
             await context.Output.WriteLineAsync( "Dry run complete (no changes made)" );
             return ExitCodes.Success;
         }
@@ -264,6 +268,7 @@ internal static class VersionCommands
         var paths = new[]
         {
             context.Path( RepositoryPaths.CargoManifest ), context.Path( RepositoryPaths.ConfiguratorCargoManifest ),
+            context.Path( RepositoryPaths.BrokerCargoManifest ),
             context.Path( RepositoryPaths.CargoLock ), pkgbuildPath,
             context.Path( RepositoryPaths.PackagingDirectory, RepositoryNames.SourceInfoFile )
         };

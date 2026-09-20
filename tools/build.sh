@@ -6,5 +6,5 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "Building wayscriber (default features)..."
-(cd "$PROJECT_ROOT" && cargo build --release --bins)
+(cd "$PROJECT_ROOT" && cargo build --release -p wayscriber -p wayscriber-process-broker --bins)
 echo "✅ Build complete."

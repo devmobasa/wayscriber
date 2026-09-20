@@ -78,13 +78,13 @@ internal static class ChecksCommand
             new( @"\blibc::SYS_(?:clone|clone3|fork|vfork)\b" ),
             new( @"\b(?:sh|bash|zsh)\s+-c\b" ),
         ];
-        foreach ( var root in new[] { "src", "configurator/src", "tests" } )
+        foreach ( var root in new[] { "src", "broker/src", "configurator/src", "tests" } )
         {
             foreach ( var path in Directory.EnumerateFiles( context.Path( root.Split( '/' ) ), "*.rs", SearchOption.AllDirectories ) )
             {
                 var relative = Path.GetRelativePath( context.RepositoryRoot, path ).Replace( Path.DirectorySeparatorChar, '/' );
                 var parts = relative.Split( '/' );
-                var allowed = relative.StartsWith( "src/process_broker/", StringComparison.Ordinal ) || allow.Contains( relative ) ||
+                var allowed = relative.StartsWith( "broker/src/", StringComparison.Ordinal ) || allow.Contains( relative ) ||
                     parts.Contains( "tests" ) || Path.GetFileName( relative ) == "tests.rs";
                 var lines = File.ReadAllLines( path );
                 for ( var index = 0; index < lines.Length; index++ )
@@ -98,13 +98,13 @@ internal static class ChecksCommand
             }
         }
 
-        var bootstrap = context.Path( "src", "process_broker", "bootstrap.rs" );
+        var bootstrap = context.Path( "broker", "src", "bootstrap.rs" );
         var source = Files.Read( bootstrap );
         const string start = "    if pid == 0 {";
         const string end = "    drop(child_socket);";
         if ( !source.Contains( start, StringComparison.Ordinal ) || !source.Contains( end, StringComparison.Ordinal ) )
         {
-            errors.Add( "src/process_broker/bootstrap.rs: raw-clone child-stub markers changed" );
+            errors.Add( "broker/src/bootstrap.rs: raw-clone child-stub markers changed" );
         }
         else
         {
@@ -113,18 +113,18 @@ internal static class ChecksCommand
             {
                 if ( stub.Contains( token, StringComparison.Ordinal ) )
                 {
-                    errors.Add( $"src/process_broker/bootstrap.rs: child stub reaches banned token '{token}'" );
+                    errors.Add( $"broker/src/bootstrap.rs: child stub reaches banned token '{token}'" );
                 }
             }
             var libcCalls = Regex.Matches( stub, @"libc::([A-Za-z0-9_]+)\s*\(" ).Select( match => match.Groups[1].Value ).ToHashSet( );
             foreach ( var unexpected in libcCalls.Except( ["syscall", "_exit"] ).Order( ) )
             {
-                errors.Add( $"src/process_broker/bootstrap.rs: child stub reaches unapproved libc call: {unexpected}" );
+                errors.Add( $"broker/src/bootstrap.rs: child stub reaches unapproved libc call: {unexpected}" );
             }
             var syscalls = Regex.Matches( stub, @"libc::SYS_([A-Za-z0-9_]+)" ).Select( match => match.Groups[1].Value ).ToHashSet( );
-            foreach ( var unexpected in syscalls.Except( ["fcntl", "dup3", "setpgid", "exit_group", "close_range", "execve"] ).Order( ) )
+            foreach ( var unexpected in syscalls.Except( ["fcntl", "dup3", "setpgid", "exit_group", "close_range", "execveat"] ).Order( ) )
             {
-                errors.Add( $"src/process_broker/bootstrap.rs: child stub reaches unapproved syscall: {unexpected}" );
+                errors.Add( $"broker/src/bootstrap.rs: child stub reaches unapproved syscall: {unexpected}" );
             }
         }
         Failures( context, errors, "process-site audit passed", "process-site audit failed:" );

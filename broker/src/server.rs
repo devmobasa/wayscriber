@@ -83,6 +83,7 @@ fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
 
 fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
     let mut ownership = BrokerOwnership::default();
+    let mut compatible = false;
     loop {
         if wait_for_request(socket, shutdown_fd)? == BrokerWake::Shutdown {
             ownership.release_retained_publication();
@@ -108,6 +109,10 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
         if !canonical_lower_hex(&request.request_id, 32) {
             bail!("broker request identity is not canonical");
         }
+        let is_hello = matches!(&request.operation, BrokerOperation::Hello);
+        if !compatible && !is_hello {
+            bail!("broker compatibility hello is required before helper work");
+        }
         let request_id = request.request_id;
         let mut descriptors = VecDeque::from(descriptors);
         let wire_response = handle_operation(
@@ -122,6 +127,9 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
             },
             descriptors: Vec::new(),
         });
+        if is_hello && matches!(&wire_response.outcome, BrokerOutcome::Hello { .. }) {
+            compatible = true;
+        }
         let response = BrokerResponse {
             request_id,
             outcome: wire_response.outcome,
@@ -242,6 +250,13 @@ fn handle_operation(
         bail!("broker operation cancelled during shutdown");
     }
     match operation {
+        BrokerOperation::Hello => {
+            reject_descriptors(descriptors)?;
+            Ok(wire_outcome(BrokerOutcome::Hello {
+                protocol_generation: super::BROKER_PROTOCOL_GENERATION,
+                cohort: super::BROKER_COHORT.to_owned(),
+            }))
+        }
         BrokerOperation::Ping => {
             reject_descriptors(descriptors)?;
             Ok(wire_outcome(BrokerOutcome::Acknowledged))

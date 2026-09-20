@@ -254,6 +254,7 @@ internal static class RepositoryPaths
     public const string CargoLock = "Cargo.lock";
     public const string CargoManifest = "Cargo.toml";
     public const string ConfiguratorCargoManifest = "configurator/Cargo.toml";
+    public const string BrokerCargoManifest = "broker/Cargo.toml";
     public const string ConfiguratorDirectory = "configurator";
     public const string DebugDirectory = "debug";
     public const string PackagingDirectory = "packaging";

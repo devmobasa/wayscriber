@@ -79,9 +79,6 @@ pub fn run_from_env() -> ExitCode {
     let _run_entry = RUN_ENTRY_LEASE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(exit_code) = process_broker::run_internal_broker_if_requested() {
-        return exit_code;
-    }
     match cli::Cli::parse() {
         Ok(CliOutcome::Run(cli)) => {
             logger::init(cli.daemon || cli.active);

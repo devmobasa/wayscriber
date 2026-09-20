@@ -8,6 +8,7 @@ Usage: tools/check-version-consistency.sh [--release-version X.Y.Z[.N]]
 Checks that release/version metadata agrees across:
   * Cargo.toml
   * configurator/Cargo.toml
+  * broker/Cargo.toml
   * Cargo.lock
   * packaging/PKGBUILD
   * packaging/.SRCINFO
@@ -248,6 +249,8 @@ def require_template_sha256sums(label, values):
 root_version = cargo_version("Cargo.toml")
 config_version = cargo_version("configurator/Cargo.toml")
 require_equal("configurator/Cargo.toml", config_version, root_version)
+broker_version = cargo_version("broker/Cargo.toml")
+require_equal("broker/Cargo.toml", broker_version, root_version)
 require_equal("global.json SDK", global_json_sdk("global.json"), repository_tool_sdk)
 
 expected_libadwaita_feature = "v" + supported_libadwaita_floor.replace(".", "_")
@@ -325,6 +328,11 @@ require_equal(
 require_equal(
     "Cargo.lock wayscriber-configurator",
     lock_package_version("Cargo.lock", "wayscriber-configurator"),
+    root_version,
+)
+require_equal(
+    "Cargo.lock wayscriber-process-broker",
+    lock_package_version("Cargo.lock", "wayscriber-process-broker"),
     root_version,
 )
 

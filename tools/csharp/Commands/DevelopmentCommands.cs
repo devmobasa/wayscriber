@@ -38,7 +38,8 @@ internal static class DevelopmentCommands
     {
         new Arguments( args ).RequireEmpty( "dev build" );
         await context.Output.WriteLineAsync( "Building wayscriber (default features)..." );
-        await context.Run( Programs.Cargo, ["build", CommandLineOptions.Release, CommandLineOptions.Binaries] );
+        await context.Run( Programs.Cargo,
+            ["build", CommandLineOptions.Release, "-p", RepositoryNames.MainPackage, "-p", RepositoryNames.BrokerPackage, CommandLineOptions.Binaries] );
         await context.Output.WriteLineAsync( "Build complete." );
         return ExitCodes.Success;
     }
@@ -273,7 +274,9 @@ internal static class DevelopmentCommands
         IReadOnlyDictionary<string, string?>? environment = mode == NativeLibraryModes.Static
             ? new Dictionary<string, string?> { [EnvironmentVariables.SystemGtk4LayerShellLink] = NativeLibraryModes.Static }
             : null;
-        await context.Run( Programs.Cargo, ["build", CommandLineOptions.Locked, "--bin", RepositoryNames.MainPackage], environment: environment );
+        await context.Run( Programs.Cargo,
+            ["build", CommandLineOptions.Locked, "-p", RepositoryNames.MainPackage, "-p", RepositoryNames.BrokerPackage,
+                CommandLineOptions.Binaries], environment: environment );
         var verification = mode == NativeLibraryModes.Static ? CommandNames.VerifyStatic : CommandNames.VerifyDynamic;
         return await ToolApplication.RunNestedAsync( context, CommandAreas.Elf, verification,
             [context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.DebugDirectory, RepositoryNames.MainPackage )] );

@@ -17,9 +17,6 @@ pub const DEFAULT_UPDATE_URL: &str = "https://wayscriber.com/docs/getting-starte
 /// Release notes, used under the same fallback rule.
 pub const DEFAULT_NOTES_URL: &str = "https://wayscriber.com/docs/release-notes.html";
 
-/// Hosts whose HTTPS URLs may be opened from manifest data.
-const TRUSTED_HOSTS: [&str; 2] = ["wayscriber.com", "www.wayscriber.com"];
-
 /// Largest manifest we will parse. The real file is well under 1 KiB.
 pub(crate) const MAX_MANIFEST_BYTES: usize = 64 * 1024;
 
@@ -80,17 +77,7 @@ fn trusted_url(candidate: Option<&str>, fallback: &str) -> String {
         .to_string()
 }
 
-/// HTTPS + exact host match. The host must be followed by a path, query,
-/// fragment, or end of string so `wayscriber.com.example/` cannot pass.
-pub(crate) fn is_trusted_url(url: &str) -> bool {
-    let Some(rest) = url.strip_prefix("https://") else {
-        return false;
-    };
-    TRUSTED_HOSTS.iter().any(|host| {
-        rest.strip_prefix(host)
-            .is_some_and(|tail| tail.is_empty() || tail.starts_with(['/', '?', '#']))
-    })
-}
+pub(crate) use wayscriber_process_broker::is_trusted_url;
 
 /// Append the docs anchor for this build's install source, when one is known.
 /// Package builds set `WAYSCRIBER_INSTALL_SOURCE` so the update page opens on

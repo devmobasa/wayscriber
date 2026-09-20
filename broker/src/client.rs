@@ -30,19 +30,19 @@ pub(super) struct BrokerInner {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ProcessBroker {
+pub struct ProcessBroker {
     pub(super) inner: Arc<BrokerInner>,
 }
 
 #[derive(Debug)]
-pub(crate) struct BrokerChild {
+pub struct BrokerChild {
     broker: ProcessBroker,
     handle: String,
     pid: u32,
 }
 
 #[derive(Debug)]
-pub(crate) struct ProcessBrokerGuard {
+pub struct ProcessBrokerGuard {
     broker: ProcessBroker,
 }
 
@@ -55,7 +55,7 @@ struct RunOptions {
 
 /// Failure text used when a caller declines to wait for the transport.
 /// Callers match on it to offer "try again" rather than a generic failure.
-pub(crate) const BROKER_BUSY: &str = "process broker is busy running another helper";
+pub const BROKER_BUSY: &str = "process broker is busy running another helper";
 
 /// How a caller wants the single-socket transport acquired.
 ///
@@ -91,7 +91,7 @@ fn active_slot() -> &'static Mutex<Weak<BrokerInner>> {
     ACTIVE_BROKER.get_or_init(|| Mutex::new(Weak::new()))
 }
 
-pub(crate) fn start_for_runtime() -> Result<ProcessBrokerGuard> {
+pub fn start_for_runtime() -> Result<ProcessBrokerGuard> {
     let broker = super::bootstrap::start()?;
     *active_slot()
         .lock()
@@ -99,7 +99,7 @@ pub(crate) fn start_for_runtime() -> Result<ProcessBrokerGuard> {
     Ok(ProcessBrokerGuard { broker })
 }
 
-pub(crate) fn current() -> Result<ProcessBroker> {
+pub fn current() -> Result<ProcessBroker> {
     let inner = active_slot()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -176,7 +176,7 @@ fn signal_shutdown(descriptor: RawFd) -> std::io::Result<()> {
 
 #[cfg(test)]
 impl ProcessBrokerGuard {
-    pub(crate) fn broker(&self) -> &ProcessBroker {
+    pub fn broker(&self) -> &ProcessBroker {
         &self.broker
     }
 }
@@ -251,7 +251,7 @@ impl ProcessBroker {
         Ok((response.outcome, descriptors))
     }
 
-    pub(crate) fn run<I, S>(
+    pub fn run<I, S>(
         &self,
         kind: HelperKind,
         program: &OsStr,
@@ -278,7 +278,7 @@ impl ProcessBroker {
     }
 
     /// Reads a bounded stdout prefix. The broker restricts this mode to `wl-paste`.
-    pub(crate) fn run_prefix<I, S>(
+    pub fn run_prefix<I, S>(
         &self,
         kind: HelperKind,
         program: &OsStr,
@@ -365,7 +365,7 @@ impl ProcessBroker {
         }
     }
 
-    pub(crate) fn publish<I, S>(
+    pub fn publish<I, S>(
         &self,
         kind: HelperKind,
         program: &OsStr,
@@ -421,7 +421,7 @@ impl ProcessBroker {
         }
     }
 
-    pub(crate) fn spawn<I, S>(
+    pub fn spawn<I, S>(
         &self,
         kind: HelperKind,
         lifetime: HelperLifetime,
@@ -453,7 +453,7 @@ impl ProcessBroker {
     /// overlay spawn, the tray, startup detach — must keep queueing: those
     /// requests have to happen, and failing them behind an unrelated helper
     /// would turn a wait into a spurious error and a retry backoff.
-    pub(crate) fn try_spawn<I, S>(
+    pub fn try_spawn<I, S>(
         &self,
         kind: HelperKind,
         lifetime: HelperLifetime,
@@ -478,7 +478,7 @@ impl ProcessBroker {
         )
     }
 
-    pub(crate) fn spawn_with_watchdog<I, S>(
+    pub fn spawn_with_watchdog<I, S>(
         &self,
         kind: HelperKind,
         lifetime: HelperLifetime,
@@ -563,16 +563,16 @@ fn broker_exchange_timeout(operation: &BrokerOperation) -> Duration {
         BrokerOperation::Signal { .. }
         | BrokerOperation::TryWait { .. }
         | BrokerOperation::KillWait { .. } => Duration::from_secs(5),
-        BrokerOperation::Ping => Duration::from_secs(2),
+        BrokerOperation::Hello | BrokerOperation::Ping => Duration::from_secs(2),
     }
 }
 
 impl BrokerChild {
-    pub(crate) fn id(&self) -> u32 {
+    pub fn id(&self) -> u32 {
         self.pid
     }
 
-    pub(crate) fn signal(&self, signal: i32) -> Result<()> {
+    pub fn signal(&self, signal: i32) -> Result<()> {
         match self.broker.request(BrokerOperation::Signal {
             handle: self.handle.clone(),
             signal,
@@ -582,7 +582,7 @@ impl BrokerChild {
         }
     }
 
-    pub(crate) fn try_wait(&self) -> Result<Option<i32>> {
+    pub fn try_wait(&self) -> Result<Option<i32>> {
         match self.broker.request(BrokerOperation::TryWait {
             handle: self.handle.clone(),
         })? {
@@ -592,7 +592,7 @@ impl BrokerChild {
         }
     }
 
-    pub(crate) fn kill_wait(&self) -> Result<i32> {
+    pub fn kill_wait(&self) -> Result<i32> {
         match self.broker.request(BrokerOperation::KillWait {
             handle: self.handle.clone(),
         })? {

@@ -9,7 +9,7 @@ repository = "https://github.com/devmobasa/wayscriber"
 default-run = "wayscriber"
 
 [workspace]
-members = ["configurator"]
+members = ["configurator", "broker"]
 default-members = ["."]
 
 [workspace.lints.clippy]
@@ -19,6 +19,7 @@ cognitive_complexity = "warn"
 workspace = true
 
 [dependencies]
+wayscriber-process-broker = { path = "broker" }
 # Wayland
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }

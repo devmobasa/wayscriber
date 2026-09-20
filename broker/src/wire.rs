@@ -25,11 +25,11 @@ pub(super) const REQUIRED_MEMFD_SEALS: i32 =
 /// The broker rejects that run rather than returning a truncated result, so the
 /// only signal a caller gets is this message. Callers that distinguish
 /// "produced too much output" from other transport failures match on it.
-pub(crate) const STDOUT_CAP_EXCEEDED: &str = "broker helper stdout exceeded output cap";
+pub const STDOUT_CAP_EXCEEDED: &str = "broker helper stdout exceeded output cap";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum HelperKind {
+pub enum HelperKind {
     Overlay,
     InitialDetach,
     CapabilityProbe,
@@ -59,7 +59,7 @@ pub(crate) enum HelperKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum HelperLifetime {
+pub enum HelperLifetime {
     OperationBound,
     OwnedChild,
     DetachedAfterExec,
@@ -85,6 +85,7 @@ pub(super) struct BrokerRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "operation", deny_unknown_fields)]
 pub(super) enum BrokerOperation {
+    Hello,
     Ping,
     Run {
         kind: HelperKind,
@@ -134,6 +135,10 @@ pub(super) struct BrokerResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "outcome", deny_unknown_fields)]
 pub(super) enum BrokerOutcome {
+    Hello {
+        protocol_generation: u32,
+        cohort: String,
+    },
     Output {
         status: i32,
         stdout: BlobWire,
@@ -187,10 +192,10 @@ impl OsWire {
 }
 
 #[derive(Debug)]
-pub(crate) struct BrokerOutput {
-    pub(crate) status: i32,
-    pub(crate) stdout: Vec<u8>,
-    pub(crate) stderr: Vec<u8>,
-    pub(crate) timed_out: bool,
-    pub(crate) stdout_limit_reached: bool,
+pub struct BrokerOutput {
+    pub status: i32,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub timed_out: bool,
+    pub stdout_limit_reached: bool,
 }

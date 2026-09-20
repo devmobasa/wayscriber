@@ -46,7 +46,20 @@ pub(super) fn validate(
         .to_owned();
     let allowed = match kind {
         HelperKind::Overlay | HelperKind::InitialDetach | HelperKind::About => {
-            basename == "wayscriber" || basename.starts_with("wayscriber-")
+            #[cfg(test)]
+            {
+                basename == "wayscriber" || basename.starts_with("wayscriber-")
+            }
+            #[cfg(not(test))]
+            {
+                // The broker executable must never substitute for the public
+                // app when spawning an overlay, detach child, or About window.
+                // Its parent is the client process that created this broker.
+                // SAFETY: getppid has no preconditions.
+                let parent_pid = unsafe { libc::getppid() };
+                let parent_exe = std::fs::read_link(format!("/proc/{parent_pid}/exe"))?;
+                std::path::Path::new(&program) == parent_exe.as_path()
+            }
         }
         HelperKind::CapabilityProbe => matches!(
             basename.as_str(),
