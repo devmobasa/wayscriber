@@ -262,7 +262,10 @@ fn event_loop_timeout(
     last_render_time: Option<Instant>,
 ) -> Option<Duration> {
     let vsync_enabled = state.config.performance.enable_vsync;
-    let should_block = capture_active
+    // A capture preflight still needs a hidden redraw. If the FPS cap delayed
+    // that redraw, keep its deadline armed instead of blocking for an unrelated
+    // Wayland event that may never arrive.
+    let should_block = (capture_active && (vsync_enabled || !state.input_state.needs_redraw))
         || !state.surface.is_configured()
         || (vsync_enabled && state.surface.frame_callback_pending());
     let now = Instant::now();
