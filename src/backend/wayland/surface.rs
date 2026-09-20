@@ -389,6 +389,14 @@ impl SurfaceState {
         self.frame_callbacks.is_pending()
     }
 
+    /// Number of current-generation slots still owned by submitted buffers.
+    pub(in crate::backend::wayland) fn active_slot_count(&self) -> usize {
+        self.slots
+            .iter()
+            .filter(|slot| slot.has_active_buffers())
+            .count()
+    }
+
     /// Updates the stored pool size and returns true if it grew.
     ///
     /// Call this after `create_buffer` to detect if the pool grew during allocation.

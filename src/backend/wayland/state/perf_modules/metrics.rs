@@ -2,16 +2,26 @@ use super::*;
 
 impl PerfMetrics {
     pub(in crate::backend::wayland::state) fn from_env() -> Self {
-        let enabled = perf_log_enabled_from_env();
-        if enabled {
+        let run_enabled = perf_run_enabled_from_env();
+        let perf_log_enabled = perf_log_enabled_from_env();
+        let enabled = perf_log_enabled || run_enabled;
+        if perf_log_enabled {
             info!("Performance logging enabled via {PERF_LOG_ENV}=1");
         }
-        Self::new(enabled)
+        let mut metrics = Self::new(enabled);
+        if run_enabled {
+            metrics.run_latency = Some(RunLatencyHistogram::new());
+            metrics.run_slots = Some(RunSlotStats::new());
+            info!("Run latency collection enabled via {PERF_RUN_ENV}=1");
+        }
+        metrics
     }
 
     fn new(enabled: bool) -> Self {
         Self {
             enabled,
+            run_latency: None,
+            run_slots: None,
             pending_input_samples: VecDeque::new(),
             recent_latencies_ms: VecDeque::new(),
             recent_render_ms: VecDeque::new(),
@@ -42,6 +52,24 @@ impl PerfMetrics {
 
     pub(super) fn enabled(&self) -> bool {
         self.enabled
+    }
+
+    pub(super) fn record_buffer_deferral(&mut self, now: Instant) {
+        if let Some(stats) = self.run_slots.as_mut() {
+            stats.defer(now);
+        }
+    }
+
+    pub(super) fn record_buffer_submit(
+        &mut self,
+        generation: u64,
+        canvas_ptr: usize,
+        in_flight: usize,
+        now: Instant,
+    ) {
+        if let Some(stats) = self.run_slots.as_mut() {
+            stats.submit(generation, canvas_ptr, in_flight, now);
+        }
     }
 
     pub(super) fn begin_render(&mut self, now: Instant) {
@@ -221,6 +249,9 @@ impl PerfMetrics {
             canvas_y,
             pressure_sample,
         });
+        if let Some(run) = self.run_latency.as_mut() {
+            run.begin(received_at);
+        }
     }
 
     pub(super) fn commit_frame(
@@ -246,6 +277,9 @@ impl PerfMetrics {
         while let Some(sample) = self.pending_input_samples.pop_front() {
             let latency = commit_at.saturating_duration_since(sample.received_at);
             self.push_latency_ms(duration_ms(latency));
+            if let Some(run) = self.run_latency.as_mut() {
+                run.record(latency, commit_at);
+            }
             sample_count += 1;
             if latency >= max_latency {
                 max_latency = latency;
@@ -457,6 +491,13 @@ impl PerfMetrics {
     pub(super) fn flush_pending_summaries(&mut self, now: Instant) -> PerfFinalSummaryReport {
         if !self.enabled {
             return PerfFinalSummaryReport::default();
+        }
+
+        if let Some(run) = self.run_latency.as_ref() {
+            run.log_final(self.pending_input_samples.len(), self.dropped_input_samples);
+        }
+        if let Some(slots) = self.run_slots.as_ref() {
+            slots.log_final(now);
         }
 
         let input = if self.samples_since_summary > 0 && !self.recent_latencies_ms.is_empty() {

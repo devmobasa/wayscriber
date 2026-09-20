@@ -88,6 +88,9 @@ impl WaylandState {
                 geometry.stride,
             )
         })?;
+        let submitted_slot = acquired
+            .as_ref()
+            .map(|buffer| (buffer.pool_generation, buffer.canvas_ptr));
         let outcome = render_acquired_frame(acquired, |acquired| {
             let prepared = self.prepare_frame(geometry, visibility, &acquired, &mut breakdown);
             let plan = plan_frame(prepared);
@@ -98,6 +101,14 @@ impl WaylandState {
         if outcome == RenderOutcome::BuffersInFlight {
             debug!("All {buffer_count} buffers in flight - deferring this frame");
             self.record_perf_render_skip(PerfRenderSkipReason::BuffersInFlight);
+            self.record_perf_buffer_deferral(Instant::now());
+        } else if let Some((generation, canvas_ptr)) = submitted_slot {
+            self.record_perf_buffer_submit(
+                generation,
+                canvas_ptr,
+                self.surface.active_slot_count(),
+                Instant::now(),
+            );
         }
         Ok(outcome)
     }

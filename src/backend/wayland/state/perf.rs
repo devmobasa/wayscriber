@@ -7,7 +7,7 @@ use std::{
 use log::info;
 
 use crate::{
-    env_vars::PERF_LOG_ENV,
+    env_vars::{PERF_LOG_ENV, PERF_RUN_ENV},
     input::{DrawingState, Tool},
 };
 
@@ -19,6 +19,12 @@ mod damage_diagnostics;
 mod metrics;
 #[path = "perf_modules/render_breakdown.rs"]
 mod render_breakdown;
+#[path = "perf_modules/run_latency.rs"]
+mod run_latency;
+use run_latency::RunLatencyHistogram;
+#[path = "perf_modules/run_slots.rs"]
+mod run_slots;
+use run_slots::RunSlotStats;
 
 pub(in crate::backend::wayland) use damage_diagnostics::{
     PerfDamageDiagnostics, PerfFrameDamageContext, damage_covers_logical_surface,
@@ -226,6 +232,8 @@ struct PerfFramePacingSummary {
 #[derive(Debug)]
 pub(super) struct PerfMetrics {
     enabled: bool,
+    run_latency: Option<RunLatencyHistogram>,
+    run_slots: Option<RunSlotStats>,
     pending_input_samples: VecDeque<PerfInputSample>,
     recent_latencies_ms: VecDeque<u64>,
     recent_render_ms: VecDeque<u64>,
@@ -371,6 +379,21 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn flush_perf_summaries(&mut self, now: Instant) {
         let _ = self.perf.flush_pending_summaries(now);
     }
+
+    pub(in crate::backend::wayland) fn record_perf_buffer_deferral(&mut self, now: Instant) {
+        self.perf.record_buffer_deferral(now);
+    }
+
+    pub(in crate::backend::wayland) fn record_perf_buffer_submit(
+        &mut self,
+        generation: u64,
+        canvas_ptr: usize,
+        in_flight: usize,
+        now: Instant,
+    ) {
+        self.perf
+            .record_buffer_submit(generation, canvas_ptr, in_flight, now);
+    }
 }
 
 fn log_input_summary(summary: &PerfSummary, final_summary: bool) {
@@ -416,6 +439,12 @@ fn log_frame_pacing_summary(summary: &PerfFramePacingSummary, final_summary: boo
 
 fn perf_log_enabled_from_env() -> bool {
     std::env::var(PERF_LOG_ENV)
+        .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "on" | "ON"))
+        .unwrap_or(false)
+}
+
+fn perf_run_enabled_from_env() -> bool {
+    std::env::var(PERF_RUN_ENV)
         .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "on" | "ON"))
         .unwrap_or(false)
 }
