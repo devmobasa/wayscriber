@@ -158,6 +158,10 @@ cut -d' ' -f2 "$MANIFEST" | LC_ALL=C sort > "$WORK_DIR/expected-paths.txt"
 DUPLICATE_PATHS="$(uniq -d "$WORK_DIR/expected-paths.txt")"
 [[ -z "$DUPLICATE_PATHS" ]] \
     || die "installer manifest contains duplicate paths: $DUPLICATE_PATHS"
+for binary in wayscriber wayscriber-broker; do
+    grep -Fxq "0755 bin/$binary" "$MANIFEST" \
+        || die "installer manifest must include executable bin/$binary"
+done
 
 tar -tzf "$ARCHIVE" > "$WORK_DIR/archive-paths.txt"
 ARCHIVE_ROOT="$(awk -F/ 'NF > 0 && $1 != "" { print $1; exit }' "$WORK_DIR/archive-paths.txt")"

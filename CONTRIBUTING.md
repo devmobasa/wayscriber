@@ -45,7 +45,7 @@ available for development and installation on machines without .NET. Nix does
 not provide .NET; `global.json` selects the required SDK when it is installed
 separately.
 
-Build both packages without launching a window:
+Build every workspace package without launching a window:
 
 ```bash
 cargo build --workspace

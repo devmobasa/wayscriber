@@ -524,6 +524,11 @@ internal static class ReleaseAurCommands
             text = Regex.Replace( text, "\"\\$srcdir/(wayscriber(?:-configurator)?\\.desktop)\"", "packaging/$1" );
             text = Regex.Replace( text, "\"\\$srcdir/(wayscriber(?:-configurator)?-[0-9]+\\.png)\"", "packaging/icons/$1" );
         }
+        if ( channel is PackageChannels.Source or PackageChannels.Binary )
+        {
+            text = EnsureBrokerCompanion( text, channel );
+        }
+
         text = ApplyDesktopAssets( text, recipes[channel]!.AsObject( ) );
         Files.WriteAtomic( path, text );
         var srcinfoPath = Path.Combine( directory, RepositoryNames.SourceInfoFile );
@@ -537,6 +542,44 @@ internal static class ReleaseAurCommands
         {
             File.Delete( Path.Combine( directory, "wayscriber-bin.install" ) );
         }
+    }
+
+    internal static string EnsureBrokerCompanion( string text, string channel )
+    {
+        var binary = channel == PackageChannels.Binary;
+        var source = binary ? "${srcdir_tmp}/usr/bin/" : "target/release/";
+        var mainInstall = $"    install -Dm755 \"{source}wayscriber\" \"$pkgdir/usr/bin/wayscriber\"";
+        var brokerInstall = $"    install -Dm755 \"{source}wayscriber-broker\" \"$pkgdir/usr/bin/wayscriber-broker\"";
+        if ( !text.Contains( brokerInstall, StringComparison.Ordinal ) )
+        {
+            if ( !text.Contains( mainInstall, StringComparison.Ordinal ) )
+            {
+                throw new ToolException( "Wayscriber PKGBUILD has no public binary install line." );
+            }
+
+            text = text.Replace( mainInstall, mainInstall + "\n" + brokerInstall, StringComparison.Ordinal );
+        }
+
+        if ( binary || Regex.IsMatch( text, @"(?m)^\s*cargo build .*wayscriber-process-broker" ) )
+        {
+            return text;
+        }
+
+        var build = new Regex( @"(?m)^([ \t]*cargo build[^\n]*)$" );
+        if ( build.IsMatch( text ) )
+        {
+            return build.Replace( text, "$1 -p wayscriber -p wayscriber-process-broker --bins", 1 );
+        }
+
+        var package = "package() {";
+        if ( !text.Contains( package, StringComparison.Ordinal ) )
+        {
+            throw new ToolException( "Wayscriber source PKGBUILD has no package function." );
+        }
+
+        return text.Replace( package,
+            "build() {\n    cd \"wayscriber-$pkgver\"\n    cargo build --frozen --release -p wayscriber -p wayscriber-process-broker --bins\n}\n\n" + package,
+            StringComparison.Ordinal );
     }
 
     private static string TransformSrcInfo( string text, string channel, string version, int release, string sourceSha, string binarySha )

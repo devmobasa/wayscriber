@@ -73,16 +73,24 @@ internal static class PackagingCommands
         {
             await ToolApplication.RunNestedAsync( context, CommandAreas.Native, CommandNames.InstallGtk4LayerShell,
                 ["--prefix", gtkPrefix, "--library-mode", NativeLibraryModes.Static] );
-            await context.Run( Programs.Cargo, ["build", CommandLineOptions.Locked, CommandLineOptions.Release, CommandLineOptions.Binaries], environment: environment );
+            await context.Run( Programs.Cargo,
+                ["build", CommandLineOptions.Locked, CommandLineOptions.Release, "-p", RepositoryNames.MainPackage, "-p", RepositoryNames.BrokerPackage,
+                    CommandLineOptions.Binaries], environment: environment );
             if ( configurator )
             {
                 await context.Run( Programs.Cargo, ["build", CommandLineOptions.Locked, CommandLineOptions.Release, CommandLineOptions.Binaries, "--manifest-path", RepositoryPaths.ConfiguratorCargoManifest], environment: environment );
             }
         }
         var mainBinary = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.MainPackage );
+        var brokerBinary = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.BrokerBinary );
         var configBinary = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.ConfiguratorPackage );
+        if ( !File.Exists( brokerBinary ) )
+        {
+            throw new ToolException( $"Missing release binary: {brokerBinary}" );
+        }
         await ToolApplication.RunNestedAsync( context, CommandAreas.Elf, CommandNames.VerifyStatic, [mainBinary] );
         await VerifyGlibc( context, mainBinary );
+        await VerifyGlibc( context, brokerBinary );
         if ( configurator )
         {
             if ( !File.Exists( configBinary ) )
@@ -93,7 +101,7 @@ internal static class PackagingCommands
         }
         if ( strip )
         {
-            await StripBinaries( context, mainBinary, configBinary, configurator );
+            await StripBinaries( context, mainBinary, brokerBinary, configBinary, configurator );
         }
 
         var artifacts = await BuildArtifacts( context, formats, artifactRoot, version, configurator, environment );
@@ -101,7 +109,8 @@ internal static class PackagingCommands
         return ExitCodes.Success;
     }
 
-    private static async Task StripBinaries( ToolContext context, string mainBinary, string configuratorBinary, bool includeConfigurator )
+    private static async Task StripBinaries( ToolContext context, string mainBinary, string brokerBinary, string configuratorBinary,
+        bool includeConfigurator )
     {
         var available = await context.Run( Programs.Which, [Programs.Strip], capture: true, trace: false,
             allowedExitCodes: new HashSet<int> { ExitCodes.Success, ExitCodes.Failure } );
@@ -116,6 +125,11 @@ internal static class PackagingCommands
         if ( mainStrip.ExitCode != ExitCodes.Success )
         {
             await context.Error.WriteLineAsync( "[WARN] strip failed for wayscriber" );
+        }
+        var brokerStrip = await context.Run( Programs.Strip, [brokerBinary], allowedExitCodes: nonFatalExitCodes );
+        if ( brokerStrip.ExitCode != ExitCodes.Success )
+        {
+            await context.Error.WriteLineAsync( "[WARN] strip failed for wayscriber-broker" );
         }
         if ( includeConfigurator )
         {
@@ -223,6 +237,8 @@ internal static class PackagingCommands
             {
                 Copy( context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.MainPackage ),
                     "usr/bin/wayscriber", executable );
+                Copy( context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.BrokerBinary ),
+                    "usr/bin/wayscriber-broker", executable );
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, RepositoryNames.UserServiceFile ), "usr/lib/systemd/user/wayscriber.service", regular );
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, "wayscriber.desktop" ), "usr/share/applications/wayscriber.desktop", regular );
                 foreach ( var size in WayscriberIconSizes )
@@ -301,6 +317,14 @@ internal static class PackagingCommands
             throw new ToolException( "Installer or archive was not found." );
         }
         var entries = ParseInstallerManifest( Files.Read( installer ) );
+        foreach ( var binary in new[] { RepositoryNames.MainPackage, RepositoryNames.BrokerBinary } )
+        {
+            if ( !entries.TryGetValue( $"bin/{binary}", out var mode ) || mode != "0755" )
+            {
+                throw new ToolException( $"Installer manifest must include executable bin/{binary}." );
+            }
+        }
+
         var listing = await context.Run( Programs.Tar, ["-tzf", archive], capture: true );
         var archiveRoot = ValidateArchiveListing( listing.StandardOutput );
         using var temporary = new TemporaryDirectory( "wayscriber-arch-manifest" );
@@ -512,7 +536,8 @@ internal static class PackagingCommands
             throw new ToolException( "Main deb retains dynamic gtk4-layer-shell dependency." );
         }
         var mainDebFiles = await context.Run( Programs.DpkgDeb, ["-c", Path.Combine( root, "wayscriber-amd64.deb" )], capture: true );
-        RequireContains( mainDebFiles.StandardOutput, ["/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"], "wayscriber deb files" );
+        RequireContains( mainDebFiles.StandardOutput,
+            ["/usr/bin/wayscriber-broker", "/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"], "wayscriber deb files" );
         var configDepends = await context.Run( Programs.DpkgDeb, ["-f", Path.Combine( root, "wayscriber-configurator-amd64.deb" ), "Depends"], capture: true );
         RequireContains( configDepends.StandardOutput,
             [$"libc6 (>= {PackagingPlatform.MaximumGlibcVersion})", $"libadwaita-1-0 (>= {VersionCommands.SupportedLibadwaitaFloor})"],
@@ -536,14 +561,17 @@ internal static class PackagingCommands
             throw new ToolException( "Main rpm retains dynamic gtk4-layer-shell dependency." );
         }
         var mainRpmFiles = await context.Run( Programs.Rpm, ["--dbpath", rpmDatabase.Path, "-qlp", Path.Combine( root, "wayscriber-x86_64.rpm" )], capture: true );
-        RequireLines( mainRpmFiles.StandardOutput, ["/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"], "wayscriber rpm files" );
+        RequireLines( mainRpmFiles.StandardOutput,
+            ["/usr/bin/wayscriber-broker", "/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"], "wayscriber rpm files" );
         var configRpmRequires = await context.Run( Programs.Rpm, ["--dbpath", rpmDatabase.Path, "-qp", "--requires", Path.Combine( root, "wayscriber-configurator-x86_64.rpm" )], capture: true );
         RequireLines( configRpmRequires.StandardOutput,
             [$"glibc >= {PackagingPlatform.MaximumGlibcVersion}", $"libadwaita >= {VersionCommands.SupportedLibadwaitaFloor}"],
             "configurator rpm dependencies" );
 
         var mainTar = await context.Run( Programs.Tar, ["-tzf", Path.Combine( root, $"wayscriber-v{version}-linux-x86_64.tar.gz" )], capture: true );
-        RequireSuffixes( mainTar.StandardOutput, ["/usr/bin/wayscriber", "/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"], "wayscriber tar files" );
+        RequireSuffixes( mainTar.StandardOutput,
+            ["/usr/bin/wayscriber", "/usr/bin/wayscriber-broker", "/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"],
+            "wayscriber tar files" );
         var configTar = await context.Run( Programs.Tar, ["-tzf", Path.Combine( root, $"wayscriber-configurator-v{version}-linux-x86_64.tar.gz" )], capture: true );
         RequireSuffixes( configTar.StandardOutput, ["/usr/bin/wayscriber-configurator"], "configurator tar files" );
         await context.Output.WriteLineAsync( $"Verified release artifacts for {version}." );
@@ -565,6 +593,7 @@ internal static class PackagingCommands
             await context.Run( Programs.Docker, ["exec", "-e", "DEBIAN_FRONTEND=noninteractive", name, Programs.AptGet, "install", "-y", "/dist/wayscriber-amd64.deb", "/dist/wayscriber-configurator-amd64.deb"] );
             await context.Run( Programs.Docker, ["exec", name, RepositoryNames.MainPackage, CommandLineOptions.Version] );
             await context.Run( Programs.Docker, ["exec", name, Programs.Test, "-x", "/usr/bin/wayscriber-configurator"] );
+            await context.Run( Programs.Docker, ["exec", name, Programs.Test, "-x", "/usr/bin/wayscriber-broker"] );
         }
         finally
         {

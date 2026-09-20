@@ -577,7 +577,8 @@ capture suppression operates on the paired resources without runtime pairing che
 | `src/lib.rs` | Canonical module graph, CLI/error entry facade, and reusable public exports. |
 | `src/domain/` | Stable action, tool, color, and board values with no upward runtime dependencies. |
 | `src/daemon/` | Background daemon control queue, lifecycle, overlay child, shortcuts, and tray. |
-| `src/process_broker/` | Pre-lock, bounded runtime helper creation and broker-only child reaping. |
+| `src/process_broker/` | Main-process broker client facade and test-thread coverage. |
+| `broker/` | Private client/wire package and small companion executable for helper creation and child reaping. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), input/render handlers, and the `runtime_ui_state/` preference store. |
 | `src/input/` | Event/state machine, tools, board/page ownership, selection, and action routing. |
 | `src/draw/` | Vector drawing primitives, frames/pages, history, fonts, and rendering helpers. |

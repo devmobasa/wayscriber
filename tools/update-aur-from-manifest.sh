@@ -427,6 +427,51 @@ has_unmanaged_wayscriber_desktop_assets() {
 
 # Emit package-time variables literally, just like the existing recipe templates.
 # shellcheck disable=SC2016
+ensure_broker_companion() {
+    local channel="$1" anchor broker_line
+    if [[ "$channel" == bin ]]; then
+        anchor='    install -Dm755 "${srcdir_tmp}/usr/bin/wayscriber" "$pkgdir/usr/bin/wayscriber"'
+        broker_line='    install -Dm755 "${srcdir_tmp}/usr/bin/wayscriber-broker" "$pkgdir/usr/bin/wayscriber-broker"'
+    else
+        anchor='    install -Dm755 "target/release/wayscriber" "$pkgdir/usr/bin/wayscriber"'
+        broker_line='    install -Dm755 "target/release/wayscriber-broker" "$pkgdir/usr/bin/wayscriber-broker"'
+    fi
+    if ! grep -Fxq "$broker_line" PKGBUILD; then
+        WAYSCRIBER_MAIN_INSTALL="$anchor" WAYSCRIBER_BROKER_INSTALL="$broker_line" \
+            perl -0pi -e '
+                my $anchor = $ENV{WAYSCRIBER_MAIN_INSTALL};
+                s{^\Q$anchor\E$}{$anchor . "\n" . $ENV{WAYSCRIBER_BROKER_INSTALL}}me
+                    or die "wayscriber PKGBUILD has no public binary install line\n";
+            ' PKGBUILD
+    fi
+    if [[ "$channel" == source ]] && ! grep -Eq '^[[:space:]]*cargo build .*wayscriber-process-broker' PKGBUILD; then
+        if grep -Eq '^[[:space:]]*cargo build ' PKGBUILD; then
+            perl -0pi -e '
+                s{^([ \t]*cargo build[^\n]*)$}{$1 . " -p wayscriber -p wayscriber-process-broker --bins"}me
+                    or die "wayscriber source PKGBUILD has no cargo build command\n";
+            ' PKGBUILD
+        else
+            perl -0pi -e '
+                s~^package\(\) \{~"build() {\n    cd \"\$pkgname-\$pkgver\"\n    cargo build --frozen --release -p wayscriber -p wayscriber-process-broker --bins\n}\n\npackage() {"~me
+                    or die "wayscriber source PKGBUILD has no package function\n";
+            ' PKGBUILD
+        fi
+    fi
+}
+
+validate_broker_companion() {
+    local channel="$1" dir="$2" broker_line
+    if [[ "$channel" == bin ]]; then
+        broker_line='    install -Dm755 "${srcdir_tmp}/usr/bin/wayscriber-broker" "$pkgdir/usr/bin/wayscriber-broker"'
+    else
+        broker_line='    install -Dm755 "target/release/wayscriber-broker" "$pkgdir/usr/bin/wayscriber-broker"'
+        grep -Eq '^[[:space:]]*cargo build .*wayscriber-process-broker' "$dir/PKGBUILD" || return 1
+    fi
+    grep -Fxq "$broker_line" "$dir/PKGBUILD"
+}
+
+# Emit package-time variables literally, just like the existing recipe templates.
+# shellcheck disable=SC2016
 wayscriber_desktop_install_lines() {
     local channel="$1" source destination
     while read -r source destination; do
@@ -678,6 +723,7 @@ update_bin() {
     # aligned with the binary instead of inheriting source-build dependencies.
     remove_runtime_dependency gtk4-layer-shell
     ensure_bin_layer_shell_license
+    ensure_broker_companion bin
     ensure_wayscriber_desktop_assets bin
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
@@ -715,6 +761,7 @@ update_source() {
     replace_pkgbuild_array PKGBUILD sha256sums "sha256sums=('${source_sha}')"
     replace_line PKGBUILD 'cd "\$pkgname"' 'cd "$pkgname-$pkgver"'
     rewrite_packaging_asset_paths
+    ensure_broker_companion source
     ensure_wayscriber_desktop_assets source
 
     set_srcinfo_field .SRCINFO pkgver "${VERSION}"
@@ -789,11 +836,13 @@ validate_selected_recipes() {
     if [[ "$SOURCE_SELECTED" -eq 1 ]]; then
         validate_recipe_pair "wayscriber" "$source_dir" sha256sums "$SOURCE_ARCHIVE_SHA"
         validate_wayscriber_desktop_assets source "$source_dir"
+        validate_broker_companion source "$source_dir"
     fi
     if [[ "$BIN_SELECTED" -eq 1 ]]; then
         validate_recipe_pair \
             "wayscriber-bin" "$bin_dir" sha256sums_x86_64 "$BIN_ARCHIVE_SHA"
         validate_wayscriber_desktop_assets bin "$bin_dir"
+        validate_broker_companion bin "$bin_dir"
     fi
     if [[ "$CONFIGURATOR_SELECTED" -eq 1 ]]; then
         validate_configurator_recipe "$config_dir"

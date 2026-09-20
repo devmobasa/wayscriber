@@ -28,6 +28,42 @@ public sealed class RepositoryContractTests
     }
 
     [Fact]
+    public async Task AppInstallerSelectsCompleteCohortsAndRetainsThePreviousPair( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory( "wayscriber-install-cohort-test" );
+        var release = Path.Combine( fixture.Path, "target/release" );
+        var install = Path.Combine( fixture.Path, "installed/bin" );
+        Directory.CreateDirectory( release );
+        Directory.CreateDirectory( install );
+        var sourceApp = Path.Combine( release, RepositoryNames.MainPackage );
+        var sourceBroker = Path.Combine( release, RepositoryNames.BrokerBinary );
+        File.WriteAllText( sourceApp, "app-v1" );
+        File.WriteAllText( sourceBroker, "broker-v1" );
+        var context = new ToolContext( fixture.Path, TextWriter.Null, TextWriter.Null,
+            new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
+        var destination = Path.Combine( install, RepositoryNames.MainPackage );
+
+        await NativeDesktopCommands.InstallAppCohort( context, install, destination );
+        var first = Path.GetFullPath( Path.Combine( install, new FileInfo( destination ).LinkTarget! ) );
+        Assert.Equal( "app-v1", File.ReadAllText( first ) );
+        Assert.Equal( "broker-v1", File.ReadAllText( Path.Combine( Path.GetDirectoryName( first )!, RepositoryNames.BrokerBinary ) ) );
+
+        File.WriteAllText( sourceApp, "app-v2" );
+        File.WriteAllText( sourceBroker, "broker-v2" );
+        await NativeDesktopCommands.InstallAppCohort( context, install, destination );
+        var second = Path.GetFullPath( Path.Combine( install, new FileInfo( destination ).LinkTarget! ) );
+        Assert.NotEqual( first, second );
+        Assert.Equal( "app-v2", File.ReadAllText( second ) );
+        Assert.Equal( "broker-v2", File.ReadAllText( Path.Combine( Path.GetDirectoryName( second )!, RepositoryNames.BrokerBinary ) ) );
+        Assert.Equal( "app-v1", File.ReadAllText( first ) );
+    }
+
+    [Fact]
     public void CsharpInstallShortcutRoutesToTheSharedAppInstaller( )
     {
         var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/install.cs" ) );
@@ -236,6 +272,8 @@ pkgname = wayscriber
         Assert.Contains( "pkgrel=2", pkgbuild );
         Assert.Contains( "# End Wayscriber desktop integration", pkgbuild );
         Assert.Single( Regex.Matches( pkgbuild, "# Wayscriber desktop integration" ).Cast<Match>( ) );
+        Assert.Single( Regex.Matches( pkgbuild, "wayscriber-process-broker --bins" ).Cast<Match>( ) );
+        Assert.Single( Regex.Matches( pkgbuild, "target/release/wayscriber-broker" ).Cast<Match>( ) );
         Assert.Contains( "\tpkgver = 9.9.9", srcinfo );
         Assert.Contains( "\tpkgrel = 2", srcinfo );
         Assert.Contains( "\tdepends = gtk4-layer-shell", srcinfo );

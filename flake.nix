@@ -56,6 +56,9 @@
             src = ./.;
 
             cargoLock.lockFile = ./Cargo.lock;
+            cargoBuildFlags = [ "-p" "wayscriber" "-p" "wayscriber-process-broker" "--bins" ];
+            # Keep the broker as an ELF executable for descriptor-based exec.
+            dontWrapGApps = true;
 
             nativeBuildInputs = with pkgs; [
               pkg-config
@@ -72,6 +75,7 @@
             ];
 
             postInstall = ''
+              install -Dm755 target/release/wayscriber-broker $out/bin/wayscriber-broker
               install -Dm644 packaging/wayscriber.desktop $out/share/applications/wayscriber.desktop
               install -Dm644 packaging/wayscriber.service $out/lib/systemd/user/wayscriber.service
               substituteInPlace $out/lib/systemd/user/wayscriber.service \
@@ -93,6 +97,10 @@
               install -Dm644 config.example.toml $out/share/doc/wayscriber/config.example.toml
               install -Dm644 README.md $out/share/doc/wayscriber/README.md
               install -Dm644 LICENSE $out/share/licenses/wayscriber/LICENSE
+            '';
+
+            postFixup = ''
+              wrapGApp "$out/bin/wayscriber"
             '';
 
             meta = with pkgs.lib; {

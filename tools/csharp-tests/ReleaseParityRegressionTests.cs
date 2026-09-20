@@ -259,12 +259,22 @@ public sealed class ReleaseParityRegressionTests
         Directory.CreateDirectory( Path.Combine( usr, "bin" ) );
         Directory.CreateDirectory( Path.Combine( usr, "lib/systemd/user" ) );
         File.WriteAllText( Path.Combine( usr, "bin/wayscriber" ), "binary\n" );
+        File.WriteAllText( Path.Combine( usr, "bin/wayscriber-broker" ), "broker\n" );
+
+        if ( OperatingSystem.IsLinux( ) )
+        {
+            var executableMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+            File.SetUnixFileMode( Path.Combine( usr, "bin/wayscriber" ), executableMode );
+            File.SetUnixFileMode( Path.Combine( usr, "bin/wayscriber-broker" ), executableMode );
+        }
         File.WriteAllText( Path.Combine( usr, "lib/systemd/user/wayscriber.service" ), "ExecStart=/usr/bin/wayscriber --daemon\n" );
         File.WriteAllText( Path.Combine( fixture.Path, "installer.sh" ), """
 # ARCH_INSTALL_MANIFEST_BEGIN
 release_manifest() {
     printf '%s\n' \
-        '0644 bin/wayscriber' \
+        '0755 bin/wayscriber' \
+        '0755 bin/wayscriber-broker' \
         '0644 lib/systemd/user/wayscriber.service'
 }
 # ARCH_INSTALL_MANIFEST_END

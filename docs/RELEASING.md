@@ -6,9 +6,9 @@ Land tooling fixes, test routing, and release documentation as focused commits,
 then commit the version bump separately immediately before tagging. An uncommitted
 release preparation may contain these groups together; stage them separately at handoff.
 
-1. Run `./tools/bump-version.sh X.Y.Z`. It updates both workspace versions and
+1. Run `./tools/bump-version.sh X.Y.Z`. It updates all three workspace versions and
    package metadata without refreshing locked dependencies. Review `Cargo.lock`:
-   a version-only release should change only the two workspace package versions.
+   a version-only release should change only the three workspace package versions.
    Prefetch dependencies first if the local Cargo cache is empty.
 2. Run `./tools/lint-and-test.sh` and `./tools/test-gtk-widgets.sh`. The canonical
    gate serializes the Rust test harness to avoid the observed parallel native-font
@@ -18,6 +18,9 @@ release preparation may contain these groups together; stage them separately at 
 3. Exercise the affected desktop flows on Wayland, including capture, keyboard
    focus, save/reopen, and configurator edits. Automated checks do not prove
    installed-binary or compositor behavior.
+   Confirm the app and `wayscriber-broker` executable are paired in every
+   release artifact. Stop an existing daemon before upgrading, and restart it
+   manually after the complete package transaction; no upgrade hook restarts it.
 4. Prepare the website's `docs-src/src/release-notes.md` and run its
    `build-docs.sh`. Keep the published `latest.json` on the previous release
    until the new downloads and package channels are available.

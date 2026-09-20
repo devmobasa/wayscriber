@@ -48,8 +48,12 @@ rustPlatform.buildRustPackage (finalAttrs: {
   ];
 
   cargoHash = lib.fakeHash;
+  cargoBuildFlags = [ "-p" "wayscriber" "-p" "wayscriber-process-broker" "--bins" ];
+  # The broker must remain an ELF executable for descriptor-based exec.
+  dontWrapGApps = true;
 
   postInstall = ''
+    install -Dm755 target/release/wayscriber-broker $out/bin/wayscriber-broker
     install -Dm644 packaging/wayscriber.desktop \
       $out/share/applications/wayscriber.desktop
     install -Dm644 packaging/wayscriber.service \
@@ -74,6 +78,10 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
     install -Dm644 config.example.toml \
       $out/share/doc/wayscriber/config.example.toml
+  '';
+
+  postFixup = ''
+    wrapGApp "$out/bin/wayscriber"
   '';
 
   passthru.updateScript = nix-update-script { };

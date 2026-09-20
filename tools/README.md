@@ -54,11 +54,13 @@ Common equivalents are `dev build`, `dev test`, `dev fetch`, `ci lint-and-test`,
 `ci gtk-widgets`, `install app`, `install configurator`, `version bump`,
 `package build`, `release publish-tag`, and `aur update`. Run `--help` for the
 complete command list and options.
+`install app` follows the standalone installer's paired-cohort policy: stop an
+active user service first, install both executables, then start it manually.
 
 ## Development
 
-- **build.sh** - Build wayscriber release binary
-  - Runs `cargo build --release --bins`
+- **build.sh** - Build the Wayscriber app and broker companion
+  - Runs `cargo build --release -p wayscriber -p wayscriber-process-broker --bins`
   - Usage: `./tools/build.sh`
 
 - **run.sh** - Run daemon for development
@@ -93,7 +95,8 @@ complete command list and options.
 ## Installation
 
 - **install.sh** - Full installation script
-  - Builds and installs binary to `/usr/bin` (or `$WAYSCRIBER_INSTALL_DIR`)
+  - Builds the app/broker pair and selects a complete versioned cohort through `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
+  - Refuses an active `wayscriber.service`; stop it first and start it manually after installation
   - Refuses a second copy under `/usr/bin`, `/usr/local/bin`, or `~/.local/bin` unless
     `--replace-other` is passed or you confirm on a TTY
   - Sets up config directory with example config
@@ -113,7 +116,7 @@ complete command list and options.
 
 - **bump-version.sh** - Bump version numbers
   - Checks offline dependency resolution before changing version files; run `./tools/fetch-all-deps.sh` if the cache is incomplete.
-  - Updates Cargo.toml, configurator/Cargo.toml, the workspace Cargo.lock, PKGBUILD, and .SRCINFO
+  - Updates Cargo.toml, configurator/Cargo.toml, broker/Cargo.toml, the workspace Cargo.lock, PKGBUILD, and .SRCINFO
   - Updates only workspace packages in the lockfile, offline; existing dependency versions stay locked
   - flake.nix package version follows Cargo.toml automatically
   - Auto-increments patch version if no version specified

@@ -22,6 +22,18 @@ BIND_COMMAND="$INSTALL_DIR/$BINARY_NAME --daemon-toggle"
 CONFIG_DIR="$HOME/.config/wayscriber"
 HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 REPLACE_OTHER=0
+STAGE_DIR=""
+LINK_STAGE=""
+
+cleanup_install_stage() {
+    if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
+        ${SUDO:-} rm -r -- "$STAGE_DIR"
+    fi
+    if [ -n "$LINK_STAGE" ] && [ -L "$LINK_STAGE" ]; then
+        ${SUDO:-} rm -f -- "$LINK_STAGE"
+    fi
+}
+trap cleanup_install_stage EXIT
 
 die() {
     echo "❌ $*" >&2
@@ -30,7 +42,7 @@ die() {
 
 usage() {
     echo "Usage: $0 [--replace-other]"
-    echo "Build a source binary and install it to $INSTALL_DIR."
+    echo "Build a matching app/broker pair and atomically select it under $INSTALL_DIR."
     echo "Refuses a second copy under /usr/bin, /usr/local/bin, or ~/.local/bin"
     echo "unless --replace-other is passed or you confirm on a TTY."
 }
@@ -56,6 +68,10 @@ echo "================================"
 echo "   Wayscriber Installation"
 echo "================================"
 echo ""
+
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet wayscriber.service; then
+    die "Stop wayscriber.service before installing a new broker cohort, then start it again after the complete pair is selected"
+fi
 
 ensure_replacement() {
     local file="$1"
@@ -260,8 +276,8 @@ if has_install_conflicts; then
 fi
 
 # Ensure required binaries are built
-echo "Building Wayscriber binary (release, default features)..."
-(cd "$PROJECT_ROOT" && cargo build --release --bins)
+echo "Building Wayscriber and its broker companion (release, default features)..."
+(cd "$PROJECT_ROOT" && cargo build --release -p wayscriber -p wayscriber-process-broker --bins)
 
 if [ ! -d "$INSTALL_DIR" ] || [ ! -w "$INSTALL_DIR" ]; then
     if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then
@@ -302,9 +318,30 @@ fi
 # Ensure install directory exists
 ${SUDO:-} install -d "$INSTALL_DIR"
 
-# Copy binaries
-echo "Installing binary to $INSTALL_DIR/$BINARY_NAME"
-${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+# Keep a complete old cohort available until an already-running daemon exits.
+# The public symlink changes only after both new executables are installed.
+if path_is_package_owned "$INSTALLED_BINARY"; then
+    die "$INSTALLED_BINARY is package-owned; update or remove that package instead of replacing it with a source install"
+fi
+COHORT_HASH="$(sha256sum "$PROJECT_ROOT/target/release/wayscriber" "$PROJECT_ROOT/target/release/wayscriber-broker" | awk '{print $1}' | sha256sum | cut -c1-16)"
+COHORT_ROOT="$INSTALL_DIR/.wayscriber-cohorts"
+COHORT_DIR="$COHORT_ROOT/$COHORT_HASH"
+STAGE_DIR="$COHORT_ROOT/.staging-$COHORT_HASH-$$"
+${SUDO:-} install -d "$COHORT_ROOT" "$STAGE_DIR"
+${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/wayscriber" "$STAGE_DIR/wayscriber"
+${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/wayscriber-broker" "$STAGE_DIR/wayscriber-broker"
+if [ -e "$COHORT_DIR" ]; then
+    cmp -s "$COHORT_DIR/wayscriber" "$STAGE_DIR/wayscriber" && \
+        cmp -s "$COHORT_DIR/wayscriber-broker" "$STAGE_DIR/wayscriber-broker" || \
+        die "Existing Wayscriber cohort $COHORT_DIR does not match the new build"
+    ${SUDO:-} rm -r -- "$STAGE_DIR"
+else
+    ${SUDO:-} mv -- "$STAGE_DIR" "$COHORT_DIR"
+fi
+LINK_STAGE="$INSTALL_DIR/.wayscriber-link-$$"
+${SUDO:-} ln -s ".wayscriber-cohorts/$COHORT_HASH/wayscriber" "$LINK_STAGE"
+${SUDO:-} mv -Tf -- "$LINK_STAGE" "$INSTALLED_BINARY"
+echo "Installed complete cohort: $COHORT_DIR"
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
@@ -444,20 +481,11 @@ case $REPLY in
 
             echo "✅ Service file installed to $TARGET_SERVICE"
 
-            # Enable and start the service
+            # A surviving old daemon must not activate a new executable cohort.
+            # Keep the service stopped until the operator starts it explicitly.
             systemctl --user daemon-reload
             systemctl --user enable wayscriber.service
-            if systemctl --user restart wayscriber.service; then
-                echo "✅ Service restarted"
-            else
-                echo "⚠️  Restart failed; attempting start"
-                systemctl --user start wayscriber.service
-            fi
-
-            echo "✅ Service enabled and started"
-            echo ""
-            echo "Service status:"
-            systemctl --user status wayscriber.service --no-pager -l
+            echo "✅ Service enabled; start it manually after reviewing the installed cohort"
             echo ""
             echo "Commands:"
             echo "  Restart: systemctl --user restart wayscriber.service"

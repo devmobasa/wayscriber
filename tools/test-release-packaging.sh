@@ -212,6 +212,7 @@ assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita >= 1.4"
 LIBADWAITA_FLOOR_REPO="${WORK_DIR}/libadwaita-floor-repo"
 mkdir -p \
     "${LIBADWAITA_FLOOR_REPO}/.github/workflows" \
+    "${LIBADWAITA_FLOOR_REPO}/broker" \
     "${LIBADWAITA_FLOOR_REPO}/configurator" \
     "${LIBADWAITA_FLOOR_REPO}/packaging" \
     "${LIBADWAITA_FLOOR_REPO}/tools"
@@ -223,6 +224,8 @@ cp "${REPO_ROOT}/Cargo.toml" \
     "${LIBADWAITA_FLOOR_REPO}/"
 cp "${REPO_ROOT}/configurator/Cargo.toml" \
     "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
+cp "${REPO_ROOT}/broker/Cargo.toml" \
+    "${LIBADWAITA_FLOOR_REPO}/broker/Cargo.toml"
 cp "${REPO_ROOT}/packaging/PKGBUILD" \
     "${REPO_ROOT}/packaging/.SRCINFO" \
     "${REPO_ROOT}/packaging/package.configurator.yaml" \
@@ -370,7 +373,7 @@ assert_contains "${WORK_DIR}/release-package-job.yml" "package check-live-arch-i
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
 assert_not_contains "${RELEASE_WORKFLOW}" 'bash '
 assert_contains "${REPO_ROOT}/README.md" "--replace-other"
-assert_contains "${REPO_ROOT}/README.md" "--no-restart"
+assert_contains "${REPO_ROOT}/README.md" "installer never restarts it"
 assert_contains "${REPO_ROOT}/README.md" "--remove-unmanaged-usr"
 test -x "${ARCH_INSTALLER_CHECKER}"
 assert_contains "${ARCH_INSTALLER_CHECKER}" "The installer is parsed as data and is not run."
@@ -389,6 +392,8 @@ mkdir -p \
     "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user"
 touch "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin/wayscriber"
 chmod 0755 "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin/wayscriber"
+touch "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin/wayscriber-broker"
+chmod 0755 "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin/wayscriber-broker"
 cat > "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user/wayscriber.service" <<'EOF'
 [Service]
 ExecStart="/usr/bin/wayscriber" --daemon
@@ -403,6 +408,7 @@ cat > "${ARCH_INSTALLER_VALID_FIXTURE}" <<'EOF'
 release_manifest() {
     printf '%s\n' \
         '0755 bin/wayscriber' \
+        '0755 bin/wayscriber-broker' \
         '0644 lib/systemd/user/wayscriber.service'
 }
 # ARCH_INSTALL_MANIFEST_END
@@ -441,6 +447,7 @@ cat > "${ARCH_INSTALLER_MALFORMED_FIXTURE}" <<'EOF'
 release_manifest() {
     printf '%s\n' \
         '0755 bin/wayscriber' \
+        '0755 bin/wayscriber-broker' \
         '0644 lib/systemd/user/wayscriber.service' \
         "0644 share/foo"
 }
@@ -516,6 +523,10 @@ cat > "${PACKAGE_VERSION_REPO}/tools/verify-static-gtk4-layer-shell.sh" <<'EOF'
 exit 0
 EOF
 cat > "${PACKAGE_VERSION_REPO}/target/release/wayscriber" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "${PACKAGE_VERSION_REPO}/target/release/wayscriber-broker" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
@@ -610,6 +621,7 @@ command -p cp "$@"
 EOF
 chmod +x "${PACKAGE_VERSION_REPO}/tools/verify-static-gtk4-layer-shell.sh" \
     "${PACKAGE_VERSION_REPO}/target/release/wayscriber" \
+    "${PACKAGE_VERSION_REPO}/target/release/wayscriber-broker" \
     "${PACKAGE_VERSION_REPO}/target/release/wayscriber-configurator" \
     "${PACKAGE_VERSION_FAKE_BIN}/cargo" \
     "${PACKAGE_VERSION_FAKE_BIN}/readelf" \
@@ -1618,6 +1630,7 @@ AUR_ASSET_STAGE="${WORK_DIR}/aur-asset-stage"
 mkdir -p "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/target/release"
 cp -a "${REPO_ROOT}/packaging" "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/"
 printf '#!/usr/bin/env bash\nexit 0\n' > "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/target/release/wayscriber"
+printf '#!/usr/bin/env bash\nexit 0\n' > "${AUR_ASSET_SOURCE}/wayscriber-9.9.9/target/release/wayscriber-broker"
 srcdir="${AUR_ASSET_SOURCE}" pkgdir="${AUR_ASSET_STAGE}" \
     bash -c 'source "$1"; cd "$srcdir"; package' -- "${AUR_SOURCE_HOTFIX}/PKGBUILD"
 
@@ -1713,7 +1726,7 @@ name = "wayscriber"
 version = "1.0.0"
 edition = "2024"
 [workspace]
-members = ["configurator"]
+members = ["configurator", "broker"]
 [dependencies]
 release-fixture = "1"
 EOF
@@ -1725,7 +1738,14 @@ edition = "2024"
 [dependencies]
 wayscriber = { path = ".." }
 EOF
-touch "${BUMP_REPO}/src/lib.rs" "${BUMP_REPO}/configurator/src/lib.rs"
+mkdir -p "${BUMP_REPO}/broker/src"
+cat > "${BUMP_REPO}/broker/Cargo.toml" <<'EOF'
+[package]
+name = "wayscriber-process-broker"
+version = "1.0.0"
+edition = "2024"
+EOF
+touch "${BUMP_REPO}/src/lib.rs" "${BUMP_REPO}/configurator/src/lib.rs" "${BUMP_REPO}/broker/src/lib.rs"
 printf "pkgver=1.0.0\nsha256sums=('SKIP')\n" > "${BUMP_REPO}/packaging/PKGBUILD"
 cat > "${BUMP_REPO}/.cargo/config.toml" <<EOF
 [source.crates-io]

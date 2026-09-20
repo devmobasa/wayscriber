@@ -42,7 +42,7 @@ build() {
     cd "$pkgname-$pkgver"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
-    cargo build --frozen --release --bins
+    cargo build --frozen --release -p wayscriber -p wayscriber-process-broker --bins
     cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml
 }
 
@@ -51,6 +51,7 @@ package() {
 
     # Install binaries
     install -Dm755 "target/release/wayscriber" "$pkgdir/usr/bin/wayscriber"
+    install -Dm755 "target/release/wayscriber-broker" "$pkgdir/usr/bin/wayscriber-broker"
     install -Dm755 "target/release/wayscriber-configurator" "$pkgdir/usr/bin/wayscriber-configurator"
 
     # Install systemd user service

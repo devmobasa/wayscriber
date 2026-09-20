@@ -218,8 +218,10 @@ internal static class Programs
     public const string GtkUpdateIconCache = "gtk-update-icon-cache";
     public const string Install = "install";
     public const string LdConfig = "ldconfig";
+    public const string Link = "ln";
     public const string Makepkg = "makepkg";
     public const string Meson = "meson";
+    public const string Move = "mv";
     public const string Nfpm = "nfpm";
     public const string Nix = "nix";
     public const string Nm = "nm";

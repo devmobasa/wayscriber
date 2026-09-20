@@ -70,6 +70,7 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
     "wayland-client": ("wayland",),
     "wayland-protocols": (),
     "wayland-protocols-wlr": (),
+    "wayscriber-process-broker": (),
     "xkbcommon": ("libxkbcommon",),
     "zbus": (),
     "zune-jpeg": (),
@@ -227,6 +228,15 @@ def main() -> int:
         return 1
 
     errors: list[str] = []
+
+    for path in (RECIPE, FLAKE):
+        package_text = read_text(path)
+        if 'cargoBuildFlags = [ "-p" "wayscriber" "-p" "wayscriber-process-broker" "--bins" ];' not in package_text:
+            errors.append(f"{path}: cargoBuildFlags must build the app and broker together")
+        if "target/release/wayscriber-broker" not in package_text:
+            errors.append(f"{path}: install output is missing the broker companion")
+        if "dontWrapGApps = true;" not in package_text or 'wrapGApp "$out/bin/wayscriber"' not in package_text:
+            errors.append(f"{path}: GTK wrapping must leave the broker as an ELF executable")
 
     unmapped = sorted(direct_normal_dependencies(manifest) - set(SYSTEM_LIBRARIES))
     for crate in unmapped:

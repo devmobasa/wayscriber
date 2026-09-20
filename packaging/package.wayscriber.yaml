@@ -14,6 +14,10 @@ contents:
     dst: /usr/bin/wayscriber
     file_info:
       mode: 0755
+  - src: target/release/wayscriber-broker
+    dst: /usr/bin/wayscriber-broker
+    file_info:
+      mode: 0755
   - src: packaging/wayscriber.service
     dst: /usr/lib/systemd/user/wayscriber.service
     file_info:

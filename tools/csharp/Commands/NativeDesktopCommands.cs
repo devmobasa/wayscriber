@@ -5,6 +5,7 @@ internal static class NativeDesktopCommands
     private const uint RootUserId = 0;
     private const int DownloadTimeoutSeconds = 60;
     private const int DaemonRestartDelayMilliseconds = 500;
+    private const string CohortDirectoryName = ".wayscriber-cohorts";
     private const string GlsVersion = "1.3.0";
     private const string GlsCommit = "1c963c51514581c41b9bdae08cdf69171265cdda";
     private const string GlsArchiveSha256 = "22be5f5edf487cfb87266f0e71c400b11322082a4dc99832e5a54a4fca3d5a7c";
@@ -244,12 +245,27 @@ internal static class NativeDesktopCommands
         var systemdUser = Path.Combine( context.Environment( EnvironmentVariables.XdgConfigHome ) ?? Path.Combine( home, ".config" ), "systemd/user" );
         var conflicts = FindInstallConflicts( home, systemdUser, destination );
         await ConfirmInstallConflicts( context, conflicts, destination, replaceOther );
-        await context.Run( Programs.Cargo, ["build", CommandLineOptions.Release, CommandLineOptions.Binaries] );
+        await context.Run( Programs.Cargo, ["build", CommandLineOptions.Release, "-p", RepositoryNames.MainPackage, "-p", RepositoryNames.BrokerPackage,
+            CommandLineOptions.Binaries] );
+
+        if ( await CommandExists( context, Programs.SystemControl ) )
+        {
+            var service = await context.Run( Programs.SystemControl, ["--user", "is-active", "--quiet", RepositoryNames.UserServiceFile],
+                allowedExitCodes: Enumerable.Range( 0, 256 ).ToHashSet( ) );
+            if ( service.ExitCode == ExitCodes.Success )
+            {
+                throw new ToolException( "Stop wayscriber.service before installing a new app/broker pair; start it manually afterward." );
+            }
+        }
+
+        if ( File.Exists( destination ) && await IsPackageOwned( context, destination ) )
+        {
+            throw new ToolException( $"{destination} is package-owned; remove or update that package instead." );
+        }
+
         await RemoveInstallConflicts( context, conflicts );
 
-        await RunPossiblyRoot( context, NeedsPrivilege( installDir ), Programs.Install, ["-d", installDir] );
-        await RunPossiblyRoot( context, NeedsPrivilege( installDir ), Programs.Install,
-            [InstallArguments.ExecutableFile, context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.MainPackage ), destination] );
+        await InstallAppCohort( context, installDir, destination );
         var configDir = Path.Combine( home, ".config/wayscriber" );
         Directory.CreateDirectory( configDir );
         var config = Path.Combine( configDir, "config.toml" );
@@ -272,6 +288,48 @@ internal static class NativeDesktopCommands
         }
         await context.Output.WriteLineAsync( $"Installed: {destination}\nSHA256: {Files.Sha256( destination )}" );
         return ExitCodes.Success;
+    }
+
+    internal static async Task InstallAppCohort( ToolContext context, string installDir, string destination )
+    {
+        var app = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.MainPackage );
+        var broker = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.BrokerBinary );
+        var digest = System.Security.Cryptography.SHA256.HashData( System.Text.Encoding.UTF8.GetBytes( Files.Sha256( app ) + Files.Sha256( broker ) ) );
+        var cohort = Convert.ToHexStringLower( digest )[..16];
+        var root = Path.Combine( installDir, CohortDirectoryName );
+        var selected = Path.Combine( root, cohort );
+        var staging = Path.Combine( root, $".staging-{Guid.NewGuid( ):N}" );
+        var link = Path.Combine( installDir, $".wayscriber-link-{Guid.NewGuid( ):N}" );
+        var privileged = NeedsPrivilege( installDir );
+
+        await RunPossiblyRoot( context, privileged, Programs.Install, ["-d", installDir, root, staging] );
+        try
+        {
+            await RunPossiblyRoot( context, privileged, Programs.Install,
+                [InstallArguments.ExecutableFile, app, Path.Combine( staging, RepositoryNames.MainPackage )] );
+            await RunPossiblyRoot( context, privileged, Programs.Install,
+                [InstallArguments.ExecutableFile, broker, Path.Combine( staging, RepositoryNames.BrokerBinary )] );
+            if ( Directory.Exists( selected ) )
+            {
+                if ( Files.Sha256( Path.Combine( selected, RepositoryNames.MainPackage ) ) != Files.Sha256( app ) ||
+                    Files.Sha256( Path.Combine( selected, RepositoryNames.BrokerBinary ) ) != Files.Sha256( broker ) )
+                {
+                    throw new ToolException( $"Existing Wayscriber cohort {selected} does not match the new build." );
+                }
+            }
+            else
+            {
+                await RunPossiblyRoot( context, privileged, Programs.Move, ["--", staging, selected] );
+            }
+
+            await RunPossiblyRoot( context, privileged, Programs.Link,
+                ["-s", Path.Combine( CohortDirectoryName, cohort, RepositoryNames.MainPackage ), link] );
+            await RunPossiblyRoot( context, privileged, Programs.Move, ["-Tf", "--", link, destination] );
+        }
+        finally
+        {
+            await RunPossiblyRoot( context, privileged, Programs.Remove, ["-rf", "--", staging, link] );
+        }
     }
 
     private static void ValidateInstallOptions( bool skipAutostart, string? autostart )
@@ -435,11 +493,6 @@ internal static class NativeDesktopCommands
         await RunPossiblyRoot( context, NeedsPrivilege( Path.GetDirectoryName( target )! ), Programs.Install, [InstallArguments.DataFile, source, target] );
         await context.Run( Programs.SystemControl, ["--user", "daemon-reload"] );
         await context.Run( Programs.SystemControl, ["--user", "enable", RepositoryNames.UserServiceFile] );
-        var restart = await context.Run( Programs.SystemControl, ["--user", "restart", RepositoryNames.UserServiceFile], allowedExitCodes: new HashSet<int> { ExitCodes.Success, ExitCodes.Failure } );
-        if ( restart.ExitCode != ExitCodes.Success )
-        {
-            await context.Run( Programs.SystemControl, ["--user", "start", RepositoryNames.UserServiceFile] );
-        }
     }
 
     private static void ConfigureHyprland( string home, string destination, bool includeAutostart )

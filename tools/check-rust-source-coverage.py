@@ -16,7 +16,9 @@ CARGO_CONFIGURATIONS = (
     ("all features", "--all-features"),
     ("no default features", "--no-default-features"),
 )
-EXPLICIT_ENTRY_POINTS = {Path("build.rs")}
+# Cargo compiles workspace build scripts, but this check intentionally excludes
+# custom-build artifacts from the ordinary target dep-info matrix.
+EXPLICIT_ENTRY_POINTS = {Path("build.rs"), Path("broker/build.rs")}
 
 
 class CoverageError(RuntimeError):

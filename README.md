@@ -290,8 +290,8 @@ and the full run refuse another Wayscriber copy that is not this install: an unm
 file under `/usr`, `~/.local/bin/wayscriber`, or a user unit / drop-in whose `ExecStart`
 is not `/usr/local/bin/wayscriber`. A symlink that already resolves to the dest is not a
 conflict. Pass `--replace-other` on those commands to remove the other copy first. If
-`wayscriber.service` is already active, the installer restarts it so the overlay daemon
-follows `/usr/local/bin/wayscriber`; pass `--no-restart` to leave the running unit alone.
+`wayscriber.service` is already active, stop it before installing the matching
+app/broker pair, then start it manually. The installer never restarts it.
 `--version` is the crate version, not a git hash, so inspect the installed path and the
 running service `ExecStart` after install. To update this installation, download a fresh
 script and rerun it.
@@ -527,21 +527,26 @@ bash tools/install-gtk4-layer-shell.sh   # builds + installs gtk4-layer-shell 1.
 With the GTK toolbar frontend (the default):
 
 ```bash
-cargo build --release
-# Binary: target/release/wayscriber
+cargo build --release -p wayscriber -p wayscriber-process-broker --bins
+# Keep target/release/wayscriber and wayscriber-broker together.
 ```
 
 Without the GTK toolbar frontend:
 
 ```bash
-cargo build --release --no-default-features --features tablet-input,portal,tray
-# Binary: target/release/wayscriber
+cargo build --release -p wayscriber -p wayscriber-process-broker --bins --no-default-features --features wayscriber/tablet-input,wayscriber/portal,wayscriber/tray
+# Keep target/release/wayscriber and wayscriber-broker together.
 ```
 
 **Optional install script:**
 ```bash
 ./tools/install.sh
 ```
+
+Stop `wayscriber.service` before replacing an installed pair. The source installer
+keeps complete, versioned app/broker cohorts and selects a new one together; start
+the service manually after installation. Distribution packages install both
+executables in one transaction and also require a daemon restart after an upgrade.
 
 ### Screenshot tools
 
@@ -1208,7 +1213,7 @@ max_thickness = 8.0
 
 Pressure controls the width of pressure-sensitive freehand Pen strokes. Marker/Textmarker, Step Marker, and shape tools keep their selected sizes when used with a stylus.
 
-Tablet input works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support, drop only that feature (bare `--no-default-features` would also strip portal capture, tray, and the GTK toolbars): `cargo build --release --no-default-features --features portal,tray,toolbar-gtk`.
+Tablet input works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support, drop only that feature (bare `--no-default-features` would also strip portal capture, tray, and the GTK toolbars): `cargo build --release -p wayscriber -p wayscriber-process-broker --bins --no-default-features --features wayscriber/portal,wayscriber/tray,wayscriber/toolbar-gtk`.
 
 ---
 

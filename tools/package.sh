@@ -111,7 +111,7 @@ prepare_gtk4_layer_shell() {
 build_binaries() {
     [[ "$SKIP_BUILD" == 1 ]] && { warn "Skipping cargo build (SKIP_BUILD=1)"; return; }
     info "Building release binaries (locked)"
-    (cd "$REPO_ROOT" && cargo build --locked --release --bins)
+    (cd "$REPO_ROOT" && cargo build --locked --release -p wayscriber -p wayscriber-process-broker --bins)
     if [[ "${PACKAGE_CONFIGURATOR}" == 1 && -d "${REPO_ROOT}/configurator" ]]; then
         (cd "$REPO_ROOT" && cargo build --locked --release --bins --manifest-path configurator/Cargo.toml)
     fi
@@ -144,13 +144,16 @@ verify_glibc_floor() {
 
 verify_release_binaries() {
     local binary="${REPO_ROOT}/target/release/wayscriber"
+    local broker="${REPO_ROOT}/target/release/wayscriber-broker"
     local configurator="${REPO_ROOT}/target/release/wayscriber-configurator"
 
     [[ -x "${binary}" ]] || { echo "Missing release binary: ${binary}" >&2; exit 1; }
+    [[ -x "${broker}" ]] || { echo "Missing release binary: ${broker}" >&2; exit 1; }
     info "Verifying final release linkage"
     bash "${REPO_ROOT}/tools/verify-static-gtk4-layer-shell.sh" "${binary}"
 
     verify_glibc_floor "${binary}"
+    verify_glibc_floor "${broker}"
     if [[ "${PACKAGE_CONFIGURATOR}" == 1 ]]; then
         [[ -x "${configurator}" ]] || {
             echo "Missing release binary: ${configurator}" >&2
@@ -165,6 +168,7 @@ strip_binaries() {
     if command -v strip >/dev/null 2>&1; then
         info "Stripping binaries"
         strip "${REPO_ROOT}/target/release/wayscriber" || warn "strip failed for wayscriber"
+        strip "${REPO_ROOT}/target/release/wayscriber-broker" || warn "strip failed for wayscriber-broker"
         if [[ -f "${REPO_ROOT}/target/release/wayscriber-configurator" ]]; then
             strip "${REPO_ROOT}/target/release/wayscriber-configurator" || warn "strip failed for configurator"
         fi
@@ -193,6 +197,7 @@ package_tar() {
     done
 
     cp "${REPO_ROOT}/target/release/wayscriber" "${dist_dir}/usr/bin/"
+    cp "${REPO_ROOT}/target/release/wayscriber-broker" "${dist_dir}/usr/bin/"
     cp "${REPO_ROOT}/packaging/wayscriber.service" "${dist_dir}/usr/lib/systemd/user/"
     cp "${REPO_ROOT}/packaging/wayscriber.desktop" "${dist_dir}/usr/share/applications/"
     for size in 16 19 22 24 38 64 128; do

@@ -36,10 +36,13 @@ Run the install script:
 ```
 
 This will:
-1. Build the release binary
-2. Copy it to `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
+1. Build the release app and broker companion
+2. Install the pair as a versioned cohort selected by `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
 3. Refuse a second copy under `/usr/local/bin` or `~/.local/bin` unless you pass `--replace-other` or confirm
 4. Optionally set up the systemd user service or a Hyprland keybind
+
+Stop `wayscriber.service` before updating an existing source install and start it
+manually after the new pair is selected. The installer refuses an active service.
 
 If `/usr/local/bin/wayscriber` already exists from the direct Arch installer, keep only one
 prefix. Overlay spawn follows the running daemon file, not whichever path you passed to
@@ -51,12 +54,13 @@ If you prefer manual installation:
 
 ```bash
 # Build
-cargo build --release
+cargo build --release -p wayscriber -p wayscriber-process-broker --bins
 
 # Copy to user bin
 mkdir -p ~/.local/bin
 cp target/release/wayscriber ~/.local/bin/
-chmod +x ~/.local/bin/wayscriber
+cp target/release/wayscriber-broker ~/.local/bin/
+chmod +x ~/.local/bin/wayscriber ~/.local/bin/wayscriber-broker
 
 # Make sure ~/.local/bin is in your PATH
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc

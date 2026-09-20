@@ -248,7 +248,8 @@ release_manifest() {
         Assert.Equal( "known-good-installation", File.ReadAllText( existingBinary ) );
         var request = Assert.Single( runner.Requests );
         Assert.Equal( Programs.Cargo, request.FileName );
-        Assert.Equal( ["build", CommandLineOptions.Release, CommandLineOptions.Binaries], request.Arguments );
+        Assert.Equal( ["build", CommandLineOptions.Release, "-p", RepositoryNames.MainPackage, "-p", RepositoryNames.BrokerPackage,
+            CommandLineOptions.Binaries], request.Arguments );
     }
 
     [Fact]
