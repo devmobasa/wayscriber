@@ -1,3 +1,4 @@
+use super::super::runtime::RenderRuntime;
 use super::*;
 use crate::config::{RenderColorMappingConfig, RenderProfileConfig};
 
@@ -142,4 +143,43 @@ fn absent_profile_does_not_remap_even_when_both_targets_are_enabled() {
     );
     assert_eq!(baseline, [7]);
     assert_eq!(read(&mut surface), [RED, BLUE, RED, RED]);
+}
+
+#[test]
+fn ui_only_profile_rebuilds_its_baseline_after_turning_off_and_back_on() {
+    let mut runtime = RenderRuntime::new(
+        crate::ui::theme::Theme::dark(),
+        crate::ui_text::UiTextEngine::default(),
+        crate::draw::TextMeasurer::default(),
+    );
+    let ui_profile = FrameProfile::new(Some(selected_profile()), false, true);
+    let off = FrameProfile::new(None, false, false);
+    let damage = [Rect::new(1, 0, 1, 1).unwrap()];
+
+    for _ in 0..2 {
+        let mut surface = canvas();
+        runtime.prepare_profile_ui_baseline(ui_profile.mode(), 16);
+        ui_profile.before_ui(
+            pixels(&mut surface.data().unwrap(), &damage),
+            runtime.profile_ui_baseline_mut(),
+            true,
+        );
+        assert_eq!(runtime.profile_ui_baseline().len(), 16);
+
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            ctx.set_source_rgb(1.0, 0.0, 0.0);
+            ctx.rectangle(1.0, 0.0, 1.0, 1.0);
+            ctx.fill().unwrap();
+        }
+        ui_profile.after_ui(
+            pixels(&mut surface.data().unwrap(), &damage),
+            runtime.profile_ui_baseline(),
+            true,
+        );
+        assert_eq!(read(&mut surface), [RED, GREEN, RED, RED]);
+
+        runtime.prepare_profile_ui_baseline(off.mode(), 16);
+        assert_eq!(runtime.profile_ui_baseline_mut().capacity(), 0);
+    }
 }
