@@ -7,6 +7,7 @@
   runtimeShell,
   wrapGAppsHook4,
   cairo,
+  coreutils,
   grim,
   gtk4,
   gtk4-layer-shell,
@@ -63,7 +64,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
       --replace-fail "/bin/sh" "${runtimeShell}" \
       --replace-fail "/usr/bin/wayscriber" "$out/bin/wayscriber" \
       --replace-fail "/usr/local/bin:/usr/bin:/bin" \
-        "${lib.makeBinPath [ grim slurp wl-clipboard ]}:/run/current-system/sw/bin:/etc/profiles/per-user/%u/bin:%h/.nix-profile/bin"
+        "${lib.makeBinPath [ coreutils grim slurp wl-clipboard ]}:/run/current-system/sw/bin:/etc/profiles/per-user/%u/bin:%h/.nix-profile/bin"
 
     for size in 16 19 22 24 38 64 128; do
       for category in apps status; do
@@ -82,7 +83,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   '';
 
   postFixup = ''
-    wrapGApp "$out/bin/wayscriber"
+    wrapGApp "$out/bin/wayscriber" --prefix PATH : "${lib.makeBinPath [ coreutils grim slurp wl-clipboard ]}"
   '';
 
   passthru.updateScript = nix-update-script { };

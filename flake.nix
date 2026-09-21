@@ -29,7 +29,7 @@
           cargo = rustToolchain;
           rustc = rustToolchain;
         };
-        servicePath = pkgs.lib.makeBinPath [ pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
+        servicePath = pkgs.lib.makeBinPath [ pkgs.coreutils pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
         developmentInputs = with pkgs; [
           rustToolchain
           util-linux
@@ -116,7 +116,7 @@
             '';
 
             postFixup = ''
-              wrapGApp "$out/bin/wayscriber"
+              wrapGApp "$out/bin/wayscriber" --prefix PATH : "${servicePath}"
             '';
 
             meta = with pkgs.lib; {

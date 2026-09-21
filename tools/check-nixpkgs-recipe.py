@@ -32,6 +32,7 @@ LINUX_TARGET = "x86_64-unknown-linux-gnu"
 
 # Native tools/hooks required by the default GTK-enabled package.
 NATIVE_BUILD_INPUTS = {"pkg-config", "wrapGAppsHook4"}
+RUNTIME_HELPERS = {"coreutils", "grim", "slurp", "wl-clipboard"}
 
 # Direct dependency -> nixpkgs attributes its build or link step requires.
 # Attributes that nixpkgs propagates through another entry are left out: pango
@@ -79,6 +80,30 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
 
 class RecipeError(RuntimeError):
     """The recipe or flake could not be inspected."""
+
+
+def runtime_path_errors(path: Path, package_text: str) -> list[str]:
+    """Check the service and desktop wrapper's helper closure.
+
+    Nix's wl-copy invokes `cat` internally. A pure runtime PATH with only
+    grim/slurp/wl-clipboard therefore breaks brokered clipboard publication.
+    """
+    expressions = re.findall(r"(?:pkgs\.)?lib\.makeBinPath\s*\[([^]]+)\]", package_text)
+    helper_sets = [
+        {entry.removeprefix("pkgs.") for entry in expression.split()}
+        for expression in expressions
+    ]
+    if path == FLAKE:
+        paths_complete = any(RUNTIME_HELPERS <= helpers for helpers in helper_sets)
+        wrapped = 'wrapGApp "$out/bin/wayscriber" --prefix PATH : "${servicePath}"' in package_text
+        service = '"${servicePath}:/run/current-system/sw/bin:' in package_text
+    else:
+        paths_complete = sum(RUNTIME_HELPERS <= helpers for helpers in helper_sets) >= 2
+        wrapped = 'wrapGApp "$out/bin/wayscriber" --prefix PATH : "${lib.makeBinPath [ coreutils grim slurp wl-clipboard ]}"' in package_text
+        service = '"${lib.makeBinPath [ coreutils grim slurp wl-clipboard ]}:/run/current-system/sw/bin:' in package_text
+    if paths_complete and wrapped and service:
+        return []
+    return [f"{path}: service and desktop wrapper PATH must contain coreutils, grim, slurp, and wl-clipboard"]
 
 
 def read_text(path: Path) -> str:
@@ -231,6 +256,7 @@ def main() -> int:
 
     for path in (RECIPE, FLAKE):
         package_text = read_text(path)
+        errors.extend(runtime_path_errors(path, package_text))
         if 'cargoBuildFlags = [ "-p" "wayscriber" "-p" "wayscriber-process-broker" "--bins" ];' not in package_text:
             errors.append(f"{path}: cargoBuildFlags must build the app and broker together")
         if 'test -x "$out/bin/wayscriber-broker"' not in package_text:
