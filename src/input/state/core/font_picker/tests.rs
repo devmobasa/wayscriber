@@ -229,6 +229,11 @@ fn the_scroll_window_follows_the_highlight_by_the_least_it_can() {
     let mut state = make_test_input_state();
     state.update_screen_dimensions(1920, 1080);
     open_ready_font_picker(&mut state);
+    // Scrolling needs more than twelve rows regardless of the host's fonts.
+    state.font_picker.results.replace(Some((
+        (String::new(), FontPickerFilter::All),
+        (0..20).map(|index| format!("Fixture {index}")).collect(),
+    )));
     let window = state.font_picker_visible_rows(state.font_picker_families().len());
     assert_eq!(
         window, FONT_PICKER_MAX_VISIBLE,

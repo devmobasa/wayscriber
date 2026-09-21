@@ -65,6 +65,21 @@
               wrapGAppsHook4
             ];
 
+            # Font-dependent rendering and picker tests need a deterministic
+            # family in Nix's otherwise fontless build environment.
+            nativeCheckInputs = with pkgs; [ dejavu_fonts ];
+            preCheck = ''
+              mkdir -p "$TMPDIR/fontconfig-cache"
+              cat > "$TMPDIR/wayscriber-test-fonts.conf" <<EOF
+              <?xml version="1.0"?>
+              <fontconfig>
+                <dir>${pkgs.dejavu_fonts}/share/fonts</dir>
+                <cachedir>$TMPDIR/fontconfig-cache</cachedir>
+              </fontconfig>
+              EOF
+              export FONTCONFIG_FILE="$TMPDIR/wayscriber-test-fonts.conf"
+            '';
+
             buildInputs = with pkgs; [
               cairo
               pango
