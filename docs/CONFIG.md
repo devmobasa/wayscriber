@@ -1377,6 +1377,11 @@ top_controls = [
 ]
 ```
 
+Choose `backend = "builtin"` to use the built-in toolbar without starting GTK's
+graphics renderer. This can substantially reduce memory use on systems where
+GTK graphics initialization is expensive, but the toolbar looks different.
+`auto` remains the default. The choice takes effect on the next overlay activation.
+
 **Behavior:**
 - **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
 - **Scale**: `scale` multiplies toolbar UI sizing (useful for HiDPI when output scale=1).

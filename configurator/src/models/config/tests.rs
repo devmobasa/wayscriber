@@ -29,9 +29,26 @@ use super::super::fields::{
     InputHudModeOption, InputHudPositionOption, OverrideOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, RegionPickerOption,
-    SessionStorageModeOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
+    SessionStorageModeOption, TextField, ToggleField, ToolOption, ToolbarBackendOption,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
 };
+
+#[test]
+fn config_draft_round_trips_toolbar_backend_choice() {
+    let mut config = Config::default();
+    config.ui.toolbar.backend = wayscriber::config::ToolbarBackendKind::Gtk;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_toolbar_backend, ToolbarBackendOption::Gtk);
+
+    draft.ui_toolbar_backend = ToolbarBackendOption::Builtin;
+    let round_trip = draft
+        .to_config(&config)
+        .expect("toolbar backend round trip");
+    assert_eq!(
+        round_trip.ui.toolbar.backend,
+        wayscriber::config::ToolbarBackendKind::Builtin
+    );
+}
 
 #[test]
 fn config_draft_round_trips_toolbar_rebind_modifier() {

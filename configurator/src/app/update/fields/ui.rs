@@ -2,7 +2,7 @@ use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     InputHudModeOption, InputHudPositionOption, OverrideOption, ReducedMotionOption,
-    StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    StatusPositionOption, ToolbarBackendOption, ToolbarLayoutModeOption, ToolbarOverrideField,
     ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
 };
 
@@ -66,6 +66,16 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.apply_toolbar_layout_mode(option);
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_toolbar_backend_changed(
+        &mut self,
+        option: ToolbarBackendOption,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_toolbar_backend = option;
         self.refresh_dirty_flag();
         Vec::new()
     }

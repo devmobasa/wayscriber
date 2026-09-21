@@ -208,6 +208,7 @@ impl ConfiguratorApp {
             Message::UiReducedMotionChanged(option) => {
                 self.handle_ui_reduced_motion_changed(option)
             }
+            Message::ToolbarBackendChanged(option) => self.handle_toolbar_backend_changed(option),
             Message::ToolbarLayoutModeChanged(option) => {
                 self.handle_toolbar_layout_mode_changed(option)
             }

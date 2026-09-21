@@ -32,8 +32,8 @@ pub use theme::{ReducedMotionOption, UiThemeOption};
 pub use toggles::{PresetTextField, PresetToggleField, QuadField, TextField, ToggleField};
 pub use tool::{DragColorOption, DragMouseButton, DragToolField, DragToolOption, ToolOption};
 pub use toolbar::{
-    OverrideOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    ZoomChipDisplayOption,
+    OverrideOption, ToolbarBackendOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, ZoomChipDisplayOption,
 };
 
 #[cfg(test)]

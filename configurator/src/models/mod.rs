@@ -30,8 +30,9 @@ pub use fields::{
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
     ReducedMotionOption, RegionPickerOption, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
+    StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarBackendOption,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

@@ -8,7 +8,7 @@ use super::super::fields::{
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    ToolbarBackendOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -107,6 +107,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_idle_fade: bool,
+    pub ui_toolbar_backend: ToolbarBackendOption,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
     pub ui_toolbar_zoom_chip_display: ZoomChipDisplayOption,
     pub ui_toolbar_show_zoom_chip: bool,

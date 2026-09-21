@@ -2,8 +2,8 @@ use relm4::ComponentSender;
 
 use crate::messages::Message;
 use crate::models::{
-    OverrideOption, TabId, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ZoomChipDisplayOption,
+    OverrideOption, TabId, TextField, ToggleField, ToolbarBackendOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, ZoomChipDisplayOption,
 };
 
 use super::super::super::state::ConfiguratorApp;
@@ -11,6 +11,8 @@ use super::super::{BuiltPage, PageBuilder};
 use super::{note, options};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
+    let (backends, backend_labels) =
+        options(ToolbarBackendOption::ALL.to_vec(), |value| value.label());
     let (layout_modes, layout_labels) =
         options(ToolbarLayoutModeOption::list(), |value| value.label());
     let (zoom_chips, zoom_chip_labels) =
@@ -23,9 +25,18 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
-    page.group("Toolbar").custom(&note(
-        "These settings are configured defaults. Toolbar pin, position, display form, item visibility/order, and board pins changed in the overlay are saved separately as runtime preferences.",
-    ));
+    page.group("Toolbar")
+        .custom(&note(
+            "These settings are configured defaults. Toolbar pin, position, display form, item visibility/order, and board pins changed in the overlay are saved separately as runtime preferences.",
+        ))
+        .combo_row(
+            "Toolbar type",
+            "Built-in avoids GTK graphics startup and can use less memory. Its appearance differs. Applies on the next overlay activation.",
+            backends,
+            backend_labels,
+            |app| app.draft.ui_toolbar_backend,
+            Message::ToolbarBackendChanged,
+        );
 
     page.group("Layout")
         .combo_row(

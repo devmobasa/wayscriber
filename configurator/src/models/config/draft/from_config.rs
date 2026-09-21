@@ -6,7 +6,7 @@ use super::super::super::fields::{
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    ToolbarBackendOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -150,6 +150,7 @@ impl ConfigDraft {
             ui_toolbar_show_more_colors: config.ui.toolbar.show_more_colors,
             ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
             ui_toolbar_idle_fade: config.ui.toolbar.idle_fade,
+            ui_toolbar_backend: ToolbarBackendOption::from_config(config.ui.toolbar.backend),
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
             ),

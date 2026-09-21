@@ -1,4 +1,47 @@
-use wayscriber::config::{ToolbarLayoutMode, ToolbarRebindModifier, ZoomChipDisplay};
+use wayscriber::config::{
+    ToolbarBackendKind, ToolbarLayoutMode, ToolbarRebindModifier, ZoomChipDisplay,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarBackendOption {
+    Auto,
+    Gtk,
+    Builtin,
+}
+
+impl ToolbarBackendOption {
+    pub const ALL: [Self; 3] = [Self::Auto, Self::Gtk, Self::Builtin];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "Automatic (GTK where available)",
+            Self::Gtk => "GTK",
+            Self::Builtin => "Built-in",
+        }
+    }
+
+    pub fn from_config(value: ToolbarBackendKind) -> Self {
+        match value {
+            ToolbarBackendKind::Auto => Self::Auto,
+            ToolbarBackendKind::Gtk => Self::Gtk,
+            ToolbarBackendKind::Builtin => Self::Builtin,
+        }
+    }
+
+    pub fn to_config(self) -> ToolbarBackendKind {
+        match self {
+            Self::Auto => ToolbarBackendKind::Auto,
+            Self::Gtk => ToolbarBackendKind::Gtk,
+            Self::Builtin => ToolbarBackendKind::Builtin,
+        }
+    }
+}
+
+impl std::fmt::Display for ToolbarBackendOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarRebindModifierOption {
