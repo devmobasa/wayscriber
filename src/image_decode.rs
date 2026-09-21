@@ -420,7 +420,13 @@ mod tests {
             assert_eq!(image.rgba.len(), 24);
             assert_eq!(image.rgba.capacity(), 24);
             assert_eq!(rgb.len(), 18);
-            for (rgba, rgb) in image.rgba.chunks_exact(4).zip(rgb.chunks_exact(3)) {
+            for (rgba, rgb) in image
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(rgb.as_chunks::<3>().0.iter())
+            {
                 assert_eq!(&rgba[..3], rgb);
                 assert_eq!(rgba[3], 255);
             }
@@ -431,13 +437,18 @@ mod tests {
             assert_eq!(cairo.as_ptr(), allocation);
             assert_eq!(cairo.len(), 24);
             assert_eq!(cairo.capacity(), 24);
-            for (argb, rgb) in cairo.chunks_exact(4).zip(rgb.chunks_exact(3)) {
+            for (argb, rgb) in cairo
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(rgb.as_chunks::<3>().0.iter())
+            {
                 let expected = if cfg!(target_endian = "little") {
                     [rgb[2], rgb[1], rgb[0], 255]
                 } else {
                     [255, rgb[0], rgb[1], rgb[2]]
                 };
-                assert_eq!(argb, expected);
+                assert_eq!(*argb, expected);
             }
         }
     }
