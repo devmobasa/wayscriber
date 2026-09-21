@@ -64,6 +64,125 @@ public sealed class RepositoryContractTests
     }
 
     [Fact]
+    public async Task ActiveAppInstallerStagesThePairBeforeStoppingAndRestartsOnTheNewSelector( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory( "wayscriber-active-install-test" );
+        var release = Path.Combine( fixture.Path, "target/release" );
+        var install = Path.Combine( fixture.Path, "installed/bin" );
+        Directory.CreateDirectory( release );
+        Directory.CreateDirectory( install );
+        var sourceApp = Path.Combine( release, RepositoryNames.MainPackage );
+        var sourceBroker = Path.Combine( release, RepositoryNames.BrokerBinary );
+        var destination = Path.Combine( install, RepositoryNames.MainPackage );
+        var context = new ToolContext( fixture.Path, TextWriter.Null, TextWriter.Null,
+            new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
+        File.WriteAllText( sourceApp, "app-v1" );
+        File.WriteAllText( sourceBroker, "broker-v1" );
+        await NativeDesktopCommands.InstallAppCohort( context, install, destination );
+        var oldLink = new FileInfo( destination ).LinkTarget;
+        File.WriteAllText( sourceApp, "app-v2" );
+        File.WriteAllText( sourceBroker, "broker-v2" );
+        var events = new List<string>( );
+
+        await NativeDesktopCommands.InstallAppCohortWithRestart( context, install, destination,
+            _ =>
+            {
+                events.Add( "stop" );
+                Assert.Equal( oldLink, new FileInfo( destination ).LinkTarget );
+                Assert.Contains( Directory.EnumerateFiles( Path.Combine( install, ".wayscriber-cohorts" ), RepositoryNames.BrokerBinary,
+                    SearchOption.AllDirectories ), path => File.ReadAllText( path ) == "broker-v2" &&
+                    File.ReadAllText( Path.Combine( Path.GetDirectoryName( path )!, RepositoryNames.MainPackage ) ) == "app-v2" );
+                return Task.CompletedTask;
+            },
+            _ =>
+            {
+                events.Add( "start" );
+                Assert.Equal( "app-v2", File.ReadAllText( destination ) );
+                return Task.CompletedTask;
+            },
+            ( _, hash ) =>
+            {
+                events.Add( "verify" );
+                Assert.Equal( Files.Sha256( destination ), hash );
+                return Task.CompletedTask;
+            } );
+
+        Assert.Equal( ["stop", "start", "verify"], events );
+        Assert.NotEqual( oldLink, new FileInfo( destination ).LinkTarget );
+    }
+
+    [Theory]
+    [InlineData( false )]
+    [InlineData( true )]
+    public async Task ActiveAppInstallerRestoresOldSelectorWhenNewServiceFails( bool previousWasSymlink )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory( "wayscriber-active-install-rollback-test" );
+        var release = Path.Combine( fixture.Path, "target/release" );
+        var install = Path.Combine( fixture.Path, "installed/bin" );
+        Directory.CreateDirectory( release );
+        Directory.CreateDirectory( install );
+        var sourceApp = Path.Combine( release, RepositoryNames.MainPackage );
+        var sourceBroker = Path.Combine( release, RepositoryNames.BrokerBinary );
+        var destination = Path.Combine( install, RepositoryNames.MainPackage );
+        var context = new ToolContext( fixture.Path, TextWriter.Null, TextWriter.Null,
+            new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
+        File.WriteAllText( sourceApp, "app-v1" );
+        File.WriteAllText( sourceBroker, "broker-v1" );
+        if ( previousWasSymlink )
+        {
+            await NativeDesktopCommands.InstallAppCohort( context, install, destination );
+        }
+        else
+        {
+            File.WriteAllText( destination, "app-v1" );
+        }
+        var oldLink = new FileInfo( destination ).LinkTarget;
+        File.WriteAllText( sourceApp, "app-v2" );
+        File.WriteAllText( sourceBroker, "broker-v2" );
+        var stops = 0;
+        var starts = 0;
+
+        var error = await Assert.ThrowsAsync<ToolException>( ( ) => NativeDesktopCommands.InstallAppCohortWithRestart(
+            context, install, destination,
+            _ =>
+            {
+                stops++;
+                return Task.CompletedTask;
+            },
+            _ =>
+            {
+                starts++;
+                if ( starts == 1 )
+                {
+                    throw new ToolException( "Injected new-service failure." );
+                }
+                Assert.Equal( "app-v1", File.ReadAllText( destination ) );
+                return Task.CompletedTask;
+            },
+            ( _, hash ) =>
+            {
+                Assert.Equal( Files.Sha256( destination ), hash );
+                return Task.CompletedTask;
+            } ) );
+
+        Assert.Contains( "Injected new-service failure", error.Message, StringComparison.Ordinal );
+        Assert.Equal( 2, stops );
+        Assert.Equal( 2, starts );
+        Assert.Equal( "app-v1", File.ReadAllText( destination ) );
+        Assert.Equal( oldLink, new FileInfo( destination ).LinkTarget );
+    }
+
+    [Fact]
     public void CsharpInstallShortcutRoutesToTheSharedAppInstaller( )
     {
         var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/install.cs" ) );

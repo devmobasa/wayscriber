@@ -1,6 +1,6 @@
 namespace Wayscriber.Tools;
 
-internal static class NativeDesktopCommands
+internal static partial class NativeDesktopCommands
 {
     private const uint RootUserId = 0;
     private const int DownloadTimeoutSeconds = 60;
@@ -248,24 +248,30 @@ internal static class NativeDesktopCommands
         await context.Run( Programs.Cargo, ["build", CommandLineOptions.Release, "-p", RepositoryNames.MainPackage, "-p", RepositoryNames.BrokerPackage,
             CommandLineOptions.Binaries] );
 
-        if ( await CommandExists( context, Programs.SystemControl ) )
-        {
-            var service = await context.Run( Programs.SystemControl, ["--user", "is-active", "--quiet", RepositoryNames.UserServiceFile],
-                allowedExitCodes: Enumerable.Range( 0, 256 ).ToHashSet( ) );
-            if ( service.ExitCode == ExitCodes.Success )
-            {
-                throw new ToolException( "Stop wayscriber.service before installing a new app/broker pair; start it manually afterward." );
-            }
-        }
-
         if ( File.Exists( destination ) && await IsPackageOwned( context, destination ) )
         {
             throw new ToolException( $"{destination} is package-owned; remove or update that package instead." );
         }
 
+        var serviceActive = await IsWayscriberServiceActive( context );
+        if ( serviceActive && !await ServiceUsesDestination( context, destination ) )
+        {
+            throw new ToolException( $"The active wayscriber.service does not run {destination}; stop it before switching install prefixes." );
+        }
+
         await RemoveInstallConflicts( context, conflicts );
 
-        await InstallAppCohort( context, installDir, destination );
+        if ( serviceActive )
+        {
+            await InstallAppCohortWithRestart( context, installDir, destination,
+                tool => tool.Run( Programs.SystemControl, ["--user", "stop", RepositoryNames.UserServiceFile] ),
+                tool => tool.Run( Programs.SystemControl, ["--user", "start", RepositoryNames.UserServiceFile] ),
+                VerifyServiceExecutable );
+        }
+        else
+        {
+            await InstallAppCohort( context, installDir, destination );
+        }
         var configDir = Path.Combine( home, ".config/wayscriber" );
         Directory.CreateDirectory( configDir );
         var config = Path.Combine( configDir, "config.toml" );
@@ -292,6 +298,12 @@ internal static class NativeDesktopCommands
 
     internal static async Task InstallAppCohort( ToolContext context, string installDir, string destination )
     {
+        var selected = await StageAppCohort( context, installDir );
+        await SelectAppCohort( context, installDir, destination, selected );
+    }
+
+    private static async Task<string> StageAppCohort( ToolContext context, string installDir )
+    {
         var app = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.MainPackage );
         var broker = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.BrokerBinary );
         var digest = System.Security.Cryptography.SHA256.HashData( System.Text.Encoding.UTF8.GetBytes( Files.Sha256( app ) + Files.Sha256( broker ) ) );
@@ -299,7 +311,6 @@ internal static class NativeDesktopCommands
         var root = Path.Combine( installDir, CohortDirectoryName );
         var selected = Path.Combine( root, cohort );
         var staging = Path.Combine( root, $".staging-{Guid.NewGuid( ):N}" );
-        var link = Path.Combine( installDir, $".wayscriber-link-{Guid.NewGuid( ):N}" );
         var privileged = NeedsPrivilege( installDir );
 
         await RunPossiblyRoot( context, privileged, Programs.Install, ["-d", installDir, root, staging] );
@@ -322,13 +333,27 @@ internal static class NativeDesktopCommands
                 await RunPossiblyRoot( context, privileged, Programs.Move, ["--", staging, selected] );
             }
 
+            return selected;
+        }
+        finally
+        {
+            await RunPossiblyRoot( context, privileged, Programs.Remove, ["-rf", "--", staging] );
+        }
+    }
+
+    private static async Task SelectAppCohort( ToolContext context, string installDir, string destination, string selected )
+    {
+        var link = Path.Combine( installDir, $".wayscriber-link-{Guid.NewGuid( ):N}" );
+        var privileged = NeedsPrivilege( installDir );
+        try
+        {
             await RunPossiblyRoot( context, privileged, Programs.Link,
-                ["-s", Path.Combine( CohortDirectoryName, cohort, RepositoryNames.MainPackage ), link] );
+                ["-s", Path.Combine( CohortDirectoryName, Path.GetFileName( selected ), RepositoryNames.MainPackage ), link] );
             await RunPossiblyRoot( context, privileged, Programs.Move, ["-Tf", "--", link, destination] );
         }
         finally
         {
-            await RunPossiblyRoot( context, privileged, Programs.Remove, ["-rf", "--", staging, link] );
+            await RunPossiblyRoot( context, privileged, Programs.Remove, ["-f", "--", link] );
         }
     }
 

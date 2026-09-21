@@ -54,8 +54,9 @@ Common equivalents are `dev build`, `dev test`, `dev fetch`, `ci lint-and-test`,
 `ci gtk-widgets`, `install app`, `install configurator`, `version bump`,
 `package build`, `release publish-tag`, and `aur update`. Run `--help` for the
 complete command list and options.
-`install app` follows the standalone installer's paired-cohort policy: stop an
-active user service first, install both executables, then start it manually.
+`install app` follows the standalone installer's paired-cohort policy: it stages
+both executables, then stops and restarts an active service on the selected pair.
+A failed restart restores the previous selection and service.
 
 ## Development
 
@@ -96,7 +97,7 @@ active user service first, install both executables, then start it manually.
 
 - **install.sh** - Full installation script
   - Builds the app/broker pair and selects a complete versioned cohort through `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
-  - Refuses an active `wayscriber.service`; stop it first and start it manually after installation
+  - Stops and restarts an active `wayscriber.service` after staging the pair; restores the old selection on failure
   - Refuses a second copy under `/usr/bin`, `/usr/local/bin`, or `~/.local/bin` unless
     `--replace-other` is passed or you confirm on a TTY
   - Sets up config directory with example config

@@ -24,14 +24,77 @@ HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 REPLACE_OTHER=0
 STAGE_DIR=""
 LINK_STAGE=""
+ROLLBACK_LINK=""
+PREVIOUS_LINK=""
+PREVIOUS_BACKUP=""
+PREVIOUS_HASH=""
+SELECTOR_PENDING=0
+SERVICE_WAS_ACTIVE=0
 
 cleanup_install_stage() {
+    local status=$?
+    local rollback_failed=0
+    local service_stopped=1
+    trap - EXIT
+    set +e
+    if [ "$SELECTOR_PENDING" -eq 1 ]; then
+        if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+            systemctl --user stop wayscriber.service
+            if systemctl --user is-active --quiet wayscriber.service; then
+                service_stopped=0
+                rollback_failed=1
+                echo "❌ Could not stop the new service for rollback; leaving the selected cohort in place" >&2
+            fi
+        fi
+        if [ "$service_stopped" -eq 1 ]; then
+            if [ -n "$PREVIOUS_LINK" ]; then
+                ROLLBACK_LINK="$INSTALL_DIR/.wayscriber-rollback-$$"
+                ${SUDO:-} ln -s "$PREVIOUS_LINK" "$ROLLBACK_LINK" && \
+                    ${SUDO:-} mv -Tf -- "$ROLLBACK_LINK" "$INSTALLED_BINARY" || rollback_failed=1
+            elif [ -n "$PREVIOUS_BACKUP" ] && [ -e "$PREVIOUS_BACKUP" ]; then
+                ${SUDO:-} mv -Tf -- "$PREVIOUS_BACKUP" "$INSTALLED_BINARY" || rollback_failed=1
+            elif [ -n "$PREVIOUS_HASH" ]; then
+                [ -f "$INSTALLED_BINARY" ] && \
+                    [ "$(sha256sum "$INSTALLED_BINARY" | cut -d' ' -f1)" = "$PREVIOUS_HASH" ] || rollback_failed=1
+            else
+                ${SUDO:-} rm -f -- "$INSTALLED_BINARY" || rollback_failed=1
+            fi
+            if [ -n "$PREVIOUS_HASH" ] && \
+                [ "$(sha256sum "$INSTALLED_BINARY" | cut -d' ' -f1)" != "$PREVIOUS_HASH" ]; then
+                rollback_failed=1
+            fi
+            if [ "$SERVICE_WAS_ACTIVE" -eq 1 ] && [ "$rollback_failed" -eq 0 ]; then
+                systemctl --user start wayscriber.service || rollback_failed=1
+                systemctl --user is-active --quiet wayscriber.service || rollback_failed=1
+                SERVICE_PID="$(systemctl --user show -p MainPID --value wayscriber.service)"
+                if ! [[ "$SERVICE_PID" =~ ^[1-9][0-9]*$ ]] || \
+                    [ "$(sha256sum "/proc/$SERVICE_PID/exe" | cut -d' ' -f1)" != "$PREVIOUS_HASH" ]; then
+                    rollback_failed=1
+                fi
+            fi
+        fi
+        if [ "$rollback_failed" -eq 0 ]; then
+            echo "Restored the previous Wayscriber selector and service after install failure." >&2
+        else
+            echo "❌ Automatic rollback failed; inspect $INSTALLED_BINARY and $PREVIOUS_BACKUP" >&2
+        fi
+    fi
     if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
         ${SUDO:-} rm -r -- "$STAGE_DIR"
     fi
     if [ -n "$LINK_STAGE" ] && [ -L "$LINK_STAGE" ]; then
         ${SUDO:-} rm -f -- "$LINK_STAGE"
     fi
+    if [ -n "$ROLLBACK_LINK" ] && [ -L "$ROLLBACK_LINK" ]; then
+        ${SUDO:-} rm -f -- "$ROLLBACK_LINK"
+    fi
+    if [ "$rollback_failed" -eq 0 ] && [ -n "$PREVIOUS_BACKUP" ] && [ -e "$PREVIOUS_BACKUP" ]; then
+        ${SUDO:-} rm -f -- "$PREVIOUS_BACKUP"
+    fi
+    if [ "$rollback_failed" -ne 0 ]; then
+        status=1
+    fi
+    exit "$status"
 }
 trap cleanup_install_stage EXIT
 
@@ -43,6 +106,7 @@ die() {
 usage() {
     echo "Usage: $0 [--replace-other]"
     echo "Build a matching app/broker pair and atomically select it under $INSTALL_DIR."
+    echo "An active service using this path is stopped and restarted around selection."
     echo "Refuses a second copy under /usr/bin, /usr/local/bin, or ~/.local/bin"
     echo "unless --replace-other is passed or you confirm on a TTY."
 }
@@ -68,10 +132,6 @@ echo "================================"
 echo "   Wayscriber Installation"
 echo "================================"
 echo ""
-
-if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet wayscriber.service; then
-    die "Stop wayscriber.service before installing a new broker cohort, then start it again after the complete pair is selected"
-fi
 
 ensure_replacement() {
     local file="$1"
@@ -100,6 +160,29 @@ same_file() {
     left="$(canonical_path "$1")"
     right="$(canonical_path "$2")"
     [ -n "$left" ] && { [ "$left" = "$right" ] || [ "$left" = "$2" ]; }
+}
+
+service_uses_destination() {
+    local exec_start
+    exec_start="$(systemctl --user show -p ExecStart --value wayscriber.service)" || return 1
+    case "$exec_start" in
+        *"path=$INSTALLED_BINARY ;"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+service_state() {
+    local state
+    if ! command -v systemctl >/dev/null 2>&1; then
+        printf 'unavailable\n'
+        return 0
+    fi
+    state="$(systemctl --user show -p ActiveState --value wayscriber.service)" || \
+        die "Could not inspect wayscriber.service before selecting a new app/broker cohort"
+    case "$state" in
+        active|inactive|failed) printf '%s\n' "$state" ;;
+        *) die "wayscriber.service is in state '${state:-unknown}'; retry after it settles" ;;
+    esac
 }
 
 systemd_user_dir() {
@@ -243,6 +326,10 @@ has_install_conflicts() {
 }
 
 collect_conflicts
+SERVICE_STATE="$(service_state)" || die "Could not inspect wayscriber.service"
+if [ "$SERVICE_STATE" = active ] && ! service_uses_destination; then
+    die "The active wayscriber.service does not run $INSTALLED_BINARY; stop it before switching install prefixes"
+fi
 if has_install_conflicts; then
     echo "Another wayscriber install would stay beside $INSTALLED_BINARY:"
     for other in "${OTHER_BINARIES[@]+"${OTHER_BINARIES[@]}"}"; do
@@ -338,9 +425,42 @@ if [ -e "$COHORT_DIR" ]; then
 else
     ${SUDO:-} mv -- "$STAGE_DIR" "$COHORT_DIR"
 fi
+if [ -L "$INSTALLED_BINARY" ]; then
+    PREVIOUS_LINK="$(readlink "$INSTALLED_BINARY")"
+    PREVIOUS_HASH="$(sha256sum "$INSTALLED_BINARY" | cut -d' ' -f1)"
+elif [ -e "$INSTALLED_BINARY" ]; then
+    [ -f "$INSTALLED_BINARY" ] || die "$INSTALLED_BINARY is not a regular file or symlink"
+    PREVIOUS_BACKUP="$INSTALL_DIR/.wayscriber-previous-$$"
+    PREVIOUS_HASH="$(sha256sum "$INSTALLED_BINARY" | cut -d' ' -f1)"
+fi
+SERVICE_STATE="$(service_state)" || die "Could not inspect wayscriber.service"
+if [ "$SERVICE_STATE" = active ]; then
+    service_uses_destination || die "The active wayscriber.service does not run $INSTALLED_BINARY"
+    SERVICE_WAS_ACTIVE=1
+    echo "Stopping the active Wayscriber service for the paired update..."
+fi
+SELECTOR_PENDING=1
+if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+    systemctl --user stop wayscriber.service
+fi
+if [ -n "$PREVIOUS_BACKUP" ]; then
+    ${SUDO:-} mv -T -- "$INSTALLED_BINARY" "$PREVIOUS_BACKUP"
+fi
 LINK_STAGE="$INSTALL_DIR/.wayscriber-link-$$"
 ${SUDO:-} ln -s ".wayscriber-cohorts/$COHORT_HASH/wayscriber" "$LINK_STAGE"
 ${SUDO:-} mv -Tf -- "$LINK_STAGE" "$INSTALLED_BINARY"
+if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+    systemctl --user start wayscriber.service
+    sleep 1
+    systemctl --user is-active --quiet wayscriber.service || die "Updated Wayscriber service did not stay active"
+    SERVICE_PID="$(systemctl --user show -p MainPID --value wayscriber.service)"
+    if ! [[ "$SERVICE_PID" =~ ^[1-9][0-9]*$ ]] || \
+        ! same_file "/proc/$SERVICE_PID/exe" "$COHORT_DIR/wayscriber"; then
+        die "Updated Wayscriber service did not run the selected app/broker cohort"
+    fi
+    echo "✅ Updated Wayscriber service is running the selected cohort (PID $SERVICE_PID)"
+fi
+SELECTOR_PENDING=0
 echo "Installed complete cohort: $COHORT_DIR"
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -410,8 +530,12 @@ echo ""
 echo "1. Test the installation:"
 echo "   $INSTALLED_BINARY --help"
 echo ""
-echo "2. Run in daemon mode (recommended):"
-echo "   $INSTALLED_BINARY --daemon &"
+if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+    echo "2. The running service was restarted with this version."
+else
+    echo "2. Run in daemon mode (recommended):"
+    echo "   $INSTALLED_BINARY --daemon &"
+fi
 echo ""
 echo "3. For Hyprland integration, add to $HYPR_CONFIG:"
 echo ""
@@ -481,11 +605,13 @@ case $REPLY in
 
             echo "✅ Service file installed to $TARGET_SERVICE"
 
-            # A surviving old daemon must not activate a new executable cohort.
-            # Keep the service stopped until the operator starts it explicitly.
             systemctl --user daemon-reload
             systemctl --user enable wayscriber.service
-            echo "✅ Service enabled; start it manually after reviewing the installed cohort"
+            if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+                echo "✅ Service enabled and restarted with the selected cohort"
+            else
+                echo "✅ Service enabled; start it when ready with: systemctl --user start wayscriber.service"
+            fi
             echo ""
             echo "Commands:"
             echo "  Restart: systemctl --user restart wayscriber.service"

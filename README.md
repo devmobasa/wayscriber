@@ -543,10 +543,12 @@ cargo build --release -p wayscriber -p wayscriber-process-broker --bins --no-def
 ./tools/install.sh
 ```
 
-Stop `wayscriber.service` before replacing an installed pair. The source installer
-keeps complete, versioned app/broker cohorts and selects a new one together; start
-the service manually after installation. Distribution packages install both
-executables in one transaction and also require a daemon restart after an upgrade.
+The source installer keeps complete, versioned app/broker cohorts and selects a
+new one together. If `wayscriber.service` is active for that install path, it
+stops and restarts the service automatically; a failed restart restores the
+previous selection and service. An inactive service stays inactive. Distribution
+packages install both executables in one transaction and require a daemon restart
+after an upgrade.
 
 ### Screenshot tools
 

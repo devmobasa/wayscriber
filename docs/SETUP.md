@@ -41,8 +41,11 @@ This will:
 3. Refuse a second copy under `/usr/local/bin` or `~/.local/bin` unless you pass `--replace-other` or confirm
 4. Optionally set up the systemd user service or a Hyprland keybind
 
-Stop `wayscriber.service` before updating an existing source install and start it
-manually after the new pair is selected. The installer refuses an active service.
+When updating an existing source install, the installer stops an active
+`wayscriber.service` after staging the app and broker, selects the new pair, and
+restarts the service. If the restart fails, it restores the previous selection
+and service. An inactive service stays inactive. Switching from another active
+install prefix still requires stopping that service first.
 
 If `/usr/local/bin/wayscriber` already exists from the direct Arch installer, keep only one
 prefix. Overlay spawn follows the running daemon file, not whichever path you passed to

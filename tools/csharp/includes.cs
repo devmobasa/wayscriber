@@ -9,6 +9,7 @@
 #:include Commands/ChecksCommand.cs
 #:include Commands/VersionCommands.cs
 #:include Commands/NativeDesktopCommands.cs
+#:include Commands/NativeDesktopCommands.InstallService.cs
 #:include Commands/PackagingCommands.cs
 #:include Commands/ReleaseAurCommands.cs
 #:include Commands/ReportCommands.cs
