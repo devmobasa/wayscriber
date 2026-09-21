@@ -396,6 +396,28 @@ fn zoom_chip_control_labels_expose_the_toolbar_settings_tab() {
 }
 
 #[test]
+fn toolbar_type_and_memory_guidance_expose_toolbar_settings() {
+    for query in [
+        "toolbar type",
+        "toolbar backend",
+        "GTK",
+        "Built-in",
+        "memory",
+    ] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let ui = summary.tab(TabId::Ui).expect("UI match");
+
+        assert!(
+            ui.ui_tabs().contains(&UiTabId::Toolbar),
+            "toolbar type should be discoverable by {query}"
+        );
+    }
+}
+
+#[test]
 fn dynamic_matches_preserve_original_indices() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.draft.boards.items[1].name = "Meeting board".to_string();

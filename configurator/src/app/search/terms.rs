@@ -199,6 +199,12 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
 ];
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "toolbar",
+    "toolbar type",
+    "toolbar backend",
+    "GTK",
+    "Built-in",
+    "memory",
+    "less memory",
     "layout mode",
     "style pill",
     "zoom chip",
