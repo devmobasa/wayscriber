@@ -84,6 +84,10 @@ impl WaylandState {
         if let Some(breakdown) = breakdown.as_mut() {
             breakdown.render_profile = PerfRenderProfileKind::from_flags(remap_canvas, remap_ui);
         }
+        let profile = FrameProfile::new(profile, remap_canvas, remap_ui);
+        self.render
+            .prepare_profile_ui_baseline(profile.mode(), geometry.byte_len);
+
         PreparedFrame {
             geometry,
             visibility,
@@ -99,7 +103,7 @@ impl WaylandState {
             damage_screen,
             full_damage_reason,
             damage_diagnostics,
-            profile: FrameProfile::new(profile, remap_canvas, remap_ui),
+            profile,
             now,
             keep_rendering,
         }

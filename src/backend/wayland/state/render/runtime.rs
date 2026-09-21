@@ -1,6 +1,7 @@
 use crate::util::Rect;
 
 use super::super::canvas_layer::CanvasLayerCache;
+use super::profile::ProfileMode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum UiEffect {
@@ -239,6 +240,18 @@ impl RenderRuntime {
     pub(in crate::backend::wayland::state) fn profile_ui_baseline_mut(&mut self) -> &mut Vec<u8> {
         &mut self.profile_ui_baseline
     }
+
+    pub(super) fn prepare_profile_ui_baseline(
+        &mut self,
+        mode: ProfileMode,
+        byte_len: usize,
+    ) {
+        if mode != ProfileMode::Ui
+            || self.profile_ui_baseline.capacity() > byte_len.saturating_mul(2)
+        {
+            self.profile_ui_baseline = Vec::new();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +277,32 @@ mod tests {
         let (theme, _caches, _engine) = dark.ui_parts_with_text_mut();
         assert_eq!(theme, &crate::ui::theme::Theme::dark());
         assert_ne!(dark.theme(), light.theme());
+    }
+
+    #[test]
+    fn profile_baseline_is_released_after_ui_only_mode_or_output_shrink() {
+        let mut runtime = RenderRuntime::new(
+            crate::ui::theme::Theme::dark(),
+            crate::ui_text::UiTextEngine::default(),
+            crate::draw::TextMeasurer::default(),
+        );
+        runtime.profile_ui_baseline_mut().resize(1024, 7);
+        let original_capacity = runtime.profile_ui_baseline.capacity();
+
+        runtime.prepare_profile_ui_baseline(ProfileMode::Ui, 1024);
+        assert_eq!(runtime.profile_ui_baseline.capacity(), original_capacity);
+        assert_eq!(runtime.profile_ui_baseline(), vec![7; 1024]);
+
+        runtime.prepare_profile_ui_baseline(ProfileMode::Ui, 128);
+        assert_eq!(runtime.profile_ui_baseline.capacity(), 0);
+
+        runtime.profile_ui_baseline_mut().resize(128, 3);
+        runtime.prepare_profile_ui_baseline(ProfileMode::CanvasAndUi, 128);
+        assert_eq!(runtime.profile_ui_baseline.capacity(), 0);
+
+        runtime.profile_ui_baseline_mut().resize(128, 4);
+        runtime.prepare_profile_ui_baseline(ProfileMode::Off, 128);
+        assert_eq!(runtime.profile_ui_baseline.capacity(), 0);
     }
 
     fn rect(x: i32) -> Rect {
