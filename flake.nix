@@ -75,7 +75,8 @@
             ];
 
             postInstall = ''
-              install -Dm755 target/release/wayscriber-broker $out/bin/wayscriber-broker
+              # cargoInstallHook already installs both binaries from its target-specific directory.
+              test -x "$out/bin/wayscriber-broker"
               install -Dm644 packaging/wayscriber.desktop $out/share/applications/wayscriber.desktop
               install -Dm644 packaging/wayscriber.service $out/lib/systemd/user/wayscriber.service
               substituteInPlace $out/lib/systemd/user/wayscriber.service \

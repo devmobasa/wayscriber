@@ -233,8 +233,10 @@ def main() -> int:
         package_text = read_text(path)
         if 'cargoBuildFlags = [ "-p" "wayscriber" "-p" "wayscriber-process-broker" "--bins" ];' not in package_text:
             errors.append(f"{path}: cargoBuildFlags must build the app and broker together")
-        if "target/release/wayscriber-broker" not in package_text:
-            errors.append(f"{path}: install output is missing the broker companion")
+        if 'test -x "$out/bin/wayscriber-broker"' not in package_text:
+            errors.append(f"{path}: postInstall must verify the broker installed by cargoInstallHook")
+        if "target/release/wayscriber-broker" in package_text:
+            errors.append(f"{path}: do not copy the broker from Cargo's nonexistent target/release path")
         if "dontWrapGApps = true;" not in package_text or 'wrapGApp "$out/bin/wayscriber"' not in package_text:
             errors.append(f"{path}: GTK wrapping must leave the broker as an ELF executable")
 

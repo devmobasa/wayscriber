@@ -310,6 +310,19 @@ internal static class ChecksCommand
             .GroupBy( pair => pair.attribute ).ToDictionary( group => group.Key, group => group.Select( pair => pair.crate ).ToArray( ) );
         var recipe = Files.Read( context.Path( RepositoryPaths.PackagingDirectory, "nixpkgs", "package.nix" ) );
         var flake = Files.Read( context.Path( "flake.nix" ) );
+
+        foreach ( var (path, packageText) in new[] { ("packaging/nixpkgs/package.nix", recipe), ("flake.nix", flake) } )
+        {
+            if ( !packageText.Contains( "test -x \"$out/bin/wayscriber-broker\"", StringComparison.Ordinal ) )
+            {
+                errors.Add( $"{path}: postInstall must verify the broker installed by cargoInstallHook" );
+            }
+            if ( packageText.Contains( "target/release/wayscriber-broker", StringComparison.Ordinal ) )
+            {
+                errors.Add( $"{path}: do not copy the broker from Cargo's nonexistent target/release path" );
+            }
+        }
+
         var marker = flake.IndexOf( "wayscriber = rustPlatform.buildRustPackage", StringComparison.Ordinal );
         if ( marker < 0 )
         {
@@ -454,6 +467,7 @@ internal static class ChecksCommand
         ["wayland-client"] = ["wayland"],
         ["wayland-protocols"] = [],
         ["wayland-protocols-wlr"] = [],
+        [RepositoryNames.BrokerPackage] = [],
         ["xkbcommon"] = ["libxkbcommon"],
         ["zbus"] = [],
         ["zune-jpeg"] = [],
