@@ -195,29 +195,7 @@ fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
     }
 
     let stride = Format::ARgb32.stride_for_width(width).ok()? as usize;
-    let mut pixels = vec![0u8; stride * height as usize];
-    for (row, source) in image.rgba.chunks_exact(width as usize * 4).enumerate() {
-        let offset = row * stride;
-        let row_bytes = &mut pixels[offset..offset + width as usize * 4];
-        for (pixel, out) in source
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(row_bytes.as_chunks_mut::<4>().0.iter_mut())
-        {
-            let [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
-            let premul =
-                |channel: u8| -> u8 { ((channel as u16 * a as u16 + 127) / 255).min(255) as u8 };
-            let r = premul(r);
-            let g = premul(g);
-            let b = premul(b);
-            if cfg!(target_endian = "little") {
-                out.copy_from_slice(&[b, g, r, a]);
-            } else {
-                out.copy_from_slice(&[a, r, g, b]);
-            }
-        }
-    }
+    let pixels = image.into_cairo_argb(stride).ok()?;
 
     let decoded_bytes = pixels.len();
     ImageSurface::create_for_data(

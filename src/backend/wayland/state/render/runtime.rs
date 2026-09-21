@@ -241,11 +241,7 @@ impl RenderRuntime {
         &mut self.profile_ui_baseline
     }
 
-    pub(super) fn prepare_profile_ui_baseline(
-        &mut self,
-        mode: ProfileMode,
-        byte_len: usize,
-    ) {
+    pub(super) fn prepare_profile_ui_baseline(&mut self, mode: ProfileMode, byte_len: usize) {
         if mode != ProfileMode::Ui
             || self.profile_ui_baseline.capacity() > byte_len.saturating_mul(2)
         {

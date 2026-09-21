@@ -40,30 +40,16 @@ fn decode_desktop_backdrop(
     let decoded = decode_rgba(format, &image_data).map_err(|err| {
         CaptureError::ImageError(format!("Failed to decode desktop backdrop: {err}"))
     })?;
-    let argb = rgba_to_cairo_argb(&decoded.rgba)?;
-    desktop_backdrop_from_argb(argb, decoded.width, decoded.height, &request)
-}
-
-fn rgba_to_cairo_argb(rgba: &[u8]) -> Result<Vec<u8>, CaptureError> {
-    if !rgba.len().is_multiple_of(4) {
-        return Err(CaptureError::ImageError(
-            "Decoded desktop backdrop RGBA data has an unexpected length".to_string(),
-        ));
-    }
-
-    let mut argb = Vec::with_capacity(rgba.len());
-    for pixel in rgba.as_chunks::<4>().0 {
-        let r = pixel[0];
-        let g = pixel[1];
-        let b = pixel[2];
-        let a = pixel[3];
-        let alpha = u16::from(a);
-        let pr = ((u16::from(r) * alpha + 127) / 255) as u8;
-        let pg = ((u16::from(g) * alpha + 127) / 255) as u8;
-        let pb = ((u16::from(b) * alpha + 127) / 255) as u8;
-        argb.extend_from_slice(&[pb, pg, pr, a]);
-    }
-    Ok(argb)
+    let stride = usize::try_from(decoded.width)
+        .ok()
+        .and_then(|width| width.checked_mul(4))
+        .ok_or_else(|| CaptureError::ImageError("Desktop backdrop stride overflow".into()))?;
+    let width = decoded.width;
+    let height = decoded.height;
+    let argb = decoded
+        .into_cairo_argb(stride)
+        .map_err(CaptureError::ImageError)?;
+    desktop_backdrop_from_argb(argb, width, height, &request)
 }
 
 pub(crate) fn desktop_backdrop_from_argb(
@@ -228,4 +214,53 @@ fn desktop_backdrop_result(
         logical_to_image_scale_x: width as f64 / logical_width as f64,
         logical_to_image_scale_y: height as f64 / logical_height as f64,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_desktop_backdrop;
+    use crate::capture::{
+        DesktopBackdropCaptureRequest, DesktopBackdropGeometry, ImageOperationKind,
+    };
+
+    #[test]
+    fn decoded_png_backdrop_uses_premultiplied_cairo_pixels() {
+        let mut png_bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut png_bytes, 2, 1);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&[200, 100, 50, 128, 40, 80, 120, 255])
+                .unwrap();
+        }
+        let request = DesktopBackdropCaptureRequest {
+            logical_width: 2,
+            logical_height: 1,
+            scale: 1,
+            geometry: Some(DesktopBackdropGeometry {
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 2,
+                logical_height: 1,
+                physical_width: Some(2),
+                physical_height: Some(1),
+                crop_x: Some(0),
+                crop_y: Some(0),
+                screenshot_width: Some(2),
+                screenshot_height: Some(1),
+            }),
+            operation: ImageOperationKind::BoardPdfExport,
+        };
+
+        let result = decode_desktop_backdrop(png_bytes, request).unwrap();
+
+        if cfg!(target_endian = "little") {
+            assert_eq!(result.data.as_ref(), &[25, 50, 100, 128, 120, 80, 40, 255]);
+        } else {
+            assert_eq!(result.data.as_ref(), &[128, 100, 50, 25, 255, 40, 80, 120]);
+        }
+    }
 }
