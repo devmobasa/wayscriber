@@ -77,8 +77,13 @@ pub(super) fn maybe_render(
             _ => true, // No previous render or unlimited FPS
         }
     };
-    let can_render =
-        state.surface.is_configured() && state.input_state.needs_redraw && frame_time_ok;
+    let buffer_available = state
+        .surface
+        .has_available_slot(state.config.performance.buffer_count as usize);
+    let can_render = state.surface.is_configured()
+        && state.input_state.needs_redraw
+        && frame_time_ok
+        && buffer_available;
 
     if can_render {
         debug!(
@@ -160,19 +165,27 @@ pub(super) fn maybe_render(
             }
         }
     } else {
-        record_skipped_render(state, vsync_enabled, frame_time_ok);
+        record_skipped_render(state, vsync_enabled, frame_time_ok, buffer_available);
     }
 
     None
 }
 
-fn record_skipped_render(state: &mut WaylandState, vsync_enabled: bool, frame_time_ok: bool) {
+fn record_skipped_render(
+    state: &mut WaylandState,
+    vsync_enabled: bool,
+    frame_time_ok: bool,
+    buffer_available: bool,
+) {
     let skip_reason = if !state.surface.is_configured() {
         Some(PerfRenderSkipReason::SurfaceUnconfigured)
     } else if !state.input_state.needs_redraw {
         Some(PerfRenderSkipReason::NoRedraw)
     } else if vsync_enabled && state.surface.frame_callback_pending() {
         Some(PerfRenderSkipReason::FrameCallbackPending)
+    } else if !buffer_available {
+        state.record_perf_buffer_deferral(Instant::now());
+        Some(PerfRenderSkipReason::BuffersInFlight)
     } else if !vsync_enabled && !frame_time_ok {
         Some(PerfRenderSkipReason::FpsCap)
     } else {

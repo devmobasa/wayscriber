@@ -45,6 +45,7 @@ struct RenderWaitInputs {
     vsync_enabled: bool,
     needs_redraw: bool,
     surface_configured: bool,
+    buffer_available: bool,
     frame_callback_pending: bool,
     max_fps_no_vsync: u32,
     last_render_time: Option<Instant>,
@@ -56,6 +57,7 @@ fn render_wait(inputs: RenderWaitInputs) -> RenderWait {
     // Wayland event that may never arrive.
     if (inputs.capture_active && (inputs.vsync_enabled || !inputs.needs_redraw))
         || !inputs.surface_configured
+        || !inputs.buffer_available
         || (inputs.vsync_enabled && inputs.frame_callback_pending)
     {
         RenderWait::Blocked
@@ -303,6 +305,9 @@ fn event_loop_timeout(
         vsync_enabled,
         needs_redraw: state.input_state.needs_redraw,
         surface_configured: state.surface.is_configured(),
+        buffer_available: state
+            .surface
+            .has_available_slot(state.config.performance.buffer_count as usize),
         frame_callback_pending: state.surface.frame_callback_pending(),
         max_fps_no_vsync: state.config.performance.max_fps_no_vsync,
         last_render_time,
@@ -475,6 +480,7 @@ mod tests {
             vsync_enabled: false,
             needs_redraw: true,
             surface_configured: true,
+            buffer_available: true,
             frame_callback_pending: false,
             max_fps_no_vsync: 1,
             last_render_time: Some(last_render),
@@ -491,6 +497,36 @@ mod tests {
                 ..inputs
             }),
             RenderWait::Blocked
+        ));
+        assert!(matches!(
+            render_wait(RenderWaitInputs {
+                buffer_available: false,
+                ..inputs
+            }),
+            RenderWait::Blocked
+        ));
+    }
+
+    #[test]
+    fn unlimited_redraw_waits_for_buffer_release() {
+        let inputs = RenderWaitInputs {
+            capture_active: false,
+            vsync_enabled: false,
+            needs_redraw: true,
+            surface_configured: true,
+            buffer_available: false,
+            frame_callback_pending: false,
+            max_fps_no_vsync: 0,
+            last_render_time: None,
+        };
+
+        assert!(matches!(render_wait(inputs), RenderWait::Blocked));
+        assert!(matches!(
+            render_wait(RenderWaitInputs {
+                buffer_available: true,
+                ..inputs
+            }),
+            RenderWait::FrameCap(None)
         ));
     }
 

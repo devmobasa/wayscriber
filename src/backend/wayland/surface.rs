@@ -509,6 +509,15 @@ impl SurfaceState {
             .count()
     }
 
+    /// Whether the next frame can acquire a slot without waiting for a
+    /// compositor release. A geometry change drops the pool, so it can render
+    /// immediately even if buffers from the old pool are still in flight.
+    pub(in crate::backend::wayland) fn has_available_slot(&self, buffer_count: usize) -> bool {
+        self.pool.is_none()
+            || self.slots.len() < buffer_count.max(1)
+            || self.slots.iter().any(|slot| !slot.has_active_buffers())
+    }
+
     /// Updates the stored pool size and returns true if it grew.
     ///
     /// Call this after `create_buffer` to detect if the pool grew during allocation.
