@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 const IMAGE_CACHE_ENTRIES: usize = 32;
-/// Per-owner budget for decoded ARGB32 image pixels.
+/// Per-owner budget for allocated decoded ARGB32 image backing storage.
 const IMAGE_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
@@ -197,7 +197,7 @@ fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
     let stride = Format::ARgb32.stride_for_width(width).ok()? as usize;
     let pixels = image.into_cairo_argb(stride).ok()?;
 
-    let decoded_bytes = pixels.len();
+    let decoded_bytes = pixels.capacity();
     ImageSurface::create_for_data(
         pixels,
         Format::ARgb32,

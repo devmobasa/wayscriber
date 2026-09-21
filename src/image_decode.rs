@@ -207,43 +207,65 @@ fn decode_jpeg_rgba(bytes: &[u8]) -> Result<DecodedImage, String> {
     use zune_jpeg::zune_core::colorspace::ColorSpace;
     use zune_jpeg::zune_core::options::DecoderOptions;
 
-    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGB);
+    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA);
     let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
-    let rgb = decoder.decode().map_err(|err| err.to_string())?;
+    decoder.decode_headers().map_err(|err| err.to_string())?;
     let info = decoder
         .info()
         .ok_or_else(|| "JPEG did not include dimensions".to_string())?;
     let width = u32::from(info.width);
     let height = u32::from(info.height);
-    let expected_len = pixel_count(width, height)?
-        .checked_mul(3)
+    let pixels = pixel_count(width, height)?;
+    let rgba_len = pixels
+        .checked_mul(4)
         .ok_or_else(|| "image dimensions are too large".to_string())?;
-    if rgb.len() != expected_len {
-        return Err("decoded JPEG RGB data has an unexpected length".to_string());
+    // zune-jpeg's direct RGBA conversion inverts some CMYK/YCCK JPEGs. Preserve
+    // their RGB conversion, decoding into the front of the final RGBA buffer.
+    let cmyk = matches!(
+        decoder.input_colorspace(),
+        Some(ColorSpace::CMYK | ColorSpace::YCCK)
+    );
+    if cmyk {
+        let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGB);
+        decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
+        decoder.decode_headers().map_err(|err| err.to_string())?;
+    }
+    let output_len = pixels
+        .checked_mul(if cmyk { 3 } else { 4 })
+        .ok_or_else(|| "image dimensions are too large".to_string())?;
+    if decoder.output_buffer_size() != Some(output_len) {
+        return Err("decoded JPEG data has an unexpected length".to_string());
+    }
+
+    let mut rgba = vec![0; rgba_len];
+    decoder
+        .decode_into(&mut rgba)
+        .map_err(|err| err.to_string())?;
+    if cmyk {
+        expand_rgb_pixels_in_place(&mut rgba, pixels);
     }
 
     Ok(DecodedImage {
         width,
         height,
-        rgba: expand_rgb_to_rgba(
-            rgb,
-            pixel_count(width, height)?
-                .checked_mul(4)
-                .ok_or_else(|| "image dimensions are too large".to_string())?,
-        ),
+        rgba,
     })
 }
 
 fn expand_rgb_to_rgba(mut rgb: Vec<u8>, rgba_len: usize) -> Vec<u8> {
     let pixels = rgb.len() / 3;
     rgb.resize(rgba_len, 0);
+    expand_rgb_pixels_in_place(&mut rgb, pixels);
+    rgb
+}
+
+fn expand_rgb_pixels_in_place(rgba: &mut [u8], pixels: usize) {
     for index in (0..pixels).rev() {
         let source = index * 3;
         let target = index * 4;
-        let [r, g, b] = [rgb[source], rgb[source + 1], rgb[source + 2]];
-        rgb[target..target + 4].copy_from_slice(&[r, g, b, 255]);
+        let [r, g, b] = [rgba[source], rgba[source + 1], rgba[source + 2]];
+        rgba[target..target + 4].copy_from_slice(&[r, g, b, 255]);
     }
-    rgb
 }
 
 fn pixel_count(width: u32, height: u32) -> Result<usize, String> {
@@ -256,6 +278,9 @@ fn pixel_count(width: u32, height: u32) -> Result<usize, String> {
 #[cfg(test)]
 mod tests {
     use super::{DecodedImage, EncodedImageFormat, decode_rgba, normalize_png_rgba};
+    use zune_jpeg::zune_core::bytestream::ZCursor;
+    use zune_jpeg::zune_core::colorspace::ColorSpace;
+    use zune_jpeg::zune_core::options::DecoderOptions;
 
     fn png(color_type: png::ColorType, pixels: &[u8]) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -359,6 +384,62 @@ mod tests {
         assert_eq!(image.width, 1);
         assert_eq!(image.height, 1);
         assert_eq!(image.rgba, [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn jpeg_rgba_matches_rgb_pixels_without_expanded_capacity() {
+        for (bytes, four_component_input) in [
+            (
+                &include_bytes!("../tests/fixtures/jpeg_rgb_3x2.jpg")[..],
+                false,
+            ),
+            (
+                &include_bytes!("../tests/fixtures/jpeg_gray_3x2.jpg")[..],
+                false,
+            ),
+            (
+                &include_bytes!("../tests/fixtures/jpeg_cmyk_3x2.jpg")[..],
+                true,
+            ),
+        ] {
+            let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGB);
+            let mut reference =
+                zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
+            reference.decode_headers().unwrap();
+            assert_eq!(
+                matches!(
+                    reference.input_colorspace(),
+                    Some(ColorSpace::CMYK | ColorSpace::YCCK)
+                ),
+                four_component_input
+            );
+            let rgb = reference.decode().unwrap();
+            let image = decode_rgba(EncodedImageFormat::Jpeg, bytes).unwrap();
+
+            assert_eq!((image.width, image.height), (3, 2));
+            assert_eq!(image.rgba.len(), 24);
+            assert_eq!(image.rgba.capacity(), 24);
+            assert_eq!(rgb.len(), 18);
+            for (rgba, rgb) in image.rgba.chunks_exact(4).zip(rgb.chunks_exact(3)) {
+                assert_eq!(&rgba[..3], rgb);
+                assert_eq!(rgba[3], 255);
+            }
+            assert_ne!(&image.rgba[..4], &image.rgba[12..16]);
+
+            let allocation = image.rgba.as_ptr();
+            let cairo = image.into_cairo_argb(12).unwrap();
+            assert_eq!(cairo.as_ptr(), allocation);
+            assert_eq!(cairo.len(), 24);
+            assert_eq!(cairo.capacity(), 24);
+            for (argb, rgb) in cairo.chunks_exact(4).zip(rgb.chunks_exact(3)) {
+                let expected = if cfg!(target_endian = "little") {
+                    [rgb[2], rgb[1], rgb[0], 255]
+                } else {
+                    [255, rgb[0], rgb[1], rgb[2]]
+                };
+                assert_eq!(argb, expected);
+            }
+        }
     }
 
     const CMYK_RED_JPEG: &str = "\
