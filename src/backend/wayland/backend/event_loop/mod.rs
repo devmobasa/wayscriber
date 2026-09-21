@@ -33,6 +33,42 @@ fn min_timeout(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
     }
 }
 
+enum RenderWait {
+    Blocked,
+    FrameCap(Option<Duration>),
+    Animation,
+}
+
+#[derive(Clone, Copy)]
+struct RenderWaitInputs {
+    capture_active: bool,
+    vsync_enabled: bool,
+    needs_redraw: bool,
+    surface_configured: bool,
+    frame_callback_pending: bool,
+    max_fps_no_vsync: u32,
+    last_render_time: Option<Instant>,
+}
+
+fn render_wait(inputs: RenderWaitInputs) -> RenderWait {
+    // A capture preflight still needs a hidden redraw. If the FPS cap delayed
+    // that redraw, keep its deadline armed instead of blocking for an unrelated
+    // Wayland event that may never arrive.
+    if (inputs.capture_active && (inputs.vsync_enabled || !inputs.needs_redraw))
+        || !inputs.surface_configured
+        || (inputs.vsync_enabled && inputs.frame_callback_pending)
+    {
+        RenderWait::Blocked
+    } else if !inputs.vsync_enabled && inputs.needs_redraw {
+        RenderWait::FrameCap(render::frame_rate_cap_timeout(
+            inputs.max_fps_no_vsync,
+            inputs.last_render_time,
+        ))
+    } else {
+        RenderWait::Animation
+    }
+}
+
 pub(super) fn run_event_loop(
     conn: &Connection,
     event_queue: &mut EventQueue<WaylandState>,
@@ -262,12 +298,15 @@ fn event_loop_timeout(
     last_render_time: Option<Instant>,
 ) -> Option<Duration> {
     let vsync_enabled = state.config.performance.enable_vsync;
-    // A capture preflight still needs a hidden redraw. If the FPS cap delayed
-    // that redraw, keep its deadline armed instead of blocking for an unrelated
-    // Wayland event that may never arrive.
-    let should_block = (capture_active && (vsync_enabled || !state.input_state.needs_redraw))
-        || !state.surface.is_configured()
-        || (vsync_enabled && state.surface.frame_callback_pending());
+    let render_wait = render_wait(RenderWaitInputs {
+        capture_active,
+        vsync_enabled,
+        needs_redraw: state.input_state.needs_redraw,
+        surface_configured: state.surface.is_configured(),
+        frame_callback_pending: state.surface.frame_callback_pending(),
+        max_fps_no_vsync: state.config.performance.max_fps_no_vsync,
+        last_render_time,
+    });
     let now = Instant::now();
     let animation_timeout = min_timeout(
         min_timeout(
@@ -281,27 +320,23 @@ fn event_loop_timeout(
     );
     let autosave_timeout = session_save::autosave_timeout(state, now);
     let focus_exit_timeout = state.focus.exit_timeout(now);
-    let base_timeout = if should_block {
-        min_timeout(autosave_timeout, focus_exit_timeout)
-    } else if !vsync_enabled && state.input_state.needs_redraw {
-        let frame_cap_timeout = render::frame_rate_cap_timeout(
-            state.config.performance.max_fps_no_vsync,
-            last_render_time,
-        );
-        let frame_timeout = match (frame_cap_timeout, animation_timeout) {
-            (Some(frame), Some(animation)) => Some(frame.min(animation)),
-            (Some(frame), None) => Some(frame),
-            (None, _) => Some(Duration::ZERO),
-        };
-        min_timeout(
-            frame_timeout,
-            min_timeout(autosave_timeout, focus_exit_timeout),
-        )
-    } else {
-        min_timeout(
+    let base_timeout = match render_wait {
+        RenderWait::Blocked => min_timeout(autosave_timeout, focus_exit_timeout),
+        RenderWait::FrameCap(frame_cap_timeout) => {
+            let frame_timeout = match (frame_cap_timeout, animation_timeout) {
+                (Some(frame), Some(animation)) => Some(frame.min(animation)),
+                (Some(frame), None) => Some(frame),
+                (None, _) => Some(Duration::ZERO),
+            };
+            min_timeout(
+                frame_timeout,
+                min_timeout(autosave_timeout, focus_exit_timeout),
+            )
+        }
+        RenderWait::Animation => min_timeout(
             animation_timeout,
             min_timeout(autosave_timeout, focus_exit_timeout),
-        )
+        ),
     };
     let pending_backend_action_timeout = (state.input_state.has_pending_backend_actions()
         || state.toolbar_persistence_drain_ready())
@@ -425,11 +460,39 @@ fn break_on_requested_exit(state: &mut WaylandState) -> bool {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use super::{
-        finalize_event_loop, install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
+        RenderWait, RenderWaitInputs, finalize_event_loop, install_then_scan, min_timeout,
+        render_wait, should_defer_xdg_unfocused_exit,
     };
+
+    #[test]
+    fn capture_redraw_keeps_the_no_vsync_frame_cap_deadline_armed() {
+        let last_render = Instant::now();
+        let inputs = RenderWaitInputs {
+            capture_active: true,
+            vsync_enabled: false,
+            needs_redraw: true,
+            surface_configured: true,
+            frame_callback_pending: false,
+            max_fps_no_vsync: 1,
+            last_render_time: Some(last_render),
+        };
+        let RenderWait::FrameCap(Some(timeout)) = render_wait(inputs) else {
+            panic!("capture redraw must wait for its frame-cap deadline");
+        };
+
+        assert!(timeout > Duration::ZERO);
+        assert!(timeout <= Duration::from_secs(1));
+        assert!(matches!(
+            render_wait(RenderWaitInputs {
+                needs_redraw: false,
+                ..inputs
+            }),
+            RenderWait::Blocked
+        ));
+    }
 
     #[test]
     fn runtime_deadlines_choose_the_earliest_deadline() {
