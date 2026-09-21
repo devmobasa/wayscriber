@@ -1,0 +1,904 @@
+{
+  "review_date": "2026-09-21",
+  "app_handoff": "2ca34484fea3e8f12b1cf50e400530863dd9289d",
+  "source_commit": "2cad646f",
+  "evidence_head": "3a07011f1c9148655249467804e028cfa0040bd5",
+  "method": "Replay latest Rust Wayland buffer creation lifetime, main attachment, new main-frame commit, old release and destroy. Reconcile per-process PSS. Window medians use final five seconds preceding each marked settle event. No live UI test performed.",
+  "transitions_checked": 31,
+  "selected_lifetimes_checked": 93,
+  "misclassified_lifetimes": 4,
+  "complete_pss_samples_checked": 2276,
+  "runs": {
+    "builtin-strict": {
+      "transition_count": 3,
+      "selected_old_lifetimes": 9,
+      "all_selected_buffers_are_current_main_lifetimes": true,
+      "issues": [],
+      "pool_generations": 7,
+      "fixture_counts": [
+        {
+          "held": 169,
+          "delivered": 70,
+          "cancelled": 99,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 180,
+      "complete_samples": 180,
+      "last_five_second_windows": [
+        {
+          "event": "cycle_settled",
+          "cycle": 0,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 44997,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        },
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 47305,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "2e2bbd9d7dbdb247deec68dd8692beafc2f802772aabf8d0a4a86327a8dd0131",
+        "app.log.gz": "67736ef18e2e42f8c0c305bbb82e430be8c686fe7790b6af34ca241d0e44adda",
+        "compositor.log.gz": "5ec3fe4fb7247c3848734604731a872085b34162f8faafd6529bacb0ea489bc8"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "46",
+            "22",
+            "25"
+          ],
+          "new_buffer": "39",
+          "new_commit_offset": 57154,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 1,
+          "selected_old_ids": [
+            "22",
+            "25",
+            "38"
+          ],
+          "new_buffer": "45",
+          "new_commit_offset": 78169,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 2,
+          "selected_old_ids": [
+            "23",
+            "39",
+            "45"
+          ],
+          "new_buffer": "56",
+          "new_commit_offset": 121407,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    },
+    "gtk-strict": {
+      "transition_count": 3,
+      "selected_old_lifetimes": 9,
+      "all_selected_buffers_are_current_main_lifetimes": true,
+      "issues": [],
+      "pool_generations": 7,
+      "fixture_counts": [
+        {
+          "held": 227,
+          "delivered": 107,
+          "cancelled": 120,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 181,
+      "complete_samples": 181,
+      "last_five_second_windows": [
+        {
+          "event": "cycle_settled",
+          "cycle": 0,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 50228,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        },
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 50228,
+          "app_fd_counts": [
+            21,
+            22
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "4299176a537169510c76dbbbae56c1ccac7df1dcabbc205f2bee93a422e6f2be",
+        "app.log.gz": "8d070bef31f7574acda82a91b406ada8ba1e8604260b7bf3c97e296d4b42a745",
+        "compositor.log.gz": "b71efa889e46f37edb648ef7c8bb337c433efca25df728f88164fb95200405a0"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "36",
+            "33",
+            "37"
+          ],
+          "new_buffer": "39",
+          "new_commit_offset": 81568,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 1,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "35"
+          ],
+          "new_buffer": "37",
+          "new_commit_offset": 128794,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 2,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "35"
+          ],
+          "new_buffer": "37",
+          "new_commit_offset": 184654,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    },
+    "builtin-strict-repeat": {
+      "transition_count": 6,
+      "selected_old_lifetimes": 18,
+      "all_selected_buffers_are_current_main_lifetimes": false,
+      "issues": [
+        {
+          "index": 3,
+          "buffer": "24",
+          "issue": "latest buffer lifetime was not attached to the main surface"
+        },
+        {
+          "index": 3,
+          "buffer": "39",
+          "issue": "latest buffer lifetime was not attached to the main surface"
+        }
+      ],
+      "pool_generations": 12,
+      "fixture_counts": [
+        {
+          "held": 407,
+          "delivered": 203,
+          "cancelled": 204,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 376,
+      "complete_samples": 376,
+      "last_five_second_windows": [
+        {
+          "event": "cycle_settled",
+          "cycle": 0,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 44976,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        },
+        {
+          "event": "cycle_settled",
+          "cycle": 1,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 45204,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        },
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 48942,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "4a2c0af7f454a8db7fd17a5cfe8d8a6c3d1d700aa1fb9d5f197e5897b3bb3a40",
+        "app.log.gz": "61c2729bbc8b07c9985658084b0a9f7a220c569156b2dd70db38a5bed963d79e",
+        "compositor.log.gz": "43f653655e7ffb012b9dc070c68c1b320ebd11942744459586fcc2fe5fed4c28"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "46",
+            "23",
+            "22"
+          ],
+          "new_buffer": "39",
+          "new_commit_offset": 57162,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 1,
+          "selected_old_ids": [
+            "22",
+            "25",
+            "38"
+          ],
+          "new_buffer": "45",
+          "new_commit_offset": 78174,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 2,
+          "selected_old_ids": [
+            "24",
+            "39",
+            "45"
+          ],
+          "new_buffer": "56",
+          "new_commit_offset": 121001,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 3,
+          "selected_old_ids": [
+            "24",
+            "39",
+            "51"
+          ],
+          "new_buffer": "66",
+          "new_commit_offset": 191192,
+          "all_three_current_main_lifetimes": false,
+          "issues": [
+            {
+              "buffer": "24",
+              "issue": "latest buffer lifetime was not attached to the main surface"
+            },
+            {
+              "buffer": "39",
+              "issue": "latest buffer lifetime was not attached to the main surface"
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "selected_old_ids": [
+            "22",
+            "24",
+            "38"
+          ],
+          "new_buffer": "52",
+          "new_commit_offset": 221468,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 5,
+          "selected_old_ids": [
+            "22",
+            "24",
+            "37"
+          ],
+          "new_buffer": "51",
+          "new_commit_offset": 262352,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    },
+    "gtk-strict-repeat": {
+      "transition_count": 6,
+      "selected_old_lifetimes": 18,
+      "all_selected_buffers_are_current_main_lifetimes": true,
+      "issues": [],
+      "pool_generations": 12,
+      "fixture_counts": [
+        {
+          "held": 508,
+          "delivered": 266,
+          "cancelled": 242,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 380,
+      "complete_samples": 380,
+      "last_five_second_windows": [
+        {
+          "event": "cycle_settled",
+          "cycle": 0,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 50428,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        },
+        {
+          "event": "cycle_settled",
+          "cycle": 1,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 50520,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        },
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 52860,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "b0769d0fd62f466cbc952c329f201d78d16b75ed58ad57e0e8a7c2ed5fc2c3af",
+        "app.log.gz": "3bab7c62ac8fc9dd06e2d0770821f8e8e3c76403ab1565cf1950127e8c9e3d20",
+        "compositor.log.gz": "90571c27c43eb15958d3e7db415d6b8f99c8822d204933e42ae01571512a39a7"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "36",
+            "33",
+            "37"
+          ],
+          "new_buffer": "39",
+          "new_commit_offset": 81674,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 1,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "35"
+          ],
+          "new_buffer": "37",
+          "new_commit_offset": 129839,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 2,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "35"
+          ],
+          "new_buffer": "37",
+          "new_commit_offset": 185301,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 3,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "36"
+          ],
+          "new_buffer": "37",
+          "new_commit_offset": 278600,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 4,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "36"
+          ],
+          "new_buffer": "38",
+          "new_commit_offset": 329349,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 5,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "36"
+          ],
+          "new_buffer": "38",
+          "new_commit_offset": 388979,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    },
+    "builtin-vsync": {
+      "transition_count": 6,
+      "selected_old_lifetimes": 18,
+      "all_selected_buffers_are_current_main_lifetimes": false,
+      "issues": [
+        {
+          "index": 3,
+          "buffer": "37",
+          "issue": "latest buffer lifetime was not attached to the main surface"
+        },
+        {
+          "index": 3,
+          "buffer": "41",
+          "issue": "latest buffer lifetime was not attached to the main surface"
+        }
+      ],
+      "pool_generations": 12,
+      "fixture_counts": [
+        {
+          "held": 519,
+          "delivered": 256,
+          "cancelled": 263,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 499,
+      "complete_samples": 499,
+      "last_five_second_windows": [
+        {
+          "event": "cycle_settled",
+          "cycle": 0,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 46021,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        },
+        {
+          "event": "cycle_settled",
+          "cycle": 1,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 24,
+          "median_pss_kib": 48054.0,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        },
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 49923,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "0ba842a9010ab0d559f68054afbd2049a25cca8a18639c2fcca15f5c3441a50a",
+        "app.log.gz": "f5285fcef172596b80fc0b2049e9facabcd74135a9ea7211e2738569b6958489",
+        "compositor.log.gz": "5f3379824388670d2f5f92ac6acd9f6875a6197ecfb23dcab0344917a6139285"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "46",
+            "22",
+            "25"
+          ],
+          "new_buffer": "48",
+          "new_commit_offset": 67764,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 1,
+          "selected_old_ids": [
+            "22",
+            "25",
+            "40"
+          ],
+          "new_buffer": "72",
+          "new_commit_offset": 104573,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 2,
+          "selected_old_ids": [
+            "52",
+            "53",
+            "55"
+          ],
+          "new_buffer": "66",
+          "new_commit_offset": 164069,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 3,
+          "selected_old_ids": [
+            "37",
+            "41",
+            "54"
+          ],
+          "new_buffer": "68",
+          "new_commit_offset": 243107,
+          "all_three_current_main_lifetimes": false,
+          "issues": [
+            {
+              "buffer": "37",
+              "issue": "latest buffer lifetime was not attached to the main surface"
+            },
+            {
+              "buffer": "41",
+              "issue": "latest buffer lifetime was not attached to the main surface"
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "selected_old_ids": [
+            "22",
+            "37",
+            "41"
+          ],
+          "new_buffer": "55",
+          "new_commit_offset": 276909,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 5,
+          "selected_old_ids": [
+            "22",
+            "37",
+            "41"
+          ],
+          "new_buffer": "55",
+          "new_commit_offset": 322247,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    },
+    "gtk-vsync": {
+      "transition_count": 6,
+      "selected_old_lifetimes": 18,
+      "all_selected_buffers_are_current_main_lifetimes": true,
+      "issues": [],
+      "pool_generations": 12,
+      "fixture_counts": [
+        {
+          "held": 490,
+          "delivered": 251,
+          "cancelled": 239,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 500,
+      "complete_samples": 500,
+      "last_five_second_windows": [
+        {
+          "event": "cycle_settled",
+          "cycle": 0,
+          "geometry": [
+            1280,
+            720,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 53005,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        },
+        {
+          "event": "cycle_settled",
+          "cycle": 1,
+          "geometry": [
+            1148,
+            1262,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 50661,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        },
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1148,
+            1262,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 48110,
+          "app_fd_counts": [
+            21
+          ],
+          "app_thread_counts": [
+            11
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "789130601d226d1318bcbadffa07b4f7ce020e75c303bedfb8ea5de3f53b5c94",
+        "app.log.gz": "c4358732b38355b503670396b1bf61f00f3f607f69ee6ebbc035ae2dca926ba2",
+        "compositor.log.gz": "f11fb4e1d47269c6884db360f6bea2ce347de0599fce7a9a4f3f28a883905670"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "36",
+            "33",
+            "37"
+          ],
+          "new_buffer": "39",
+          "new_commit_offset": 82718,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 1,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "35"
+          ],
+          "new_buffer": "37",
+          "new_commit_offset": 132214,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 2,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "35"
+          ],
+          "new_buffer": "38",
+          "new_commit_offset": 190135,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 3,
+          "selected_old_ids": [
+            "37",
+            "33",
+            "34"
+          ],
+          "new_buffer": "38",
+          "new_commit_offset": 288305,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 4,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "36"
+          ],
+          "new_buffer": "38",
+          "new_commit_offset": 341570,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        },
+        {
+          "index": 5,
+          "selected_old_ids": [
+            "33",
+            "34",
+            "36"
+          ],
+          "new_buffer": "38",
+          "new_commit_offset": 401155,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    },
+    "builtin-held-30s": {
+      "transition_count": 1,
+      "selected_old_lifetimes": 3,
+      "all_selected_buffers_are_current_main_lifetimes": true,
+      "issues": [],
+      "pool_generations": 3,
+      "fixture_counts": [
+        {
+          "held": 21,
+          "delivered": 8,
+          "cancelled": 13,
+          "outstanding": 0,
+          "callbacks_dropped": 0
+        }
+      ],
+      "total_samples": 160,
+      "complete_samples": 160,
+      "last_five_second_windows": [
+        {
+          "event": "settled",
+          "cycle": null,
+          "geometry": [
+            1600,
+            900,
+            1
+          ],
+          "samples": 23,
+          "median_pss_kib": 42996,
+          "app_fd_counts": [
+            19
+          ],
+          "app_thread_counts": [
+            7
+          ]
+        }
+      ],
+      "input_sha256": {
+        "result.json.gz": "24fac2f44ea90de609952eb279e0257279568e3a19897c982eb3c7a36aefe2e9",
+        "app.log.gz": "9d520fb8bf9ee21e00089d1eb6e9d24ec0f4485e945fafd60c9e418475cbd082",
+        "compositor.log.gz": "e56cad1301f44455ea81ee1c079373fe9f0da2ba607a8141316ad0ea64038e91"
+      },
+      "transition_checks": [
+        {
+          "index": 0,
+          "selected_old_ids": [
+            "46",
+            "23",
+            "37"
+          ],
+          "new_buffer": "39",
+          "new_commit_offset": 57058,
+          "all_three_current_main_lifetimes": true,
+          "issues": []
+        }
+      ]
+    }
+  }
+}

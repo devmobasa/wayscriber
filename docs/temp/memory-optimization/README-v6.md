@@ -7,9 +7,21 @@ supersede older open-status wording for the newly exercised cells.
 The evidence repository's reviewed handoff revision is `3a07011`; application
 source remains at `2cad646f`.
 
+The [V6 review](review-v6.md) found that the two original Built-in repeated
+runs each counted toolbar-reused buffer IDs during cycle two's first resize.
+The [lifetime correction and reruns](../../../../docs/memory-optimization/v6-buffer-lifetime-correction-2026-09-21.md)
+at evidence revision `453dff0` replace those two acceptance claims. Both
+corrected Built-in runs passed all six transitions with three distinct,
+committed main-surface buffer lifetimes; all 18 selected old lifetimes released
+and were destroyed after the new main frame committed. The original runs and
+[review data](v6-review-evidence.json) remain available for comparison. The
+[headless reproducer](v6-review-id-reuse-repro.py) preserves the old selector
+locally, so it still demonstrates the historical failure after the fix.
+
 The held-buffer resize and fractional-scale checks passed for Built-in and GTK
-toolbars in isolated runs, including two repeated cycles and late releases from
-retired generations. Isolated capture-timeout recovery, mixed-output switching,
+toolbars in isolated runs, including corrected two-cycle Built-in repeats and
+late releases from retired generations. Isolated capture-timeout recovery,
+mixed-output switching,
 several zoom controls, and region-picker cancellation were also exercised.
 Physical tablet, native dual monitor, IME composition, live tray actions,
 old-overlay/new-broker coexistence,
