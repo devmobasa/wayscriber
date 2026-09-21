@@ -2,19 +2,39 @@ namespace Wayscriber.Tools;
 
 internal static partial class NativeDesktopCommands
 {
-    private static async Task<bool> IsWayscriberServiceActive( ToolContext context )
+    internal enum WayscriberServiceState
+    {
+        Unavailable,
+        Inactive,
+        Active,
+    }
+
+    internal static async Task<WayscriberServiceState> InspectWayscriberService( ToolContext context )
     {
         if ( !await CommandExists( context, Programs.SystemControl ) )
         {
-            return false;
+            return WayscriberServiceState.Unavailable;
         }
 
         var result = await context.Run( Programs.SystemControl,
-            ["--user", "show", RepositoryNames.UserServiceFile, "-p", "ActiveState", "--value"], capture: true );
+            ["--user", "show", RepositoryNames.UserServiceFile, "-p", "ActiveState", "--value"],
+            environment: new Dictionary<string, string?> { [EnvironmentVariables.LocaleAll] = "C" },
+            capture: true, allowedExitCodes: new HashSet<int> { ExitCodes.Failure } );
+        if ( !result.IsSuccess )
+        {
+            if ( result.StandardError.Contains( "Failed to connect to bus", StringComparison.Ordinal ) ||
+                 result.StandardError.Contains( "Failed to connect to user scope bus", StringComparison.Ordinal ) )
+            {
+                return WayscriberServiceState.Unavailable;
+            }
+
+            throw new ToolException( $"Could not inspect wayscriber.service before selecting a new app/broker cohort: {result.StandardError.Trim( )}" );
+        }
+
         return result.StandardOutput.Trim( ) switch
         {
-            "active" => true,
-            "inactive" or "failed" => false,
+            "active" => WayscriberServiceState.Active,
+            "inactive" or "failed" => WayscriberServiceState.Inactive,
             var state => throw new ToolException( $"wayscriber.service is in state '{state}'; retry after it settles." )
         };
     }
@@ -29,7 +49,7 @@ internal static partial class NativeDesktopCommands
     private static async Task VerifyServiceExecutable( ToolContext context, string expectedHash )
     {
         await Task.Delay( DaemonRestartDelayMilliseconds, context.CancellationToken );
-        if ( !await IsWayscriberServiceActive( context ) )
+        if ( await InspectWayscriberService( context ) != WayscriberServiceState.Active )
         {
             throw new ToolException( "Updated Wayscriber service did not stay active." );
         }

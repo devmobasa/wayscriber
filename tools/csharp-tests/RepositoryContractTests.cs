@@ -17,6 +17,38 @@ public sealed class RepositoryContractTests
     }
 
     [Fact]
+    public async Task StandaloneInstallerDistinguishesUnavailableBusFromOtherServiceStates( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        var root = FindRepository( );
+        var result = await new ProcessRunner( TextWriter.Null, TextWriter.Null ).RunAsync(
+            new ProcessRequest( "/usr/bin/bash", [Path.Combine( root, "tools/test-install-service-state.sh" )], root,
+                CaptureOutput: true ), CancellationToken.None );
+
+        Assert.Contains( "Shell service-state fixture passed.", result.StandardOutput, StringComparison.Ordinal );
+    }
+
+    [Fact]
+    public async Task StandaloneInstallerRestoresSelectorsAndReportsRollbackFailure( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        var root = FindRepository( );
+        var result = await new ProcessRunner( TextWriter.Null, TextWriter.Null ).RunAsync(
+            new ProcessRequest( "/usr/bin/bash", [Path.Combine( root, "tools/test-install-rollback.sh" )], root,
+                CaptureOutput: true ), CancellationToken.None );
+
+        Assert.Contains( "Shell installer rollback fixture passed.", result.StandardOutput, StringComparison.Ordinal );
+    }
+
+    [Fact]
     public void StandaloneDevelopmentRunnerUsesTheBuiltBinary( )
     {
         var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/run.sh" ) );
@@ -180,6 +212,81 @@ public sealed class RepositoryContractTests
         Assert.Equal( 2, starts );
         Assert.Equal( "app-v1", File.ReadAllText( destination ) );
         Assert.Equal( oldLink, new FileInfo( destination ).LinkTarget );
+    }
+
+    [Fact]
+    public async Task ActiveAppInstallerReportsRollbackRestartFailureAndKeepsTheOldSelector( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory( "wayscriber-active-install-rollback-failure-test" );
+        var release = Path.Combine( fixture.Path, "target/release" );
+        var install = Path.Combine( fixture.Path, "installed/bin" );
+        Directory.CreateDirectory( release );
+        Directory.CreateDirectory( install );
+        var sourceApp = Path.Combine( release, RepositoryNames.MainPackage );
+        var sourceBroker = Path.Combine( release, RepositoryNames.BrokerBinary );
+        var destination = Path.Combine( install, RepositoryNames.MainPackage );
+        var context = new ToolContext( fixture.Path, TextWriter.Null, TextWriter.Null,
+            new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
+        File.WriteAllText( sourceApp, "app-v1" );
+        File.WriteAllText( sourceBroker, "broker-v1" );
+        await NativeDesktopCommands.InstallAppCohort( context, install, destination );
+        var oldLink = new FileInfo( destination ).LinkTarget;
+        File.WriteAllText( sourceApp, "app-v2" );
+        File.WriteAllText( sourceBroker, "broker-v2" );
+
+        var error = await Assert.ThrowsAsync<ToolException>( ( ) => NativeDesktopCommands.InstallAppCohortWithRestart(
+            context, install, destination,
+            _ => Task.CompletedTask,
+            _ => throw new ToolException( "Injected service-start failure." ),
+            ( _, _ ) => Task.CompletedTask ) );
+
+        Assert.Contains( "Rollback failed", error.Message, StringComparison.Ordinal );
+        Assert.Contains( "Injected service-start failure", error.Message, StringComparison.Ordinal );
+        Assert.Equal( oldLink, new FileInfo( destination ).LinkTarget );
+        Assert.Equal( "app-v1", File.ReadAllText( destination ) );
+        Assert.Contains( Directory.EnumerateFiles( Path.Combine( install, ".wayscriber-cohorts" ), RepositoryNames.BrokerBinary,
+            SearchOption.AllDirectories ), path => File.ReadAllText( path ) == "broker-v2" );
+    }
+
+    [Theory]
+    [InlineData( "active", "Active" )]
+    [InlineData( "inactive", "Inactive" )]
+    [InlineData( "failed", "Inactive" )]
+    public async Task AppInstallerRecognizesSettledUserServiceStates( string reported, string expected )
+    {
+        var runner = new ServiceProbeRunner( new ProcessResult( ExitCodes.Success, reported + "\n", string.Empty ) );
+        var context = new ToolContext( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
+
+        Assert.Equal( expected, (await NativeDesktopCommands.InspectWayscriberService( context )).ToString( ) );
+        Assert.Equal( [Programs.Which, Programs.SystemControl], runner.Requests.Select( request => request.FileName ) );
+    }
+
+    [Fact]
+    public async Task AppInstallerAllowsServiceFreePathWhenTheUserBusIsUnavailable( )
+    {
+        var runner = new ServiceProbeRunner( new ProcessResult( ExitCodes.Failure, string.Empty,
+            "Failed to connect to user scope bus via local transport: No such file or directory\n" ) );
+        var context = new ToolContext( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
+
+        Assert.Equal( NativeDesktopCommands.WayscriberServiceState.Unavailable,
+            await NativeDesktopCommands.InspectWayscriberService( context ) );
+        Assert.DoesNotContain( runner.Requests, request => request.Arguments.Contains( "stop" ) || request.Arguments.Contains( "start" ) );
+    }
+
+    [Theory]
+    [InlineData( 0, "activating", "" )]
+    [InlineData( 1, "", "Failed to inspect unit" )]
+    public async Task AppInstallerRefusesTransitionalOrUnexpectedServiceQuery( int exitCode, string output, string error )
+    {
+        var runner = new ServiceProbeRunner( new ProcessResult( exitCode, output, error ) );
+        var context = new ToolContext( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
+
+        await Assert.ThrowsAsync<ToolException>( ( ) => NativeDesktopCommands.InspectWayscriberService( context ) );
     }
 
     [Fact]
@@ -515,6 +622,28 @@ pkgname = wayscriber
                 return Task.FromResult( new ProcessResult( ExitCodes.Success, Path.GetFullPath( request.Arguments[1] ) + "\n", string.Empty ) );
             }
             throw new Xunit.Sdk.XunitException( $"Unexpected process: {request.FileName} {string.Join( ' ', request.Arguments )}" );
+        }
+    }
+
+    private sealed class ServiceProbeRunner( ProcessResult serviceResult ) : IProcessRunner
+    {
+        public List<ProcessRequest> Requests { get; } = [];
+
+        public Task<ProcessResult> RunAsync( ProcessRequest request, CancellationToken cancellationToken )
+        {
+            Requests.Add( request );
+            if ( request.FileName == Programs.Which )
+            {
+                Assert.Equal( [Programs.SystemControl], request.Arguments );
+                return Task.FromResult( new ProcessResult( ExitCodes.Success, Programs.SystemControl + "\n", string.Empty ) );
+            }
+            if ( request.FileName == Programs.SystemControl )
+            {
+                Assert.Equal( ["--user", "show", RepositoryNames.UserServiceFile, "-p", "ActiveState", "--value"], request.Arguments );
+                Assert.Equal( "C", request.Environment![EnvironmentVariables.LocaleAll] );
+                return Task.FromResult( serviceResult );
+            }
+            throw new Xunit.Sdk.XunitException( $"Unexpected process: {request.FileName}" );
         }
     }
 

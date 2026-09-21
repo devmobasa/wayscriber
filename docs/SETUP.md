@@ -47,6 +47,13 @@ restarts the service. If the restart fails, it restores the previous selection
 and service. An inactive service stays inactive. Switching from another active
 install prefix still requires stopping that service first.
 
+If `systemctl` is installed but the user service manager is unavailable, a
+source install still works without service setup. Choose Hyprland autostart or
+skip autostart in `install.sh`, or pass `--autostart hyprland` or
+`--autostart none` to the C# installer. Set up the systemd user service later
+from a session with a working user bus. Other service-query errors and an
+active service using another install prefix still stop the install.
+
 If `/usr/local/bin/wayscriber` already exists from the direct Arch installer, keep only one
 prefix. Overlay spawn follows the running daemon file, not whichever path you passed to
 `--version` or `--about`.

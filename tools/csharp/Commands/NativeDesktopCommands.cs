@@ -253,10 +253,16 @@ internal static partial class NativeDesktopCommands
             throw new ToolException( $"{destination} is package-owned; remove or update that package instead." );
         }
 
-        var serviceActive = await IsWayscriberServiceActive( context );
+        var serviceState = await InspectWayscriberService( context );
+        var serviceActive = serviceState == WayscriberServiceState.Active;
         if ( serviceActive && !await ServiceUsesDestination( context, destination ) )
         {
             throw new ToolException( $"The active wayscriber.service does not run {destination}; stop it before switching install prefixes." );
+        }
+        autostart = await SelectAutostart( context, skipAutostart, autostart );
+        if ( serviceState == WayscriberServiceState.Unavailable && autostart == AutostartModes.Systemd )
+        {
+            throw new ToolException( "The user service manager is unavailable; use Hyprland autostart or none." );
         }
 
         await RemoveInstallConflicts( context, conflicts );
@@ -279,7 +285,6 @@ internal static partial class NativeDesktopCommands
         {
             File.Copy( context.Path( "config.example.toml" ), config );
         }
-        autostart = await SelectAutostart( context, skipAutostart, autostart );
         if ( autostart == AutostartModes.Systemd )
         {
             await InstallSystemdService( context, destination, installDir, systemdUser );

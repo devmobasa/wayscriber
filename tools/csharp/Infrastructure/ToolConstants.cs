@@ -168,6 +168,7 @@ internal static class EnvironmentVariables
     public const string Gtk4LayerShellLibraryMode = "GTK4_LAYER_SHELL_LIBRARY_MODE";
     public const string Gtk4LayerShellPrefix = "GTK4_LAYER_SHELL_PREFIX";
     public const string Gtk4LayerShellSystemPrefix = "GTK4_LAYER_SHELL_SYSTEM_PREFIX";
+    public const string LocaleAll = "LC_ALL";
     public const string GtkAccessibility = "GTK_A11Y";
     public const string Home = "HOME";
     public const string LibraryPath = "LD_LIBRARY_PATH";

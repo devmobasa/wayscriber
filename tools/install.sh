@@ -177,8 +177,17 @@ service_state() {
         printf 'unavailable\n'
         return 0
     fi
-    state="$(systemctl --user show -p ActiveState --value wayscriber.service)" || \
-        die "Could not inspect wayscriber.service before selecting a new app/broker cohort"
+    if ! state="$(LC_ALL=C systemctl --user show -p ActiveState --value wayscriber.service 2>&1)"; then
+        case "$state" in
+            *"Failed to connect to bus"*|*"Failed to connect to user scope bus"*)
+                printf 'unavailable\n'
+                return 0
+                ;;
+            *)
+                die "Could not inspect wayscriber.service before selecting a new app/broker cohort: $state"
+                ;;
+        esac
+    fi
     case "$state" in
         active|inactive|failed) printf '%s\n' "$state" ;;
         *) die "wayscriber.service is in state '${state:-unknown}'; retry after it settles" ;;
@@ -433,7 +442,11 @@ elif [ -e "$INSTALLED_BINARY" ]; then
     PREVIOUS_BACKUP="$INSTALL_DIR/.wayscriber-previous-$$"
     PREVIOUS_HASH="$(sha256sum "$INSTALLED_BINARY" | cut -d' ' -f1)"
 fi
+PREVIOUS_SERVICE_STATE="$SERVICE_STATE"
 SERVICE_STATE="$(service_state)" || die "Could not inspect wayscriber.service"
+if [ "$PREVIOUS_SERVICE_STATE" != unavailable ] && [ "$SERVICE_STATE" = unavailable ]; then
+    die "The user service manager became unavailable during installation; retry when its state can be checked"
+fi
 if [ "$SERVICE_STATE" = active ]; then
     service_uses_destination || die "The active wayscriber.service does not run $INSTALLED_BINARY"
     SERVICE_WAS_ACTIVE=1

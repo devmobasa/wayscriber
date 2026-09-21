@@ -98,6 +98,7 @@ A failed restart restores the previous selection and service.
 - **install.sh** - Full installation script
   - Builds the app/broker pair and selects a complete versioned cohort through `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
   - Stops and restarts an active `wayscriber.service` after staging the pair; restores the old selection on failure
+  - Allows service-free installs when the user systemd bus is unavailable; choose Hyprland or skip autostart
   - Refuses a second copy under `/usr/bin`, `/usr/local/bin`, or `~/.local/bin` unless
     `--replace-other` is passed or you confirm on a TTY
   - Sets up config directory with example config
