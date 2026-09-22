@@ -16,6 +16,8 @@ creation and a new main frame commit before any selected old release, followed
 by server delivery, client destruction, reordered releases, and another drawn
 frame. Every wait has a deadline; compositor shutdown must leave no pending
 release. Four trace-parser unit tests cover ID reuse and false overlap.
+The fixture hooks both Wayland server event entry points used by the tested
+wlroots versions (Ubuntu 24.04 Sway 1.9 and local Sway 1.12).
 
 This checks protocol buffer and server-resource lifetime. It does not measure
 RSS/PSS or directly sample the pixel storage of a held server buffer. On

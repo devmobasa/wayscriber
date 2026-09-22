@@ -92,7 +92,7 @@ def execute(app, fixture, pointer, root):
         compositor_env = base | {"LD_PRELOAD": str(fixture),
                                  "WAYSCRIBER_RELEASE_HOLD_MS": "8000",
                                  "WAYSCRIBER_RELEASE_SCHEDULE_FILE": str(schedule)}
-        compositor = start(["sway", "--config", str(conf), "--debug"],
+        compositor = start(["sway", "--config", str(conf), "--debug", "--unsupported-gpu"],
                            compositor_env, root / "sway.log")
         socket = wait_for(lambda: next(runtime.glob("sway-ipc.*.sock"), None),
                           "headless compositor IPC")
