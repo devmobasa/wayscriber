@@ -80,13 +80,25 @@ fn paint(
     inputs: CanvasLayerInputs,
     cached: bool,
 ) -> Vec<u8> {
+    paint_with_preferred_scale(measurer, shapes, layer, caches, inputs, cached, Some(180))
+}
+
+fn paint_with_preferred_scale(
+    measurer: &crate::draw::TextMeasurer,
+    shapes: &[DrawnShape],
+    layer: &CanvasLayerCache,
+    caches: &mut crate::draw::RenderCaches,
+    inputs: CanvasLayerInputs,
+    cached: bool,
+    preferred_scale: Option<u32>,
+) -> Vec<u8> {
     let mut geometry = FrameGeometry::new(inputs.width, inputs.height, inputs.scale);
     if let Some((pixel_width, pixel_height)) = inputs.raster_dimensions {
         geometry.physical_width = pixel_width;
         geometry.physical_height = pixel_height;
         geometry.stride = (pixel_width * 4) as i32;
         geometry.byte_len = pixel_height as usize * geometry.stride as usize;
-        geometry.preferred_scale = Some(180);
+        geometry.preferred_scale = preferred_scale;
         geometry.wire_scale = 1;
     }
     let mut surface = cairo::ImageSurface::create(
@@ -254,19 +266,66 @@ fn fractional_baked_pan_matches_direct_rendering() {
     let mut layer = CanvasLayerCache::new();
     let mut caches = crate::draw::RenderCaches::default();
     let shapes = shapes();
-    let request = CanvasLayerInputs {
-        raster_dimensions: Some((120, 96)),
-        ..inputs()
-    };
-    assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
-    let direct = paint(&measurer, &shapes, &layer, &mut caches, request, false);
-    let cached = paint(&measurer, &shapes, &layer, &mut caches, request, true);
-    let error: u64 = direct
-        .iter()
-        .zip(&cached)
-        .map(|(left, right)| u64::from(left.abs_diff(*right)))
-        .sum();
-    assert!(error as f64 / (direct.len() as f64) < 1.0);
+    let mut previous_direct = None;
+    for preferred_scale in [150, 180, 210] {
+        let raster_width = (81 * preferred_scale + 60) / 120;
+        let raster_height = (63 * preferred_scale + 60) / 120;
+        for origin in [(0.0, 0.0), (3.25, 2.5), (8.5, 5.75), (12.25, 7.125)] {
+            let request = CanvasLayerInputs {
+                width: 81,
+                height: 63,
+                raster_dimensions: Some((raster_width, raster_height)),
+                origin,
+                ..inputs()
+            };
+            assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
+            let direct = paint_with_preferred_scale(
+                &measurer,
+                &shapes,
+                &layer,
+                &mut caches,
+                request,
+                false,
+                Some(preferred_scale),
+            );
+            let cached = paint_with_preferred_scale(
+                &measurer,
+                &shapes,
+                &layer,
+                &mut caches,
+                request,
+                true,
+                Some(preferred_scale),
+            );
+            if let Some(previous) = previous_direct {
+                assert_ne!(direct, previous, "pan or scale must move drawn content");
+            }
+            previous_direct = Some(direct.clone());
+
+            let scale = raster_width as f64 / request.width as f64;
+            let left = ((5.0 - origin.0) * scale).max(0.0) as usize;
+            let top = ((5.0 - origin.1) * scale).max(0.0) as usize;
+            let right = ((36.0 - origin.0) * scale).min(raster_width as f64) as usize;
+            let bottom = ((38.0 - origin.1) * scale).min(raster_height as f64) as usize;
+            let mut error = 0_u64;
+            let mut samples = 0_u64;
+            for y in top..bottom {
+                for x in left..right {
+                    let offset = (y * raster_width as usize + x) * 4;
+                    for channel in 0..4 {
+                        error +=
+                            u64::from(direct[offset + channel].abs_diff(cached[offset + channel]));
+                        samples += 1;
+                    }
+                }
+            }
+            assert!(samples > 0);
+            assert!(
+                error as f64 / (samples as f64) < 3.0,
+                "local image error at {preferred_scale}% origin {origin:?}: {error}/{samples}"
+            );
+        }
+    }
 }
 
 #[test]
