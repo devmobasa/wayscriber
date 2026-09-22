@@ -151,13 +151,14 @@ impl WaylandState {
 
         let pixel_size = current_mode_size(&info)
             .map(|(width, height)| transformed_output_size(width, height, info.transform));
-        let geometry = OutputGeometry::update_from(
+        let geometry = OutputGeometry::update_from_with_raster(
             info.logical_position,
             info.logical_size,
             (self.surface.width(), self.surface.height()),
             self.surface.scale(),
             info.transform,
             pixel_size,
+            self.surface.physical_dimensions(),
         );
         self.set_freeze_zoom_geometry_excluding(geometry, exclude);
         self.frozen

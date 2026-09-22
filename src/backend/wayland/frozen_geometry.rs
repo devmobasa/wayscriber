@@ -13,8 +13,8 @@ pub struct OutputGeometry {
     pub logical_height: u32,
     pub scale: i32,
     pub transform: wl_output::Transform,
-    /// Integer-scale buffer dimensions of the overlay surface. These are
-    /// independent of the output's logical/native size on xdg-shell fallbacks.
+    /// Raster dimensions of the overlay surface. These are independent of the
+    /// output's logical/native size on xdg-shell fallbacks.
     pub(super) overlay_buffer_size: (u32, u32),
     /// Physical pixels belonging to this output after applying its transform.
     /// This may differ from `logical * scale` under fractional scaling.
@@ -69,6 +69,30 @@ impl OutputGeometry {
             screenshot_size: None,
             known_output_count: None,
         })
+    }
+
+    pub fn update_from_with_raster(
+        logical_pos: Option<(i32, i32)>,
+        logical_size: Option<(i32, i32)>,
+        fallback_size: (u32, u32),
+        scale: i32,
+        transform: wl_output::Transform,
+        pixel_size: Option<(u32, u32)>,
+        raster_size: (u32, u32),
+    ) -> Option<Self> {
+        if raster_size.0 == 0 || raster_size.1 == 0 {
+            return None;
+        }
+        let mut geometry = Self::update_from(
+            logical_pos,
+            logical_size,
+            fallback_size,
+            scale,
+            transform,
+            pixel_size,
+        )?;
+        geometry.overlay_buffer_size = raster_size;
+        Some(geometry)
     }
 }
 
@@ -400,7 +424,7 @@ impl OutputGeometry {
         horizontal.abs_diff(vertical) <= rounding_tolerance
     }
 
-    /// Returns the integer-scale buffer dimensions used by the overlay surface.
+    /// Returns the raster dimensions used by the overlay surface.
     pub fn buffer_size(&self) -> (u32, u32) {
         self.overlay_buffer_size
     }

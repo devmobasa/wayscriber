@@ -89,7 +89,7 @@ impl ZoomState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::wayland::frozen::FrozenImage;
+    use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
     use crate::input::state::test_support::make_test_input_state;
     use wayland_client::protocol::wl_output;
@@ -119,6 +119,40 @@ mod tests {
         assert!(zoom.active);
 
         zoom.handle_resize(7, 4, &mut input);
+        assert!(zoom.image().is_none());
+        assert!(!zoom.active);
+    }
+
+    #[test]
+    fn fractional_raster_survives_unchanged_configure() {
+        let mut zoom = ZoomState::new(None);
+        let mut input = make_test_input_state();
+        zoom.set_active_geometry(OutputGeometry::update_from_with_raster(
+            Some((0, 0)),
+            Some((800, 600)),
+            (800, 600),
+            2,
+            wl_output::Transform::Normal,
+            Some((1000, 750)),
+            (1000, 750),
+        ));
+        zoom.install_image(
+            FrozenImage {
+                width: 1000,
+                height: 750,
+                stride: 4000,
+                data: vec![0; 1000 * 750 * 4],
+            },
+            ScreenImageProvenance::new(1, 0, 2, wl_output::Transform::Normal)
+                .expect("valid provenance"),
+        );
+        zoom.activate_without_capture();
+
+        zoom.handle_resize(1000, 750, &mut input);
+        assert!(zoom.image().is_some());
+        assert!(zoom.active);
+
+        zoom.handle_resize(1001, 750, &mut input);
         assert!(zoom.image().is_none());
         assert!(!zoom.active);
     }
