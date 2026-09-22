@@ -49,6 +49,41 @@ public sealed class RepositoryContractTests
     }
 
     [Fact]
+    public async Task BothInstallersUseTheSameExpectedCohortDirectory( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        var root = FindRepository( );
+        var expected = File.ReadAllText( Path.Combine( root, "tools/fixtures/install-cohort-hash.txt" ) ).Trim( );
+        using var fixture = new TemporaryDirectory( "wayscriber-install-parity-test" );
+        var release = Path.Combine( fixture.Path, "target/release" );
+        var install = Path.Combine( fixture.Path, "installed/bin" );
+        Directory.CreateDirectory( release );
+        Directory.CreateDirectory( install );
+        var app = Path.Combine( release, RepositoryNames.MainPackage );
+        var broker = Path.Combine( release, RepositoryNames.BrokerBinary );
+        File.Copy( Path.Combine( root, "tools/fixtures/install-cohort-app.txt" ), app );
+        File.Copy( Path.Combine( root, "tools/fixtures/install-cohort-broker.txt" ), broker );
+
+        Assert.Equal( expected, NativeDesktopCommands.AppCohortHash( app, broker ) );
+
+        var context = new ToolContext( fixture.Path, TextWriter.Null, TextWriter.Null,
+            new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
+        var destination = Path.Combine( install, RepositoryNames.MainPackage );
+        await NativeDesktopCommands.InstallAppCohort( context, install, destination );
+        var selected = Path.GetFullPath( Path.Combine( install, new FileInfo( destination ).LinkTarget! ) );
+        Assert.Equal( expected, Path.GetFileName( Path.GetDirectoryName( selected ) ) );
+
+        var shell = await new ProcessRunner( TextWriter.Null, TextWriter.Null ).RunAsync(
+            new ProcessRequest( "/usr/bin/bash", [Path.Combine( root, "tools/test-install-cohort-hash.sh" )], root,
+                CaptureOutput: true ), CancellationToken.None );
+        Assert.Contains( "Shell installer cohort-hash fixture passed.", shell.StandardOutput, StringComparison.Ordinal );
+    }
+
+    [Fact]
     public void StandaloneDevelopmentRunnerUsesTheBuiltBinary( )
     {
         var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/run.sh" ) );

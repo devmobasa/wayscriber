@@ -154,6 +154,11 @@ canonical_path() {
     readlink -f "$1" 2>/dev/null || printf '%s' "$1"
 }
 
+cohort_hash() {
+    # SHA-256 of each file's lowercase hex digest followed by LF, in app/broker order.
+    sha256sum "$1" "$2" | awk '{print $1}' | sha256sum | cut -c1-16
+}
+
 same_file() {
     local left right
     { [ -e "$1" ] || [ -L "$1" ]; } || return 1
@@ -419,7 +424,7 @@ ${SUDO:-} install -d "$INSTALL_DIR"
 if path_is_package_owned "$INSTALLED_BINARY"; then
     die "$INSTALLED_BINARY is package-owned; update or remove that package instead of replacing it with a source install"
 fi
-COHORT_HASH="$(sha256sum "$PROJECT_ROOT/target/release/wayscriber" "$PROJECT_ROOT/target/release/wayscriber-broker" | awk '{print $1}' | sha256sum | cut -c1-16)"
+COHORT_HASH="$(cohort_hash "$PROJECT_ROOT/target/release/wayscriber" "$PROJECT_ROOT/target/release/wayscriber-broker")"
 COHORT_ROOT="$INSTALL_DIR/.wayscriber-cohorts"
 COHORT_DIR="$COHORT_ROOT/$COHORT_HASH"
 STAGE_DIR="$COHORT_ROOT/.staging-$COHORT_HASH-$$"

@@ -311,8 +311,7 @@ internal static partial class NativeDesktopCommands
     {
         var app = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.MainPackage );
         var broker = context.Path( RepositoryPaths.TargetDirectory, RepositoryPaths.ReleaseDirectory, RepositoryNames.BrokerBinary );
-        var digest = System.Security.Cryptography.SHA256.HashData( System.Text.Encoding.UTF8.GetBytes( Files.Sha256( app ) + Files.Sha256( broker ) ) );
-        var cohort = Convert.ToHexStringLower( digest )[..16];
+        var cohort = AppCohortHash( app, broker );
         var root = Path.Combine( installDir, CohortDirectoryName );
         var selected = Path.Combine( root, cohort );
         var staging = Path.Combine( root, $".staging-{Guid.NewGuid( ):N}" );
@@ -344,6 +343,13 @@ internal static partial class NativeDesktopCommands
         {
             await RunPossiblyRoot( context, privileged, Programs.Remove, ["-rf", "--", staging] );
         }
+    }
+
+    internal static string AppCohortHash( string app, string broker )
+    {
+        var hashes = $"{Files.Sha256( app )}\n{Files.Sha256( broker )}\n";
+        var digest = System.Security.Cryptography.SHA256.HashData( System.Text.Encoding.UTF8.GetBytes( hashes ) );
+        return Convert.ToHexStringLower( digest )[..16];
     }
 
     private static async Task SelectAppCohort( ToolContext context, string installDir, string destination, string selected )

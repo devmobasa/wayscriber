@@ -16,6 +16,9 @@ run_check bash tools/check-version-consistency.sh
 run_check bash tools/test-package-repo-layout.sh
 run_check bash tools/test-release-packaging.sh
 run_check bash tools/test-aur-desktop-assets.sh
+run_check bash tools/test-install-cohort-hash.sh
+run_check bash tools/test-install-service-state.sh
+run_check bash tools/test-install-rollback.sh
 
 if command -v dotnet >/dev/null 2>&1 && dotnet --version >/dev/null 2>&1; then
     run_check dotnet build tools/wayscriber.cs --disable-build-servers --verbosity quiet
