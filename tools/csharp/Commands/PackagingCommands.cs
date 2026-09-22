@@ -19,6 +19,10 @@ internal static class PackagingCommands
     private const int NfpmDownloadTimeoutMinutes = 2;
     private const int GpgSecretKeyIdFieldIndex = 4;
     private const string DefaultNfpmVersion = "2.43.4";
+    private const string BrokerCheckFlag = "--broker-check";
+    private const string BrokerCheckReady = "process broker handshake ok";
+    private const string BrokerCheckTimeout = "15s";
+    private const string RelocatedSmokeRoot = "/tmp/wayscriber-relocated-smoke";
     private const string InstallerManifestBeginMarker = "# ARCH_INSTALL_MANIFEST_BEGIN";
     private const string InstallerManifestEndMarker = "# ARCH_INSTALL_MANIFEST_END";
     private const string InstallerManifestFunction = "release_manifest() {";
@@ -584,6 +588,15 @@ internal static class PackagingCommands
         var image = parsed.TakeOption( "--image" ) ?? PackagingPlatform.UbuntuImage;
         var root = Path.GetFullPath( parsed.TakeOption( "--artifact-root" ) ?? "dist", context.RepositoryRoot );
         parsed.RequireEmpty( "package smoke-ubuntu [--image IMAGE] [--artifact-root PATH]" );
+        var archives = Directory.GetFiles( root, "wayscriber-v*-linux-x86_64.tar.gz" );
+        if ( archives.Length != 1 )
+        {
+            throw new ToolException( "Package smoke requires exactly one Wayscriber app tarball beside the deb packages." );
+        }
+        var archiveName = Path.GetFileName( archives[0] );
+        var archiveRoot = archiveName[..^".tar.gz".Length];
+        var relocatedBinary = $"{RelocatedSmokeRoot}/{archiveRoot}/usr/bin/wayscriber";
+        var relocatedBroker = $"{RelocatedSmokeRoot}/{archiveRoot}/usr/bin/wayscriber-broker";
         var name = $"wayscriber-package-smoke-{Guid.NewGuid( ):N}";
         try
         {
@@ -594,12 +607,41 @@ internal static class PackagingCommands
             await context.Run( Programs.Docker, ["exec", name, RepositoryNames.MainPackage, CommandLineOptions.Version] );
             await context.Run( Programs.Docker, ["exec", name, Programs.Test, "-x", "/usr/bin/wayscriber-configurator"] );
             await context.Run( Programs.Docker, ["exec", name, Programs.Test, "-x", "/usr/bin/wayscriber-broker"] );
+            await RequireBrokerCheck( context, name, "/usr/bin/wayscriber", BrokerCheckReady, success: true );
+
+            await context.Run( Programs.Docker, ["exec", name, Programs.Install, "-d", RelocatedSmokeRoot] );
+            await context.Run( Programs.Docker, ["exec", name, Programs.Tar, "-xzf", $"/dist/{archiveName}",
+                CommandLineOptions.ChangeDirectory, RelocatedSmokeRoot] );
+            await RequireBrokerCheck( context, name, relocatedBinary, BrokerCheckReady, success: true );
+
+            await context.Run( Programs.Docker, ["exec", name, Programs.Remove, "--", relocatedBroker] );
+            await RequireBrokerCheck( context, name, relocatedBinary, "missing broker companion", success: false );
+
+            await context.Run( Programs.Docker, ["exec", name, Programs.Install, "-m755", "/bin/true", relocatedBroker] );
+            await RequireBrokerCheck( context, name, relocatedBinary, "process broker handshake failed", success: false );
         }
         finally
         {
             await context.Run( Programs.Docker, ["rm", "-f", name], allowedExitCodes: new HashSet<int> { ExitCodes.Success, ExitCodes.Failure } );
         }
         return ExitCodes.Success;
+    }
+
+    private static async Task RequireBrokerCheck( ToolContext context, string container, string binary, string expected, bool success )
+    {
+        var result = await context.Run( Programs.Docker,
+            ["exec", container, Programs.Timeout, BrokerCheckTimeout, binary, BrokerCheckFlag],
+            capture: true, allowedExitCodes: new HashSet<int> { ExitCodes.Success, ExitCodes.Failure } );
+        if ( result.IsSuccess != success || !(result.StandardOutput + result.StandardError).Contains( expected, StringComparison.Ordinal ) )
+        {
+            throw new ToolException( $"Packaged broker check failed for {binary}: exit {result.ExitCode}; stdout={result.StandardOutput}; stderr={result.StandardError}" );
+        }
+
+        var processes = await context.Run( Programs.Docker, ["top", container, "-eo", "pid,comm"], capture: true );
+        if ( processes.StandardOutput.Contains( "wayscriber-brok", StringComparison.Ordinal ) )
+        {
+            throw new ToolException( "Packaged broker check left a broker child running." );
+        }
     }
 
     private static async Task<int> InstallNfpm( ToolContext context, string[] args )

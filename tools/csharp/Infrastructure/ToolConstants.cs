@@ -246,6 +246,7 @@ internal static class Programs
     public const string SystemControl = "systemctl";
     public const string Tar = "tar";
     public const string Test = "test";
+    public const string Timeout = "timeout";
     public const string UpdateDesktopDatabase = "update-desktop-database";
     public const string Wayscriber = "wayscriber";
     public const string Weston = "weston";

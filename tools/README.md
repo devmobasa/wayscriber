@@ -163,6 +163,11 @@ final update-manifest publication step. Pushing a tag does not update the websit
   - Generates checksums.txt and manifest.json
   - Usage: `./tools/package.sh [--version <ver>] [--formats tar,deb,rpm]`
 
+- **package smoke-ubuntu** - Check the installed app and broker in a disposable Ubuntu container
+  - Runs the packaged app's headless `--broker-check`, then repeats it from the relocated tarball
+  - Confirms clean broker shutdown and rejects missing or unrelated companions
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- package smoke-ubuntu --artifact-root dist`
+
 - **check-arch-installer-manifest.sh** - Check direct Arch installer compatibility
   - Strictly parses the installer's static allowlist as data; it never executes the installer, and unsupported manifest syntax fails closed
   - Requires the archive file set, modes, and service command to match what the installer accepts

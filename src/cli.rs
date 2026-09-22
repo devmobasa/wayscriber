@@ -76,6 +76,9 @@ pub struct Cli {
 
     /// Print compiled runtime capabilities for companion tools
     pub runtime_capabilities: bool,
+
+    /// Verify the installed process-broker companion without opening a desktop
+    pub broker_check: bool,
 }
 
 #[derive(Debug)]
@@ -151,6 +154,7 @@ impl Cli {
                 "--no-resume-session" => cli.no_resume_session = true,
                 "--about" => cli.about = true,
                 "--check-update" => cli.check_update = true,
+                "--broker-check" => cli.broker_check = true,
                 crate::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
                     cli.runtime_capabilities = true;
                 }
@@ -206,8 +210,7 @@ impl Cli {
 
     /// Whether any flag that launches, controls, or mutates something is set.
     ///
-    /// The three print-and-exit commands (`--runtime-capabilities`, `--about`,
-    /// `--check-update`) all conflict with every one of these, so the list lives
+    /// The print-and-exit commands all conflict with every one of these, so the list lives
     /// in one place: three hand-maintained copies drifted apart once already.
     fn selects_a_launch_command(&self) -> bool {
         self.daemon
@@ -266,7 +269,10 @@ impl Cli {
 
     fn validate_runtime_capabilities_command(&self) -> Result<(), String> {
         if self.runtime_capabilities
-            && (self.selects_a_launch_command() || self.about || self.check_update)
+            && (self.selects_a_launch_command()
+                || self.about
+                || self.check_update
+                || self.broker_check)
         {
             return Err("--runtime-capabilities conflicts with launch flags".to_string());
         }
@@ -454,6 +460,14 @@ impl Cli {
     }
 
     fn validate_catalog_commands(&self) -> Result<(), String> {
+        if self.broker_check
+            && (self.selects_a_launch_command()
+                || self.about
+                || self.check_update
+                || self.runtime_capabilities)
+        {
+            return Err("--broker-check conflicts with the selected command".to_string());
+        }
         if self.about && (self.selects_a_launch_command() || self.check_update) {
             return Err("--about conflicts with the selected command".to_string());
         }

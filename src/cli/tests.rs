@@ -454,7 +454,12 @@ fn print_and_exit_commands_reject_every_launch_flag() {
         "--no-resume-session",
     ];
 
-    for command in ["--about", "--check-update", "--runtime-capabilities"] {
+    for command in [
+        "--about",
+        "--check-update",
+        "--runtime-capabilities",
+        "--broker-check",
+    ] {
         for flag in launch_flags {
             let result = Cli::try_parse_from(["wayscriber", command, flag]);
             assert!(
@@ -475,6 +480,16 @@ fn print_and_exit_commands_reject_each_other() {
         Cli::try_parse_from(["wayscriber", "--runtime-capabilities", "--check-update"])
             .unwrap_err(),
         "--runtime-capabilities conflicts with launch flags"
+    );
+}
+
+#[test]
+fn broker_check_is_a_standalone_headless_command() {
+    let cli = parse_cli(["wayscriber", "--broker-check"]);
+    assert!(cli.broker_check);
+    assert_eq!(
+        Cli::try_parse_from(["wayscriber", "--broker-check", "--about"]).unwrap_err(),
+        "--broker-check conflicts with the selected command"
     );
 }
 

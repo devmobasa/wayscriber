@@ -168,6 +168,11 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     let _process_broker = needs_process_broker(&cli)
         .then(crate::process_broker::start_for_runtime)
         .transpose()?;
+    if cli.broker_check {
+        crate::process_broker::current()?;
+        println!("process broker handshake ok");
+        return Ok(());
+    }
     crate::daemon::protocol_v2::start_daemon_watchdog_from_environment()?;
 
     #[cfg(unix)]
@@ -296,6 +301,7 @@ fn needs_process_broker(cli: &Cli) -> bool {
         // About's URL and clipboard helpers need the broker even when network
         // update checks were compiled out of this build.
         || cli.about
+        || cli.broker_check
         || (cli.check_update && !crate::update_check::compiled_out())
 }
 
@@ -307,6 +313,14 @@ mod tests {
     fn about_always_starts_the_process_broker() {
         assert!(needs_process_broker(&Cli {
             about: true,
+            ..Cli::default()
+        }));
+    }
+
+    #[test]
+    fn broker_check_starts_the_process_broker() {
+        assert!(needs_process_broker(&Cli {
+            broker_check: true,
             ..Cli::default()
         }));
     }
