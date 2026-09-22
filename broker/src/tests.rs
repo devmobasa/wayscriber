@@ -1,9 +1,23 @@
 use std::ffi::OsStr;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::process::CommandExt;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use super::*;
+
+static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+fn test_pidfd() -> OwnedFd {
+    // SAFETY: pidfd_open on this process returns a new descriptor owned by the test.
+    let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, libc::getpid(), 0) };
+    assert!(
+        fd >= 0,
+        "pidfd_open failed: {}",
+        std::io::Error::last_os_error()
+    );
+    unsafe { OwnedFd::from_raw_fd(fd as i32) }
+}
 
 fn wire_arguments(arguments: &[&str]) -> Vec<super::wire::OsWire> {
     arguments
@@ -36,10 +50,10 @@ fn release_test_provider(
 
 #[test]
 fn configurator_manifest_preserves_arbitrary_explicit_override_name() {
-    let _guard = crate::test_env::lock();
-    let variable = crate::env_vars::CONFIGURATOR_ENV;
+    let _guard = TEST_ENV_LOCK.lock().unwrap();
+    let variable = crate::CONFIGURATOR_ENV;
     let previous = std::env::var_os(variable);
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let configured = temp.path().join("open-wayscriber-settings");
     std::fs::write(&configured, "#!/bin/sh\nexit 0\n").unwrap();
     let mut permissions = std::fs::metadata(&configured).unwrap().permissions();
@@ -472,7 +486,7 @@ fn only_the_callback_thread_spawn_declines_to_wait_for_the_transport() {
 
     let error = declined.expect_err("try_spawn must not queue behind the long helper");
     assert!(
-        format!("{error:#}").contains(crate::process_broker::BROKER_BUSY),
+        format!("{error:#}").contains(BROKER_BUSY),
         "unexpected try_spawn failure: {error:#}"
     );
     assert!(
@@ -546,7 +560,7 @@ fn process_group_guard_cleans_up_before_ownership_transfer() {
 
 #[test]
 fn initial_detach_child_remains_eligible_to_create_a_session() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let helper = temp.path().join("wayscriber-detach-probe");
     let proof = temp.path().join("detach-state");
     std::fs::write(
@@ -737,7 +751,7 @@ fn broker_prefix_read_returns_the_requested_prefix_without_weakening_strict_runs
 fn broker_guard_preempts_an_active_operation_and_kills_its_group() {
     let guard = start_for_runtime().unwrap();
     let broker = guard.broker().clone();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let pid_path = temp.path().join("helper.pid");
     let run = std::thread::spawn({
         let pid_path = pid_path.clone();
@@ -782,7 +796,7 @@ fn broker_guard_preempts_an_active_operation_and_kills_its_group() {
 #[test]
 fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
     let guard = start_for_runtime().unwrap();
-    let watchdog = crate::daemon::protocol_v2::open_daemon_watchdog().unwrap();
+    let watchdog = test_pidfd();
     let child = guard
         .broker()
         .spawn_with_watchdog(
@@ -833,7 +847,7 @@ fn operation_bound_run_terminates_descendants_that_retain_pipes() {
 #[test]
 fn normal_broker_shutdown_releases_successful_provider_descendant() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let release_path = temp.path().join("release-provider");
     let proof_path = temp.path().join("provider-survived");
     let pid_path = temp.path().join("provider.pid");
@@ -874,7 +888,7 @@ fn normal_broker_shutdown_releases_successful_provider_descendant() {
 #[test]
 fn shutdown_channel_peer_loss_kills_retained_provider() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let pid_path = temp.path().join("provider.pid");
     let output = guard
         .broker()
@@ -928,7 +942,7 @@ fn shutdown_channel_peer_loss_kills_retained_provider() {
 #[test]
 fn retained_publication_replacement_disposes_the_previous_provider() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let first_pid_path = temp.path().join("first-provider.pid");
     let second_pid_path = temp.path().join("second-provider.pid");
     let second_release_path = temp.path().join("release-second-provider");
@@ -1006,7 +1020,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
 #[test]
 fn failed_publication_replacement_preserves_the_current_provider() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let current_pid_path = temp.path().join("current-provider.pid");
     let failed_pid_path = temp.path().join("failed-provider.pid");
     let current_release_path = temp.path().join("release-current-provider");
@@ -1092,7 +1106,7 @@ fn retained_publication_kills_failed_or_input_stalled_provider_groups() {
             vec![b'x'; 1024 * 1024],
         ),
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = tempfile::tempdir().unwrap();
         let pid_path = temp.path().join("provider.pid");
         let result = guard.broker().publish(
             HelperKind::TestShell,
@@ -1149,7 +1163,7 @@ fn retained_publication_rejects_incomplete_input_after_successful_exit() {
 fn broker_shutdown_preempts_retained_publication_stdin_writer() {
     let guard = start_for_runtime().unwrap();
     let broker = guard.broker().clone();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let current_pid_path = temp.path().join("current-provider.pid");
     let current_release_path = temp.path().join("release-current-provider");
     let current_proof_path = temp.path().join("current-provider-survived");
@@ -1236,7 +1250,7 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
 fn wl_copy_publication_accepts_capture_sized_input() {
     const PUBLICATION_BYTES: usize = 16 * 1024 * 1024 + 1;
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
     let helper = temp.path().join("wl-copy");
     let count_path = temp.path().join("published-bytes");
     std::fs::write(&helper, "#!/bin/sh\nwc -c > \"$1\"\n").unwrap();

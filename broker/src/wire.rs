@@ -49,11 +49,11 @@ pub enum HelperKind {
     About,
     DesktopOpen,
     UpdateFetcher,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     TestSleep,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     TestCat,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     TestShell,
 }
 

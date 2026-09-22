@@ -72,6 +72,9 @@ xkbcommon = { version = "0.8", optional = true }
 
 [build-dependencies]
 
+[dev-dependencies]
+wayscriber-process-broker = { path = "broker", features = ["test-support"] }
+
 [features]
 # Optional Wayland tablet/stylus input support (zwp_tablet_v2)
 tablet-input = []

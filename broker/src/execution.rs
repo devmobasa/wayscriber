@@ -30,7 +30,7 @@ pub(super) fn supports_retained_publication(kind: HelperKind) -> bool {
     if matches!(kind, HelperKind::WlCopy) {
         return true;
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if matches!(kind, HelperKind::TestShell) {
         return true;
     }
@@ -172,8 +172,8 @@ pub(super) fn publish_bounded(
     if shutdown_requested(shutdown_fd)? {
         return Err(anyhow!("broker publication cancelled during shutdown"));
     }
-    let deadline = crate::daemon::protocol_v2::BootClock::now()?
-        .checked_add(timeout.max(Duration::from_millis(1)))?;
+    let deadline =
+        crate::identity::BootClock::now()?.checked_add(timeout.max(Duration::from_millis(1)))?;
     command
         .process_group(0)
         .stdin(Stdio::piped())
@@ -211,7 +211,7 @@ pub(super) fn publish_bounded(
                 retained: Some(child.into_child()),
             });
         }
-        if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
+        if crate::identity::BootClock::now()? >= deadline {
             child.terminate();
             let status = status_code(child.wait()?);
             let _ = stdin_writer.join();
@@ -234,7 +234,7 @@ pub(super) fn publish_bounded(
 fn write_input_until(
     mut stdin: std::process::ChildStdin,
     input: &[u8],
-    deadline: crate::daemon::protocol_v2::BootDeadline,
+    deadline: crate::identity::BootDeadline,
     shutdown_fd: std::os::fd::RawFd,
 ) -> io::Result<()> {
     let descriptor = stdin.as_raw_fd();
@@ -257,9 +257,7 @@ fn write_input_until(
             Ok(written) => offset += written,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                if crate::daemon::protocol_v2::BootClock::now().map_err(io::Error::other)?
-                    >= deadline
-                {
+                if crate::identity::BootClock::now().map_err(io::Error::other)? >= deadline {
                     return Err(io::Error::new(
                         io::ErrorKind::TimedOut,
                         "publication input deadline expired",
@@ -284,8 +282,8 @@ pub(super) fn run_bounded(
     if shutdown_requested(shutdown_fd)? {
         return Err(anyhow!("broker helper cancelled during shutdown"));
     }
-    let deadline = crate::daemon::protocol_v2::BootClock::now()?
-        .checked_add(timeout.max(Duration::from_millis(1)))?;
+    let deadline =
+        crate::identity::BootClock::now()?.checked_add(timeout.max(Duration::from_millis(1)))?;
     command.process_group(0);
     command
         .stdin(Stdio::piped())
@@ -330,7 +328,7 @@ pub(super) fn run_bounded(
             child.terminate();
             break (child.wait()?, false, false);
         }
-        if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
+        if crate::identity::BootClock::now()? >= deadline {
             child.terminate();
             break (child.wait()?, true, false);
         }

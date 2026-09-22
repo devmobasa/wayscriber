@@ -198,7 +198,7 @@ fn wait_for_request(socket: RawFd, shutdown_fd: RawFd) -> io::Result<BrokerWake>
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn run_loop_for_test(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
     broker_loop(socket, shutdown_fd, token)
 }
@@ -438,11 +438,11 @@ fn spawn_helper(
     let mut command = super::manifest::command(program, arguments, environment);
     let watchdog_descriptor = if watchdog {
         if !matches!(kind, HelperKind::Overlay) || lifetime != HelperLifetime::OwnedChild {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             if !matches!(kind, HelperKind::TestSleep) {
                 bail!("daemon watchdog is only valid for an owned overlay child");
             }
-            #[cfg(not(test))]
+            #[cfg(not(any(test, feature = "test-support")))]
             bail!("daemon watchdog is only valid for an owned overlay child");
         }
         if descriptors.len() != 1 {
@@ -453,7 +453,7 @@ fn spawn_helper(
             .ok_or_else(|| anyhow!("checked watchdog descriptor disappeared"))?;
         set_cloexec(&descriptor, false)?;
         command.env(
-            crate::env_vars::DAEMON_WATCHDOG_FD_ENV,
+            crate::DAEMON_WATCHDOG_FD_ENV,
             descriptor.as_raw_fd().to_string(),
         );
         Some(descriptor)
@@ -470,7 +470,7 @@ fn spawn_helper(
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     let handle = loop {
-        let candidate = crate::daemon::protocol_v2::ProtocolId::generate()?.to_string();
+        let candidate = crate::identity::ProtocolId::generate()?.to_string();
         if !children.contains_key(&candidate) {
             break candidate;
         }

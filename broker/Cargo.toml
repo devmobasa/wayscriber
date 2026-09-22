@@ -9,6 +9,11 @@ build = "build.rs"
 [lints]
 workspace = true
 
+[features]
+# Only the main crate's unit tests use this in-process, allowlisted test broker.
+# Release packaging builds the broker without this feature.
+test-support = []
+
 [dependencies]
 anyhow = "1.0"
 libc = "0.2"

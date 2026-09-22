@@ -25,7 +25,7 @@ pub(super) struct BrokerInner {
     pub(super) child_pid: libc::pid_t,
     pub(super) exchange_lock: Mutex<()>,
     pub(super) healthy: AtomicBool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(super) test_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
@@ -119,7 +119,7 @@ impl Drop for ProcessBrokerGuard {
                 libc::kill(self.broker.inner.child_pid, libc::SIGKILL);
             }
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(thread) = self
             .broker
             .inner
@@ -132,7 +132,7 @@ impl Drop for ProcessBrokerGuard {
         } else {
             super::bootstrap::wait_for_broker_process(self.broker.inner.child_pid);
         }
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test-support")))]
         super::bootstrap::wait_for_broker_process(self.broker.inner.child_pid);
 
         let mut slot = active_slot()
@@ -174,7 +174,7 @@ fn signal_shutdown(descriptor: RawFd) -> std::io::Result<()> {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl ProcessBrokerGuard {
     pub fn broker(&self) -> &ProcessBroker {
         &self.broker
@@ -214,7 +214,7 @@ impl ProcessBroker {
         descriptors: &[RawFd],
         wait: ExchangeWait,
     ) -> Result<(BrokerOutcome, Vec<OwnedFd>)> {
-        let request_id = crate::daemon::protocol_v2::ProtocolId::generate()?.to_string();
+        let request_id = crate::identity::ProtocolId::generate()?.to_string();
         let exchange_timeout = broker_exchange_timeout(&operation);
         let packet = serde_json::to_vec(&BrokerRequest {
             token: self.inner.token.clone(),

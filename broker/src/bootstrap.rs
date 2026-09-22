@@ -3,29 +3,29 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 use std::ffi::CString;
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 use std::fs::File;
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 use std::os::unix::ffi::OsStrExt;
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 use std::os::unix::fs::MetadataExt;
 
 use anyhow::{Context, Result, bail};
 
 use super::client::{BrokerInner, ProcessBroker};
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
 };
 use super::wire::{BrokerOperation, BrokerOutcome};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn start() -> Result<ProcessBroker> {
     let (parent_socket, child_socket) = socket_pair("test broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("test broker shutdown")?;
-    let token = crate::daemon::protocol_v2::ProtocolToken::generate()?.to_string();
+    let token = crate::identity::ProtocolToken::generate()?.to_string();
     let thread_token = token.clone();
     let thread = std::thread::Builder::new()
         .name("wayscriber-process-broker-test".into())
@@ -54,11 +54,11 @@ pub(super) fn start() -> Result<ProcessBroker> {
     Ok(broker)
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub(super) fn start() -> Result<ProcessBroker> {
     let (parent_socket, child_socket) = socket_pair("broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("broker shutdown")?;
-    let token = crate::daemon::protocol_v2::ProtocolToken::generate()
+    let token = crate::identity::ProtocolToken::generate()
         .context("failed to generate broker authentication token")?
         .to_string();
     let (exe, companion) = open_companion()?;
@@ -68,7 +68,7 @@ pub(super) fn start() -> Result<ProcessBroker> {
             name != BROKER_FD_ENV
                 && name != BROKER_TOKEN_ENV
                 && name != BROKER_SHUTDOWN_FD_ENV
-                && name != crate::env_vars::DAEMON_WATCHDOG_FD_ENV
+                && name != crate::DAEMON_WATCHDOG_FD_ENV
         })
         .map(|(name, value)| {
             let mut bytes = name.as_bytes().to_vec();
@@ -160,7 +160,7 @@ pub(super) fn start() -> Result<ProcessBroker> {
     Ok(broker)
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn open_companion() -> Result<(CString, OwnedFd)> {
     let current = std::env::current_exe().context("failed to resolve running wayscriber")?;
     let directory = current
@@ -221,7 +221,7 @@ fn verify_hello(broker: &ProcessBroker) -> Result<()> {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn duplicate_for_exec(descriptor: &OwnedFd) -> Result<OwnedFd> {
     // SAFETY: F_DUPFD_CLOEXEC duplicates the live descriptor above child slot five.
     let duplicate = unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 6) };

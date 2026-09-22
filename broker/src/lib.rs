@@ -1,6 +1,9 @@
 //! Private process broker client and server shared by the public app and its
 //! companion executable. This crate must remain free of graphical dependencies.
 
+#[cfg(all(feature = "test-support", not(debug_assertions)))]
+compile_error!("broker test-support is only for debug test builds");
+
 mod bootstrap;
 mod client;
 mod execution;
@@ -10,6 +13,9 @@ mod server;
 mod transport;
 mod trusted_url;
 mod wire;
+
+#[cfg(test)]
+mod tests;
 
 pub use client::{BROKER_BUSY, BrokerChild, ProcessBroker, current, start_for_runtime};
 pub use identity::{BootClock, BootDeadline, ProtocolId, ProtocolToken};
@@ -27,18 +33,4 @@ pub const fn max_publish_bytes() -> usize {
 
 pub fn run_broker_from_env() -> std::process::ExitCode {
     server::run_internal_broker_if_requested().unwrap_or(std::process::ExitCode::from(2))
-}
-
-mod daemon {
-    pub(crate) mod protocol_v2 {
-        pub(crate) use crate::identity::{BootClock, BootDeadline, ProtocolId, ProtocolToken};
-    }
-}
-
-mod env_vars {
-    pub(crate) use crate::{CONFIGURATOR_ENV, DAEMON_WATCHDOG_FD_ENV};
-}
-
-mod update_check {
-    pub(crate) use crate::is_trusted_url;
 }

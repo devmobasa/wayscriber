@@ -17,7 +17,7 @@ pub(super) fn supports_prefix_output(kind: HelperKind) -> bool {
     if matches!(kind, HelperKind::WlPaste) {
         return true;
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if matches!(kind, HelperKind::TestShell) {
         return true;
     }
@@ -46,11 +46,11 @@ pub(super) fn validate(
         .to_owned();
     let allowed = match kind {
         HelperKind::Overlay | HelperKind::InitialDetach | HelperKind::About => {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             {
                 basename == "wayscriber" || basename.starts_with("wayscriber-")
             }
-            #[cfg(not(test))]
+            #[cfg(not(any(test, feature = "test-support")))]
             {
                 // The broker executable must never substitute for the public
                 // app when spawning an overlay, detach child, or About window.
@@ -76,18 +76,17 @@ pub(super) fn validate(
         HelperKind::SessionKdialog => basename == "kdialog",
         HelperKind::Gsettings => basename == "gsettings",
         HelperKind::Systemctl => basename == "systemctl",
-        HelperKind::Configurator => std::env::var_os(crate::env_vars::CONFIGURATOR_ENV)
-            .map_or_else(
-                || basename.contains("configurator"),
-                |configured| configured == program,
-            ),
+        HelperKind::Configurator => std::env::var_os(crate::CONFIGURATOR_ENV).map_or_else(
+            || basename.contains("configurator"),
+            |configured| configured == program,
+        ),
         HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open"),
         HelperKind::UpdateFetcher => matches!(basename.as_str(), "curl" | "wget"),
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         HelperKind::TestSleep => basename == "sleep",
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         HelperKind::TestCat => basename == "cat",
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         HelperKind::TestShell => basename == "sh",
     };
     if !allowed {
@@ -188,9 +187,7 @@ fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) ->
                 bail!("desktop opener target must not be an option");
             }
             match std::str::from_utf8(&target.0) {
-                Ok(target)
-                    if looks_like_uri(target) && !crate::update_check::is_trusted_url(target) =>
-                {
+                Ok(target) if looks_like_uri(target) && !crate::is_trusted_url(target) => {
                     bail!("desktop opener URL is not a trusted Wayscriber HTTPS URL");
                 }
                 // xdg-open parses schemes bytewise. Undecodable targets that
