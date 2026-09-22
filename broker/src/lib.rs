@@ -1,15 +1,13 @@
 //! Private process broker client and server shared by the public app and its
 //! companion executable. This crate must remain free of graphical dependencies.
 
-#[cfg(all(feature = "test-support", not(debug_assertions)))]
-compile_error!("broker test-support is only for debug test builds");
-
 mod bootstrap;
 mod client;
 mod execution;
 mod identity;
 mod manifest;
 mod server;
+mod test_mode;
 mod transport;
 mod trusted_url;
 mod wire;
@@ -17,6 +15,8 @@ mod wire;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "test-support")]
+pub use client::start_for_test;
 pub use client::{BROKER_BUSY, BrokerChild, ProcessBroker, current, start_for_runtime};
 pub use identity::{BootClock, BootDeadline, ProtocolId, ProtocolToken};
 pub use trusted_url::is_trusted_url;

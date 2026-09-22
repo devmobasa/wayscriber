@@ -18,7 +18,7 @@ pub(super) fn supports_prefix_output(kind: HelperKind) -> bool {
         return true;
     }
     #[cfg(any(test, feature = "test-support"))]
-    if matches!(kind, HelperKind::TestShell) {
+    if crate::test_mode::is_active() && matches!(kind, HelperKind::TestShell) {
         return true;
     }
     false
@@ -46,12 +46,9 @@ pub(super) fn validate(
         .to_owned();
     let allowed = match kind {
         HelperKind::Overlay | HelperKind::InitialDetach | HelperKind::About => {
-            #[cfg(any(test, feature = "test-support"))]
-            {
+            if crate::test_mode::is_active() {
                 basename == "wayscriber" || basename.starts_with("wayscriber-")
-            }
-            #[cfg(not(any(test, feature = "test-support")))]
-            {
+            } else {
                 // The broker executable must never substitute for the public
                 // app when spawning an overlay, detach child, or About window.
                 // Its parent is the client process that created this broker.
@@ -83,11 +80,11 @@ pub(super) fn validate(
         HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open"),
         HelperKind::UpdateFetcher => matches!(basename.as_str(), "curl" | "wget"),
         #[cfg(any(test, feature = "test-support"))]
-        HelperKind::TestSleep => basename == "sleep",
+        HelperKind::TestSleep => crate::test_mode::is_active() && basename == "sleep",
         #[cfg(any(test, feature = "test-support"))]
-        HelperKind::TestCat => basename == "cat",
+        HelperKind::TestCat => crate::test_mode::is_active() && basename == "cat",
         #[cfg(any(test, feature = "test-support"))]
-        HelperKind::TestShell => basename == "sh",
+        HelperKind::TestShell => crate::test_mode::is_active() && basename == "sh",
     };
     if !allowed {
         bail!("program {basename:?} is not allowed for helper kind {kind:?}");

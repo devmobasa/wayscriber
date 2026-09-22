@@ -439,7 +439,7 @@ fn spawn_helper(
     let watchdog_descriptor = if watchdog {
         if !matches!(kind, HelperKind::Overlay) || lifetime != HelperLifetime::OwnedChild {
             #[cfg(any(test, feature = "test-support"))]
-            if !matches!(kind, HelperKind::TestSleep) {
+            if !crate::test_mode::is_active() || !matches!(kind, HelperKind::TestSleep) {
                 bail!("daemon watchdog is only valid for an owned overlay child");
             }
             #[cfg(not(any(test, feature = "test-support")))]

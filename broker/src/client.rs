@@ -92,11 +92,19 @@ fn active_slot() -> &'static Mutex<Weak<BrokerInner>> {
 }
 
 pub fn start_for_runtime() -> Result<ProcessBrokerGuard> {
-    let broker = super::bootstrap::start()?;
+    Ok(install_broker(super::bootstrap::start()?))
+}
+
+#[cfg(feature = "test-support")]
+pub fn start_for_test() -> Result<ProcessBrokerGuard> {
+    Ok(install_broker(super::bootstrap::start_test()?))
+}
+
+fn install_broker(broker: ProcessBroker) -> ProcessBrokerGuard {
     *active_slot()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::downgrade(&broker.inner);
-    Ok(ProcessBrokerGuard { broker })
+    ProcessBrokerGuard { broker }
 }
 
 pub fn current() -> Result<ProcessBroker> {

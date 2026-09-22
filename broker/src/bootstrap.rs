@@ -3,26 +3,36 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 use std::ffi::CString;
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 use std::fs::File;
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 use std::os::unix::ffi::OsStrExt;
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 use std::os::unix::fs::MetadataExt;
 
 use anyhow::{Context, Result, bail};
 
 use super::client::{BrokerInner, ProcessBroker};
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
 };
 use super::wire::{BrokerOperation, BrokerOutcome};
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(super) fn start() -> Result<ProcessBroker> {
+    start_test()
+}
+
+#[cfg(not(test))]
+pub(super) fn start() -> Result<ProcessBroker> {
+    start_production()
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub(super) fn start_test() -> Result<ProcessBroker> {
     let (parent_socket, child_socket) = socket_pair("test broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("test broker shutdown")?;
     let token = crate::identity::ProtocolToken::generate()?.to_string();
@@ -32,11 +42,13 @@ pub(super) fn start() -> Result<ProcessBroker> {
         .spawn(move || {
             let _socket = child_socket;
             let _shutdown = shutdown_reader;
-            let _ = super::server::run_loop_for_test(
-                _socket.as_raw_fd(),
-                _shutdown.as_raw_fd(),
-                &thread_token,
-            );
+            crate::test_mode::run(|| {
+                let _ = super::server::run_loop_for_test(
+                    _socket.as_raw_fd(),
+                    _shutdown.as_raw_fd(),
+                    &thread_token,
+                );
+            });
         })
         .context("failed to start test broker thread")?;
     let broker = ProcessBroker {
@@ -54,8 +66,8 @@ pub(super) fn start() -> Result<ProcessBroker> {
     Ok(broker)
 }
 
-#[cfg(not(any(test, feature = "test-support")))]
-pub(super) fn start() -> Result<ProcessBroker> {
+#[cfg(not(test))]
+fn start_production() -> Result<ProcessBroker> {
     let (parent_socket, child_socket) = socket_pair("broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("broker shutdown")?;
     let token = crate::identity::ProtocolToken::generate()
@@ -145,6 +157,8 @@ pub(super) fn start() -> Result<ProcessBroker> {
             child_pid: pid,
             exchange_lock: Mutex::new(()),
             healthy: AtomicBool::new(true),
+            #[cfg(feature = "test-support")]
+            test_thread: Mutex::new(None),
         }),
     };
     if let Err(error) = verify_hello(&broker) {
@@ -160,7 +174,7 @@ pub(super) fn start() -> Result<ProcessBroker> {
     Ok(broker)
 }
 
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 fn open_companion() -> Result<(CString, OwnedFd)> {
     let current = std::env::current_exe().context("failed to resolve running wayscriber")?;
     let directory = current
@@ -221,7 +235,7 @@ fn verify_hello(broker: &ProcessBroker) -> Result<()> {
     }
 }
 
-#[cfg(not(any(test, feature = "test-support")))]
+#[cfg(not(test))]
 fn duplicate_for_exec(descriptor: &OwnedFd) -> Result<OwnedFd> {
     // SAFETY: F_DUPFD_CLOEXEC duplicates the live descriptor above child slot five.
     let duplicate = unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 6) };

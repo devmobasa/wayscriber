@@ -31,7 +31,7 @@ pub(super) fn supports_retained_publication(kind: HelperKind) -> bool {
         return true;
     }
     #[cfg(any(test, feature = "test-support"))]
-    if matches!(kind, HelperKind::TestShell) {
+    if crate::test_mode::is_active() && matches!(kind, HelperKind::TestShell) {
         return true;
     }
     false
