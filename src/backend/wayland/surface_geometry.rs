@@ -7,7 +7,7 @@ use crate::util::Rect;
 /// Bounds the main SHM pool independently of the compositor's requested size.
 const MAX_POOL_BYTES: usize = 1024 * 1024 * 1024;
 const CAIRO_MAX_DIM: u64 = 32_767;
-const FRACTIONAL_DENOMINATOR: u64 = 120;
+const FRACTIONAL_DENOMINATOR: u128 = 120;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct SurfaceGeometry {
@@ -24,6 +24,27 @@ pub(super) struct SurfaceGeometry {
 }
 
 impl SurfaceGeometry {
+    /// The single raster-rounding policy for configured and pending surfaces.
+    /// Pending surfaces may still have zero dimensions, so callers that need
+    /// allocated storage must validate the result through `new`.
+    pub(super) fn raster_dimensions(
+        width: u32,
+        height: u32,
+        integer_scale: i32,
+        preferred_scale: Option<u32>,
+    ) -> (u32, u32) {
+        let dimension = |logical: u32| {
+            let pixels = if let Some(scale) = preferred_scale.filter(|scale| *scale > 0) {
+                (u128::from(logical) * u128::from(scale) + FRACTIONAL_DENOMINATOR / 2)
+                    / FRACTIONAL_DENOMINATOR
+            } else {
+                u128::from(logical) * integer_scale.max(1) as u128
+            };
+            pixels.min(u128::from(u32::MAX)) as u32
+        };
+        (dimension(width), dimension(height))
+    }
+
     pub fn new(
         logical_width: u32,
         logical_height: u32,
@@ -47,25 +68,19 @@ impl SurfaceGeometry {
         } else {
             integer_scale.max(1)
         };
-        let raster_size = |logical: u32| -> Result<u32> {
-            let pixels = if let Some(scale) = preferred_scale {
-                // Positive dimensions use half-away-from-zero rounding.
-                u64::from(logical)
-                    .checked_mul(u64::from(scale))
-                    .and_then(|value| value.checked_add(FRACTIONAL_DENOMINATOR / 2))
-                    .ok_or_else(|| anyhow!("fractional surface size overflow"))?
-                    / FRACTIONAL_DENOMINATOR
-            } else {
-                u64::from(logical) * buffer_scale as u64
-            };
-            ensure!(
-                pixels > 0 && pixels <= CAIRO_MAX_DIM,
-                "raster size exceeds Cairo limits"
-            );
-            Ok(pixels as u32)
-        };
-        let pixel_width = raster_size(logical_width)?;
-        let pixel_height = raster_size(logical_height)?;
+        let (pixel_width, pixel_height) = Self::raster_dimensions(
+            logical_width,
+            logical_height,
+            integer_scale,
+            preferred_scale,
+        );
+        ensure!(
+            pixel_width > 0
+                && pixel_height > 0
+                && u64::from(pixel_width) <= CAIRO_MAX_DIM
+                && u64::from(pixel_height) <= CAIRO_MAX_DIM,
+            "raster size exceeds Cairo limits"
+        );
         let stride = i32::try_from(u64::from(pixel_width) * 4)
             .map_err(|_| anyhow!("surface stride exceeds Cairo limits"))?;
         let byte_len = usize::try_from(u64::from(pixel_height) * stride as u64)
@@ -178,6 +193,18 @@ mod tests {
         assert_eq!((geometry.pixel_width, geometry.pixel_height), (202, 158));
         assert_eq!(geometry.buffer_scale, 2);
         assert_eq!(geometry.slot_len, 127_680);
+        assert_eq!(
+            SurfaceGeometry::raster_dimensions(0, 0, 2, Some(150)),
+            (0, 0)
+        );
+        assert_eq!(
+            SurfaceGeometry::raster_dimensions(81, 63, 2, Some(150)),
+            (101, 79)
+        );
+        assert_eq!(
+            SurfaceGeometry::raster_dimensions(81, 63, 2, None),
+            (162, 126)
+        );
         assert!(SurfaceGeometry::new(0, 10, 1, None, 3).is_err());
         assert!(SurfaceGeometry::new(500_000, 500_000, 2, None, 3).is_err());
     }

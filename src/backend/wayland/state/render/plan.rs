@@ -10,7 +10,6 @@ use super::profile::FrameProfile;
 pub(super) struct FrameGeometry {
     pub(super) width: u32,
     pub(super) height: u32,
-    pub(super) scale: i32,
     pub(super) preferred_scale: Option<u32>,
     pub(super) wire_scale: i32,
     pub(super) physical_width: u32,
@@ -35,11 +34,6 @@ impl FrameGeometry {
         Self {
             width,
             height,
-            scale: if preferred_scale.is_some() {
-                1
-            } else {
-                wire_scale
-            },
             preferred_scale,
             wire_scale,
             physical_width,

@@ -81,7 +81,7 @@ impl WaylandState {
         let ctx = canvas.cairo;
         let width = canvas.geometry.width;
         let height = canvas.geometry.height;
-        let scale = canvas.geometry.scale;
+        let scale = canvas.geometry.wire_scale;
         let phys_width = canvas.geometry.physical_width;
         let phys_height = canvas.geometry.physical_height;
         let now = canvas.now;

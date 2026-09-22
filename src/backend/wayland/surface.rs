@@ -443,14 +443,12 @@ impl SurfaceState {
 
     /// Returns rounded raster dimensions for the active scale policy.
     pub fn physical_dimensions(&self) -> (u32, u32) {
-        let dimension = |logical: u32| {
-            if let Some(scale) = self.preferred_scale {
-                ((u64::from(logical) * u64::from(scale) + 60) / 120).min(u64::from(u32::MAX)) as u32
-            } else {
-                logical.saturating_mul(self.scale as u32)
-            }
-        };
-        (dimension(self.width), dimension(self.height))
+        SurfaceGeometry::raster_dimensions(
+            self.width,
+            self.height,
+            self.scale,
+            self.preferred_scale,
+        )
     }
 
     /// Current surface width in pixels.

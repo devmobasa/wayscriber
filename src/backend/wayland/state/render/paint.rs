@@ -14,7 +14,7 @@ impl WaylandState {
         let FrameGeometry {
             width,
             height,
-            scale,
+            wire_scale: scale,
             physical_width: phys_width,
             physical_height: phys_height,
             ..
