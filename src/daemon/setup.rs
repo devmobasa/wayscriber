@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::systemd_user_service::{
-    USER_SERVICE_NAME, render_user_service_unit, user_service_unit_path,
+    USER_SERVICE_NAME, render_user_service_unit, selected_service_executable_path,
+    user_service_unit_path,
 };
 
 #[derive(Debug, Clone)]
@@ -35,7 +36,7 @@ fn ensure_user_service_file() -> Result<PathBuf> {
     }
 
     let executable = std::env::current_exe().context("failed to resolve wayscriber executable")?;
-    let service_contents = render_user_service_unit(&executable);
+    let service_contents = render_user_service_unit(&selected_service_executable_path(&executable));
     write_if_changed(&service_path, &service_contents)?;
     Ok(service_path)
 }

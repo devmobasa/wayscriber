@@ -46,6 +46,9 @@ When updating an existing source install, the installer stops an active
 restarts the service. If the restart fails, it restores the previous selection
 and service. An inactive service stays inactive. Switching from another active
 install prefix still requires stopping that service first.
+First-run background-mode setup and the configurator write `ExecStart` using
+the public `wayscriber` selector, so later app/broker cohort updates are picked
+up when the service restarts.
 
 If `systemctl` is installed but the user service manager is unavailable, a
 source install still works without service setup. Choose Hyprland autostart or

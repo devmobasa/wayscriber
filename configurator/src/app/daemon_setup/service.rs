@@ -12,7 +12,7 @@ use wayscriber::runtime_capabilities::{
 use wayscriber::systemd_user_service::{
     USER_SERVICE_NAME, escape_systemd_env_value as shared_escape_systemd_env_value,
     portal_shortcut_dropin_path as shared_portal_shortcut_dropin_path, render_user_service_unit,
-    user_service_unit_path as shared_user_service_unit_path,
+    selected_service_executable_path, user_service_unit_path as shared_user_service_unit_path,
 };
 
 use super::command::{command_available, find_in_path, run_command, run_command_checked};
@@ -310,12 +310,12 @@ pub(super) fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
     {
         let sibling = exe_dir.join("wayscriber");
         if sibling.exists() {
-            return Ok(sibling);
+            return Ok(selected_service_executable_path(&sibling));
         }
     }
 
     if let Some(path) = find_in_path("wayscriber") {
-        return Ok(path);
+        return Ok(selected_service_executable_path(&path));
     }
 
     Err(format!(
