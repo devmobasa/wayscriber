@@ -37,6 +37,7 @@ const PREFERRED_ORDER: &[KeybindingField] = &[
     KeybindingField::DecreaseMarkerOpacity,
     KeybindingField::SelectSelectionTool,
     KeybindingField::SelectPenTool,
+    KeybindingField::SelectLiveShapeTool,
     KeybindingField::SelectEraserTool,
     KeybindingField::ToggleEraserMode,
     KeybindingField::CycleFontFamily,

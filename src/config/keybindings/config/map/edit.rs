@@ -168,6 +168,7 @@ define_action_binding_accessors! {
     CycleBlurStyle => tools.cycle_blur_style,
     CycleArrowStyle => tools.cycle_arrow_style,
     SelectPenTool => tools.select_pen_tool,
+    SelectLiveShapeTool => tools.select_live_shape_tool,
     SelectLineTool => tools.select_line_tool,
     SelectRectTool => tools.select_rect_tool,
     SelectEllipseTool => tools.select_ellipse_tool,

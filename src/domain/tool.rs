@@ -12,6 +12,8 @@ pub enum Tool {
     Select,
     /// Freehand drawing - follows mouse path (default, no modifiers)
     Pen,
+    /// Freehand ink that resolves confident lines and circles into shapes.
+    LiveShape,
     /// Straight line - between start and end points (Shift)
     Line,
     /// Rectangle outline - from corner to corner (Ctrl)
@@ -59,6 +61,7 @@ pub enum DragTool {
     Select,
     /// Freehand drawing.
     Pen,
+    LiveShape,
     /// Straight line.
     Line,
     /// Rectangle outline.
@@ -106,6 +109,7 @@ impl DragTool {
 pub enum DragBindableTool {
     Select,
     Pen,
+    LiveShape,
     Line,
     Rect,
     Ellipse,
@@ -126,6 +130,7 @@ impl DragBindableTool {
         match self {
             Self::Select => DragTool::Select,
             Self::Pen => DragTool::Pen,
+            Self::LiveShape => DragTool::LiveShape,
             Self::Line => DragTool::Line,
             Self::Rect => DragTool::Rect,
             Self::Ellipse => DragTool::Ellipse,
@@ -146,6 +151,7 @@ impl DragBindableTool {
         match self {
             Self::Select => Tool::Select,
             Self::Pen => Tool::Pen,
+            Self::LiveShape => Tool::LiveShape,
             Self::Line => Tool::Line,
             Self::Rect => Tool::Rect,
             Self::Ellipse => Tool::Ellipse,
@@ -166,6 +172,7 @@ impl DragBindableTool {
         match tool {
             Tool::Select => Some(Self::Select),
             Tool::Pen => Some(Self::Pen),
+            Tool::LiveShape => Some(Self::LiveShape),
             Tool::Line => Some(Self::Line),
             Tool::Rect => Some(Self::Rect),
             Tool::Ellipse => Some(Self::Ellipse),
@@ -190,6 +197,7 @@ impl DragBindableTool {
             DragTool::Default => None,
             DragTool::Select => Some(Self::Select),
             DragTool::Pen => Some(Self::Pen),
+            DragTool::LiveShape => Some(Self::LiveShape),
             DragTool::Line => Some(Self::Line),
             DragTool::Rect => Some(Self::Rect),
             DragTool::Ellipse => Some(Self::Ellipse),

@@ -78,6 +78,8 @@ impl InputState {
             point_thicknesses,
             color: self.active_drag_color_or_current(),
             size: self.thickness_for_tool(*tool),
+            grid: self.boards.active_board().spec.grid,
+            shape_recognition_sensitivity: self.style.shape_recognition_sensitivity,
             eraser_size: self.style.eraser_size,
             marker_opacity: self.style.marker_opacity,
             fill_enabled: self.style.fill_enabled,

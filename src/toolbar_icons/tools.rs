@@ -11,6 +11,11 @@ pub fn draw_icon_pen(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_pen(ctx, x, y, size);
 }
 
+pub fn draw_icon_live_shape(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_pen(ctx, x, y, size);
+    super::svg::render_circle(ctx, x + size * 0.46, y + size * 0.46, size * 0.52);
+}
+
 pub fn draw_icon_line(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_line(ctx, x, y, size);
 }

@@ -1,5 +1,5 @@
 use super::Config;
-use crate::config::types::DEFAULT_HIT_TEST_TOLERANCE;
+use crate::config::types::{DEFAULT_HIT_TEST_TOLERANCE, MAX_SHAPE_RECOGNITION_SENSITIVITY};
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 
@@ -39,6 +39,14 @@ impl Config {
                 self.drawing.pen_smoothing
             );
             self.drawing.pen_smoothing = MAX_PEN_SMOOTHING;
+        }
+
+        if self.drawing.shape_recognition_sensitivity > MAX_SHAPE_RECOGNITION_SENSITIVITY {
+            log::warn!(
+                "Invalid shape_recognition_sensitivity {}, clamping to 0-{MAX_SHAPE_RECOGNITION_SENSITIVITY} range",
+                self.drawing.shape_recognition_sensitivity
+            );
+            self.drawing.shape_recognition_sensitivity = MAX_SHAPE_RECOGNITION_SENSITIVITY;
         }
 
         if !(0.05..=0.9).contains(&self.drawing.marker_opacity) {

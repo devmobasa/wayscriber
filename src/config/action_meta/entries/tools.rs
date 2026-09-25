@@ -46,6 +46,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         icon: crate::toolbar_icons::draw_icon_pen
     ),
     meta!(
+        SelectLiveShapeTool,
+        "Live Shaping Tool",
+        Some("Shape Pen"),
+        "Turn confident ink lines and circles into shapes",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         SelectLineTool,
         "Line Tool",
         Some("Line"),

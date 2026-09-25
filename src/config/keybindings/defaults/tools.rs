@@ -72,6 +72,10 @@ pub(crate) fn default_select_pen_tool() -> Vec<String> {
     vec!["F".to_string()]
 }
 
+pub(crate) fn default_select_live_shape_tool() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_line_tool() -> Vec<String> {
     Vec::new()
 }

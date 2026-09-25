@@ -2,6 +2,7 @@
 
 mod catalog;
 mod drawing;
+mod live_shape;
 mod profile;
 mod settings;
 

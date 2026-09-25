@@ -67,6 +67,326 @@ fn mouse_drag_creates_shapes_for_each_tool() {
 }
 
 #[test]
+fn live_shape_strokes_preview_and_commit_lines_and_circles() {
+    use crate::input::tool::ProvisionalToolStroke;
+
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    for point in [(20, 1), (40, -1), (60, 1), (80, 3)] {
+        state.on_mouse_motion(point.0, point.1);
+    }
+    assert!(matches!(
+        state.provisional_tool_stroke(80, 3),
+        ProvisionalToolStroke::Shape(Shape::Line { y2: 0, .. })
+    ));
+    state.on_mouse_release(MouseButton::Left, 80, 3);
+    assert!(matches!(
+        state.boards.active_frame().shapes[0].shape,
+        Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 80,
+            y2: 0,
+            ..
+        }
+    ));
+
+    state.on_mouse_press(MouseButton::Left, 120, 80);
+    for index in 1..=32 {
+        let angle = std::f64::consts::TAU * f64::from(index) / 32.0;
+        state.on_mouse_motion(
+            80 + (40.0 * angle.cos()).round() as i32,
+            80 + (40.0 * angle.sin()).round() as i32,
+        );
+    }
+    assert!(matches!(
+        state.provisional_tool_stroke(120, 80),
+        ProvisionalToolStroke::Shape(Shape::Ellipse { .. })
+    ));
+    state.on_mouse_release(MouseButton::Left, 120, 80);
+    assert!(matches!(
+        state.boards.active_frame().shapes[1].shape,
+        Shape::Ellipse {
+            cx: 80,
+            cy: 80,
+            rx: 40,
+            ry: 40,
+            fill: false,
+            ..
+        }
+    ));
+
+    state.on_mouse_press(MouseButton::Left, 0, 120);
+    for point in [(20, 140), (40, 160), (60, 180)] {
+        state.on_mouse_motion(point.0, point.1);
+    }
+    state.on_mouse_release(MouseButton::Left, 60, 180);
+    assert!(matches!(
+        state.boards.active_frame().shapes[2].shape,
+        Shape::Line {
+            x1: 0,
+            y1: 120,
+            x2: 60,
+            y2: 180,
+            ..
+        }
+    ));
+    assert_eq!(state.boards.active_frame().shapes.len(), 3);
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 3);
+}
+
+#[test]
+fn live_shape_previews_and_commits_hand_drawn_rectangles_and_ovals() {
+    use crate::input::tool::ProvisionalToolStroke;
+
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    for (x, y) in [
+        (30, 8),
+        (55, 11),
+        (80, 9),
+        (110, 10),
+        (112, 30),
+        (109, 55),
+        (110, 90),
+        (85, 92),
+        (60, 89),
+        (35, 91),
+        (10, 90),
+        (8, 70),
+        (11, 45),
+        (9, 25),
+        (10, 10),
+    ] {
+        state.on_mouse_motion(x, y);
+    }
+    assert!(matches!(
+        state.provisional_tool_stroke(10, 10),
+        ProvisionalToolStroke::Shape(Shape::Rect { .. })
+    ));
+    state.on_mouse_release(MouseButton::Left, 10, 10);
+    assert!(matches!(
+        state.boards.active_frame().shapes[0].shape,
+        Shape::Rect {
+            x: 8,
+            y: 8,
+            w: 104,
+            h: 84,
+            fill: false,
+            ..
+        }
+    ));
+
+    state.style.shape_recognition_sensitivity = 0;
+    state.on_mouse_press(MouseButton::Left, 260, 80);
+    for index in 1..=32 {
+        let angle = std::f64::consts::TAU * f64::from(index) / 32.0;
+        state.on_mouse_motion(
+            200 + (60.0 * angle.cos()).round() as i32,
+            80 + (35.0 * angle.sin()).round() as i32,
+        );
+    }
+    assert!(matches!(
+        state.provisional_tool_stroke(260, 80),
+        ProvisionalToolStroke::Shape(Shape::Ellipse { .. })
+    ));
+    state.on_mouse_release(MouseButton::Left, 260, 80);
+    assert!(matches!(
+        state.boards.active_frame().shapes[1].shape,
+        Shape::Ellipse {
+            cx: 200,
+            cy: 80,
+            rx: 60,
+            ry: 35,
+            fill: false,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn live_shape_sensitivity_recognizes_rough_lines_without_changing_precise_ink() {
+    for (sensitivity, becomes_line) in [(0, false), (4, true)] {
+        let mut state = create_test_input_state();
+        state.style.shape_recognition_sensitivity = sensitivity;
+        assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        for (x, y) in [(20, 5), (40, -4), (60, 6), (80, 1)] {
+            state.on_mouse_motion(x, y);
+        }
+        state.on_mouse_release(MouseButton::Left, 80, 1);
+
+        assert_eq!(
+            matches!(
+                state.boards.active_frame().shapes[0].shape,
+                Shape::Line { .. }
+            ),
+            becomes_line,
+            "sensitivity {sensitivity}"
+        );
+    }
+}
+
+#[test]
+fn live_shape_sensitivity_controls_rough_closed_shapes() {
+    let rectangle = vec![
+        (10, 10),
+        (30, 16),
+        (50, 18),
+        (70, 16),
+        (90, 10),
+        (84, 30),
+        (82, 50),
+        (84, 70),
+        (90, 90),
+        (70, 84),
+        (50, 82),
+        (30, 84),
+        (10, 90),
+        (16, 70),
+        (18, 50),
+        (16, 30),
+        (10, 10),
+    ];
+    let oval: Vec<_> = (0..=32)
+        .map(|index| {
+            let angle = std::f64::consts::TAU * f64::from(index) / 32.0;
+            let wobble = 1.0 + 0.13 * (3.0 * angle).sin();
+            (
+                200 + (50.0 * wobble * angle.cos()).round() as i32,
+                80 + (40.0 * wobble * angle.sin()).round() as i32,
+            )
+        })
+        .collect();
+
+    for (path, expected_kind) in [(rectangle, "Rectangle"), (oval, "Ellipse")] {
+        for (sensitivity, recognized) in [(0, false), (4, true)] {
+            let mut state = create_test_input_state();
+            state.style.shape_recognition_sensitivity = sensitivity;
+            assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+            let first = path[0];
+            state.on_mouse_press(MouseButton::Left, first.0, first.1);
+            for &(x, y) in &path[1..] {
+                state.on_mouse_motion(x, y);
+            }
+            let last = *path.last().unwrap();
+            state.on_mouse_release(MouseButton::Left, last.0, last.1);
+
+            let kind = state.boards.active_frame().shapes[0].shape.kind_name();
+            assert_eq!(
+                kind,
+                if recognized {
+                    expected_kind
+                } else {
+                    "Freehand"
+                },
+                "{expected_kind} at sensitivity {sensitivity}"
+            );
+        }
+    }
+}
+
+#[test]
+fn live_shape_keeps_ambiguous_strokes_as_freehand() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    for point in [(30, 30), (0, 30), (30, 0)] {
+        state.on_mouse_motion(point.0, point.1);
+    }
+    state.on_mouse_release(MouseButton::Left, 30, 0);
+
+    assert!(matches!(
+        state.boards.active_frame().shapes[0].shape,
+        Shape::Freehand { .. }
+    ));
+
+    state.style.shape_recognition_sensitivity = 4;
+    state.on_mouse_press(MouseButton::Left, 40, 0);
+    for point in [
+        (50, 10),
+        (60, 20),
+        (70, 30),
+        (80, 40),
+        (70, 50),
+        (60, 60),
+        (50, 70),
+        (40, 80),
+        (30, 70),
+        (20, 60),
+        (10, 50),
+        (0, 40),
+        (10, 30),
+        (20, 20),
+        (30, 10),
+        (40, 0),
+    ] {
+        state.on_mouse_motion(point.0, point.1);
+    }
+    state.on_mouse_release(MouseButton::Left, 40, 0);
+    assert!(matches!(
+        state.boards.active_frame().shapes[1].shape,
+        Shape::Freehand { .. }
+    ));
+}
+
+#[test]
+fn live_shape_snaps_lines_to_visible_board_grid() {
+    use crate::domain::{BoardGrid, BoardGridKind};
+    use crate::input::BOARD_ID_WHITEBOARD;
+    use crate::input::tool::ProvisionalToolStroke;
+
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    state.boards.active_board_mut().spec.grid = BoardGrid::new(BoardGridKind::Cartesian, 40);
+    assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+    state.on_mouse_press(MouseButton::Left, 0, 44);
+    for point in [(30, 43), (60, 42), (100, 44)] {
+        state.on_mouse_motion(point.0, point.1);
+    }
+    assert!(matches!(
+        state.provisional_tool_stroke(100, 44),
+        ProvisionalToolStroke::Shape(Shape::Line { y1: 40, y2: 40, .. })
+    ));
+    state.on_mouse_release(MouseButton::Left, 100, 44);
+    assert!(matches!(
+        state.boards.active_frame().shapes[0].shape,
+        Shape::Line {
+            x1: 0,
+            y1: 40,
+            x2: 100,
+            y2: 40,
+            ..
+        }
+    ));
+
+    state.boards.active_board_mut().spec.grid = BoardGrid::new(BoardGridKind::Isometric, 40);
+    state.on_mouse_press(MouseButton::Left, 0, 1);
+    for point in [(40, 23), (80, 47), (120, 69)] {
+        state.on_mouse_motion(point.0, point.1);
+    }
+    state.on_mouse_release(MouseButton::Left, 120, 69);
+    assert!(matches!(
+        state.boards.active_frame().shapes[1].shape,
+        Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 120,
+            y2: 69,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn regular_polygon_drag_stores_concrete_points_and_side_metadata() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::RegularPolygon)));

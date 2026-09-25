@@ -119,6 +119,9 @@ impl InputState {
         else {
             return None;
         };
+        if *tool == crate::input::Tool::LiveShape {
+            return None;
+        }
 
         let stroke_width = match tool.motion_behavior() {
             ToolMotionBehavior::NoPathAccumulation => return None,

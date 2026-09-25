@@ -244,6 +244,9 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # Smoothing applied to a finished freehand or marker stroke (0 - 6)
 pen_smoothing = 3
 
+# Shape Pen: 0 precise, 2 balanced (default), 4 more forgiving
+shape_recognition_sensitivity = 2
+
 # Default fill state for fill-capable shape tools
 default_fill_enabled = false
 
@@ -378,6 +381,7 @@ drag_tool = "default"
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
+- **Live shaping**: Choose **Shape pen** from the Shapes picker or **Live Shaping Tool** from the command palette; bind `select_live_shape_tool` for a shortcut. Confident lines, circles, ovals, and axis-aligned rectangles preview as shapes and commit as editable shapes. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (forgiving), with 2 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. Reopen the overlay after changing it. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Other ink stays freehand.
 - **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -1364,6 +1368,7 @@ shown = []
 top_tools = [
   "top.tool.select",
   "top.tool.pen",
+  "top.tool.live-shape",
   "top.tool.marker",
   "top.tool.step-marker",
   "top.tool.eraser",
@@ -2163,6 +2168,7 @@ decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 # Tool selection shortcuts (optional; keep empty to rely on modifiers)
 select_selection_tool = ["V"]
 select_pen_tool = ["F"]
+select_live_shape_tool = []         # draw ink that snaps to lines or circles
 select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]

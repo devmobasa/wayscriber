@@ -108,6 +108,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::PickScreenColor => KeybindingsSection::Drawing,
         Action::SelectSelectionTool
         | Action::SelectPenTool
+        | Action::SelectLiveShapeTool
         | Action::SelectEraserTool
         | Action::ToggleEraserMode
         | Action::IncreasePenSmoothing

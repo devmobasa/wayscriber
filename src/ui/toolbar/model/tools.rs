@@ -13,6 +13,7 @@ use crate::ui::toolbar::ToolbarSnapshot;
 pub(crate) enum SemanticToolIcon {
     Select,
     Pen,
+    LiveShape,
     Line,
     Rect,
     Circle,
@@ -49,7 +50,8 @@ const FULL_TOOL_BUTTONS: [Tool; 7] = [
 ];
 
 /// Full-mode shape picker: everything the strip no longer shows inline.
-const FULL_SHAPE_PICKER_TOOLS: [Tool; 9] = [
+const FULL_SHAPE_PICKER_TOOLS: [Tool; 10] = [
+    Tool::LiveShape,
     Tool::Rect,
     Tool::Ellipse,
     Tool::Blur,
@@ -61,7 +63,8 @@ const FULL_SHAPE_PICKER_TOOLS: [Tool; 9] = [
     Tool::FreeformPolygon,
 ];
 
-const SHAPE_TOOLS: [Tool; 11] = [
+const SHAPE_TOOLS: [Tool; 12] = [
+    Tool::LiveShape,
     Tool::Line,
     Tool::Rect,
     Tool::Ellipse,
@@ -161,6 +164,7 @@ pub(crate) fn toolbar_item_id_for_tool(tool: Tool) -> ToolbarItemId {
     match tool {
         Tool::Select => ids::TOP_TOOL_SELECT,
         Tool::Pen => ids::TOP_TOOL_PEN,
+        Tool::LiveShape => ids::TOP_TOOL_LIVE_SHAPE,
         Tool::Line => ids::TOP_TOOL_LINE,
         Tool::Rect => ids::TOP_TOOL_RECT,
         Tool::Ellipse => ids::TOP_TOOL_ELLIPSE,
@@ -183,6 +187,7 @@ fn tool_for_toolbar_item_id(id: ToolbarItemId) -> Option<Tool> {
     [
         (ids::TOP_TOOL_SELECT, Tool::Select),
         (ids::TOP_TOOL_PEN, Tool::Pen),
+        (ids::TOP_TOOL_LIVE_SHAPE, Tool::LiveShape),
         (ids::TOP_TOOL_LINE, Tool::Line),
         (ids::TOP_TOOL_RECT, Tool::Rect),
         (ids::TOP_TOOL_ELLIPSE, Tool::Ellipse),
@@ -332,9 +337,12 @@ pub(crate) enum TopToolGroup {
 
 pub(crate) fn top_tool_group(tool: Tool) -> TopToolGroup {
     match tool {
-        Tool::Select | Tool::Pen | Tool::Marker | Tool::StepMarker | Tool::Eraser => {
-            TopToolGroup::Pens
-        }
+        Tool::Select
+        | Tool::Pen
+        | Tool::LiveShape
+        | Tool::Marker
+        | Tool::StepMarker
+        | Tool::Eraser => TopToolGroup::Pens,
         _ => TopToolGroup::Shapes,
     }
 }
@@ -385,6 +393,7 @@ pub(crate) fn semantic_icon_for_tool(tool: Tool) -> SemanticToolIcon {
     match tool {
         Tool::Select => SemanticToolIcon::Select,
         Tool::Pen => SemanticToolIcon::Pen,
+        Tool::LiveShape => SemanticToolIcon::LiveShape,
         Tool::Line => SemanticToolIcon::Line,
         Tool::Rect => SemanticToolIcon::Rect,
         Tool::Ellipse => SemanticToolIcon::Circle,

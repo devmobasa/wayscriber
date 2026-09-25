@@ -115,6 +115,7 @@ decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 # Tool selection shortcuts (optional; keep empty to rely on modifiers)
 select_selection_tool = ["V"]
 select_pen_tool = ["F"]
+select_live_shape_tool = []
 select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
@@ -696,6 +697,7 @@ shown = []
 top_tools = [
   "top.tool.select",
   "top.tool.pen",
+  "top.tool.live-shape",
   "top.tool.marker",
   "top.tool.step-marker",
   "top.tool.eraser",
@@ -1115,6 +1117,11 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # Also on the toolbar as the "Smoothing" stepper while the Pen or Marker is up.
 # A session remembers the level it was saved at; this is the starting value.
 pen_smoothing = 3
+
+# Shape Pen recognition sensitivity (0 - 4): 0 is precise, 2 is balanced,
+# and 4 accepts rougher lines and closed shapes. Applies to lines, ellipses,
+# and rectangles; it does not change the dedicated shape tools or grid spacing.
+shape_recognition_sensitivity = 2
 
 # Default fill state for fill-capable shapes
 default_fill_enabled = false
