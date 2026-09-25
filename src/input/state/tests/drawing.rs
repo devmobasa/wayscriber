@@ -138,6 +138,37 @@ fn live_shape_strokes_preview_and_commit_lines_and_circles() {
 }
 
 #[test]
+fn live_shape_recognizes_densely_sampled_straight_diagonal() {
+    use crate::input::tool::ProvisionalToolStroke;
+
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::LiveShape)));
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    for sample in 1..=400 {
+        let x = (10.0 + f64::from(sample) * 0.5).round() as i32;
+        let y = (10.0 + f64::from(sample) * 0.25).round() as i32;
+        state.on_mouse_motion(x, y);
+    }
+
+    assert!(matches!(
+        state.provisional_tool_stroke(210, 110),
+        ProvisionalToolStroke::Shape(Shape::Line { .. })
+    ));
+    state.on_mouse_release(MouseButton::Left, 210, 110);
+    assert!(matches!(
+        state.boards.active_frame().shapes[0].shape,
+        Shape::Line {
+            x1: 10,
+            y1: 10,
+            x2: 210,
+            y2: 110,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn live_shape_previews_and_commits_hand_drawn_rectangles_and_ovals() {
     use crate::input::tool::ProvisionalToolStroke;
 

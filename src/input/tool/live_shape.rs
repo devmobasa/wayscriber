@@ -29,7 +29,7 @@ pub(super) fn recognize(
         return Some(shape);
     }
 
-    if chord < 16.0 || length > chord * (1.08 + 0.04 * f64::from(sensitivity)) {
+    if chord < 16.0 || resampled_length(points) > chord * (1.08 + 0.04 * f64::from(sensitivity)) {
         return None;
     }
 
@@ -355,4 +355,23 @@ fn fit_rectangle(
 
 fn distance(a: (i32, i32), b: (i32, i32)) -> f64 {
     (f64::from(a.0) - f64::from(b.0)).hypot(f64::from(a.1) - f64::from(b.1))
+}
+
+fn resampled_length(points: &[(i32, i32)]) -> f64 {
+    let Some(&first) = points.first() else {
+        return 0.0;
+    };
+    let mut anchor = first;
+    let mut length = 0.0;
+
+    // Small pixel steps exaggerate diagonal length after integer rounding.
+    for &point in points.iter().skip(1) {
+        let segment = distance(anchor, point);
+        if segment >= 4.0 {
+            length += segment;
+            anchor = point;
+        }
+    }
+
+    length + distance(anchor, *points.last().unwrap())
 }
