@@ -396,9 +396,14 @@ impl InputState {
                 return true;
             };
             let (command, actual_index) = command_entry;
+            // The shortcut controls are drawn only on the selected and the
+            // hovered row, so only there can they be pressed.
+            let row_actions_shown = actual_index == self.command_palette.selected
+                || self.command_palette_hovered_command(&rows, geometry) == Some(actual_index);
             self.command_palette.select_command(actual_index);
 
-            if let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
+            if row_actions_shown
+                && let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
                 && default_keybindings()
                     .bindings_for_action(command.action)
                     .is_some()
@@ -475,6 +480,23 @@ impl InputState {
         let rows = self.command_palette_rows();
         let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
         self.command_palette_action_tooltip_for_layout(&rows, geometry)
+    }
+
+    /// The command row under the pointer, as a `filtered_commands()` index.
+    /// Its shortcut controls show alongside the selected row's.
+    pub(crate) fn command_palette_hovered_command(
+        &self,
+        rows: &[CommandPaletteListRow],
+        geometry: CommandPaletteGeometry,
+    ) -> Option<usize> {
+        let (x, y) = self.pointer_position();
+        let (local_x, local_y) = geometry.local_point(x, y);
+        if !geometry.contains_local(local_x, local_y) {
+            return None;
+        }
+        let visible_index = geometry.visible_item_at(local_x, local_y)?;
+        rows.get(self.command_palette.scroll + visible_index)?
+            .command_index()
     }
 
     pub(crate) fn command_palette_action_tooltip_for_layout(
