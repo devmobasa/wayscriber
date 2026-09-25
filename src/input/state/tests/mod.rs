@@ -21,6 +21,7 @@ mod erase;
 mod focus_mode;
 mod hit_testing;
 mod input_hud;
+mod laser;
 mod light_mode;
 mod menus;
 mod modal;

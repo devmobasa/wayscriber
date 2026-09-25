@@ -119,6 +119,9 @@ pub enum TextField {
     DrawingUndoStackLimit,
     ArrowLength,
     ArrowAngle,
+    LaserWidth,
+    LaserHoldMs,
+    LaserFadeMs,
     PerformanceMaxFpsNoVsync,
     PerformanceUiAnimationFps,
     HistoryUndoAllDelayMs,
@@ -202,6 +205,7 @@ pub enum QuadField {
     HelpText,
     HighlightFill,
     HighlightOutline,
+    LaserColor,
     ExportPdfLabelText,
     ExportPdfLabelBackground,
 }

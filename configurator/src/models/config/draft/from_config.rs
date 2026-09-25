@@ -111,6 +111,11 @@ impl ConfigDraft {
             arrow_head_at_end: config.arrow.head_at_end,
             arrow_style: ArrowStyleOption::from_style(config.arrow.style),
 
+            laser_color: ColorQuadInput::from(config.laser.color),
+            laser_width: format_float(config.laser.width),
+            laser_hold_ms: config.laser.hold_ms.to_string(),
+            laser_fade_ms: config.laser.fade_ms.to_string(),
+
             history: super::super::history::HistoryDraft::from_config(&config.history),
 
             performance_buffer_count: config.performance.buffer_count,

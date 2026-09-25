@@ -74,6 +74,7 @@ const DEFAULT_TOP_TOOLS_ORDER: &[ToolbarItemId] = &[
     ids::TOP_TOOL_PEN,
     ids::TOP_TOOL_LIVE_SHAPE,
     ids::TOP_TOOL_MARKER,
+    ids::TOP_TOOL_LASER,
     ids::TOP_TOOL_STEP_MARKER,
     ids::TOP_TOOL_ERASER,
     ids::TOP_TOOL_LINE,

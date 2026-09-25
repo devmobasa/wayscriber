@@ -98,6 +98,10 @@ pub(super) fn finish_drawing(
             }
             return;
         }
+        FinishedToolStroke::Laser { points } => {
+            state.commit_laser_stroke(points);
+            return;
+        }
         FinishedToolStroke::Noop => {
             state.clear_provisional_dirty();
             return;

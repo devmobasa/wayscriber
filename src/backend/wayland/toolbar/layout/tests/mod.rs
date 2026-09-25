@@ -34,7 +34,7 @@ fn top_size_respects_icon_mode() {
     // drawing tool is active.
     assert_eq!(
         top_size(&crate::ui_text::UiTextEngine::default(), &snapshot),
-        (1278, 104)
+        (1329, 104)
     );
 
     state.set_toolbar_use_icons(false);
@@ -552,4 +552,23 @@ fn scale_size_clamps_extreme_values() {
     let snapshot = snapshot_from_state(&state);
     let min_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
     assert_eq!(tiny_size, min_size, "Scale < 0.5 should clamp to 0.5");
+}
+
+#[test]
+fn a_narrowing_strip_moves_the_laser_to_the_overflow_before_any_other_tool() {
+    let mut state = create_test_input_state();
+    state.set_toolbar_use_icons(true);
+    let mut snapshot = snapshot_from_state(&state);
+    let full_width = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0;
+
+    let first_dropped = (200..full_width).rev().find_map(|budget| {
+        snapshot.top_viewport_max = Some(f64::from(budget));
+        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
+            &crate::ui_text::UiTextEngine::default(),
+            &snapshot,
+        );
+        (!plan.dropped_tools.is_empty()).then_some(plan.dropped_tools)
+    });
+
+    assert_eq!(first_dropped, Some(vec![crate::input::Tool::Laser]));
 }

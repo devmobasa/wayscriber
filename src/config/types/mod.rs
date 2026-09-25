@@ -12,6 +12,7 @@ mod export;
 mod help_overlay;
 mod history;
 mod input_hud;
+mod laser;
 mod performance;
 mod presenter_mode;
 mod presets;
@@ -57,6 +58,9 @@ pub use export::{
 pub use help_overlay::HelpOverlayStyle;
 pub use history::HistoryConfig;
 pub use input_hud::{InputHudConfig, InputHudMode, InputHudPosition};
+pub use laser::{
+    LASER_FADE_MS_MAX, LASER_HOLD_MS_MAX, LASER_WIDTH_MAX, LASER_WIDTH_MIN, LaserConfig,
+};
 pub use performance::PerformanceConfig;
 pub use presenter_mode::{PresenterModeConfig, PresenterToolBehavior, PresenterToolbarMode};
 pub use presets::{

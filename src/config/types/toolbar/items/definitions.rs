@@ -20,6 +20,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     item(ids::TOP_TOOL_PEN, "Pen", Top, Tool, None),
     item(ids::TOP_TOOL_LIVE_SHAPE, "Shape Pen", Top, Tool, None),
     item(ids::TOP_TOOL_MARKER, "Marker", Top, Tool, None),
+    item(ids::TOP_TOOL_LASER, "Laser pointer", Top, Tool, None),
     item(ids::TOP_TOOL_STEP_MARKER, "Step marker", Top, Tool, None),
     item(ids::TOP_TOOL_ERASER, "Eraser", Top, Tool, None),
     item(ids::TOP_TOOL_LINE, "Line", Top, Tool, None),

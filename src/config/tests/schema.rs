@@ -39,6 +39,22 @@ fn performance_metadata_paths_exist_in_json_schema() {
 }
 
 #[test]
+fn laser_paths_exist_in_json_schema() {
+    let schema = Config::json_schema();
+    for path in [
+        "laser.color",
+        "laser.width",
+        "laser.hold_ms",
+        "laser.fade_ms",
+    ] {
+        assert!(
+            schema_contains_path(&schema, path),
+            "schema missing laser path {path}"
+        );
+    }
+}
+
+#[test]
 fn region_capture_paths_exist_in_json_schema() {
     let schema = Config::json_schema();
     for path in [

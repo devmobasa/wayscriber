@@ -1,6 +1,38 @@
 use super::super::color::ColorInput;
 
 #[test]
+fn laser_settings_round_trip_and_reject_out_of_range_drafts() {
+    let mut config = Config::default();
+    config.laser.color = [0.0, 0.5, 1.0, 0.75];
+    config.laser.width = 8.0;
+    config.laser.hold_ms = 2000;
+    config.laser.fade_ms = 250;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.laser_width, "8");
+    assert_eq!(draft.laser_hold_ms, "2000");
+    assert_eq!(draft.laser_fade_ms, "250");
+
+    draft.laser_width = "12".to_string();
+    draft.laser_hold_ms = "0".to_string();
+    draft.set_quad(QuadField::LaserColor, 0, "1".to_string());
+    let saved = draft.to_config(&config).expect("valid laser draft");
+    assert_eq!(saved.laser.width, 12.0);
+    assert_eq!(saved.laser.hold_ms, 0);
+    assert_eq!(saved.laser.fade_ms, 250);
+    assert_eq!(saved.laser.color, [1.0, 0.5, 1.0, 0.75]);
+
+    for (width, hold, fade) in [("1", "0", "0"), ("8", "40000", "0"), ("8", "0", "9000")] {
+        draft.laser_width = width.to_string();
+        draft.laser_hold_ms = hold.to_string();
+        draft.laser_fade_ms = fade.to_string();
+        assert!(
+            draft.to_config(&config).is_err(),
+            "width {width}, hold {hold}, fade {fade} must be refused"
+        );
+    }
+}
+
+#[test]
 fn shape_pen_sensitivity_round_trips_and_rejects_invalid_drafts() {
     let mut config = Config::default();
     config.drawing.shape_recognition_sensitivity = 3;

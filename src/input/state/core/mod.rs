@@ -19,6 +19,7 @@ mod index;
 mod input_hud_controls;
 pub(crate) mod key_repeat;
 mod keymap;
+mod laser_controls;
 mod menus;
 pub(crate) mod modal;
 mod modes;

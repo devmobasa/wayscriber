@@ -13,6 +13,7 @@ struct RenderAnimationState {
     text_edit_entry: bool,
     input_hud: bool,
     ocr_scan: bool,
+    laser_ink: bool,
 }
 
 impl RenderAnimationState {
@@ -25,6 +26,7 @@ impl RenderAnimationState {
             self.text_edit_entry,
             self.input_hud,
             self.ocr_scan,
+            self.laser_ink,
         ]
         .into_iter()
         .any(|active| active)
@@ -114,6 +116,7 @@ impl WaylandState {
             text_edit_entry: self.input_state.advance_text_edit_entry_feedback(now),
             input_hud: self.input_state.advance_input_hud(now),
             ocr_scan: self.input_state.advance_ocr_scan(now),
+            laser_ink: self.input_state.advance_laser_ink(now),
         }
     }
 

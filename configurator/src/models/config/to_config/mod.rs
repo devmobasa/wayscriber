@@ -2,6 +2,7 @@ mod boards;
 mod drawing;
 mod export;
 mod keybindings;
+mod laser;
 mod performance;
 mod presenter_mode;
 mod presets;
@@ -25,6 +26,7 @@ impl ConfigDraft {
             config.config_revision = revision;
         }
         self.apply_drawing(&mut config, &mut errors);
+        self.apply_laser(&mut config, &mut errors);
         self.history.apply_to(&mut config.history, &mut errors);
         self.apply_performance(&mut config, &mut errors);
         self.apply_ui(&mut config, &mut errors);

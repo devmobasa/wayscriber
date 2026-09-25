@@ -150,6 +150,7 @@ select_freeform_polygon_tool = []
 select_arrow_tool = []
 select_blur_tool = []
 select_highlight_tool = []
+select_laser_tool = ["L"]
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 
 # Reset label counters
@@ -707,6 +708,7 @@ top_tools = [
   "top.tool.pen",
   "top.tool.live-shape",
   "top.tool.marker",
+  "top.tool.laser",
   "top.tool.step-marker",
   "top.tool.eraser",
   "top.tool.line",
@@ -1365,6 +1367,29 @@ style = "standard"
 # ═══════════════════════════════════════════════════════════════════════════════
 # PERFORMANCE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Laser pointer: glowing ink that fades away on its own. Press `L`, click the
+# laser next to Marker on the toolbar (Regular and Advanced layouts), or choose
+# Laser Pointer Tool from the command palette. Laser ink is never saved, never
+# undone, never selected, and never appears in captures or exports.
+[laser]
+# Ink color as [red, green, blue, alpha], each 0.0 - 1.0. Independent of the
+# pen color; the color picker and quick colors do not change it.
+color = [1.0, 0.16, 0.12, 1.0]
+
+# Width of the bright core in pixels (2.0 - 30.0). The glow around it is about
+# three times as wide.
+width = 6.0
+
+# How long the ink stays fully visible after you release, in ms (0 - 30000).
+# Another stroke drawn before the ink has faded keeps the whole group on
+# screen, so they all fade together.
+hold_ms = 1200
+
+# How long the ink then takes to fade out, in ms (0 - 5000). 0 removes it at
+# once. With [ui] reduced_motion the ink stays solid and disappears in one step
+# at the end of hold_ms + fade_ms.
+fade_ms = 500
 
 # Spotlight tool: dims the whole overlay except the regions you draw, so
 # attention lands where you point. Select the tool from the toolbar or bind

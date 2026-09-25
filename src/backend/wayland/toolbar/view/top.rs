@@ -1,7 +1,7 @@
 //! Top-strip tree builder.
 //!
 //! The strip reads left to right as detached pill islands. The Tools island:
-//! drag grip, pens (Select/Pen/Shape Pen/Marker/Step/Eraser), shapes (Line/Arrow/Shapes
+//! drag grip, pens (Select/Pen/Shape Pen/Marker/Laser/Step/Eraser), shapes (Line/Arrow/Shapes
 //! picker), annotations (Text/Note/Screenshot/Highlight), with thin dividers
 //! between the groups — colors no longer sit here (M7 moved them into the
 //! style pill). The Presets island: the saved tool+color slots. The History
@@ -99,7 +99,9 @@ pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopS
             plan.dropped_utilities.push(candidate);
         }
     }
-    for candidate in [Tool::Arrow, Tool::Line] {
+    // The laser yields first: presenters reach it with its key while the
+    // toolbar is hidden anyway, and the palette still lists it.
+    for candidate in [Tool::Laser, Tool::Arrow, Tool::Line] {
         if fits(&plan) {
             sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
             return plan;

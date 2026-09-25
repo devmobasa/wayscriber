@@ -58,6 +58,7 @@ pub enum ToolOption {
     Marker,
     StepMarker,
     Highlight,
+    Laser,
     Eraser,
 }
 
@@ -81,6 +82,7 @@ impl ToolOption {
             Self::Marker,
             Self::StepMarker,
             Self::Highlight,
+            Self::Laser,
             Self::Eraser,
         ]
     }
@@ -104,6 +106,7 @@ impl ToolOption {
             Self::Marker => "Marker",
             Self::StepMarker => "Step",
             Self::Highlight => "Highlight",
+            Self::Laser => "Laser pointer",
             Self::Eraser => "Eraser",
         }
     }
@@ -127,6 +130,7 @@ impl ToolOption {
             Self::Marker => Tool::Marker,
             Self::StepMarker => Tool::StepMarker,
             Self::Highlight => Tool::Highlight,
+            Self::Laser => Tool::Laser,
             Self::Eraser => Tool::Eraser,
         }
     }
@@ -150,6 +154,7 @@ impl ToolOption {
             Tool::Marker => Self::Marker,
             Tool::StepMarker => Self::StepMarker,
             Tool::Highlight => Self::Highlight,
+            Tool::Laser => Self::Laser,
             Tool::Eraser => Self::Eraser,
         }
     }
@@ -183,6 +188,7 @@ pub enum DragToolOption {
     Marker,
     StepMarker,
     Highlight,
+    Laser,
     Eraser,
 }
 
@@ -205,6 +211,7 @@ impl DragToolOption {
             Self::Marker,
             Self::StepMarker,
             Self::Highlight,
+            Self::Laser,
             Self::Eraser,
         ]
     }
@@ -235,6 +242,7 @@ impl DragToolOption {
             Self::Marker => "Marker",
             Self::StepMarker => "Step",
             Self::Highlight => "Highlight",
+            Self::Laser => "Laser pointer",
             Self::Eraser => "Eraser",
         }
     }
@@ -257,6 +265,7 @@ impl DragToolOption {
             Self::Marker => DragTool::Marker,
             Self::StepMarker => DragTool::StepMarker,
             Self::Highlight => DragTool::Highlight,
+            Self::Laser => DragTool::Laser,
             Self::Eraser => DragTool::Eraser,
         }
     }
@@ -279,6 +288,7 @@ impl DragToolOption {
             DragTool::Marker => Self::Marker,
             DragTool::StepMarker => Self::StepMarker,
             DragTool::Highlight => Self::Highlight,
+            DragTool::Laser => Self::Laser,
             DragTool::Eraser => Self::Eraser,
         }
     }
@@ -301,6 +311,7 @@ impl DragToolOption {
             Self::Marker => Some(ToolOption::Marker),
             Self::StepMarker => Some(ToolOption::StepMarker),
             Self::Highlight => Some(ToolOption::Highlight),
+            Self::Laser => Some(ToolOption::Laser),
             Self::Eraser => Some(ToolOption::Eraser),
         }
     }

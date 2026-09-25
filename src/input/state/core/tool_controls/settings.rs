@@ -154,7 +154,7 @@ impl InputState {
                 self.presenter_mode_config().tool_behavior,
                 crate::config::PresenterToolBehavior::ForceHighlightLocked
             )
-            && tool != Some(Tool::Highlight)
+            && !matches!(tool, Some(Tool::Highlight | Tool::Laser))
         {
             return false;
         }

@@ -133,6 +133,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::CycleBlurStyle
         | Action::CycleArrowStyle
         | Action::SelectHighlightTool
+        | Action::SelectLaserTool
         | Action::ToggleHighlightTool
         | Action::ResetArrowLabelCounter
         | Action::ResetStepMarkerCounter => KeybindingsSection::Tools,

@@ -160,6 +160,9 @@ impl InputState {
             ToolMotionBehavior::AccumulatePath {
                 size_source: ToolMotionSizeSource::EraserSize,
             } => self.style.eraser_size,
+            ToolMotionBehavior::AccumulatePath {
+                size_source: ToolMotionSizeSource::LaserWidth,
+            } => self.laser_style().glow_width(),
         };
 
         let start = points.len().saturating_sub(2);

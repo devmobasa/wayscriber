@@ -116,6 +116,20 @@ pub(super) const DRAWING_DEFAULT_TERMS: &[&str] = &[
     "undo stack",
     "undo stack limit",
 ];
+pub(super) const DRAWING_LASER_TERMS: &[&str] = &[
+    "laser",
+    "laser pointer",
+    "pointer",
+    "presenter",
+    "fading ink",
+    "disappearing ink",
+    "ink color hex",
+    "width px",
+    "stay visible after release ms",
+    "hold",
+    "fade out ms",
+    "fade",
+];
 pub(super) const DRAWING_DRAG_TERMS: &[&str] = &["drag", "mouse", "button", "shift", "ctrl", "tab"];
 pub(super) const DRAWING_FONT_TERMS: &[&str] = &[
     "font",

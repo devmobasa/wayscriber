@@ -350,6 +350,9 @@ impl ConfigDraft {
             TextField::DrawingHitTestThreshold => self.drawing_hit_test_linear_threshold = value,
             TextField::DrawingUndoStackLimit => self.drawing_undo_stack_limit = value,
             TextField::ArrowLength => self.arrow_length = value,
+            TextField::LaserWidth => self.laser_width = value,
+            TextField::LaserHoldMs => self.laser_hold_ms = value,
+            TextField::LaserFadeMs => self.laser_fade_ms = value,
             TextField::ArrowAngle => self.arrow_angle = value,
             TextField::PerformanceMaxFpsNoVsync => {
                 self.set_performance_text(PerformanceFieldId::MaxFpsNoVsync, value);
@@ -443,6 +446,7 @@ impl ConfigDraft {
             QuadField::HighlightOutline => self
                 .click_highlight_outline_color
                 .set_component(index, value),
+            QuadField::LaserColor => self.laser_color.set_component(index, value),
             QuadField::ExportPdfLabelText => {
                 self.export_pdf_label_text_color.set_component(index, value)
             }

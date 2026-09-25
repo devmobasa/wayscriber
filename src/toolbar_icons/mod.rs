@@ -136,6 +136,7 @@ pub(crate) fn top_toolbar_icon_painter(
         I::Tool(T::Spotlight) => draw_icon_spotlight,
         I::Tool(T::Marker) => draw_icon_marker,
         I::Tool(T::Highlight) => draw_icon_highlight,
+        I::Tool(T::Laser) => draw_icon_laser,
         I::Tool(T::StepMarker) => draw_icon_step_marker,
         I::Tool(T::Eraser) => draw_icon_eraser,
     }
@@ -155,7 +156,7 @@ mod painter_tests {
     /// Every public painter. `svg.rs` covers the newer family through its own
     /// `render_*` entry points; this covers the shipped surface callers use,
     /// including the older proportional-style painters that had no coverage.
-    const PAINTERS: [(&str, IconPainter); 65] = [
+    const PAINTERS: [(&str, IconPainter); 66] = [
         ("arrow", draw_icon_arrow),
         ("blur", draw_icon_blur),
         ("board", draw_icon_board),
@@ -178,6 +179,7 @@ mod painter_tests {
         ("highlight", draw_icon_highlight),
         ("highlight_ring", draw_icon_highlight_ring),
         ("info", draw_icon_info),
+        ("laser", draw_icon_laser),
         ("layers", draw_icon_layers),
         ("layout_advanced", draw_icon_layout_advanced),
         ("layout_regular", draw_icon_layout_regular),

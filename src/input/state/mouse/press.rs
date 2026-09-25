@@ -179,7 +179,18 @@ impl InputState {
                 crate::config::PresenterToolBehavior::ForceHighlightLocked
             )
         {
-            return Some(Tool::Highlight);
+            // Locked presenting still allows the laser, which leaves nothing
+            // behind: picked for the left button, or bound to this button.
+            let presenter_tool = if button == MouseButton::Left {
+                self.tool_override()
+            } else {
+                configured_tool
+            };
+            return Some(
+                presenter_tool
+                    .filter(|tool| *tool == Tool::Laser)
+                    .unwrap_or(Tool::Highlight),
+            );
         }
 
         if button == MouseButton::Left

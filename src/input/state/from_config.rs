@@ -26,6 +26,7 @@ impl InputState {
             presenter_mode_config: config.presenter_mode.clone(),
         });
         input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
+        input_state.init_laser_from_config(&config.laser);
         input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(
             &config.render_profiles,
         ));

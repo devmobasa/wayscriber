@@ -384,6 +384,7 @@ drag_tool = "default"
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
 - **Shape Pen**: Press `S` (`select_live_shape_tool`), click **Shape Pen** next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** from the command palette. Confident lines, circles, ovals, rectangles, and triangles preview as shapes over a faint copy of the stroke and commit as editable shapes. Recognized ovals, rectangles, and triangles follow the Fill toggle, like the dedicated shape tools. If a stroke should have stayed ink, undo once to get the original stroke back; undo again to remove it. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (most forgiving), with 3 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. While Shape Pen is active, the style pill's **Detect** stepper changes it at once; so do **Increase / Decrease Shape Pen Sensitivity** in the command palette, or bind `increase_shape_recognition_sensitivity` / `decrease_shape_recognition_sensitivity`. A session remembers the level it was saved at; the config value is the starting level. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Rectangle and oval edges also snap to nearby Cartesian lines, and triangle corners to nearby Cartesian lines or isometric points. Set `[drawing] shape_recognition_grid_snap = false`, or turn off **Snap Shape Pen to board paper** in the configurator, to keep recognized shapes exactly where you drew them; axis alignment still applies. Rectangles drawn quickly, with leaning or skewed sides, are squared up to the average position of each side. Other ink stays freehand.
+- **Laser pointer**: Press `L` (`select_laser_tool`), click the laser next to Marker on the toolbar (Regular and Advanced layouts), or choose **Laser Pointer Tool** from the command palette. The ink glows while you draw and fades away on its own (see [`[laser]`](#laser---laser-pointer))
 - **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -609,6 +610,48 @@ style = "standard"
 | Pointy | The same head with its rear notched forward into a concave V, for a dart silhouette. |
 | Curved | Shaft follows an arc instead of a straight line, so an arrow can route around whatever sits between the pointer and its target. Drag the round handle at the arc's midpoint to reshape it; hold <kbd>Shift</kbd> to snap the bend to tenths. |
 | Double | Parallel-sided shaft with a head at both ends. `head_at_end` has no effect on it. |
+
+### `[laser]` - Laser Pointer
+
+Laser ink is presenter feedback, not a drawing. It follows the pointer as a bright, glowing stroke, stays fully visible for `hold_ms` after you release, then fades out over `fade_ms`.
+
+```toml
+# Laser pointer: glowing ink that fades away on its own. Press `L`, click the
+# laser next to Marker on the toolbar (Regular and Advanced layouts), or choose
+# Laser Pointer Tool from the command palette. Laser ink is never saved, never
+# undone, never selected, and never appears in captures or exports.
+[laser]
+# Ink color as [red, green, blue, alpha], each 0.0 - 1.0. Independent of the
+# pen color; the color picker and quick colors do not change it.
+color = [1.0, 0.16, 0.12, 1.0]
+
+# Width of the bright core in pixels (2.0 - 30.0). The glow around it is about
+# three times as wide.
+width = 6.0
+
+# How long the ink stays fully visible after you release, in ms (0 - 30000).
+# Another stroke drawn before the ink has faded keeps the whole group on
+# screen, so they all fade together.
+hold_ms = 1200
+
+# How long the ink then takes to fade out, in ms (0 - 5000). 0 removes it at
+# once. With [ui] reduced_motion the ink stays solid and disappears in one step
+# at the end of hold_ms + fade_ms.
+fade_ms = 500
+```
+
+**Defaults:**
+- Color: `[1.0, 0.16, 0.12, 1.0]` (vivid red)
+- Width: 6.0px core, with a glow about three times as wide
+- Hold: 1200 ms
+- Fade: 500 ms
+
+**Behavior:**
+- **Strokes fade as a group.** Each release restarts the hold for all ink on screen, and drawing another stroke keeps the whole group fully visible. A gesture made of several strokes, such as circling a word and underlining it, therefore disappears together.
+- **Nothing is kept.** Laser strokes never enter the page: they are not in undo/redo, the saved session, selection, hit testing, canvas or PDF export, or screenshots and region captures (captures render without transient overlays). **Clear Canvas** removes laser ink immediately.
+- **Own style.** The laser uses `color` and `width` from this section rather than the pen's color and thickness, so it has no style controls on the toolbar.
+- **Presenter and light modes.** The laser works with presenter mode, including `tool_behavior = "force-highlight-locked"`, which otherwise allows only the highlight tool. Entering light passthrough keeps the laser when it is the active tool, instead of switching to the pen. It works on transparent and solid boards, over a frozen screen, and while zoomed.
+- The configurator edits these values on its Drawing page, under **Laser pointer**. They take effect the next time the overlay opens.
 
 ### `[presets]` - Quick Tool Slots
 
@@ -1381,6 +1424,7 @@ top_tools = [
   "top.tool.pen",
   "top.tool.live-shape",
   "top.tool.marker",
+  "top.tool.laser",
   "top.tool.step-marker",
   "top.tool.eraser",
 ]
@@ -2204,6 +2248,7 @@ select_freeform_polygon_tool = []
 select_arrow_tool = []
 select_blur_tool = []
 select_highlight_tool = []
+select_laser_tool = ["L"]           # fading laser pointer ink
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 
 # Reset label counters

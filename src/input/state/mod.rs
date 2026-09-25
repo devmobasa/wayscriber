@@ -4,6 +4,7 @@ mod from_config;
 mod highlight;
 mod input_hud;
 pub(crate) mod interaction;
+mod laser;
 mod mouse;
 mod render;
 mod spotlight;

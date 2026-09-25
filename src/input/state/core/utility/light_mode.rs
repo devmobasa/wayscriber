@@ -205,7 +205,14 @@ impl InputState {
         self.ui_visibility.show_status_bar = false;
         self.ui_visibility.show_tool_preview = false;
         self.hide_toolbar_visibility();
-        self.set_tool_override_with(resources.measurer, Some(Tool::Pen));
+        // Light mode draws with the pen, unless the laser is already up: it
+        // leaves nothing behind, so pointing over a live app stays possible.
+        let light_tool = if self.tool_override() == Some(Tool::Laser) {
+            Tool::Laser
+        } else {
+            Tool::Pen
+        };
+        self.set_tool_override_with(resources.measurer, Some(light_tool));
         if self.click_highlight_forced_in_light_mode() && !self.click_highlight_enabled() {
             self.toggle_click_highlight();
         }

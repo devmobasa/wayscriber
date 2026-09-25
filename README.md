@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 ## Why wayscriber?
 
 - **Annotate live** over any app without disrupting your workflow
-- **Professional presentation tools**: presenter mode, numbered callouts, click highlights, screen freeze, zoom
+- **Professional presentation tools**: presenter mode, laser pointer, numbered callouts, click highlights, screen freeze, zoom
 - **Persistent sessions** that survive restarts
 - **Native Wayland performance** with ZoomIt-like controls
 - **Lightweight daemon** with instant toggle via keybind
@@ -176,6 +176,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - Apply: <kbd>1</kbd>–<kbd>5</kbd>; save: <kbd>Shift+1</kbd>–<kbd>Shift+5</kbd>
 
 ### Presenter tools
+- Laser pointer (<kbd>L</kbd>): glowing ink that follows the pointer, stays for a moment after you release, then fades away. Strokes drawn before it fades stay together and disappear as one. Laser ink is never saved, undone, selected, exported, or captured. Its color, width, and timing are set under `[laser]` or on the configurator's Drawing page, and it keeps working in presenter mode (even with the tool locked to highlight) and light passthrough. See [docs/CONFIG.md](docs/CONFIG.md#laser---laser-pointer)
 - Click highlights with configurable colors/radius/duration
 - Persistent ring while the click highlight tool is active
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
@@ -873,10 +874,11 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Spotlight | **Shape picker** (bindable): drag an ellipse; everything else dims; set 1×–4× magnification in the style pill, scroll over the loupe, or select an unlocked loupe and drag its on-canvas knob |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
+| Laser pointer (fading ink) | <kbd>L</kbd>, then drag |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The full strip also shows Line and Arrow. The picker contains rectangle, ellipse, blur, spotlight, and polygon tools.
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The full strip also shows Shape Pen, Laser, Line, and Arrow. The picker contains rectangle, ellipse, blur, spotlight, and polygon tools.
 
 Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
 
@@ -1334,6 +1336,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Board pages (multi-page boards)
 - [x] Presenter mode
 - [x] Click highlights
+- [x] Laser pointer with fading ink
 - [x] Screen freeze
 - [x] Light passthrough mode
 - [x] Command palette

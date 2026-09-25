@@ -3,8 +3,8 @@ use super::keybindings::{Action, KeybindingAuthorship, KeybindingsConfig};
 use super::types::TabletInputConfig;
 use super::types::{
     ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, ExportConfig,
-    HistoryConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig,
-    SessionConfig, SpotlightConfig, TrayConfig, UiConfig, UpdatesConfig,
+    HistoryConfig, LaserConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig,
+    RenderProfilesConfig, SessionConfig, SpotlightConfig, TrayConfig, UiConfig, UpdatesConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -100,6 +100,10 @@ pub struct Config {
     #[serde(default)]
     pub spotlight: SpotlightConfig,
 
+    /// Laser pointer ink settings
+    #[serde(default)]
+    pub laser: LaserConfig,
+
     /// Performance tuning options
     #[serde(default)]
     pub performance: PerformanceConfig,
@@ -164,6 +168,7 @@ impl Default for Config {
             history: HistoryConfig::default(),
             arrow: ArrowConfig::default(),
             spotlight: SpotlightConfig::default(),
+            laser: LaserConfig::default(),
             performance: PerformanceConfig::default(),
             ui: UiConfig::default(),
             tray: TrayConfig::default(),

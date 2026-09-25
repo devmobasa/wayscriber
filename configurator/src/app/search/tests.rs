@@ -134,6 +134,22 @@ fn exact_drawing_default_labels_match_defaults_section() {
 }
 
 #[test]
+fn laser_searches_reveal_the_laser_pointer_section() {
+    for query in ["laser", "pointer", "presenter", "fading ink", "fade out ms"] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let drawing = summary.tab(TabId::Drawing).expect("drawing match");
+
+        assert!(
+            drawing.area_matches(SearchArea::DrawingLaser),
+            "query should show the laser pointer section: {query}",
+        );
+    }
+}
+
+#[test]
 fn halo_search_reveals_the_drawing_defaults_section() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.search_query = SearchQuery::new("halo");

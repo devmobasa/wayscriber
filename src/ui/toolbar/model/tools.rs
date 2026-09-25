@@ -27,6 +27,7 @@ pub(crate) enum SemanticToolIcon {
     Spotlight,
     Marker,
     Highlight,
+    Laser,
     StepMarker,
     Eraser,
 }
@@ -39,11 +40,14 @@ const SIMPLE_TOOL_BUTTONS: [Tool; 5] = [
     Tool::Eraser,
 ];
 
-const FULL_TOOL_BUTTONS: [Tool; 8] = [
+/// Regular and Advanced strips. The laser rides with the pens here; the
+/// simple strip leaves it to its key and the command palette.
+const FULL_TOOL_BUTTONS: [Tool; 9] = [
     Tool::Select,
     Tool::Pen,
     Tool::LiveShape,
     Tool::Marker,
+    Tool::Laser,
     Tool::StepMarker,
     Tool::Eraser,
     Tool::Line,
@@ -178,6 +182,7 @@ pub(crate) fn toolbar_item_id_for_tool(tool: Tool) -> ToolbarItemId {
         Tool::Spotlight => ids::TOP_TOOL_SPOTLIGHT,
         Tool::Marker => ids::TOP_TOOL_MARKER,
         Tool::Highlight => ids::TOP_UTILITY_HIGHLIGHT,
+        Tool::Laser => ids::TOP_TOOL_LASER,
         Tool::StepMarker => ids::TOP_TOOL_STEP_MARKER,
         Tool::Eraser => ids::TOP_TOOL_ERASER,
     }
@@ -200,6 +205,7 @@ fn tool_for_toolbar_item_id(id: ToolbarItemId) -> Option<Tool> {
         (ids::TOP_TOOL_BLUR, Tool::Blur),
         (ids::TOP_TOOL_SPOTLIGHT, Tool::Spotlight),
         (ids::TOP_TOOL_MARKER, Tool::Marker),
+        (ids::TOP_TOOL_LASER, Tool::Laser),
         (ids::TOP_TOOL_STEP_MARKER, Tool::StepMarker),
         (ids::TOP_TOOL_ERASER, Tool::Eraser),
     ]
@@ -341,6 +347,7 @@ pub(crate) fn top_tool_group(tool: Tool) -> TopToolGroup {
         | Tool::Pen
         | Tool::LiveShape
         | Tool::Marker
+        | Tool::Laser
         | Tool::StepMarker
         | Tool::Eraser => TopToolGroup::Pens,
         _ => TopToolGroup::Shapes,
@@ -407,6 +414,7 @@ pub(crate) fn semantic_icon_for_tool(tool: Tool) -> SemanticToolIcon {
         Tool::Spotlight => SemanticToolIcon::Spotlight,
         Tool::Marker => SemanticToolIcon::Marker,
         Tool::Highlight => SemanticToolIcon::Highlight,
+        Tool::Laser => SemanticToolIcon::Laser,
         Tool::StepMarker => SemanticToolIcon::StepMarker,
         Tool::Eraser => SemanticToolIcon::Eraser,
     }

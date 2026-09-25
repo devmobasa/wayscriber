@@ -71,6 +71,11 @@ pub struct ConfigDraft {
     pub arrow_head_at_end: bool,
     pub arrow_style: ArrowStyleOption,
 
+    pub laser_color: ColorQuadInput,
+    pub laser_width: String,
+    pub laser_hold_ms: String,
+    pub laser_fade_ms: String,
+
     pub history: super::history::HistoryDraft,
 
     pub performance_buffer_count: u32,
