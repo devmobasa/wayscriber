@@ -121,6 +121,8 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) arrow_style: ArrowStyle,
     pub(crate) arrow_label: Option<ArrowLabel>,
     pub(crate) step_marker_label: Option<crate::draw::StepMarkerLabel>,
+    /// Shape Pen's recognition of this stroke so far.
+    pub(crate) live_shape_memo: &'a super::LiveShapeMemo,
 }
 
 /// Borrowed inputs needed to render the current live polygon preview.
@@ -330,7 +332,7 @@ impl Tool {
         match self.drawing_behavior() {
             ToolDrawingBehavior::None => ProvisionalToolStroke::None,
             ToolDrawingBehavior::LiveShape => {
-                if let Some(shape) = super::live_shape::recognize(
+                if let Some(shape) = snapshot.live_shape_memo.recognize(
                     snapshot.points,
                     snapshot.color,
                     snapshot.size,

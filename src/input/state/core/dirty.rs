@@ -42,7 +42,9 @@ impl InputState {
         current_x: i32,
         current_y: i32,
     ) {
-        if let Some((append_bounds, append_regions)) = self.compute_append_only_provisional_damage()
+        if self.provisional_grows_at_tail(current_x, current_y)
+            && let Some((append_bounds, append_regions)) =
+                self.compute_append_only_provisional_damage()
         {
             for region in append_regions {
                 self.dirty_tracker.mark_rect(region);
@@ -109,6 +111,25 @@ impl InputState {
         }
     }
 
+    /// Whether only the end of the preview can have changed since the last
+    /// damage. Shape Pen ink grows at its end like the pen, but a recognized
+    /// shape, or a switch between ink and shape, can change anywhere.
+    fn provisional_grows_at_tail(&mut self, current_x: i32, current_y: i32) -> bool {
+        let DrawingState::Drawing {
+            tool: crate::input::Tool::LiveShape,
+            ..
+        } = &self.state
+        else {
+            return true;
+        };
+        let shape = matches!(
+            self.provisional_tool_stroke(current_x, current_y),
+            crate::input::tool::ProvisionalToolStroke::Recognized { .. }
+        );
+        let previous_shape = self.pointer.replace_live_shape_previewed_shape(shape);
+        !shape && !previous_shape
+    }
+
     fn compute_append_only_provisional_damage(&self) -> Option<(Rect, Vec<Rect>)> {
         let DrawingState::Drawing {
             tool,
@@ -119,10 +140,6 @@ impl InputState {
         else {
             return None;
         };
-        if *tool == crate::input::Tool::LiveShape {
-            return None;
-        }
-
         let stroke_width = match tool.motion_behavior() {
             ToolMotionBehavior::NoPathAccumulation => return None,
             ToolMotionBehavior::AccumulatePath {

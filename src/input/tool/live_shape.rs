@@ -1,5 +1,7 @@
 //! Recognize lines and closed shapes from a pen path. Ambiguous ink stays ink.
 
+use std::cell::RefCell;
+
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Color, Shape};
 
@@ -9,6 +11,72 @@ mod rough_rectangle;
 #[cfg(test)]
 mod tests;
 mod triangle;
+
+/// Remembers the last recognition of the stroke being drawn, so the preview,
+/// its damage, and the shape readout share one recognition per pointer move
+/// instead of each running it over the whole stroke.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LiveShapeMemo {
+    last: RefCell<Option<(MemoKey, Option<Shape>)>>,
+    #[cfg(test)]
+    runs: std::cell::Cell<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MemoKey {
+    len: usize,
+    first: (i32, i32),
+    last: (i32, i32),
+    color: Color,
+    thick: f64,
+    fill: bool,
+    grid: BoardGrid,
+    sensitivity: u8,
+}
+
+impl LiveShapeMemo {
+    /// Recognize `points`, reusing the last answer while neither the stroke
+    /// nor the settings have changed. A stroke only grows at its end while
+    /// it is drawn, and the memo is reset when the next one starts, so the
+    /// point count and both ends identify it.
+    pub(crate) fn recognize(
+        &self,
+        points: &[(i32, i32)],
+        color: Color,
+        thick: f64,
+        fill: bool,
+        grid: BoardGrid,
+        sensitivity: u8,
+    ) -> Option<Shape> {
+        let key = MemoKey {
+            len: points.len(),
+            first: *points.first()?,
+            last: *points.last()?,
+            color,
+            thick,
+            fill,
+            grid,
+            sensitivity,
+        };
+        if let Some((cached, shape)) = &*self.last.borrow()
+            && *cached == key
+        {
+            return shape.clone();
+        }
+
+        #[cfg(test)]
+        self.runs.set(self.runs.get() + 1);
+        let shape = recognize(points, color, thick, fill, grid, sensitivity);
+        *self.last.borrow_mut() = Some((key, shape.clone()));
+        shape
+    }
+
+    /// How many recognitions actually ran.
+    #[cfg(test)]
+    pub(crate) fn runs(&self) -> usize {
+        self.runs.get()
+    }
+}
 
 pub(super) fn recognize(
     points: &[(i32, i32)],

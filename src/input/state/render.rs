@@ -128,6 +128,7 @@ impl InputState {
                 None
             },
             step_marker_label: (*tool == Tool::StepMarker).then(|| self.next_step_marker_label()),
+            live_shape_memo: self.pointer.live_shape(),
         };
         tool.provisional_stroke(snapshot)
     }

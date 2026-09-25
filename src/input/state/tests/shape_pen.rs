@@ -42,6 +42,10 @@ fn release_at_end(state: &mut InputState, path: &[(i32, i32)]) {
     state.on_mouse_release(MouseButton::Left, last.0, last.1);
 }
 
+fn overlaps(a: crate::util::Rect, b: crate::util::Rect) -> bool {
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+}
+
 fn run_action(state: &mut InputState, action: Action) {
     let measurer = crate::draw::TextMeasurer::default();
     let ui_engine = crate::ui_text::UiTextEngine::default();
@@ -278,4 +282,52 @@ fn turning_grid_snap_off_keeps_shapes_where_they_were_drawn() {
             "snap {snap}"
         );
     }
+}
+
+#[test]
+fn preview_damage_and_readout_share_one_recognition_per_point() {
+    let mut state = shape_pen_state();
+    draw_path(&mut state, &RECTANGLE);
+    let runs = state.pointer.live_shape().runs();
+    assert!(
+        (1..=RECTANGLE.len()).contains(&runs),
+        "at most one recognition per point, got {runs}"
+    );
+
+    let _ = state.provisional_tool_stroke(10, 10);
+    let _ = state.provisional_shape_readout(10, 10);
+    let _ = state.provisional_tool_stroke(10, 10);
+
+    assert_eq!(state.pointer.live_shape().runs(), runs);
+}
+
+#[test]
+fn ink_previews_damage_only_their_new_tail() {
+    let near_start = crate::util::Rect::new(0, 0, 12, 12).expect("probe");
+    let touches_start =
+        |dirty: &[crate::util::Rect]| dirty.iter().any(|rect| overlaps(*rect, near_start));
+
+    // A sawtooth is neither a line nor a closed shape, so it stays ink.
+    let mut state = shape_pen_state();
+    let sawtooth: Vec<_> = (0..=30).map(|step| (step * 10, (step % 2) * 20)).collect();
+    draw_path(&mut state, &sawtooth);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_motion(310, 20);
+    assert!(
+        !touches_start(&state.take_dirty_regions()),
+        "ink grows at its end"
+    );
+
+    // A recognized rectangle can move anywhere, so its whole preview repaints,
+    // including the corner farthest from the new segment.
+    let mut state = shape_pen_state();
+    let far_corner = crate::util::Rect::new(106, 86, 8, 8).expect("probe");
+    draw_path(&mut state, &RECTANGLE[..RECTANGLE.len() - 1]);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_motion(10, 10);
+    let dirty = state.take_dirty_regions();
+    assert!(
+        dirty.iter().any(|rect| overlaps(*rect, far_corner)),
+        "a recognized preview repaints in full: {dirty:?}"
+    );
 }
