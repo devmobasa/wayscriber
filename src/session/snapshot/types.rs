@@ -91,6 +91,10 @@ pub struct ToolStateSnapshot {
     /// existed, which restore the configured level instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pen_smoothing: Option<u8>,
+    /// Shape Pen recognition sensitivity. Absent in sessions written before
+    /// it could change at runtime, which restore the configured level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape_recognition_sensitivity: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spotlight_magnification: Option<f64>,
     #[serde(default)]
@@ -147,6 +151,7 @@ impl From<(&DrawingStyle, Tool, Option<Color>)> for ToolStateSnapshot {
             recent_colors: style.recent_colors.clone(),
             marker_opacity: Some(style.marker_opacity),
             pen_smoothing: Some(style.pen_smoothing),
+            shape_recognition_sensitivity: Some(style.shape_recognition_sensitivity),
             spotlight_magnification: Some(style.spotlight_magnification),
             fill_enabled: Some(style.fill_enabled),
             tool_override: None,

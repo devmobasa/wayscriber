@@ -82,6 +82,14 @@ fn action_serialization_matches_established_contract() {
         (Action::DecreaseMarkerOpacity, "decrease_marker_opacity"),
         (Action::IncreasePenSmoothing, "increase_pen_smoothing"),
         (Action::DecreasePenSmoothing, "decrease_pen_smoothing"),
+        (
+            Action::IncreaseShapeRecognitionSensitivity,
+            "increase_shape_recognition_sensitivity",
+        ),
+        (
+            Action::DecreaseShapeRecognitionSensitivity,
+            "decrease_shape_recognition_sensitivity",
+        ),
         (Action::CycleFontFamily, "cycle_font_family"),
         (Action::OpenFontPicker, "open_font_picker"),
         (Action::SelectSelectionTool, "select_selection_tool"),

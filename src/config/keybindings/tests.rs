@@ -745,6 +745,8 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("open_font_picker", &[]),
     ("increase_pen_smoothing", &[]),
     ("decrease_pen_smoothing", &[]),
+    ("increase_shape_recognition_sensitivity", &[]),
+    ("decrease_shape_recognition_sensitivity", &[]),
     ("cycle_blur_style", &[]),
     ("cycle_arrow_style", &[]),
     ("select_pen_tool", &["F"]),

@@ -275,6 +275,26 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        IncreaseShapeRecognitionSensitivity,
+        "Increase Shape Pen Sensitivity",
+        None,
+        "Recognize rougher strokes as shapes",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        DecreaseShapeRecognitionSensitivity,
+        "Decrease Shape Pen Sensitivity",
+        None,
+        "Keep more strokes as ink",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         CycleBlurStyle,
         "Cycle Blur Style",
         None,

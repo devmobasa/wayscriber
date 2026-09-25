@@ -131,6 +131,17 @@ pub(super) fn build_main_sections(
                 ),
                 "Adjust stroke smoothing",
             ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[
+                        Action::IncreaseShapeRecognitionSensitivity,
+                        Action::DecreaseShapeRecognitionSensitivity,
+                    ],
+                    NOT_BOUND_LABEL,
+                ),
+                "Adjust Shape Pen sensitivity",
+            ),
         ],
         badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_pen),

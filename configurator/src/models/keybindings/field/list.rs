@@ -44,6 +44,8 @@ const PREFERRED_ORDER: &[KeybindingField] = &[
     KeybindingField::OpenFontPicker,
     KeybindingField::IncreasePenSmoothing,
     KeybindingField::DecreasePenSmoothing,
+    KeybindingField::IncreaseShapeRecognitionSensitivity,
+    KeybindingField::DecreaseShapeRecognitionSensitivity,
     KeybindingField::SelectMarkerTool,
     KeybindingField::SelectStepMarkerTool,
     KeybindingField::SelectLineTool,

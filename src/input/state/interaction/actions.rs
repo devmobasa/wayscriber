@@ -38,6 +38,8 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::DecreaseMarkerOpacity
         | Action::IncreasePenSmoothing
         | Action::DecreasePenSmoothing
+        | Action::IncreaseShapeRecognitionSensitivity
+        | Action::DecreaseShapeRecognitionSensitivity
         | Action::CycleFontFamily
         | Action::OpenFontPicker
         | Action::SelectSelectionTool

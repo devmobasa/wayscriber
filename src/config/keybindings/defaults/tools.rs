@@ -46,6 +46,16 @@ pub(crate) fn default_decrease_pen_smoothing() -> Vec<String> {
     Vec::new()
 }
 
+/// Unbound like smoothing: sensitivity is tuned once, and the Shape Pen style
+/// pill has a stepper for it.
+pub(crate) fn default_increase_shape_recognition_sensitivity() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_decrease_shape_recognition_sensitivity() -> Vec<String> {
+    Vec::new()
+}
+
 /// `T` enters text mode, so `Shift+T` is the natural neighbour for the font
 /// that text will be written in. Omasnap uses the same chord for the same job.
 pub(crate) fn default_cycle_font_family() -> Vec<String> {

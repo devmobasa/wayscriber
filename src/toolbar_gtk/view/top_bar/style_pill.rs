@@ -346,6 +346,7 @@ impl TopBar {
                     }));
                 }
                 model::StylePillControl::PenSmoothingStepper
+                | model::StylePillControl::ShapeSensitivityStepper
                 | model::StylePillControl::SelectionStepper(_) => {
                     // No spacing between the halves: the builtin lays the three
                     // parts out abutting, at step + value + step exactly, and

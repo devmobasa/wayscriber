@@ -129,6 +129,9 @@ open_font_picker = []
 # Step stroke smoothing up and down (unbound by default)
 increase_pen_smoothing = []
 decrease_pen_smoothing = []
+# Step Shape Pen recognition sensitivity up and down (unbound by default)
+increase_shape_recognition_sensitivity = []
+decrease_shape_recognition_sensitivity = []
 # Select the spotlight tool (unbound by default)
 select_spotlight_tool = []
 # Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
@@ -1123,6 +1126,9 @@ pen_smoothing = 3
 # and 4 accepts rougher lines and closed shapes. Applies to lines, ellipses,
 # rectangles, and triangles; it does not change the dedicated shape tools or
 # grid spacing.
+#
+# Also on the toolbar as the "Sensitivity" stepper while Shape Pen is up.
+# A session remembers the level it was saved at; this is the starting value.
 shape_recognition_sensitivity = 2
 
 # Default fill state for fill-capable shapes

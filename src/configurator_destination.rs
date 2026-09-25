@@ -113,6 +113,8 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::ToggleEraserMode
         | Action::IncreasePenSmoothing
         | Action::DecreasePenSmoothing
+        | Action::IncreaseShapeRecognitionSensitivity
+        | Action::DecreaseShapeRecognitionSensitivity
         | Action::CycleFontFamily
         | Action::OpenFontPicker
         | Action::SelectMarkerTool

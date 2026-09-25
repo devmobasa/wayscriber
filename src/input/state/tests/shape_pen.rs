@@ -1,6 +1,6 @@
 use super::*;
 use crate::input::tool::ProvisionalToolStroke;
-use crate::ui::toolbar::{ToolContext, ToolbarSnapshot};
+use crate::ui::toolbar::{ToolContext, ToolbarEvent, ToolbarSnapshot};
 use crate::ui::{ShapeExtent, ShapeReadout};
 
 /// A hand-drawn rectangle from the top-left corner, clockwise.
@@ -40,6 +40,18 @@ fn draw_path(state: &mut InputState, path: &[(i32, i32)]) {
 fn release_at_end(state: &mut InputState, path: &[(i32, i32)]) {
     let last = path.last().expect("path has points");
     state.on_mouse_release(MouseButton::Left, last.0, last.1);
+}
+
+fn run_action(state: &mut InputState, action: Action) {
+    let measurer = crate::draw::TextMeasurer::default();
+    let ui_engine = crate::ui_text::UiTextEngine::default();
+    state.handle_action_with_resources(
+        crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        },
+        action,
+    );
 }
 
 #[test]
@@ -104,4 +116,45 @@ fn readout_names_the_recognized_shape_and_stays_quiet_for_ink() {
             extent: ShapeExtent::Length(120),
         })
     );
+}
+
+#[test]
+fn sensitivity_steps_at_runtime_and_announces_the_level() {
+    let mut state = shape_pen_state();
+    let _ = state.apply_toolbar_event(ToolbarEvent::SetShapeRecognitionSensitivity(2));
+
+    run_action(&mut state, Action::IncreaseShapeRecognitionSensitivity);
+    assert_eq!(state.style.shape_recognition_sensitivity, 3);
+    assert_eq!(
+        state.active_toast().map(|toast| toast.message.as_str()),
+        Some("Shape Pen sensitivity 3/4")
+    );
+
+    for _ in 0..3 {
+        run_action(&mut state, Action::IncreaseShapeRecognitionSensitivity);
+    }
+    assert_eq!(state.style.shape_recognition_sensitivity, 4);
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetShapeRecognitionSensitivity(0)));
+    run_action(&mut state, Action::DecreaseShapeRecognitionSensitivity);
+    assert_eq!(state.style.shape_recognition_sensitivity, 0);
+}
+
+#[test]
+fn toolbar_sensitivity_applies_to_the_next_stroke() {
+    let rough_line = [(0, 0), (20, 5), (40, -4), (60, 6), (80, 1)];
+
+    for (level, expected_kind) in [(0, "Freehand"), (4, "Line")] {
+        let mut state = shape_pen_state();
+        let _ = state.apply_toolbar_event(ToolbarEvent::SetShapeRecognitionSensitivity(level));
+
+        draw_path(&mut state, &rough_line);
+        release_at_end(&mut state, &rough_line);
+
+        assert_eq!(
+            state.boards.active_frame().shapes[0].shape.kind_name(),
+            expected_kind,
+            "sensitivity {level}"
+        );
+    }
 }
