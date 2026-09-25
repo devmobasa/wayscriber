@@ -82,14 +82,14 @@ fn draw_hint_keycap(
     label: &str,
 ) {
     let (width, _height) =
-        keycap_size_with_engine(engine, ctx, label, toolbar::FONT_SIZE_SWATCH_KEY);
+        keycap_size_with_engine(engine, ctx, label, overlay::RADIAL_KEYCAP_FONT_SIZE);
     draw_keycap_with_engine(
         engine,
         ctx,
         center_x - width / 2.0,
         top_y,
         label,
-        toolbar::FONT_SIZE_SWATCH_KEY,
+        overlay::RADIAL_KEYCAP_FONT_SIZE,
         toolbar::COLOR_BADGE_BACKGROUND,
         toolbar::COLOR_BADGE_TEXT,
     );

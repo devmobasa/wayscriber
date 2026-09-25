@@ -36,9 +36,9 @@ const COLOR_SWATCH_BORDER: Rgba = (0.0, 0.0, 0.0, 0.4);
 /// Separation between adjacent wedges, in pixels of arc length.
 const WEDGE_GAP_PX: f64 = 2.0;
 /// Tool ring wedge label font size.
-const TOOL_LABEL_SIZE: f64 = 12.0;
-/// Sub-ring wedge label font size.
-const SUB_LABEL_SIZE: f64 = 11.0;
+const TOOL_LABEL_SIZE: f64 = overlay::FONT_SIZE_MIN_TEXT;
+/// Sub-ring wedge label font size: the readable floor, like the tool ring.
+const SUB_LABEL_SIZE: f64 = overlay::FONT_SIZE_MIN_TEXT;
 /// Render a standalone radial menu using the legacy [`theme::init`] preference.
 /// Runtime rendering uses explicit resources to retain its cached base.
 pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
@@ -510,14 +510,14 @@ fn draw_center_well(
     );
     let numeral = format!("{size:.0}px");
     let (numeral_w, numeral_h) =
-        keycap_size_with_engine(engine, ctx, &numeral, toolbar::FONT_SIZE_SWATCH_KEY);
+        keycap_size_with_engine(engine, ctx, &numeral, overlay::RADIAL_KEYCAP_FONT_SIZE);
     draw_keycap_with_engine(
         engine,
         ctx,
         cx - numeral_w / 2.0,
         cy + overlay::RADIAL_CENTER_NUMERAL_DROP - numeral_h / 2.0,
         &numeral,
-        toolbar::FONT_SIZE_SWATCH_KEY,
+        overlay::RADIAL_KEYCAP_FONT_SIZE,
         toolbar::COLOR_BADGE_BACKGROUND,
         toolbar::COLOR_BADGE_TEXT,
     );

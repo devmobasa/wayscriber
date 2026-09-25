@@ -1,5 +1,6 @@
 use super::super::grid::GridStyle;
 use crate::config::HelpOverlayStyle;
+use crate::ui::theme::overlay;
 
 /// Spacing multiplier for the help overlay. Gaps, paddings, and line leading
 /// are designed against the user-configurable `HelpOverlayStyle` base sizes
@@ -189,13 +190,12 @@ impl RenderMetrics {
     }
 }
 
-/// Readable floor (logical px) for secondary help text: the nav line, the
-/// footer note, badges, and footer pills. Logical pixels already follow the
-/// output scale, so the floor also holds on HiDPI outputs.
-const MIN_SECONDARY_FONT_SIZE: f64 = 12.0;
+/// Readable floor for secondary help text: the nav line, the footer note,
+/// badges, and footer pills.
+const MIN_SECONDARY_FONT_SIZE: f64 = overlay::FONT_SIZE_MIN_TEXT;
 
-/// Readable floor (logical px) for the labels inside key chips.
-const MIN_KEY_CHIP_FONT_SIZE: f64 = 11.0;
+/// Readable floor for the labels inside key chips.
+const MIN_KEY_CHIP_FONT_SIZE: f64 = overlay::FONT_SIZE_MIN_KEYCAP;
 
 #[cfg(test)]
 mod tests {

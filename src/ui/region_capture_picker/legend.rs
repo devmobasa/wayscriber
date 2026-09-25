@@ -1,9 +1,13 @@
 use super::types::RegionCaptureWindowVisual;
 use super::{PANEL_FILL, PANEL_RADIUS};
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
-use crate::ui_text::UiTextEngine;
+use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::theme::overlay;
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
-const LEGEND_FONT_SIZE: f64 = 12.0;
+pub(super) const LEGEND_FONT_SIZE: f64 = overlay::FONT_SIZE_CONTROL_LABEL;
+/// Strip height: the legend text plus even padding above and below.
+pub(super) const LEGEND_HEIGHT: f64 = 32.0;
+const LEGEND_PADDING_X: f64 = 14.0;
 pub(super) const AREA_LEGEND_TEXT: &str =
     "Drag to select   Shift: square   Ctrl+A: all   Esc: cancel";
 pub(super) const AREA_WITH_WINDOWS_LEGEND_TEXT: &str =
@@ -33,37 +37,37 @@ pub(crate) fn render_region_legend(
     screen: (u32, u32),
     text: &str,
 ) {
-    let extents = text_extents_for_with_engine(
-        engine,
-        ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        LEGEND_FONT_SIZE,
-        text,
-    );
+    let style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: LEGEND_FONT_SIZE,
+    };
+    // Measure and draw through the same layout so the strip always wraps the
+    // text it shows.
+    let layout = engine.layout(ctx, style, text, None);
+    let extents = layout.ink_extents();
     let screen_width = f64::from(screen.0);
     let screen_height = f64::from(screen.1);
-    let width = (extents.width() + 24.0).min((screen_width - 12.0).max(0.0));
-    let height = 28.0_f64.min((screen_height - 12.0).max(0.0));
+    let width = (extents.width() + LEGEND_PADDING_X * 2.0).min((screen_width - 12.0).max(0.0));
+    let height = LEGEND_HEIGHT.min((screen_height - 12.0).max(0.0));
     if width <= 0.0 || height <= 0.0 {
         return;
     }
+
     let x = ((screen_width - width) / 2.0).max(6.0);
     let y = 12.0_f64.min((screen_height - height).max(0.0));
     let radius = PANEL_RADIUS.min(width / 2.0).min(height / 2.0);
     ctx.set_source_rgba(PANEL_FILL.0, PANEL_FILL.1, PANEL_FILL.2, PANEL_FILL.3);
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
+
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.88);
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(LEGEND_FONT_SIZE);
     let text_x = x + ((width - extents.width()) / 2.0).max(6.0) - extents.x_bearing();
     let baseline = y + (height - extents.height()) / 2.0 - extents.y_bearing();
     let _ = ctx.save();
     ctx.rectangle(x, y, width, height);
     ctx.clip();
-    ctx.move_to(text_x, baseline);
-    let _ = ctx.show_text(text);
+    layout.show_at_baseline(ctx, text_x, baseline);
     let _ = ctx.restore();
 }

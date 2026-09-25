@@ -201,6 +201,17 @@ pub mod overlay {
     /// Submenu arrow
     pub const ICON_SUBMENU_ARROW: Rgba = (0.75, 0.78, 0.84, 1.0);
 
+    // ---- Readable text sizes (logical px) ----
+    // Overlay chrome is laid out in logical pixels and the buffer is scaled
+    // by the output scale, so these floors hold on HiDPI outputs too.
+    /// Smallest size for overlay labels, hints, captions, and status lines.
+    pub const FONT_SIZE_MIN_TEXT: f64 = 12.0;
+    /// Smallest label size inside keycap chips.
+    pub const FONT_SIZE_MIN_KEYCAP: f64 = 11.0;
+    /// Size for control labels and hint strips (buttons, capture actions,
+    /// selector legends).
+    pub const FONT_SIZE_CONTROL_LABEL: f64 = 13.0;
+
     // ---- Spacing scale (px) ----
     // TODO(theme-consolidation): overlay and toolbar spacing scales use the
     // same names with different values; keep separate until surfaces migrate.
@@ -264,6 +275,8 @@ pub mod overlay {
     /// Drop of the keycap hint's top edge below the wedge midpoint when a
     /// glyph/label stack sits above it.
     pub const RADIAL_WEDGE_HINT_DROP: f64 = 13.0;
+    /// Label size of the radial menu's shortcut and thickness keycaps.
+    pub const RADIAL_KEYCAP_FONT_SIZE: f64 = FONT_SIZE_MIN_KEYCAP;
     /// Sub-ring wedges whose mid-radius arc is narrower than this render
     /// their glyph only (no label/keycap).
     pub const RADIAL_SUB_LABEL_MIN_ARC: f64 = 34.0;

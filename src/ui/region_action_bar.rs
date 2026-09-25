@@ -11,9 +11,13 @@ pub(crate) use model::{
 };
 pub(crate) use render::render_region_action_bar;
 
+use crate::ui::theme::overlay;
 use crate::ui_text::UiTextStyle;
 
-const TOGGLE_FONT_SIZE: f64 = 10.5;
+/// "Include drawings" toggle label.
+const TOGGLE_FONT_SIZE: f64 = overlay::FONT_SIZE_CONTROL_LABEL;
+/// Cut status line under the toggle.
+const STATUS_FONT_SIZE: f64 = overlay::FONT_SIZE_MIN_TEXT;
 
 fn status_label_style(size: f64) -> UiTextStyle<'static> {
     UiTextStyle {
