@@ -85,6 +85,7 @@ impl ConfigDraft {
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
         config.drawing.text_halo_enabled = self.drawing_text_halo_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
+        config.drawing.shape_recognition_grid_snap = self.drawing_shape_recognition_grid_snap;
         config.drawing.drag_tool = legacy_tool(
             self.drawing_drag_tools.left.drag_tool,
             DragBindableTool::Pen,

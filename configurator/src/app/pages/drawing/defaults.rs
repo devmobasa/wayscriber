@@ -66,6 +66,12 @@ pub(super) fn build(page: &mut PageBuilder) {
                 )
             },
         )
+        .switch_row(
+            "Snap Shape Pen to board paper",
+            "Recognized lines, rectangles, ovals, and triangles line up with nearby grid lines and points",
+            |app| app.draft.drawing_shape_recognition_grid_snap,
+            |value| Message::ToggleChanged(ToggleField::DrawingShapeRecognitionGridSnap, value),
+        )
         .entry_row_validated(
             "Undo stack limit",
             |app| app.draft.drawing_undo_stack_limit.clone(),

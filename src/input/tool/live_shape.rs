@@ -3,6 +3,7 @@
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Color, Shape};
 
+mod grid;
 #[cfg(test)]
 mod tests;
 mod triangle;
@@ -38,7 +39,7 @@ pub(super) fn recognize(
         {
             *filled = fill;
         }
-        return Some(shape);
+        return Some(grid::snap_closed_shape(shape, grid));
     }
 
     if chord < 16.0 || resampled_length(points) > chord * (1.08 + 0.04 * f64::from(sensitivity)) {
@@ -194,9 +195,14 @@ fn align_line(
 
 fn snap_to_grid(first: f64, last: f64, spacing: f64) -> Option<i32> {
     let coordinate = ((first + last) / (2.0 * spacing)).round() * spacing;
-    let margin = (spacing * 0.15).clamp(4.0, 8.0);
+    let margin = grid_snap_margin(spacing);
     ((first - coordinate).abs() <= margin && (last - coordinate).abs() <= margin)
         .then_some(coordinate.round() as i32)
+}
+
+/// How far ink may sit from board paper and still snap to it.
+fn grid_snap_margin(spacing: f64) -> f64 {
+    (spacing * 0.15).clamp(4.0, 8.0)
 }
 
 fn winds_once(points: &[(i32, i32)], bounds: Bounds) -> bool {

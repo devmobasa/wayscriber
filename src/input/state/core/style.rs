@@ -32,6 +32,7 @@ pub(crate) struct DrawingStyle {
     pub(crate) marker_opacity: f64,
     pub(crate) pen_smoothing: u8,
     pub(crate) shape_recognition_sensitivity: u8,
+    pub(crate) shape_recognition_grid_snap: bool,
     pub(crate) blur_style: BlurStyle,
     pub(crate) spotlight_dim_opacity: f64,
     pub(crate) spotlight_feather: f64,
@@ -82,6 +83,7 @@ impl From<(&DrawingConfig, &ArrowConfig, &SpotlightConfig)> for DrawingStyle {
             shape_recognition_sensitivity: drawing
                 .shape_recognition_sensitivity
                 .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+            shape_recognition_grid_snap: drawing.shape_recognition_grid_snap,
             blur_style: drawing.default_blur_style,
             spotlight_dim_opacity: spotlight.dim_opacity,
             spotlight_feather: spotlight.feather,

@@ -254,3 +254,28 @@ fn recognized_preview_keeps_a_faint_copy_of_the_ink_underneath() {
         assert!(bounds.contains(x, y), "({x}, {y}) outside {bounds:?}");
     }
 }
+
+#[test]
+fn turning_grid_snap_off_keeps_shapes_where_they_were_drawn() {
+    use crate::domain::{BoardGrid, BoardGridKind};
+    use crate::input::BOARD_ID_WHITEBOARD;
+
+    let line = [(0, 44), (30, 43), (60, 42), (100, 44)];
+    for (snap, expected_y) in [(true, 40), (false, 44)] {
+        let mut state = shape_pen_state();
+        state.switch_board(BOARD_ID_WHITEBOARD);
+        state.boards.active_board_mut().spec.grid = BoardGrid::new(BoardGridKind::Cartesian, 40);
+        state.style.shape_recognition_grid_snap = snap;
+
+        draw_path(&mut state, &line);
+        release_at_end(&mut state, &line);
+
+        assert!(
+            matches!(
+                state.boards.active_frame().shapes[0].shape,
+                Shape::Line { y1, y2, .. } if y1 == expected_y && y2 == expected_y
+            ),
+            "snap {snap}"
+        );
+    }
+}

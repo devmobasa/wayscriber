@@ -1131,6 +1131,12 @@ pen_smoothing = 3
 # A session remembers the level it was saved at; this is the starting value.
 shape_recognition_sensitivity = 2
 
+# Snap Shape Pen results to board paper: lines to nearby grid lines,
+# rectangle and oval edges to Cartesian lines, and triangle corners to
+# Cartesian lines or isometric points. Set to false to keep recognized shapes
+# exactly where you drew them.
+shape_recognition_grid_snap = true
+
 # Default fill state for fill-capable shapes
 default_fill_enabled = false
 

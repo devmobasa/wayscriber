@@ -1,8 +1,12 @@
-use crate::domain::BoardGrid;
+use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{BLACK, PolygonKind, Shape};
 
 fn recognize(points: &[(i32, i32)], sensitivity: u8) -> Option<Shape> {
-    super::recognize(points, BLACK, 3.0, false, BoardGrid::default(), sensitivity)
+    recognize_on(points, BoardGrid::default(), sensitivity)
+}
+
+fn recognize_on(points: &[(i32, i32)], grid: BoardGrid, sensitivity: u8) -> Option<Shape> {
+    super::recognize(points, BLACK, 3.0, false, grid, sensitivity)
 }
 
 fn triangle_points(shape: Option<Shape>) -> Option<Vec<(i32, i32)>> {
@@ -213,5 +217,60 @@ fn round_and_four_sided_strokes_never_become_triangles() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn rectangles_snap_their_edges_to_nearby_cartesian_lines() {
+    let grid = BoardGrid::new(BoardGridKind::Cartesian, 40);
+    let near = [(42.0, 38.0), (158.0, 41.0), (157.0, 122.0), (41.0, 119.0)];
+    let far = [(20.0, 20.0), (140.0, 20.0), (140.0, 100.0), (20.0, 100.0)];
+
+    let snapped = recognize_on(&trace(&near, 0.1, 3.0, 0.0), grid, 2);
+    let untouched = recognize_on(&trace(&far, 0.1, 3.0, 0.0), grid, 2);
+
+    assert!(
+        matches!(
+            snapped,
+            Some(Shape::Rect {
+                x: 40,
+                y: 40,
+                w: 120,
+                h: 80,
+                ..
+            })
+        ),
+        "{snapped:?}"
+    );
+    assert!(
+        matches!(
+            untouched,
+            Some(Shape::Rect {
+                x: 20,
+                y: 20,
+                w: 120,
+                h: 80,
+                ..
+            })
+        ),
+        "edges 20px from every line stay put: {untouched:?}"
+    );
+}
+
+#[test]
+fn triangle_corners_snap_to_isometric_lattice_points() {
+    // Lattice points (i, j) sit at x = i·√3/2·s and y = j·s, shifted down half
+    // a spacing in odd columns. These corners are a few pixels off i = 2, 6
+    // (y = 160) and i = 4 (y = 40).
+    let drawn = [(72.0, 157.0), (205.0, 163.0), (140.0, 43.0)];
+
+    for kind in [BoardGridKind::Isometric, BoardGridKind::IsometricDots] {
+        let grid = BoardGrid::new(kind, 40);
+        let points = triangle_points(recognize_on(&trace(&drawn, 0.1, 3.0, 0.0), grid, 2))
+            .unwrap_or_else(|| panic!("triangle on {kind:?}"));
+
+        let mut sorted = points.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![(69, 160), (139, 40), (208, 160)], "{kind:?}");
     }
 }

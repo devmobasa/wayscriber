@@ -76,6 +76,10 @@ pub struct DrawingConfig {
     #[serde(default = "default_shape_recognition_sensitivity")]
     pub shape_recognition_sensitivity: u8,
 
+    /// Whether Shape Pen results snap to nearby board-paper lines and points.
+    #[serde(default = "default_shape_recognition_grid_snap")]
+    pub shape_recognition_grid_snap: bool,
+
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
     pub default_fill_enabled: bool,
@@ -164,6 +168,7 @@ impl Default for DrawingConfig {
             font_cycle: default_font_cycle(),
             pen_smoothing: default_pen_smoothing(),
             shape_recognition_sensitivity: default_shape_recognition_sensitivity(),
+            shape_recognition_grid_snap: default_shape_recognition_grid_snap(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
@@ -925,6 +930,10 @@ fn default_pen_smoothing() -> u8 {
 
 fn default_shape_recognition_sensitivity() -> u8 {
     DEFAULT_SHAPE_RECOGNITION_SENSITIVITY
+}
+
+fn default_shape_recognition_grid_snap() -> bool {
+    true
 }
 
 fn default_fill_enabled() -> bool {

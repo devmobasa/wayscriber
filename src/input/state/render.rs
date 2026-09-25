@@ -64,6 +64,16 @@ impl InputState {
         })
     }
 
+    /// The board paper Shape Pen snaps to: none when snapping is turned off.
+    pub(crate) fn shape_pen_grid(&self) -> crate::domain::BoardGrid {
+        let grid = self.boards.active_board().spec.grid;
+        if self.style.shape_recognition_grid_snap {
+            grid
+        } else {
+            grid.disabled()
+        }
+    }
+
     pub(crate) fn provisional_tool_stroke(
         &self,
         current_x: i32,
@@ -101,7 +111,7 @@ impl InputState {
             point_thicknesses,
             color: self.active_drag_color_or_current(),
             size: self.thickness_for_tool(*tool),
-            grid: self.boards.active_board().spec.grid,
+            grid: self.shape_pen_grid(),
             shape_recognition_sensitivity: self.style.shape_recognition_sensitivity,
             eraser_size: self.style.eraser_size,
             marker_opacity: self.style.marker_opacity,
