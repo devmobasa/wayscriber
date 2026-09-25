@@ -67,7 +67,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             "Show shape size readout",
-            "Shows rectangle and ellipse preview dimensions in logical board pixels. Separate from the region-capture size readout.",
+            "Shows rectangle and ellipse preview dimensions in logical board pixels, and the shape Shape Pen has recognized. Separate from the region-capture size readout.",
             |app| app.draft.ui_show_shape_size_readout,
             |value| Message::ToggleChanged(ToggleField::UiShowShapeSizeReadout, value),
         )

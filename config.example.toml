@@ -479,7 +479,8 @@ show_capabilities_warning = true
 # The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
-# Show rectangle and ellipse preview dimensions in logical board pixels.
+# Show rectangle and ellipse preview dimensions in logical board pixels, and
+# the shape Shape Pen has recognized with its size (a line shows its length).
 # This is separate from capture.region.show_size_readout.
 show_shape_size_readout = true
 

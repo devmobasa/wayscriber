@@ -7,38 +7,61 @@ use crate::input::Tool;
 use crate::input::tool::{
     PolygonProvisionalSnapshot, ProvisionalToolSnapshot, ProvisionalToolStroke,
 };
+use crate::ui::{ShapeExtent, ShapeReadout};
 use crate::util::Rect;
 use std::ops::Range;
 
 use super::{DrawingState, InputState};
 
 impl InputState {
-    /// Logical canvas dimensions for the in-progress shape-size badge.
+    /// What the in-progress shape badge reports, in logical canvas pixels.
     ///
-    /// Only the rectangle and ellipse tools expose a width/height readout;
-    /// path-like and line-like tools keep their existing uncluttered preview.
-    pub(crate) fn provisional_shape_size(
+    /// The rectangle and ellipse tools show their width and height. Shape Pen
+    /// names the shape it has recognized, so the badge says what release will
+    /// commit, and shows nothing while the stroke is still ink. Other path-like
+    /// and line-like tools keep their uncluttered preview.
+    pub(crate) fn provisional_shape_readout(
         &self,
         current_x: i32,
         current_y: i32,
-    ) -> Option<(u32, u32)> {
+    ) -> Option<ShapeReadout> {
         let DrawingState::Drawing { tool, .. } = &self.state else {
             return None;
         };
-        if !matches!(tool, Tool::Rect | Tool::Ellipse) {
+        let names_shape = match tool {
+            Tool::Rect | Tool::Ellipse => false,
+            Tool::LiveShape => true,
+            _ => return None,
+        };
+        let ProvisionalToolStroke::Shape(shape) =
+            self.provisional_tool_stroke(current_x, current_y)
+        else {
             return None;
-        }
+        };
 
-        match self.provisional_tool_stroke(current_x, current_y) {
-            ProvisionalToolStroke::Shape(Shape::Rect { w, h, .. }) => {
-                Some((w.unsigned_abs(), h.unsigned_abs()))
-            }
-            ProvisionalToolStroke::Shape(Shape::Ellipse { rx, ry, .. }) => Some((
+        let extent = match &shape {
+            Shape::Rect { w, h, .. } => ShapeExtent::Size(w.unsigned_abs(), h.unsigned_abs()),
+            Shape::Ellipse { rx, ry, .. } => ShapeExtent::Size(
                 rx.unsigned_abs().saturating_mul(2),
                 ry.unsigned_abs().saturating_mul(2),
-            )),
-            _ => None,
-        }
+            ),
+            Shape::Polygon { points, .. } => {
+                let span = |axis: fn(&(i32, i32)) -> i32| {
+                    let low = points.iter().map(axis).min().unwrap_or(0);
+                    let high = points.iter().map(axis).max().unwrap_or(0);
+                    low.abs_diff(high)
+                };
+                ShapeExtent::Size(span(|point| point.0), span(|point| point.1))
+            }
+            Shape::Line { x1, y1, x2, y2, .. } => {
+                ShapeExtent::Length((f64::from(x2 - x1).hypot(f64::from(y2 - y1))).round() as u32)
+            }
+            _ => return None,
+        };
+        Some(ShapeReadout {
+            kind: names_shape.then(|| shape.kind_name()),
+            extent,
+        })
     }
 
     pub(crate) fn provisional_tool_stroke(

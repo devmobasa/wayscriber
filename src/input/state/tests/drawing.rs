@@ -1,6 +1,7 @@
 use super::*;
 use crate::draw::BlurStyle;
 use crate::input::{DragBinding, DragButtonBindings, DragToolBindings};
+use crate::ui::ShapeReadout;
 use crate::ui::toolbar::ToolbarEvent;
 
 fn left_drag_bindings(
@@ -1175,7 +1176,7 @@ fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
 }
 
 #[test]
-fn provisional_shape_size_reports_rect_and_ellipse_logical_extents() {
+fn provisional_shape_readout_reports_rect_and_ellipse_logical_extents() {
     let mut state = create_test_input_state();
 
     for tool in [Tool::Rect, Tool::Ellipse] {
@@ -1187,7 +1188,10 @@ fn provisional_shape_size_reports_rect_and_ellipse_logical_extents() {
             point_thicknesses: Vec::new(),
         };
 
-        assert_eq!(state.provisional_shape_size(20, 175), Some((120, 80)));
+        assert_eq!(
+            state.provisional_shape_readout(20, 175),
+            Some(ShapeReadout::size(120, 80))
+        );
     }
 
     state.state = DrawingState::Drawing {
@@ -1197,7 +1201,10 @@ fn provisional_shape_size_reports_rect_and_ellipse_logical_extents() {
         points: Vec::new(),
         point_thicknesses: Vec::new(),
     };
-    assert_eq!(state.provisional_shape_size(0, 0), Some((10, 14)));
+    assert_eq!(
+        state.provisional_shape_readout(0, 0),
+        Some(ShapeReadout::size(10, 14))
+    );
 
     state.state = DrawingState::Drawing {
         tool: Tool::Rect,
@@ -1206,13 +1213,17 @@ fn provisional_shape_size_reports_rect_and_ellipse_logical_extents() {
         points: Vec::new(),
         point_thicknesses: Vec::new(),
     };
-    assert_eq!(state.provisional_shape_size(7, 9), Some((0, 0)));
+    assert_eq!(
+        state.provisional_shape_readout(7, 9),
+        Some(ShapeReadout::size(0, 0))
+    );
 }
 
 #[test]
-fn provisional_shape_size_excludes_freehand_and_non_size_badge_tools() {
+fn provisional_shape_readout_excludes_freehand_and_non_size_badge_tools() {
     let mut state = create_test_input_state();
 
+    // A single Shape Pen point is still ink, so it has no readout either.
     for tool in Tool::ALL
         .into_iter()
         .filter(|tool| !matches!(tool, Tool::Rect | Tool::Ellipse))
@@ -1225,11 +1236,11 @@ fn provisional_shape_size_excludes_freehand_and_non_size_badge_tools() {
             point_thicknesses: vec![2.0],
         };
 
-        assert_eq!(state.provisional_shape_size(40, 70), None, "{tool:?}");
+        assert_eq!(state.provisional_shape_readout(40, 70), None, "{tool:?}");
     }
 
     state.state = DrawingState::Idle;
-    assert_eq!(state.provisional_shape_size(40, 70), None);
+    assert_eq!(state.provisional_shape_readout(40, 70), None);
 }
 
 fn test_rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {

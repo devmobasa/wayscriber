@@ -1,6 +1,7 @@
 use super::*;
 use crate::input::tool::ProvisionalToolStroke;
 use crate::ui::toolbar::{ToolContext, ToolbarSnapshot};
+use crate::ui::{ShapeExtent, ShapeReadout};
 
 /// A hand-drawn rectangle from the top-left corner, clockwise.
 const RECTANGLE: [(i32, i32); 16] = [
@@ -73,4 +74,34 @@ fn shape_pen_style_pill_offers_fill_and_smoothing() {
     assert!(context.show_fill_toggle);
     assert!(context.show_pen_smoothing);
     assert_eq!(context.thickness_label, "Thickness");
+}
+
+#[test]
+fn readout_names_the_recognized_shape_and_stays_quiet_for_ink() {
+    let mut state = shape_pen_state();
+
+    // Two sides of the rectangle are neither a line nor a closed shape yet.
+    draw_path(&mut state, &RECTANGLE[..8]);
+    assert_eq!(state.provisional_shape_readout(110, 90), None);
+
+    for &(x, y) in &RECTANGLE[8..] {
+        state.on_mouse_motion(x, y);
+    }
+    assert_eq!(
+        state.provisional_shape_readout(10, 10),
+        Some(ShapeReadout {
+            kind: Some("Rectangle"),
+            extent: ShapeExtent::Size(104, 84),
+        })
+    );
+    release_at_end(&mut state, &RECTANGLE);
+
+    draw_path(&mut state, &[(0, 200), (40, 201), (80, 199), (120, 200)]);
+    assert_eq!(
+        state.provisional_shape_readout(120, 200),
+        Some(ShapeReadout {
+            kind: Some("Line"),
+            extent: ShapeExtent::Length(120),
+        })
+    );
 }
