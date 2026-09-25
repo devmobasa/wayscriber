@@ -78,7 +78,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     ),
     item(
         ids::TOP_UTILITY_SCREENSHOT,
-        "Screenshot",
+        "Capture (region)",
         Top,
         Utility,
         None,

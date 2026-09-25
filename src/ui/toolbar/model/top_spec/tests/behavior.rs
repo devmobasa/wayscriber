@@ -110,6 +110,49 @@ fn allocation_free_queries_match_the_materialized_spec() {
     }
 }
 
+/// Capture used to be reachable only through shortcuts and the palette. It
+/// now ships visible in the history island, after Redo and before the
+/// overflow toggle, and runs the interactive region capture.
+#[test]
+fn capture_ships_beside_undo_redo_and_runs_the_interactive_capture() {
+    let snapshot = snapshot();
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let capture = TopToolbarControl::Utility(TopToolbarUtility::Screenshot);
+
+    let history: Vec<_> = spec
+        .strip()
+        .iter()
+        .filter_map(|node| match node {
+            TopToolbarNode::Control(control) if node.island() == TopToolbarIsland::History => {
+                Some(*control)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        history,
+        [
+            TopToolbarControl::Undo,
+            TopToolbarControl::Redo,
+            capture,
+            TopToolbarControl::Overflow,
+        ]
+    );
+    assert_eq!(capture.event(&snapshot), ToolbarEvent::CaptureScreenshot);
+    assert_eq!(
+        capture.action(&snapshot),
+        Some(Action::CaptureRegionInteractive)
+    );
+    assert_eq!(capture.label(&snapshot), "Capture");
+
+    // Width pressure moves it into the overflow menu like other utilities.
+    let mut narrow = TopStripPlan::unconstrained();
+    narrow.dropped_utilities = vec![TopUtilityButton::Screenshot];
+    let spec = TopToolbarSpec::build(&snapshot, &narrow);
+    assert!(!spec.strip().contains(&TopToolbarNode::Control(capture)));
+    assert!(spec.overflow().contains(&capture));
+}
+
 /// A mouse-only user could not leave the overlay. Exit ends the chrome
 /// island, runs the Exit action, names its configured key in the tooltip,
 /// and says "hide" when the daemon keeps running behind it.

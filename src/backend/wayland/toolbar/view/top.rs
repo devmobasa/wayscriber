@@ -2,13 +2,13 @@
 //!
 //! The strip reads left to right as detached pill islands. The Tools island:
 //! drag grip, pens (Select/Pen/Shape Pen/Marker/Laser/Step/Eraser), shapes (Line/Arrow/Shapes
-//! picker), annotations (Text/Note/Screenshot/Highlight), with thin dividers
+//! picker), annotations (Text/Note/Highlight), with thin dividers
 //! between the groups — colors no longer sit here (M7 moved them into the
 //! style pill). The Presets island: the saved tool+color slots. The History
-//! island: Undo/Redo plus the overflow toggle whose menu anchors the
-//! destructive Clear (red on hover) and any width-dropped items. The Chrome
-//! island: the quieter right-aligned layout menu, About, pin, and minimize
-//! buttons. Under the band,
+//! island: Undo/Redo, the capture button, and the overflow toggle whose menu
+//! anchors the destructive Clear (red on hover) and any width-dropped items.
+//! The Chrome island: the quieter right-aligned layout menu, About, pin,
+//! minimize, and exit buttons. Under the band,
 //! the style pill carries the active tool's contextual properties (colors, the
 //! color chip, sizes; `model::StylePillSpec`). Blue is reserved for the active
 //! tool; disabled history buttons are dimmed and not interactive.

@@ -121,6 +121,8 @@ pub enum ToolbarEvent {
     ClearCanvas {
         instant: bool,
     },
+    /// Start the interactive region capture: select a region, then choose
+    /// Copy, Save, Both, or Board.
     CaptureScreenshot,
     /// Select a screen region and copy the text recognized in it.
     CopyTextFromScreen,

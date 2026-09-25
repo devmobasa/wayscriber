@@ -77,7 +77,9 @@ impl InputState {
         &mut self,
         resources: crate::input::state::InputTextResources<'_>,
     ) -> bool {
-        self.handle_action_with_resources(resources, Action::CaptureSelection);
+        // The interactive region capture: select, then choose Copy, Save,
+        // Both, or Board.
+        self.handle_action_with_resources(resources, Action::CaptureRegionInteractive);
         self.close_top_toolbar_menus();
         true
     }

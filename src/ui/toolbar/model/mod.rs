@@ -265,12 +265,12 @@ mod tests {
     fn factory_visibility_reset_button_tracks_only_eligible_tri_state_differences() {
         let mut snapshot = snapshot();
         snapshot.resolved_toolbar_items = ToolbarItemsConfig::default().resolved();
-        assert!(snapshot.toolbar_item_hidden(ids::TOP_UTILITY_SCREENSHOT));
+        assert!(!snapshot.toolbar_item_hidden(ids::TOP_UTILITY_SCREENSHOT));
         assert!(!has_visibility_reset_button(&snapshot));
 
-        let mut showing_screenshot = ToolbarItemsConfig::default();
-        showing_screenshot.set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
-        snapshot.resolved_toolbar_items = showing_screenshot.resolved();
+        let mut hiding_screenshot = ToolbarItemsConfig::default();
+        hiding_screenshot.set_hidden(ids::TOP_UTILITY_SCREENSHOT, true);
+        snapshot.resolved_toolbar_items = hiding_screenshot.resolved();
         assert!(has_visibility_reset_button(&snapshot));
 
         let mut hidden_pen = ToolbarItemsConfig::default();

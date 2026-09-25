@@ -1492,7 +1492,7 @@ top_controls = [
 - **Recoloring a swatch**: right-clicking any quick-color swatch in the style pill opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK applies the color to that slot and writes it back to `config.toml` — only that one `[[drawing.quick_colors]]` entry, with the previous file copied to a timestamped `.bak` — and Cancel/Escape restores it. Recoloring a slot the file only implies writes the palette out as far as that slot and no further, so the slots after it keep tracking the shipped defaults. If the file cannot be written the color still applies for the run and the toast says the save failed; picking the color the slot already paints writes nothing and says so. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
 - **Restoring a swatch's shipped color**: while recoloring a slot, the picker adds a **Default** button next to OK/Cancel that loads the color wayscriber ships for that slot. It stages the color like any other pick — the swatch previews it, OK applies and saves it, Cancel backs out — so it is not a separate destructive action. The button only appears for the eleven built-in slots; extra slots you added past them have no shipped default, and the tool-color picker never shows it. Restoring sets the built-in value in your palette rather than deleting the entry, so the slot keeps its identity.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
-- **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
+- **Capture toolbar button**: `top.utility.screenshot` sits beside Undo/Redo and is shown by default. It starts the interactive region capture (select a region, then choose Copy, Save, Both, or Board). Add it to `ui.toolbar.items.hidden`, or uncheck it in the configurator/overlay customization, to hide it. Under width pressure it moves into the overflow menu first.
 
 **Defaults:** all set as above.
 
@@ -1881,7 +1881,7 @@ does not change the active tool, the drawing history, or the board.
   the rest of the capture family had left; rebind it in the configurator or in
   `[keybindings.capture]`.
 - It is also in the command palette (search for "OCR"), and as an optional top
-  toolbar button (`top.utility.ocr`), hidden by default like Screenshot.
+  toolbar button (`top.utility.ocr`), hidden by default.
 - `ocr_languages` accepts one language or several joined with `+`
   (`eng`, `eng+deu`). Only letters, digits, `_` and `-` are accepted; anything
   else falls back to `eng`.

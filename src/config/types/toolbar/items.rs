@@ -52,7 +52,10 @@ fn drain_without(raw_ids: Vec<String>, id: ToolbarItemId) -> Vec<String> {
     next
 }
 
-const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_SCREENSHOT];
+/// Items the shipped `hidden` list names. Empty: the capture button used to
+/// ship hidden here, and now shows by default beside Undo/Redo. A config
+/// that authored its own `hidden` list keeps whatever that list says.
+const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[];
 
 /// Items hidden by a code-level baseline rather than by the shipped `hidden`
 /// list, overridable with an explicit `shown` entry.
@@ -60,8 +63,7 @@ const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_SCR
 /// A `hidden` list authored before an item existed cannot name it, and serde
 /// applies the struct default only to a *missing* field — so shipping a new
 /// default-hidden id reaches new configs and silently exposes the item on every
-/// installed one. Screenshot stays list-driven because every existing config
-/// already names it; anything added afterwards belongs here instead.
+/// installed one. New default-hidden items belong here, not in the list above.
 const BASELINE_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_OCR];
 
 /// Whether `id` is hidden unless the user explicitly shows it.

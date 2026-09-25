@@ -28,13 +28,14 @@ fn top_size_respects_icon_mode() {
     let snapshot = snapshot_from_state(&state);
     // Width includes the island gaps/padding of the four-pill band (tools,
     // presets, history, chrome): the presets island replaced the retired
-    // colors group (M7-C1/C2), and the chrome island carries the layout
-    // menu, About, and Exit alongside pin and minimize. Height adds the contextual
+    // colors group (M7-C1/C2), the history island carries the capture button,
+    // and the chrome island carries the layout menu, About, and Exit alongside
+    // pin and minimize. Height adds the contextual
     // style pill under the 58px island band (6px gap + 40px pill) while a
     // drawing tool is active.
     assert_eq!(
         top_size(&crate::ui_text::UiTextEngine::default(), &snapshot),
-        (1359, 104)
+        (1410, 104)
     );
 
     state.set_toolbar_use_icons(false);
@@ -144,6 +145,10 @@ fn overflow_contains_only_visible_items_and_is_structural() {
     state.set_toolbar_use_icons(true);
     let mut items = state.toolbar_items().clone();
     items.set_hidden(crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
+    items.set_hidden(
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        true,
+    );
     items.set_hidden(crate::config::toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
     state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);

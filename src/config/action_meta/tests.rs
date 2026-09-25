@@ -521,7 +521,8 @@ fn interactive_region_capture_metadata_matches_its_public_surfaces() {
     assert_eq!(meta.category, ActionCategory::Capture);
     assert!(meta.in_command_palette);
     assert!(meta.in_help);
-    assert!(!meta.in_toolbar);
+    // The toolbar's capture button runs it and names its keys.
+    assert!(meta.in_toolbar);
 }
 
 #[test]

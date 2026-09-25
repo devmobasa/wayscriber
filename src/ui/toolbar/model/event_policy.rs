@@ -150,7 +150,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::UndoAllDelayed => Some(Action::UndoAllDelayed),
         ToolbarEvent::RedoAllDelayed => Some(Action::RedoAllDelayed),
         ToolbarEvent::ClearCanvas { .. } => Some(Action::ClearCanvas),
-        ToolbarEvent::CaptureScreenshot => Some(Action::CaptureSelection),
+        ToolbarEvent::CaptureScreenshot => Some(Action::CaptureRegionInteractive),
         ToolbarEvent::CopyTextFromScreen => Some(Action::CopyTextFromScreen),
         ToolbarEvent::PagePrev => Some(Action::PagePrev),
         ToolbarEvent::PageNext => Some(Action::PageNext),

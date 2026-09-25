@@ -17,15 +17,22 @@ fn known_hidden_ids_resolve_and_unknown_ids_round_trip() {
     assert_eq!(resolved.unknown_hidden, vec!["future.toolbar.item"]);
 }
 
+/// The capture button ships visible; a config that lists it in `hidden`
+/// still hides it.
 #[test]
-fn default_hidden_items_hide_screenshot_tool() {
+fn the_capture_button_is_visible_by_default_and_still_hideable() {
     let resolved = ToolbarItemsConfig::default().resolved();
 
-    assert!(resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
+    assert!(!resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
     assert_eq!(
         item_visibility_setting(&resolved, ids::TOP_UTILITY_SCREENSHOT),
-        ToolbarItemVisibilitySetting::Hidden
+        ToolbarItemVisibilitySetting::Default
     );
+    assert!(ToolbarItemsConfig::default().hidden.is_empty());
+
+    let mut hidden = ToolbarItemsConfig::default();
+    hidden.set_hidden(ids::TOP_UTILITY_SCREENSHOT, true);
+    assert!(hidden.resolved().is_hidden(ids::TOP_UTILITY_SCREENSHOT));
 }
 
 #[test]
@@ -194,13 +201,7 @@ fn reset_known_hidden_restores_defaults_and_preserves_unknown_ids() {
     };
 
     assert!(config.reset_known_hidden_to_defaults());
-    assert_eq!(
-        config.hidden,
-        vec![
-            ids::TOP_UTILITY_SCREENSHOT.as_str().to_string(),
-            "future.toolbar.item".to_string()
-        ]
-    );
+    assert_eq!(config.hidden, vec!["future.toolbar.item".to_string()]);
     assert!(!config.reset_known_hidden_to_defaults());
 }
 

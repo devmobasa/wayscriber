@@ -593,7 +593,7 @@ mod tests {
         let mut state = make_test_input_state();
         let section = crate::config::ToolbarSectionFlag::Actions.item_id();
         let mut items = ToolbarItemsConfig::default();
-        items.set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
+        items.set_hidden(ids::TOP_UTILITY_SCREENSHOT, true);
         items.set_hidden(ids::TOP_UTILITY_OCR, false);
         items.set_hidden(ids::TOP_TOOL_PEN, true);
         items.set_hidden(section, true);
@@ -604,7 +604,8 @@ mod tests {
         assert!(state.reset_toolbar_item_hidden_overrides());
 
         let resolved = state.toolbar_items().resolved();
-        assert!(resolved.hidden.contains(&ids::TOP_UTILITY_SCREENSHOT));
+        // The capture button ships visible, so the reset brings it back.
+        assert!(!resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
         // Restored to its baseline rather than to an explicit entry.
         assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));
         assert!(!resolved.hidden.contains(&ids::TOP_UTILITY_OCR));

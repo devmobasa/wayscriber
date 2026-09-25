@@ -5,9 +5,11 @@ use crate::backend::wayland::toolbar::view::node::{
 };
 use crate::ui::toolbar::ToolbarBindingHints;
 
+/// Target wide enough for the full strip with an open settings popover, so a
+/// tooltip over its right-hand controls lands inside the pixels compared.
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
     let mut surface =
-        cairo::ImageSurface::create(cairo::Format::ARgb32, 1400 * density, 800 * density).unwrap();
+        cairo::ImageSurface::create(cairo::Format::ARgb32, 2000 * density, 800 * density).unwrap();
     surface.set_device_scale(density as f64, density as f64);
     let ctx = cairo::Context::new(&surface).unwrap();
     paint(&ctx);

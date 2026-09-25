@@ -21,7 +21,7 @@ impl TopToolbarNode {
 
 /// The detached pill islands of the top strip, in reading order: tools
 /// (drag grip through annotations), presets (saved tool+color slots),
-/// history (undo/redo/overflow), chrome (layout menu/About/pin/minimize).
+/// history (undo/redo/capture/overflow), chrome (layout menu/About/pin/minimize/exit).
 /// Both frontends and
 /// the contract tests derive island membership from this one accessor; the
 /// `Ord` derive fixes the reading order the strip walk relies on.
@@ -250,6 +250,7 @@ impl TopToolbarControl {
         match self {
             Self::Undo
             | Self::Redo
+            | Self::Utility(TopToolbarUtility::Screenshot)
             | Self::Overflow
             | Self::ClearCanvas
             | Self::CanvasMenu

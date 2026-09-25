@@ -126,7 +126,7 @@ pub(super) fn utility_action(utility: TopToolbarUtility) -> Action {
     match utility {
         TopToolbarUtility::Text => Action::EnterTextMode,
         TopToolbarUtility::StickyNote => Action::EnterStickyNoteMode,
-        TopToolbarUtility::Screenshot => Action::CaptureSelection,
+        TopToolbarUtility::Screenshot => Action::CaptureRegionInteractive,
         TopToolbarUtility::Ocr => Action::CopyTextFromScreen,
         TopToolbarUtility::Highlight => Action::ToggleHighlightTool,
     }
@@ -134,7 +134,7 @@ pub(super) fn utility_action(utility: TopToolbarUtility) -> Action {
 
 pub(super) fn utility_short_label(utility: TopToolbarUtility) -> &'static str {
     match utility {
-        TopToolbarUtility::Screenshot => "Shot",
+        TopToolbarUtility::Screenshot => "Capture",
         TopToolbarUtility::Ocr => "Copy text",
         TopToolbarUtility::Highlight => "Highlight",
         _ => action_short_label(utility_action(utility)),
