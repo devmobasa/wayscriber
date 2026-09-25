@@ -89,6 +89,9 @@ impl InputState {
     }
 
     fn finalize_text_input_with(&mut self, measurer: &TextMeasurer) {
+        // A style change since the last keystroke (a larger font, say) may
+        // have grown the block past the edge without moving it.
+        self.keep_text_draft_inside_output_with(measurer);
         let (x, y, text) = if let DrawingState::TextInput { x, y, buffer, .. } = &self.state {
             (*x, *y, buffer.clone())
         } else {

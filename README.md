@@ -891,6 +891,8 @@ These tools' default keybindings are intentionally empty; bind them under `[keyb
 
 While a text block or sticky note is being edited, these keys belong to the editor and are not configurable. Undo, tool switching, board navigation, and capture still use their usual bindings.
 
+A block placed near the edge of the screen, or one that grows past it while you type, shifts left or up so it stays fully visible. Editing a block that already crosses the edge does not move it.
+
 | Action | Key/Mouse |
 |--------|-----------|
 | Place the caret | <kbd>Click</kbd> |

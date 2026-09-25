@@ -50,6 +50,7 @@ mod status_hud;
 mod style;
 mod text_editing;
 mod text_font;
+mod text_placement;
 mod tool_controls;
 mod toolbar;
 mod top_menu;
