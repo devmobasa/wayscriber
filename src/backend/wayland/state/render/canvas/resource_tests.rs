@@ -152,6 +152,98 @@ fn paint_with_preferred_scale(
     surface.data().unwrap().to_vec()
 }
 
+struct LocalChannelError {
+    samples: u64,
+    mean: f64,
+    tiles: u32,
+    worst_tile: f64,
+}
+
+/// Region mean plus the worst 8×8 window. Windows step by four pixels so a
+/// defect on a boundary stays inside one sample. A small defect can disappear
+/// into the region mean while still failing the window bound.
+fn local_channel_error(
+    direct: &[u8],
+    cached: &[u8],
+    raster_width: usize,
+    left: usize,
+    top: usize,
+    right: usize,
+    bottom: usize,
+) -> LocalChannelError {
+    let mut error = 0_u64;
+    let mut samples = 0_u64;
+    for y in top..bottom {
+        for x in left..right {
+            let offset = (y * raster_width + x) * 4;
+            for channel in 0..4 {
+                error += u64::from(direct[offset + channel].abs_diff(cached[offset + channel]));
+                samples += 1;
+            }
+        }
+    }
+
+    let mut worst_tile = 0.0_f64;
+    let mut tiles = 0_u32;
+    let mut tile_y = top;
+    while tile_y + 8 <= bottom {
+        let mut tile_x = left;
+        while tile_x + 8 <= right {
+            let mut tile_error = 0_u64;
+            let mut tile_samples = 0_u64;
+            for y in tile_y..tile_y + 8 {
+                for x in tile_x..tile_x + 8 {
+                    let offset = (y * raster_width + x) * 4;
+                    for channel in 0..4 {
+                        tile_error +=
+                            u64::from(direct[offset + channel].abs_diff(cached[offset + channel]));
+                        tile_samples += 1;
+                    }
+                }
+            }
+            worst_tile = worst_tile.max(tile_error as f64 / tile_samples as f64);
+            tiles += 1;
+            tile_x += 4;
+        }
+        tile_y += 4;
+    }
+
+    LocalChannelError {
+        samples,
+        mean: if samples == 0 {
+            0.0
+        } else {
+            error as f64 / samples as f64
+        },
+        tiles,
+        worst_tile,
+    }
+}
+
+#[test]
+fn local_channel_error_keeps_a_concentrated_defect_out_of_the_region_mean() {
+    let width = 64;
+    let height = 32;
+    let mut direct = vec![0_u8; width * height * 4];
+    let cached = vec![0_u8; direct.len()];
+    for y in 0..4 {
+        for x in 0..4 {
+            for channel in 0..4 {
+                direct[(y * width + x) * 4 + channel] = 255;
+            }
+        }
+    }
+
+    let error = local_channel_error(&direct, &cached, width, 0, 0, width, height);
+
+    assert!(error.mean < 3.0, "region mean hid nothing: {}", error.mean);
+    assert!(
+        error.worst_tile >= 24.0,
+        "tile mean missed the defect: {}",
+        error.worst_tile
+    );
+}
+
 fn assert_pixels_match(actual: &[u8], expected: &[u8], label: &str) {
     assert_eq!(actual.len(), expected.len(), "{label}: buffer length");
     if let Some((index, (actual, expected))) = actual
@@ -307,22 +399,26 @@ fn fractional_baked_pan_matches_direct_rendering() {
             let top = ((5.0 - origin.1) * scale).max(0.0) as usize;
             let right = ((36.0 - origin.0) * scale).min(raster_width as f64) as usize;
             let bottom = ((38.0 - origin.1) * scale).min(raster_height as f64) as usize;
-            let mut error = 0_u64;
-            let mut samples = 0_u64;
-            for y in top..bottom {
-                for x in left..right {
-                    let offset = (y * raster_width as usize + x) * 4;
-                    for channel in 0..4 {
-                        error +=
-                            u64::from(direct[offset + channel].abs_diff(cached[offset + channel]));
-                        samples += 1;
-                    }
-                }
-            }
-            assert!(samples > 0);
+            let error = local_channel_error(
+                &direct,
+                &cached,
+                raster_width as usize,
+                left,
+                top,
+                right,
+                bottom,
+            );
+            assert!(error.samples > 0);
+            assert!(error.tiles > 0, "content region must contain an 8x8 window");
             assert!(
-                error as f64 / (samples as f64) < 3.0,
-                "local image error at {preferred_scale}% origin {origin:?}: {error}/{samples}"
+                error.mean < 3.0,
+                "local image error at {preferred_scale}% origin {origin:?}: {:.3}",
+                error.mean
+            );
+            assert!(
+                error.worst_tile < 24.0,
+                "concentrated tile error at {preferred_scale}% origin {origin:?}: {:.3}",
+                error.worst_tile
             );
         }
     }

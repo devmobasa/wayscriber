@@ -15,7 +15,16 @@ from 1280×720 to 1600×900 and to fractional scale 200/120. It checks new pool
 creation and a new main frame commit before any selected old release, followed
 by server delivery, client destruction, reordered releases, and another drawn
 frame. Every wait has a deadline; compositor shutdown must leave no pending
-release. Four trace-parser unit tests cover ID reuse and false overlap.
+release.
+
+Before the first geometry change, the driver requests one more redraw while
+those three lifetimes are still held, then waits one second with no further
+input. The app must already have logged that rendering is skipped because every
+slot is held. During that second the main thread may use at most 0.35
+CPU-seconds and the process may log at most 40 additional skips. A busy loop
+exceeds both limits. The quiet-wait
+unit tests accept a sleeping sample and reject a spinning one. Trace-parser
+unit tests cover ID reuse and false overlap.
 The fixture hooks both Wayland server event entry points used by the tested
 wlroots versions (Ubuntu 24.04 Sway 1.9 and local Sway 1.12).
 

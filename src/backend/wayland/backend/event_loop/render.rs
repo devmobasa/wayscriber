@@ -198,6 +198,10 @@ fn record_skipped_render(
     if state.input_state.needs_redraw {
         if vsync_enabled && state.surface.frame_callback_pending() {
             debug!("Main loop: Skipping render - frame callback already pending");
+        } else if !buffer_available {
+            // The held-buffer fixture counts this line while every slot is occupied.
+            // Rewording it without updating that fixture hides a busy-wait regression.
+            debug!("Main loop: Skipping render - all buffers still held by the compositor");
         } else if !vsync_enabled && !frame_time_ok {
             debug!(
                 "Main loop: Skipping render - frame rate cap ({} FPS)",

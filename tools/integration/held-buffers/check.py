@@ -13,6 +13,7 @@ import tempfile
 import time
 
 from buffer_trace import current_main_buffers, new_frame_overlap, old_late_events, parse_buffer_trace
+import quiet_wait
 
 
 def run(args, env):
@@ -61,6 +62,60 @@ def config(path, mode, scale):
     path.write_text(
         f"output HEADLESS-1 resolution {mode} scale {scale}\n"
         "focus_follows_mouse no\n")
+
+
+def main_thread_cpu_seconds(pid):
+    # The event loop is the main thread. Worker threads, such as font scanning,
+    # must not count toward the busy-wait limit. comm can contain spaces, so
+    # fields after the last ")" are stable; utime and stime are fields 14 and 15.
+    fields = Path(f"/proc/{pid}/task/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    ticks = os.sysconf("SC_CLK_TCK")
+    return (int(fields[11]) + int(fields[12])) / ticks
+
+
+def selected_still_held(text, surface, old):
+    trace = parse_buffer_trace(text, surface)
+    for identity in old:
+        life = trace.lifetime(identity)
+        if life is None or not life.held_on(surface, trace.length):
+            return False, len(trace.main_commits)
+    return True, len(trace.main_commits)
+
+
+def request_redraw_while_held(process, app_log, surface, old, pointer, env, width, height):
+    def observe():
+        text = app_log.read_text(errors="replace")
+        held, commits = selected_still_held(text, surface, old)
+        return text.count(quiet_wait.SKIP_LOG_MARK), commits, held
+
+    skips, commits, held = observe()
+    if not held:
+        raise AssertionError("selected buffers were released before the quiet interval")
+
+    run([str(pointer), "drag", "90", "240", "150", "300", str(width), str(height)], env)
+
+    def redraw_pending():
+        count, now_commits, now_held = observe()
+        if now_commits != commits:
+            raise AssertionError("redraw while every slot was held committed a main frame")
+        if not now_held:
+            raise AssertionError("selected buffers were released before the quiet interval")
+        return count if count > skips else None
+
+    wait_for(redraw_pending, "pending redraw with every slot held", 4)
+    skips_before, commits_before, held_before = observe()
+    if commits_before != commits or not held_before:
+        raise AssertionError("quiet interval started after a main commit or release")
+
+    cpu_before = main_thread_cpu_seconds(process.pid)
+    started = time.monotonic()
+    time.sleep(quiet_wait.QUIET_SECONDS)
+    wall = time.monotonic() - started
+    skips_after, commits_after, still_held = observe()
+    quiet_wait.require_quiet_hold(quiet_wait.QuietHold(
+        wall, main_thread_cpu_seconds(process.pid) - cpu_before, skips_after - skips_before,
+        True, commits_after - commits_before, still_held))
+    print("PASS quiet hold: pending redraw slept while three slots stayed occupied", flush=True)
 
 
 def execute(app, fixture, pointer, root):
@@ -121,6 +176,7 @@ def execute(app, fixture, pointer, root):
                            "--no-exit-after-capture"], app_env, app_log)
         surface = wait_for(lambda: main_surface(app_log), "main layer surface")
         wait_for(lambda: current_main_buffers(app_log, surface), "first main frame")
+        checked_quiet_hold = False
 
         for mode, scale in (("1600x900", 1), ("1600x900", 1.6666666)):
             current = monitor()
@@ -139,6 +195,11 @@ def execute(app, fixture, pointer, root):
             old = old or wait_for(occupied, "three occupied main slots", 3)
             schedule.write_text(f"{wayscriber.pid} " + " ".join(
                 item["buffer"] for item in old) + "\n")
+            if not checked_quiet_hold:
+                request_redraw_while_held(
+                    wayscriber, app_log, surface, old, pointer, app_env,
+                    current["width"], current["height"])
+                checked_quiet_hold = True
             before = len(app_log.read_text(errors="replace"))
             fixture_before = len((root / "sway.log").read_text(errors="replace"))
             old_pool_count = app_log.read_text(errors="replace").count("Creating new SlotPool (")
