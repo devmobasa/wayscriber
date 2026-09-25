@@ -163,6 +163,8 @@ define_action_binding_accessors! {
     ToggleEraserMode => tools.toggle_eraser_mode,
     IncreasePenSmoothing => tools.increase_pen_smoothing,
     DecreasePenSmoothing => tools.decrease_pen_smoothing,
+    IncreaseShapeRecognitionSensitivity => tools.increase_shape_recognition_sensitivity,
+    DecreaseShapeRecognitionSensitivity => tools.decrease_shape_recognition_sensitivity,
     CycleFontFamily => tools.cycle_font_family,
     OpenFontPicker => tools.open_font_picker,
     CycleBlurStyle => tools.cycle_blur_style,

@@ -244,8 +244,10 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # Smoothing applied to a finished freehand or marker stroke (0 - 6)
 pen_smoothing = 3
 
-# Shape Pen: 0 precise, 2 balanced (default), 4 more forgiving
-shape_recognition_sensitivity = 2
+# Shape Pen: 0 precise, 3 forgiving (default), 4 most forgiving
+shape_recognition_sensitivity = 3
+# Snap Shape Pen results to nearby board-paper lines and points
+shape_recognition_grid_snap = true
 
 # Default fill state for fill-capable shape tools
 default_fill_enabled = false
@@ -381,7 +383,7 @@ drag_tool = "default"
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
-- **Live shaping**: Choose **Shape pen** from the Shapes picker or **Live Shaping Tool** from the command palette; bind `select_live_shape_tool` for a shortcut. Confident lines, circles, ovals, axis-aligned rectangles, and triangles preview as shapes and commit as editable shapes. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (forgiving), with 2 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. Reopen the overlay after changing it. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Other ink stays freehand.
+- **Shape Pen**: Press `S` (`select_live_shape_tool`), click **Shape Pen** next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** from the command palette. Confident lines, circles, ovals, rectangles, and triangles preview as shapes over a faint copy of the stroke and commit as editable shapes. Recognized ovals, rectangles, and triangles follow the Fill toggle, like the dedicated shape tools. If a stroke should have stayed ink, undo once to get the original stroke back; undo again to remove it. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (most forgiving), with 3 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. While Shape Pen is active, the toolbar's **Sensitivity** stepper changes it at once; so do **Increase / Decrease Shape Pen Sensitivity** in the command palette, or bind `increase_shape_recognition_sensitivity` / `decrease_shape_recognition_sensitivity`. A session remembers the level it was saved at; the config value is the starting level. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Rectangle and oval edges also snap to nearby Cartesian lines, and triangle corners to nearby Cartesian lines or isometric points. Set `[drawing] shape_recognition_grid_snap = false`, or turn off **Snap Shape Pen to board paper** in the configurator, to keep recognized shapes exactly where you drew them; axis alignment still applies. Rectangles drawn quickly, with leaning or skewed sides, are squared up to the average position of each side. Other ink stays freehand.
 - **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -925,7 +927,8 @@ show_capabilities_warning = true
 # appearances. The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
-# Show rectangle and ellipse preview dimensions in logical board pixels.
+# Show rectangle and ellipse preview dimensions in logical board pixels, and
+# the shape Shape Pen has recognized with its size (a line shows its length).
 # This is separate from capture.region.show_size_readout.
 show_shape_size_readout = true
 
@@ -1401,7 +1404,7 @@ top_controls = [
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Discovery and coaching tips offer **Got it** (permanently acknowledge that tip) and **Tip settings…** (acknowledge it, then open the Configurator at this setting); the toolbar-hidden recovery tip keeps **Show** as its primary control and offers the same settings route. Using the board picker, bottom-right zoom controls, or Canvas popover also acknowledges the matching tip. Clicking the message body dismisses a tip only for the current run; an unattended tip stops after three appearances. Set this option to `false` to disable all automatic tutorials on later overlay launches; the running overlay does not live-reload this Configurator change. The guided tour remains available manually, and capability, safety, and configuration warnings are unaffected. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series. If onboarding progress cannot be saved, automatic guidance is disabled for that run and an actionable persistence warning is shown.
-- **Shape size readout**: `show_shape_size_readout` controls the live rectangle and ellipse preview dimensions, measured in logical board pixels. Ellipse values match the diameter that will be committed, so an odd drag span rounds down to the nearest even diameter. It defaults to `true` and is separate from `capture.region.show_size_readout`, which describes a region-capture selection.
+- **Shape size readout**: `show_shape_size_readout` controls the live rectangle and ellipse preview dimensions, measured in logical board pixels. With Shape Pen it names the shape that release will commit, such as "Triangle 120 × 90" or "Line 140", and stays hidden while the stroke is still ink. Ellipse values match the diameter that will be committed, so an odd drag span rounds down to the nearest even diameter. It defaults to `true` and is separate from `capture.region.show_size_readout`, which describes a region-capture selection.
 - **Capability warnings**: `show_capabilities_warning` independently controls compositor limitation warnings; disabling tutorials does not hide safety, configuration, or capability diagnostics.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.
@@ -2168,7 +2171,7 @@ decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 # Tool selection shortcuts (optional; keep empty to rely on modifiers)
 select_selection_tool = ["V"]
 select_pen_tool = ["F"]
-select_live_shape_tool = []         # draw ink that snaps to lines and shapes
+select_live_shape_tool = ["S"]      # draw ink that snaps to lines and shapes
 select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
@@ -2177,6 +2180,8 @@ cycle_font_family = ["Shift+T"]    # step the text font through drawing.font_cyc
 open_font_picker = []              # pick from every installed family
 increase_pen_smoothing = []        # clean up finished strokes more
 decrease_pen_smoothing = []        # keep more of the drawn path
+increase_shape_recognition_sensitivity = []  # Shape Pen: recognize rougher strokes
+decrease_shape_recognition_sensitivity = []  # Shape Pen: keep more strokes as ink
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out
 cycle_arrow_style = []             # standard -> pointy -> curved -> double
 select_spotlight_tool = []         # dim everything except a region

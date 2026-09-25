@@ -32,6 +32,7 @@ pub(crate) struct DrawingStyle {
     pub(crate) marker_opacity: f64,
     pub(crate) pen_smoothing: u8,
     pub(crate) shape_recognition_sensitivity: u8,
+    pub(crate) shape_recognition_grid_snap: bool,
     pub(crate) blur_style: BlurStyle,
     pub(crate) spotlight_dim_opacity: f64,
     pub(crate) spotlight_feather: f64,
@@ -79,7 +80,10 @@ impl From<(&DrawingConfig, &ArrowConfig, &SpotlightConfig)> for DrawingStyle {
             eraser_mode: drawing.default_eraser_mode,
             marker_opacity: drawing.marker_opacity,
             pen_smoothing: crate::draw::shape::clamp_pen_smoothing(drawing.pen_smoothing),
-            shape_recognition_sensitivity: drawing.shape_recognition_sensitivity,
+            shape_recognition_sensitivity: drawing
+                .shape_recognition_sensitivity
+                .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+            shape_recognition_grid_snap: drawing.shape_recognition_grid_snap,
             blur_style: drawing.default_blur_style,
             spotlight_dim_opacity: spotlight.dim_opacity,
             spotlight_feather: spotlight.feather,
@@ -197,6 +201,25 @@ impl DrawingStyle {
             return false;
         }
         self.pen_smoothing = level;
+        true
+    }
+
+    pub(crate) fn nudge_shape_recognition_sensitivity(&mut self, delta: i32) -> bool {
+        let next = i32::from(self.shape_recognition_sensitivity)
+            .saturating_add(delta)
+            .clamp(
+                0,
+                i32::from(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+            );
+        self.set_shape_recognition_sensitivity(next as u8)
+    }
+
+    pub(crate) fn set_shape_recognition_sensitivity(&mut self, level: u8) -> bool {
+        let level = level.min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY);
+        if level == self.shape_recognition_sensitivity {
+            return false;
+        }
+        self.shape_recognition_sensitivity = level;
         true
     }
 
@@ -408,6 +431,9 @@ impl DrawingStyle {
         self.restore_recent_colors(&snapshot.recent_colors);
         if let Some(level) = snapshot.pen_smoothing {
             let _ = self.set_pen_smoothing(level);
+        }
+        if let Some(level) = snapshot.shape_recognition_sensitivity {
+            let _ = self.set_shape_recognition_sensitivity(level);
         }
         if let Some(opacity) = snapshot.marker_opacity {
             let _ = self.set_marker_opacity(opacity);

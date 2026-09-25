@@ -126,12 +126,12 @@ const DESCRIPTORS: [ToolDescriptor; 18] = [
     ToolDescriptor {
         tool: Tool::LiveShape,
         short_label: "Shape Pen",
-        display_label: "Live Shaping Tool",
+        display_label: "Shape Pen Tool",
         action: Some(Action::SelectLiveShapeTool),
         profile: profile(
             ToolSettingsSlot::Pen,
             ToolSizeSource::DrawingThickness,
-            ToolControlGroup::Stroke,
+            ToolControlGroup::Shape,
             true,
             "Thickness",
         ),

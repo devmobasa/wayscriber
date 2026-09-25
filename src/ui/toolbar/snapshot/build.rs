@@ -116,6 +116,7 @@ impl ToolbarSnapshot {
             eraser_mode,
             marker_opacity: state.style.marker_opacity,
             pen_smoothing: state.style.pen_smoothing,
+            shape_recognition_sensitivity: state.style.shape_recognition_sensitivity,
             spotlight_magnification: state.style.spotlight_magnification,
             // Filled in by the backend that renders the canvas; see the field.
             spotlight_magnifier_source: None,

@@ -78,6 +78,8 @@ pub struct ToolContext {
     /// the whole program, but it only reaches strokes the pen and marker
     /// accumulate, so a Line or Blur tool has nothing for the stepper to do.
     pub show_pen_smoothing: bool,
+    /// Whether the Shape Pen sensitivity stepper should be shown.
+    pub show_shape_sensitivity: bool,
 }
 
 impl ToolContext {
@@ -107,6 +109,7 @@ impl ToolContext {
                 show_polygon_sides_control: false,
                 show_font_controls: true,
                 show_pen_smoothing: false,
+                show_shape_sensitivity: false,
             };
         }
 
@@ -138,6 +141,7 @@ impl ToolContext {
             ctx.show_polygon_sides_control = true;
         }
         ctx.show_pen_smoothing = effective_tool.smooths_strokes();
+        ctx.show_shape_sensitivity = effective_tool == Tool::LiveShape;
 
         ctx
     }
@@ -157,6 +161,7 @@ impl ToolContext {
             show_font_controls: false,
             // Set from the tool by `from_snapshot`; a profile alone cannot say.
             show_pen_smoothing: false,
+            show_shape_sensitivity: false,
         }
     }
 
@@ -189,6 +194,7 @@ impl ToolContext {
             show_polygon_sides_control,
             show_font_controls,
             show_pen_smoothing: true,
+            show_shape_sensitivity: true,
         }
     }
 }
@@ -268,6 +274,8 @@ pub struct ToolbarSnapshot {
     pub marker_opacity: f64,
     /// Smoothing passes applied to freehand and marker strokes on release.
     pub pen_smoothing: u8,
+    /// How readily Shape Pen turns ink into shapes, 0 (precise) to 4.
+    pub shape_recognition_sensitivity: u8,
     pub spotlight_magnification: f64,
     /// Whether the active canvas has complete pixels for magnifying a Spotlight,
     /// or `None` when no backend has answered yet.

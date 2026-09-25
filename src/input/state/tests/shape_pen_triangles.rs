@@ -84,16 +84,19 @@ fn live_shape_previews_and_commits_hand_drawn_triangles() {
     draw_path(&mut state, &HAND_DRAWN);
     assert!(matches!(
         state.provisional_tool_stroke(99, 22),
-        ProvisionalToolStroke::Shape(Shape::Polygon {
-            kind: PolygonKind::Triangle,
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Polygon {
+                kind: PolygonKind::Triangle,
+                ..
+            },
             ..
-        })
+        }
     ));
     release_at_end(&mut state, &HAND_DRAWN);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 1);
-    assert_eq!(frame.undo_stack_len(), 1);
+    assert_eq!(frame.undo_stack_len(), 2, "the ink, then the recognition");
     let Shape::Polygon {
         kind: PolygonKind::Triangle,
         points,

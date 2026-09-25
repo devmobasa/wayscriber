@@ -476,7 +476,8 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
         crate::input::tool::ProvisionalToolStroke::BorrowedFreehand { points, .. }
         | crate::input::tool::ProvisionalToolStroke::BorrowedPressureFreehand { points, .. }
         | crate::input::tool::ProvisionalToolStroke::BorrowedMarker { points, .. }
-        | crate::input::tool::ProvisionalToolStroke::EraserPreview { points, .. } => points.len(),
+        | crate::input::tool::ProvisionalToolStroke::EraserPreview { points, .. }
+        | crate::input::tool::ProvisionalToolStroke::Recognized { ink: points, .. } => points.len(),
         crate::input::tool::ProvisionalToolStroke::Shape(_)
         | crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(_)
         | crate::input::tool::ProvisionalToolStroke::None => 0,

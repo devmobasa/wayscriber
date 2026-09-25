@@ -1,8 +1,12 @@
-use crate::domain::BoardGrid;
+use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{BLACK, PolygonKind, Shape};
 
 fn recognize(points: &[(i32, i32)], sensitivity: u8) -> Option<Shape> {
-    super::recognize(points, BLACK, 3.0, BoardGrid::default(), sensitivity)
+    recognize_on(points, BoardGrid::default(), sensitivity)
+}
+
+fn recognize_on(points: &[(i32, i32)], grid: BoardGrid, sensitivity: u8) -> Option<Shape> {
+    super::recognize(points, BLACK, 3.0, false, grid, sensitivity)
 }
 
 fn triangle_points(shape: Option<Shape>) -> Option<Vec<(i32, i32)>> {
@@ -210,6 +214,154 @@ fn round_and_four_sided_strokes_never_become_triangles() {
                     triangle_points(recognize(&path, sensitivity)),
                     None,
                     "{name} with wobble {wobble} at sensitivity {sensitivity}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn rectangles_snap_their_edges_to_nearby_cartesian_lines() {
+    let grid = BoardGrid::new(BoardGridKind::Cartesian, 40);
+    let near = [(42.0, 38.0), (158.0, 41.0), (157.0, 122.0), (41.0, 119.0)];
+    let far = [(20.0, 20.0), (140.0, 20.0), (140.0, 100.0), (20.0, 100.0)];
+
+    let snapped = recognize_on(&trace(&near, 0.1, 3.0, 0.0), grid, 2);
+    let untouched = recognize_on(&trace(&far, 0.1, 3.0, 0.0), grid, 2);
+
+    assert!(
+        matches!(
+            snapped,
+            Some(Shape::Rect {
+                x: 40,
+                y: 40,
+                w: 120,
+                h: 80,
+                ..
+            })
+        ),
+        "{snapped:?}"
+    );
+    assert!(
+        matches!(
+            untouched,
+            Some(Shape::Rect {
+                x: 20,
+                y: 20,
+                w: 120,
+                h: 80,
+                ..
+            })
+        ),
+        "edges 20px from every line stay put: {untouched:?}"
+    );
+}
+
+#[test]
+fn triangle_corners_snap_to_isometric_lattice_points() {
+    // Lattice points (i, j) sit at x = i·√3/2·s and y = j·s, shifted down half
+    // a spacing in odd columns. These corners are a few pixels off i = 2, 6
+    // (y = 160) and i = 4 (y = 40).
+    let drawn = [(72.0, 157.0), (205.0, 163.0), (140.0, 43.0)];
+
+    for kind in [BoardGridKind::Isometric, BoardGridKind::IsometricDots] {
+        let grid = BoardGrid::new(kind, 40);
+        let points = triangle_points(recognize_on(&trace(&drawn, 0.1, 3.0, 0.0), grid, 2))
+            .unwrap_or_else(|| panic!("triangle on {kind:?}"));
+
+        let mut sorted = points.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![(69, 160), (139, 40), (208, 160)], "{kind:?}");
+    }
+}
+
+/// Quick mouse rectangles traced from a screenshot of strokes Shape Pen left
+/// as ink at the old default: one tilted, one with a rounded corner, and one
+/// skewed with a side leaning about 17 degrees.
+const QUICK_RECTANGLES: [&[(f64, f64)]; 3] = [
+    &[(38.0, 122.0), (382.0, 150.0), (401.0, 256.0), (39.0, 240.0)],
+    &[
+        (567.0, 234.0),
+        (845.0, 226.0),
+        (850.0, 386.0),
+        (622.0, 395.0),
+        (597.0, 350.0),
+    ],
+    &[
+        (206.0, 343.0),
+        (457.0, 350.0),
+        (492.0, 466.0),
+        (252.0, 485.0),
+    ],
+];
+
+#[test]
+fn quick_rectangles_with_leaning_sides_are_rectangles_by_default() {
+    let default = crate::config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY;
+
+    for corners in QUICK_RECTANGLES {
+        let path = trace(corners, 0.05, 2.0, 1.0);
+
+        let shape = recognize(&path, default);
+
+        let Some(Shape::Rect { x, y, w, h, .. }) = shape else {
+            panic!("{corners:?} became {shape:?}");
+        };
+        // Each side lands on its average position, inside the drawn extremes.
+        let (xs, ys): (Vec<f64>, Vec<f64>) = corners.iter().copied().unzip();
+        let min = |values: &[f64]| values.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = |values: &[f64]| values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        assert!(f64::from(x) >= min(&xs) - 2.0 && f64::from(x + w) <= max(&xs) + 2.0);
+        assert!(f64::from(y) >= min(&ys) - 2.0 && f64::from(y + h) <= max(&ys) + 2.0);
+    }
+}
+
+#[test]
+fn leaning_quadrilaterals_need_more_sensitivity_the_more_they_lean() {
+    // Left and right sides lean 21 degrees: a trapezoid, not a quick
+    // rectangle, until the most forgiving levels.
+    let trapezoid = [
+        (100.0, 250.0),
+        (300.0, 250.0),
+        (250.0, 120.0),
+        (150.0, 120.0),
+    ];
+    let path = trace(&trapezoid, 0.1, 3.0, 0.0);
+
+    let kinds: Vec<_> = (0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY)
+        .map(|level| recognize(&path, level).map(|shape| shape.kind_name()))
+        .collect();
+
+    assert_eq!(
+        kinds,
+        [None, None, None, Some("Rectangle"), Some("Rectangle")]
+    );
+}
+
+#[test]
+fn diamonds_kites_and_round_strokes_never_become_rectangles() {
+    let outlines = [
+        ("diamond", regular(4, (70.0, 70.0), 0.0)),
+        (
+            "kite",
+            vec![
+                (200.0, 100.0),
+                (260.0, 170.0),
+                (200.0, 300.0),
+                (140.0, 170.0),
+            ],
+        ),
+        ("circle", regular(48, (60.0, 60.0), 0.0)),
+        ("oval", regular(48, (90.0, 50.0), 0.0)),
+    ];
+
+    for (name, outline) in outlines {
+        for wobble in [0.0, 2.0] {
+            let path = trace(&outline, 0.1, 3.0, wobble);
+            for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+                assert!(
+                    !matches!(recognize(&path, level), Some(Shape::Rect { .. })),
+                    "{name} with wobble {wobble} at level {level}"
                 );
             }
         }

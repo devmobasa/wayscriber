@@ -78,6 +78,7 @@ impl ConfigDraft {
                 .drawing
                 .shape_recognition_sensitivity
                 .to_string(),
+            drawing_shape_recognition_grid_snap: config.drawing.shape_recognition_grid_snap,
             drawing_font_cycle: FontCycleDraft::from_entries(config.drawing.font_cycle.clone()),
             drawing_hit_test_tolerance: format_float(config.drawing.hit_test_tolerance),
             drawing_hit_test_linear_threshold: config.drawing.hit_test_linear_threshold.to_string(),

@@ -183,6 +183,8 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::OpenFontPicker,
     Action::IncreasePenSmoothing,
     Action::DecreasePenSmoothing,
+    Action::IncreaseShapeRecognitionSensitivity,
+    Action::DecreaseShapeRecognitionSensitivity,
     Action::SelectSpotlightTool,
     Action::CycleBlurStyle,
     Action::CycleArrowStyle,

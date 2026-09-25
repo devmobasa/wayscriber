@@ -28,5 +28,6 @@ pub(crate) use drawing::{
     FinishedToolStroke, PROVISIONAL_POLYGON_DAMAGE_PADDING, PolygonProvisionalSnapshot,
     PolygonStrokeSnapshot, ProvisionalToolSnapshot, ProvisionalToolStroke, ToolStrokeSnapshot,
 };
+pub(crate) use live_shape::LiveShapeMemo;
 pub(crate) use profile::{ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};
 pub use settings::{PerToolDrawingSettings, ToolDrawingSettings};

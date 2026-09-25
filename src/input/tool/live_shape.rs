@@ -1,16 +1,88 @@
 //! Recognize lines and closed shapes from a pen path. Ambiguous ink stays ink.
 
+use std::cell::RefCell;
+
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Color, Shape};
 
+mod grid;
+mod outline;
+mod rough_rectangle;
 #[cfg(test)]
 mod tests;
 mod triangle;
+
+/// Remembers the last recognition of the stroke being drawn, so the preview,
+/// its damage, and the shape readout share one recognition per pointer move
+/// instead of each running it over the whole stroke.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LiveShapeMemo {
+    last: RefCell<Option<(MemoKey, Option<Shape>)>>,
+    #[cfg(test)]
+    runs: std::cell::Cell<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MemoKey {
+    len: usize,
+    first: (i32, i32),
+    last: (i32, i32),
+    color: Color,
+    thick: f64,
+    fill: bool,
+    grid: BoardGrid,
+    sensitivity: u8,
+}
+
+impl LiveShapeMemo {
+    /// Recognize `points`, reusing the last answer while neither the stroke
+    /// nor the settings have changed. A stroke only grows at its end while
+    /// it is drawn, and the memo is reset when the next one starts, so the
+    /// point count and both ends identify it.
+    pub(crate) fn recognize(
+        &self,
+        points: &[(i32, i32)],
+        color: Color,
+        thick: f64,
+        fill: bool,
+        grid: BoardGrid,
+        sensitivity: u8,
+    ) -> Option<Shape> {
+        let key = MemoKey {
+            len: points.len(),
+            first: *points.first()?,
+            last: *points.last()?,
+            color,
+            thick,
+            fill,
+            grid,
+            sensitivity,
+        };
+        if let Some((cached, shape)) = &*self.last.borrow()
+            && *cached == key
+        {
+            return shape.clone();
+        }
+
+        #[cfg(test)]
+        self.runs.set(self.runs.get() + 1);
+        let shape = recognize(points, color, thick, fill, grid, sensitivity);
+        *self.last.borrow_mut() = Some((key, shape.clone()));
+        shape
+    }
+
+    /// How many recognitions actually ran.
+    #[cfg(test)]
+    pub(crate) fn runs(&self) -> usize {
+        self.runs.get()
+    }
+}
 
 pub(super) fn recognize(
     points: &[(i32, i32)],
     color: Color,
     thick: f64,
+    fill: bool,
     grid: BoardGrid,
     sensitivity: u8,
 ) -> Option<Shape> {
@@ -28,9 +100,16 @@ pub(super) fn recognize(
         && bounds.width >= 24.0
         && bounds.height >= 24.0
         && chord <= bounds.diameter() * (0.12 + 0.05 * f64::from(sensitivity))
-        && let Some(shape) = recognize_closed(points, bounds, length, color, thick, sensitivity)
+        && let Some(mut shape) = recognize_closed(points, bounds, length, color, thick, sensitivity)
     {
-        return Some(shape);
+        // Closed shapes follow the Fill toggle, like the dedicated shape tools.
+        if let Shape::Ellipse { fill: filled, .. }
+        | Shape::Rect { fill: filled, .. }
+        | Shape::Polygon { fill: filled, .. } = &mut shape
+        {
+            *filled = fill;
+        }
+        return Some(grid::snap_closed_shape(shape, grid));
     }
 
     if chord < 16.0 || resampled_length(points) > chord * (1.08 + 0.04 * f64::from(sensitivity)) {
@@ -125,6 +204,10 @@ fn recognize_closed(
     } else {
         (None, None)
     };
+    // A rectangle the box fit rejects may still be one whose sides lean.
+    let rectangle = rectangle.or_else(|| {
+        rough_rectangle::fit_rough_rectangle(points, bounds, color, thick, sensitivity)
+    });
     let triangle = triangle::fit_triangle(points, bounds, color, thick, sensitivity);
 
     // Ties keep the earlier candidate, so an ellipse wins an exact tie.
@@ -186,9 +269,14 @@ fn align_line(
 
 fn snap_to_grid(first: f64, last: f64, spacing: f64) -> Option<i32> {
     let coordinate = ((first + last) / (2.0 * spacing)).round() * spacing;
-    let margin = (spacing * 0.15).clamp(4.0, 8.0);
+    let margin = grid_snap_margin(spacing);
     ((first - coordinate).abs() <= margin && (last - coordinate).abs() <= margin)
         .then_some(coordinate.round() as i32)
+}
+
+/// How far ink may sit from board paper and still snap to it.
+fn grid_snap_margin(spacing: f64) -> f64 {
+    (spacing * 0.15).clamp(4.0, 8.0)
 }
 
 fn winds_once(points: &[(i32, i32)], bounds: Bounds) -> bool {

@@ -25,6 +25,22 @@ impl InputState {
         self.push_toast(ToastPriority::Info, "pen-smoothing", Toast::info(message));
     }
 
+    /// Step Shape Pen sensitivity and say where it landed, since nothing
+    /// changes on screen until the next stroke.
+    fn announce_shape_recognition_sensitivity(&mut self, delta: i32) {
+        if !self.nudge_shape_recognition_sensitivity(delta) {
+            return;
+        }
+        let level = self.style.shape_recognition_sensitivity;
+        let max = crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
+        info!("Shape Pen sensitivity set to {level}/{max}");
+        self.push_toast(
+            ToastPriority::Info,
+            "shape-recognition-sensitivity",
+            Toast::info(format!("Shape Pen sensitivity {level}/{max}")),
+        );
+    }
+
     pub(in crate::input::state) fn handle_tool_action_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,
@@ -68,6 +84,12 @@ impl InputState {
             }
             Action::IncreasePenSmoothing => self.announce_pen_smoothing(1),
             Action::DecreasePenSmoothing => self.announce_pen_smoothing(-1),
+            Action::IncreaseShapeRecognitionSensitivity => {
+                self.announce_shape_recognition_sensitivity(1);
+            }
+            Action::DecreaseShapeRecognitionSensitivity => {
+                self.announce_shape_recognition_sensitivity(-1);
+            }
             Action::ToggleEraserMode => {
                 if self.toggle_eraser_mode() {
                     info!("Eraser mode set to {:?}", self.style.eraser_mode);

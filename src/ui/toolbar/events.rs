@@ -89,6 +89,8 @@ pub enum ToolbarEvent {
     SetSpotlightMagnification(f64),
     /// Smoothing passes applied to freehand and marker strokes on release.
     SetPenSmoothing(u8),
+    /// How readily Shape Pen turns ink into shapes, 0 (precise) to 4.
+    SetShapeRecognitionSensitivity(u8),
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
     /// Turn bold on or off for selected text, or for the next label typed.

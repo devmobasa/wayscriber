@@ -40,6 +40,14 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_decrease_pen_smoothing")]
     pub decrease_pen_smoothing: Vec<String>,
 
+    /// Let Shape Pen turn rougher strokes into shapes.
+    #[serde(default = "default_increase_shape_recognition_sensitivity")]
+    pub increase_shape_recognition_sensitivity: Vec<String>,
+
+    /// Make Shape Pen keep more strokes as ink.
+    #[serde(default = "default_decrease_shape_recognition_sensitivity")]
+    pub decrease_shape_recognition_sensitivity: Vec<String>,
+
     /// Step the text font through `drawing.font_cycle`.
     #[serde(default = "default_cycle_font_family")]
     pub cycle_font_family: Vec<String>,
@@ -126,6 +134,10 @@ impl Default for ToolKeybindingsConfig {
             toggle_eraser_mode: default_toggle_eraser_mode(),
             increase_pen_smoothing: default_increase_pen_smoothing(),
             decrease_pen_smoothing: default_decrease_pen_smoothing(),
+            increase_shape_recognition_sensitivity: default_increase_shape_recognition_sensitivity(
+            ),
+            decrease_shape_recognition_sensitivity: default_decrease_shape_recognition_sensitivity(
+            ),
             cycle_font_family: default_cycle_font_family(),
             open_font_picker: default_open_font_picker(),
             cycle_blur_style: default_cycle_blur_style(),

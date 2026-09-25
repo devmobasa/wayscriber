@@ -9,6 +9,7 @@ impl StylePillControl {
             Self::ThicknessValue => Cow::Borrowed("top.style.thickness-value"),
             Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("top.style.opacity"),
             Self::PenSmoothingStepper => Cow::Borrowed("top.style.pen-smoothing"),
+            Self::ShapeSensitivityStepper => Cow::Borrowed("top.style.shape-sensitivity"),
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
@@ -51,7 +52,9 @@ impl StylePillControl {
             }
             Self::EraserModeSegment => StylePillRole::Segmented,
             Self::SelectionCycle(_) => StylePillRole::Button,
-            Self::PenSmoothingStepper | Self::SelectionStepper(_) => StylePillRole::Stepper,
+            Self::PenSmoothingStepper
+            | Self::ShapeSensitivityStepper
+            | Self::SelectionStepper(_) => StylePillRole::Stepper,
         }
     }
 
@@ -92,7 +95,10 @@ impl StylePillControl {
             Self::SelectionCycle(kind) => {
                 ToolbarEvent::AdjustSelectionProperty { kind, direction: 1 }
             }
-            Self::EraserModeSegment | Self::PenSmoothingStepper | Self::SelectionStepper(_) => {
+            Self::EraserModeSegment
+            | Self::PenSmoothingStepper
+            | Self::ShapeSensitivityStepper
+            | Self::SelectionStepper(_) => {
                 return None;
             }
         })
@@ -166,6 +172,9 @@ impl StylePillControl {
             } else {
                 snapshot.pen_smoothing.to_string()
             }),
+            Self::ShapeSensitivityStepper => {
+                Some(snapshot.shape_recognition_sensitivity.to_string())
+            }
             Self::Slider(StylePillSlider::FontSize) | Self::FontSizeValue => {
                 Some(StylePillSlider::FontSize.formatter()(snapshot.font_size))
             }
@@ -250,6 +259,7 @@ impl StylePillControl {
             }
             Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("Marker opacity"),
             Self::PenSmoothingStepper => Cow::Borrowed("Smoothing"),
+            Self::ShapeSensitivityStepper => Cow::Borrowed("Sensitivity"),
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Cow::Borrowed("Spotlight magnification")
             }
@@ -316,6 +326,10 @@ impl StylePillControl {
                 "Smooth freehand and marker strokes when the pen lifts. Off keeps the exact path."
                     .to_string(),
             ),
+            Self::ShapeSensitivityStepper => Some(
+                "How readily Shape Pen turns ink into shapes: 0 is precise, 4 accepts rough strokes."
+                    .to_string(),
+            ),
             Self::FontWeightToggle => {
                 Some("Bold. Applies to selected text, or to the next label you type.".to_string())
             }
@@ -376,6 +390,9 @@ impl StylePillControl {
     pub(crate) fn steps(self, snapshot: &ToolbarSnapshot) -> Option<[StylePillStep; 2]> {
         if self == Self::PenSmoothingStepper {
             return Some(pen_smoothing_steps(snapshot));
+        }
+        if self == Self::ShapeSensitivityStepper {
+            return Some(shape_sensitivity_steps(snapshot));
         }
         let Self::SelectionStepper(kind) = self else {
             return None;
@@ -457,6 +474,29 @@ fn pen_smoothing_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
                 level.saturating_add(1).min(crate::draw::MAX_PEN_SMOOTHING),
             ),
             tooltip: "More smoothing".to_string(),
+        },
+    ]
+}
+
+/// The Shape Pen sensitivity stepper's halves, clamped like smoothing's.
+fn shape_sensitivity_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
+    let level = snapshot.shape_recognition_sensitivity;
+    [
+        StylePillStep {
+            id: "top.style.shape-sensitivity.minus",
+            label: "\u{2212}",
+            event: ToolbarEvent::SetShapeRecognitionSensitivity(level.saturating_sub(1)),
+            tooltip: "Keep more strokes as ink".to_string(),
+        },
+        StylePillStep {
+            id: "top.style.shape-sensitivity.plus",
+            label: "+",
+            event: ToolbarEvent::SetShapeRecognitionSensitivity(
+                level
+                    .saturating_add(1)
+                    .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+            ),
+            tooltip: "Recognize rougher strokes".to_string(),
         },
     ]
 }

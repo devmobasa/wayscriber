@@ -47,7 +47,7 @@ pub const ENTRIES: &[ActionMeta] = &[
     ),
     meta!(
         SelectLiveShapeTool,
-        "Live Shaping Tool",
+        "Shape Pen Tool",
         Some("Shape Pen"),
         "Turn confident ink into lines, ellipses, rectangles, and triangles",
         Tools,
@@ -269,6 +269,26 @@ pub const ENTRIES: &[ActionMeta] = &[
         "Decrease Pen Smoothing",
         None,
         "Keep more of the drawn path",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        IncreaseShapeRecognitionSensitivity,
+        "Increase Shape Pen Sensitivity",
+        None,
+        "Recognize rougher strokes as shapes",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        DecreaseShapeRecognitionSensitivity,
+        "Decrease Shape Pen Sensitivity",
+        None,
+        "Keep more strokes as ink",
         Tools,
         true,
         true,

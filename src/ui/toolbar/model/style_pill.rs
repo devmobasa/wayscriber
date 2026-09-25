@@ -97,6 +97,9 @@ pub(crate) enum StylePillControl {
     /// on a 110px track is 18px of travel per step and fiddly to land on. It
     /// also keeps the pill from reading as a row of near-identical bars.
     PenSmoothingStepper,
+    /// Shape Pen recognition sensitivity, as a −/value/+ stepper over its
+    /// five levels.
+    ShapeSensitivityStepper,
     /// Shape fill toggle.
     FillToggle,
     /// Arrow style cycle button, showing the style the next arrow will use.
@@ -272,6 +275,9 @@ impl StylePillSpec {
         }
         if context.show_pen_smoothing && !plan.drop_style_extras {
             controls.push(StylePillControl::PenSmoothingStepper);
+        }
+        if context.show_shape_sensitivity && !plan.drop_style_extras {
+            controls.push(StylePillControl::ShapeSensitivityStepper);
         }
         if context.tool_options_kind == ToolOptionsKind::Spotlight {
             controls.push(StylePillControl::Slider(

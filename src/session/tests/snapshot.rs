@@ -78,6 +78,7 @@ fn every_persisted_drawing_style_survives_snapshot_serialization_and_restore() {
         recent_colors: vec![recent, color],
         marker_opacity: Some(0.42),
         pen_smoothing: Some(5),
+        shape_recognition_sensitivity: Some(3),
         spotlight_magnification: Some(2.25),
         fill_enabled: Some(true),
         tool_override: Some(Tool::Marker),
@@ -138,6 +139,27 @@ fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
     );
 
     assert_eq!(restored.style.pen_smoothing, 5);
+}
+
+#[test]
+fn shape_recognition_sensitivity_survives_snapshot_serialization_and_restore() {
+    let mut source = dummy_input_state();
+    let _ = source.set_shape_recognition_sensitivity(4);
+
+    let captured = ToolStateSnapshot::from_input_state(&source);
+    let encoded = serde_json::to_vec(&captured).expect("serialize tool snapshot");
+    let decoded: ToolStateSnapshot =
+        serde_json::from_slice(&encoded).expect("deserialize tool snapshot");
+
+    let mut restored = dummy_input_state();
+    let _ = restored.set_shape_recognition_sensitivity(0);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
+
+    assert_eq!(restored.style.shape_recognition_sensitivity, 4);
 }
 
 #[test]
@@ -452,6 +474,7 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             pen_smoothing: None,
+            shape_recognition_sensitivity: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),
@@ -508,6 +531,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             pen_smoothing: None,
+            shape_recognition_sensitivity: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),
@@ -559,6 +583,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             pen_smoothing: None,
+            shape_recognition_sensitivity: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),

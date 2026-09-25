@@ -115,7 +115,7 @@ decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 # Tool selection shortcuts (optional; keep empty to rely on modifiers)
 select_selection_tool = ["V"]
 select_pen_tool = ["F"]
-select_live_shape_tool = []
+select_live_shape_tool = ["S"]
 select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
@@ -129,6 +129,9 @@ open_font_picker = []
 # Step stroke smoothing up and down (unbound by default)
 increase_pen_smoothing = []
 decrease_pen_smoothing = []
+# Step Shape Pen recognition sensitivity up and down (unbound by default)
+increase_shape_recognition_sensitivity = []
+decrease_shape_recognition_sensitivity = []
 # Select the spotlight tool (unbound by default)
 select_spotlight_tool = []
 # Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
@@ -479,7 +482,8 @@ show_capabilities_warning = true
 # The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
-# Show rectangle and ellipse preview dimensions in logical board pixels.
+# Show rectangle and ellipse preview dimensions in logical board pixels, and
+# the shape Shape Pen has recognized with its size (a line shows its length).
 # This is separate from capture.region.show_size_readout.
 show_shape_size_readout = true
 
@@ -1118,11 +1122,20 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # A session remembers the level it was saved at; this is the starting value.
 pen_smoothing = 3
 
-# Shape Pen recognition sensitivity (0 - 4): 0 is precise, 2 is balanced,
-# and 4 accepts rougher lines and closed shapes. Applies to lines, ellipses,
-# rectangles, and triangles; it does not change the dedicated shape tools or
-# grid spacing.
-shape_recognition_sensitivity = 2
+# Shape Pen recognition sensitivity (0 - 4): 0 is precise, 3 (the default)
+# is forgiving, and 4 accepts the roughest lines and closed shapes. Applies to
+# lines, ellipses, rectangles, and triangles; it does not change the dedicated
+# shape tools or grid spacing.
+#
+# Also on the toolbar as the "Sensitivity" stepper while Shape Pen is up.
+# A session remembers the level it was saved at; this is the starting value.
+shape_recognition_sensitivity = 3
+
+# Snap Shape Pen results to board paper: lines to nearby grid lines,
+# rectangle and oval edges to Cartesian lines, and triangle corners to
+# Cartesian lines or isometric points. Set to false to keep recognized shapes
+# exactly where you drew them.
+shape_recognition_grid_snap = true
 
 # Default fill state for fill-capable shapes
 default_fill_enabled = false

@@ -1,7 +1,7 @@
 use log::warn;
 
 use crate::draw::Shape;
-use crate::draw::frame::UndoAction;
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::shape::bounding_box_for_points;
 use crate::input::tool::{FinishedToolStroke, PolygonStrokeSnapshot, ToolStrokeSnapshot};
 use crate::input::{InputState, Tool};
@@ -67,7 +67,7 @@ pub(super) fn finish_drawing(
             point_thicknesses: release.point_thicknesses,
             color: drawing_color,
             size: drawing_thickness,
-            grid: state.boards.active_board().spec.grid,
+            grid: state.shape_pen_grid(),
             shape_recognition_sensitivity: state.style.shape_recognition_sensitivity,
             marker_opacity: state.style.marker_opacity,
             fill_enabled: state.style.fill_enabled,
@@ -88,8 +88,9 @@ pub(super) fn finish_drawing(
         tool.finish_stroke(snapshot)
     };
 
-    let (shape, usage) = match finished {
-        FinishedToolStroke::Shape { shape, usage } => (shape, usage),
+    let (shape, ink, usage) = match finished {
+        FinishedToolStroke::Shape { shape, usage } => (shape, None, usage),
+        FinishedToolStroke::Recognized { shape, ink, usage } => (shape, Some(ink), usage),
         FinishedToolStroke::EraseStroke { path } => {
             state.clear_provisional_dirty();
             if state.erase_strokes_by_points_with(measurer, &path) {
@@ -110,20 +111,31 @@ pub(super) fn finish_drawing(
             if crate::draw::spotlight_magnification_is_active(magnification)
     );
     let path_damage = finished_path_damage_regions(&shape, bounds);
-    // `Shape::Freehand` only, deliberately. This covers the case where a
-    // pressure preview drew wide samples and the release then *downgraded* to a
-    // plain Freehand at the tool's own thickness, leaving the preview wider than
-    // anything the committed shape damages. A committed `FreehandPressure` keeps
-    // the sampled thicknesses it was drawn with, so its own damage is already as
-    // wide as the preview was and it needs no help here.
-    let preserve_provisional_cleanup =
-        matches!(shape, Shape::Freehand { .. }) && pressure_preview_exceeds_final_width;
+    // Two previews can leave pixels outside anything the committed stroke
+    // damages, so their whole bounds are repainted.
+    //
+    // A pressure preview drew wide samples and the release then *downgraded* to
+    // a plain Freehand at the tool's own thickness. `Shape::Freehand` only,
+    // deliberately: a committed `FreehandPressure` keeps the sampled
+    // thicknesses it was drawn with, so its own damage is already as wide as
+    // the preview was.
+    //
+    // A Shape Pen preview showed a shape, fitted or snapped to the grid, and
+    // the release point tipped the stroke back into ink.
+    let previewed_shape = state.pointer.replace_live_shape_previewed_shape(false);
+    let preserve_provisional_cleanup = (matches!(shape, Shape::Freehand { .. })
+        && pressure_preview_exceeds_final_width)
+        || (previewed_shape && ink.is_none());
 
     let mut limit_reached = false;
     let max_shapes = state.max_shapes_per_frame();
+    let undo_limit = state.history_limits.undo_stack_limit();
     let addition = {
         let frame = state.boards.active_frame_mut();
-        match frame.try_add_shape_with_id(shape.clone(), max_shapes) {
+        // A recognized stroke enters history as its ink, then turns into the
+        // shape as a second step, so the first undo gives the ink back.
+        let created = ink.clone().unwrap_or_else(|| shape.clone());
+        match frame.try_add_shape_with_id(created, max_shapes) {
             Some(new_id) => {
                 if let Some(index) = frame.find_index(new_id) {
                     if let Some(new_shape) = frame.shape(new_id) {
@@ -132,8 +144,27 @@ pub(super) fn finish_drawing(
                             UndoAction::Create {
                                 shapes: vec![(index, snapshot.clone())],
                             },
-                            state.history_limits.undo_stack_limit(),
+                            undo_limit,
                         );
+                        if let Some(ink) = ink
+                            && let Some(target) = frame.shape_mut(new_id)
+                        {
+                            target.set_shape(shape.clone());
+                            frame.push_undo_action(
+                                UndoAction::Modify {
+                                    shape_id: new_id,
+                                    before: ShapeSnapshot {
+                                        shape: ink,
+                                        locked: snapshot.locked,
+                                    },
+                                    after: ShapeSnapshot {
+                                        shape: shape.clone(),
+                                        locked: snapshot.locked,
+                                    },
+                                },
+                                undo_limit,
+                            );
+                        }
                         Some((new_id, snapshot))
                     } else {
                         None
