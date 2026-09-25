@@ -16,6 +16,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Chrome,
         None,
     ),
+    item(ids::TOP_CHROME_EXIT, "Exit overlay", Top, Chrome, None),
     item(ids::TOP_TOOL_SELECT, "Select", Top, Tool, None),
     item(ids::TOP_TOOL_PEN, "Pen", Top, Tool, None),
     item(ids::TOP_TOOL_LIVE_SHAPE, "Shape Pen", Top, Tool, None),

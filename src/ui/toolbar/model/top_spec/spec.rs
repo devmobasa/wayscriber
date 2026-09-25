@@ -222,12 +222,12 @@ impl TopToolbarSpec {
     }
 
     /// Chrome island content, in reading order: layout menu, then About,
-    /// then pin, then minimize. The layout menu sits on the content-adjacent
-    /// edge because it reshapes the strip's content, while the window-chrome
-    /// trio (About leading among them because it is the only entry that
-    /// leaves the overlay) stays against the window edge. All four are
-    /// hideable through toolbar customization.
-    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 4] {
+    /// then pin, then minimize, then exit. The layout menu sits on the
+    /// content-adjacent edge because it reshapes the strip's content, while
+    /// the window-chrome entries stay against the window edge, Exit last where
+    /// a close button is expected. All five are hideable through toolbar
+    /// customization.
+    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 5] {
         [
             toolbar_item_visible(snapshot, ids::TOP_CHROME_LAYOUT)
                 .then_some(TopToolbarControl::LayoutMode),
@@ -236,6 +236,7 @@ impl TopToolbarSpec {
             toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN).then_some(TopToolbarControl::Pin),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE)
                 .then_some(TopToolbarControl::Minimize),
+            toolbar_item_visible(snapshot, ids::TOP_CHROME_EXIT).then_some(TopToolbarControl::Exit),
         ]
     }
 

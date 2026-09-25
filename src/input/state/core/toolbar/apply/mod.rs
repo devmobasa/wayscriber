@@ -198,6 +198,7 @@ impl InputState {
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
             ToolbarEvent::OpenAbout => self.apply_toolbar_open_about(),
+            ToolbarEvent::ExitOverlay => self.apply_toolbar_exit_overlay(),
             ToolbarEvent::RequestRuntimeUiReset
             | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
             | ToolbarEvent::CancelUnsupportedRuntimeUiReset

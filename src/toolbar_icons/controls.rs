@@ -214,7 +214,6 @@ pub fn draw_icon_restore(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_restore(ctx, x, y, size);
 }
 
-#[allow(dead_code)] // part of the complete icon family; no close action today
 pub fn draw_icon_close(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_close(ctx, x, y, size);
 }

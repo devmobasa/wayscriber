@@ -46,6 +46,14 @@ impl InputState {
         true
     }
 
+    /// The toolbar's Exit button is an explicit request, so an xdg stay-mode
+    /// focus loss must not defer it (see `request_explicit_exit`).
+    pub(super) fn apply_toolbar_exit_overlay(&mut self) -> bool {
+        self.end_pointer_drag();
+        self.request_explicit_exit();
+        true
+    }
+
     pub(super) fn apply_toolbar_open_config_file(&mut self) -> bool {
         self.open_config_file_default();
         true
@@ -592,6 +600,18 @@ mod tests {
         state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(false)));
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+    }
+
+    /// The toolbar's Exit is an explicit request, so xdg stay-mode focus loss
+    /// cannot defer it.
+    #[test]
+    fn exit_overlay_requests_an_explicit_exit() {
+        let mut state = make_test_input_state();
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ExitOverlay));
+
+        assert!(state.should_exit);
+        assert!(state.take_explicit_exit_requested());
     }
 
     #[test]

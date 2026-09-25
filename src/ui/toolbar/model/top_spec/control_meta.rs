@@ -84,6 +84,8 @@ pub(crate) enum TopToolbarIcon {
     Settings,
     /// About entry (circled information glyph).
     About,
+    /// Exit entry (a cross).
+    Exit,
     /// Layout button showing Simple (one density bar).
     LayoutSimple,
     /// Layout button showing Regular (two density bars).

@@ -180,6 +180,7 @@ pub(super) fn build_top_view_planned(
                 | model::TopToolbarControl::Pin
                 | model::TopToolbarControl::Minimize
                 | model::TopToolbarControl::About
+                | model::TopToolbarControl::Exit
                 | model::TopToolbarControl::LayoutMode
                 | model::TopToolbarControl::ClearCanvas
                 | model::TopToolbarControl::CanvasMenu

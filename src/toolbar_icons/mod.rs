@@ -117,6 +117,7 @@ pub(crate) fn top_toolbar_icon_painter(
         I::Session => draw_icon_session,
         I::Settings => draw_icon_sliders,
         I::About => draw_icon_info,
+        I::Exit => draw_icon_close,
         I::LayoutSimple => draw_icon_layout_simple,
         I::LayoutRegular => draw_icon_layout_regular,
         I::LayoutAdvanced => draw_icon_layout_advanced,

@@ -101,6 +101,8 @@ const HELP_ACTIONS: &[Action] = &[
 ];
 
 const TOOLBAR_ACTIONS: &[Action] = &[
+    // The chrome island's Exit button names its keys in the tooltip.
+    Action::Exit,
     Action::SelectPenTool,
     Action::SelectLiveShapeTool,
     Action::SelectLineTool,

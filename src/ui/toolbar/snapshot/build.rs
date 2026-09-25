@@ -207,6 +207,7 @@ impl ToolbarSnapshot {
                 == crate::input::state::TopMenuState::CanvasPopover,
             layout_menu_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::LayoutMenu,
+            exit_hides_overlay: false,
             top_popover_scroll: state.toolbar_top_popover_scroll(),
             top_minimized: state.toolbar_top_minimized(),
             top_display_mode: state.toolbar_top_display_mode(),

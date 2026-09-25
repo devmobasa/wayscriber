@@ -87,6 +87,10 @@ pub(crate) enum TopToolbarControl {
     /// leaves the overlay, since About is a normal window and the overlay
     /// renders above those.
     About,
+    /// Chrome-island entry closing the overlay (the Exit action), so a
+    /// mouse-only user can always leave. Under the daemon it hides the
+    /// overlay instead, and its label says so.
+    Exit,
     /// Chrome-island entry opening the layout-preset menu (Simple / Regular /
     /// Advanced). A menu rather than a cycle: the strip's width changes with
     /// the preset, so a cycling button moved out from under the pointer. The
@@ -129,6 +133,7 @@ impl TopToolbarControl {
             Self::Overflow => ids::TOP_CHROME_OVERFLOW,
             Self::Minimize => ids::TOP_CHROME_CLOSE,
             Self::About => ids::TOP_CHROME_ABOUT,
+            Self::Exit => ids::TOP_CHROME_EXIT,
             Self::LayoutMode => ids::TOP_CHROME_LAYOUT,
             Self::HighlightRing => ids::TOP_UTILITY_HIGHLIGHT_RING,
         };
@@ -167,6 +172,7 @@ impl TopToolbarControl {
             }
             Self::Minimize => ToolbarEvent::SetTopMinimized(true),
             Self::About => ToolbarEvent::OpenAbout,
+            Self::Exit => ToolbarEvent::ExitOverlay,
             Self::LayoutMode => ToolbarEvent::ToggleLayoutMenu(!snapshot.layout_menu_open),
             Self::HighlightRing => {
                 ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled)
@@ -231,7 +237,7 @@ impl TopToolbarControl {
             // The chrome island (layout menu, About, pin, minimize) renders
             // quieter than the content islands; both frontends key that
             // styling off this role.
-            Self::Pin | Self::Minimize | Self::About | Self::LayoutMode => {
+            Self::Pin | Self::Minimize | Self::About | Self::LayoutMode | Self::Exit => {
                 TopToolbarControlRole::Chrome
             }
             _ => TopToolbarControlRole::Button,
@@ -253,6 +259,7 @@ impl TopToolbarControl {
             | Self::Minimize
             | Self::About
             | Self::LayoutMode
+            | Self::Exit
             | Self::Restore
             | Self::MicroChip => TopToolbarIsland::Chrome,
             Self::Preset(_) => TopToolbarIsland::Presets,
@@ -287,6 +294,7 @@ impl TopToolbarControl {
             Self::SettingsMenu => TopToolbarIcon::Settings,
             Self::Minimize => TopToolbarIcon::Minimize,
             Self::About => TopToolbarIcon::About,
+            Self::Exit => TopToolbarIcon::Exit,
             // Filled preset slots carry the saved tool's glyph (the renderers
             // draw it neutral and show the preset color as a corner swatch);
             // empty slots have no glyph.
@@ -328,6 +336,8 @@ impl TopToolbarControl {
             Self::SettingsMenu => Cow::Borrowed("Settings..."),
             Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
             Self::About => Cow::Borrowed(action_short_label(Action::OpenAbout)),
+            Self::Exit if snapshot.exit_hides_overlay => Cow::Borrowed("Hide overlay"),
+            Self::Exit => Cow::Borrowed(action_short_label(Action::Exit)),
             Self::LayoutMode => Cow::Borrowed("Toolbar layout"),
             Self::HighlightRing => Cow::Borrowed("Ring"),
         }
@@ -368,6 +378,11 @@ impl TopToolbarControl {
                 layout_mode_label(snapshot.layout_mode)
             ),
             Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
+            // The key text comes from the configured Exit binding.
+            Self::Exit => format_binding_label(
+                &self.label(snapshot),
+                snapshot.binding_hints.binding_for_action(Action::Exit),
+            ),
             Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
             Self::CanvasMenu => "Canvas: boards, pages, zoom, history, steps".to_string(),
             Self::SessionMenu => "Session: open, save, recent files".to_string(),

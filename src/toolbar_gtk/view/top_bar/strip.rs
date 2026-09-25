@@ -379,6 +379,7 @@ impl TopBar {
                     | model::TopToolbarControl::Pin
                     | model::TopToolbarControl::Minimize
                     | model::TopToolbarControl::About
+                    | model::TopToolbarControl::Exit
                     | model::TopToolbarControl::LayoutMode
                     | model::TopToolbarControl::ClearCanvas
                     | model::TopToolbarControl::CanvasMenu
@@ -405,7 +406,7 @@ impl TopBar {
                 model::TopToolbarControl::Minimize => {
                     island_chrome.append(&self.minimize_button(snapshot, control, sz(chrome_size)));
                 }
-                model::TopToolbarControl::About => {
+                model::TopToolbarControl::About | model::TopToolbarControl::Exit => {
                     island_chrome.append(&self.about_button(snapshot, control, sz(chrome_size)));
                 }
                 model::TopToolbarControl::LayoutMode => {

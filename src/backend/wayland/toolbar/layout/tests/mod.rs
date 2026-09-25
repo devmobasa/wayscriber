@@ -29,12 +29,12 @@ fn top_size_respects_icon_mode() {
     // Width includes the island gaps/padding of the four-pill band (tools,
     // presets, history, chrome): the presets island replaced the retired
     // colors group (M7-C1/C2), and the chrome island carries the layout
-    // cycle and About alongside pin and minimize. Height adds the contextual
+    // menu, About, and Exit alongside pin and minimize. Height adds the contextual
     // style pill under the 58px island band (6px gap + 40px pill) while a
     // drawing tool is active.
     assert_eq!(
         top_size(&crate::ui_text::UiTextEngine::default(), &snapshot),
-        (1329, 104)
+        (1359, 104)
     );
 
     state.set_toolbar_use_icons(false);
@@ -225,7 +225,9 @@ fn compact_top_strip_respects_budget_without_the_old_floor() {
     let mut state = create_test_input_state();
     state.set_toolbar_use_icons(false);
     let mut snapshot = snapshot_from_state(&state);
-    for budget in [376, 320, 300] {
+    // The protected core (Pen, Eraser, history, and the never-dropped chrome
+    // island including Exit) bounds how narrow the compact strip can get.
+    for budget in [376, 340, 320] {
         snapshot.top_viewport_max = Some(budget as f64);
         assert!(
             top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0 <= budget,

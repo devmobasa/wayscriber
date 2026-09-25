@@ -198,7 +198,7 @@ mod tests {
     fn toolbar_binding_hints_collect_only_toolbar_actions() {
         let state = make_test_input_state_with_action_bindings(binding_map(&[
             (Action::OpenConfigurator, &["Ctrl+Alt+Shift+O"]),
-            (Action::Exit, &["Ctrl+Alt+Shift+Q"]),
+            (Action::MeasureMode, &["Ctrl+Alt+Shift+Q"]),
         ]));
         let hints = ToolbarBindingHints::from_input_state(&state);
         let expected = Shortcut::parse("Ctrl+Alt+Shift+O").unwrap().to_string();
@@ -207,7 +207,7 @@ mod tests {
             hints.binding_for_action(Action::OpenConfigurator),
             Some(expected.as_str())
         );
-        assert_eq!(hints.binding_for_action(Action::Exit), None);
+        assert_eq!(hints.binding_for_action(Action::MeasureMode), None);
     }
 
     #[test]

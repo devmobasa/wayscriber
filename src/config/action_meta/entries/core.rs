@@ -8,5 +8,5 @@ pub const ENTRIES: &[ActionMeta] = &[meta!(
     Core,
     true,
     true,
-    false
+    true
 )];

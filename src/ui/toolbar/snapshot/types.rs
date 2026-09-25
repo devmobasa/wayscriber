@@ -402,6 +402,9 @@ pub struct ToolbarSnapshot {
     pub canvas_popover_open: bool,
     /// Whether the chrome island's layout-preset menu is open
     pub layout_menu_open: bool,
+    /// Whether exiting only hides the overlay: the daemon spawned this overlay
+    /// and keeps running after it closes. Filled by the backend.
+    pub exit_hides_overlay: bool,
     /// Internal scroll offset of the open Canvas/Session/Settings popover
     /// (logical pixels, clamped at render)
     pub top_popover_scroll: f64,

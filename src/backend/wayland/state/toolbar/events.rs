@@ -20,6 +20,16 @@ pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 use feedback::{ToolbarPinChange, pin_durability};
 use session::populate_session_snapshot;
 
+/// Whether the daemon spawned this overlay. Its exit then only hides the
+/// overlay: the daemon keeps running and shows it again on the next toggle.
+/// The daemon marks its overlay children with the child-generation variable
+/// (`daemon::overlay::spawn`), which never changes during a run.
+fn overlay_is_daemon_child() -> bool {
+    static DAEMON_CHILD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DAEMON_CHILD
+        .get_or_init(|| std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some())
+}
+
 fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
 }
@@ -102,6 +112,7 @@ impl WaylandState {
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_available_height = self.top_popover_available_height(&snapshot);
         snapshot.top_fade = self.toolbar_chrome.fade().value();
+        snapshot.exit_hides_overlay = overlay_is_daemon_child();
         snapshot
     }
 

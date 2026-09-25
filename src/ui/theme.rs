@@ -421,9 +421,10 @@ pub mod toolbar {
     pub const COLOR_PIN_DEFAULT: Rgba = (0.3, 0.3, 0.35, 0.7);
 
     // ---- Close button ----
-    /// Close button hover (red tint)
-    // TODO(theme-consolidation): near-duplicate of the destructive family.
-    pub const COLOR_CLOSE_HOVER: Rgba = (0.8, 0.3, 0.3, 0.9);
+    /// Minimize (collapse) button hover: a neutral lift of the default. Red
+    /// is reserved for destructive actions, and a red minimize read as
+    /// "close the overlay".
+    pub const COLOR_CLOSE_HOVER: Rgba = (0.62, 0.62, 0.68, 0.9);
     /// Close button default
     pub const COLOR_CLOSE_DEFAULT: Rgba = (0.5, 0.5, 0.55, 0.7);
 

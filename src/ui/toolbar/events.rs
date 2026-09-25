@@ -167,6 +167,9 @@ pub enum ToolbarEvent {
     /// Open the standalone About dialog. The overlay exits first: it is a
     /// layer-shell surface, so an About toplevel underneath would be hidden.
     OpenAbout,
+    /// Close the overlay, exactly like the Exit shortcut. Under the daemon
+    /// this hides the overlay and the daemon keeps running.
+    ExitOverlay,
     /// Reset generated runtime UI preferences. Supported state resets
     /// immediately; newer unsupported state first requests confirmation.
     RequestRuntimeUiReset,

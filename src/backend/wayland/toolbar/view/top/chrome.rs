@@ -1,4 +1,5 @@
-//! The right-aligned chrome island: layout menu, About, pin, and minimize.
+//! The right-aligned chrome island: layout menu, About, pin, minimize, and
+//! exit.
 
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
@@ -55,9 +56,12 @@ fn chrome_node(
     rect: (f64, f64, f64, f64),
 ) -> WidgetNode {
     let kind = match control {
-        // About and the layout menu are ordinary icon buttons in chrome
-        // styling; pin and minimize keep their bespoke glyph widgets.
-        model::TopToolbarControl::About | model::TopToolbarControl::LayoutMode => {
+        // About, Exit, and the layout menu are ordinary icon buttons in chrome
+        // styling with a neutral hover; pin and minimize keep their bespoke
+        // glyph widgets.
+        model::TopToolbarControl::About
+        | model::TopToolbarControl::Exit
+        | model::TopToolbarControl::LayoutMode => {
             return control_button_node(
                 snapshot,
                 control,

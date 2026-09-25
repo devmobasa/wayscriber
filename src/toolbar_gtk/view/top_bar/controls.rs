@@ -470,25 +470,33 @@ impl TopBar {
         (popover, capture_surface)
     }
 
-    /// The chrome island's About entry. Styled like the other chrome buttons,
-    /// but it opens a window instead of changing the toolbar, so it carries no
-    /// active state.
+    /// The chrome island's About and Exit entries. Styled like the other
+    /// chrome buttons, but they leave the overlay instead of changing the
+    /// toolbar, so they carry no active state. The Exit binding rides the
+    /// structure key's binding hints, so its tooltip never goes stale.
     pub(super) fn about_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
         control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::About);
+        assert!(matches!(
+            control,
+            model::TopToolbarControl::About | model::TopToolbarControl::Exit
+        ));
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
-        button.add_css_class("about");
+        button.add_css_class(if control == model::TopToolbarControl::About {
+            "about"
+        } else {
+            "exit"
+        });
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(model::TopToolbarIcon::About),
+            top_toolbar_icon_painter(control.glyph(snapshot)),
             size * 0.6,
         );
         button.set_child(Some(&icon.area));

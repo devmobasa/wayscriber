@@ -110,6 +110,48 @@ fn allocation_free_queries_match_the_materialized_spec() {
     }
 }
 
+/// A mouse-only user could not leave the overlay. Exit ends the chrome
+/// island, runs the Exit action, names its configured key in the tooltip,
+/// and says "hide" when the daemon keeps running behind it.
+#[test]
+fn exit_ends_the_chrome_island_and_runs_the_exit_action() {
+    let state = make_test_input_state();
+    let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let exit = TopToolbarControl::Exit;
+
+    assert_eq!(spec.chrome().last().copied(), Some(exit));
+    assert_eq!(exit.event(&snapshot), ToolbarEvent::ExitOverlay);
+    assert_eq!(exit.action(&snapshot), Some(Action::Exit));
+    assert_eq!(exit.role(), TopToolbarControlRole::Chrome);
+    assert_eq!(exit.island(), TopToolbarIsland::Chrome);
+    assert_eq!(exit.id(), TopToolbarControlId::Item(ids::TOP_CHROME_EXIT));
+    assert_eq!(exit.glyph(&snapshot), TopToolbarIcon::Exit);
+    assert!(!exit.active(&snapshot));
+    assert_eq!(exit.label(&snapshot), "Exit");
+    let binding = snapshot
+        .binding_hints
+        .binding_for_action(Action::Exit)
+        .expect("Exit has a default binding")
+        .to_string();
+    assert!(binding.contains("Esc"), "{binding}");
+    assert_eq!(exit.tooltip(&snapshot), format!("Exit ({binding})"));
+
+    snapshot.exit_hides_overlay = true;
+    assert_eq!(exit.label(&snapshot), "Hide overlay");
+    assert_eq!(exit.tooltip(&snapshot), format!("Hide overlay ({binding})"));
+    assert_eq!(exit.event(&snapshot), ToolbarEvent::ExitOverlay);
+
+    let mut items = ToolbarItemsConfig::default();
+    items.set_hidden(ids::TOP_CHROME_EXIT, true);
+    snapshot.resolved_toolbar_items = items.resolved();
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    assert!(!spec.chrome().contains(&exit), "Exit is hideable");
+}
+
 /// About sits in the chrome island, opens the dialog rather than changing
 /// the toolbar, and can be hidden like any other chrome entry.
 #[test]
@@ -149,7 +191,12 @@ fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
 
     assert_eq!(
         chrome_ids(&spec),
-        ["top.chrome.layout", "top.chrome.pin", "top.chrome.close"],
+        [
+            "top.chrome.layout",
+            "top.chrome.pin",
+            "top.chrome.close",
+            "top.chrome.exit"
+        ],
         "hiding the item leaves the rest of the chrome island intact"
     );
 }
@@ -323,7 +370,12 @@ fn hiding_the_layout_cycle_leaves_the_chrome_trio_in_order() {
     let spec = TopToolbarSpec::build(&hidden, &TopStripPlan::unconstrained());
     assert_eq!(
         chrome_ids(&spec),
-        ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
+        [
+            "top.chrome.about",
+            "top.chrome.pin",
+            "top.chrome.close",
+            "top.chrome.exit"
+        ],
         "hiding the layout menu leaves About, pin, minimize in order"
     );
 }
