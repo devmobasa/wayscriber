@@ -15,8 +15,8 @@ use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
     COLOR_PANEL_BACKGROUND, COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED,
     COLOR_TEXT_SECONDARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
-    FONT_SIZE_LABEL, PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
-    PRESET_SLOT_SWATCH_RATIO, set_color,
+    FONT_SIZE_LABEL, FONT_SIZE_SWATCH_KEY, PRESET_SLOT_ICON_RATIO, PRESET_SLOT_NUMBER_BOX,
+    PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS, PRESET_SLOT_SWATCH_RATIO, set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
@@ -398,9 +398,24 @@ fn paint_node(
                         icon_size,
                     );
                     paint_preset_color_swatch(ctx, x, y, w, h, *color);
+                    // The slot number stays readable as a small caption in the
+                    // corner opposite the color, like the key captions under
+                    // the tool icons.
+                    let number = PRESET_SLOT_NUMBER_BOX;
+                    draw_label_center_color(
+                        engine,
+                        ctx,
+                        label_style(FONT_SIZE_SWATCH_KEY, true),
+                        x + PRESET_SLOT_SWATCH_INSET,
+                        y + h - number - PRESET_SLOT_SWATCH_INSET,
+                        number,
+                        number,
+                        label,
+                        COLOR_LABEL_HINT,
+                    );
                 }
-                // Empty slot: the 1-based slot number in the secondary text
-                // color, inviting a save.
+                // Empty slot: the 1-based slot number, muted so a filled slot
+                // reads as the one holding something; hover brings it up.
                 None => {
                     draw_label_center_color(
                         engine,
@@ -411,7 +426,11 @@ fn paint_node(
                         w,
                         h,
                         label,
-                        COLOR_TEXT_SECONDARY,
+                        if is_hover {
+                            COLOR_TEXT_SECONDARY
+                        } else {
+                            COLOR_LABEL_HINT
+                        },
                     );
                 }
             }
@@ -617,6 +636,87 @@ mod tests {
         assert!(
             r > 200 && g < 120 && b < 120,
             "red keeps its own edge: ({r}, {g}, {b})"
+        );
+    }
+
+    /// Paint one 46px preset slot on black and return its pixels as luma.
+    fn preset_slot_luma(filled: bool, label: &str, hover: Option<(f64, f64)>) -> Vec<Vec<u32>> {
+        const SIZE: i32 = 46;
+        let surface = ImageSurface::create(Format::Rgb24, SIZE, SIZE).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(0.0, 0.0, 0.0);
+            let _ = ctx.paint();
+            let glyph = filled.then(|| {
+                crate::backend::wayland::toolbar::view::node::IconFn(
+                    crate::toolbar_icons::top_toolbar_icon_painter(
+                        crate::ui::toolbar::model::TopToolbarIcon::Tool(
+                            crate::ui::toolbar::model::SemanticToolIcon::Pen,
+                        ),
+                    ),
+                )
+            });
+            let node = WidgetNode::new(
+                "test.preset",
+                (0.0, 0.0, SIZE as f64, SIZE as f64),
+                WidgetKind::PresetSlot {
+                    glyph,
+                    color: (1.0, 0.0, 0.0, 1.0),
+                    label: label.to_string(),
+                    active: false,
+                },
+                Some(
+                    crate::backend::wayland::toolbar::view::node::Interaction::click(
+                        crate::ui::toolbar::ToolbarEvent::SavePreset(1),
+                        None,
+                    ),
+                ),
+            );
+            paint_node(&UiTextEngine::default(), &ctx, &node, hover);
+        }
+        let mut surface = surface;
+        (0..SIZE)
+            .map(|y| {
+                (0..SIZE)
+                    .map(|x| {
+                        let (r, g, b) = pixel_at(&mut surface, x, y);
+                        (u32::from(r) + u32::from(g) + u32::from(b)) / 3
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_filled_preset_slot_keeps_its_number_in_the_corner() {
+        let with_number = preset_slot_luma(true, "1", None);
+        let without = preset_slot_luma(true, "", None);
+
+        // The number sits in the bottom-left box, clear of the color swatch
+        // in the opposite corner.
+        let inset = PRESET_SLOT_SWATCH_INSET as usize;
+        let box_size = PRESET_SLOT_NUMBER_BOX as usize;
+        let rows = 46 - inset - box_size..46 - inset;
+        let columns = inset..inset + box_size;
+        let changed = rows
+            .flat_map(|y| columns.clone().map(move |x| (x, y)))
+            .filter(|&(x, y)| with_number[y][x] != without[y][x])
+            .count();
+        assert!(
+            changed > 4,
+            "the slot number should paint in its corner box"
+        );
+    }
+
+    #[test]
+    fn an_empty_preset_slot_is_muted_until_hovered() {
+        let brightest = |pixels: &[Vec<u32>]| pixels.iter().flatten().copied().max().unwrap_or(0);
+        let resting = brightest(&preset_slot_luma(false, "1", None));
+        let hovered = brightest(&preset_slot_luma(false, "1", Some((23.0, 23.0))));
+
+        assert!(
+            resting + 30 < hovered,
+            "the empty slot's number rests muted ({resting}) and lifts on hover ({hovered})"
         );
     }
 

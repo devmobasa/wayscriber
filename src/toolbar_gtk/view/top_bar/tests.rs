@@ -2087,6 +2087,59 @@ fn assert_font_button_width_stable(widths: &std::collections::BTreeMap<&str, i32
     );
 }
 
+/// A filled slot keeps its number as a corner caption over the drawn face; an
+/// empty slot is a muted numbered button.
+fn assert_preset_slot_faces(regular: &ToolbarSnapshot) {
+    let mut snapshot = regular.clone();
+    snapshot.presets = vec![None; 5];
+    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+        name: None,
+        tool: Tool::Pen,
+        color: crate::draw::Color::new(1.0, 0.0, 0.0, 1.0),
+        size: 4.0,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+    });
+    let plan = TopStripPlan::unconstrained();
+    let mut top = build_contract_top(&snapshot, &plan);
+    let root: &gtk4::Widget = top.root.upcast_ref();
+
+    let filled = find_widget_named(root, "top.preset.0").expect("filled preset slot");
+    let mut labels: Vec<gtk4::Label> = Vec::new();
+    collect_descendants(&filled, &mut labels);
+    let number = labels
+        .iter()
+        .find(|label| label.has_css_class("preset-number"))
+        .expect("a filled slot keeps its number");
+    assert_eq!(number.text(), "1");
+    assert!(!filled.has_css_class("empty"));
+
+    let empty = find_widget_named(root, "top.preset.1")
+        .expect("empty preset slot")
+        .downcast::<gtk4::Button>()
+        .expect("empty slot is a button");
+    assert_eq!(empty.label().as_deref(), Some("2"));
+    assert!(empty.has_css_class("empty"), "an empty slot reads muted");
+    assert_eq!(
+        empty.tooltip_text().as_deref(),
+        Some(
+            model::TopToolbarControl::Preset(1)
+                .tooltip(&snapshot)
+                .as_str()
+        )
+    );
+
+    detach_test_popovers(&mut top);
+}
+
 fn assert_compact_gtk_widget_contract(regular: &ToolbarSnapshot) {
     let mut compact_plan = TopStripPlan::unconstrained();
     compact_plan.compact = true;
@@ -2607,6 +2660,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     // Colors left the strip (M7-C1) and the presets island yields under the
     // compact plan (M7-C2): assert neither renders in a compact build.
     assert_compact_gtk_widget_contract(&regular);
+
+    assert_preset_slot_faces(&regular);
 
     assert_shapes_and_overflow_contract(&regular);
 

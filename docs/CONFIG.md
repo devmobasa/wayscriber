@@ -614,6 +614,11 @@ style = "standard"
 
 Configure 3-5 tool presets that you can apply via hotkeys or the toolbar strip.
 
+On the strip, a saved slot shows its tool's icon, its color as a corner swatch, and its slot
+number in the opposite corner; hovering it names the tool, color, and size. An empty slot shows
+only its number, dimmed, and its tooltip names the key that saves the current tool there
+(`save_preset_N`); clicking an empty slot saves too.
+
 Saving or clearing a slot from the overlay writes that one `[presets.slot_N]` table back to
 `config.toml`, leaving every other setting and your comments alone and copying the previous file to
 a timestamped `.bak` first. Names and the advanced fields are still edited in the configurator's

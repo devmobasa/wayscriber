@@ -8,8 +8,8 @@ use super::*;
 use crate::ui::theme::set_color;
 use crate::ui::theme::toolbar::{
     COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_SECONDARY,
-    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
-    PRESET_SLOT_SWATCH_RATIO,
+    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_NUMBER_BOX, PRESET_SLOT_SWATCH_INSET,
+    PRESET_SLOT_SWATCH_RADIUS, PRESET_SLOT_SWATCH_RATIO,
 };
 
 use super::super::super::widgets::rounded_rect_path;
@@ -296,10 +296,25 @@ impl TopBar {
                 rounded_rect_path(ctx, sx, sy, sw, sw, radius);
                 let _ = ctx.stroke();
             });
-            button.set_child(Some(&area));
+            // The slot number stays readable as a caption in the corner
+            // opposite the color, where the builtin paints it.
+            let face = gtk4::Overlay::new();
+            face.set_child(Some(&area));
+            let number = gtk4::Label::new(Some(&control.label(snapshot)));
+            number.add_css_class("preset-number");
+            number.set_can_target(false);
+            number.set_halign(gtk4::Align::Start);
+            number.set_valign(gtk4::Align::End);
+            let inset = (PRESET_SLOT_SWATCH_INSET * scale).round() as i32;
+            number.set_margin_start(inset);
+            number.set_margin_bottom(inset);
+            number.set_width_request((PRESET_SLOT_NUMBER_BOX * scale).round() as i32);
+            face.add_overlay(&number);
+            button.set_child(Some(&face));
         } else {
-            // Empty slot: the 1-based slot number.
+            // Empty slot: the 1-based slot number, muted until hovered.
             button.set_label(&control.label(snapshot));
+            button.add_css_class("empty");
         }
 
         let sender = self.feedback.clone();

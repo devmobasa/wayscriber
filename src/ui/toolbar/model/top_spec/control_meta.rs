@@ -161,36 +161,84 @@ fn preset_name(snapshot: &ToolbarSnapshot, index: usize) -> Option<&str> {
         .filter(|name| !name.is_empty())
 }
 
-/// Accessible label for a preset slot: the saved preset name (or its tool)
-/// for filled slots, and an "(empty)" note otherwise. The 1-based slot number
-/// leads either way so the slots read distinctly under a screen reader.
+/// What a filled slot will apply, as "Pen, Red, 4px": the tool, then its color
+/// and size where the tool has them. A name the user gave the preset leads.
+///
+/// The color reads as the quick-color label it matches, so it uses the words
+/// the swatch tooltips use; anything else reads as hex.
+fn preset_summary(snapshot: &ToolbarSnapshot, index: usize) -> Option<String> {
+    let preset = preset_slot(snapshot, index)?;
+    let profile = preset.tool.profile();
+    // "Pen", not "Pen Tool": the summary is a list, and "Preset 1:" already
+    // says what kind of thing it describes.
+    let tool = tool_tooltip_label(preset.tool);
+    let mut parts = vec![tool.strip_suffix(" Tool").unwrap_or(tool).to_string()];
+    if profile.needs_color {
+        parts.push(preset_color_label(snapshot, preset.color));
+    }
+    if profile.needs_thickness_control() {
+        parts.push(format!("{:.0}px", preset.size));
+    }
+
+    let details = parts.join(", ");
+    Some(match preset_name(snapshot, index) {
+        Some(name) => format!("{name} \u{2014} {details}"),
+        None => details,
+    })
+}
+
+fn preset_color_label(snapshot: &ToolbarSnapshot, color: crate::draw::Color) -> String {
+    const TOLERANCE: f64 = 0.5 / 255.0;
+    let matches = |entry: &crate::draw::Color| {
+        (entry.r - color.r).abs() <= TOLERANCE
+            && (entry.g - color.g).abs() <= TOLERANCE
+            && (entry.b - color.b).abs() <= TOLERANCE
+    };
+    if let Some(entry) = snapshot
+        .quick_colors
+        .rendered_entries()
+        .iter()
+        .find(|entry| matches(&entry.color))
+    {
+        return entry.label.clone();
+    }
+
+    let channel = |value: f64| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!(
+        "#{:02X}{:02X}{:02X}",
+        channel(color.r),
+        channel(color.g),
+        channel(color.b)
+    )
+}
+
+/// Accessible label for a preset slot: what a filled slot applies, and an
+/// "(empty)" note otherwise. The 1-based slot number leads either way so the
+/// slots read distinctly under a screen reader.
 pub(super) fn preset_accessible_label(snapshot: &ToolbarSnapshot, index: usize) -> String {
     let slot = index + 1;
-    match preset_slot(snapshot, index) {
-        Some(preset) => match preset_name(snapshot, index) {
-            Some(name) => format!("Preset {slot}: {name}"),
-            None => format!("Preset {slot}: {}", tool_tooltip_label(preset.tool)),
-        },
+    match preset_summary(snapshot, index) {
+        Some(summary) => format!("Preset {slot}: {summary}"),
         None => format!("Preset {slot} (empty)"),
     }
 }
 
-/// Tooltip for a preset slot: filled slots describe the saved preset and its
-/// apply binding; empty slots invite a save with the save binding.
+/// Tooltip for a preset slot: filled slots summarize what they apply, with
+/// the apply binding; empty slots say so and how to fill them, naming the
+/// configured save binding when there is one.
 pub(super) fn preset_tooltip(snapshot: &ToolbarSnapshot, index: usize) -> String {
     let slot = index + 1;
-    match preset_slot(snapshot, index) {
-        Some(preset) => {
-            let label = match preset_name(snapshot, index) {
-                Some(name) => format!("Preset {slot}: {name}"),
-                None => format!("Preset {slot}: {}", tool_tooltip_label(preset.tool)),
-            };
-            format_binding_label(&label, snapshot.binding_hints.apply_preset(slot))
-        }
-        None => format_binding_label(
-            &format!("Save preset {slot}"),
-            snapshot.binding_hints.save_preset(slot),
+    match preset_summary(snapshot, index) {
+        Some(summary) => format_binding_label(
+            &format!("Preset {slot}: {summary}"),
+            snapshot.binding_hints.apply_preset(slot),
         ),
+        None => match snapshot.binding_hints.save_preset(slot) {
+            Some(binding) => format!(
+                "Preset {slot} (empty) \u{2014} click or press {binding} to save the current tool"
+            ),
+            None => format!("Preset {slot} (empty) \u{2014} click to save the current tool"),
+        },
     }
 }
 

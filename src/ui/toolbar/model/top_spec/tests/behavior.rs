@@ -393,6 +393,99 @@ fn presets_island_hosts_the_saved_slots() {
     assert!(!has_preset(&TopToolbarSpec::build(&snapshot, &dropped)));
 }
 
+fn preset(
+    tool: Tool,
+    color: crate::draw::Color,
+    size: f64,
+) -> crate::ui::toolbar::PresetSlotSnapshot {
+    crate::ui::toolbar::PresetSlotSnapshot {
+        name: None,
+        tool,
+        color,
+        size,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+    }
+}
+
+#[test]
+fn preset_slots_say_what_they_hold_and_how_to_fill_them() {
+    let state = make_test_input_state();
+    let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let red = snapshot.quick_colors.rendered_entries()[0].clone();
+    snapshot.presets = vec![None; 5];
+    snapshot.presets[0] = Some(preset(Tool::Pen, red.color, 4.0));
+    snapshot.presets[1] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+        name: Some("Lecture".to_string()),
+        ..preset(
+            Tool::Marker,
+            crate::draw::Color::new(0.2, 0.4, 0.6, 1.0),
+            12.0,
+        )
+    });
+    snapshot.presets[2] = Some(preset(Tool::Eraser, red.color, 18.0));
+
+    // A filled slot names the tool, the color in the palette's words, and
+    // the size, followed by its apply key.
+    let pen = format!("Preset 1: Pen, {}, 4px", red.label);
+    assert_eq!(
+        TopToolbarControl::Preset(0).accessible_label(&snapshot),
+        pen
+    );
+    assert_eq!(
+        TopToolbarControl::Preset(0).tooltip(&snapshot),
+        format_binding_label(&pen, snapshot.binding_hints.apply_preset(1))
+    );
+
+    // A color off the palette reads as hex; a name the user gave leads.
+    assert!(
+        TopToolbarControl::Preset(1)
+            .tooltip(&snapshot)
+            .starts_with("Preset 2: Lecture \u{2014} Marker, #336699, 12px"),
+        "{}",
+        TopToolbarControl::Preset(1).tooltip(&snapshot)
+    );
+
+    // Tools without a color skip it.
+    assert!(
+        TopToolbarControl::Preset(2)
+            .tooltip(&snapshot)
+            .starts_with("Preset 3: Eraser, 18px")
+    );
+
+    // An empty slot says so and names the configured save key.
+    let save = snapshot
+        .binding_hints
+        .save_preset(4)
+        .expect("preset 4 has a default save binding")
+        .to_string();
+    let empty = TopToolbarControl::Preset(3).tooltip(&snapshot);
+    assert!(empty.starts_with("Preset 4 (empty)"), "{empty}");
+    assert!(empty.contains(&save), "{empty} names {save}");
+    assert_eq!(
+        TopToolbarControl::Preset(3).accessible_label(&snapshot),
+        "Preset 4 (empty)"
+    );
+
+    // Without a binding the click is the only way in, and the tooltip says so.
+    let unbound = TopToolbarControl::Preset(3).tooltip(&self::snapshot());
+    assert_eq!(
+        unbound,
+        "Preset 4 (empty) \u{2014} click to save the current tool"
+    );
+}
+
 /// Strip controls that currently read as the active tool: tool buttons plus
 /// the Shapes picker standing in for the tools it hosts.
 fn active_tool_controls(snapshot: &ToolbarSnapshot) -> Vec<TopToolbarControl> {

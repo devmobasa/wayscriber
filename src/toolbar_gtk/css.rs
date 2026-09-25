@@ -131,6 +131,21 @@ window.wayscriber-toolbar {{
     background-color: {close_hover};
 }}
 
+/* Preset slots: an empty slot's number is muted until hovered, and a filled
+   slot keeps its number as a corner caption (the builtin paints both the same
+   way in `render/paint.rs`). */
+.wayscriber-toolbar button.preset.empty {{
+    color: {label_hint};
+}}
+.wayscriber-toolbar button.preset.empty:hover {{
+    color: {text_primary};
+}}
+.wayscriber-toolbar label.preset-number {{
+    color: {label_hint};
+    font-size: {font_swatch_key}px;
+    font-weight: {weight_bold};
+}}
+
 /* Swatch buttons paint their fill in a DrawingArea; the button itself
    stays transparent so only the drawn swatch shows. */
 .wayscriber-toolbar button.swatch {{

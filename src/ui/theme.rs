@@ -456,6 +456,9 @@ pub mod toolbar {
     pub const PRESET_SLOT_SWATCH_INSET: f64 = SPACING_XS;
     /// Corner radius of the preset slot's color swatch.
     pub const PRESET_SLOT_SWATCH_RADIUS: f64 = RADIUS_SM;
+    /// Square box, at the swatch inset from the bottom-left corner, holding a
+    /// filled slot's number caption.
+    pub const PRESET_SLOT_NUMBER_BOX: f64 = 10.0;
 
     // ---- Slider/track ----
     /// Slider track background
