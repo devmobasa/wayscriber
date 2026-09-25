@@ -1102,7 +1102,7 @@ enabled = true
 - Position: bottom-left
 - Radial menu mouse trigger: middle
 - Status bar font: 21px
-- Help overlay font: 14px
+- Help overlay font: 14px (the body size of the help rows; secondary text never drops below 12px)
 - Semi-transparent dark status bar; opaque help panel, both with muted borders
 
 ### `[ui.input_hud]` - Input HUD (keystrokes and clicks)

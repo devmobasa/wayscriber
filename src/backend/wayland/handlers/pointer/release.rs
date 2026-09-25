@@ -340,6 +340,9 @@ impl WaylandState {
                 }
                 self.input_state.needs_redraw = true;
             }
+            HelpOverlayReleaseOutcome::ToggleUnbound => {
+                self.input_state.toggle_help_overlay_unbound();
+            }
             HelpOverlayReleaseOutcome::Dismiss => {
                 self.input_state.close_help_overlay();
             }

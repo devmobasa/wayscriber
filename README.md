@@ -160,7 +160,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - Preset slots, icon or text modes
 - Color picker with extended palettes and a screen eyedropper (toolbar, popup, or command palette)
 - Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items
-- Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
+- Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>). Actions without a binding are hidden until you press <kbd>Tab</kbd> or click **Show Unbound**; search always finds them
 - Command palette (<kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd>)
 - Search, run, edit, unbind, or reset action shortcuts from the command palette. Hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> and click a bindable toolbar control to record its shortcut. You can configure this modifier chord. Wayscriber saves only that action's entry to `config.toml` and creates a timestamped `.bak` backup. Press <kbd>Ctrl+Shift+E</kbd> on a palette row to open the same shortcut in the configurator
 

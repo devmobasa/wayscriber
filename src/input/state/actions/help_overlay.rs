@@ -33,6 +33,11 @@ impl InputState {
                 true
             }
             Key::Backspace => false,
+            // Printable keys type into search, so Tab toggles unbound rows.
+            Key::Tab => {
+                self.toggle_help_overlay_unbound();
+                true
+            }
             Key::Space => {
                 if search_active {
                     self.help_overlay.insert_search(" ");

@@ -1,4 +1,5 @@
 use super::super::primitives::text_extents_for_with_engine;
+use super::grid::GridStyle;
 use super::keycaps::measure_key_combo;
 use super::types::{BadgeTextMetrics, MeasuredSection, Section};
 
@@ -11,95 +12,81 @@ pub(crate) struct GridLayout {
     pub(crate) grid_height: f64,
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Measure each section card. Rows read "label … keys": the label column is
+/// as wide as the widest label, and the key chips start one gap past it.
 pub(crate) fn measure_sections(
     engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     sections: Vec<Section>,
-    help_font_family: &str,
-    body_font_size: f64,
-    heading_font_size: f64,
-    heading_line_height: f64,
-    heading_icon_size: f64,
-    heading_icon_gap: f64,
-    row_line_height: f64,
-    row_gap_after_heading: f64,
-    key_desc_gap: f64,
-    badge_font_size: f64,
-    badge_padding_x: f64,
-    badge_gap: f64,
-    badge_height: f64,
-    badge_top_gap: f64,
-    section_card_padding: f64,
+    style: &GridStyle<'_>,
 ) -> Vec<MeasuredSection> {
-    let mut measured_sections = Vec::with_capacity(sections.len());
-    for section in sections {
-        let mut key_max_width: f64 = 0.0;
-        for row in &section.rows {
-            if row.key.is_empty() {
-                continue;
-            }
-            // Measure with keycap styling padding
-            let key_width = measure_key_combo(
-                engine,
-                ctx,
-                row.key.as_str(),
-                help_font_family,
-                body_font_size,
-            );
-            key_max_width = key_max_width.max(key_width);
-        }
-
-        let mut section_width: f64 = 0.0;
-        let mut section_height: f64 = 0.0;
-
-        let heading_extents = text_extents_for_with_engine(
+    let text_width = |weight: cairo::FontWeight, size: f64, text: &str| {
+        text_extents_for_with_engine(
             engine,
             ctx,
-            help_font_family,
+            style.help_font_family,
             cairo::FontSlant::Normal,
-            cairo::FontWeight::Bold,
-            heading_font_size,
-            section.title,
-        );
-        let mut heading_width = heading_extents.width();
-        if section.icon.is_some() {
-            heading_width += heading_icon_size + heading_icon_gap;
-        }
-        section_width = section_width.max(heading_width);
-        section_height += heading_line_height;
+            weight,
+            size,
+            text,
+        )
+        .width()
+    };
 
-        if !section.rows.is_empty() {
-            section_height += row_gap_after_heading;
-            for row in &section.rows {
-                let desc_extents = text_extents_for_with_engine(
+    let mut measured_sections = Vec::with_capacity(sections.len());
+    for section in sections {
+        let mut label_column_width: f64 = 0.0;
+        let mut key_column_width: f64 = 0.0;
+        for row in &section.rows {
+            label_column_width = label_column_width.max(text_width(
+                cairo::FontWeight::Normal,
+                style.body_font_size,
+                row.action,
+            ));
+            if !row.key.is_empty() {
+                key_column_width = key_column_width.max(measure_key_combo(
                     engine,
                     ctx,
-                    help_font_family,
-                    cairo::FontSlant::Normal,
-                    cairo::FontWeight::Normal,
-                    body_font_size,
-                    row.action,
-                );
-                let row_width = key_max_width + key_desc_gap + desc_extents.width();
-                section_width = section_width.max(row_width);
-                section_height += row_line_height;
+                    row.key.as_str(),
+                    style.help_font_family,
+                    style.key_font_size,
+                ));
             }
         }
 
-        if !section.badges.is_empty() {
-            section_height += badge_top_gap;
-            let mut badges_width = 0.0;
-            let mut badge_text_metrics = Vec::with_capacity(section.badges.len());
+        let mut heading_width = text_width(
+            cairo::FontWeight::Bold,
+            style.heading_font_size,
+            section.title,
+        );
+        if section.icon.is_some() {
+            heading_width += style.heading_icon_size + style.heading_icon_gap;
+        }
+        let mut section_width = heading_width;
+        let mut section_height = style.heading_line_height;
 
+        if !section.rows.is_empty() {
+            let key_span = if key_column_width > 0.0 {
+                style.key_desc_gap + key_column_width
+            } else {
+                0.0
+            };
+            section_width = section_width.max(label_column_width + key_span);
+            section_height +=
+                style.row_gap_after_heading + style.row_line_height * section.rows.len() as f64;
+        }
+
+        let mut badge_text_metrics = Vec::with_capacity(section.badges.len());
+        if !section.badges.is_empty() {
+            let mut badges_width = 0.0;
             for (index, badge) in section.badges.iter().enumerate() {
                 let badge_extents = text_extents_for_with_engine(
                     engine,
                     ctx,
-                    help_font_family,
+                    style.help_font_family,
                     cairo::FontSlant::Normal,
                     cairo::FontWeight::Bold,
-                    badge_font_size,
+                    style.badge_font_size,
                     badge.label.as_str(),
                 );
                 badge_text_metrics.push(BadgeTextMetrics {
@@ -107,31 +94,22 @@ pub(crate) fn measure_sections(
                     height: badge_extents.height(),
                     y_bearing: badge_extents.y_bearing(),
                 });
-                let badge_width = badge_extents.width() + badge_padding_x * 2.0;
                 if index > 0 {
-                    badges_width += badge_gap;
+                    badges_width += style.badge_gap;
                 }
-                badges_width += badge_width;
+                badges_width += badge_extents.width() + style.badge_padding_x * 2.0;
             }
 
             section_width = section_width.max(badges_width);
-            section_height += badge_height;
-
-            measured_sections.push(MeasuredSection {
-                section,
-                width: section_width + section_card_padding * 2.0,
-                height: section_height + section_card_padding * 2.0,
-                key_column_width: key_max_width,
-                badge_text_metrics,
-            });
-            continue;
+            section_height += style.badge_top_gap + style.badge_height;
         }
+
         measured_sections.push(MeasuredSection {
             section,
-            width: section_width + section_card_padding * 2.0,
-            height: section_height + section_card_padding * 2.0,
-            key_column_width: key_max_width,
-            badge_text_metrics: Vec::new(),
+            width: section_width + style.section_card_padding * 2.0,
+            height: section_height + style.section_card_padding * 2.0,
+            label_column_width,
+            badge_text_metrics,
         });
     }
 

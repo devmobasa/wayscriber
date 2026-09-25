@@ -1,5 +1,5 @@
 use super::content::HelpContentSnapshot;
-use super::grid::{GridColors, GridStyle, draw_sections_grid};
+use super::grid::{GridColors, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
 use super::sections::HelpOverlayBindings;
@@ -19,7 +19,7 @@ use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::UiTextStyle;
 pub(in crate::ui) use cache::HelpLayoutCache;
 pub use entry::{render_help_overlay, render_help_overlay_result};
-use footer::{FooterPill, FooterPillLayout, draw_footer_pills};
+use footer::{FooterPillLayout, FooterTarget, draw_footer_pills, footer_pills};
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
@@ -43,6 +43,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     capture_enabled: bool,
     scroll_offset: f64,
     quick_mode: bool,
+    show_unbound: bool,
 ) -> HelpRenderResult {
     let content = HelpContentSnapshot::from_bindings(
         bindings,
@@ -62,6 +63,7 @@ pub(crate) fn render_help_overlay_result_with_context(
         search_query,
         scroll_offset,
         quick_mode,
+        show_unbound,
     )
 }
 
@@ -77,6 +79,7 @@ pub(crate) fn render_help_overlay_result_with_content(
     search_query: &str,
     scroll_offset: f64,
     quick_mode: bool,
+    show_unbound: bool,
 ) -> HelpRenderResult {
     let bindings = &content.bindings;
     let ctx = render.cairo;
@@ -161,6 +164,7 @@ pub(crate) fn render_help_overlay_result_with_content(
         note_text_base,
         close_hint_text,
         quick_mode,
+        show_unbound,
     );
     let help_font_family = layout.help_font_family.as_str();
     let metrics = layout.metrics;
@@ -170,6 +174,10 @@ pub(crate) fn render_help_overlay_result_with_content(
         font_size: metrics.body_font_size,
         text_color: palette.accent_muted,
         separator_color: palette.subtitle,
+    };
+    let row_key_style = KeyComboStyle {
+        font_size: metrics.key_font_size,
+        ..key_combo_style
     };
 
     draw_overlay_frame(
@@ -294,31 +302,17 @@ pub(crate) fn render_help_overlay_result_with_content(
 
     let grid_start_y = cursor_y;
 
-    let grid_style = GridStyle {
-        help_font_family,
-        body_font_size: metrics.body_font_size,
-        heading_font_size: metrics.heading_font_size,
-        heading_line_height: metrics.heading_line_height,
-        heading_icon_size: metrics.heading_icon_size,
-        heading_icon_gap: metrics.heading_icon_gap,
-        row_line_height: metrics.row_line_height,
-        row_gap_after_heading: metrics.row_gap_after_heading,
-        key_desc_gap: metrics.key_desc_gap,
-        badge_font_size: metrics.badge_font_size,
-        badge_padding_x: metrics.badge_padding_x,
-        badge_gap: metrics.badge_gap,
-        badge_height: metrics.badge_height,
-        badge_corner_radius: metrics.badge_corner_radius,
-        badge_top_gap: metrics.badge_top_gap,
-        section_card_padding: metrics.section_card_padding,
-        section_card_radius: metrics.section_card_radius,
-        row_gap: metrics.row_gap,
-        column_gap: metrics.column_gap,
-    };
+    let grid_style = metrics.grid_style(help_font_family);
     let grid_colors = GridColors {
         accent: palette.accent,
         heading_icon: palette.heading_icon,
         description: palette.description,
+        muted: [
+            palette.subtitle[0],
+            palette.subtitle[1],
+            palette.subtitle[2],
+            palette.subtitle[3] * 0.55,
+        ],
         highlight: palette.highlight,
         section_card_bg: palette.section_card_bg,
         section_card_border: palette.section_card_border,
@@ -341,16 +335,16 @@ pub(crate) fn render_help_overlay_result_with_content(
         &layout.search_lower,
         &grid_style,
         &grid_colors,
-        &key_combo_style,
+        &row_key_style,
         &mut row_hits,
     );
 
     cursor_y = grid_start_y + layout.grid_view_height + metrics.columns_bottom_spacing;
 
-    // Footer entries: centred, clickable pills whose labels come from the
-    // action registry, never a hardcoded string. Both are registered in the hit
-    // map as clickable rows. About lives here rather than in the header hint
-    // row because it needs no keybinding to be reachable.
+    // Footer entries: centred, clickable pills. Replay Tour and About take
+    // their labels from the action registry; About lives here rather than in
+    // the header hint row because it needs no keybinding to be reachable. The
+    // third pill shows or hides actions that have no binding.
     let footer_hits = draw_footer_pills(
         engine,
         ctx,
@@ -359,23 +353,22 @@ pub(crate) fn render_help_overlay_result_with_content(
             inner_width,
             top_y: cursor_y,
             pill_height: metrics.footer_action_height,
-            font_size: metrics.note_font_size,
+            font_size: metrics.footer_font_size,
+            key_font_size: metrics.key_font_size,
             font_family: help_font_family,
             accent: palette.accent,
             accent_muted: palette.accent_muted,
         },
-        &[
-            FooterPill {
-                action: Action::ReplayTour,
-                icon: crate::toolbar_icons::draw_icon_refresh,
-            },
-            FooterPill {
-                action: Action::OpenAbout,
-                icon: crate::toolbar_icons::draw_icon_info,
-            },
-        ],
+        &footer_pills(show_unbound),
     );
-    row_hits.extend(footer_hits);
+    let mut unbound_toggle = None;
+    for hit in footer_hits {
+        let (x, y, w, h) = hit.rect;
+        match hit.target {
+            FooterTarget::Action(action) => row_hits.push(HelpRowHit { x, y, w, h, action }),
+            FooterTarget::ToggleUnbound => unbound_toggle = Some(hit.rect),
+        }
+    }
     cursor_y += metrics.footer_action_height + metrics.footer_action_gap;
 
     // Note
@@ -427,19 +420,24 @@ pub(crate) fn render_help_overlay_result_with_content(
         None,
     );
 
+    let mut hit_map = HelpHitMap::new(
+        (
+            layout.box_x,
+            layout.box_y,
+            layout.box_width,
+            layout.box_height,
+        ),
+        Some(search_rect),
+        row_hits
+            .into_iter()
+            .map(|hit| ((hit.x, hit.y, hit.w, hit.h), hit.action)),
+    );
+    if let Some(rect) = unbound_toggle {
+        hit_map = hit_map.with_unbound_toggle(rect);
+    }
+
     HelpRenderResult {
         scroll_max: layout.scroll_max,
-        hit_map: HelpHitMap::new(
-            (
-                layout.box_x,
-                layout.box_y,
-                layout.box_width,
-                layout.box_height,
-            ),
-            Some(search_rect),
-            row_hits
-                .into_iter()
-                .map(|hit| ((hit.x, hit.y, hit.w, hit.h), hit.action)),
-        ),
+        hit_map,
     }
 }

@@ -235,6 +235,7 @@ impl WaylandState {
                     self.input_state.help_overlay.query(),
                     self.input_state.help_overlay.scroll(),
                     self.input_state.help_overlay.is_quick_mode(),
+                    self.input_state.help_overlay.shows_unbound(),
                 )
             };
             self.input_state.help_overlay.install_render_result(result);
