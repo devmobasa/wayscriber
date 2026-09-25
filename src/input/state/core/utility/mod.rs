@@ -12,6 +12,7 @@ pub(crate) mod ocr_scan;
 mod pending;
 mod presenter_mode;
 mod render_profiles;
+mod restore_notice;
 mod sequence;
 mod step_markers;
 mod toasts;

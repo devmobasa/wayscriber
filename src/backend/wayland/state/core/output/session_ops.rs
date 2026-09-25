@@ -22,6 +22,33 @@ impl WaylandState {
         Ok(())
     }
 
+    /// After a launch-time session load, announce ink restored onto the
+    /// transparent overlay board, once per launch. With per-output sessions
+    /// the ink arrives with the first output transition rather than the
+    /// initial load, so both report here; later output or named-session
+    /// switches stay quiet. Overlays the daemon reopens on a toggle show what
+    /// the user just had on screen, so they stay quiet too.
+    pub(super) fn announce_launch_restore(&mut self, first_output_resolved: bool) {
+        if self.session.launch_restore_notice_settled() {
+            return;
+        }
+
+        let daemon_toggle =
+            std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some();
+        let step = launch_restore_step(
+            daemon_toggle,
+            self.session.has_loaded_board_data(),
+            first_output_resolved,
+        );
+
+        if step.announce {
+            self.input_state.announce_restored_annotations();
+        }
+        if step.settle {
+            self.session.settle_launch_restore_notice();
+        }
+    }
+
     pub(super) fn notify_output_transition_deferred(&mut self) {
         if !self.session.mark_output_transition_notified() {
             return;
@@ -230,5 +257,56 @@ impl WaylandState {
 
     pub(super) fn session_persistence_enabled(options: &session::SessionOptions) -> bool {
         options.any_enabled() || options.restore_tool_state || options.persist_history
+    }
+}
+
+/// What one launch-time load does about the restored-ink notice.
+#[derive(Debug, PartialEq, Eq)]
+struct LaunchRestoreStep {
+    /// Show the notice now.
+    announce: bool,
+    /// Stop considering later loads for this launch.
+    settle: bool,
+}
+
+/// Only a fresh launch (not a daemon toggle) whose load brought board data
+/// back announces. The launch settles once the notice is shown, on a daemon
+/// toggle, or once the first output transition resolves without restoring
+/// ink, so a later switch to another output stays quiet.
+fn launch_restore_step(
+    daemon_toggle: bool,
+    loaded_board_data: bool,
+    first_output_resolved: bool,
+) -> LaunchRestoreStep {
+    LaunchRestoreStep {
+        announce: !daemon_toggle && loaded_board_data,
+        settle: daemon_toggle || loaded_board_data || first_output_resolved,
+    }
+}
+
+#[cfg(test)]
+mod restore_notice_tests {
+    use super::{LaunchRestoreStep, launch_restore_step};
+
+    fn step(announce: bool, settle: bool) -> LaunchRestoreStep {
+        LaunchRestoreStep { announce, settle }
+    }
+
+    #[test]
+    fn a_fresh_launch_announces_the_load_that_restores_board_data() {
+        assert_eq!(launch_restore_step(false, true, false), step(true, true));
+        assert_eq!(launch_restore_step(false, true, true), step(true, true));
+    }
+
+    #[test]
+    fn an_empty_initial_load_waits_for_the_first_output_transition() {
+        assert_eq!(launch_restore_step(false, false, false), step(false, false));
+        assert_eq!(launch_restore_step(false, false, true), step(false, true));
+    }
+
+    #[test]
+    fn a_daemon_toggle_stays_quiet_and_settles() {
+        assert_eq!(launch_restore_step(true, true, false), step(false, true));
+        assert_eq!(launch_restore_step(true, false, false), step(false, true));
     }
 }
