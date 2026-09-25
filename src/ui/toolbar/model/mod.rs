@@ -41,7 +41,7 @@ pub(crate) use header::{
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
 pub(crate) use settings::{
-    ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsNotice,
+    ToolbarSettingsButton, ToolbarSettingsDetails, ToolbarSettingsModel, ToolbarSettingsNotice,
     ToolbarSettingsNoticeSeverity, ToolbarSettingsToggle,
 };
 #[allow(unused_imports)]
@@ -388,6 +388,9 @@ mod tests {
     #[test]
     fn runtime_persistence_controls_follow_status_and_preserve_complete_paths() {
         let mut snapshot = snapshot();
+        // Paths live behind the "Details" disclosure; expanded, they stay
+        // complete.
+        snapshot.settings_details_open = true;
         let runtime_path = std::path::PathBuf::from(
             "/a/very/long/runtime/state/location/whose/complete/path/must/remain/visible/runtime-ui.toml",
         );

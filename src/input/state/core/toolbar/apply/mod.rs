@@ -333,6 +333,9 @@ impl InputState {
             ToolbarEvent::SetStatusBarContentsOpen(open) => {
                 self.apply_toolbar_set_status_bar_contents_open(open)
             }
+            ToolbarEvent::SetSettingsDetailsOpen(open) => {
+                self.apply_toolbar_set_settings_details_open(open)
+            }
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
             ToolbarEvent::ApplyPreset(slot) => {
                 self.apply_toolbar_apply_preset_with(resources.measurer, slot)

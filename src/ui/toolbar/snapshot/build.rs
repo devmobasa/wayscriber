@@ -224,6 +224,7 @@ impl ToolbarSnapshot {
             customize_items_open,
             customize_items_group,
             status_bar_contents_open,
+            settings_details_open: state.toolbar_settings_details_open(),
             binding_hints,
             is_transparent: state.board_is_transparent(),
             render_profile_generation: state.render_profile_generation(),

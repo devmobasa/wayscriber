@@ -5,6 +5,7 @@ fn retained_planner_preserves_wrapped_notices_surface_size_and_input_regions() {
     let engine = UiTextEngine::default();
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
+    snapshot.settings_details_open = true;
     snapshot.top_available_height = Some(1800.0);
     let mut notice_heights = Vec::new();
     for path in [
@@ -35,7 +36,7 @@ fn retained_planner_preserves_wrapped_notices_surface_size_and_input_regions() {
             top_popover_scroll_bounds(&engine, &snapshot),
             top_popover_scroll_bounds(&fresh, &snapshot)
         );
-        let text = format!("Runtime state: {path}");
+        let text = format!("Saved separately from config.toml, in {path}");
         let notice = tree
             .nodes()
             .iter()

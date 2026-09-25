@@ -468,6 +468,14 @@ impl InputState {
         true
     }
 
+    pub(super) fn apply_toolbar_set_settings_details_open(&mut self, open: bool) -> bool {
+        if !self.toolbar.set_settings_details_open(open) {
+            return false;
+        }
+        self.needs_redraw = true;
+        true
+    }
+
     pub(super) fn apply_toolbar_set_status_bar_contents_open(&mut self, open: bool) -> bool {
         if !self.toolbar.set_status_bar_contents_open(open) {
             return false;
@@ -607,6 +615,19 @@ mod tests {
         state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(false)));
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+    }
+
+    #[test]
+    fn settings_details_disclosure_opens_and_closes() {
+        let mut state = make_test_input_state();
+        assert!(!state.toolbar_settings_details_open());
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetSettingsDetailsOpen(true)));
+        assert!(state.toolbar_settings_details_open());
+        assert!(!state.apply_toolbar_event(ToolbarEvent::SetSettingsDetailsOpen(true)));
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetSettingsDetailsOpen(false)));
+        assert!(!state.toolbar_settings_details_open());
     }
 
     /// The restored strip's first controls sit where the tab was, so the

@@ -1972,10 +1972,81 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
     }
 }
 
+/// The storage path used to greet every visit to Settings. It now waits
+/// behind a collapsed "Details" toggle under a plain summary, and the reset
+/// button stays in the grid either way.
+#[test]
+fn settings_popover_tucks_the_runtime_path_behind_details() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    let runtime_path =
+        std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
+    snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+        path: runtime_path.clone(),
+        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
+        detail: None,
+        recovery_artifacts: Vec::new(),
+    });
+    let label_texts = |tree: &WidgetTree| -> Vec<String> {
+        tree.nodes()
+            .iter()
+            .filter_map(|node| match &node.kind {
+                WidgetKind::Label(label) => Some(label.text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    let tree = build(&snapshot);
+    let labels = label_texts(&tree);
+    assert!(labels.contains(&"Toolbar changes are saved automatically".to_string()));
+    assert!(
+        labels
+            .iter()
+            .all(|text| !text.contains(runtime_path.to_string_lossy().as_ref())),
+        "the path stays collapsed: {labels:?}"
+    );
+    let toggle = tree
+        .node_by_id(&"top.menu.settings.details".into())
+        .expect("details toggle");
+    assert_eq!(
+        toggle
+            .interact
+            .as_ref()
+            .map(|interaction| &interaction.event),
+        Some(&ToolbarEvent::SetSettingsDetailsOpen(true))
+    );
+    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
+        .expect("settings model");
+    assert!(
+        model
+            .buttons()
+            .iter()
+            .any(|button| button.event == ToolbarEvent::RequestRuntimeUiReset),
+        "the reset action stays discoverable"
+    );
+
+    snapshot.settings_details_open = true;
+    let tree = build(&snapshot);
+    assert!(
+        label_texts(&tree)
+            .iter()
+            .any(|text| text.contains(runtime_path.to_string_lossy().as_ref())),
+        "expanding Details shows the path"
+    );
+    assert_eq!(
+        tree.node_by_id(&"top.menu.settings.details".into())
+            .and_then(|node| node.interact.as_ref())
+            .map(|interaction| &interaction.event),
+        Some(&ToolbarEvent::SetSettingsDetailsOpen(false))
+    );
+}
+
 #[test]
 fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
+    snapshot.settings_details_open = true;
     let runtime_path =
         std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
     snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
@@ -1996,7 +2067,10 @@ fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
         2,
         "summary and path should remain logical rows instead of fixed character chunks"
     );
-    let path_text = format!("Runtime state: {}", runtime_path.display());
+    let path_text = format!(
+        "Saved separately from config.toml, in {}",
+        runtime_path.display()
+    );
     let path_notice = notices
         .iter()
         .find(|node| matches!(&node.kind, WidgetKind::Label(label) if label.text == path_text))

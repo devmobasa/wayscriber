@@ -2945,6 +2945,25 @@ fn assert_settings_button_contract(
 ) {
     let mut buttons: Vec<gtk4::Button> = Vec::new();
     collect_descendants(panel, &mut buttons);
+    // The "Details" disclosure toggle shares the compact tab styling but is
+    // not a layout segment.
+    let (details, buttons): (Vec<_>, Vec<_>) = buttons
+        .into_iter()
+        .partition(|button| button.has_css_class("details"));
+    let expected_details = model
+        .details()
+        .expect("the runtime path waits behind Details");
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0].label().as_deref(), Some(expected_details.label));
+    details[0].emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK details toggle event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::SetSettingsDetailsOpen(true),
+            rebind_requested: false,
+        }
+    );
     let tabs: Vec<_> = buttons
         .iter()
         .filter(|button| button.has_css_class("tab"))

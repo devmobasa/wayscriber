@@ -434,6 +434,8 @@ pub struct ToolbarSnapshot {
     pub customize_items_group: Option<super::super::events::ToolbarItemCustomizeGroup>,
     /// Whether the Settings drawer is showing status-bar content controls.
     pub status_bar_contents_open: bool,
+    /// Whether the Settings popover's "Details" disclosure is expanded.
+    pub settings_details_open: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews

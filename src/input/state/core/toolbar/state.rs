@@ -51,6 +51,7 @@ pub(in crate::input::state) struct ToolbarInteraction {
     customize_items_open: bool,
     customize_items_group: Option<ToolbarItemCustomizeGroup>,
     status_bar_contents_open: bool,
+    settings_details_open: bool,
     rebind_modifier: ToolbarRebindModifier,
     top_menu: TopMenuState,
     top_popover_scroll: f64,
@@ -102,6 +103,7 @@ impl Default for ToolbarInteraction {
             customize_items_open: false,
             customize_items_group: None,
             status_bar_contents_open: false,
+            settings_details_open: false,
             rebind_modifier: ToolbarRebindModifier::default(),
             top_menu: TopMenuState::Closed,
             top_popover_scroll: 0.0,
@@ -142,6 +144,7 @@ impl ToolbarInteraction {
             customize_items_open: false,
             customize_items_group: None,
             status_bar_contents_open: false,
+            settings_details_open: false,
             rebind_modifier: config.rebind_modifier,
             top_menu: TopMenuState::Closed,
             top_popover_scroll: 0.0,
@@ -222,6 +225,16 @@ impl ToolbarInteraction {
 
     pub(in crate::input::state) const fn status_bar_contents_open(&self) -> bool {
         self.status_bar_contents_open
+    }
+
+    pub(in crate::input::state) const fn settings_details_open(&self) -> bool {
+        self.settings_details_open
+    }
+
+    pub(in crate::input::state) fn set_settings_details_open(&mut self, open: bool) -> bool {
+        let changed = self.settings_details_open != open;
+        self.settings_details_open = open;
+        changed
     }
 
     pub(in crate::input::state) const fn rebind_modifier(&self) -> ToolbarRebindModifier {

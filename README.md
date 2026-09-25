@@ -1086,7 +1086,8 @@ start matches what was on screen), dragged top-strip positions, the top strip's 
 minimized state, individual toolbar item visibility/order, and board pins changed in the overlay
 are direct interaction state and are saved separately in the generated
 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
-preferences from the overlay Settings popover; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
+preferences from the overlay Settings popover (**Details** shows the file path, and **Reset
+toolbar changes** restores your configured defaults); see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
 
 The unified top toolbar is the only layout. Older panel keys such as `side_layout` remain
 readable and are preserved on save, but they no longer affect the running overlay; the

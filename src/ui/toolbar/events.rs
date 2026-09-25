@@ -326,6 +326,9 @@ pub enum ToolbarEvent {
     SetToolbarItemCustomizationGroup(Option<ToolbarItemCustomizeGroup>),
     /// Show or hide the Settings drawer status-bar content sub-panel.
     SetStatusBarContentsOpen(bool),
+    /// Expand or collapse the Settings popover's "Details" disclosure, which
+    /// holds where toolbar changes are saved.
+    SetSettingsDetailsOpen(bool),
     /// Toggle the simple-mode shape picker
     ToggleShapePicker(bool),
     /// Drag handle for top toolbar (toolbar coords; screen coords when inline toolbars are active)

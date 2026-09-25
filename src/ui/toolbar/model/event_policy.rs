@@ -361,6 +361,7 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
         | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
         | ToolbarEvent::SetStatusBarContentsOpen(_)
+        | ToolbarEvent::SetSettingsDetailsOpen(_)
         | ToolbarEvent::SetToolbarItemHidden(_, _)
         | ToolbarEvent::MoveToolbarItem { .. }
         | ToolbarEvent::StartToolbarItemDrag { .. }
@@ -602,6 +603,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
         | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
         | ToolbarEvent::SetStatusBarContentsOpen(_)
+        | ToolbarEvent::SetSettingsDetailsOpen(_)
         | ToolbarEvent::ToggleShapePicker(_)
         | ToolbarEvent::MoveTopToolbar { .. } => ToolbarPersistence::Ephemeral,
     }

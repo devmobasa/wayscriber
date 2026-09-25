@@ -249,6 +249,8 @@ struct SettingsMenuContentKey {
     /// only appear through a keyed rebuild.
     items: crate::config::ResolvedToolbarItems,
     status_bar_contents_open: bool,
+    /// The "Details" disclosure adds and removes notice rows.
+    settings_details_open: bool,
     layout_mode: ToolbarLayoutMode,
     runtime_ui_persistence: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
 }
@@ -261,6 +263,7 @@ impl SettingsMenuContentKey {
             customize_items_group: snapshot.customize_items_group,
             items: snapshot.resolved_toolbar_items.clone(),
             status_bar_contents_open: snapshot.status_bar_contents_open,
+            settings_details_open: snapshot.settings_details_open,
             layout_mode: snapshot.layout_mode,
             runtime_ui_persistence: snapshot.runtime_ui_persistence.clone(),
         }

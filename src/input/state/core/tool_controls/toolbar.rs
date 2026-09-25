@@ -149,6 +149,10 @@ impl InputState {
         self.toolbar.status_bar_contents_open()
     }
 
+    pub(crate) fn toolbar_settings_details_open(&self) -> bool {
+        self.toolbar.settings_details_open()
+    }
+
     pub(crate) fn toolbar_top_popover_scroll(&self) -> f64 {
         self.toolbar.top_popover_scroll()
     }
