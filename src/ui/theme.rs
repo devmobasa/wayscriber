@@ -75,19 +75,24 @@ pub mod overlay {
     // TODO(theme-consolidation): five near-duplicate panel backgrounds (plus
     // `toolbar::COLOR_PANEL_BACKGROUND`) should converge on the runtime
     // Theme's surface tokens as surfaces migrate.
+    //
+    // Every panel background is fully opaque: a translucent panel lets the
+    // canvas (terminal text, a white board) bleed through its labels, so
+    // chrome contrast would depend on whatever sits behind it. Only the
+    // full-screen dim scrims (`OVERLAY_DIM_*`) stay translucent.
     /// Context menu background
-    pub const PANEL_BG_CONTEXT_MENU: Rgba = (0.10, 0.13, 0.17, 0.95);
+    pub const PANEL_BG_CONTEXT_MENU: Rgba = (0.10, 0.13, 0.17, 1.0);
     /// Submenu surface: one shade lighter than the menu it opens from, so
     /// the stacking reads even where the panes overlap.
-    pub const PANEL_BG_CONTEXT_SUBMENU: Rgba = (0.13, 0.16, 0.21, 0.96);
+    pub const PANEL_BG_CONTEXT_SUBMENU: Rgba = (0.13, 0.16, 0.21, 1.0);
     /// Board picker panel background
-    pub const PANEL_BG_BOARD_PICKER: Rgba = (0.09, 0.11, 0.15, 0.96);
+    pub const PANEL_BG_BOARD_PICKER: Rgba = (0.09, 0.11, 0.15, 1.0);
     /// Properties panel background
-    pub const PANEL_BG_PROPERTIES: Rgba = (0.08, 0.11, 0.17, 0.92);
+    pub const PANEL_BG_PROPERTIES: Rgba = (0.08, 0.11, 0.17, 1.0);
     /// Command palette background
-    pub const PANEL_BG_COMMAND_PALETTE: Rgba = (0.15, 0.15, 0.18, 0.98);
+    pub const PANEL_BG_COMMAND_PALETTE: Rgba = (0.15, 0.15, 0.18, 1.0);
     /// Tour/modal dialog background
-    pub const PANEL_BG_MODAL: Rgba = (0.15, 0.15, 0.18, 0.98);
+    pub const PANEL_BG_MODAL: Rgba = (0.15, 0.15, 0.18, 1.0);
 
     // ---- Panel borders ----
     /// Context menu border
@@ -467,8 +472,10 @@ pub mod toolbar {
     pub const COLOR_TRACK_KNOB: Rgba = rgba(ACCENT_RGB, 0.9);
 
     // ---- Card/panel backgrounds ----
-    /// Main panel background
-    pub const COLOR_PANEL_BACKGROUND: Rgba = (0.05, 0.05, 0.08, 0.92);
+    /// Main panel background: the islands, popovers, and GTK panels. Opaque
+    /// so the icons and labels keep their contrast over any board; the
+    /// translucent control fills below composite over it.
+    pub const COLOR_PANEL_BACKGROUND: Rgba = (0.05, 0.05, 0.08, 1.0);
     /// Group card background
     pub const COLOR_CARD_BACKGROUND: Rgba = (0.12, 0.12, 0.18, 0.35);
 
@@ -479,8 +486,8 @@ pub mod toolbar {
     pub const RADIUS_CARD: f64 = 8.0;
 
     // ---- Tooltip ----
-    /// Tooltip background
-    pub const COLOR_TOOLTIP_BACKGROUND: Rgba = (0.1, 0.1, 0.15, 0.95);
+    /// Tooltip background (opaque, like the panels it labels)
+    pub const COLOR_TOOLTIP_BACKGROUND: Rgba = (0.1, 0.1, 0.15, 1.0);
     /// Tooltip border
     pub const COLOR_TOOLTIP_BORDER: Rgba = (0.4, 0.4, 0.5, 0.8);
     /// Tooltip shadow
@@ -742,9 +749,9 @@ impl Theme {
     /// the runtime theme). Accent/radii/spacing match dark.
     pub fn light() -> Self {
         Self {
-            surface_pill: (0.980, 0.980, 0.988, 0.88),
-            surface_popover: (1.0, 1.0, 1.0, 0.97),
-            surface_panel: (0.980, 0.980, 0.988, 0.92),
+            surface_pill: (0.980, 0.980, 0.988, 1.0),
+            surface_popover: (1.0, 1.0, 1.0, 1.0),
+            surface_panel: (0.980, 0.980, 0.988, 1.0),
             surface_card: (0.0, 0.0, 0.024, 0.06),
             border_hairline: (0.0, 0.0, 0.024, 0.15),
             // HIG: light-mode fg is near-black, never pure black
@@ -967,6 +974,51 @@ mod tests {
             ),
             ACCENT_RGB
         );
+    }
+
+    /// Chrome contrast must not depend on the board behind it: every panel,
+    /// popover, and tooltip background is opaque in both theme variants.
+    #[test]
+    fn chrome_panel_backgrounds_are_opaque() {
+        for (name, color) in [
+            ("PANEL_BG_CONTEXT_MENU", overlay::PANEL_BG_CONTEXT_MENU),
+            (
+                "PANEL_BG_CONTEXT_SUBMENU",
+                overlay::PANEL_BG_CONTEXT_SUBMENU,
+            ),
+            ("PANEL_BG_BOARD_PICKER", overlay::PANEL_BG_BOARD_PICKER),
+            ("PANEL_BG_PROPERTIES", overlay::PANEL_BG_PROPERTIES),
+            (
+                "PANEL_BG_COMMAND_PALETTE",
+                overlay::PANEL_BG_COMMAND_PALETTE,
+            ),
+            ("PANEL_BG_MODAL", overlay::PANEL_BG_MODAL),
+            ("COLOR_PANEL_BACKGROUND", toolbar::COLOR_PANEL_BACKGROUND),
+            (
+                "COLOR_TOOLTIP_BACKGROUND",
+                toolbar::COLOR_TOOLTIP_BACKGROUND,
+            ),
+        ] {
+            assert_eq!(color.3, 1.0, "{name} must be opaque");
+        }
+
+        for theme in [Theme::dark(), Theme::light()] {
+            assert_eq!(theme.surface_pill.3, 1.0);
+            assert_eq!(theme.surface_popover.3, 1.0);
+            assert_eq!(theme.surface_panel.3, 1.0);
+        }
+    }
+
+    #[test]
+    fn modal_dim_scrims_stay_translucent() {
+        for dim in [
+            overlay::OVERLAY_DIM_LIGHT,
+            overlay::OVERLAY_DIM_MEDIUM,
+            overlay::OVERLAY_DIM_HEAVY,
+            overlay::OVERLAY_DIM_HELP,
+        ] {
+            assert!(dim > 0.0 && dim < 1.0, "scrim alpha {dim}");
+        }
     }
 
     #[test]

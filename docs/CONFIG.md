@@ -975,7 +975,7 @@ font_size = 14.0
 font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
 padding = 32.0
-bg_color = [0.09, 0.1, 0.13, 0.92]   # Deep slate background
+bg_color = [0.09, 0.1, 0.13, 1.0]    # Opaque deep slate background
 border_color = [0.33, 0.39, 0.52, 0.88] # Muted steel border
 border_width = 2.0
 text_color = [0.95, 0.96, 0.98, 1.0] # Near-white
@@ -1058,7 +1058,7 @@ enabled = true
 - Radial menu mouse trigger: middle
 - Status bar font: 21px
 - Help overlay font: 14px
-- Semi-transparent dark backgrounds with muted borders
+- Semi-transparent dark status bar; opaque help panel, both with muted borders
 
 ### `[ui.input_hud]` - Input HUD (keystrokes and clicks)
 
