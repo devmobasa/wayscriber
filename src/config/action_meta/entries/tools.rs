@@ -49,7 +49,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         SelectLiveShapeTool,
         "Live Shaping Tool",
         Some("Shape Pen"),
-        "Turn confident ink lines and circles into shapes",
+        "Turn confident ink into lines, ellipses, rectangles, and triangles",
         Tools,
         true,
         true,

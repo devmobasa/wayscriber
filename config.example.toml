@@ -1120,7 +1120,8 @@ pen_smoothing = 3
 
 # Shape Pen recognition sensitivity (0 - 4): 0 is precise, 2 is balanced,
 # and 4 accepts rougher lines and closed shapes. Applies to lines, ellipses,
-# and rectangles; it does not change the dedicated shape tools or grid spacing.
+# rectangles, and triangles; it does not change the dedicated shape tools or
+# grid spacing.
 shape_recognition_sensitivity = 2
 
 # Default fill state for fill-capable shapes

@@ -3,6 +3,10 @@
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Color, Shape};
 
+#[cfg(test)]
+mod tests;
+mod triangle;
+
 pub(super) fn recognize(
     points: &[(i32, i32)],
     color: Color,
@@ -111,20 +115,24 @@ fn recognize_closed(
     thick: f64,
     sensitivity: u8,
 ) -> Option<Shape> {
-    if !winds_once(points, bounds) {
-        return None;
-    }
+    // Winding is measured around the box center, which can fall on a
+    // triangle's edge, so the triangle fit checks its own edges instead.
+    let (ellipse, rectangle) = if winds_once(points, bounds) {
+        (
+            fit_ellipse(points, bounds, length, color, thick, sensitivity),
+            fit_rectangle(points, bounds, length, color, thick, sensitivity),
+        )
+    } else {
+        (None, None)
+    };
+    let triangle = triangle::fit_triangle(points, bounds, color, thick, sensitivity);
 
-    let ellipse = fit_ellipse(points, bounds, length, color, thick, sensitivity);
-    let rectangle = fit_rectangle(points, bounds, length, color, thick, sensitivity);
-    match (ellipse, rectangle) {
-        (Some(ellipse), Some(rectangle)) if rectangle.error < ellipse.error => {
-            Some(rectangle.shape)
-        }
-        (Some(ellipse), _) => Some(ellipse.shape),
-        (_, Some(rectangle)) => Some(rectangle.shape),
-        _ => None,
-    }
+    // Ties keep the earlier candidate, so an ellipse wins an exact tie.
+    [ellipse, rectangle, triangle]
+        .into_iter()
+        .flatten()
+        .min_by(|a, b| a.error.total_cmp(&b.error))
+        .map(|fit| fit.shape)
 }
 
 fn align_line(

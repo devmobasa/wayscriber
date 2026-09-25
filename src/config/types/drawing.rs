@@ -72,7 +72,7 @@ pub struct DrawingConfig {
     #[serde(default = "default_pen_smoothing")]
     pub pen_smoothing: u8,
 
-    /// How readily Shape Pen turns ink into lines, ellipses, or rectangles (0 - 4).
+    /// How readily Shape Pen turns ink into lines, ellipses, rectangles, or triangles (0 - 4).
     #[serde(default = "default_shape_recognition_sensitivity")]
     pub shape_recognition_sensitivity: u8,
 
