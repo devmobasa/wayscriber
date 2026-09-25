@@ -1,4 +1,4 @@
-//! Recognize a confident line or circle from a pen path. Ambiguous ink stays ink.
+//! Recognize lines and closed shapes from a pen path. Ambiguous ink stays ink.
 
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Color, Shape};
@@ -8,42 +8,28 @@ pub(super) fn recognize(
     color: Color,
     thick: f64,
     grid: BoardGrid,
+    sensitivity: u8,
 ) -> Option<Shape> {
     let first = *points.first()?;
     let last = *points.last()?;
-    let (min_x, max_x, min_y, max_y) = points.iter().fold(
-        (i32::MAX, i32::MIN, i32::MAX, i32::MIN),
-        |(min_x, max_x, min_y, max_y), &(x, y)| {
-            (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
-        },
-    );
-    let width = f64::from(max_x) - f64::from(min_x);
-    let height = f64::from(max_y) - f64::from(min_y);
-    let diameter = width.max(height);
+    let bounds = Bounds::for_points(points);
     let chord = distance(first, last);
     let length: f64 = points
         .windows(2)
         .map(|pair| distance(pair[0], pair[1]))
         .sum();
+    let sensitivity = sensitivity.min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY);
 
-    if diameter >= 24.0
-        && (width - height).abs() <= diameter * 0.25
-        && chord <= diameter * 0.2
-        && let Some(circle) = recognize_circle(points, min_x, max_x, min_y, max_y, length)
+    if points.len() >= 8
+        && bounds.width >= 24.0
+        && bounds.height >= 24.0
+        && chord <= bounds.diameter() * (0.12 + 0.05 * f64::from(sensitivity))
+        && let Some(shape) = recognize_closed(points, bounds, length, color, thick, sensitivity)
     {
-        let (cx, cy, radius) = circle;
-        return Some(Shape::Ellipse {
-            cx,
-            cy,
-            rx: radius,
-            ry: radius,
-            fill: false,
-            color,
-            thick,
-        });
+        return Some(shape);
     }
 
-    if chord < 16.0 || length > chord * 1.16 {
+    if chord < 16.0 || length > chord * (1.08 + 0.04 * f64::from(sensitivity)) {
         return None;
     }
 
@@ -56,7 +42,7 @@ pub(super) fn recognize(
                 .abs()
         })
         .fold(0.0_f64, f64::max);
-    if deviation > (chord * 0.08).max(4.0) {
+    if deviation > (chord * (0.04 + 0.02 * f64::from(sensitivity))).max(4.0) {
         return None;
     }
 
@@ -70,6 +56,75 @@ pub(super) fn recognize(
         color,
         thick,
     })
+}
+
+#[derive(Clone, Copy)]
+struct Bounds {
+    min_x: i32,
+    max_x: i32,
+    min_y: i32,
+    max_y: i32,
+    width: f64,
+    height: f64,
+}
+
+impl Bounds {
+    fn for_points(points: &[(i32, i32)]) -> Self {
+        let (min_x, max_x, min_y, max_y) = points.iter().fold(
+            (i32::MAX, i32::MIN, i32::MAX, i32::MIN),
+            |(min_x, max_x, min_y, max_y), &(x, y)| {
+                (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
+            },
+        );
+        Self {
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+            width: f64::from(max_x) - f64::from(min_x),
+            height: f64::from(max_y) - f64::from(min_y),
+        }
+    }
+
+    fn diameter(self) -> f64 {
+        self.width.max(self.height)
+    }
+
+    fn center(self) -> (f64, f64) {
+        (
+            (f64::from(self.min_x) + f64::from(self.max_x)) / 2.0,
+            (f64::from(self.min_y) + f64::from(self.max_y)) / 2.0,
+        )
+    }
+}
+
+struct ClosedFit {
+    shape: Shape,
+    error: f64,
+}
+
+fn recognize_closed(
+    points: &[(i32, i32)],
+    bounds: Bounds,
+    length: f64,
+    color: Color,
+    thick: f64,
+    sensitivity: u8,
+) -> Option<Shape> {
+    if !winds_once(points, bounds) {
+        return None;
+    }
+
+    let ellipse = fit_ellipse(points, bounds, length, color, thick, sensitivity);
+    let rectangle = fit_rectangle(points, bounds, length, color, thick, sensitivity);
+    match (ellipse, rectangle) {
+        (Some(ellipse), Some(rectangle)) if rectangle.error < ellipse.error => {
+            Some(rectangle.shape)
+        }
+        (Some(ellipse), _) => Some(ellipse.shape),
+        (_, Some(rectangle)) => Some(rectangle.shape),
+        _ => None,
+    }
 }
 
 fn align_line(
@@ -128,58 +183,174 @@ fn snap_to_grid(first: f64, last: f64, spacing: f64) -> Option<i32> {
         .then_some(coordinate.round() as i32)
 }
 
-fn recognize_circle(
-    points: &[(i32, i32)],
-    min_x: i32,
-    max_x: i32,
-    min_y: i32,
-    max_y: i32,
-    length: f64,
-) -> Option<(i32, i32, i32)> {
-    if points.len() < 8 {
-        return None;
-    }
-
-    let cx = (f64::from(min_x) + f64::from(max_x)) / 2.0;
-    let cy = (f64::from(min_y) + f64::from(max_y)) / 2.0;
-    let radius =
-        ((f64::from(max_x) - f64::from(min_x)) + (f64::from(max_y) - f64::from(min_y))) / 4.0;
-    let circumference = std::f64::consts::TAU * radius;
-    if !(circumference * 0.75..=circumference * 1.35).contains(&length) {
-        return None;
-    }
-
+fn winds_once(points: &[(i32, i32)], bounds: Bounds) -> bool {
+    let (cx, cy) = bounds.center();
+    let rx = bounds.width / 2.0;
+    let ry = bounds.height / 2.0;
     let mut winding = 0.0_f64;
-    let mut reverse = 0.0_f64;
+    let mut travel = 0.0_f64;
     let mut previous_angle: Option<f64> = None;
-    for &(x, y) in points {
-        let dx = f64::from(x) - cx;
-        let dy = f64::from(y) - cy;
-        let sample_radius = dx.hypot(dy);
-        if (sample_radius - radius).abs() > (radius * 0.25).max(5.0) {
-            return None;
-        }
 
-        let angle = dy.atan2(dx);
+    for &(x, y) in points {
+        let angle = ((f64::from(y) - cy) / ry).atan2((f64::from(x) - cx) / rx);
         if let Some(previous) = previous_angle {
             let delta = (angle - previous + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
                 - std::f64::consts::PI;
-            if delta.abs() > std::f64::consts::FRAC_PI_3 {
-                return None;
+            if delta.abs() > std::f64::consts::FRAC_PI_2 + 0.1 {
+                return false;
             }
             winding += delta;
-            reverse += delta.abs();
+            travel += delta.abs();
         }
         previous_angle = Some(angle);
     }
-    if winding.abs() < std::f64::consts::TAU * 0.8
-        || winding.abs() > std::f64::consts::TAU * 1.2
-        || reverse > winding.abs() * 1.35
+
+    (std::f64::consts::TAU * 0.8..=std::f64::consts::TAU * 1.2).contains(&winding.abs())
+        && travel <= winding.abs() * 1.5
+}
+
+fn fit_ellipse(
+    points: &[(i32, i32)],
+    bounds: Bounds,
+    length: f64,
+    color: Color,
+    thick: f64,
+    sensitivity: u8,
+) -> Option<ClosedFit> {
+    let level = f64::from(sensitivity);
+    let rx = bounds.width / 2.0;
+    let ry = bounds.height / 2.0;
+    if rx.max(ry) / rx.min(ry) > 2.5 || has_polygon_corners(points, bounds) {
+        return None;
+    }
+
+    let circumference =
+        std::f64::consts::PI * (3.0 * (rx + ry) - ((3.0 * rx + ry) * (rx + 3.0 * ry)).sqrt());
+    if !(circumference * (0.74 - 0.03 * level)..=circumference * (1.3 + 0.05 * level))
+        .contains(&length)
     {
         return None;
     }
 
-    Some((cx.round() as i32, cy.round() as i32, radius.round() as i32))
+    let (cx, cy) = bounds.center();
+    let mut error = 0.0_f64;
+    let mut worst = 0.0_f64;
+    for &(x, y) in points {
+        let radius = ((f64::from(x) - cx) / rx).hypot((f64::from(y) - cy) / ry);
+        let deviation = (radius - 1.0).abs();
+        error += deviation;
+        worst = worst.max(deviation);
+    }
+    let error = error / points.len() as f64;
+    if error > 0.07 + 0.025 * level || worst > 0.2 + 0.05 * level {
+        return None;
+    }
+
+    Some(ClosedFit {
+        shape: Shape::Ellipse {
+            cx: cx.round() as i32,
+            cy: cy.round() as i32,
+            rx: rx.round() as i32,
+            ry: ry.round() as i32,
+            fill: false,
+            color,
+            thick,
+        },
+        error,
+    })
+}
+
+fn has_polygon_corners(points: &[(i32, i32)], bounds: Bounds) -> bool {
+    // One kink can be hand jitter; three clear turns describe a polygon.
+    let min_segment = (bounds.width.min(bounds.height) * 0.08).max(3.0);
+    let mut corners = 0;
+    for triplet in points.windows(3) {
+        let first = (
+            f64::from(triplet[1].0) - f64::from(triplet[0].0),
+            f64::from(triplet[1].1) - f64::from(triplet[0].1),
+        );
+        let second = (
+            f64::from(triplet[2].0) - f64::from(triplet[1].0),
+            f64::from(triplet[2].1) - f64::from(triplet[1].1),
+        );
+        let first_length = first.0.hypot(first.1);
+        let second_length = second.0.hypot(second.1);
+        if first_length.min(second_length) < min_segment {
+            continue;
+        }
+        if first.0 * second.0 + first.1 * second.1 < 0.25 * first_length * second_length {
+            corners += 1;
+            if corners >= 3 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn fit_rectangle(
+    points: &[(i32, i32)],
+    bounds: Bounds,
+    length: f64,
+    color: Color,
+    thick: f64,
+    sensitivity: u8,
+) -> Option<ClosedFit> {
+    let level = f64::from(sensitivity);
+    let short_side = bounds.width.min(bounds.height);
+    let perimeter = 2.0 * (bounds.width + bounds.height);
+    if bounds.diameter() / short_side > 5.0
+        || !(perimeter * (0.8 - 0.04 * level)..=perimeter * (1.25 + 0.08 * level)).contains(&length)
+    {
+        return None;
+    }
+
+    let mut error = 0.0_f64;
+    let mut worst = 0.0_f64;
+    for &(x, y) in points {
+        let x = f64::from(x);
+        let y = f64::from(y);
+        let distance = (x - f64::from(bounds.min_x))
+            .abs()
+            .min((x - f64::from(bounds.max_x)).abs())
+            .min((y - f64::from(bounds.min_y)).abs())
+            .min((y - f64::from(bounds.max_y)).abs())
+            / short_side;
+        error += distance;
+        worst = worst.max(distance);
+    }
+    let error = error / points.len() as f64;
+    if error > 0.035 + 0.02 * level || worst > 0.13 + 0.035 * level {
+        return None;
+    }
+
+    for corner in [
+        (bounds.min_x, bounds.min_y),
+        (bounds.max_x, bounds.min_y),
+        (bounds.max_x, bounds.max_y),
+        (bounds.min_x, bounds.max_y),
+    ] {
+        let nearest = points
+            .iter()
+            .map(|&point| distance(point, corner))
+            .fold(f64::INFINITY, f64::min);
+        if nearest > short_side * (0.12 + 0.04 * level) {
+            return None;
+        }
+    }
+
+    Some(ClosedFit {
+        shape: Shape::Rect {
+            x: bounds.min_x,
+            y: bounds.min_y,
+            w: bounds.width.round() as i32,
+            h: bounds.height.round() as i32,
+            fill: false,
+            color,
+            thick,
+        },
+        error,
+    })
 }
 
 fn distance(a: (i32, i32), b: (i32, i32)) -> f64 {

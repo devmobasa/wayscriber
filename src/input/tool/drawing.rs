@@ -40,6 +40,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) color: Color,
     pub(crate) size: f64,
     pub(crate) grid: crate::domain::BoardGrid,
+    pub(crate) shape_recognition_sensitivity: u8,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
     pub(crate) blur_style: BlurStyle,
@@ -91,6 +92,7 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) color: Color,
     pub(crate) size: f64,
     pub(crate) grid: crate::domain::BoardGrid,
+    pub(crate) shape_recognition_sensitivity: u8,
     pub(crate) eraser_size: f64,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
@@ -156,6 +158,7 @@ impl Tool {
                         snapshot.color,
                         snapshot.size,
                         snapshot.grid,
+                        snapshot.shape_recognition_sensitivity,
                     )
                 } else {
                     let mut path = snapshot.points.clone();
@@ -165,6 +168,7 @@ impl Tool {
                         snapshot.color,
                         snapshot.size,
                         snapshot.grid,
+                        snapshot.shape_recognition_sensitivity,
                     )
                 };
                 if let Some(shape) = recognized {
@@ -302,6 +306,7 @@ impl Tool {
                     snapshot.color,
                     snapshot.size,
                     snapshot.grid,
+                    snapshot.shape_recognition_sensitivity,
                 ) {
                     ProvisionalToolStroke::Shape(shape)
                 } else if !snapshot.point_thicknesses.is_empty()

@@ -74,6 +74,10 @@ impl ConfigDraft {
             drawing_polygon_sides: config.drawing.polygon_sides.to_string(),
             drawing_marker_opacity: format_float(config.drawing.marker_opacity),
             drawing_pen_smoothing: config.drawing.pen_smoothing.to_string(),
+            drawing_shape_recognition_sensitivity: config
+                .drawing
+                .shape_recognition_sensitivity
+                .to_string(),
             drawing_font_cycle: FontCycleDraft::from_entries(config.drawing.font_cycle.clone()),
             drawing_hit_test_tolerance: format_float(config.drawing.hit_test_tolerance),
             drawing_hit_test_linear_threshold: config.drawing.hit_test_linear_threshold.to_string(),

@@ -68,6 +68,7 @@ pub(super) fn finish_drawing(
             color: drawing_color,
             size: drawing_thickness,
             grid: state.boards.active_board().spec.grid,
+            shape_recognition_sensitivity: state.style.shape_recognition_sensitivity,
             marker_opacity: state.style.marker_opacity,
             fill_enabled: state.style.fill_enabled,
             blur_style: state.style.blur_style,

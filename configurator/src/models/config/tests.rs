@@ -1,6 +1,28 @@
 use super::super::color::ColorInput;
 
 #[test]
+fn shape_pen_sensitivity_round_trips_and_rejects_invalid_drafts() {
+    let mut config = Config::default();
+    config.drawing.shape_recognition_sensitivity = 3;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.drawing_shape_recognition_sensitivity, "3");
+
+    draft.drawing_shape_recognition_sensitivity = "4".to_string();
+    assert_eq!(
+        draft
+            .to_config(&config)
+            .expect("valid sensitivity")
+            .drawing
+            .shape_recognition_sensitivity,
+        4
+    );
+
+    draft.drawing_shape_recognition_sensitivity = "5".to_string();
+    assert!(draft.to_config(&config).is_err());
+    assert_eq!(draft.drawing_shape_recognition_sensitivity, "5");
+}
+
+#[test]
 fn board_grid_draft_preserves_patterns_and_rejects_invalid_spacing() {
     let mut config = Config::default();
     let mut boards = wayscriber::config::BoardsConfig::default();
