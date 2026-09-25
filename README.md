@@ -117,7 +117,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 
 ### Drawing and editing
 - Freehand pen, highlighter, eraser (circle/rect)
-- Shape pen: draw naturally and confident strokes preview and become editable lines, circles, ovals, rectangles, or triangles; other strokes remain freehand. Choose **Live Shaping Tool** in the command palette or the toolbar's Shapes picker. Adjust recognition with `[drawing] shape_recognition_sensitivity` (0-4) or the configurator's Drawing page.
+- Shape Pen: draw naturally and confident strokes preview and become editable lines, circles, ovals, rectangles, or triangles; other strokes remain freehand. Choose **Shape Pen Tool** in the command palette or the toolbar's Shapes picker. Adjust recognition with `[drawing] shape_recognition_sensitivity` (0-4) or the configurator's Drawing page.
 - Pen smoothing: finished pen and marker strokes are cleaned up on release, so the live line never lags the cursor (`[drawing] pen_smoothing`, 0-6, or the toolbar's **Smoothing** stepper); tablet pressure values are preserved, and the level is remembered with the session
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows in four styles - standard, pointy, curved (drag its handle to route around what is in the way), and double-ended - with optional auto-numbered labels; step markers for walkthroughs

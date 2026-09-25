@@ -89,7 +89,7 @@ impl ToolOption {
         match self {
             Self::Select => "Select",
             Self::Pen => "Pen",
-            Self::LiveShape => "Shape pen",
+            Self::LiveShape => "Shape Pen",
             Self::Line => "Line",
             Self::Rect => "Rectangle",
             Self::Ellipse => "Ellipse",
@@ -222,7 +222,7 @@ impl DragToolOption {
             Self::Default => "Button default",
             Self::Select => "Select",
             Self::Pen => "Pen",
-            Self::LiveShape => "Shape pen",
+            Self::LiveShape => "Shape Pen",
             Self::Line => "Line",
             Self::Rect => "Rectangle",
             Self::Ellipse => "Ellipse",
