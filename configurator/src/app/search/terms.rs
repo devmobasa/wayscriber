@@ -290,6 +290,8 @@ pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
     "clickable status bar segments",
     "contents",
     "show active output",
+    "show active output with a single output",
+    "single output",
     "monitor",
     "display",
     "show selection dimensions",

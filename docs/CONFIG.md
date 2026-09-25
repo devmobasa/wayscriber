@@ -921,8 +921,12 @@ status_bar_interactive = true
 # keep this fixed order; narrow layouts may compact labels and temporarily
 # shed items without changing these choices. Mode badges such as
 # FROZEN/ZOOM/PAN are separate.
-# The active output appears only when an output label is available.
+# The active output appears only while two or more outputs are connected
+# (and an output label is available); a single output's name is noise.
 active_output_badge = true
+
+# Show the active output even with a single output connected
+active_output_badge_always = false
 
 # Selection dimensions appear only while one or more shapes are selected.
 show_status_selection_info = true
@@ -952,8 +956,9 @@ show_toolbar_hint = true
 # Show the Help shortcut segment
 show_status_help = true
 
-# Show the About/version segment
-show_status_about = true
+# Show the About/version segment. Off by default; the toolbar and the help
+# overlay keep About one click away.
+show_status_about = false
 
 # Master visibility for the floating board/page badge. The
 # toggle_floating_badge palette/keyboard action flips it for the current run
@@ -1081,7 +1086,7 @@ enabled = true
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Light mode**: `force_in_light_mode = true` preserves the default behavior of enabling click highlights on light mode entry; set it to `false` to keep the current click highlight state
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
-- **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
+- **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar once two or more outputs are connected (`active_output_badge_always = true` keeps it with a single output)
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized; `xdg_focus_loss_behavior` controls whether losing focus closes (`exit`) or keeps (`stay`) the overlay
 - **Radial menu trigger**: `radial_menu_mouse_binding` selects which mouse button opens radial menu (`middle` default, `right`, or `disabled`)
 
@@ -1097,7 +1102,7 @@ enabled = true
 - Reduced motion: auto (full motion)
 - Show status bar: true
 - Interactive status bar segments: true
-- All status bar content items: true
+- Status bar content items: true, except the About/version chip (false); the output item appears only with two or more outputs
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle

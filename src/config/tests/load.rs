@@ -261,14 +261,21 @@ fn ui_reduced_motion_maps_to_motion_enabled() {
 }
 
 #[test]
-fn status_bar_content_flags_default_true_and_round_trip() {
+fn status_bar_content_flags_have_documented_defaults_and_round_trip() {
     let defaults: Config = toml::from_str("").expect("empty config should use defaults");
     for item in StatusBarItem::ALL {
-        assert!(
+        // About/version is opt-in; About stays in the toolbar and help.
+        let expected = item != StatusBarItem::About;
+        assert_eq!(
             defaults.ui.status_bar_item_visible(item),
-            "{item:?} should be visible by default"
+            expected,
+            "{item:?} default visibility"
         );
     }
+    assert!(
+        !defaults.ui.active_output_badge_always,
+        "the output item waits for a second output by default"
+    );
 
     let source = r#"
 [ui]
@@ -300,6 +307,23 @@ show_status_about = false
     for item in StatusBarItem::ALL {
         assert!(!reloaded.ui.status_bar_item_visible(item));
     }
+}
+
+#[test]
+fn explicit_opt_ins_for_the_about_chip_and_single_output_badge_round_trip() {
+    let source = r#"
+[ui]
+show_status_about = true
+active_output_badge_always = true
+"#;
+    let config: Config = toml::from_str(source).expect("opt-in flags should parse");
+    assert!(config.ui.status_bar_item_visible(StatusBarItem::About));
+    assert!(config.ui.active_output_badge_always);
+
+    let serialized = toml::to_string(&config).expect("opt-in flags should serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("serialized flags should reload");
+    assert!(reloaded.ui.show_status_about);
+    assert!(reloaded.ui.active_output_badge_always);
 }
 
 #[test]

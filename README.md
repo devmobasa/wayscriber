@@ -159,7 +159,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
 - Color picker with extended palettes and a screen eyedropper (toolbar, popup, or command palette)
-- Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items
+- Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items (the output item appears with two or more outputs; About/version is opt-in)
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>). Actions without a binding are hidden until you press <kbd>Tab</kbd> or click **Show Unbound**; search always finds them
 - Command palette (<kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd>)
 - Search, run, edit, unbind, or reset action shortcuts from the command palette. Hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> and click a bindable toolbar control to record its shortcut. You can configure this modifier chord. Wayscriber saves only that action's entry to `config.toml` and creates a timestamped `.bak` backup. Press <kbd>Ctrl+Shift+E</kbd> on a palette row to open the same shortcut in the configurator
@@ -167,7 +167,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 ### Multi-monitor
 - Move overlay focus between monitors: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
 - Toolbars and status bar follow the active output when output focus changes
-- Optional active output badge in status bar (`ui.active_output_badge`)
+- Active output badge in the status bar with two or more outputs (`ui.active_output_badge`; `ui.active_output_badge_always` keeps it with one output)
 - Output-scoped session restore when `session.per_output = true`
 - GNOME fallback output pinning via `ui.preferred_output` or `WAYSCRIBER_XDG_OUTPUT`
 

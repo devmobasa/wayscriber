@@ -12,6 +12,8 @@ pub(in crate::input::state) struct ViewState {
     screen_width: u32,
     screen_height: u32,
     active_output_label: Option<String>,
+    /// Outputs currently connected, as last reported by the backend.
+    output_count: usize,
 }
 
 impl Default for ViewState {
@@ -25,6 +27,7 @@ impl Default for ViewState {
             screen_width: 0,
             screen_height: 0,
             active_output_label: None,
+            output_count: 0,
         }
     }
 }
@@ -103,6 +106,18 @@ impl ViewState {
 
     pub(in crate::input::state) fn active_output_label(&self) -> Option<&str> {
         self.active_output_label.as_deref()
+    }
+
+    pub(in crate::input::state) fn set_output_count(&mut self, count: usize) -> bool {
+        if self.output_count == count {
+            return false;
+        }
+        self.output_count = count;
+        true
+    }
+
+    pub(in crate::input::state) fn output_count(&self) -> usize {
+        self.output_count
     }
 
     pub(in crate::input::state) fn canvas_scale(&self) -> f64 {
@@ -265,5 +280,15 @@ mod tests {
         assert!(view.set_active_output_label(Some("DP-1".to_string())));
         assert!(!view.set_active_output_label(Some("DP-1".to_string())));
         assert_eq!(view.active_output_label(), Some("DP-1"));
+    }
+
+    #[test]
+    fn output_count_reports_only_real_changes() {
+        let mut view = ViewState::default();
+        assert_eq!(view.output_count(), 0);
+
+        assert!(view.set_output_count(2));
+        assert!(!view.set_output_count(2));
+        assert_eq!(view.output_count(), 2);
     }
 }

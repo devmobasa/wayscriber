@@ -10,6 +10,7 @@ impl ConfigDraft {
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.status_bar_interactive = self.ui_status_bar_interactive;
         config.ui.active_output_badge = self.ui_active_output_badge;
+        config.ui.active_output_badge_always = self.ui_active_output_badge_always;
         config.ui.show_status_selection_info = self.ui_show_status_selection_info;
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;

@@ -185,6 +185,7 @@ fn explicit_status_prefix_and_stacked_badge_paint_match_standalone() {
     input.ui_visibility.show_zoom_chip = false;
     input.ui_visibility.show_active_output_badge = true;
     input.set_active_output_label(Some("DP-3 Dell UltraSharp U2723QE 3840x2160@60".into()));
+    input.set_output_count(2);
     input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     let style = StatusBarStyle {
         font_size: 28.0,

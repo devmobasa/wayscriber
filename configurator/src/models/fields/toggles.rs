@@ -9,6 +9,7 @@ pub enum ToggleField {
     UiShowStatusBar,
     UiStatusBarInteractive,
     UiActiveOutputBadge,
+    UiActiveOutputBadgeAlways,
     UiShowStatusSelectionInfo,
     UiShowStatusColor,
     UiShowStatusTool,

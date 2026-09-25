@@ -87,6 +87,15 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn refresh_active_output_label(&mut self) {
+        self.refresh_active_output_label_excluding(None);
+    }
+
+    /// Refresh the status-bar output label and the connected-output count.
+    /// `removed` names an output that is being destroyed but is still listed.
+    pub(in crate::backend::wayland) fn refresh_active_output_label_excluding(
+        &mut self,
+        removed: Option<&wl_output::WlOutput>,
+    ) {
         let next_label = self
             .surface
             .current_output()
@@ -94,11 +103,20 @@ impl WaylandState {
             .and_then(|output| self.output_badge_label_for(output))
             .or_else(|| {
                 self.sorted_known_outputs()
-                    .first()
+                    .iter()
+                    .find(|output| removed != Some(*output))
                     .and_then(|output| self.output_badge_label_for(output))
             });
+        let output_count = self
+            .protocol
+            .output()
+            .outputs()
+            .filter(|output| removed != Some(output))
+            .count();
 
-        if self.input_state.set_active_output_label(next_label) {
+        let label_changed = self.input_state.set_active_output_label(next_label);
+        let count_changed = self.input_state.set_output_count(output_count);
+        if label_changed || count_changed {
             self.input_state.needs_redraw = true;
         }
     }

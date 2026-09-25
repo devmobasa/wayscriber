@@ -129,6 +129,7 @@ impl ConfigDraft {
             ui_show_status_bar: config.ui.show_status_bar,
             ui_status_bar_interactive: config.ui.status_bar_interactive,
             ui_active_output_badge: config.ui.active_output_badge,
+            ui_active_output_badge_always: config.ui.active_output_badge_always,
             ui_show_status_selection_info: config.ui.show_status_selection_info,
             ui_show_status_board_badge: config.ui.show_status_board_badge,
             ui_show_status_page_badge: config.ui.show_status_page_badge,

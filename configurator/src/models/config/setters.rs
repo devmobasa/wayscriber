@@ -169,6 +169,7 @@ impl ConfigDraft {
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiStatusBarInteractive => self.ui_status_bar_interactive = value,
             ToggleField::UiActiveOutputBadge => self.ui_active_output_badge = value,
+            ToggleField::UiActiveOutputBadgeAlways => self.ui_active_output_badge_always = value,
             ToggleField::UiShowStatusSelectionInfo => {
                 self.ui_show_status_selection_info = value;
             }

@@ -152,6 +152,15 @@ impl InputState {
         self.view.active_output_label()
     }
 
+    /// Record how many outputs are connected. Returns whether it changed.
+    pub(crate) fn set_output_count(&mut self, count: usize) -> bool {
+        self.view.set_output_count(count)
+    }
+
+    pub(crate) fn output_count(&self) -> usize {
+        self.view.output_count()
+    }
+
     /// Cancels the current text input session and restores any edited shape.
     pub(crate) fn cancel_text_input_with(&mut self, measurer: &TextMeasurer) {
         self.cancel_text_edit_with(measurer);

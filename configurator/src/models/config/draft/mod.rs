@@ -89,6 +89,7 @@ pub struct ConfigDraft {
     pub ui_show_status_bar: bool,
     pub ui_status_bar_interactive: bool,
     pub ui_active_output_badge: bool,
+    pub ui_active_output_badge_always: bool,
     pub ui_show_status_selection_info: bool,
     pub ui_show_status_board_badge: bool,
     pub ui_show_status_page_badge: bool,

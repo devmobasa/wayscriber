@@ -1309,9 +1309,12 @@ fn config_draft_round_trips_every_status_bar_content_preference() {
         config.ui.set_status_bar_item_visible(item, false);
     }
 
+    config.ui.active_output_badge_always = true;
+
     let draft = ConfigDraft::from_config(&config);
     assert!(!draft.ui_status_bar_interactive);
     assert!(!draft.ui_active_output_badge);
+    assert!(draft.ui_active_output_badge_always);
     assert!(!draft.ui_show_status_selection_info);
     assert!(!draft.ui_show_status_board_badge);
     assert!(!draft.ui_show_status_page_badge);
@@ -1325,6 +1328,7 @@ fn config_draft_round_trips_every_status_bar_content_preference() {
 
     let saved = draft.to_config(&config).expect("draft should convert");
     assert!(!saved.ui.status_bar_interactive);
+    assert!(saved.ui.active_output_badge_always);
     for item in StatusBarItem::ALL {
         assert!(
             !saved.ui.status_bar_item_visible(item),
