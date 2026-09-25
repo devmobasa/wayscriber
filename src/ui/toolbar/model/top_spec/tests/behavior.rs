@@ -392,3 +392,76 @@ fn presets_island_hosts_the_saved_slots() {
     dropped.drop_presets = true;
     assert!(!has_preset(&TopToolbarSpec::build(&snapshot, &dropped)));
 }
+
+/// Strip controls that currently read as the active tool: tool buttons plus
+/// the Shapes picker standing in for the tools it hosts.
+fn active_tool_controls(snapshot: &ToolbarSnapshot) -> Vec<TopToolbarControl> {
+    TopToolbarSpec::build(snapshot, &TopStripPlan::unconstrained())
+        .strip()
+        .iter()
+        .filter_map(|node| match node {
+            TopToolbarNode::Control(control) => Some(*control),
+            TopToolbarNode::Divider(_) => None,
+        })
+        .filter(|control| {
+            matches!(
+                control,
+                TopToolbarControl::Tool(_) | TopToolbarControl::ShapePicker
+            )
+        })
+        .filter(|control| control.active(snapshot))
+        .collect()
+}
+
+#[test]
+fn a_grouped_tool_lights_one_button() {
+    let mut full = snapshot();
+    full.layout_mode = ToolbarLayoutMode::Regular;
+    full.shape_picker_open = false;
+
+    // Shape Pen, Line, and Arrow have buttons of their own in full layouts,
+    // so the Shapes picker stays quiet for them.
+    for tool in [Tool::LiveShape, Tool::Line, Tool::Arrow] {
+        full.active_tool = tool;
+        full.tool_override = Some(tool);
+        assert_eq!(
+            active_tool_controls(&full),
+            [TopToolbarControl::Tool(tool)],
+            "{tool:?}"
+        );
+    }
+
+    // Tools that live inside the picker light the picker instead.
+    for tool in [Tool::Rect, Tool::Ellipse, Tool::RegularPolygon, Tool::Blur] {
+        full.active_tool = tool;
+        full.tool_override = Some(tool);
+        assert_eq!(
+            active_tool_controls(&full),
+            [TopToolbarControl::ShapePicker],
+            "{tool:?}"
+        );
+    }
+
+    // Simple layouts move Shape Pen, Line, and Arrow into the picker.
+    let mut simple = full.clone();
+    simple.layout_mode = ToolbarLayoutMode::Simple;
+    for tool in [Tool::LiveShape, Tool::Line, Tool::Arrow] {
+        simple.active_tool = tool;
+        simple.tool_override = Some(tool);
+        assert_eq!(
+            active_tool_controls(&simple),
+            [TopToolbarControl::ShapePicker],
+            "simple {tool:?}"
+        );
+    }
+}
+
+#[test]
+fn an_open_shapes_picker_reads_active_whatever_the_tool() {
+    let mut snapshot = snapshot();
+    snapshot.active_tool = Tool::Pen;
+    snapshot.tool_override = Some(Tool::Pen);
+    snapshot.shape_picker_open = true;
+
+    assert!(TopToolbarControl::ShapePicker.active(&snapshot));
+}

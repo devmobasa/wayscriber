@@ -445,6 +445,18 @@ pub(crate) fn current_shape_tool(active_tool: Tool, tool_override: Option<Tool>)
         .or_else(|| is_shape_tool(active_tool).then_some(active_tool))
 }
 
+/// Whether the active shape tool is one the Shapes picker hosts, so the
+/// picker button is its only home on the strip.
+///
+/// Full layouts give Shape Pen, Line, and Arrow buttons of their own and leave
+/// them out of the picker; lighting the picker for those as well showed two
+/// active buttons for one tool.
+pub(crate) fn active_tool_in_shape_picker(snapshot: &ToolbarSnapshot) -> bool {
+    let simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
+    current_shape_tool(snapshot.active_tool, snapshot.tool_override)
+        .is_some_and(|tool| shape_picker_tools(simple).contains(&tool))
+}
+
 pub(crate) fn default_shape_tool() -> Tool {
     Tool::Rect
 }

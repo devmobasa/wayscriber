@@ -190,9 +190,11 @@ impl TopToolbarControl {
             Self::Tool(tool) => {
                 snapshot.active_tool == tool || snapshot.tool_override == Some(tool)
             }
+            // The picker stands in for the active tool only while that tool
+            // lives inside it; a tool with its own strip button keeps the one
+            // highlight.
             Self::ShapePicker => {
-                snapshot.shape_picker_open
-                    || current_shape_tool(snapshot.active_tool, snapshot.tool_override).is_some()
+                snapshot.shape_picker_open || active_tool_in_shape_picker(snapshot)
             }
             Self::Utility(TopToolbarUtility::Text) => snapshot.text_active,
             Self::Utility(TopToolbarUtility::StickyNote) => snapshot.note_active,

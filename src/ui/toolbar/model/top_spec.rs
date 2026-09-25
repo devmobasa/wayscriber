@@ -10,8 +10,8 @@ use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::{
-    SemanticToolIcon, TopToolGroup, TopUtilityButton, current_shape_tool, default_drag_hint,
-    semantic_icon_for_tool, toolbar_item_id_for_tool, toolbar_item_visible,
+    SemanticToolIcon, TopToolGroup, TopUtilityButton, active_tool_in_shape_picker,
+    default_drag_hint, semantic_icon_for_tool, toolbar_item_id_for_tool, toolbar_item_visible,
     top_highlight_ring_visible, top_highlight_visible, top_shape_picker_visible, top_tool_group,
     visible_top_tool_buttons, visible_top_utility_buttons,
 };

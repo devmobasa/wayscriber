@@ -381,6 +381,45 @@ fn shape_picker_grid_hosts_the_relocated_shapes() {
 }
 
 #[test]
+fn a_tool_with_its_own_button_does_not_also_light_the_shapes_picker() {
+    use crate::input::Tool;
+
+    // Band buttons painted in the active (blue) state. The picker's own
+    // popover stays closed, so only tool state can light it.
+    let active_band_buttons = |tool: Tool| -> Vec<String> {
+        let mut snapshot = snapshot();
+        snapshot.active_tool = tool;
+        snapshot.tool_override = Some(tool);
+        snapshot.shape_picker_open = false;
+        build(&snapshot)
+            .nodes()
+            .iter()
+            .filter(|node| match &node.kind {
+                WidgetKind::IconButton { style, .. } | WidgetKind::TextButton { style, .. } => {
+                    style.active
+                }
+                _ => false,
+            })
+            .map(|node| node.id.as_str().to_string())
+            .filter(|id| {
+                id.starts_with("top.tool.") || id == ids::TOP_UTILITY_SHAPE_PICKER.as_str()
+            })
+            .collect()
+    };
+
+    assert_eq!(
+        active_band_buttons(Tool::LiveShape),
+        ["top.tool.live-shape"]
+    );
+    assert_eq!(active_band_buttons(Tool::Arrow), ["top.tool.arrow"]);
+    assert_eq!(
+        active_band_buttons(Tool::Rect),
+        [ids::TOP_UTILITY_SHAPE_PICKER.as_str()],
+        "a tool inside the picker lights the picker alone"
+    );
+}
+
+#[test]
 fn shape_picker_shows_fill_while_line_is_active() {
     let mut state = make_test_input_state();
     state.test_set_toolbar_menu_state(
