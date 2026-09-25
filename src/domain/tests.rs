@@ -92,6 +92,7 @@ fn action_serialization_matches_established_contract() {
         (Action::CycleBlurStyle, "cycle_blur_style"),
         (Action::CycleArrowStyle, "cycle_arrow_style"),
         (Action::SelectPenTool, "select_pen_tool"),
+        (Action::SelectLiveShapeTool, "select_live_shape_tool"),
         (Action::SelectLineTool, "select_line_tool"),
         (Action::SelectRectTool, "select_rect_tool"),
         (Action::SelectEllipseTool, "select_ellipse_tool"),

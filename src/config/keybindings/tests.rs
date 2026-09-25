@@ -748,6 +748,7 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("cycle_blur_style", &[]),
     ("cycle_arrow_style", &[]),
     ("select_pen_tool", &["F"]),
+    ("select_live_shape_tool", &[]),
     ("select_line_tool", &[]),
     ("select_rect_tool", &[]),
     ("select_ellipse_tool", &[]),

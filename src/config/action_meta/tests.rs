@@ -41,6 +41,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::SetColorBlack,
     Action::SelectSelectionTool,
     Action::SelectPenTool,
+    Action::SelectLiveShapeTool,
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,
@@ -100,6 +101,7 @@ const HELP_ACTIONS: &[Action] = &[
 
 const TOOLBAR_ACTIONS: &[Action] = &[
     Action::SelectPenTool,
+    Action::SelectLiveShapeTool,
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,
@@ -161,6 +163,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::Redo,
     Action::SelectSelectionTool,
     Action::SelectPenTool,
+    Action::SelectLiveShapeTool,
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,

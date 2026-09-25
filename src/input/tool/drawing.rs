@@ -39,6 +39,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) point_thicknesses: Vec<f32>,
     pub(crate) color: Color,
     pub(crate) size: f64,
+    pub(crate) grid: crate::domain::BoardGrid,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
     pub(crate) blur_style: BlurStyle,
@@ -89,6 +90,7 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) point_thicknesses: &'a [f32],
     pub(crate) color: Color,
     pub(crate) size: f64,
+    pub(crate) grid: crate::domain::BoardGrid,
     pub(crate) eraser_size: f64,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
@@ -146,6 +148,35 @@ impl Tool {
             ToolDrawingBehavior::None => FinishedToolStroke::Noop,
             ToolDrawingBehavior::Path { kind, pressure } => {
                 finish_path_stroke(snapshot, kind, pressure, usage)
+            }
+            ToolDrawingBehavior::LiveShape => {
+                let recognized = if snapshot.points.last().copied() == Some(snapshot.end) {
+                    super::live_shape::recognize(
+                        &snapshot.points,
+                        snapshot.color,
+                        snapshot.size,
+                        snapshot.grid,
+                    )
+                } else {
+                    let mut path = snapshot.points.clone();
+                    path.push(snapshot.end);
+                    super::live_shape::recognize(
+                        &path,
+                        snapshot.color,
+                        snapshot.size,
+                        snapshot.grid,
+                    )
+                };
+                if let Some(shape) = recognized {
+                    FinishedToolStroke::Shape { shape, usage }
+                } else {
+                    finish_path_stroke(
+                        snapshot,
+                        ToolPathKind::Freehand,
+                        ToolPressureBehavior::OptionalPressureStroke,
+                        usage,
+                    )
+                }
             }
             ToolDrawingBehavior::Line => finish_shape(snapshot, usage, |snapshot| Shape::Line {
                 x1: snapshot.start.0,
@@ -265,6 +296,30 @@ impl Tool {
         debug_assert_eq!(self, snapshot.tool);
         match self.drawing_behavior() {
             ToolDrawingBehavior::None => ProvisionalToolStroke::None,
+            ToolDrawingBehavior::LiveShape => {
+                if let Some(shape) = super::live_shape::recognize(
+                    snapshot.points,
+                    snapshot.color,
+                    snapshot.size,
+                    snapshot.grid,
+                ) {
+                    ProvisionalToolStroke::Shape(shape)
+                } else if !snapshot.point_thicknesses.is_empty()
+                    && snapshot.point_thicknesses.len() == snapshot.points.len()
+                {
+                    ProvisionalToolStroke::BorrowedPressureFreehand {
+                        points: snapshot.points,
+                        point_thicknesses: snapshot.point_thicknesses,
+                        color: snapshot.color,
+                    }
+                } else {
+                    ProvisionalToolStroke::BorrowedFreehand {
+                        points: snapshot.points,
+                        color: snapshot.color,
+                        size: snapshot.size,
+                    }
+                }
+            }
             ToolDrawingBehavior::Path {
                 kind: ToolPathKind::Freehand,
                 pressure: ToolPressureBehavior::OptionalPressureStroke,

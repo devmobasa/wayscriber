@@ -48,6 +48,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::CycleBlurStyle
         | Action::CycleArrowStyle
         | Action::SelectPenTool
+        | Action::SelectLiveShapeTool
         | Action::SelectLineTool
         | Action::SelectRectTool
         | Action::SelectEllipseTool

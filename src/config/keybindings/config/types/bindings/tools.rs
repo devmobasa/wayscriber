@@ -57,6 +57,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_select_pen_tool")]
     pub select_pen_tool: Vec<String>,
 
+    #[serde(default = "default_select_live_shape_tool")]
+    pub select_live_shape_tool: Vec<String>,
+
     #[serde(default = "default_select_line_tool")]
     pub select_line_tool: Vec<String>,
 
@@ -128,6 +131,7 @@ impl Default for ToolKeybindingsConfig {
             cycle_blur_style: default_cycle_blur_style(),
             cycle_arrow_style: default_cycle_arrow_style(),
             select_pen_tool: default_select_pen_tool(),
+            select_live_shape_tool: default_select_live_shape_tool(),
             select_line_tool: default_select_line_tool(),
             select_rect_tool: default_select_rect_tool(),
             select_ellipse_tool: default_select_ellipse_tool(),

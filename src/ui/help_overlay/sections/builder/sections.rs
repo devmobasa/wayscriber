@@ -104,6 +104,7 @@ pub(super) fn build_main_sections(
         title: "Drawing",
         rows: vec![
             action_row(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectLiveShapeTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectLineTool, "Shift+Drag"),
             action_row(bindings, Action::SelectRectTool, "Ctrl+Drag"),
             action_row(bindings, Action::SelectEllipseTool, "Tab+Drag"),

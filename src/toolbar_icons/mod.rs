@@ -122,6 +122,7 @@ pub(crate) fn top_toolbar_icon_painter(
         I::LayoutAdvanced => draw_icon_layout_advanced,
         I::Tool(T::Select) => draw_icon_select,
         I::Tool(T::Pen) => draw_icon_pen,
+        I::Tool(T::LiveShape) => draw_icon_live_shape,
         I::Tool(T::Line) => draw_icon_line,
         I::Tool(T::Rect) => draw_icon_rect,
         I::Tool(T::Circle) => draw_icon_circle,

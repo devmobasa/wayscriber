@@ -43,6 +43,7 @@ pub(crate) enum ToolDrawingBehavior {
         kind: ToolPathKind,
         pressure: ToolPressureBehavior,
     },
+    LiveShape,
     Line,
     Rect,
     Ellipse,
@@ -82,7 +83,7 @@ const fn profile(
     }
 }
 
-const DESCRIPTORS: [ToolDescriptor; 17] = [
+const DESCRIPTORS: [ToolDescriptor; 18] = [
     ToolDescriptor {
         tool: Tool::Select,
         short_label: "Select",
@@ -121,6 +122,26 @@ const DESCRIPTORS: [ToolDescriptor; 17] = [
             kind: ToolPathKind::Freehand,
             pressure: ToolPressureBehavior::OptionalPressureStroke,
         },
+    },
+    ToolDescriptor {
+        tool: Tool::LiveShape,
+        short_label: "Shape Pen",
+        display_label: "Live Shaping Tool",
+        action: Some(Action::SelectLiveShapeTool),
+        profile: profile(
+            ToolSettingsSlot::Pen,
+            ToolSizeSource::DrawingThickness,
+            ToolControlGroup::Stroke,
+            true,
+            "Thickness",
+        ),
+        press: ToolPressBehavior::StartDrawing {
+            request_blur_capture: false,
+        },
+        motion: ToolMotionBehavior::AccumulatePath {
+            size_source: ToolMotionSizeSource::ToolSize,
+        },
+        drawing: ToolDrawingBehavior::LiveShape,
     },
     ToolDescriptor {
         tool: Tool::Line,
@@ -402,9 +423,10 @@ const DESCRIPTORS: [ToolDescriptor; 17] = [
 ];
 
 impl Tool {
-    pub(crate) const ALL: [Self; 17] = [
+    pub(crate) const ALL: [Self; 18] = [
         Self::Select,
         Self::Pen,
+        Self::LiveShape,
         Self::Line,
         Self::Rect,
         Self::Ellipse,
@@ -426,21 +448,22 @@ impl Tool {
         match self {
             Self::Select => &DESCRIPTORS[0],
             Self::Pen => &DESCRIPTORS[1],
-            Self::Line => &DESCRIPTORS[2],
-            Self::Rect => &DESCRIPTORS[3],
-            Self::Ellipse => &DESCRIPTORS[4],
-            Self::Triangle => &DESCRIPTORS[5],
-            Self::Parallelogram => &DESCRIPTORS[6],
-            Self::Rhombus => &DESCRIPTORS[7],
-            Self::RegularPolygon => &DESCRIPTORS[8],
-            Self::FreeformPolygon => &DESCRIPTORS[9],
-            Self::Arrow => &DESCRIPTORS[10],
-            Self::Blur => &DESCRIPTORS[11],
-            Self::Spotlight => &DESCRIPTORS[12],
-            Self::Marker => &DESCRIPTORS[13],
-            Self::Highlight => &DESCRIPTORS[14],
-            Self::StepMarker => &DESCRIPTORS[15],
-            Self::Eraser => &DESCRIPTORS[16],
+            Self::LiveShape => &DESCRIPTORS[2],
+            Self::Line => &DESCRIPTORS[3],
+            Self::Rect => &DESCRIPTORS[4],
+            Self::Ellipse => &DESCRIPTORS[5],
+            Self::Triangle => &DESCRIPTORS[6],
+            Self::Parallelogram => &DESCRIPTORS[7],
+            Self::Rhombus => &DESCRIPTORS[8],
+            Self::RegularPolygon => &DESCRIPTORS[9],
+            Self::FreeformPolygon => &DESCRIPTORS[10],
+            Self::Arrow => &DESCRIPTORS[11],
+            Self::Blur => &DESCRIPTORS[12],
+            Self::Spotlight => &DESCRIPTORS[13],
+            Self::Marker => &DESCRIPTORS[14],
+            Self::Highlight => &DESCRIPTORS[15],
+            Self::StepMarker => &DESCRIPTORS[16],
+            Self::Eraser => &DESCRIPTORS[17],
         }
     }
 
@@ -487,7 +510,10 @@ impl Tool {
     /// Accumulated paths — freehand and marker — are the ones smoothed on
     /// release.
     pub(crate) fn smooths_strokes(self) -> bool {
-        matches!(self.drawing_behavior(), ToolDrawingBehavior::Path { .. })
+        matches!(
+            self.drawing_behavior(),
+            ToolDrawingBehavior::Path { .. } | ToolDrawingBehavior::LiveShape
+        )
     }
 
     pub(crate) fn settings_slot(self) -> ToolSettingsSlot {
@@ -517,7 +543,7 @@ impl Tool {
             ToolDrawingBehavior::Path {
                 pressure: ToolPressureBehavior::OptionalPressureStroke,
                 ..
-            }
+            } | ToolDrawingBehavior::LiveShape
         )
     }
 }

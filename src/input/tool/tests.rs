@@ -163,11 +163,11 @@ fn descriptor_exposes_press_motion_and_drawing_behavior() {
 }
 
 #[test]
-fn only_freehand_pen_supports_pressure_thickness() {
+fn freehand_pens_support_pressure_thickness() {
     for tool in Tool::ALL {
         assert_eq!(
             tool.supports_pressure_thickness(),
-            tool == Tool::Pen,
+            matches!(tool, Tool::Pen | Tool::LiveShape),
             "unexpected pressure-thickness behavior for {tool:?}"
         );
     }

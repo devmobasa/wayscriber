@@ -53,6 +53,7 @@ pub enum Action {
     CycleBlurStyle,
     CycleArrowStyle,
     SelectPenTool,
+    SelectLiveShapeTool,
     SelectLineTool,
     SelectRectTool,
     SelectEllipseTool,
