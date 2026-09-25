@@ -82,8 +82,9 @@ pub(crate) fn default_select_pen_tool() -> Vec<String> {
     vec!["F".to_string()]
 }
 
+/// `S` for Shape Pen; `F`, the plain pen, stays freehand.
 pub(crate) fn default_select_live_shape_tool() -> Vec<String> {
-    Vec::new()
+    vec!["S".to_string()]
 }
 
 pub(crate) fn default_select_line_tool() -> Vec<String> {

@@ -1,6 +1,6 @@
 use super::*;
 use crate::input::tool::ProvisionalToolStroke;
-use crate::ui::toolbar::{ToolContext, ToolbarEvent, ToolbarSnapshot};
+use crate::ui::toolbar::{ToolContext, ToolbarEvent, ToolbarSnapshot, model};
 use crate::ui::{ShapeExtent, ShapeReadout};
 
 /// A hand-drawn rectangle from the top-left corner, clockwise.
@@ -157,4 +157,29 @@ fn toolbar_sensitivity_applies_to_the_next_stroke() {
             "sensitivity {level}"
         );
     }
+}
+
+#[test]
+fn full_toolbar_shows_shape_pen_beside_pen_and_simple_keeps_it_in_the_picker() {
+    let snapshot = ToolbarSnapshot::from_input(&create_test_input_state());
+
+    let strip: Vec<_> = model::visible_top_tool_buttons(false, &snapshot).collect();
+    let pen = strip
+        .iter()
+        .position(|&tool| tool == Tool::Pen)
+        .expect("pen");
+    assert_eq!(strip.get(pen + 1), Some(&Tool::LiveShape));
+    assert!(
+        !model::visible_shape_picker_rows(&snapshot, false)
+            .concat()
+            .contains(&Tool::LiveShape),
+        "the full-mode picker lists only what the strip does not show"
+    );
+
+    assert!(!model::visible_top_tool_buttons(true, &snapshot).any(|tool| tool == Tool::LiveShape));
+    assert!(
+        model::visible_shape_picker_rows(&snapshot, true)
+            .concat()
+            .contains(&Tool::LiveShape)
+    );
 }

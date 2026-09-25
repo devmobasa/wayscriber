@@ -34,7 +34,7 @@ fn top_size_respects_icon_mode() {
     // drawing tool is active.
     assert_eq!(
         top_size(&crate::ui_text::UiTextEngine::default(), &snapshot),
-        (1227, 104)
+        (1278, 104)
     );
 
     state.set_toolbar_use_icons(false);
@@ -201,6 +201,23 @@ fn top_strip_fits_480_pixels_in_icon_and_text_modes() {
             if use_icons { "icon" } else { "text" }
         );
     }
+}
+
+#[test]
+fn compact_top_strip_moves_shape_pen_to_the_overflow_before_other_pens() {
+    let mut state = create_test_input_state();
+    state.set_toolbar_use_icons(false);
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = Some(320.0);
+
+    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
+        &crate::ui_text::UiTextEngine::default(),
+        &snapshot,
+    );
+
+    assert!(plan.compact);
+    assert!(plan.dropped_tools.contains(&crate::input::Tool::LiveShape));
+    assert!(!plan.dropped_tools.contains(&crate::input::Tool::Pen));
 }
 
 #[test]

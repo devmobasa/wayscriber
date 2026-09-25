@@ -39,9 +39,10 @@ const SIMPLE_TOOL_BUTTONS: [Tool; 5] = [
     Tool::Eraser,
 ];
 
-const FULL_TOOL_BUTTONS: [Tool; 7] = [
+const FULL_TOOL_BUTTONS: [Tool; 8] = [
     Tool::Select,
     Tool::Pen,
+    Tool::LiveShape,
     Tool::Marker,
     Tool::StepMarker,
     Tool::Eraser,
@@ -50,8 +51,7 @@ const FULL_TOOL_BUTTONS: [Tool; 7] = [
 ];
 
 /// Full-mode shape picker: everything the strip no longer shows inline.
-const FULL_SHAPE_PICKER_TOOLS: [Tool; 10] = [
-    Tool::LiveShape,
+const FULL_SHAPE_PICKER_TOOLS: [Tool; 9] = [
     Tool::Rect,
     Tool::Ellipse,
     Tool::Blur,
