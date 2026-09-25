@@ -58,6 +58,18 @@ impl InputState {
         }
     }
 
+    /// Closes the menu, then runs `action`. Closing first keeps the menu from
+    /// painting over what the action shows, and keeps Exit from spending
+    /// itself on cancelling the menu.
+    fn close_menu_and_run(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        action: Action,
+    ) {
+        self.close_context_menu();
+        self.handle_action_with_resources(resources, action);
+    }
+
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
         let measurer = crate::draw::TextMeasurer::default();
         let ui_engine = crate::ui_text::UiTextEngine::default();
@@ -151,6 +163,12 @@ impl InputState {
                 self.request_zoom_action(crate::input::ZoomAction::Reset);
                 self.close_context_menu();
             }
+            MenuCommand::Undo => self.close_menu_and_run(resources, Action::Undo),
+            MenuCommand::Redo => self.close_menu_and_run(resources, Action::Redo),
+            MenuCommand::CaptureRegion => {
+                self.close_menu_and_run(resources, Action::CaptureRegionInteractive);
+            }
+            MenuCommand::Exit => self.close_menu_and_run(resources, Action::Exit),
             MenuCommand::ToggleHighlightTool => {
                 // Through the action, not the primitive: the action is what
                 // queues the durable click-highlight change, and the other

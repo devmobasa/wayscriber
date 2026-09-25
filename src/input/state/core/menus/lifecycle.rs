@@ -142,6 +142,12 @@ impl InputState {
         }
     }
 
+    /// A background daemon owns this overlay: Exit hides it rather than
+    /// ending anything, and the menu says so.
+    pub(crate) fn set_context_menu_exit_hides_overlay(&mut self, hides: bool) {
+        self.context_menu.exit_hides_overlay = hides;
+    }
+
     pub fn set_context_menu_enabled(&mut self, enabled: bool) {
         if self.context_menu.set_enabled(enabled) {
             self.close_context_menu();

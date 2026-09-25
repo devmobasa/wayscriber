@@ -5,20 +5,13 @@ use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
-    self, BG_EXPANDED, BG_HOVER, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU,
-    NAV_HINT_MENU_SUBMENUS, NAV_HINT_SUBMENU, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, SHADOW,
-    TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+    self, BG_EXPANDED, BG_HOVER, BORDER_FOCUS, DIVIDER_LIGHT, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW,
+    RADIUS_PANEL, RADIUS_SM, SHADOW, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
 };
 
-/// Footer strip below the menu: darker than the menu surface so the hint reads
-/// as an attachment (no matching theme token; kept from pre-theme literals).
-const HINT_FOOTER_BG: Rgba = (0.08, 0.10, 0.14, 0.9);
-/// Footer hint text: slightly brighter than TEXT_TERTIARY for legibility on
-/// the darker strip (kept from pre-theme literals).
+/// Footer hint text: slightly brighter than TEXT_TERTIARY so the key hints
+/// stay legible inside the menu (kept from pre-theme literals).
 const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
-/// Gap between the menu and its hint footer.
-const HINT_GAP: f64 = 4.0;
-const HINT_PADDING: f64 = 6.0;
 /// Accent bar on the parent row of an open submenu.
 const EXPANDED_BAR_WIDTH: f64 = 3.0;
 /// The submenu's shadow: a few layers stepping outward stand in for a blur.
@@ -75,14 +68,7 @@ pub(crate) fn render_context_menu_with_engine(
             expanded: submenu.map(|submenu| submenu.parent_index),
         },
     );
-    let hint = if input_state.context_submenu_is_active() {
-        NAV_HINT_SUBMENU
-    } else if entries.iter().any(|entry| entry.submenu.is_some()) {
-        NAV_HINT_MENU_SUBMENUS
-    } else {
-        NAV_HINT_MENU
-    };
-    draw_hint_footer(engine, ctx, &layout, hint);
+    draw_hint_footer(engine, ctx, &layout, input_state.context_menu_footer_hint());
 
     // An open submenu paints above the menu it opens from.
     let submenu_entries = input_state.context_submenu_entries();
@@ -110,7 +96,7 @@ pub(crate) fn render_context_menu_with_engine(
     let _ = ctx.restore();
 }
 
-/// Bounds of the open menu and its hint footer, as laid out for this frame.
+/// Bounds of the open menu, hint footer included, as laid out for this frame.
 pub(crate) fn context_menu_visual_geometry(
     input_state: &InputState,
 ) -> Option<(f64, f64, f64, f64)> {
@@ -119,7 +105,7 @@ pub(crate) fn context_menu_visual_geometry(
         layout.origin_x,
         layout.origin_y,
         layout.width,
-        layout.height + HINT_GAP + hint_footer_height(layout),
+        layout.height,
     ))
 }
 
@@ -297,6 +283,25 @@ fn draw_menu(
             let _ = ctx.fill();
         }
     }
+
+    // Group dividers go on top of the row fills so hover never hides them.
+    for (index, entry) in entries.iter().enumerate() {
+        if index == 0 || !entry.separator_before {
+            continue;
+        }
+        let y =
+            (layout.origin_y + layout.padding_y + layout.row_height * index as f64).round() + 0.5;
+        draw_divider(ctx, layout, y);
+    }
+}
+
+/// A hairline across the menu between its horizontal paddings.
+fn draw_divider(ctx: &cairo::Context, layout: &ContextMenuLayout, y: f64) {
+    constants::set_color(ctx, DIVIDER_LIGHT);
+    ctx.set_line_width(1.0);
+    ctx.move_to(layout.origin_x + layout.padding_x, y);
+    ctx.line_to(layout.origin_x + layout.width - layout.padding_x, y);
+    let _ = ctx.stroke();
 }
 
 /// A soft shadow under a pane: stacked translucent rects widening outward.
@@ -317,43 +322,33 @@ fn draw_shadow(ctx: &cairo::Context, layout: &ContextMenuLayout) {
     }
 }
 
-fn hint_footer_height(layout: &ContextMenuLayout) -> f64 {
-    layout.font_size * 0.8 + HINT_PADDING * 2.0
-}
-
-/// Navigation hint footer with background for visibility.
+/// Key-hint footer inside the bottom of the menu, below a divider. The menu
+/// was measured wide enough for every hint it can show.
 fn draw_hint_footer(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     layout: &ContextMenuLayout,
     hint: &str,
 ) {
+    if layout.footer_height <= 0.0 {
+        return;
+    }
     let hint_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: layout.font_size * 0.8,
+        size: layout.footer_font_size,
     };
-    let hint_y = layout.origin_y + layout.height + HINT_GAP;
+    let footer_top = layout.origin_y + layout.height - layout.padding_y - layout.footer_height;
 
-    constants::set_color(ctx, HINT_FOOTER_BG);
-    draw_rounded_rect(
-        ctx,
-        layout.origin_x,
-        hint_y,
-        layout.width,
-        hint_footer_height(layout),
-        RADIUS_STD,
-    );
-    let _ = ctx.fill();
-
+    draw_divider(ctx, layout, footer_top.round() + 0.5);
     constants::set_color(ctx, HINT_FOOTER_TEXT);
     engine.draw_baseline(
         ctx,
         hint_style,
         hint,
         layout.origin_x + layout.padding_x,
-        hint_y + HINT_PADDING + layout.font_size * 0.65,
+        footer_top + layout.footer_height * 0.5 + layout.footer_font_size * 0.4,
         None,
     );
 }

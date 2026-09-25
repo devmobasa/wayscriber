@@ -113,6 +113,17 @@ impl InputState {
         created_len
     }
 
+    /// Records that a capture just put an image on the system clipboard.
+    pub(crate) fn note_capture_image_on_clipboard(&mut self) {
+        self.selection_clipboard.note_capture_image_published();
+    }
+
+    /// Whether a menu Paste has anything known to paste. Only local state is
+    /// consulted: probing the system clipboard would block the event loop.
+    pub(crate) fn paste_available(&self) -> bool {
+        self.selection_clipboard.has_known_content()
+    }
+
     pub(crate) fn request_clipboard_paste(&mut self) -> ClipboardPasteRequest {
         self.request_clipboard_paste_at_anchor(self.paste_anchor())
     }

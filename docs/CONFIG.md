@@ -1580,7 +1580,7 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
   rests on it, or on click, and the menu stays open. Clicking the row again collapses it. From
   the keyboard, → opens a submenu and ← or Esc returns to its row. The parent row shows the
   submenu's current state, such as the zoom level or the active page.
-- Right-click menus expose **Paste**; shape menus also expose **Copy** for the selected annotations.
+- The canvas right-click menu starts with **Undo**, **Redo** (dimmed when there is nothing to undo or redo), **Paste**, and **Capture Region…**, and ends with **Clear All** and then **Exit** (**Hide Overlay** when the background daemon owns the overlay), each in its own group. Shape menus also end with **Exit** and expose **Copy** for the selected annotations. **Paste** is enabled once annotations have been copied or a capture was copied to the clipboard in this run; the system clipboard is not probed, so an image copied from another app pastes with <kbd>Ctrl+Alt+V</kbd>. The key hints sit inside the bottom of the menu.
 - Pan offsets are stored per page, so each page keeps its own position.
 
 **CLI Override:**

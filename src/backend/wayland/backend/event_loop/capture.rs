@@ -461,6 +461,7 @@ fn handle_capture_results(state: &mut WaylandState) {
 
             if result.copied_to_clipboard {
                 info!("{} copied to clipboard", result.operation.saved_log_label());
+                state.input_state.note_capture_image_on_clipboard();
                 message_parts.push("Copied to clipboard".to_string());
             }
 

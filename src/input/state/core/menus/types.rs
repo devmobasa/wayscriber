@@ -76,6 +76,11 @@ pub enum MenuCommand {
     ZoomOut,
     ResetZoom,
     ToggleHighlightTool,
+    Undo,
+    Redo,
+    CaptureRegion,
+    /// Exit the overlay, or hide it when a background daemon owns it.
+    Exit,
     OpenPagesMenu,
     OpenPageMoveMenu,
     PagePrev,
@@ -86,7 +91,9 @@ pub enum MenuCommand {
     PageRename,
     PageDuplicateFromContext,
     PageDeleteFromContext,
-    PageMoveToBoard { id: String },
+    PageMoveToBoard {
+        id: String,
+    },
     SwitchToPage(usize),
     OpenBoardsMenu,
     OpenBoardPicker,
@@ -99,7 +106,9 @@ pub enum MenuCommand {
     BoardEditPaperFromContext,
     BoardRenameFromContext,
     BoardTogglePinFromContext,
-    SwitchToBoard { id: String },
+    SwitchToBoard {
+        id: String,
+    },
     SwitchToWhiteboard,
     SwitchToBlackboard,
     ReturnToTransparent,
@@ -122,6 +131,9 @@ pub struct ContextMenuEntry {
     pub submenu: Option<ContextMenuKind>,
     pub disabled: bool,
     pub command: Option<MenuCommand>,
+    /// A hairline divider sits on this row's top edge, starting a new group.
+    /// It takes no height, so rows keep one uniform pitch for hit-testing.
+    pub separator_before: bool,
 }
 
 impl ContextMenuEntry {
@@ -137,7 +149,14 @@ impl ContextMenuEntry {
             submenu: None,
             disabled,
             command,
+            separator_before: false,
         }
+    }
+
+    /// Starts a new group at this row.
+    pub fn with_separator(mut self) -> Self {
+        self.separator_before = true;
+        self
     }
 
     /// Makes this a parent row that opens `kind` as a submenu.
@@ -156,6 +175,10 @@ pub struct ContextMenuLayout {
     pub height: f64,
     pub row_height: f64,
     pub font_size: f64,
+    /// Height of the key-hint footer inside the bottom of the box; zero for
+    /// submenus, which have none.
+    pub footer_height: f64,
+    pub footer_font_size: f64,
     pub padding_x: f64,
     pub padding_y: f64,
     pub shortcut_width: f64,
