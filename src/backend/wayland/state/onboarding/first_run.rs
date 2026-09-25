@@ -207,7 +207,7 @@ impl WaylandState {
         Some(card)
     }
 
-    fn first_run_onboarding_card_visible(&self) -> bool {
+    pub(super) fn first_run_onboarding_card_visible(&self) -> bool {
         if !super::automatic_onboarding_allowed(
             self.config.ui.show_onboarding_hints,
             self.preferences.onboarding().persistence_available(),

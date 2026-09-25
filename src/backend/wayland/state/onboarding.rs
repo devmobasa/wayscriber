@@ -6,7 +6,10 @@ use std::time::{Duration, Instant};
 
 use super::*;
 
+mod card;
 mod first_run;
+
+pub(in crate::backend::wayland) use card::OnboardingCardChrome;
 
 /// Slow-path threshold: this many shortcut-bound command-palette runs of the
 /// same action before the coach offers the keyboard shortcut.

@@ -124,6 +124,7 @@ impl WaylandState {
             ),
             suppression: Default::default(),
             shortcut_coach: Default::default(),
+            onboarding_card: Default::default(),
             focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),
             spotlight: super::super::spotlight_runtime::SpotlightRuntime::new(),

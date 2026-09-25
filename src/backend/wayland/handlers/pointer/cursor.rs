@@ -295,6 +295,13 @@ impl WaylandState {
         {
             return Some(hint.icon());
         }
+        if matches!(self.input_state.state, DrawingState::Idle)
+            && self
+                .onboarding_card_press_at(f64::from(mx), f64::from(my))
+                .is_some()
+        {
+            return Some(CursorIcon::Default);
+        }
         None
     }
 

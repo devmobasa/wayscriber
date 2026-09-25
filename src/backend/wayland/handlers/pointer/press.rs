@@ -63,6 +63,10 @@ impl WaylandState {
             return;
         }
 
+        if self.handle_onboarding_card_pointer_press(routed, button) {
+            return;
+        }
+
         if !self.input_state.modal_owns_pointer_shortcuts()
             && self.try_dispatch_pointer_shortcut(button)
         {
@@ -260,6 +264,29 @@ impl WaylandState {
         true
     }
 
+    /// The onboarding card paints above the canvas and the inline bars, so it
+    /// owns every button pressed on it: nothing draws, no pointer shortcut
+    /// fires, and a click never counts as the stroke the card asks for.
+    fn handle_onboarding_card_pointer_press(&mut self, routed: RoutedInput, button: u32) -> bool {
+        if routed.surface != InputSurface::Canvas {
+            return false;
+        }
+        let Some(press) = routed
+            .screen
+            .and_then(|(x, y)| self.onboarding_card_press_at(x, y))
+        else {
+            return false;
+        };
+
+        self.pointer.clear_chrome_press();
+        if button == BTN_LEFT {
+            self.pointer.arm_onboarding_card_press(press);
+        } else {
+            self.pointer.suppress_release(RegionInputSource::Pointer);
+        }
+        true
+    }
+
     fn handle_inline_pointer_press(
         &mut self,
         conn: &wayland_client::Connection,
@@ -360,6 +387,11 @@ impl WaylandState {
         screen_y: i32,
     ) -> bool {
         self.pointer.clear_chrome_press();
+        // The card paints above toasts; touch reaches it only through here.
+        if let Some(press) = self.onboarding_card_press_at(f64::from(screen_x), f64::from(screen_y))
+        {
+            return self.pointer.arm_onboarding_card_press(press);
+        }
         if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
             return self.pointer.arm_toast_press(pressed);
         }

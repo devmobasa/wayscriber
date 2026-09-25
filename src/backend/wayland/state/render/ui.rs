@@ -25,6 +25,7 @@ impl WaylandState {
     fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
         if !render_ui {
             self.input_state.clear_context_menu_layout();
+            self.onboarding_card.set_layout(None);
             return;
         }
         let capture_picker = self.capture_picker_chrome_suppressed();
@@ -426,17 +427,19 @@ impl WaylandState {
         }
         self.render_ocr_scan(ctx, width, height);
         if capture_picker {
+            self.onboarding_card.set_layout(None);
             return;
         }
-        if let Some(card) = self.first_run_onboarding_card() {
+        let card_layout = self.first_run_onboarding_card().map(|card| {
             crate::ui::render_onboarding_card_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
                 height,
                 &card,
-            );
-        }
+            )
+        });
+        self.onboarding_card.set_layout(card_layout);
         let palette_view = crate::ui::CommandPaletteView::prepare(&self.input_state, width, height);
         crate::ui::paint_command_palette(
             self.render.theme(),

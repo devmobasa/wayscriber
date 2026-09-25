@@ -55,6 +55,36 @@ const DOT_PENDING: Rgba = (0.44, 0.52, 0.62, 1.0);
 /// Checkmark stroke drawn over a completed dot.
 const CHECKMARK: Rgba = (0.96, 1.0, 0.97, 1.0);
 
+/// Where the painted card sits on screen. The renderer returns it so pointer
+/// hit-testing uses exactly the rectangle that was drawn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct OnboardingCardLayout {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+}
+
+impl OnboardingCardLayout {
+    /// Whether a screen point lands on the card. The card is opaque chrome, so
+    /// a press anywhere inside it belongs to the card, never to the canvas.
+    pub(crate) fn contains(&self, x: f64, y: f64) -> bool {
+        (self.x..=self.x + self.width).contains(&x) && (self.y..=self.y + self.height).contains(&y)
+    }
+
+    /// What a press at a screen point targets, if it lands on the card.
+    pub(crate) fn press_at(&self, x: f64, y: f64) -> Option<OnboardingCardPress> {
+        self.contains(x, y).then_some(OnboardingCardPress::Body)
+    }
+}
+
+/// What a press on the card targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OnboardingCardPress {
+    /// Anywhere on the card: consumed so it neither draws nor counts as drawing.
+    Body,
+}
+
 pub fn render_onboarding_card(
     ctx: &cairo::Context,
     width: u32,
@@ -64,13 +94,14 @@ pub fn render_onboarding_card(
     render_onboarding_card_with_engine(&UiTextEngine::default(), ctx, width, height, card);
 }
 
+/// Paints the card and returns the rectangle it occupies.
 pub(crate) fn render_onboarding_card_with_engine(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     width: u32,
     height: u32,
     card: &OnboardingCard,
-) {
+) -> OnboardingCardLayout {
     let margin = CARD_MARGIN * CARD_TYPE_SCALE;
     let card_max_width = CARD_MAX_WIDTH * CARD_TYPE_SCALE;
     let card_min_width = CARD_MIN_WIDTH * CARD_TYPE_SCALE;
@@ -221,6 +252,13 @@ pub(crate) fn render_onboarding_card_with_engine(
         y + card_height - card_padding + 2.0 * CARD_TYPE_SCALE,
         None,
     );
+
+    OnboardingCardLayout {
+        x,
+        y,
+        width: card_width,
+        height: card_height,
+    }
 }
 
 fn fit_text(
@@ -265,4 +303,82 @@ fn draw_checkmark(ctx: &cairo::Context, cx: f64, cy: f64, radius: f64) {
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.set_line_join(cairo::LineJoin::Round);
     let _ = ctx.stroke();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn card() -> OnboardingCard {
+        OnboardingCard {
+            eyebrow: "Step 1 / 6".to_string(),
+            title: "Draw, then undo".to_string(),
+            body: "Draw one quick stroke anywhere on the canvas.".to_string(),
+            items: vec![OnboardingChecklistItem {
+                label: "Draw a stroke".to_string(),
+                done: false,
+            }],
+            footer: "Shift+Escape to skip".to_string(),
+        }
+    }
+
+    /// Bounding box of every painted pixel.
+    fn painted_bounds(surface: &mut cairo::ImageSurface) -> (i32, i32, i32, i32) {
+        let width = surface.width();
+        let height = surface.height();
+        let stride = surface.stride() as usize;
+        let data = surface.data().expect("surface data");
+        let mut bounds = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+        for y in 0..height {
+            for x in 0..width {
+                if data[y as usize * stride + x as usize * 4 + 3] != 0 {
+                    bounds.0 = bounds.0.min(x);
+                    bounds.1 = bounds.1.min(y);
+                    bounds.2 = bounds.2.max(x);
+                    bounds.3 = bounds.3.max(y);
+                }
+            }
+        }
+        bounds
+    }
+
+    #[test]
+    fn the_returned_layout_is_the_painted_card() {
+        let engine = UiTextEngine::default();
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
+        let layout = {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            render_onboarding_card_with_engine(&engine, &ctx, 1280, 720, &card())
+        };
+
+        let (min_x, min_y, max_x, max_y) = painted_bounds(&mut surface);
+        // The hairline border straddles the edge and antialiases into the
+        // neighbouring pixel row.
+        assert!(
+            f64::from(min_x) >= layout.x - 2.0,
+            "{layout:?} vs x={min_x}"
+        );
+        assert!(
+            f64::from(min_y) >= layout.y - 2.0,
+            "{layout:?} vs y={min_y}"
+        );
+        assert!(f64::from(max_x) <= layout.x + layout.width + 2.0);
+        assert!(f64::from(max_y) <= layout.y + layout.height + 2.0);
+        assert!(layout.contains(f64::from(min_x + 4), f64::from(min_y + 4)));
+        assert!(layout.contains(f64::from(max_x - 4), f64::from(max_y - 4)));
+    }
+
+    #[test]
+    fn presses_resolve_to_the_card_only_inside_it() {
+        let layout = OnboardingCardLayout {
+            x: 10.0,
+            y: 20.0,
+            width: 100.0,
+            height: 50.0,
+        };
+
+        assert_eq!(layout.press_at(60.0, 40.0), Some(OnboardingCardPress::Body));
+        assert_eq!(layout.press_at(9.0, 40.0), None);
+        assert_eq!(layout.press_at(60.0, 71.0), None);
+    }
 }

@@ -183,6 +183,10 @@ impl WaylandState {
         screen_x: i32,
         screen_y: i32,
     ) -> bool {
+        if let Some(press) = self.pointer.take_onboarding_card_press() {
+            self.release_onboarding_card_press(press, f64::from(screen_x), f64::from(screen_y));
+            return true;
+        }
         if let Some(pressed) = self.pointer.take_toast_press() {
             let (hit, action) = self
                 .input_state

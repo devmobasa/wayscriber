@@ -47,11 +47,11 @@ fn retained_overlay_owner_matches_fresh_across_density_and_visible_state_changes
             render_precision_entry_popup_with_engine(engine, ctx, &state, 420, 360, (400.0, 350.0))
         });
         let before = assert_owner_parity(&engine, density, |engine, ctx| {
-            render_onboarding_card_with_engine(engine, ctx, 420, 360, &card)
+            render_onboarding_card_with_engine(engine, ctx, 420, 360, &card);
         });
         card.items[0].done = !card.items[0].done;
         let after = assert_owner_parity(&engine, density, |engine, ctx| {
-            render_onboarding_card_with_engine(engine, ctx, 420, 360, &card)
+            render_onboarding_card_with_engine(engine, ctx, 420, 360, &card);
         });
         assert!(before != after, "checklist completion must remain visible");
         state.start_tour_with_resources(InputTextResources {
