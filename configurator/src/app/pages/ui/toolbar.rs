@@ -128,7 +128,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             "Always show text controls",
-            "",
+            "Applies while the toolbar's Adapt to tool setting is off; otherwise font controls follow tools that draw text.",
             |app| app.draft.ui_toolbar_show_text_controls,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowTextControls, value),
         )

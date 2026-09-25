@@ -63,7 +63,7 @@ impl ToolbarSettingsModel {
                     "Text controls",
                     snapshot.show_text_controls,
                     ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
-                    "Text: font size/family.",
+                    "Font size/family on every tool while Adapt to tool is off.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsStatusBar,

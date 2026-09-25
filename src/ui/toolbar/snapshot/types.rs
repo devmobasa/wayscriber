@@ -72,6 +72,8 @@ pub struct ToolContext {
     pub show_polygon_sides_control: bool,
     /// Whether font controls should be shown
     pub show_font_controls: bool,
+    /// Whether the text-size slider joins the font controls.
+    pub show_font_size: bool,
     /// Whether the pen-smoothing stepper should be shown.
     ///
     /// Follows the tool rather than the setting: smoothing is one number for
@@ -108,6 +110,7 @@ impl ToolContext {
                 show_marker_opacity: snapshot.show_marker_opacity_section,
                 show_polygon_sides_control: false,
                 show_font_controls: true,
+                show_font_size: true,
                 show_pen_smoothing: false,
                 show_shape_sensitivity: false,
             };
@@ -129,10 +132,10 @@ impl ToolContext {
         if snapshot.thickness_targets_marker {
             ctx.show_marker_opacity = true;
         }
-        // show_text_controls: keep font controls visible even when text mode is inactive
-        if snapshot.show_text_controls {
-            ctx.show_font_controls = true;
-        }
+        // Font controls follow what the tool draws; `show_text_controls` pins
+        // them on every tool only in classic mode (`all_visible`).
+        let text = super::text_controls::DrawnTextControls::for_tool(effective_tool, snapshot);
+        (ctx.show_font_controls, ctx.show_font_size) = (text.face, text.size);
         // show_marker_opacity_section: keep opacity slider visible for all tools
         if snapshot.show_marker_opacity_section {
             ctx.show_marker_opacity = true;
@@ -159,6 +162,7 @@ impl ToolContext {
             show_marker_opacity: profile.show_marker_opacity(),
             show_polygon_sides_control: false,
             show_font_controls: false,
+            show_font_size: false,
             // Set from the tool by `from_snapshot`; a profile alone cannot say.
             show_pen_smoothing: false,
             show_shape_sensitivity: false,
@@ -193,6 +197,7 @@ impl ToolContext {
             show_marker_opacity,
             show_polygon_sides_control,
             show_font_controls,
+            show_font_size: show_font_controls,
             show_pen_smoothing: true,
             show_shape_sensitivity: true,
         }

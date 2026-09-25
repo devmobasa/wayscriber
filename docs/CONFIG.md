@@ -1312,7 +1312,8 @@ show_presets = true
 # Show Step Undo/Redo section
 show_step_section = false
 
-# Keep text controls visible even when text is inactive
+# Keep text controls visible on every tool when context_aware_ui = false.
+# With context-aware UI, font controls appear only for tools that draw text
 show_text_controls = true
 
 # Show delayed undo/redo sliders in the Canvas popover's Step section
@@ -1395,7 +1396,7 @@ top_controls = [
 - **Pages**: `show_pages_section` toggles the page navigation block in the Canvas popover.
 - **Boards**: `show_boards_section` toggles the board navigation block in the Canvas popover.
 - **Presets**: `show_presets` hides/shows the top-strip preset slots.
-- **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
+- **Text controls**: with `context_aware_ui = true`, the style pill shows the text size, **Bold**, and font family only where they change what is drawn: text and sticky notes, arrows while **Auto-number** is on (their labels use the text font at 0.6× the text size), and step markers (**Bold** and family only; the number is sized by the marker's own **Size** slider). A text selection keeps its size stepper and **Bold**. `show_text_controls` keeps the text controls on every tool when `context_aware_ui = false`.
 - **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo block in the Canvas popover.
 - **Settings**: Settings is always reachable from the top-strip overflow popover.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the Canvas popover's Step section.

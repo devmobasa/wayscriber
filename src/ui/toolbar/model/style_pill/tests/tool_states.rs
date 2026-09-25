@@ -326,7 +326,10 @@ fn the_font_button_shows_the_family_in_use_and_opens_the_picker() {
 
 #[test]
 fn a_squeezed_pill_sheds_its_extras_before_it_sheds_the_color_chip() {
+    // Classic mode pins the text controls onto the Pen, so one pill carries
+    // both extras (smoothing and Bold) beside the core.
     let mut snapshot = snapshot_for_tool(Tool::Pen);
+    snapshot.context_aware_ui = false;
     snapshot.show_text_controls = true;
     let mut squeezed = plan();
     squeezed.drop_style_extras = true;
@@ -799,8 +802,55 @@ fn settings_overrides_extend_the_stroke_state() {
     snapshot.show_marker_opacity_section = true;
     let ids = control_ids(&StylePillSpec::build(&snapshot, &plan()));
     assert!(ids.contains(&"top.style.opacity".to_string()));
-    assert!(ids.contains(&"top.style.font-size".to_string()));
-    assert!(ids.contains(&"top.style.font-family-picker".to_string()));
+}
+
+#[test]
+fn text_controls_appear_only_where_text_is_drawn_while_the_pill_adapts() {
+    let font_ids = [
+        "top.style.font-size",
+        "top.style.font-size-value",
+        "top.style.font-bold",
+        "top.style.font-family-picker",
+    ];
+    let present = |snapshot: &ToolbarSnapshot| -> Vec<&str> {
+        let ids = control_ids(&StylePillSpec::build(snapshot, &plan()));
+        font_ids
+            .into_iter()
+            .filter(|id| ids.iter().any(|candidate| candidate == id))
+            .collect()
+    };
+
+    // The shipped default pins text controls on; adapting to the tool still
+    // keeps them off tools whose strokes carry no text.
+    for tool in [Tool::Pen, Tool::LiveShape, Tool::Marker, Tool::Rect] {
+        let mut snapshot = snapshot_for_tool(tool);
+        snapshot.show_text_controls = true;
+        assert!(present(&snapshot).is_empty(), "{tool:?}");
+    }
+
+    let mut arrow = snapshot_for_tool(Tool::Arrow);
+    arrow.show_text_controls = true;
+    assert!(present(&arrow).is_empty(), "unnumbered arrows draw no text");
+    arrow.arrow_label_enabled = true;
+    assert_eq!(present(&arrow), font_ids, "numbered arrows draw labels");
+
+    // A step marker's number takes the face, not the text size.
+    assert_eq!(
+        present(&snapshot_for_tool(Tool::StepMarker)),
+        ["top.style.font-bold", "top.style.font-family-picker"]
+    );
+
+    let mut text = snapshot_for_tool(Tool::Pen);
+    text.text_active = true;
+    assert_eq!(present(&text), font_ids);
+
+    // Classic mode keeps the old meaning: the setting pins them everywhere.
+    let mut classic = snapshot_for_tool(Tool::Pen);
+    classic.context_aware_ui = false;
+    classic.show_text_controls = true;
+    assert_eq!(present(&classic), font_ids);
+    classic.show_text_controls = false;
+    assert!(present(&classic).is_empty());
 }
 
 #[test]

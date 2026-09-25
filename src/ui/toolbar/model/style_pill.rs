@@ -301,8 +301,10 @@ impl StylePillSpec {
             controls.push(StylePillControl::CounterReset(StylePillCounter::Step));
         }
         if context.show_font_controls {
-            controls.push(StylePillControl::Slider(StylePillSlider::FontSize));
-            controls.push(StylePillControl::FontSizeValue);
+            if context.show_font_size {
+                controls.push(StylePillControl::Slider(StylePillSlider::FontSize));
+                controls.push(StylePillControl::FontSizeValue);
+            }
             if !plan.drop_style_extras {
                 controls.push(StylePillControl::FontWeightToggle);
             }

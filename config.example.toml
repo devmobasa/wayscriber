@@ -631,7 +631,8 @@ show_presets = true
 # Show step undo/redo section
 show_step_section = false
 
-# Keep text controls visible even when text is inactive
+# Keep text controls visible on every tool when context_aware_ui = false.
+# With context-aware UI, font controls appear only for tools that draw text
 show_text_controls = true
 
 # Show timing delay sliders in the Canvas popover's Step section
@@ -643,7 +644,8 @@ show_delay_sliders = false
 show_marker_opacity_section = false
 
 # Enable context-aware UI that shows/hides controls based on the active tool
-# When enabled, only relevant controls appear (e.g., no color picker for eraser)
+# When enabled, only relevant controls appear (e.g., no color picker for eraser,
+# and font controls only for text, sticky notes, numbered arrows, and step markers)
 # Disable to always show all controls regardless of the active tool
 context_aware_ui = true
 

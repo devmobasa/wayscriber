@@ -93,7 +93,8 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_step_section")]
     pub show_step_section: bool,
 
-    /// Keep text controls visible even when text is not active
+    /// Keep text controls visible on every tool when `context_aware_ui` is off.
+    /// Context-aware UI shows them only for tools that draw text.
     #[serde(default = "default_show_text_controls")]
     pub show_text_controls: bool,
 

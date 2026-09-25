@@ -1291,6 +1291,8 @@ fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
 #[test]
 fn overflow_popover_anchors_directly_below_its_button_like_gtk() {
     let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+    // Classic mode pins every control, so the pill reaches under the panel.
+    snapshot.context_aware_ui = false;
     snapshot.show_text_controls = true;
     snapshot.top_viewport_max = Some(850.0);
     snapshot.top_overflow_open = true;
@@ -1356,6 +1358,8 @@ fn menu_popovers_anchor_directly_below_overflow_button_like_gtk() {
         ("settings", (false, false, true)),
     ] {
         let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+        // Classic mode pins every control, so the pill reaches under the panel.
+        snapshot.context_aware_ui = false;
         snapshot.show_text_controls = true;
         snapshot.top_viewport_max = Some(850.0);
         snapshot.canvas_popover_open = open.0;
