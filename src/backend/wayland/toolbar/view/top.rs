@@ -7,7 +7,7 @@
 //! style pill). The Presets island: the saved tool+color slots. The History
 //! island: Undo/Redo plus the overflow toggle whose menu anchors the
 //! destructive Clear (red on hover) and any width-dropped items. The Chrome
-//! island: the quieter right-aligned layout cycle, About, pin, and minimize
+//! island: the quieter right-aligned layout menu, About, pin, and minimize
 //! buttons. Under the band,
 //! the style pill carries the active tool's contextual properties (colors, the
 //! color chip, sizes; `model::StylePillSpec`). Blue is reserved for the active
@@ -22,6 +22,8 @@ use crate::ui::toolbar::{ToolbarSnapshot, model};
 use super::tree::WidgetTree;
 
 mod build;
+mod chrome;
+mod layout_menu;
 mod menus;
 mod stepper;
 
@@ -79,11 +81,8 @@ pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopS
         snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple,
         snapshot.use_icons,
     );
-    let visible_tools: Vec<_> = model::visible_top_tool_buttons(
-        snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple,
-        snapshot,
-    )
-    .collect();
+    let visible_tools: Vec<_> =
+        model::visible_top_tool_buttons(snapshot.layout_mode, snapshot).collect();
     let utility_candidates = [
         model::TopUtilityButton::Screenshot,
         model::TopUtilityButton::Highlight,
@@ -100,8 +99,18 @@ pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopS
         }
     }
     // The laser yields first: presenters reach it with its key while the
-    // toolbar is hidden anyway, and the palette still lists it.
-    for candidate in [Tool::Laser, Tool::Arrow, Tool::Line] {
+    // toolbar is hidden anyway, and the palette still lists it. Advanced's
+    // inline shapes go next, before Arrow and Line; they reappear in the
+    // overflow menu like any width-dropped tool.
+    for candidate in [
+        Tool::Laser,
+        Tool::Spotlight,
+        Tool::Blur,
+        Tool::Ellipse,
+        Tool::Rect,
+        Tool::Arrow,
+        Tool::Line,
+    ] {
         if fits(&plan) {
             sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
             return plan;
@@ -302,6 +311,7 @@ pub fn top_input_rects(
         "top.menu.canvas.panel",
         "top.menu.session.panel",
         "top.menu.settings.panel",
+        "top.layout.panel",
     ] {
         if let Some(node) = tree.node_by_id(&id.to_string().into()) {
             let (x, y, w, h) = node.rect;
@@ -314,7 +324,7 @@ pub fn top_input_rects(
 
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, the style pill, the overflow
-/// popover, and the Canvas/Session/Settings popovers.
+/// popover, the Canvas/Session/Settings popovers, and the layout menu.
 pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
@@ -329,6 +339,7 @@ pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f6
     contextual_stack
         .max(build::overflow_height_planned(snapshot, &plan))
         .max(menus::menu_popover_height_planned(engine, snapshot, &plan))
+        .max(layout_menu::layout_menu_height_planned(snapshot, &plan))
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
@@ -382,6 +393,7 @@ fn natural_width_planned_at(
                 && !id.starts_with("top.chrome.close")
                 && !id.starts_with("top.overflow.")
                 && !id.starts_with("top.menu.")
+                && !id.starts_with("top.layout.")
         })
         .map(|node| node.rect.0 + node.rect.2)
         .fold(0.0_f64, f64::max);

@@ -572,3 +572,40 @@ fn a_narrowing_strip_moves_the_laser_to_the_overflow_before_any_other_tool() {
 
     assert_eq!(first_dropped, Some(vec![crate::input::Tool::Laser]));
 }
+
+/// Advanced's inline shapes widen the strip; under width pressure they yield
+/// before Arrow and Line, so the Regular tool set is the last to leave.
+#[test]
+fn advanced_inline_shapes_yield_before_arrow_and_line() {
+    use crate::input::Tool;
+
+    let mut state = create_test_input_state();
+    state.set_toolbar_use_icons(true);
+    let mut regular = snapshot_from_state(&state);
+    regular.layout_mode = crate::config::ToolbarLayoutMode::Regular;
+    let mut advanced = regular.clone();
+    advanced.layout_mode = crate::config::ToolbarLayoutMode::Advanced;
+    let engine = crate::ui_text::UiTextEngine::default();
+
+    let regular_width = top_size(&engine, &regular).0;
+    let advanced_width = top_size(&engine, &advanced).0;
+    assert!(advanced_width > regular_width, "Advanced shows more inline");
+
+    let advanced_shapes = [Tool::Spotlight, Tool::Blur, Tool::Ellipse, Tool::Rect];
+    let mut saw_arrow_drop = false;
+    for budget in (500..advanced_width).step_by(20) {
+        advanced.top_viewport_max = Some(budget as f64);
+        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&engine, &advanced);
+        if plan.dropped_tools.contains(&Tool::Arrow) {
+            saw_arrow_drop = true;
+            for tool in advanced_shapes {
+                assert!(
+                    plan.dropped_tools.contains(&tool),
+                    "{tool:?} yields before Arrow at {budget}px: {:?}",
+                    plan.dropped_tools
+                );
+            }
+        }
+    }
+    assert!(saw_arrow_drop, "the sweep reaches the Arrow rung");
+}

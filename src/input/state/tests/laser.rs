@@ -225,19 +225,26 @@ fn locked_presenter_mode_still_allows_the_laser() {
 fn regular_and_advanced_strips_show_the_laser_with_the_pens_and_simple_does_not() {
     use crate::ui::toolbar::{ToolbarSnapshot, model};
 
+    use crate::config::ToolbarLayoutMode;
+
     let snapshot = ToolbarSnapshot::from_input(&create_test_input_state());
 
-    let strip: Vec<_> = model::visible_top_tool_buttons(false, &snapshot).collect();
-    let marker = strip
-        .iter()
-        .position(|&tool| tool == Tool::Marker)
-        .expect("marker");
-    assert_eq!(strip.get(marker + 1), Some(&Tool::Laser));
+    for mode in [ToolbarLayoutMode::Regular, ToolbarLayoutMode::Advanced] {
+        let strip: Vec<_> = model::visible_top_tool_buttons(mode, &snapshot).collect();
+        let marker = strip
+            .iter()
+            .position(|&tool| tool == Tool::Marker)
+            .expect("marker");
+        assert_eq!(strip.get(marker + 1), Some(&Tool::Laser), "{mode:?}");
+    }
     assert_eq!(
         model::top_tool_group(Tool::Laser),
         model::TopToolGroup::Pens
     );
-    assert!(!model::visible_top_tool_buttons(true, &snapshot).any(|tool| tool == Tool::Laser));
+    assert!(
+        !model::visible_top_tool_buttons(ToolbarLayoutMode::Simple, &snapshot)
+            .any(|tool| tool == Tool::Laser)
+    );
     assert_eq!(
         model::toolbar_item_id_for_tool(Tool::Laser),
         crate::config::toolbar_item_ids::TOP_TOOL_LASER

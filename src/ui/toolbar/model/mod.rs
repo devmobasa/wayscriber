@@ -33,7 +33,10 @@ pub(crate) use event_policy::{
     short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
-pub(crate) use header::layout_mode_control;
+pub(crate) use header::{
+    LAYOUT_MENU_PAD, LAYOUT_MENU_ROW_GAP, LAYOUT_MENU_ROW_H, LAYOUT_MENU_ROW_W, LayoutMenuEntry,
+    layout_menu_entries, layout_mode_control, layout_mode_label,
+};
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
@@ -322,7 +325,7 @@ mod tests {
         .resolved();
 
         assert_eq!(
-            visible_top_tool_buttons(false, &snapshot)
+            visible_top_tool_buttons(ToolbarLayoutMode::Regular, &snapshot)
                 .take(2)
                 .collect::<Vec<_>>(),
             vec![Tool::Marker, Tool::Pen]

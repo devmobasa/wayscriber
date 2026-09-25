@@ -80,7 +80,7 @@ impl TopToolbarSpec {
 
         let mut previous_tool_group = None;
         let mut tool_control_present = false;
-        for tool in visible_top_tool_buttons(simple, snapshot) {
+        for tool in visible_top_tool_buttons(snapshot.layout_mode, snapshot) {
             if plan.dropped_tools.contains(&tool) {
                 continue;
             }
@@ -221,8 +221,8 @@ impl TopToolbarSpec {
         Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).count()
     }
 
-    /// Chrome island content, in reading order: layout cycle, then About,
-    /// then pin, then minimize. The layout cycle sits on the content-adjacent
+    /// Chrome island content, in reading order: layout menu, then About,
+    /// then pin, then minimize. The layout menu sits on the content-adjacent
     /// edge because it reshapes the strip's content, while the window-chrome
     /// trio (About leading among them because it is the only entry that
     /// leaves the overlay) stays against the window edge. All four are

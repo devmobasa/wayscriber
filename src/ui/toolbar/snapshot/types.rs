@@ -400,6 +400,8 @@ pub struct ToolbarSnapshot {
     pub settings_popover_open: bool,
     /// Whether the Canvas popover (anchored to the overflow toggle) is open
     pub canvas_popover_open: bool,
+    /// Whether the chrome island's layout-preset menu is open
+    pub layout_menu_open: bool,
     /// Internal scroll offset of the open Canvas/Session/Settings popover
     /// (logical pixels, clamped at render)
     pub top_popover_scroll: f64,

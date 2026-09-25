@@ -290,6 +290,9 @@ pub enum ToolbarEvent {
     ToggleFloatingBadgeAlways(bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
+    /// Open/close the chrome island's layout-preset menu. Choosing a preset
+    /// from it (`SetToolbarLayoutMode`) closes it.
+    ToggleLayoutMenu(bool),
     /// Hide or show a known toolbar item override.
     SetToolbarItemHidden(ToolbarItemId, bool),
     /// Move an orderable toolbar item by a relative row delta.

@@ -30,7 +30,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     page.group("Layout")
         .combo_row(
             "Layout mode",
-            "",
+            "Simple: core pens. Regular: adds Shape Pen, Line, Arrow, presets. Advanced: shapes inline, multi-step undo.",
             layout_modes,
             layout_labels,
             |app| app.draft.ui_toolbar_layout_mode,

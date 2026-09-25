@@ -70,7 +70,7 @@ fn regular_spec_owns_control_order_ids_and_events() {
             "top.chrome.pin",
             "top.chrome.close",
         ],
-        "the chrome island reads layout cycle, About, pin, minimize"
+        "the chrome island reads layout menu, About, pin, minimize"
     );
     let pen = spec
         .strip()
@@ -253,7 +253,7 @@ fn narrow_spec_moves_dropped_controls_to_one_ordered_overflow() {
             "top.chrome.pin",
             "top.chrome.close",
         ],
-        "the chrome island reads layout cycle, About, pin, minimize"
+        "the chrome island reads layout menu, About, pin, minimize"
     );
     assert_eq!(
         spec.overflow()[0].event(&snapshot),

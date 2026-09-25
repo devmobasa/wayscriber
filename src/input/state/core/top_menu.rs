@@ -7,6 +7,8 @@ pub(crate) enum TopMenuState {
     CanvasPopover,
     SessionPopover,
     SettingsPopover,
+    /// The chrome island's layout-preset menu (Simple / Regular / Advanced).
+    LayoutMenu,
 }
 
 impl TopMenuState {
@@ -22,7 +24,10 @@ impl TopMenuState {
     }
 
     pub(crate) const fn is_flyout(self) -> bool {
-        matches!(self, Self::ShapePicker | Self::TopOverflow)
+        matches!(
+            self,
+            Self::ShapePicker | Self::TopOverflow | Self::LayoutMenu
+        )
     }
 
     pub(crate) fn set_open(&mut self, target: Self, open: bool) -> bool {

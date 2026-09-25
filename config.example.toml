@@ -528,6 +528,10 @@ radial_menu_mouse_binding = "middle"
 backend = "auto"
 
 # Toolbar layout preset: "simple", "regular" (the default), or "advanced"
+# Simple: core pens and one Shapes picker. Regular adds Shape Pen, Line,
+# Arrow, presets, and Clear. Advanced also puts Rectangle, Ellipse, Blur, and
+# Spotlight on the strip (only polygons stay in the picker) and turns on the
+# advanced actions and multi-step undo in the Canvas popover.
 # "full" is accepted as a legacy alias for "regular"
 layout_mode = "regular"
 

@@ -24,6 +24,8 @@ pub(crate) enum ToolbarPopover {
     Settings,
     /// The precise-entry popup.
     PrecisionEntry,
+    /// The chrome island's layout-preset menu.
+    LayoutMenu,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -270,6 +272,9 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         ToolbarEvent::ToggleTopOverflow(_) | ToolbarEvent::ToggleShapePicker(_) => {
             &[P::TopOverflow, P::ShapePicker]
         }
+        // Choosing a preset is the menu's purpose, so it closes the menu;
+        // only the toggle itself spares it.
+        ToolbarEvent::ToggleLayoutMenu(_) => &[P::LayoutMenu],
         // Shapes hosts its own inline options.
         ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_) => &[P::ShapePicker],
 
@@ -576,6 +581,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::CustomUndo
         | ToolbarEvent::CustomRedo
         | ToolbarEvent::ToggleTopOverflow(_)
+        | ToolbarEvent::ToggleLayoutMenu(_)
         | ToolbarEvent::ToggleSessionPopover(_)
         | ToolbarEvent::ToggleSettingsPopover(_)
         | ToolbarEvent::ToggleCanvasPopover(_)

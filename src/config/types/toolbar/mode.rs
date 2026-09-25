@@ -13,8 +13,11 @@ pub enum ToolbarLayoutMode {
 }
 
 impl ToolbarLayoutMode {
-    /// The next preset in the cycle the strip's layout button advances
-    /// through; wraps from Advanced back to Simple.
+    /// Every preset, simplest first: the order the layout menu lists them.
+    pub const ALL: [Self; 3] = [Self::Simple, Self::Regular, Self::Advanced];
+
+    /// The next preset, simplest to richest; wraps from Advanced back to
+    /// Simple.
     pub fn next(self) -> Self {
         match self {
             Self::Simple => Self::Regular,
@@ -75,7 +78,7 @@ pub struct ToolbarSectionDefaults {
 mod tests {
     use super::ToolbarLayoutMode;
 
-    /// The layout cycle visits all three presets and wraps from Advanced
+    /// The cycle visits all three presets and wraps from Advanced
     /// back to Simple.
     #[test]
     fn next_cycles_through_every_preset_and_wraps() {

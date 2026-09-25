@@ -5,7 +5,9 @@
 // dead code again.
 #![allow(dead_code)]
 
-use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, toolbar_item_ids as ids};
+use crate::config::{
+    ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode, toolbar_item_ids as ids,
+};
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
 
@@ -40,8 +42,8 @@ const SIMPLE_TOOL_BUTTONS: [Tool; 5] = [
     Tool::Eraser,
 ];
 
-/// Regular and Advanced strips. The laser rides with the pens here; the
-/// simple strip leaves it to its key and the command palette.
+/// Regular strip. The laser rides with the pens here and on the Advanced
+/// strip; the simple strip leaves it to its key and the command palette.
 const FULL_TOOL_BUTTONS: [Tool; 9] = [
     Tool::Select,
     Tool::Pen,
@@ -52,6 +54,24 @@ const FULL_TOOL_BUTTONS: [Tool; 9] = [
     Tool::Eraser,
     Tool::Line,
     Tool::Arrow,
+];
+
+/// Advanced strip: the Regular tools plus the everyday shapes and the two
+/// presenter effects, so only the polygons stay behind the Shapes picker.
+const ADVANCED_TOOL_BUTTONS: [Tool; 13] = [
+    Tool::Select,
+    Tool::Pen,
+    Tool::LiveShape,
+    Tool::Marker,
+    Tool::Laser,
+    Tool::StepMarker,
+    Tool::Eraser,
+    Tool::Line,
+    Tool::Rect,
+    Tool::Ellipse,
+    Tool::Arrow,
+    Tool::Blur,
+    Tool::Spotlight,
 ];
 
 /// Full-mode shape picker: everything the strip no longer shows inline.
@@ -82,6 +102,15 @@ const SHAPE_TOOLS: [Tool; 12] = [
     Tool::FreeformPolygon,
 ];
 
+/// Advanced shape picker: only the polygons, which the strip leaves out.
+const ADVANCED_SHAPE_PICKER_TOOLS: [Tool; 5] = [
+    Tool::Triangle,
+    Tool::Parallelogram,
+    Tool::Rhombus,
+    Tool::RegularPolygon,
+    Tool::FreeformPolygon,
+];
+
 const SHAPE_PICKER_ROW_LEN: usize = 5;
 
 const POLYGON_TOOLS: [Tool; 5] = [
@@ -92,19 +121,21 @@ const POLYGON_TOOLS: [Tool; 5] = [
     Tool::FreeformPolygon,
 ];
 
-pub(crate) fn top_tool_buttons(simple: bool) -> &'static [Tool] {
-    if simple {
-        &SIMPLE_TOOL_BUTTONS
-    } else {
-        &FULL_TOOL_BUTTONS
+/// The tools a layout preset shows directly on the strip. Every other tool
+/// sits in the Shapes picker for that preset.
+pub(crate) fn top_tool_buttons(mode: ToolbarLayoutMode) -> &'static [Tool] {
+    match mode {
+        ToolbarLayoutMode::Simple => &SIMPLE_TOOL_BUTTONS,
+        ToolbarLayoutMode::Regular => &FULL_TOOL_BUTTONS,
+        ToolbarLayoutMode::Advanced => &ADVANCED_TOOL_BUTTONS,
     }
 }
 
 pub(crate) fn visible_top_tool_buttons(
-    simple: bool,
+    mode: ToolbarLayoutMode,
     snapshot: &ToolbarSnapshot,
 ) -> impl Iterator<Item = Tool> + '_ {
-    visible_tools(top_tool_buttons(simple), snapshot)
+    visible_tools(top_tool_buttons(mode), snapshot)
 }
 
 pub(crate) fn visible_tools<'a>(
@@ -360,35 +391,38 @@ pub(crate) fn polygon_tools() -> &'static [Tool] {
 
 pub(crate) fn visible_shape_picker_rows(
     snapshot: &ToolbarSnapshot,
-    is_simple: bool,
+    mode: ToolbarLayoutMode,
 ) -> Vec<Vec<Tool>> {
-    visible_tools(shape_picker_tools(is_simple), snapshot)
+    visible_tools(shape_picker_tools(mode), snapshot)
         .collect::<Vec<_>>()
         .chunks(SHAPE_PICKER_ROW_LEN)
         .map(|chunk| chunk.to_vec())
         .collect()
 }
 
-pub(crate) fn visible_shape_picker_row_count(snapshot: &ToolbarSnapshot, is_simple: bool) -> usize {
-    visible_tools(shape_picker_tools(is_simple), snapshot)
+pub(crate) fn visible_shape_picker_row_count(
+    snapshot: &ToolbarSnapshot,
+    mode: ToolbarLayoutMode,
+) -> usize {
+    visible_tools(shape_picker_tools(mode), snapshot)
         .count()
         .div_ceil(SHAPE_PICKER_ROW_LEN)
 }
 
 pub(crate) fn visible_shape_picker_max_row_len(
     snapshot: &ToolbarSnapshot,
-    is_simple: bool,
+    mode: ToolbarLayoutMode,
 ) -> usize {
-    visible_tools(shape_picker_tools(is_simple), snapshot)
+    visible_tools(shape_picker_tools(mode), snapshot)
         .count()
         .min(SHAPE_PICKER_ROW_LEN)
 }
 
-fn shape_picker_tools(is_simple: bool) -> &'static [Tool] {
-    if is_simple {
-        &SHAPE_TOOLS
-    } else {
-        &FULL_SHAPE_PICKER_TOOLS
+fn shape_picker_tools(mode: ToolbarLayoutMode) -> &'static [Tool] {
+    match mode {
+        ToolbarLayoutMode::Simple => &SHAPE_TOOLS,
+        ToolbarLayoutMode::Regular => &FULL_SHAPE_PICKER_TOOLS,
+        ToolbarLayoutMode::Advanced => &ADVANCED_SHAPE_PICKER_TOOLS,
     }
 }
 
@@ -456,13 +490,13 @@ pub(crate) fn current_shape_tool(active_tool: Tool, tool_override: Option<Tool>)
 /// Whether the active shape tool is one the Shapes picker hosts, so the
 /// picker button is its only home on the strip.
 ///
-/// Full layouts give Shape Pen, Line, and Arrow buttons of their own and leave
-/// them out of the picker; lighting the picker for those as well showed two
-/// active buttons for one tool.
+/// Full layouts give Shape Pen, Line, and Arrow buttons of their own (and
+/// Advanced also rectangle, ellipse, blur, and spotlight) and leave them out
+/// of the picker; lighting the picker for those as well showed two active
+/// buttons for one tool.
 pub(crate) fn active_tool_in_shape_picker(snapshot: &ToolbarSnapshot) -> bool {
-    let simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     current_shape_tool(snapshot.active_tool, snapshot.tool_override)
-        .is_some_and(|tool| shape_picker_tools(simple).contains(&tool))
+        .is_some_and(|tool| shape_picker_tools(snapshot.layout_mode).contains(&tool))
 }
 
 pub(crate) fn default_shape_tool() -> Tool {

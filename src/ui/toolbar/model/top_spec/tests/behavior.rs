@@ -120,7 +120,7 @@ fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
     assert_eq!(
         spec.chrome().get(1).copied(),
         Some(TopToolbarControl::About),
-        "About leads the window-chrome trio, after the layout cycle"
+        "About leads the window-chrome trio, after the layout menu"
     );
     assert_eq!(TopToolbarControl::About.island(), TopToolbarIsland::Chrome);
     assert_eq!(
@@ -154,43 +154,39 @@ fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
     );
 }
 
-/// The layout cycle advances Simple → Regular → Advanced → Simple while
-/// its glyph names the mode currently on screen, so the icon is the
-/// state and the click is the transition.
+/// The layout button opens the preset menu instead of cycling presets: a
+/// cycling button jumped under the pointer because each preset changes the
+/// strip width. Its glyph still names the mode currently on screen, and it
+/// reads as active while the menu is open.
 #[test]
-fn layout_cycle_control_maps_each_mode_to_its_next_event_and_current_icon() {
+fn layout_control_toggles_the_preset_menu_and_shows_the_current_icon() {
     let control = TopToolbarControl::LayoutMode;
-    for (mode, next, icon) in [
-        (
-            ToolbarLayoutMode::Simple,
-            ToolbarLayoutMode::Regular,
-            TopToolbarIcon::LayoutSimple,
-        ),
-        (
-            ToolbarLayoutMode::Regular,
-            ToolbarLayoutMode::Advanced,
-            TopToolbarIcon::LayoutRegular,
-        ),
-        (
-            ToolbarLayoutMode::Advanced,
-            ToolbarLayoutMode::Simple,
-            TopToolbarIcon::LayoutAdvanced,
-        ),
+    for (mode, icon) in [
+        (ToolbarLayoutMode::Simple, TopToolbarIcon::LayoutSimple),
+        (ToolbarLayoutMode::Regular, TopToolbarIcon::LayoutRegular),
+        (ToolbarLayoutMode::Advanced, TopToolbarIcon::LayoutAdvanced),
     ] {
         let mut snapshot = snapshot();
         snapshot.layout_mode = mode;
         assert_eq!(
             control.event(&snapshot),
-            ToolbarEvent::SetToolbarLayoutMode(next),
-            "{mode:?} advances to {next:?}"
+            ToolbarEvent::ToggleLayoutMenu(true),
+            "{mode:?} opens the menu"
         );
         assert_eq!(
             control.icon(&snapshot),
             Some(icon),
             "{mode:?} shows the current mode's glyph"
         );
-        // A cycle, not a toggle: it never reads as active.
         assert!(!control.active(&snapshot));
+
+        snapshot.layout_menu_open = true;
+        assert_eq!(
+            control.event(&snapshot),
+            ToolbarEvent::ToggleLayoutMenu(false),
+            "a second click closes the menu"
+        );
+        assert!(control.active(&snapshot), "the open menu marks its button");
     }
     let snapshot = snapshot();
     assert_eq!(control.role(), TopToolbarControlRole::Chrome);
@@ -199,7 +195,7 @@ fn layout_cycle_control_maps_each_mode_to_its_next_event_and_current_icon() {
         control.id(),
         TopToolbarControlId::Item(ids::TOP_CHROME_LAYOUT)
     );
-    assert_eq!(control.accessible_label(&snapshot), "Cycle toolbar layout");
+    assert_eq!(control.accessible_label(&snapshot), "Toolbar layout");
 }
 
 #[test]
@@ -235,23 +231,22 @@ fn required_chrome_and_tool_controls_have_a_glyph() {
     assert_eq!(TopToolbarControl::HighlightRing.icon(&snapshot), None);
 }
 
-/// The tooltip names the current mode and where the click lands, for all
-/// three presets.
+/// The tooltip names the current mode for all three presets.
 #[test]
-fn layout_cycle_tooltip_names_current_and_next_mode() {
+fn layout_tooltip_names_the_current_mode() {
     let control = TopToolbarControl::LayoutMode;
     for (mode, tooltip) in [
         (
             ToolbarLayoutMode::Simple,
-            "Layout: Simple (click for Regular)",
+            "Layout: Simple (click to choose)",
         ),
         (
             ToolbarLayoutMode::Regular,
-            "Layout: Regular (click for Advanced)",
+            "Layout: Regular (click to choose)",
         ),
         (
             ToolbarLayoutMode::Advanced,
-            "Layout: Advanced (click for Simple)",
+            "Layout: Advanced (click to choose)",
         ),
     ] {
         let mut snapshot = snapshot();
@@ -260,7 +255,63 @@ fn layout_cycle_tooltip_names_current_and_next_mode() {
     }
 }
 
-/// Like the other chrome entries, the layout cycle is hideable; hiding
+/// Regular and Advanced used to render the same strip. Advanced now brings
+/// the everyday shapes and the presenter effects out of the Shapes picker,
+/// which keeps only the polygons.
+#[test]
+fn advanced_layout_shows_shapes_inline_and_keeps_polygons_in_the_picker() {
+    use crate::ui::toolbar::model::{visible_shape_picker_rows, visible_top_tool_buttons};
+
+    let mut regular = snapshot();
+    regular.layout_mode = ToolbarLayoutMode::Regular;
+    let mut advanced = regular.clone();
+    advanced.layout_mode = ToolbarLayoutMode::Advanced;
+
+    let regular_tools: Vec<_> = visible_top_tool_buttons(regular.layout_mode, &regular).collect();
+    let advanced_tools: Vec<_> =
+        visible_top_tool_buttons(advanced.layout_mode, &advanced).collect();
+    for tool in [Tool::Rect, Tool::Ellipse, Tool::Blur, Tool::Spotlight] {
+        assert!(
+            !regular_tools.contains(&tool),
+            "{tool:?} stays in Regular's picker"
+        );
+        assert!(
+            advanced_tools.contains(&tool),
+            "{tool:?} is inline in Advanced"
+        );
+    }
+    assert!(
+        regular_tools
+            .iter()
+            .all(|tool| advanced_tools.contains(tool)),
+        "Advanced keeps every Regular tool"
+    );
+
+    let picker: Vec<_> = visible_shape_picker_rows(&advanced, advanced.layout_mode)
+        .into_iter()
+        .flatten()
+        .collect();
+    assert_eq!(
+        picker,
+        [
+            Tool::Triangle,
+            Tool::Parallelogram,
+            Tool::Rhombus,
+            Tool::RegularPolygon,
+            Tool::FreeformPolygon,
+        ]
+    );
+
+    let regular_spec = TopToolbarSpec::build(&regular, &TopStripPlan::unconstrained());
+    let advanced_spec = TopToolbarSpec::build(&advanced, &TopStripPlan::unconstrained());
+    assert_ne!(
+        regular_spec.strip(),
+        advanced_spec.strip(),
+        "the two presets render different strips"
+    );
+}
+
+/// Like the other chrome entries, the layout menu is hideable; hiding
 /// it leaves the window-chrome trio in reading order.
 #[test]
 fn hiding_the_layout_cycle_leaves_the_chrome_trio_in_order() {
@@ -273,7 +324,7 @@ fn hiding_the_layout_cycle_leaves_the_chrome_trio_in_order() {
     assert_eq!(
         chrome_ids(&spec),
         ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
-        "hiding the layout cycle leaves About, pin, minimize in order"
+        "hiding the layout menu leaves About, pin, minimize in order"
     );
 }
 

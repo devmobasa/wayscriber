@@ -44,6 +44,7 @@ impl TopBar {
             ("top-canvas-popover", self.canvas.mounted.as_ref()),
             ("top-session-popover", self.session.mounted.as_ref()),
             ("top-settings-popover", self.settings.mounted.as_ref()),
+            ("top-layout-popover", self.layout.mounted.as_ref()),
         ]
         .into_iter()
         .filter_map(|(name, resources)| resources.map(|resources| (name, resources)))
@@ -55,6 +56,7 @@ impl TopBar {
         self.canvas.set_open(false);
         self.session.set_open(false);
         self.settings.set_open(false);
+        self.layout.set_open(false);
     }
 
     /// Each native stays mapped with transparent proof content during capture.
@@ -163,6 +165,7 @@ impl TopBar {
         }
 
         self.sync_menu_popovers(snapshot, scale);
+        self.sync_layout_menu(snapshot, scale);
     }
 
     /// Keep the Canvas/Session/Settings popovers' contents and open state in
@@ -327,7 +330,6 @@ impl TopBar {
         use_icons: bool,
         scale: f64,
     ) -> gtk4::Box {
-        let is_simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
         let gap = (GAP * scale).round() as i32;
         let content = gtk4::Box::new(gtk4::Orientation::Vertical, gap);
         set_semantic_widget_id(&content, "top.shapes.panel");
@@ -336,7 +338,7 @@ impl TopBar {
         // is invisible to every tool button in the picker.
         install_click_modifier_capture(&content, &self.feedback);
 
-        for row in model::visible_shape_picker_rows(snapshot, is_simple) {
+        for row in model::visible_shape_picker_rows(snapshot, snapshot.layout_mode) {
             let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, gap);
             for tool in row {
                 if !model::tool_visible(snapshot, tool) {

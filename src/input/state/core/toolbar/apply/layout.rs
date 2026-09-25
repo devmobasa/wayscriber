@@ -297,6 +297,18 @@ impl InputState {
         changed
     }
 
+    /// Open/close the chrome island's layout-preset menu. Opening it closes
+    /// every other top-strip menu.
+    pub(super) fn apply_toolbar_toggle_layout_menu(&mut self, open: bool) -> bool {
+        let changed = self
+            .toolbar
+            .set_top_menu_open(TopMenuState::LayoutMenu, open);
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
     /// Open/close the Canvas popover. Opening it closes the Session/Settings
     /// popovers, the overflow menu, and the shapes picker, and resets the
     /// popovers' shared internal scroll.
@@ -579,6 +591,33 @@ mod tests {
         // Explicit close is a plain toggle.
         state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(false)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+    }
+
+    #[test]
+    fn layout_menu_is_mutually_exclusive_with_the_other_top_menus() {
+        let mut state = make_test_input_state();
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleLayoutMenu(true)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::LayoutMenu);
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::SettingsPopover);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleLayoutMenu(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleLayoutMenu(false)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+    }
+
+    /// Picking a tool closes the layout menu like the other flyouts.
+    #[test]
+    fn selecting_a_tool_closes_the_layout_menu() {
+        let mut state = make_test_input_state();
+        state.apply_toolbar_event(ToolbarEvent::ToggleLayoutMenu(true));
+
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Marker));
+
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
 

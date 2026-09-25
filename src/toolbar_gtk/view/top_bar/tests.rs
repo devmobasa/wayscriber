@@ -1157,6 +1157,7 @@ fn detach_test_popovers(top: &mut TopBar) {
     top.canvas.clear();
     top.session.clear();
     top.settings.clear();
+    top.layout.clear();
 }
 
 fn assert_builtin_node(
@@ -2188,7 +2189,7 @@ fn assert_shapes_popover_contract(regular: &ToolbarSnapshot) {
         has_capture_phase_click_gesture(content.upcast_ref()),
         "the shapes popover must capture click modifiers"
     );
-    let tools = model::visible_shape_picker_rows(&shapes, false)
+    let tools = model::visible_shape_picker_rows(&shapes, shapes.layout_mode)
         .into_iter()
         .flatten()
         .filter(|tool| model::tool_visible(&shapes, *tool))
@@ -2672,7 +2673,59 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert_menu_popover_contracts(&regular);
 
     assert_key_relay_contract(&regular);
+
+    assert_layout_menu_contract(&regular);
     eprintln!("EXECUTED: GTK widget contract assertions");
+}
+
+/// The layout button opens a preset menu built from the shared entries; a
+/// row applies its preset. No click cycles presets any more.
+fn assert_layout_menu_contract(regular: &ToolbarSnapshot) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    top.build_strip(
+        regular,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), regular),
+    );
+    assert!(
+        top.layout.mounted.is_some(),
+        "the layout menu popover exists"
+    );
+
+    let button = find_widget_named(top.root.upcast_ref(), ids::TOP_CHROME_LAYOUT.as_str())
+        .and_then(|widget| widget.downcast::<gtk4::Button>().ok())
+        .expect("layout chrome button");
+    button.emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("layout button event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::ToggleLayoutMenu(true),
+            rebind_requested: false,
+        }
+    );
+
+    let mut open = regular.clone();
+    open.layout_menu_open = true;
+    let content = top.build_layout_menu_content(&open, 1.0);
+    for entry in model::layout_menu_entries(open.layout_mode) {
+        let key = model::layout_mode_label(entry.mode).to_ascii_lowercase();
+        let row = find_widget_named(content.upcast_ref(), &format!("top.layout.{key}"))
+            .and_then(|widget| widget.downcast::<gtk4::Button>().ok())
+            .unwrap_or_else(|| panic!("{key} row"));
+        assert_eq!(row.has_css_class("active"), entry.current, "{key} mark");
+        row.emit_clicked();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("layout row event"),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::SetToolbarLayoutMode(entry.mode),
+                rebind_requested: false,
+            }
+        );
+    }
+
+    detach_test_popovers(&mut top);
 }
 
 /// Keys typed while the toolbar holds keyboard focus used to vanish, and

@@ -211,6 +211,7 @@ impl InputState {
                 self.apply_toolbar_open_command_palette_with_resources(resources)
             }
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
+            ToolbarEvent::ToggleLayoutMenu(open) => self.apply_toolbar_toggle_layout_menu(open),
             ToolbarEvent::ToggleSessionPopover(open) => {
                 self.apply_toolbar_toggle_session_popover(open)
             }

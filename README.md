@@ -889,7 +889,7 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The full strip also shows Shape Pen, Laser, Line, and Arrow. The picker contains rectangle, ellipse, blur, spotlight, and polygon tools.
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The regular strip also shows Shape Pen, Laser, Line, and Arrow; its picker contains rectangle, ellipse, blur, spotlight, and polygon tools. The advanced strip also shows rectangle, ellipse, blur, and spotlight, so its picker keeps only the polygon tools. Pick a layout from the layout button at the right end of the strip.
 
 Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
 

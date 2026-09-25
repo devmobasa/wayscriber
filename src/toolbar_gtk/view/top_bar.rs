@@ -3,7 +3,7 @@
 //! Adapts the shared `TopToolbarSpec` into four detached pill islands —
 //! tools (drag grip | pens | shapes | shapes-picker | annotations | quick
 //! colors + chip), history (undo/redo + the overflow toggle anchoring Clear
-//! and width-dropped items), chrome (layout cycle, About, pin, minimize),
+//! and width-dropped items), chrome (layout menu, About, pin, minimize),
 //! and the contextual
 //! style pill (island D, `style_pill` module, from `StylePillSpec`) — as
 //! GTK widgets. Width degradation uses the same shared plan as the
@@ -17,6 +17,7 @@
 
 mod controls;
 mod drag;
+mod layout_menu;
 mod popover_owner;
 mod popovers;
 use popover_owner::{PopoverOwner, PopoverResources};
@@ -388,6 +389,8 @@ pub(in crate::toolbar_gtk) struct TopBar {
     canvas: PopoverOwner<CanvasMenuContentKey>,
     session: PopoverOwner<SessionMenuContentKey>,
     settings: PopoverOwner<SettingsMenuContentKey>,
+    /// The chrome island's layout-preset menu, keyed on the current preset.
+    layout: PopoverOwner<ToolbarLayoutMode>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -475,6 +478,7 @@ impl TopBar {
             canvas: PopoverOwner::default(),
             session: PopoverOwner::default(),
             settings: PopoverOwner::default(),
+            layout: PopoverOwner::default(),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
@@ -645,6 +649,7 @@ impl TopBar {
         self.canvas.clear();
         self.session.clear();
         self.settings.clear();
+        self.layout.clear();
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }

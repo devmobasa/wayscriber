@@ -50,7 +50,6 @@ pub(super) fn build_top_view_planned(
     } else {
         ToolbarLayoutSpec::TOP_START_X
     };
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let use_icons = planned_use_icons(snapshot, plan);
     let (btn_w, btn_h) = planned_button_size(snapshot, plan);
     let base_height = base_bar_height(snapshot);
@@ -224,60 +223,9 @@ pub(super) fn build_top_view_planned(
         (btn_w, btn_h),
         gap,
         use_icons,
-        is_simple,
     );
 
-    // --- Right-aligned chrome island --------------------------------------------
-    let chrome_metrics = super::ChromeMetrics::for_plan(plan);
-    let chrome_size = chrome_metrics.size;
-    let chrome_gap = chrome_metrics.gap;
-    let chrome_y = (base_height - chrome_size) / 2.0;
-    let chrome_count = spec.chrome().len();
-    let chrome_width = chrome_metrics.block_width(chrome_count);
-    let mut chrome_x = width - chrome_metrics.margin_right - chrome_width;
-    if chrome_count > 0 {
-        let pill_left = chrome_x - island_pad;
-        tree.push(WidgetNode::decor(
-            "top.island.chrome",
-            (pill_left, 0.0, width - pill_left, band_h),
-            WidgetKind::Panel,
-        ));
-    }
-    for control in spec.chrome().iter().copied() {
-        let rect = (chrome_x, chrome_y, chrome_size, chrome_size);
-        chrome_x += chrome_size + chrome_gap;
-        // About and the layout cycle are ordinary icon buttons in chrome
-        // styling; pin and minimize keep their bespoke glyph widgets.
-        if matches!(
-            control,
-            model::TopToolbarControl::About | model::TopToolbarControl::LayoutMode
-        ) {
-            tree.push(control_button_node(
-                snapshot,
-                control,
-                control.id().render_id().into_owned(),
-                rect,
-                true,
-            ));
-            continue;
-        }
-        let kind = match control {
-            model::TopToolbarControl::Pin => WidgetKind::PinButton {
-                pinned: control.active(snapshot),
-            },
-            model::TopToolbarControl::Minimize => WidgetKind::MinimizeButton,
-            _ => unreachable!("non-chrome control in chrome specification"),
-        };
-        tree.push(WidgetNode::new(
-            control.id().render_id().into_owned(),
-            rect,
-            kind,
-            Some(Interaction::click(
-                control.event(snapshot),
-                Some(control.tooltip(snapshot)),
-            )),
-        ));
-    }
+    let layout_anchor = super::chrome::push_chrome_island(&mut tree, snapshot, &spec, plan, width);
 
     // --- Style pill (island D): contextual tool properties -------------------
     push_style_pill(&mut tree, snapshot, plan, band_h);
@@ -311,6 +259,8 @@ pub(super) fn build_top_view_planned(
         );
     }
 
+    super::layout_menu::push_layout_menu(&mut tree, snapshot, layout_anchor, (width, height));
+
     tree
 }
 
@@ -324,12 +274,11 @@ fn push_shape_popover(
     button_size: (f64, f64),
     gap: f64,
     use_icons: bool,
-    is_simple: bool,
 ) {
     let Some(anchor) = anchor.filter(|_| snapshot.shape_picker_open) else {
         return;
     };
-    let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+    let rows = model::visible_shape_picker_rows(snapshot, snapshot.layout_mode);
     let option_rows = shape_option_rows(snapshot);
     let max_row_len = rows.iter().map(Vec::len).max().unwrap_or(0);
     if max_row_len == 0 && option_rows.is_empty() {
@@ -625,11 +574,10 @@ pub(super) fn shape_popover_height_planned(snapshot: &ToolbarSnapshot, plan: &To
     if !snapshot.shape_picker_open || !model::TopToolbarSpec::shape_picker_visible(snapshot) {
         return 0.0;
     }
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let (_, btn_h) = planned_button_size(snapshot, plan);
     let gap = planned_gap(plan);
     let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
-    let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+    let rows = model::visible_shape_picker_rows(snapshot, snapshot.layout_mode);
     let option_rows = shape_option_rows(snapshot);
     if rows.is_empty() && option_rows.is_empty() {
         return 0.0;
@@ -1093,7 +1041,7 @@ fn tool_button_node(
     )
 }
 
-fn control_button_node(
+pub(super) fn control_button_node(
     snapshot: &ToolbarSnapshot,
     control: model::TopToolbarControl,
     id: impl Into<super::super::node::WidgetId>,

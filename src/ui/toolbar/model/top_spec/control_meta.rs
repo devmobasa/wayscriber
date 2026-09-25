@@ -84,11 +84,11 @@ pub(crate) enum TopToolbarIcon {
     Settings,
     /// About entry (circled information glyph).
     About,
-    /// Layout cycle showing Simple (one density bar).
+    /// Layout button showing Simple (one density bar).
     LayoutSimple,
-    /// Layout cycle showing Regular (two density bars).
+    /// Layout button showing Regular (two density bars).
     LayoutRegular,
-    /// Layout cycle showing Advanced (three density bars).
+    /// Layout button showing Advanced (three density bars).
     LayoutAdvanced,
 }
 

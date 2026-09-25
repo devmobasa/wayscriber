@@ -1271,6 +1271,10 @@ Controls the unified top toolbar (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd
 backend = "auto"
 
 # Toolbar layout preset: "simple", "regular" (the default), or "advanced"
+# Simple: core pens and one Shapes picker. Regular adds Shape Pen, Line,
+# Arrow, presets, and Clear. Advanced also puts Rectangle, Ellipse, Blur, and
+# Spotlight on the strip (only polygons stay in the picker) and turns on the
+# advanced actions and multi-step undo in the Canvas popover.
 # "full" is accepted as a legacy alias for "regular"
 layout_mode = "regular"
 
@@ -1448,7 +1452,7 @@ top_controls = [
 - **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
 - **Scale**: `scale` multiplies toolbar UI sizing (useful for HiDPI when output scale=1).
 - **Colors**: `show_more_colors` toggles the extended palette row.
-- **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
+- **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode. **Simple** shows Select, Pen, Marker, Step marker, and Eraser with every shape in one Shapes picker. **Regular** adds Shape Pen, Line, and Arrow to the strip, plus the presets island and Clear. **Advanced** also puts Rectangle, Ellipse, Blur, and Spotlight on the strip (the Shapes picker keeps only the polygons) and turns on the advanced actions and multi-step undo in the Canvas popover. Under width pressure Advanced's extra tools move to the overflow menu first.
 - **Actions**: `show_actions_section` controls the basic Undo/Redo/Clear group in the Canvas popover; `show_actions_advanced` controls the separate advanced action group.
 - **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas popover.
 - **Pages**: `show_pages_section` toggles the page navigation block in the Canvas popover.
@@ -1478,7 +1482,7 @@ top_controls = [
 - **Session/Settings popovers**: the top strip's overflow menu always carries "Session..." and "Settings..." entries. Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally. Every top-strip menu (Shapes, the overflow menu, and the Canvas/Session/Settings popovers) closes on Escape, and any other shortcut typed while one is open closes it and then runs, including when the GTK toolbar holds keyboard focus.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
-- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings popover, and the top strip's chrome-island layout button cycles Simple → Regular → Advanced one click at a time. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings popover, and the top strip's chrome-island layout button opens a small menu listing Simple, Regular, and Advanced with a one-line description each and the current preset marked; choosing one applies it and closes the menu. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
 - **Item order**: `ui.toolbar.items.order.top_tools` and `top_controls` reorder supported top-strip items. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves. Panel-era order lists (`actions`, `pages`, `boards`, `presets`, `tool_options`, `sessions`, `side_sections`) are retired: authored `config.toml` values stay as retired settings, while matching keys under `runtime-ui.toml`'s recognized `item_order` map are pruned on rewrite.
 - **Historical item IDs**: some `side.*` IDs still control sections and commands in the unified top toolbar. Their serialized spellings remain configuration contracts even though the side palette is gone. Removed IDs in `items.hidden` and `items.shown` are preserved as unknown values across saves but have no runtime effect.
 - **Live customization**: the overlay Customize surface supports show/hide, move up/down, and drag reorder for supported top groups. The configurator supports the same saved order with up/down controls.

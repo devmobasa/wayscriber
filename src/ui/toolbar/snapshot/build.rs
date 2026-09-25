@@ -205,6 +205,8 @@ impl ToolbarSnapshot {
                 == crate::input::state::TopMenuState::SettingsPopover,
             canvas_popover_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::CanvasPopover,
+            layout_menu_open: state.toolbar_top_menu()
+                == crate::input::state::TopMenuState::LayoutMenu,
             top_popover_scroll: state.toolbar_top_popover_scroll(),
             top_minimized: state.toolbar_top_minimized(),
             top_display_mode: state.toolbar_top_display_mode(),
@@ -262,26 +264,30 @@ mod tests {
     #[test]
     fn snapshot_projects_exactly_one_active_top_menu() {
         let cases = [
-            (TopMenuState::Closed, [false; 5]),
+            (TopMenuState::Closed, [false; 6]),
             (
                 TopMenuState::ShapePicker,
-                [true, false, false, false, false],
+                [true, false, false, false, false, false],
             ),
             (
                 TopMenuState::TopOverflow,
-                [false, true, false, false, false],
+                [false, true, false, false, false, false],
             ),
             (
                 TopMenuState::CanvasPopover,
-                [false, false, true, false, false],
+                [false, false, true, false, false, false],
             ),
             (
                 TopMenuState::SessionPopover,
-                [false, false, false, true, false],
+                [false, false, false, true, false, false],
             ),
             (
                 TopMenuState::SettingsPopover,
-                [false, false, false, false, true],
+                [false, false, false, false, true, false],
+            ),
+            (
+                TopMenuState::LayoutMenu,
+                [false, false, false, false, false, true],
             ),
         ];
 
@@ -296,6 +302,7 @@ mod tests {
                 snapshot.canvas_popover_open,
                 snapshot.session_popover_open,
                 snapshot.settings_popover_open,
+                snapshot.layout_menu_open,
             ];
 
             assert_eq!(actual, expected, "projecting {top_menu:?}");

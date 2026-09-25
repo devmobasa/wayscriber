@@ -72,6 +72,38 @@ fn persistence_for(event: &ToolbarEvent) -> ToolbarPersistence {
     ToolbarEventPolicy::for_event(event).persistence
 }
 
+/// Choosing a preset is the layout menu's purpose, so it closes the menu;
+/// only the menu's own toggle spares it.
+#[test]
+fn choosing_a_layout_preset_closes_the_layout_menu() {
+    for mode in ToolbarLayoutMode::ALL {
+        assert!(event_dismisses_popover(
+            &ToolbarEvent::SetToolbarLayoutMode(mode),
+            ToolbarPopover::LayoutMenu
+        ));
+    }
+    assert!(!event_dismisses_popover(
+        &ToolbarEvent::ToggleLayoutMenu(false),
+        ToolbarPopover::LayoutMenu
+    ));
+    assert!(event_dismisses_popover(
+        &ToolbarEvent::SelectTool(Tool::Pen),
+        ToolbarPopover::LayoutMenu
+    ));
+    // Opening the menu is transient chrome; the preset it picks is what
+    // persists, through the unchanged layout-mode runtime target.
+    assert_eq!(
+        persistence_for(&ToolbarEvent::ToggleLayoutMenu(true)),
+        ToolbarPersistence::Ephemeral
+    );
+    assert_eq!(
+        persistence_for(&ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced
+        )),
+        ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::LayoutMode)
+    );
+}
+
 #[test]
 fn pin_confirmations_distinguish_persistent_and_live_only_changes() {
     let cases = [
