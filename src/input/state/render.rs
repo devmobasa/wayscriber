@@ -33,10 +33,10 @@ impl InputState {
             Tool::LiveShape => true,
             _ => return None,
         };
-        let ProvisionalToolStroke::Shape(shape) =
-            self.provisional_tool_stroke(current_x, current_y)
-        else {
-            return None;
+        let shape = match self.provisional_tool_stroke(current_x, current_y) {
+            ProvisionalToolStroke::Shape(shape)
+            | ProvisionalToolStroke::Recognized { shape, .. } => shape,
+            _ => return None,
         };
 
         let extent = match &shape {
@@ -166,6 +166,16 @@ impl InputState {
                 true
             }
             ProvisionalToolStroke::Shape(shape) => {
+                render.render_shape_with_halo_with_measurer(measurer, &shape, text_halo_enabled);
+                true
+            }
+            ProvisionalToolStroke::Recognized {
+                shape,
+                ink,
+                ink_color,
+                ink_size,
+            } => {
+                render_freehand_borrowed(ctx, ink, ink_color, ink_size);
                 render.render_shape_with_halo_with_measurer(measurer, &shape, text_halo_enabled);
                 true
             }

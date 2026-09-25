@@ -80,7 +80,10 @@ fn live_shape_strokes_preview_and_commit_lines_and_circles() {
     }
     assert!(matches!(
         state.provisional_tool_stroke(80, 3),
-        ProvisionalToolStroke::Shape(Shape::Line { y2: 0, .. })
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Line { y2: 0, .. },
+            ..
+        }
     ));
     state.on_mouse_release(MouseButton::Left, 80, 3);
     assert!(matches!(
@@ -104,7 +107,10 @@ fn live_shape_strokes_preview_and_commit_lines_and_circles() {
     }
     assert!(matches!(
         state.provisional_tool_stroke(120, 80),
-        ProvisionalToolStroke::Shape(Shape::Ellipse { .. })
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Ellipse { .. },
+            ..
+        }
     ));
     state.on_mouse_release(MouseButton::Left, 120, 80);
     assert!(matches!(
@@ -155,7 +161,10 @@ fn live_shape_recognizes_densely_sampled_straight_diagonal() {
 
     assert!(matches!(
         state.provisional_tool_stroke(210, 110),
-        ProvisionalToolStroke::Shape(Shape::Line { .. })
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Line { .. },
+            ..
+        }
     ));
     state.on_mouse_release(MouseButton::Left, 210, 110);
     assert!(matches!(
@@ -199,7 +208,10 @@ fn live_shape_previews_and_commits_hand_drawn_rectangles_and_ovals() {
     }
     assert!(matches!(
         state.provisional_tool_stroke(10, 10),
-        ProvisionalToolStroke::Shape(Shape::Rect { .. })
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Rect { .. },
+            ..
+        }
     ));
     state.on_mouse_release(MouseButton::Left, 10, 10);
     assert!(matches!(
@@ -225,7 +237,10 @@ fn live_shape_previews_and_commits_hand_drawn_rectangles_and_ovals() {
     }
     assert!(matches!(
         state.provisional_tool_stroke(260, 80),
-        ProvisionalToolStroke::Shape(Shape::Ellipse { .. })
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Ellipse { .. },
+            ..
+        }
     ));
     state.on_mouse_release(MouseButton::Left, 260, 80);
     assert!(matches!(
@@ -387,7 +402,10 @@ fn live_shape_snaps_lines_to_visible_board_grid() {
     }
     assert!(matches!(
         state.provisional_tool_stroke(100, 44),
-        ProvisionalToolStroke::Shape(Shape::Line { y1: 40, y2: 40, .. })
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Line { y1: 40, y2: 40, .. },
+            ..
+        }
     ));
     state.on_mouse_release(MouseButton::Left, 100, 44);
     assert!(matches!(

@@ -63,7 +63,7 @@ fn recognized_closed_shapes_follow_the_fill_toggle() {
         draw_path(&mut state, &RECTANGLE);
         assert!(matches!(
             state.provisional_tool_stroke(10, 10),
-            ProvisionalToolStroke::Shape(Shape::Rect { fill, .. }) if fill == fill_enabled
+            ProvisionalToolStroke::Recognized { shape: Shape::Rect { fill, .. }, .. } if fill == fill_enabled
         ));
         release_at_end(&mut state, &RECTANGLE);
 
@@ -220,4 +220,37 @@ fn ink_that_stays_ink_is_a_single_undo_step() {
     release_at_end(&mut state, &scribble);
 
     assert_eq!(state.boards.active_frame().undo_stack_len(), 1);
+}
+
+#[test]
+fn recognized_preview_keeps_a_faint_copy_of_the_ink_underneath() {
+    let mut state = shape_pen_state();
+    draw_path(&mut state, &RECTANGLE);
+    let color = state.active_drag_color_or_current();
+
+    let preview = state.provisional_tool_stroke(10, 10);
+    let ProvisionalToolStroke::Recognized {
+        shape: Shape::Rect { .. },
+        ink,
+        ink_color,
+        ..
+    } = &preview
+    else {
+        panic!("expected a recognized rectangle preview");
+    };
+    assert_eq!(ink.len(), RECTANGLE.len());
+    assert!(ink_color.a < color.a, "the ink is fainter than the shape");
+    assert_eq!(
+        (ink_color.r, ink_color.g, ink_color.b),
+        (color.r, color.g, color.b)
+    );
+
+    // The preview paints the ink as well as the shape, so the damage it
+    // reports must cover every ink point.
+    let bounds = preview
+        .bounds_with(&crate::draw::TextMeasurer::default())
+        .expect("preview bounds");
+    for &(x, y) in &RECTANGLE {
+        assert!(bounds.contains(x, y), "({x}, {y}) outside {bounds:?}");
+    }
 }

@@ -13,6 +13,11 @@ use crate::util::{self, Rect};
 
 pub(crate) const PROVISIONAL_POLYGON_DAMAGE_PADDING: i32 = 2;
 
+/// Share of the stroke's opacity kept by the ink drawn under a Shape Pen
+/// preview: enough to compare the shape with the stroke, faint enough that
+/// the shape reads as the result.
+const RECOGNIZED_INK_OPACITY: f64 = 0.3;
+
 /// Bend a freshly drawn arrow starts with.
 ///
 /// Only `Curved` gets one: a curved arrow created dead straight would look
@@ -150,6 +155,14 @@ pub(crate) enum ProvisionalToolStroke<'a> {
         size: f64,
     },
     Shape(Shape),
+    /// A Shape Pen preview: the recognized shape over a faint copy of the ink
+    /// it came from, so the swap from ink to shape is never silent.
+    Recognized {
+        shape: Shape,
+        ink: &'a [(i32, i32)],
+        ink_color: Color,
+        ink_size: f64,
+    },
     BlurReplayPreview(BlurRectParams),
     None,
 }
@@ -325,7 +338,15 @@ impl Tool {
                     snapshot.grid,
                     snapshot.shape_recognition_sensitivity,
                 ) {
-                    ProvisionalToolStroke::Shape(shape)
+                    ProvisionalToolStroke::Recognized {
+                        shape,
+                        ink: snapshot.points,
+                        ink_color: Color {
+                            a: snapshot.color.a * RECOGNIZED_INK_OPACITY,
+                            ..snapshot.color
+                        },
+                        ink_size: snapshot.size,
+                    }
                 } else if !snapshot.point_thicknesses.is_empty()
                     && snapshot.point_thicknesses.len() == snapshot.points.len()
                 {
@@ -508,6 +529,19 @@ impl<'a> ProvisionalToolStroke<'a> {
                     bounds.and_then(|rect| rect.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING))
                 } else {
                     bounds
+                }
+            }
+            Self::Recognized {
+                shape,
+                ink,
+                ink_size,
+                ..
+            } => {
+                let shape_bounds = shape.bounding_box_with(measurer);
+                let ink_bounds = bounding_box_for_points(ink, *ink_size);
+                match (shape_bounds, ink_bounds) {
+                    (Some(shape_bounds), Some(ink_bounds)) => shape_bounds.union(ink_bounds),
+                    (bounds, None) | (None, bounds) => bounds,
                 }
             }
             Self::BlurReplayPreview(params) => {

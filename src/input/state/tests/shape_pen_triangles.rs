@@ -84,10 +84,13 @@ fn live_shape_previews_and_commits_hand_drawn_triangles() {
     draw_path(&mut state, &HAND_DRAWN);
     assert!(matches!(
         state.provisional_tool_stroke(99, 22),
-        ProvisionalToolStroke::Shape(Shape::Polygon {
-            kind: PolygonKind::Triangle,
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Polygon {
+                kind: PolygonKind::Triangle,
+                ..
+            },
             ..
-        })
+        }
     ));
     release_at_end(&mut state, &HAND_DRAWN);
 
