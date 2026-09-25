@@ -131,7 +131,7 @@ const DESCRIPTORS: [ToolDescriptor; 18] = [
         profile: profile(
             ToolSettingsSlot::Pen,
             ToolSizeSource::DrawingThickness,
-            ToolControlGroup::Stroke,
+            ToolControlGroup::Shape,
             true,
             "Thickness",
         ),

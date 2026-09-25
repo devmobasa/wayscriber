@@ -2,7 +2,7 @@ use crate::domain::BoardGrid;
 use crate::draw::{BLACK, PolygonKind, Shape};
 
 fn recognize(points: &[(i32, i32)], sensitivity: u8) -> Option<Shape> {
-    super::recognize(points, BLACK, 3.0, BoardGrid::default(), sensitivity)
+    super::recognize(points, BLACK, 3.0, false, BoardGrid::default(), sensitivity)
 }
 
 fn triangle_points(shape: Option<Shape>) -> Option<Vec<(i32, i32)>> {

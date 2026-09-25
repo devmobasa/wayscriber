@@ -157,6 +157,7 @@ impl Tool {
                         &snapshot.points,
                         snapshot.color,
                         snapshot.size,
+                        snapshot.fill_enabled,
                         snapshot.grid,
                         snapshot.shape_recognition_sensitivity,
                     )
@@ -167,6 +168,7 @@ impl Tool {
                         &path,
                         snapshot.color,
                         snapshot.size,
+                        snapshot.fill_enabled,
                         snapshot.grid,
                         snapshot.shape_recognition_sensitivity,
                     )
@@ -305,6 +307,7 @@ impl Tool {
                     snapshot.points,
                     snapshot.color,
                     snapshot.size,
+                    snapshot.fill_enabled,
                     snapshot.grid,
                     snapshot.shape_recognition_sensitivity,
                 ) {

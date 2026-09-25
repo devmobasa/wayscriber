@@ -11,6 +11,7 @@ pub(super) fn recognize(
     points: &[(i32, i32)],
     color: Color,
     thick: f64,
+    fill: bool,
     grid: BoardGrid,
     sensitivity: u8,
 ) -> Option<Shape> {
@@ -28,8 +29,15 @@ pub(super) fn recognize(
         && bounds.width >= 24.0
         && bounds.height >= 24.0
         && chord <= bounds.diameter() * (0.12 + 0.05 * f64::from(sensitivity))
-        && let Some(shape) = recognize_closed(points, bounds, length, color, thick, sensitivity)
+        && let Some(mut shape) = recognize_closed(points, bounds, length, color, thick, sensitivity)
     {
+        // Closed shapes follow the Fill toggle, like the dedicated shape tools.
+        if let Shape::Ellipse { fill: filled, .. }
+        | Shape::Rect { fill: filled, .. }
+        | Shape::Polygon { fill: filled, .. } = &mut shape
+        {
+            *filled = fill;
+        }
         return Some(shape);
     }
 
