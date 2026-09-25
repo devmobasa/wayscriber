@@ -153,6 +153,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_toast_command(&mut self, command: ToastCommand) {
         match command {
             ToastCommand::Dispatch(action) => self.dispatch_input_action(action),
+            ToastCommand::CopyLastCapturePath => self.copy_last_capture_path(),
             ToastCommand::AcknowledgeTip { tip, then } => {
                 let outcome = acknowledge_tip_command(
                     self.preferences.onboarding_mut().acknowledge_tip(tip),

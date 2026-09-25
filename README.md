@@ -763,6 +763,10 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 | Unbound | Measure a logical screen region without capturing it (`measure_mode`) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
+After a capture, a short toast names the saved file. When a file was saved,
+its **Open folder** and **Copy path** buttons open the capture folder or copy
+the file's full path.
+
 Region shortcuts use Wayscriber's native frozen-image picker by default. Set
 `capture.region.picker = "slurp"` for the external selector; native selection
 also falls back to `slurp` when no screen capture backend is available. The

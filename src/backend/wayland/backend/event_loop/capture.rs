@@ -566,18 +566,9 @@ fn handle_capture_results(state: &mut WaylandState) {
                     message_parts.join(" - ")
                 };
 
-                let open_folder_binding = state
-                    .config
-                    .keybindings
-                    .capture
-                    .open_capture_folder
-                    .first()
-                    .map(|binding| binding.as_str());
-                state.input_state.set_capture_feedback(
-                    result.saved_path.as_deref(),
-                    result.copied_to_clipboard,
-                    open_folder_binding,
-                );
+                state
+                    .input_state
+                    .set_capture_feedback(result.saved_path.as_deref(), result.copied_to_clipboard);
 
                 notification::send_notification_async(
                     &state.tokio_handle,

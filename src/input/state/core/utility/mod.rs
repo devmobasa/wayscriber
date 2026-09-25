@@ -1,5 +1,6 @@
 mod actions;
 mod arrow_labels;
+mod capture_feedback;
 mod focus_mode;
 mod font;
 mod frozen_zoom;

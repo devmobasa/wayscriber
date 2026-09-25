@@ -350,6 +350,7 @@ mod tests {
         TextClipboardRequest {
             text: text.to_string(),
             cut: None,
+            confirmation: None,
         }
     }
 
@@ -361,6 +362,7 @@ mod tests {
                 revision: 3,
                 range: start..start + text.len(),
             }),
+            confirmation: None,
         }
     }
 

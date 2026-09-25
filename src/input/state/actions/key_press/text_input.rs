@@ -330,7 +330,11 @@ impl TextEditing {
 
     fn copy_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
         let (_, text) = self.selected_text(state)?;
-        Some(TextClipboardRequest { text, cut: None })
+        Some(TextClipboardRequest {
+            text,
+            cut: None,
+            confirmation: None,
+        })
     }
 
     fn cut_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
@@ -343,6 +347,7 @@ impl TextEditing {
                 revision,
                 range,
             }),
+            confirmation: None,
         })
     }
 
