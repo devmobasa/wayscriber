@@ -111,14 +111,21 @@ pub(super) fn finish_drawing(
             if crate::draw::spotlight_magnification_is_active(magnification)
     );
     let path_damage = finished_path_damage_regions(&shape, bounds);
-    // `Shape::Freehand` only, deliberately. This covers the case where a
-    // pressure preview drew wide samples and the release then *downgraded* to a
-    // plain Freehand at the tool's own thickness, leaving the preview wider than
-    // anything the committed shape damages. A committed `FreehandPressure` keeps
-    // the sampled thicknesses it was drawn with, so its own damage is already as
-    // wide as the preview was and it needs no help here.
-    let preserve_provisional_cleanup =
-        matches!(shape, Shape::Freehand { .. }) && pressure_preview_exceeds_final_width;
+    // Two previews can leave pixels outside anything the committed stroke
+    // damages, so their whole bounds are repainted.
+    //
+    // A pressure preview drew wide samples and the release then *downgraded* to
+    // a plain Freehand at the tool's own thickness. `Shape::Freehand` only,
+    // deliberately: a committed `FreehandPressure` keeps the sampled
+    // thicknesses it was drawn with, so its own damage is already as wide as
+    // the preview was.
+    //
+    // A Shape Pen preview showed a shape, fitted or snapped to the grid, and
+    // the release point tipped the stroke back into ink.
+    let previewed_shape = state.pointer.replace_live_shape_previewed_shape(false);
+    let preserve_provisional_cleanup = (matches!(shape, Shape::Freehand { .. })
+        && pressure_preview_exceeds_final_width)
+        || (previewed_shape && ink.is_none());
 
     let mut limit_reached = false;
     let max_shapes = state.max_shapes_per_frame();

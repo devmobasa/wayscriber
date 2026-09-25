@@ -331,3 +331,42 @@ fn ink_previews_damage_only_their_new_tail() {
         "a recognized preview repaints in full: {dirty:?}"
     );
 }
+
+#[test]
+fn releasing_as_ink_repaints_where_the_shape_preview_was() {
+    use crate::domain::{BoardGrid, BoardGridKind};
+    use crate::input::BOARD_ID_WHITEBOARD;
+
+    let mut state = shape_pen_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    state.boards.active_board_mut().spec.grid = BoardGrid::new(BoardGridKind::Cartesian, 40);
+    // Five pixels inside the grid lines, so the preview snaps outward to them.
+    let rectangle: Vec<_> = RECTANGLE
+        .iter()
+        .map(|&(x, y)| (45 + (x - 8) * 110 / 104, 45 + (y - 8) * 70 / 84))
+        .collect();
+    draw_path(&mut state, &rectangle);
+    assert!(matches!(
+        state.provisional_tool_stroke(44, 45),
+        ProvisionalToolStroke::Recognized {
+            shape: Shape::Rect { x: 40, .. },
+            ..
+        }
+    ));
+    let _ = state.take_dirty_regions();
+
+    // Released far from the start with no final motion, the stroke is ink.
+    state.on_mouse_release(MouseButton::Left, 400, 400);
+    assert_eq!(
+        state.boards.active_frame().shapes[0].shape.kind_name(),
+        "Freehand"
+    );
+
+    // The preview's left edge sat on x = 40, outside the ink.
+    let left_edge = crate::util::Rect::new(37, 75, 3, 10).expect("probe");
+    let dirty = state.take_dirty_regions();
+    assert!(
+        dirty.iter().any(|rect| overlaps(*rect, left_edge)),
+        "the shape preview's pixels must be repainted: {dirty:?}"
+    );
+}
