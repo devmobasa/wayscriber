@@ -135,7 +135,8 @@ fn live_shape_strokes_preview_and_commit_lines_and_circles() {
         }
     ));
     assert_eq!(state.boards.active_frame().shapes.len(), 3);
-    assert_eq!(state.boards.active_frame().undo_stack_len(), 3);
+    // Each recognized stroke is two steps: its ink, then the recognition.
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 6);
 }
 
 #[test]

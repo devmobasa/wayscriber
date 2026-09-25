@@ -183,3 +183,41 @@ fn full_toolbar_shows_shape_pen_beside_pen_and_simple_keeps_it_in_the_picker() {
             .contains(&Tool::LiveShape)
     );
 }
+
+#[test]
+fn first_undo_turns_a_recognized_shape_back_into_its_ink() {
+    let mut state = shape_pen_state();
+    draw_path(&mut state, &RECTANGLE);
+    release_at_end(&mut state, &RECTANGLE);
+    let kind = |state: &InputState| {
+        let frame = state.boards.active_frame();
+        frame.shapes.first().map(|drawn| drawn.shape.kind_name())
+    };
+    assert_eq!(kind(&state), Some("Rectangle"));
+
+    run_action(&mut state, Action::Undo);
+    assert_eq!(kind(&state), Some("Freehand"));
+    let Shape::Freehand { points, .. } = &state.boards.active_frame().shapes[0].shape else {
+        panic!("the ink comes back as a freehand stroke");
+    };
+    assert_eq!(points.first(), Some(&RECTANGLE[0]));
+
+    run_action(&mut state, Action::Undo);
+    assert_eq!(kind(&state), None);
+
+    run_action(&mut state, Action::Redo);
+    assert_eq!(kind(&state), Some("Freehand"));
+    run_action(&mut state, Action::Redo);
+    assert_eq!(kind(&state), Some("Rectangle"));
+}
+
+#[test]
+fn ink_that_stays_ink_is_a_single_undo_step() {
+    let mut state = shape_pen_state();
+    let scribble = [(0, 0), (30, 30), (0, 30), (30, 0)];
+
+    draw_path(&mut state, &scribble);
+    release_at_end(&mut state, &scribble);
+
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 1);
+}

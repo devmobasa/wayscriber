@@ -1,7 +1,7 @@
 use log::warn;
 
 use crate::draw::Shape;
-use crate::draw::frame::UndoAction;
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::shape::bounding_box_for_points;
 use crate::input::tool::{FinishedToolStroke, PolygonStrokeSnapshot, ToolStrokeSnapshot};
 use crate::input::{InputState, Tool};
@@ -88,8 +88,9 @@ pub(super) fn finish_drawing(
         tool.finish_stroke(snapshot)
     };
 
-    let (shape, usage) = match finished {
-        FinishedToolStroke::Shape { shape, usage } => (shape, usage),
+    let (shape, ink, usage) = match finished {
+        FinishedToolStroke::Shape { shape, usage } => (shape, None, usage),
+        FinishedToolStroke::Recognized { shape, ink, usage } => (shape, Some(ink), usage),
         FinishedToolStroke::EraseStroke { path } => {
             state.clear_provisional_dirty();
             if state.erase_strokes_by_points_with(measurer, &path) {
@@ -121,9 +122,13 @@ pub(super) fn finish_drawing(
 
     let mut limit_reached = false;
     let max_shapes = state.max_shapes_per_frame();
+    let undo_limit = state.history_limits.undo_stack_limit();
     let addition = {
         let frame = state.boards.active_frame_mut();
-        match frame.try_add_shape_with_id(shape.clone(), max_shapes) {
+        // A recognized stroke enters history as its ink, then turns into the
+        // shape as a second step, so the first undo gives the ink back.
+        let created = ink.clone().unwrap_or_else(|| shape.clone());
+        match frame.try_add_shape_with_id(created, max_shapes) {
             Some(new_id) => {
                 if let Some(index) = frame.find_index(new_id) {
                     if let Some(new_shape) = frame.shape(new_id) {
@@ -132,8 +137,27 @@ pub(super) fn finish_drawing(
                             UndoAction::Create {
                                 shapes: vec![(index, snapshot.clone())],
                             },
-                            state.history_limits.undo_stack_limit(),
+                            undo_limit,
                         );
+                        if let Some(ink) = ink
+                            && let Some(target) = frame.shape_mut(new_id)
+                        {
+                            target.set_shape(shape.clone());
+                            frame.push_undo_action(
+                                UndoAction::Modify {
+                                    shape_id: new_id,
+                                    before: ShapeSnapshot {
+                                        shape: ink,
+                                        locked: snapshot.locked,
+                                    },
+                                    after: ShapeSnapshot {
+                                        shape: shape.clone(),
+                                        locked: snapshot.locked,
+                                    },
+                                },
+                                undo_limit,
+                            );
+                        }
                         Some((new_id, snapshot))
                     } else {
                         None

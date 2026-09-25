@@ -93,7 +93,7 @@ fn live_shape_previews_and_commits_hand_drawn_triangles() {
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 1);
-    assert_eq!(frame.undo_stack_len(), 1);
+    assert_eq!(frame.undo_stack_len(), 2, "the ink, then the recognition");
     let Shape::Polygon {
         kind: PolygonKind::Triangle,
         points,

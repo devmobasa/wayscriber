@@ -71,8 +71,20 @@ pub(crate) struct PolygonStrokeSnapshot {
 }
 
 pub(crate) enum FinishedToolStroke {
-    Shape { shape: Shape, usage: ToolUsage },
-    EraseStroke { path: Vec<(i32, i32)> },
+    Shape {
+        shape: Shape,
+        usage: ToolUsage,
+    },
+    /// A Shape Pen stroke that became `shape`. `ink` is the stroke it would
+    /// otherwise have left, kept so one undo can bring it back.
+    Recognized {
+        shape: Shape,
+        ink: Shape,
+        usage: ToolUsage,
+    },
+    EraseStroke {
+        path: Vec<(i32, i32)>,
+    },
     Noop,
 }
 
@@ -173,15 +185,17 @@ impl Tool {
                         snapshot.shape_recognition_sensitivity,
                     )
                 };
-                if let Some(shape) = recognized {
-                    FinishedToolStroke::Shape { shape, usage }
-                } else {
-                    finish_path_stroke(
-                        snapshot,
-                        ToolPathKind::Freehand,
-                        ToolPressureBehavior::OptionalPressureStroke,
-                        usage,
-                    )
+                let ink = finish_path_stroke(
+                    snapshot,
+                    ToolPathKind::Freehand,
+                    ToolPressureBehavior::OptionalPressureStroke,
+                    usage,
+                );
+                match (recognized, ink) {
+                    (Some(shape), FinishedToolStroke::Shape { shape: ink, usage }) => {
+                        FinishedToolStroke::Recognized { shape, ink, usage }
+                    }
+                    (_, ink) => ink,
                 }
             }
             ToolDrawingBehavior::Line => finish_shape(snapshot, usage, |snapshot| Shape::Line {
