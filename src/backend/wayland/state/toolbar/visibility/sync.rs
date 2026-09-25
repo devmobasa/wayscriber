@@ -6,9 +6,9 @@ fn toolbar_visibility_for_frontend(
     requested: bool,
     gtk_active: bool,
     gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
-    capture_picker_suppressed: bool,
+    chrome_suppressed: bool,
 ) -> bool {
-    if capture_picker_suppressed {
+    if chrome_suppressed {
         return false;
     }
     if !gtk_active {
@@ -25,7 +25,7 @@ impl WaylandState {
         // from Exclusive to OnDemand while they are mapped, or compositors
         // that honor exclusivity (Hyprland) lock all input to the canvas
         // and the bars become click-through.
-        let toolbar_visible = !self.capture_picker_chrome_suppressed()
+        let toolbar_visible = !self.toolbar_chrome_suppressed()
             && (self.toolbar.is_visible()
                 || (self.gtk_toolbars_active() && self.input_state.toolbar_top_visible()));
         keyboard_interactivity_for(KeyboardInteractivityPolicyInput {
@@ -86,7 +86,7 @@ impl WaylandState {
             self.input_state.toolbar_top_visible(),
             gtk_active,
             self.toolbar_drag.gtk_preview_kind(),
-            self.capture_picker_chrome_suppressed(),
+            self.toolbar_chrome_suppressed(),
         );
         let inline_active = self.toolbar_chrome.inline_toolbars();
         let drag_preview =
@@ -95,6 +95,11 @@ impl WaylandState {
         if top_visible != self.toolbar.is_top_visible() {
             self.toolbar.set_top_visible(top_visible);
             self.input_state.needs_redraw = true;
+            if inline_active {
+                // Inline bars live in the canvas buffer; a derived hide (a
+                // modal opening) must repaint where they were drawn.
+                self.mark_inline_toolbar_full_damage();
+            }
         }
 
         let any_visible = self.toolbar.is_visible();
@@ -272,5 +277,25 @@ mod tests {
             true,
         ));
         assert!(toolbar_visibility_for_frontend(true, false, None, false));
+    }
+
+    #[test]
+    fn command_palette_hides_the_builtin_bars_and_closing_it_restores_them() {
+        let mut input_state = crate::input::state::test_support::make_test_input_state();
+        let visible = |input: &crate::input::InputState| {
+            toolbar_visibility_for_frontend(
+                input.toolbar_top_visible(),
+                false,
+                None,
+                input.modal_hides_toolbar_chrome(),
+            )
+        };
+        assert!(visible(&input_state));
+
+        input_state.toggle_command_palette();
+        assert!(!visible(&input_state), "palette hides the bars");
+
+        input_state.toggle_command_palette();
+        assert!(visible(&input_state), "closing restores them");
     }
 }

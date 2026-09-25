@@ -89,6 +89,27 @@ impl ModalSurface {
     fn owns_wheel(self) -> bool {
         !matches!(self, ModalSurface::PropertiesPanel)
     }
+
+    /// Whether this surface takes the user's full attention, so the toolbar
+    /// chrome steps aside while it is open.
+    ///
+    /// The GTK and layer-shell toolbars are separate surfaces stacked above
+    /// the overlay, so a centered, dimmed modal drawn on the overlay would
+    /// otherwise sit underneath them (help's title ended up behind the style
+    /// pill). Surfaces anchored at the pointer or beside the toolbar — the
+    /// context and radial menus, the precision entry, the docked properties
+    /// panel — keep the bars. The tour keeps them too: one of its steps
+    /// introduces the toolbar.
+    fn hides_toolbar_chrome(self) -> bool {
+        matches!(
+            self,
+            ModalSurface::CommandPalette
+                | ModalSurface::HelpOverlay
+                | ModalSurface::BoardPicker
+                | ModalSurface::FontPicker
+                | ModalSurface::ColorPicker
+        )
+    }
 }
 
 impl InputState {
@@ -248,6 +269,21 @@ impl InputState {
                 .any(|surface| surface.owns_wheel() && self.modal_is_open(surface))
     }
 
+    /// Whether an open full-attention modal wants the toolbar chrome hidden.
+    ///
+    /// Derived, never stored: the backend hides the bars while this holds and
+    /// shows them again afterwards, and the toolbar preferences (pin,
+    /// minimize, position, open popovers) are never written, so closing the
+    /// modal brings the bars back exactly as they were.
+    pub(crate) fn modal_hides_toolbar_chrome(&self) -> bool {
+        // The shortcut-capture prompt belongs to the palette even when the
+        // palette itself has closed behind it.
+        self.command_palette_is_engaged()
+            || ModalSurface::ALL
+                .into_iter()
+                .any(|surface| surface.hides_toolbar_chrome() && self.modal_is_open(surface))
+    }
+
     /// Whether either screen-region modal — the eyedropper or the generalized
     /// OCR/capture/measure region selector — has been asked for, including
     /// while a capture-backed purpose still waits on its screen image.
@@ -354,5 +390,82 @@ mod wheel_tests {
 
         assert!(state.is_properties_panel_open());
         assert!(!state.modal_owns_wheel());
+    }
+}
+
+#[cfg(test)]
+mod toolbar_chrome_tests {
+    use crate::draw::TextMeasurer;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn full_attention_modals_hide_the_toolbar_without_touching_its_preferences() {
+        let measurer = TextMeasurer::default();
+        let mut state = make_test_input_state();
+        let before = (
+            state.toolbar_top_visible(),
+            state.toolbar_top_pinned(),
+            state.toolbar_top_minimized(),
+            state.toolbar_top_menu(),
+        );
+        assert!(!state.modal_hides_toolbar_chrome(), "nothing is open");
+
+        state.toggle_command_palette();
+        assert!(state.modal_hides_toolbar_chrome(), "command palette");
+        state.toggle_command_palette();
+
+        state.toggle_help_overlay();
+        assert!(state.modal_hides_toolbar_chrome(), "help overlay");
+        state.toggle_help_overlay();
+
+        state.open_board_picker_with_measurer(&measurer);
+        assert!(state.modal_hides_toolbar_chrome(), "board picker");
+        state.close_board_picker();
+
+        state.open_font_picker();
+        assert!(state.modal_hides_toolbar_chrome(), "font picker");
+        state.close_font_picker();
+
+        state.open_color_picker_popup();
+        assert!(state.modal_hides_toolbar_chrome(), "colour picker");
+        state.close_color_picker_popup(false);
+
+        assert!(!state.modal_hides_toolbar_chrome(), "every modal closed");
+        assert_eq!(
+            (
+                state.toolbar_top_visible(),
+                state.toolbar_top_pinned(),
+                state.toolbar_top_minimized(),
+                state.toolbar_top_menu(),
+            ),
+            before,
+            "the bars come back exactly as they were"
+        );
+    }
+
+    #[test]
+    fn pointer_anchored_surfaces_and_the_tour_keep_the_toolbar() {
+        let mut state = make_test_input_state();
+
+        state.open_context_menu(
+            (40, 40),
+            Vec::new(),
+            crate::input::state::ContextMenuKind::Canvas,
+            None,
+        );
+        assert!(state.is_context_menu_open());
+        assert!(!state.modal_hides_toolbar_chrome(), "context menu");
+        state.close_context_menu();
+
+        state.open_radial_menu(40.0, 40.0);
+        assert!(state.is_radial_menu_open());
+        assert!(!state.modal_hides_toolbar_chrome(), "radial menu");
+        state.close_radial_menu();
+
+        state.start_tour();
+        assert!(
+            !state.modal_hides_toolbar_chrome(),
+            "the tour introduces the toolbar, so it stays"
+        );
     }
 }

@@ -34,6 +34,9 @@ impl WaylandState {
         self.render_cursor_chrome(ctx, width, height, capture_picker);
         self.render_mode_badges(ctx, width, height, capture_picker);
         self.render_status_surfaces(ctx, width, height, capture_picker);
+        // Inline bars stand in for the layer-shell toolbar surfaces, but every
+        // popup and modal below must paint above them.
+        self.render_inline_toolbar_chrome(ctx, capture_picker);
         self.render_help_and_pickers(ctx, width, height, capture_picker);
         self.render_radial_menu_and_feedback(ctx, width, height, capture_picker);
         self.render_properties_and_context(ctx, width, height, capture_picker);
@@ -394,6 +397,21 @@ impl WaylandState {
         crate::ui::render_context_menu_with_engine(self.render.ui_text(), ctx, &self.input_state);
     }
 
+    fn render_inline_toolbar_chrome(&mut self, ctx: &cairo::Context, capture_picker: bool) {
+        if capture_picker
+            || self.toolbar_chrome_suppressed()
+            || !self.toolbar.is_visible()
+            || !self.inline_toolbars_render_active()
+        {
+            return;
+        }
+        let snapshot = self.toolbar_snapshot();
+        if self.toolbar.update_snapshot(&snapshot) {
+            self.toolbar.mark_dirty();
+        }
+        self.render_inline_toolbars(ctx, &snapshot);
+    }
+
     fn render_inline_and_modal_ui(
         &mut self,
         ctx: &cairo::Context,
@@ -401,13 +419,6 @@ impl WaylandState {
         height: u32,
         capture_picker: bool,
     ) {
-        if !capture_picker && self.toolbar.is_visible() && self.inline_toolbars_render_active() {
-            let snapshot = self.toolbar_snapshot();
-            if self.toolbar.update_snapshot(&snapshot) {
-                self.toolbar.mark_dirty();
-            }
-            self.render_inline_toolbars(ctx, &snapshot);
-        }
         if self.input_state.region_state().purpose()
             == Some(crate::input::state::RegionPurposeTag::Measure)
         {
