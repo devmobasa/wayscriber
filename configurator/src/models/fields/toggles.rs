@@ -4,6 +4,7 @@ pub enum ToggleField {
     DrawingTextHalo,
     DrawingFillEnabled,
     DrawingShapeRecognitionGridSnap,
+    DrawingShapeRecognitionFeedback,
     PerformanceVsync,
     UiShowStatusBar,
     UiStatusBarInteractive,

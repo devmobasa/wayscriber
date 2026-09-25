@@ -160,6 +160,9 @@ impl ConfigDraft {
             ToggleField::DrawingShapeRecognitionGridSnap => {
                 self.drawing_shape_recognition_grid_snap = value;
             }
+            ToggleField::DrawingShapeRecognitionFeedback => {
+                self.drawing_shape_recognition_feedback = value;
+            }
             ToggleField::PerformanceVsync => {
                 self.set_performance_bool(PerformanceFieldId::EnableVsync, value);
             }

@@ -33,6 +33,7 @@ mod radial_menu;
 mod selection;
 mod session_preflight;
 mod shape_pen;
+mod shape_pen_feedback;
 mod shape_pen_triangles;
 mod spotlight;
 mod status_hud;

@@ -305,6 +305,19 @@ impl WaylandState {
             &mut regions,
         );
 
+        // The recognition chip holds still and fades, so each frame repaints
+        // only its own footprint, and the frame after it expires clears it.
+        let recognition_chip_rect = flags
+            .active(UiEffect::RecognitionChip)
+            .then(|| self.recognition_chip_visual(width, height))
+            .flatten()
+            .and_then(|chip| effect_rect(chip.bounds, width, height));
+        self.render.ui_damage_mut().roll(
+            UiEffect::RecognitionChip,
+            recognition_chip_rect,
+            &mut regions,
+        );
+
         // The scan overlay spans its region and, once settled, the outcome card
         // beside it. Both move only when the phase changes, so the previous
         // union is re-emitted to clear the sweep it leaves behind.
@@ -430,6 +443,35 @@ mod tests {
         damage.clear();
         push_effect_damage(&mut damage, second, None);
         assert_eq!(damage, vec![second.expect("disappeared")]);
+    }
+
+    #[test]
+    fn recognition_chip_damage_stays_on_its_own_footprint_until_it_expires() {
+        let chip = crate::ui::recognition_chip_layout(
+            &crate::ui_text::UiTextEngine::default(),
+            "Circle · Ctrl+Z keeps ink",
+            (300.0, 100.0, 200.0, 150.0),
+            0.5,
+            800,
+            600,
+        )
+        .and_then(|chip| effect_rect(chip.bounds, 800, 600))
+        .expect("chip footprint");
+        let mut history = super::super::runtime::UiDamageHistory::default();
+
+        for _fade_frame in 0..3 {
+            let mut damage = Vec::new();
+            history.roll(UiEffect::RecognitionChip, Some(chip), &mut damage);
+            assert_eq!(damage, vec![chip]);
+        }
+        let mut cleanup = Vec::new();
+        history.roll(UiEffect::RecognitionChip, None, &mut cleanup);
+
+        assert_eq!(cleanup, vec![chip], "the expiry frame clears the chip");
+        assert!(
+            chip.width < 400 && chip.height < 40,
+            "a small chip: {chip:?}"
+        );
     }
 
     #[test]

@@ -327,6 +327,9 @@ impl WaylandState {
         } else {
             self.input_state.clear_radial_menu_layout();
         }
+        if !capture_picker {
+            self.render_recognition_chip(ctx, width, height);
+        }
         let toast_geometry = crate::ui::render_ui_toast_with_engine(
             self.render.ui_text(),
             ctx,

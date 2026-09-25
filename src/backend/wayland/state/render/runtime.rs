@@ -17,10 +17,11 @@ pub(super) enum UiEffect {
     OcrScan,
     ContextMenu,
     ContextSubmenu,
+    RecognitionChip,
 }
 
 impl UiEffect {
-    const COUNT: usize = 13;
+    const COUNT: usize = 14;
 
     const fn index(self) -> usize {
         self as usize
@@ -288,6 +289,7 @@ mod tests {
             UiEffect::OcrScan,
             UiEffect::ContextMenu,
             UiEffect::ContextSubmenu,
+            UiEffect::RecognitionChip,
         ];
         let mut history = UiDamageHistory::default();
 

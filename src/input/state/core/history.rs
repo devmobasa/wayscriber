@@ -35,6 +35,9 @@ impl InputState {
 
         self.mark_selection_dirty_region(selection_chrome);
         self.apply_action_side_effects_with(measurer, &action);
+        // A recognition chip advertises this undo; once history moves it no
+        // longer describes the canvas.
+        self.clear_recognition_chip();
         true
     }
 

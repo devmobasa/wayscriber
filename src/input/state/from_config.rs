@@ -32,6 +32,7 @@ impl InputState {
         ));
 
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
+        input_state.set_shape_recognition_feedback(config.drawing.shape_recognition_feedback);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
         input_state

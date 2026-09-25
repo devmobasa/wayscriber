@@ -104,6 +104,8 @@ pub(super) const DRAWING_DEFAULT_TERMS: &[&str] = &[
     "recognition sensitivity",
     "snap shape pen to board paper",
     "grid snap",
+    "name recognized shape pen shapes",
+    "recognition feedback",
     "marker",
     "marker opacity",
     "fill",

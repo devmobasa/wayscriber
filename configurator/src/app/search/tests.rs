@@ -117,6 +117,8 @@ fn exact_drawing_default_labels_match_defaults_section() {
         "eraser size px",
         "shape pen sensitivity",
         "shape recognition",
+        "name recognized shape pen shapes",
+        "recognition feedback",
         "enable text background",
         "enable text halo",
     ] {

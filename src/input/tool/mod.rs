@@ -19,14 +19,10 @@ pub(crate) use catalog::{
     ToolDrawingBehavior, ToolMotionBehavior, ToolMotionSizeSource, ToolPathKind, ToolPressBehavior,
     ToolPressureBehavior,
 };
-#[expect(
-    unused_imports,
-    reason = "FinishedToolStroke exposes usage metadata to crate callers"
-)]
-pub(crate) use drawing::ToolUsage;
 pub(crate) use drawing::{
     FinishedToolStroke, PROVISIONAL_POLYGON_DAMAGE_PADDING, PolygonProvisionalSnapshot,
     PolygonStrokeSnapshot, ProvisionalToolSnapshot, ProvisionalToolStroke, ToolStrokeSnapshot,
+    ToolUsage,
 };
 pub(crate) use live_shape::LiveShapeMemo;
 pub(crate) use profile::{ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};

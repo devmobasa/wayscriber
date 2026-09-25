@@ -18,6 +18,7 @@ mod precision_entry;
 mod primitives;
 mod properties_panel;
 mod radial_menu;
+mod recognition_chip;
 mod render_context;
 pub(crate) use render_context::{UiRenderCaches, UiRenderCtx};
 mod region_action_bar;
@@ -75,6 +76,9 @@ pub use properties_panel::render_properties_panel;
 pub(crate) use properties_panel::render_properties_panel_with_engine;
 pub use radial_menu::render_radial_menu;
 pub(crate) use radial_menu::render_radial_menu_with_context;
+pub(crate) use recognition_chip::{
+    RecognitionChipVisual, recognition_chip_layout, render_recognition_chip,
+};
 pub(crate) use region_action_bar::{
     RegionAction, RegionActionAvailability, RegionActionBar, RegionCutStatus,
 };

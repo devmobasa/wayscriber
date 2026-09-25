@@ -11,6 +11,8 @@ impl InputState {
     pub(in crate::input::state::core) fn mark_board_surface_changed(&mut self) {
         self.mark_board_surface_dirty();
         self.mark_session_dirty();
+        // The chip points at a shape on the surface that was just replaced.
+        self.clear_recognition_chip();
     }
 
     pub(super) fn finish_active_board_transition(&mut self) {

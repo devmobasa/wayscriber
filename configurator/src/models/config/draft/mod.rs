@@ -44,6 +44,7 @@ pub struct ConfigDraft {
     pub drawing_pen_smoothing: String,
     pub drawing_shape_recognition_sensitivity: String,
     pub drawing_shape_recognition_grid_snap: bool,
+    pub drawing_shape_recognition_feedback: bool,
     /// Families `Shift+T` steps through, in order. A list rather than a
     /// comma-separated line: a family name can contain a comma, and the row
     /// editor picks from what is installed instead of asking for exact text.

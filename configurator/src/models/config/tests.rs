@@ -74,6 +74,25 @@ fn shape_pen_grid_snap_round_trips() {
 }
 
 #[test]
+fn shape_pen_recognition_feedback_round_trips() {
+    let mut config = Config::default();
+    assert!(config.drawing.shape_recognition_feedback);
+    config.drawing.shape_recognition_feedback = false;
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.drawing_shape_recognition_feedback);
+
+    draft.set_toggle(ToggleField::DrawingShapeRecognitionFeedback, true);
+    assert!(
+        draft
+            .to_config(&config)
+            .expect("valid draft")
+            .drawing
+            .shape_recognition_feedback
+    );
+}
+
+#[test]
 fn board_grid_draft_preserves_patterns_and_rejects_invalid_spacing() {
     let mut config = Config::default();
     let mut boards = wayscriber::config::BoardsConfig::default();

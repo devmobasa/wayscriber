@@ -112,4 +112,7 @@ pub struct InputState {
     pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
+    /// The transient chip naming what Shape Pen just recognized.
+    pub(in crate::input::state) recognition_feedback:
+        crate::input::state::core::RecognitionFeedback,
 }

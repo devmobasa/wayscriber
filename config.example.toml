@@ -1143,6 +1143,12 @@ shape_recognition_sensitivity = 3
 # exactly where you drew them.
 shape_recognition_grid_snap = true
 
+# Briefly name the shape Shape Pen recognized, next to it, with the undo
+# shortcut that turns it back into ink (for example "Circle · Ctrl+Z keeps
+# ink"). The chip fades after about 1.5 seconds and never appears in exports,
+# captures, or saved sessions. Set to false to hide it.
+shape_recognition_feedback = true
+
 # Default fill state for fill-capable shapes
 default_fill_enabled = false
 
