@@ -41,8 +41,8 @@ use model::TopStripPlan;
 use super::super::icons::IconWidget;
 use super::super::widgets::{
     FeedbackSender, SliderRow, SwatchButton, add_button_shortcut_hint, icon_button,
-    install_click_modifier_capture, install_quick_color_recolor, install_shortcut_focus_policy,
-    send_event, set_active_class, sized_button, text_button,
+    install_click_modifier_capture, install_key_relay, install_quick_color_recolor,
+    install_shortcut_focus_policy, send_event, set_active_class, sized_button, text_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 
@@ -459,6 +459,8 @@ impl TopBar {
             let _ = leave_feedback.send(GtkToolbarFeedback::TopHover { hovered: false });
         });
         window.add_controller(hover);
+        // Keys typed while this window holds keyboard focus go to the overlay.
+        install_key_relay(&window, &feedback);
 
         Self {
             ui_text: crate::ui_text::UiTextEngine::default(),

@@ -35,7 +35,9 @@ fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
 }
 
 impl TopBar {
-    fn popover_resources(&self) -> impl Iterator<Item = (&'static str, &PopoverResources)> {
+    pub(super) fn popover_resources(
+        &self,
+    ) -> impl Iterator<Item = (&'static str, &PopoverResources)> {
         [
             ("top-shapes-popover", self.shapes.mounted.as_ref()),
             ("top-overflow-popover", self.overflow.mounted.as_ref()),
@@ -497,23 +499,4 @@ fn menu_popover_viewport(
     scroller.set_max_content_height((MENU_MAX_CONTENT_H * scale).round() as i32);
     scroller.set_child(Some(content));
     scroller.upcast()
-}
-
-/// Without an autohide grab, Escape needs explicit wiring to dismiss an
-/// open popover through the backend state.
-pub(super) fn attach_escape_dismiss(
-    popover: &gtk4::Popover,
-    feedback: &FeedbackSender,
-    dismiss: ToolbarEvent,
-) {
-    let key = gtk4::EventControllerKey::new();
-    let sender = feedback.clone();
-    key.connect_key_pressed(move |_, keyval, _, _| {
-        if keyval == gtk4::gdk::Key::Escape {
-            send_event(&sender, dismiss.clone());
-            return gtk4::glib::Propagation::Stop;
-        }
-        gtk4::glib::Propagation::Proceed
-    });
-    popover.add_controller(key);
 }

@@ -2,7 +2,6 @@
 //!
 //! Owns construction and state-updater wiring for toolbar buttons and chrome.
 
-use super::popovers::attach_escape_dismiss;
 use super::*;
 
 use crate::ui::theme::set_color;
@@ -96,11 +95,7 @@ impl TopBar {
         // event or a canvas press), so an outside click both dismisses AND
         // activates the control under it — one click, like the builtin.
         popover.set_autohide(false);
-        attach_escape_dismiss(
-            &popover,
-            &self.feedback,
-            event_for_toggle_state(control, false),
-        );
+        install_key_relay(&popover, &self.feedback);
         let sender = self.feedback.clone();
         let expected = self.shapes.expected_open.clone();
         popover.connect_closed(move |_| {
@@ -412,11 +407,7 @@ impl TopBar {
         popover.set_position(gtk4::PositionType::Bottom);
         // See the shapes popover: dismissal stays with the backend policy.
         popover.set_autohide(false);
-        attach_escape_dismiss(
-            &popover,
-            &self.feedback,
-            event_for_toggle_state(control, false),
-        );
+        install_key_relay(&popover, &self.feedback);
         let sender = self.feedback.clone();
         let expected = self.overflow.expected_open.clone();
         popover.connect_closed(move |_| {
@@ -454,7 +445,8 @@ impl TopBar {
 
     /// One overflow-anchored Canvas/Session/Settings popover following the shapes/
     /// overflow pattern: no autohide grab (the backend dismissal policy owns
-    /// click-away), Escape wired explicitly, `closed` echoing user dismissal.
+    /// click-away), keys relayed to the overlay (whose routing closes the menu
+    /// on Escape or any shortcut), `closed` echoing user dismissal.
     fn menu_popover(
         &self,
         parent: &gtk4::Button,
@@ -465,7 +457,7 @@ impl TopBar {
         popover.set_parent(parent);
         popover.set_position(gtk4::PositionType::Bottom);
         popover.set_autohide(false);
-        attach_escape_dismiss(&popover, &self.feedback, dismiss.clone());
+        install_key_relay(&popover, &self.feedback);
         let sender = self.feedback.clone();
         popover.connect_closed(move |_| {
             if expected_open.get() {

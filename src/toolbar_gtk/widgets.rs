@@ -15,7 +15,11 @@ use crate::ui::theme::set_color;
 use crate::ui::theme::swatch::{chrome_rgb, swatch_edge_stroke};
 use crate::ui::theme::toolbar::COLOR_PANEL_BACKGROUND;
 use crate::ui::toolbar::ToolbarEvent;
+mod key_relay;
 mod slider;
+pub(super) use key_relay::install_key_relay;
+#[cfg(test)]
+pub(super) use key_relay::key_relay_controller;
 pub(super) use slider::SliderRow;
 
 pub(super) use crate::ui::theme::toolbar::COLOR_SWATCH_HAIRLINE;

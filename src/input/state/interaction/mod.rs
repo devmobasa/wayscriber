@@ -110,29 +110,63 @@ mod tests {
         assert!(state.is_properties_panel_open());
     }
 
+    const EVERY_TOP_MENU: [TopMenuState; 5] = [
+        TopMenuState::ShapePicker,
+        TopMenuState::TopOverflow,
+        TopMenuState::CanvasPopover,
+        TopMenuState::SessionPopover,
+        TopMenuState::SettingsPopover,
+    ];
+
     #[test]
-    fn escape_dismisses_the_open_top_popover_with_named_outcome() {
+    fn escape_dismisses_every_open_top_menu_with_named_outcome() {
+        let mut state = make_test_input_state();
+
+        for menu in EVERY_TOP_MENU {
+            state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
+
+            assert_eq!(
+                route_key_press(&mut state, Key::Escape),
+                RoutingOutcome::Canceled(CancelTarget::TopMenu),
+                "Escape over {menu:?}"
+            );
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed, "{menu:?}");
+            assert!(!state.should_exit, "Escape over {menu:?} must not exit");
+        }
+    }
+
+    /// A shortcut typed while a toolbar menu is open used to vanish. It now
+    /// closes the menu and still reaches its binding.
+    #[test]
+    fn shortcut_key_closes_an_open_top_menu_and_still_dispatches() {
+        let mut state = make_test_input_state();
+
+        for menu in EVERY_TOP_MENU {
+            state.set_tool_override(Some(Tool::Pen));
+            state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
+
+            let outcome = route_key_press(&mut state, Key::Char('v'));
+
+            assert!(
+                matches!(outcome, RoutingOutcome::DispatchedAction(_)),
+                "the select-tool binding still dispatches over {menu:?}: {outcome:?}"
+            );
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed, "{menu:?}");
+            assert_eq!(state.active_tool(), Tool::Select, "{menu:?}");
+        }
+    }
+
+    #[test]
+    fn modifier_press_leaves_an_open_top_menu_open() {
         let mut state = make_test_input_state();
         state.test_set_toolbar_menu_state(
-            TopMenuState::SettingsPopover,
+            TopMenuState::TopOverflow,
             state.toolbar_top_popover_scroll(),
         );
 
-        assert_eq!(
-            route_key_press(&mut state, Key::Escape),
-            RoutingOutcome::Canceled(CancelTarget::TopPopover)
-        );
-        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+        route_key_press(&mut state, Key::Ctrl);
 
-        state.test_set_toolbar_menu_state(
-            TopMenuState::SessionPopover,
-            state.toolbar_top_popover_scroll(),
-        );
-        assert_eq!(
-            route_key_press(&mut state, Key::Escape),
-            RoutingOutcome::Canceled(CancelTarget::TopPopover)
-        );
-        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
     }
 
     #[test]

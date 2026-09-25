@@ -5,6 +5,7 @@
 use wayland_client::{Connection, QueueHandle};
 
 use super::WaylandState;
+use crate::backend::wayland::handlers::keyboard::ForwardedKey;
 use crate::toolbar_gtk::select::{
     GtkPreconditions, ToolbarFrontend, requested_backend, resolve_frontend,
 };
@@ -140,6 +141,25 @@ impl WaylandState {
                     if !self.input_state.modal_owns_pointer_shortcuts() {
                         self.try_dispatch_gdk_pointer_shortcut(button, ctrl, shift, alt, logo);
                     }
+                }
+                GtkToolbarFeedback::Key {
+                    keyval,
+                    ctrl,
+                    shift,
+                    alt,
+                    logo,
+                } => {
+                    self.dispatch_gtk_forwarded_key(
+                        ForwardedKey {
+                            keyval,
+                            ctrl,
+                            shift,
+                            alt,
+                            logo,
+                        },
+                        conn,
+                        qh,
+                    );
                 }
                 GtkToolbarFeedback::TopHover { hovered } => {
                     self.toolbar_chrome.set_gtk_top_hover(hovered);

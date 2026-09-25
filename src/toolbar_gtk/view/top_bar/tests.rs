@@ -2670,7 +2670,68 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert_style_pill_interactions(&regular);
 
     assert_menu_popover_contracts(&regular);
+
+    assert_key_relay_contract(&regular);
     eprintln!("EXECUTED: GTK widget contract assertions");
+}
+
+/// Keys typed while the toolbar holds keyboard focus used to vanish, and
+/// Escape could not close a popover. The window and every mounted popover
+/// relay presses to the overlay, which routes them like its own keys.
+fn assert_key_relay_contract(regular: &ToolbarSnapshot) {
+    use crate::toolbar_gtk::widgets::key_relay_controller;
+    use gtk4::glib::translate::IntoGlib;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    top.build_strip(
+        regular,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), regular),
+    );
+
+    let window_relay = key_relay_controller(&top.window).expect("toolbar window relays keys");
+    for (name, resources) in top.popover_resources() {
+        assert!(
+            key_relay_controller(&resources.popover).is_some(),
+            "{name} relays keys"
+        );
+    }
+
+    for (keyval, state, expected_shift) in [
+        (
+            gtk4::gdk::Key::Escape,
+            gtk4::gdk::ModifierType::empty(),
+            false,
+        ),
+        (gtk4::gdk::Key::S, gtk4::gdk::ModifierType::SHIFT_MASK, true),
+    ] {
+        let handled = window_relay.emit_by_name::<bool>("key-pressed", &[&keyval, &0u32, &state]);
+        assert!(handled, "{keyval:?} is consumed by the relay");
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("relayed key feedback"),
+            GtkToolbarFeedback::Key {
+                keyval: keyval.into_glib(),
+                ctrl: false,
+                shift: expected_shift,
+                alt: false,
+                logo: false,
+            }
+        );
+    }
+
+    let handled = window_relay.emit_by_name::<bool>(
+        "key-pressed",
+        &[
+            &gtk4::gdk::Key::Tab,
+            &0u32,
+            &gtk4::gdk::ModifierType::empty(),
+        ],
+    );
+    assert!(!handled, "Tab stays with GTK focus navigation");
+    assert!(rx.try_recv().is_err(), "Tab is not relayed");
+
+    detach_test_popovers(&mut top);
 }
 
 fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {

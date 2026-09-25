@@ -1,4 +1,5 @@
 // Bridges Wayland key events into our `InputState`, including capture-action plumbing.
+mod press;
 mod translate;
 
 use log::{debug, warn};
@@ -12,6 +13,7 @@ use wayland_client::{
 use crate::{config::Action, input::Key, notification};
 
 use super::super::state::WaylandState;
+pub(in crate::backend::wayland) use press::{ForwardedKey, KeyPressSource};
 pub(in crate::backend::wayland) use translate::keysym_to_key;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,97 +148,7 @@ impl KeyboardHandler for WaylandState {
             debug!("Ignoring key press before overlay ready");
             return;
         }
-        let key = keysym_to_key(event.keysym);
-        // Report the physical press to the input HUD before any subsystem
-        // routing consumes it, so the HUD always shows what was pressed rather
-        // than what happened to reach the canvas. Compositor-synced modifier
-        // state is already current here, so the chord label is exact.
-        self.input_state
-            .note_input_hud_key(key, self.input_state.modifiers);
-        // Any fresh key press ends the previous auto-repeat; a repeatable one
-        // re-arms it at the end of this handler.
-        self.clear_key_repeat();
-        // A finished scan card is transient chrome: the next interaction of any
-        // kind takes it away rather than making the user wait it out.
-        self.input_state.dismiss_ocr_scan_result();
-        if self.try_handle_region_key(conn, key) {
-            return;
-        }
-        if self.try_handle_eyedropper_key(key) {
-            return;
-        }
-        if matches!(key, Key::Escape)
-            && self.input_state.modifiers.shift
-            && self.try_skip_first_run_onboarding()
-        {
-            return;
-        }
-        if self.try_handle_first_run_card_key(key) {
-            return;
-        }
-        if matches!(key, Key::Space) && self.should_capture_space_for_board_pan() {
-            self.pointer.set_board_pan_key_held(true);
-            self.input_state.needs_redraw = true;
-            return;
-        }
-        if self.zoom.is_engaged() {
-            match key {
-                Key::Escape => {
-                    self.exit_zoom();
-                    return;
-                }
-                Key::Up | Key::Down | Key::Left | Key::Right => {
-                    if !self.zoom.active {
-                        return;
-                    }
-                    if self.zoom.locked {
-                        return;
-                    }
-                    let step = if self.input_state.modifiers.shift {
-                        WaylandState::ZOOM_PAN_STEP_LARGE
-                    } else {
-                        WaylandState::ZOOM_PAN_STEP
-                    };
-                    let (dx, dy) = match key {
-                        Key::Up => (0.0, step),
-                        Key::Down => (0.0, -step),
-                        Key::Left => (step, 0.0),
-                        Key::Right => (-step, 0.0),
-                        _ => (0.0, 0.0),
-                    };
-                    self.zoom.pan_by_screen_delta(
-                        dx,
-                        dy,
-                        self.surface.width(),
-                        self.surface.height(),
-                    );
-                    self.sync_input_zoom_state();
-                    self.input_state.dirty_tracker.mark_full();
-                    self.input_state.needs_redraw = true;
-                    return;
-                }
-                _ => {}
-            }
-        }
-        debug!("Key pressed: {:?}", key);
-        let modal_capture = self.input_state.modal_owns_text_input();
-        let modal_blocks_repeat = self.input_state.modal_blocks_canvas_key_repeat();
-        if should_try_toolbar_key(key, modal_capture)
-            && self.handle_toolbar_key(key, Some(conn), Some(qh))
-        {
-            return;
-        }
-
-        self.apply_input_key(key);
-
-        // Arm auto-repeat for editing/navigation keys that reached normal
-        // dispatch. Some dedicated entry modals manage or intentionally block
-        // repeat themselves; other routed overlays (for example Help search)
-        // still use this timer even though they disable the canvas IME.
-        if !modal_blocks_repeat && is_repeatable_key(key) && self.focus.keyboard_focused() {
-            self.key_repeat
-                .arm(key, Instant::now(), Self::KEY_REPEAT_INITIAL_DELAY);
-        }
+        self.dispatch_key_press(keysym_to_key(event.keysym), KeyPressSource::Seat, conn, qh);
     }
 
     fn release_key(
