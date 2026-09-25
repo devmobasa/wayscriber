@@ -4,6 +4,8 @@ use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Color, Shape};
 
 mod grid;
+mod outline;
+mod rough_rectangle;
 #[cfg(test)]
 mod tests;
 mod triangle;
@@ -134,6 +136,10 @@ fn recognize_closed(
     } else {
         (None, None)
     };
+    // A rectangle the box fit rejects may still be one whose sides lean.
+    let rectangle = rectangle.or_else(|| {
+        rough_rectangle::fit_rough_rectangle(points, bounds, color, thick, sensitivity)
+    });
     let triangle = triangle::fit_triangle(points, bounds, color, thick, sensitivity);
 
     // Ties keep the earlier candidate, so an ellipse wins an exact tie.

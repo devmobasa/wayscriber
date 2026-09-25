@@ -274,3 +274,96 @@ fn triangle_corners_snap_to_isometric_lattice_points() {
         assert_eq!(sorted, vec![(69, 160), (139, 40), (208, 160)], "{kind:?}");
     }
 }
+
+/// Quick mouse rectangles traced from a screenshot of strokes Shape Pen left
+/// as ink at the old default: one tilted, one with a rounded corner, and one
+/// skewed with a side leaning about 17 degrees.
+const QUICK_RECTANGLES: [&[(f64, f64)]; 3] = [
+    &[(38.0, 122.0), (382.0, 150.0), (401.0, 256.0), (39.0, 240.0)],
+    &[
+        (567.0, 234.0),
+        (845.0, 226.0),
+        (850.0, 386.0),
+        (622.0, 395.0),
+        (597.0, 350.0),
+    ],
+    &[
+        (206.0, 343.0),
+        (457.0, 350.0),
+        (492.0, 466.0),
+        (252.0, 485.0),
+    ],
+];
+
+#[test]
+fn quick_rectangles_with_leaning_sides_are_rectangles_by_default() {
+    let default = crate::config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY;
+
+    for corners in QUICK_RECTANGLES {
+        let path = trace(corners, 0.05, 2.0, 1.0);
+
+        let shape = recognize(&path, default);
+
+        let Some(Shape::Rect { x, y, w, h, .. }) = shape else {
+            panic!("{corners:?} became {shape:?}");
+        };
+        // Each side lands on its average position, inside the drawn extremes.
+        let (xs, ys): (Vec<f64>, Vec<f64>) = corners.iter().copied().unzip();
+        let min = |values: &[f64]| values.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = |values: &[f64]| values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        assert!(f64::from(x) >= min(&xs) - 2.0 && f64::from(x + w) <= max(&xs) + 2.0);
+        assert!(f64::from(y) >= min(&ys) - 2.0 && f64::from(y + h) <= max(&ys) + 2.0);
+    }
+}
+
+#[test]
+fn leaning_quadrilaterals_need_more_sensitivity_the_more_they_lean() {
+    // Left and right sides lean 21 degrees: a trapezoid, not a quick
+    // rectangle, until the most forgiving levels.
+    let trapezoid = [
+        (100.0, 250.0),
+        (300.0, 250.0),
+        (250.0, 120.0),
+        (150.0, 120.0),
+    ];
+    let path = trace(&trapezoid, 0.1, 3.0, 0.0);
+
+    let kinds: Vec<_> = (0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY)
+        .map(|level| recognize(&path, level).map(|shape| shape.kind_name()))
+        .collect();
+
+    assert_eq!(
+        kinds,
+        [None, None, None, Some("Rectangle"), Some("Rectangle")]
+    );
+}
+
+#[test]
+fn diamonds_kites_and_round_strokes_never_become_rectangles() {
+    let outlines = [
+        ("diamond", regular(4, (70.0, 70.0), 0.0)),
+        (
+            "kite",
+            vec![
+                (200.0, 100.0),
+                (260.0, 170.0),
+                (200.0, 300.0),
+                (140.0, 170.0),
+            ],
+        ),
+        ("circle", regular(48, (60.0, 60.0), 0.0)),
+        ("oval", regular(48, (90.0, 50.0), 0.0)),
+    ];
+
+    for (name, outline) in outlines {
+        for wobble in [0.0, 2.0] {
+            let path = trace(&outline, 0.1, 3.0, wobble);
+            for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+                assert!(
+                    !matches!(recognize(&path, level), Some(Shape::Rect { .. })),
+                    "{name} with wobble {wobble} at level {level}"
+                );
+            }
+        }
+    }
+}

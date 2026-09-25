@@ -12,8 +12,9 @@ pub(crate) const DEFAULT_HIT_TEST_TOLERANCE: f64 = 6.0;
 /// Default release-time smoothing level for freehand and marker strokes.
 pub const DEFAULT_PEN_SMOOTHING: u8 = 3;
 
-/// Shape Pen recognition levels, from precise to forgiving.
-pub const DEFAULT_SHAPE_RECOGNITION_SENSITIVITY: u8 = 2;
+/// Shape Pen recognition levels, from precise to forgiving. The default leans
+/// forgiving: quick shapes should become shapes, and one undo returns the ink.
+pub const DEFAULT_SHAPE_RECOGNITION_SENSITIVITY: u8 = 3;
 pub const MAX_SHAPE_RECOGNITION_SENSITIVITY: u8 = 4;
 
 /// Drawing-related settings.
