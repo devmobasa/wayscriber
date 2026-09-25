@@ -317,9 +317,9 @@ fn open_context_menu_from_right_click(
     let mut focus_edit = false;
     if let Some(id) = hit_shape {
         if state.modifiers.shift {
-            state.extend_selection([id]);
+            state.extend_selection_with(measurer, [id]);
         } else if !state.selected_shape_ids().contains(&id) {
-            state.set_selection(vec![id]);
+            state.set_selection_with(measurer, vec![id]);
         }
         let selection = state.selected_shape_ids().to_vec();
         focus_edit = selection.len() == 1
@@ -336,7 +336,7 @@ fn open_context_menu_from_right_click(
             hit_shape,
         );
     } else {
-        state.clear_selection();
+        state.clear_selection_with(measurer);
         state.open_context_menu(
             (screen_x, screen_y),
             Vec::new(),

@@ -67,9 +67,9 @@ impl InputState {
         let mut focus_edit = false;
         if let Some(id) = hit_shape {
             if self.modifiers.shift {
-                self.extend_selection([id]);
+                self.extend_selection_with(measurer, [id]);
             } else if !self.selected_shape_ids().contains(&id) {
-                self.set_selection(vec![id]);
+                self.set_selection_with(measurer, vec![id]);
             }
             let selection = self.selected_shape_ids().to_vec();
             focus_edit = selection.len() == 1
@@ -88,7 +88,7 @@ impl InputState {
                 hit_shape,
             );
         } else {
-            self.clear_selection();
+            self.clear_selection_with(measurer);
             self.open_context_menu(
                 (screen_x, screen_y),
                 Vec::new(),
@@ -542,9 +542,9 @@ impl InputState {
             if let Some(hit_id) = hit_id {
                 if !self.selected_shape_ids().contains(&hit_id) {
                     if self.modifiers.shift {
-                        self.extend_selection([hit_id]);
+                        self.extend_selection_with(measurer, [hit_id]);
                     } else {
-                        self.set_selection(vec![hit_id]);
+                        self.set_selection_with(measurer, vec![hit_id]);
                     }
                 }
 

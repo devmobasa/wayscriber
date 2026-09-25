@@ -203,7 +203,7 @@ pub(super) fn finish_drawing(
             state.clear_provisional_dirty();
             state.dirty_tracker.mark_optional_rect(bounds);
         }
-        state.clear_selection();
+        state.clear_selection_with(measurer);
         state.needs_redraw = true;
         state.mark_session_dirty();
         state.record_first_stroke_done_for_onboarding();

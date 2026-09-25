@@ -115,7 +115,6 @@ impl InputState {
     }
 
     fn select_all_shapes_with(&mut self, measurer: &crate::draw::TextMeasurer) {
-        let previous_bounds = self.selection_bounding_box_with(measurer, self.selected_shape_ids());
         let ids: Vec<_> = self
             .boards
             .active_frame()
@@ -130,11 +129,7 @@ impl InputState {
                 Toast::warning("No shapes to select."),
             );
         } else {
-            self.set_selection(ids);
-            self.mark_selection_dirty_region(previous_bounds);
-            let new_bounds = self.selection_bounding_box_with(measurer, self.selected_shape_ids());
-            self.mark_selection_dirty_region(new_bounds);
-            self.needs_redraw = true;
+            self.set_selection_with(measurer, ids);
         }
     }
 

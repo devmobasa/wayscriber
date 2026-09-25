@@ -100,7 +100,7 @@ impl InputState {
         );
         self.mark_session_dirty();
         self.needs_redraw = true;
-        self.set_selection(new_ids);
+        self.set_selection_with(measurer, new_ids);
         if limit_hit {
             self.push_toast(
                 ToastPriority::Info,
@@ -239,7 +239,7 @@ impl InputState {
             for shape_id in hit_ids {
                 self.invalidate_hit_cache_for_with(measurer, shape_id);
             }
-            self.set_selection(new_ids);
+            self.set_selection_with(measurer, new_ids);
             self.needs_redraw = true;
         }
         if limit_hit {

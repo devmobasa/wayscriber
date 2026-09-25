@@ -1,6 +1,6 @@
 use super::base::InputState;
-use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
+use crate::draw::{Frame, TextMeasurer};
 
 impl InputState {
     /// Applies side effects after an undoable action mutates the frame.
@@ -12,9 +12,30 @@ impl InputState {
     pub fn apply_action_side_effects_with(&mut self, measurer: &TextMeasurer, action: &UndoAction) {
         self.invalidate_hit_cache_from_action(measurer, action);
         self.mark_dirty_from_action(measurer, action);
-        self.clear_selection();
+        self.clear_selection_with(measurer);
         self.needs_redraw = true;
         self.mark_session_dirty();
+    }
+
+    /// Runs one undo or redo step on the active frame and applies its side
+    /// effects. Returns whether there was a step to run.
+    ///
+    /// The step clears the selection, so the selection chrome is measured
+    /// first: the step may already have moved or removed the shapes the halo
+    /// and handles were drawn around.
+    pub(in crate::input::state) fn step_history_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        step: impl FnOnce(&mut Frame) -> Option<UndoAction>,
+    ) -> bool {
+        let selection_chrome = self.selection_chrome_bounds_with(measurer);
+        let Some(action) = step(self.boards.active_frame_mut()) else {
+            return false;
+        };
+
+        self.mark_selection_dirty_region(selection_chrome);
+        self.apply_action_side_effects_with(measurer, &action);
+        true
     }
 
     fn mark_dirty_from_action(&mut self, measurer: &TextMeasurer, action: &UndoAction) {

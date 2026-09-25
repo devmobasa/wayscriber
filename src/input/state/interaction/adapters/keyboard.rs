@@ -167,10 +167,7 @@ pub(crate) fn handle_idle_selection_cancel_key(
         && matches!(state.state, DrawingState::Idle)
         && state.has_selection()
     {
-        let bounds = state.selection_bounding_box_with(measurer, state.selected_shape_ids());
-        state.clear_selection();
-        state.mark_selection_dirty_region(bounds);
-        state.needs_redraw = true;
+        state.clear_selection_with(measurer);
         return Some(RoutingOutcome::Canceled(CancelTarget::Selection));
     }
 

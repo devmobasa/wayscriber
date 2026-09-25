@@ -57,7 +57,7 @@ impl InputState {
         );
         self.mark_session_dirty();
         self.needs_redraw = true;
-        self.set_selection(new_ids);
+        self.set_selection_with(measurer, new_ids);
         true
     }
 }

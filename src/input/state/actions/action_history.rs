@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::draw::Frame;
 
 use super::super::InputState;
 
@@ -10,8 +11,7 @@ impl InputState {
     ) -> bool {
         match action {
             Action::Undo => {
-                if let Some(action) = self.boards.active_frame_mut().undo_last() {
-                    self.apply_action_side_effects_with(measurer, &action);
+                if self.step_history_with(measurer, Frame::undo_last) {
                     self.pending_onboarding_usage.first_undo_done = true;
                 } else {
                     // Nothing to undo - show blocked feedback
@@ -20,9 +20,7 @@ impl InputState {
                 true
             }
             Action::Redo => {
-                if let Some(action) = self.boards.active_frame_mut().redo_last() {
-                    self.apply_action_side_effects_with(measurer, &action);
-                } else {
+                if !self.step_history_with(measurer, Frame::redo_last) {
                     // Nothing to redo - show blocked feedback
                     self.trigger_blocked_feedback();
                 }
@@ -52,17 +50,13 @@ impl InputState {
         &mut self,
         measurer: &crate::draw::TextMeasurer,
     ) {
-        while let Some(action) = self.boards.active_frame_mut().undo_last() {
-            self.apply_action_side_effects_with(measurer, &action);
-        }
+        while self.step_history_with(measurer, Frame::undo_last) {}
     }
 
     pub(crate) fn redo_all_immediate_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,
     ) {
-        while let Some(action) = self.boards.active_frame_mut().redo_last() {
-            self.apply_action_side_effects_with(measurer, &action);
-        }
+        while self.step_history_with(measurer, Frame::redo_last) {}
     }
 }
