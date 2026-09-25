@@ -171,7 +171,7 @@ impl KeyboardHandler for WaylandState {
         {
             return;
         }
-        if self.try_handle_first_run_background_mode_choice(key) {
+        if self.try_handle_first_run_card_key(key) {
             return;
         }
         if matches!(key, Key::Space) && self.should_capture_space_for_board_pan() {

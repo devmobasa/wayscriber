@@ -437,6 +437,7 @@ impl WaylandState {
                 width,
                 height,
                 &card,
+                self.onboarding_card.hovered(),
             )
         });
         self.onboarding_card.set_layout(card_layout);

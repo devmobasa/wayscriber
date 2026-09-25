@@ -242,11 +242,11 @@ impl WaylandState {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
+        let idle = matches!(self.input_state.state, crate::input::DrawingState::Idle);
+        self.update_onboarding_card_hover(idle.then_some((sx, sy)));
         // Hovering the onboarding card is chrome motion, not canvas motion. A
         // stroke already in progress keeps its motion as it crosses the card.
-        if matches!(self.input_state.state, crate::input::DrawingState::Idle)
-            && self.onboarding_card_press_at(sx, sy).is_some()
-        {
+        if idle && self.onboarding_card_press_at(sx, sy).is_some() {
             self.input_state
                 .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
             self.update_pointer_cursor(false, conn);

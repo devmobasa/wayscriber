@@ -596,6 +596,13 @@ Once the overlay is up:
 - <kbd>F11</kbd>: [configurator](#configurator-gui)
 - <kbd>Escape</kbd>: hide or exit
 
+The first launch shows a short tour card: draw and undo, the toolbar and how
+to leave, color and thickness, quick-access menus, and finding commands. It
+ends by offering background mode. Every card action is a button (**Got it**,
+**Set up**, **Not now**, **Skip tour**) with its key beside it; clicks on the
+card never draw. <kbd>Shift+Escape</kbd> skips the tour. Profiles that already
+finished or skipped the tour are not shown it again.
+
 Discovery and shortcut-coaching tips have **Got it** and **Tip settings…**
 controls. **Got it**
 permanently acknowledges only that tip; **Tip settings…** does the same and

@@ -1,28 +1,62 @@
 use crate::backend::wayland::state::WaylandState;
-use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier, keybindings::Action};
+use crate::config::{RadialMenuMouseBinding, keybindings::Action};
 use crate::draw::DirtyFullReason;
 use crate::input::state::{Toast, ToastPriority};
-use crate::input::{Key, state::PendingOnboardingUsage};
+use crate::input::{DrawingState, Key, state::PendingOnboardingUsage};
 use crate::onboarding::{FirstRunStep, OnboardingState};
-use crate::ui::{OnboardingCard, OnboardingChecklistItem};
+use crate::ui::OnboardingCardAction;
+
+/// What the step machine needs to know about the live overlay.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct FirstRunEnvironment {
+    pub(super) context_enabled: bool,
+    pub(super) radial_binding: RadialMenuMouseBinding,
+    pub(super) radial_available: bool,
+    pub(super) context_keyboard_available: bool,
+    pub(super) toolbar_visible: bool,
+}
+
+/// What one pass of the step machine did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct FirstRunAdvance {
+    pub(super) changed: bool,
+    pub(super) completed: bool,
+}
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn try_handle_first_run_background_mode_choice(
-        &mut self,
-        key: Key,
-    ) -> bool {
+    /// Keyboard equivalents of the card buttons: Enter acknowledges the
+    /// toolbar-and-exit step, and Y / N answer the background-mode step.
+    /// Plain keys only, and only while nothing is being drawn or typed, so
+    /// the card never steals a chord or a letter from text entry.
+    pub(in crate::backend::wayland) fn try_handle_first_run_card_key(&mut self, key: Key) -> bool {
+        if !self.first_run_onboarding_card_visible() {
+            return false;
+        }
+        let state = self.preferences.onboarding().state();
+        let Some(step) = state.active_step.filter(|_| state.first_run_active()) else {
+            return false;
+        };
+        let modifiers = self.input_state.modifiers;
+        let plain_key = !(modifiers.ctrl || modifiers.alt)
+            && matches!(self.input_state.state, DrawingState::Idle);
+        let Some(action) = first_run_card_key_action(step, key, plain_key) else {
+            return false;
+        };
+
+        self.run_onboarding_card_action(action);
+        true
+    }
+
+    /// Records the background-mode answer from the final tour step.
+    pub(super) fn answer_first_run_background_mode(&mut self, enable: bool) {
         if !background_mode_prompt_active(
             self.preferences.onboarding().state(),
             self.first_run_onboarding_card_visible(),
         ) {
-            return false;
+            return;
         }
 
-        let Some(enable_background_mode) = background_mode_prompt_choice(key) else {
-            return false;
-        };
-
-        if enable_background_mode {
+        if enable {
             match crate::daemon::setup::setup_background_mode() {
                 Ok(summary) => {
                     mark_background_mode_prompt(
@@ -56,15 +90,24 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "onboarding.first_run",
-                Toast::info("Skipped background mode setup for now."),
+                Toast::info("Tour complete. Set up background mode any time in the configurator."),
             );
         }
 
-        self.input_state
-            .dirty_tracker
-            .mark_full_for(DirtyFullReason::FirstRunOnboarding);
-        self.input_state.needs_redraw = true;
-        true
+        self.mark_first_run_card_dirty();
+    }
+
+    /// The toolbar-and-exit step has nothing to practice, so it waits for an
+    /// explicit "Got it".
+    pub(super) fn acknowledge_first_run_toolbar_exit(&mut self) {
+        let state = self.preferences.onboarding_mut().state_mut();
+        if state.active_step != Some(FirstRunStep::ToolbarExit) || state.first_run_toolbar_exit_seen
+        {
+            return;
+        }
+        state.first_run_toolbar_exit_seen = true;
+        self.save_onboarding_state();
+        self.mark_first_run_card_dirty();
     }
 
     pub(in crate::backend::wayland) fn try_skip_first_run_onboarding(&mut self) -> bool {
@@ -85,126 +128,15 @@ impl WaylandState {
             "onboarding.first_run",
             Toast::info("Onboarding skipped."),
         );
+        self.mark_first_run_card_dirty();
         true
     }
 
-    pub(in crate::backend::wayland) fn first_run_onboarding_card(&self) -> Option<OnboardingCard> {
-        if !self.first_run_onboarding_card_visible() {
-            return None;
-        }
-
-        let state = self.preferences.onboarding().state();
-        if !state.first_run_active() {
-            return None;
-        }
-        let step = state.active_step?;
-        let eyebrow = first_run_step_eyebrow(step);
-        let footer = "Shift+Escape to skip".to_string();
-
-        let card = match step {
-            FirstRunStep::BackgroundModeSetup => OnboardingCard {
-                eyebrow: eyebrow.to_string(),
-                title: "Enable background mode?".to_string(),
-                body: "Keeps Wayscriber ready in the background for quick overlay access."
-                    .to_string(),
-                items: Vec::new(),
-                footer: "Y = set up now   •   N = skip   •   Shift+Escape = skip onboarding"
-                    .to_string(),
-            },
-            FirstRunStep::WaitDraw => OnboardingCard {
-                eyebrow: eyebrow.to_string(),
-                title: "Draw one mark".to_string(),
-                body: "Draw one quick stroke anywhere on the canvas.".to_string(),
-                items: vec![OnboardingChecklistItem {
-                    label: "Draw a stroke".to_string(),
-                    done: state.first_stroke_done,
-                }],
-                footer,
-            },
-            FirstRunStep::DrawUndo => OnboardingCard {
-                eyebrow: eyebrow.to_string(),
-                title: "Try Undo".to_string(),
-                body: "You can always revert mistakes. Draw, then undo once.".to_string(),
-                items: vec![
-                    OnboardingChecklistItem {
-                        label: "Draw a stroke".to_string(),
-                        done: state.first_stroke_done,
-                    },
-                    OnboardingChecklistItem {
-                        label: format!("Undo once ({})", self.shortcut_label(Action::Undo, "Undo")),
-                        done: state.first_undo_done,
-                    },
-                ],
-                footer,
-            },
-            FirstRunStep::ColorThickness => {
-                let color_label = match self.join_shortcut_labels(&[
-                    Action::SetColorRed,
-                    Action::SetColorGreen,
-                    Action::SetColorBlue,
-                    Action::SetColorYellow,
-                ]) {
-                    Some(hint) => format!("Change color ({hint})"),
-                    None => "Change color".to_string(),
-                };
-                let thickness_label = match self
-                    .join_shortcut_labels(&[Action::IncreaseThickness, Action::DecreaseThickness])
-                {
-                    Some(hint) => format!("Adjust thickness ({hint})"),
-                    None => "Adjust thickness".to_string(),
-                };
-                OnboardingCard {
-                    eyebrow: eyebrow.to_string(),
-                    title: "Color and thickness".to_string(),
-                    body: "Recolor and resize your strokes without leaving the canvas.".to_string(),
-                    items: vec![
-                        OnboardingChecklistItem {
-                            label: color_label,
-                            done: state.first_color_done,
-                        },
-                        OnboardingChecklistItem {
-                            label: thickness_label,
-                            done: state.first_thickness_done,
-                        },
-                    ],
-                    footer,
-                }
-            }
-            FirstRunStep::QuickAccess => {
-                let items = self.quick_access_checklist_items(state);
-                OnboardingCard {
-                    eyebrow: eyebrow.to_string(),
-                    title: "Quick access at cursor".to_string(),
-                    body: "Open quick actions near the pointer.".to_string(),
-                    items,
-                    footer,
-                }
-            }
-            FirstRunStep::RadialFlick | FirstRunStep::Reference => OnboardingCard {
-                eyebrow: eyebrow.to_string(),
-                title: "Find and customize anything".to_string(),
-                body: "Palette controls can edit, unbind, or reset shortcuts.".to_string(),
-                items: vec![
-                    OnboardingChecklistItem {
-                        label: format!(
-                            "Open Help ({})",
-                            self.shortcut_label(Action::ToggleHelp, "Help")
-                        ),
-                        done: state.used_help_overlay,
-                    },
-                    OnboardingChecklistItem {
-                        label: format!(
-                            "Open Command Palette ({})",
-                            self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
-                        ),
-                        done: state.used_command_palette,
-                    },
-                ],
-                footer: shortcut_rebind_footer(self.config.ui.toolbar.rebind_modifier),
-            },
-        };
-
-        Some(card)
+    fn mark_first_run_card_dirty(&mut self) {
+        self.input_state
+            .dirty_tracker
+            .mark_full_for(DirtyFullReason::FirstRunOnboarding);
+        self.input_state.needs_redraw = true;
     }
 
     pub(super) fn first_run_onboarding_card_visible(&self) -> bool {
@@ -229,17 +161,17 @@ impl WaylandState {
 
     pub(super) fn apply_first_run_progress(&mut self) {
         let usage = std::mem::take(&mut self.input_state.pending_onboarding_usage);
-        let context_enabled = self.input_state.context_menu_enabled();
-        let radial_binding = self.input_state.radial_menu.mouse_binding();
-        let radial_available = self.shortcut_label_opt(Action::ToggleRadialMenu).is_some();
-        let context_keyboard_available = self.shortcut_label_opt(Action::OpenContextMenu).is_some();
-        let toolbar_visible = self.input_state.toolbar_visible();
+        let environment = FirstRunEnvironment {
+            context_enabled: self.input_state.context_menu_enabled(),
+            radial_binding: self.input_state.radial_menu.mouse_binding(),
+            radial_available: self.shortcut_label_opt(Action::ToggleRadialMenu).is_some(),
+            context_keyboard_available: self.shortcut_label_opt(Action::OpenContextMenu).is_some(),
+            toolbar_visible: self.input_state.toolbar_visible(),
+        };
 
         let mut changed = false;
         let mut first_run_ui_changed = false;
-        let mut completed_now = false;
-
-        {
+        let advance = {
             let state = self.preferences.onboarding_mut().state_mut();
             let first_run_active = state.first_run_active();
 
@@ -247,122 +179,17 @@ impl WaylandState {
                 changed = true;
                 first_run_ui_changed |= first_run_active;
             }
-
-            if first_run_active {
-                if usage.first_stroke_done && !state.first_stroke_done {
-                    state.first_stroke_done = true;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
-                if usage.first_undo_done && !state.first_undo_done {
-                    state.first_undo_done = true;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
-                if usage.used_toolbar_toggle && !state.used_toolbar_toggle {
-                    state.used_toolbar_toggle = true;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
-                if usage.used_color_change && !state.first_color_done {
-                    state.first_color_done = true;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
-                if usage.used_thickness_change && !state.first_thickness_done {
-                    state.first_thickness_done = true;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
-            }
-
-            if !first_run_active {
-                if state.active_step.is_some() || state.quick_access_requires_toolbar {
-                    state.active_step = None;
-                    state.quick_access_requires_toolbar = false;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
-            } else if state.active_step.is_none() {
-                state.active_step = Some(FirstRunStep::BackgroundModeSetup);
+            if first_run_active && apply_first_run_usage(state, &usage) {
                 changed = true;
                 first_run_ui_changed = true;
             }
 
-            while let Some(step) = state.active_step {
-                match step {
-                    FirstRunStep::BackgroundModeSetup => {
-                        if !state.first_run_background_mode_prompted {
-                            break;
-                        }
-                        state.active_step = Some(FirstRunStep::WaitDraw);
-                        changed = true;
-                        first_run_ui_changed = true;
-                    }
-                    FirstRunStep::WaitDraw => {
-                        if !state.first_stroke_done {
-                            break;
-                        }
-                        state.active_step = Some(FirstRunStep::DrawUndo);
-                        changed = true;
-                        first_run_ui_changed = true;
-                    }
-                    FirstRunStep::DrawUndo => {
-                        if !state.first_undo_done {
-                            break;
-                        }
-                        state.active_step = Some(FirstRunStep::ColorThickness);
-                        changed = true;
-                        first_run_ui_changed = true;
-                    }
-                    FirstRunStep::ColorThickness => {
-                        if !color_thickness_completed(state) {
-                            break;
-                        }
-                        state.active_step = Some(FirstRunStep::QuickAccess);
-                        state.quick_access_requires_toolbar = !toolbar_visible;
-                        changed = true;
-                        first_run_ui_changed = true;
-                    }
-                    FirstRunStep::QuickAccess => {
-                        if !quick_access_completed(
-                            state,
-                            context_enabled,
-                            radial_binding,
-                            radial_available,
-                            context_keyboard_available,
-                            toolbar_visible,
-                        ) {
-                            break;
-                        }
-                        state.active_step = Some(FirstRunStep::Reference);
-                        state.quick_access_requires_toolbar = false;
-                        changed = true;
-                        first_run_ui_changed = true;
-                    }
-                    FirstRunStep::RadialFlick => {
-                        state.active_step = Some(FirstRunStep::Reference);
-                        changed = true;
-                        first_run_ui_changed = true;
-                    }
-                    FirstRunStep::Reference => {
-                        if !(state.used_help_overlay && state.used_command_palette) {
-                            break;
-                        }
-                        state.first_run_completed = true;
-                        state.first_run_skipped = false;
-                        state.active_step = None;
-                        state.quick_access_requires_toolbar = false;
-                        changed = true;
-                        first_run_ui_changed = true;
-                        completed_now = true;
-                        break;
-                    }
-                }
-            }
-        }
+            advance_first_run_steps(state, environment)
+        };
+        changed |= advance.changed;
+        first_run_ui_changed |= advance.changed;
 
-        self.finish_first_run_progress(changed, first_run_ui_changed, completed_now);
+        self.finish_first_run_progress(changed, first_run_ui_changed, advance.completed);
     }
 
     fn finish_first_run_progress(
@@ -375,10 +202,7 @@ impl WaylandState {
             self.save_onboarding_state();
         }
         if first_run_ui_changed {
-            self.input_state
-                .dirty_tracker
-                .mark_full_for(DirtyFullReason::FirstRunOnboarding);
-            self.input_state.needs_redraw = true;
+            self.mark_first_run_card_dirty();
         }
         if completed_now && !self.input_state.has_active_toast() {
             self.input_state.push_toast(
@@ -388,83 +212,120 @@ impl WaylandState {
             );
         }
     }
-    /// Join the resolved shortcut labels for `actions` with `" / "`, skipping
-    /// unbound actions. `None` when none resolve. Keeps onboarding copy free of
-    /// hardcoded key strings.
-    fn join_shortcut_labels(&self, actions: &[Action]) -> Option<String> {
-        let labels: Vec<String> = actions
-            .iter()
-            .filter_map(|action| self.shortcut_label_opt(*action))
-            .collect();
-        (!labels.is_empty()).then(|| labels.join(" / "))
+}
+
+/// Folds this tick's teaching signals into the tour's checklist state.
+fn apply_first_run_usage(state: &mut OnboardingState, usage: &PendingOnboardingUsage) -> bool {
+    let mut changed = false;
+
+    if usage.first_stroke_done && !state.first_stroke_done {
+        state.first_stroke_done = true;
+        changed = true;
+    }
+    if usage.first_undo_done && !state.first_undo_done {
+        state.first_undo_done = true;
+        changed = true;
+    }
+    if usage.used_toolbar_toggle && !state.used_toolbar_toggle {
+        state.used_toolbar_toggle = true;
+        changed = true;
+    }
+    if usage.used_color_change && !state.first_color_done {
+        state.first_color_done = true;
+        changed = true;
+    }
+    if usage.used_thickness_change && !state.first_thickness_done {
+        state.first_thickness_done = true;
+        changed = true;
     }
 
-    fn quick_access_checklist_items(
-        &self,
-        state: &OnboardingState,
-    ) -> Vec<OnboardingChecklistItem> {
-        let context_enabled = self.input_state.context_menu_enabled();
-        let radial_binding = self.input_state.radial_menu.mouse_binding();
-        let radial_label = self.shortcut_label_opt(Action::ToggleRadialMenu);
-        let radial_available = radial_label.is_some();
-        let context_keyboard = self.shortcut_label_opt(Action::OpenContextMenu);
-        let mut items = Vec::new();
+    changed
+}
 
-        if context_enabled {
-            if matches!(radial_binding, RadialMenuMouseBinding::Right) && radial_available {
-                if let Some(label) = radial_label {
-                    items.push(OnboardingChecklistItem {
-                        label: format!("Open radial menu ({label})"),
-                        done: state.used_radial_menu,
-                    });
+/// Moves the tour forward past every step whose goal is already met: draw
+/// and undo, toolbar and exit, color and thickness, quick access, find
+/// anything, then background mode last. Pure so the whole order is testable.
+pub(super) fn advance_first_run_steps(
+    state: &mut OnboardingState,
+    environment: FirstRunEnvironment,
+) -> FirstRunAdvance {
+    let mut advance = FirstRunAdvance::default();
+
+    if !state.first_run_active() {
+        if state.active_step.is_some() || state.quick_access_requires_toolbar {
+            state.active_step = None;
+            state.quick_access_requires_toolbar = false;
+            advance.changed = true;
+        }
+        return advance;
+    }
+    if state.active_step.is_none() {
+        state.active_step = Some(FirstRunStep::FIRST);
+        advance.changed = true;
+    }
+
+    while let Some(step) = state.active_step {
+        let next = match step {
+            // Retired steps resume where their teaching moved to.
+            FirstRunStep::WaitDraw => FirstRunStep::DrawUndo,
+            FirstRunStep::RadialFlick => FirstRunStep::Reference,
+            FirstRunStep::DrawUndo => {
+                if !(state.first_stroke_done && state.first_undo_done) {
+                    break;
                 }
-                if let Some(label) = context_keyboard {
-                    items.push(OnboardingChecklistItem {
-                        label: format!("Open context menu ({label})"),
-                        done: state.used_context_menu_keyboard,
-                    });
-                } else {
-                    items.push(OnboardingChecklistItem {
-                        label: "Context menu keyboard shortcut not configured".to_string(),
-                        done: true,
-                    });
-                }
-            } else {
-                items.push(OnboardingChecklistItem {
-                    label: "Open context menu (Right Click)".to_string(),
-                    done: state.used_context_menu_right_click,
-                });
-                if let Some(label) = radial_label {
-                    items.push(OnboardingChecklistItem {
-                        label: format!("Open radial menu ({label})"),
-                        done: state.used_radial_menu,
-                    });
-                }
+                FirstRunStep::ToolbarExit
             }
-        } else if let Some(label) = radial_label {
-            items.push(OnboardingChecklistItem {
-                label: format!("Open radial menu ({label})"),
-                done: state.used_radial_menu,
-            });
-        } else {
-            items.push(OnboardingChecklistItem {
-                label: "Quick-access menus disabled in config".to_string(),
-                done: true,
-            });
-        }
-
-        if state.quick_access_requires_toolbar {
-            items.push(OnboardingChecklistItem {
-                label: format!(
-                    "Show toolbar ({})",
-                    self.shortcut_label(Action::ToggleToolbar, "Toggle toolbar")
-                ),
-                done: self.input_state.toolbar_visible() || state.used_toolbar_toggle,
-            });
-        }
-
-        items
+            FirstRunStep::ToolbarExit => {
+                if !state.first_run_toolbar_exit_seen {
+                    break;
+                }
+                FirstRunStep::ColorThickness
+            }
+            FirstRunStep::ColorThickness => {
+                if !color_thickness_completed(state) {
+                    break;
+                }
+                state.quick_access_requires_toolbar = !environment.toolbar_visible;
+                FirstRunStep::QuickAccess
+            }
+            FirstRunStep::QuickAccess => {
+                if !quick_access_completed(
+                    state,
+                    environment.context_enabled,
+                    environment.radial_binding,
+                    environment.radial_available,
+                    environment.context_keyboard_available,
+                    environment.toolbar_visible,
+                ) {
+                    break;
+                }
+                state.quick_access_requires_toolbar = false;
+                FirstRunStep::Reference
+            }
+            FirstRunStep::Reference => {
+                if !(state.used_help_overlay && state.used_command_palette) {
+                    break;
+                }
+                FirstRunStep::BackgroundModeSetup
+            }
+            FirstRunStep::BackgroundModeSetup => {
+                if !state.first_run_background_mode_prompted {
+                    break;
+                }
+                state.first_run_completed = true;
+                state.first_run_skipped = false;
+                state.active_step = None;
+                state.quick_access_requires_toolbar = false;
+                advance.changed = true;
+                advance.completed = true;
+                break;
+            }
+        };
+        state.active_step = Some(next);
+        advance.changed = true;
     }
+
+    advance
 }
 
 fn quick_access_context_required(
@@ -585,14 +446,22 @@ pub(super) fn background_mode_prompt_active(state: &OnboardingState, card_visibl
         && state.active_step == Some(FirstRunStep::BackgroundModeSetup)
 }
 
-pub(super) fn background_mode_prompt_choice(key: Key) -> Option<bool> {
-    let Key::Char(ch) = key else {
+/// The card action a plain key triggers on `step`, if any.
+pub(super) fn first_run_card_key_action(
+    step: FirstRunStep,
+    key: Key,
+    plain_key: bool,
+) -> Option<OnboardingCardAction> {
+    if !plain_key {
         return None;
-    };
-
-    match ch.to_ascii_lowercase() {
-        'y' => Some(true),
-        'n' => Some(false),
+    }
+    match (step, key) {
+        (FirstRunStep::ToolbarExit, Key::Return) => Some(OnboardingCardAction::Continue),
+        (FirstRunStep::BackgroundModeSetup, Key::Char(ch)) => match ch.to_ascii_lowercase() {
+            'y' => Some(OnboardingCardAction::SetUpBackgroundMode),
+            'n' => Some(OnboardingCardAction::SkipBackgroundMode),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -600,26 +469,6 @@ pub(super) fn background_mode_prompt_choice(key: Key) -> Option<bool> {
 fn mark_background_mode_prompt(state: &mut OnboardingState, enabled: bool) {
     state.first_run_background_mode_prompted = true;
     state.first_run_background_mode_enabled = enabled;
-}
-
-pub(super) fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
-    match step {
-        FirstRunStep::BackgroundModeSetup => "Step 1 / 6",
-        FirstRunStep::WaitDraw => "Step 2 / 6",
-        FirstRunStep::DrawUndo => "Step 3 / 6",
-        FirstRunStep::ColorThickness => "Step 4 / 6",
-        FirstRunStep::QuickAccess => "Step 5 / 6",
-        FirstRunStep::RadialFlick | FirstRunStep::Reference => "Step 6 / 6",
-    }
-}
-
-pub(super) fn shortcut_rebind_footer(modifier: ToolbarRebindModifier) -> String {
-    match modifier.click_label() {
-        None => "Toolbar shortcut-click editing disabled • Shift+Escape to skip".to_string(),
-        Some(click) => {
-            format!("{click} a bindable toolbar control to rebind • Shift+Escape to skip")
-        }
-    }
 }
 
 pub(super) fn first_run_skip_allowed(first_run_active: bool, card_visible: bool) -> bool {

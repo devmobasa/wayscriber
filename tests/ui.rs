@@ -206,6 +206,12 @@ fn render_onboarding_card_tiny_surface_does_not_panic() {
             label: "Draw a stroke".to_string(),
             done: false,
         }],
+        buttons: vec![wayscriber::ui::OnboardingCardButton {
+            label: "Skip tour".to_string(),
+            key_hint: Some("Shift+Esc".to_string()),
+            action: wayscriber::ui::OnboardingCardAction::SkipTour,
+            primary: false,
+        }],
         footer: "Shift+Escape to skip".to_string(),
     };
 
@@ -222,6 +228,7 @@ fn render_onboarding_card_without_checklist_stays_compact() {
         title: "Enable background mode?".to_string(),
         body: "Keeps Wayscriber ready in the background for quick overlay access.".to_string(),
         items: Vec::new(),
+        buttons: Vec::new(),
         footer: "Y = set up now • N = skip • Shift+Escape = skip onboarding".to_string(),
     };
 

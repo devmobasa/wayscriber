@@ -352,7 +352,7 @@ coach_hint_count = 1
 
     let store = OnboardingStore::load_from_path(path.clone());
     assert_eq!(store.state().version, ONBOARDING_VERSION);
-    assert_eq!(ONBOARDING_VERSION, 6);
+    assert_eq!(ONBOARDING_VERSION, 7);
     assert!(store.state().first_run_completed);
     assert!(store.state().hint_status_bar_shown);
     assert_eq!(
@@ -424,4 +424,102 @@ fn coach_bookkeeping_reconciles_capped_count_to_learned_flag() {
     let store = OnboardingStore::load_from_path(path);
     assert!(store.state().coach_hint_shown);
     assert_eq!(store.state().coach_hint_count, DEFERRED_HINT_REPEAT_MAX);
+}
+
+/// Writes `seed` as the onboarding file and loads it through migration.
+fn load_seed(
+    seed: &str,
+) -> (
+    OnboardingStore,
+    std::path::PathBuf,
+    crate::test_temp::TempDir,
+) {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    fs::create_dir_all(path.parent().expect("parent")).expect("create onboarding dir");
+    fs::write(&path, seed).expect("write seed");
+    (OnboardingStore::load_from_path(path.clone()), path, tmp)
+}
+
+#[test]
+fn a_fresh_tour_starts_by_drawing_not_by_background_mode() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path);
+
+    store.begin_session(true).expect("session state persists");
+
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+    assert!(!store.state().first_run_background_mode_prompted);
+}
+
+#[test]
+fn a_v6_tour_waiting_on_background_mode_restarts_at_draw_and_undo() {
+    // Before v7 the background prompt was step one, so this user had just
+    // started. The prompt stays unanswered and now comes last.
+    let (mut store, path, _tmp) =
+        load_seed("version = 6\nactive_step = \"background_mode_setup\"\nsessions_seen = 1\n");
+
+    assert_eq!(store.state().version, ONBOARDING_VERSION);
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+    assert!(!store.state().first_run_background_mode_prompted);
+    store.begin_session(true).expect("session state persists");
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+
+    let persisted = fs::read_to_string(path).expect("read migrated state");
+    assert!(
+        persisted.contains("active_step = \"draw_undo\""),
+        "{persisted}"
+    );
+}
+
+#[test]
+fn a_v7_tour_at_background_mode_is_on_its_last_step() {
+    let seed = format!(
+        "version = {ONBOARDING_VERSION}\nactive_step = \"background_mode_setup\"\nused_help_overlay = true\nused_command_palette = true\n"
+    );
+    let (store, _path, _tmp) = load_seed(&seed);
+
+    assert_eq!(
+        store.state().active_step,
+        Some(FirstRunStep::BackgroundModeSetup)
+    );
+}
+
+#[test]
+fn a_mid_tour_v6_profile_keeps_its_step_and_its_background_answer() {
+    let (store, _path, _tmp) = load_seed(
+        "version = 6\nactive_step = \"color_thickness\"\nfirst_run_background_mode_prompted = true\nfirst_stroke_done = true\nfirst_undo_done = true\n",
+    );
+
+    assert_eq!(
+        store.state().active_step,
+        Some(FirstRunStep::ColorThickness)
+    );
+    assert!(store.state().first_run_background_mode_prompted);
+    assert!(store.state().first_run_active());
+}
+
+#[test]
+fn the_retired_wait_draw_step_resumes_at_draw_and_undo() {
+    let (store, _path, _tmp) = load_seed(
+        "version = 6\nactive_step = \"wait_draw\"\nfirst_run_background_mode_prompted = true\n",
+    );
+
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+}
+
+#[test]
+fn completed_and_skipped_v6_profiles_never_see_the_new_tour() {
+    for seed in [
+        "version = 6\nfirst_run_completed = true\nfirst_run_background_mode_prompted = true\n",
+        "version = 6\nfirst_run_skipped = true\n",
+    ] {
+        let (mut store, _path, _tmp) = load_seed(seed);
+        store.begin_session(true).expect("session state persists");
+
+        assert!(store.state().first_run_completed, "{seed}");
+        assert!(!store.state().first_run_active(), "{seed}");
+        assert_eq!(store.state().active_step, None, "{seed}");
+    }
 }

@@ -296,11 +296,12 @@ impl WaylandState {
             return Some(hint.icon());
         }
         if matches!(self.input_state.state, DrawingState::Idle)
-            && self
-                .onboarding_card_press_at(f64::from(mx), f64::from(my))
-                .is_some()
+            && let Some(press) = self.onboarding_card_press_at(f64::from(mx), f64::from(my))
         {
-            return Some(CursorIcon::Default);
+            return Some(match press.action() {
+                Some(_) => CursorIcon::Pointer,
+                None => CursorIcon::Default,
+            });
         }
         None
     }

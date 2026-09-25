@@ -65,7 +65,12 @@ pub(crate) use measure_badge::{
 pub(crate) use ocr_scan::{
     ocr_scan_geometry, render_ocr_scan_result, render_ocr_scan_still, render_ocr_scan_sweep,
 };
-pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
+#[cfg(test)]
+pub(crate) use onboarding_card::OnboardingCardButtonHit;
+pub use onboarding_card::{
+    OnboardingCard, OnboardingCardAction, OnboardingCardButton, OnboardingChecklistItem,
+    render_onboarding_card,
+};
 pub(crate) use onboarding_card::{
     OnboardingCardLayout, OnboardingCardPress, render_onboarding_card_with_engine,
 };

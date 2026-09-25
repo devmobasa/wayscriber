@@ -8,6 +8,7 @@ use super::*;
 
 mod card;
 mod first_run;
+mod first_run_card;
 
 pub(in crate::backend::wayland) use card::OnboardingCardChrome;
 
