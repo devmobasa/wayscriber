@@ -82,6 +82,14 @@ fn action_serialization_matches_established_contract() {
         (Action::DecreaseMarkerOpacity, "decrease_marker_opacity"),
         (Action::IncreasePenSmoothing, "increase_pen_smoothing"),
         (Action::DecreasePenSmoothing, "decrease_pen_smoothing"),
+        (
+            Action::IncreaseShapeRecognitionSensitivity,
+            "increase_shape_recognition_sensitivity",
+        ),
+        (
+            Action::DecreaseShapeRecognitionSensitivity,
+            "decrease_shape_recognition_sensitivity",
+        ),
         (Action::CycleFontFamily, "cycle_font_family"),
         (Action::OpenFontPicker, "open_font_picker"),
         (Action::SelectSelectionTool, "select_selection_tool"),
@@ -92,6 +100,7 @@ fn action_serialization_matches_established_contract() {
         (Action::CycleBlurStyle, "cycle_blur_style"),
         (Action::CycleArrowStyle, "cycle_arrow_style"),
         (Action::SelectPenTool, "select_pen_tool"),
+        (Action::SelectLiveShapeTool, "select_live_shape_tool"),
         (Action::SelectLineTool, "select_line_tool"),
         (Action::SelectRectTool, "select_rect_tool"),
         (Action::SelectEllipseTool, "select_ellipse_tool"),

@@ -58,7 +58,8 @@ pub use help_overlay::{
 pub use input_hud::{input_hud_geometry, render_input_hud};
 pub(crate) use input_hud::{input_hud_geometry_with_engine, render_input_hud_with_engine};
 pub(crate) use measure_badge::{
-    ShapeMeasureBadge, measure_shape_badge, shape_measure_badge_text_style,
+    ShapeExtent, ShapeMeasureBadge, ShapeReadout, measure_shape_badge,
+    shape_measure_badge_text_style,
 };
 pub(crate) use ocr_scan::{
     ocr_scan_geometry, render_ocr_scan_result, render_ocr_scan_still, render_ocr_scan_sweep,

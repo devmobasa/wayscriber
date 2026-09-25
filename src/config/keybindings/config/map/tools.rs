@@ -36,11 +36,23 @@ impl KeybindingsConfig {
             &self.tools.decrease_pen_smoothing,
             Action::DecreasePenSmoothing,
         )?;
+        inserter.insert_all(
+            &self.tools.increase_shape_recognition_sensitivity,
+            Action::IncreaseShapeRecognitionSensitivity,
+        )?;
+        inserter.insert_all(
+            &self.tools.decrease_shape_recognition_sensitivity,
+            Action::DecreaseShapeRecognitionSensitivity,
+        )?;
         inserter.insert_all(&self.tools.cycle_font_family, Action::CycleFontFamily)?;
         inserter.insert_all(&self.tools.open_font_picker, Action::OpenFontPicker)?;
         inserter.insert_all(&self.tools.cycle_blur_style, Action::CycleBlurStyle)?;
         inserter.insert_all(&self.tools.cycle_arrow_style, Action::CycleArrowStyle)?;
         inserter.insert_all(&self.tools.select_pen_tool, Action::SelectPenTool)?;
+        inserter.insert_all(
+            &self.tools.select_live_shape_tool,
+            Action::SelectLiveShapeTool,
+        )?;
         inserter.insert_all(&self.tools.select_line_tool, Action::SelectLineTool)?;
         inserter.insert_all(&self.tools.select_rect_tool, Action::SelectRectTool)?;
         inserter.insert_all(&self.tools.select_ellipse_tool, Action::SelectEllipseTool)?;

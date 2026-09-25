@@ -8,6 +8,7 @@ pub const TOP_CHROME_CLOSE: ToolbarItemId = ToolbarItemId::from_known("top.chrom
 
 pub const TOP_TOOL_SELECT: ToolbarItemId = ToolbarItemId::from_known("top.tool.select");
 pub const TOP_TOOL_PEN: ToolbarItemId = ToolbarItemId::from_known("top.tool.pen");
+pub const TOP_TOOL_LIVE_SHAPE: ToolbarItemId = ToolbarItemId::from_known("top.tool.live-shape");
 pub const TOP_TOOL_MARKER: ToolbarItemId = ToolbarItemId::from_known("top.tool.marker");
 pub const TOP_TOOL_STEP_MARKER: ToolbarItemId = ToolbarItemId::from_known("top.tool.step-marker");
 pub const TOP_TOOL_ERASER: ToolbarItemId = ToolbarItemId::from_known("top.tool.eraser");

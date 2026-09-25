@@ -115,6 +115,8 @@ fn exact_drawing_default_labels_match_defaults_section() {
     for query in [
         "font size pt",
         "eraser size px",
+        "shape pen sensitivity",
+        "shape recognition",
         "enable text background",
         "enable text halo",
     ] {

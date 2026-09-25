@@ -905,6 +905,7 @@ fn push_style_pill(
                 x += ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W + gap;
             }
             model::StylePillControl::PenSmoothingStepper
+            | model::StylePillControl::ShapeSensitivityStepper
             | model::StylePillControl::SelectionStepper(_) => {
                 let enabled = control.enabled(snapshot);
                 let steps = control.required_steps(snapshot);

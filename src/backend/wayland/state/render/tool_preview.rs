@@ -208,6 +208,7 @@ fn draw_semantic_tool_icon(
     match icon {
         SemanticToolIcon::Select => toolbar_icons::draw_icon_select(ctx, x, y, size),
         SemanticToolIcon::Pen => toolbar_icons::draw_icon_pen(ctx, x, y, size),
+        SemanticToolIcon::LiveShape => toolbar_icons::draw_icon_live_shape(ctx, x, y, size),
         SemanticToolIcon::Line => toolbar_icons::draw_icon_line(ctx, x, y, size),
         SemanticToolIcon::Rect => toolbar_icons::draw_icon_rect(ctx, x, y, size),
         SemanticToolIcon::Circle => toolbar_icons::draw_icon_circle(ctx, x, y, size),

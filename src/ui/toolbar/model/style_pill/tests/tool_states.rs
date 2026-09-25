@@ -223,6 +223,51 @@ fn the_smoothing_stepper_follows_the_tool_it_can_change() {
 }
 
 #[test]
+fn the_shape_sensitivity_stepper_is_shape_pen_only_and_stays_in_range() {
+    let shape_pen = StylePillSpec::build(&snapshot_for_tool(Tool::LiveShape), &plan());
+    let ids = control_ids(&shape_pen);
+    assert!(ids.contains(&"top.style.shape-sensitivity".to_string()));
+    assert!(
+        ids.contains(&"top.style.pen-smoothing".to_string()),
+        "ink Shape Pen keeps is still smoothed"
+    );
+    for tool in [Tool::Pen, Tool::Rect, Tool::Triangle] {
+        let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
+        assert!(
+            !control_ids(&spec).contains(&"top.style.shape-sensitivity".to_string()),
+            "{tool:?} recognizes nothing"
+        );
+    }
+
+    let stepper = StylePillControl::ShapeSensitivityStepper;
+    let mut snapshot = snapshot_for_tool(Tool::LiveShape);
+    snapshot.shape_recognition_sensitivity = 2;
+    assert_eq!(stepper.role(), StylePillRole::Stepper);
+    assert_eq!(stepper.value_text(&snapshot).as_deref(), Some("2"));
+    let steps = stepper.required_steps(&snapshot);
+    assert_eq!(
+        steps[0].event,
+        ToolbarEvent::SetShapeRecognitionSensitivity(1)
+    );
+    assert_eq!(
+        steps[1].event,
+        ToolbarEvent::SetShapeRecognitionSensitivity(3)
+    );
+
+    let max = crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
+    snapshot.shape_recognition_sensitivity = 0;
+    assert_eq!(
+        stepper.required_steps(&snapshot)[0].event,
+        ToolbarEvent::SetShapeRecognitionSensitivity(0)
+    );
+    snapshot.shape_recognition_sensitivity = max;
+    assert_eq!(
+        stepper.required_steps(&snapshot)[1].event,
+        ToolbarEvent::SetShapeRecognitionSensitivity(max)
+    );
+}
+
+#[test]
 fn the_font_button_shows_the_family_in_use_and_opens_the_picker() {
     let mut snapshot = snapshot();
     snapshot.text_active = true;

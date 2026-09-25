@@ -590,6 +590,7 @@ impl InputState {
                     point_thicknesses: vec![drawing_thickness as f32],
                 };
                 self.pointer.replace_provisional_bounds(None);
+                self.pointer.begin_stroke_preview();
                 self.update_provisional_dirty_with(measurer, x, y);
                 self.needs_redraw = true;
             }

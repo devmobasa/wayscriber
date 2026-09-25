@@ -13,6 +13,11 @@ use crate::util::{self, Rect};
 
 pub(crate) const PROVISIONAL_POLYGON_DAMAGE_PADDING: i32 = 2;
 
+/// Share of the stroke's opacity kept by the ink drawn under a Shape Pen
+/// preview: enough to compare the shape with the stroke, faint enough that
+/// the shape reads as the result.
+const RECOGNIZED_INK_OPACITY: f64 = 0.3;
+
 /// Bend a freshly drawn arrow starts with.
 ///
 /// Only `Curved` gets one: a curved arrow created dead straight would look
@@ -39,6 +44,8 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) point_thicknesses: Vec<f32>,
     pub(crate) color: Color,
     pub(crate) size: f64,
+    pub(crate) grid: crate::domain::BoardGrid,
+    pub(crate) shape_recognition_sensitivity: u8,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
     pub(crate) blur_style: BlurStyle,
@@ -69,8 +76,20 @@ pub(crate) struct PolygonStrokeSnapshot {
 }
 
 pub(crate) enum FinishedToolStroke {
-    Shape { shape: Shape, usage: ToolUsage },
-    EraseStroke { path: Vec<(i32, i32)> },
+    Shape {
+        shape: Shape,
+        usage: ToolUsage,
+    },
+    /// A Shape Pen stroke that became `shape`. `ink` is the stroke it would
+    /// otherwise have left, kept so one undo can bring it back.
+    Recognized {
+        shape: Shape,
+        ink: Shape,
+        usage: ToolUsage,
+    },
+    EraseStroke {
+        path: Vec<(i32, i32)>,
+    },
     Noop,
 }
 
@@ -89,6 +108,8 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) point_thicknesses: &'a [f32],
     pub(crate) color: Color,
     pub(crate) size: f64,
+    pub(crate) grid: crate::domain::BoardGrid,
+    pub(crate) shape_recognition_sensitivity: u8,
     pub(crate) eraser_size: f64,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
@@ -100,6 +121,8 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) arrow_style: ArrowStyle,
     pub(crate) arrow_label: Option<ArrowLabel>,
     pub(crate) step_marker_label: Option<crate::draw::StepMarkerLabel>,
+    /// Shape Pen's recognition of this stroke so far.
+    pub(crate) live_shape_memo: &'a super::LiveShapeMemo,
 }
 
 /// Borrowed inputs needed to render the current live polygon preview.
@@ -134,6 +157,14 @@ pub(crate) enum ProvisionalToolStroke<'a> {
         size: f64,
     },
     Shape(Shape),
+    /// A Shape Pen preview: the recognized shape over a faint copy of the ink
+    /// it came from, so the swap from ink to shape is never silent.
+    Recognized {
+        shape: Shape,
+        ink: &'a [(i32, i32)],
+        ink_color: Color,
+        ink_size: f64,
+    },
     BlurReplayPreview(BlurRectParams),
     None,
 }
@@ -146,6 +177,41 @@ impl Tool {
             ToolDrawingBehavior::None => FinishedToolStroke::Noop,
             ToolDrawingBehavior::Path { kind, pressure } => {
                 finish_path_stroke(snapshot, kind, pressure, usage)
+            }
+            ToolDrawingBehavior::LiveShape => {
+                let recognized = if snapshot.points.last().copied() == Some(snapshot.end) {
+                    super::live_shape::recognize(
+                        &snapshot.points,
+                        snapshot.color,
+                        snapshot.size,
+                        snapshot.fill_enabled,
+                        snapshot.grid,
+                        snapshot.shape_recognition_sensitivity,
+                    )
+                } else {
+                    let mut path = snapshot.points.clone();
+                    path.push(snapshot.end);
+                    super::live_shape::recognize(
+                        &path,
+                        snapshot.color,
+                        snapshot.size,
+                        snapshot.fill_enabled,
+                        snapshot.grid,
+                        snapshot.shape_recognition_sensitivity,
+                    )
+                };
+                let ink = finish_path_stroke(
+                    snapshot,
+                    ToolPathKind::Freehand,
+                    ToolPressureBehavior::OptionalPressureStroke,
+                    usage,
+                );
+                match (recognized, ink) {
+                    (Some(shape), FinishedToolStroke::Shape { shape: ink, usage }) => {
+                        FinishedToolStroke::Recognized { shape, ink, usage }
+                    }
+                    (_, ink) => ink,
+                }
             }
             ToolDrawingBehavior::Line => finish_shape(snapshot, usage, |snapshot| Shape::Line {
                 x1: snapshot.start.0,
@@ -265,6 +331,40 @@ impl Tool {
         debug_assert_eq!(self, snapshot.tool);
         match self.drawing_behavior() {
             ToolDrawingBehavior::None => ProvisionalToolStroke::None,
+            ToolDrawingBehavior::LiveShape => {
+                if let Some(shape) = snapshot.live_shape_memo.recognize(
+                    snapshot.points,
+                    snapshot.color,
+                    snapshot.size,
+                    snapshot.fill_enabled,
+                    snapshot.grid,
+                    snapshot.shape_recognition_sensitivity,
+                ) {
+                    ProvisionalToolStroke::Recognized {
+                        shape,
+                        ink: snapshot.points,
+                        ink_color: Color {
+                            a: snapshot.color.a * RECOGNIZED_INK_OPACITY,
+                            ..snapshot.color
+                        },
+                        ink_size: snapshot.size,
+                    }
+                } else if !snapshot.point_thicknesses.is_empty()
+                    && snapshot.point_thicknesses.len() == snapshot.points.len()
+                {
+                    ProvisionalToolStroke::BorrowedPressureFreehand {
+                        points: snapshot.points,
+                        point_thicknesses: snapshot.point_thicknesses,
+                        color: snapshot.color,
+                    }
+                } else {
+                    ProvisionalToolStroke::BorrowedFreehand {
+                        points: snapshot.points,
+                        color: snapshot.color,
+                        size: snapshot.size,
+                    }
+                }
+            }
             ToolDrawingBehavior::Path {
                 kind: ToolPathKind::Freehand,
                 pressure: ToolPressureBehavior::OptionalPressureStroke,
@@ -431,6 +531,19 @@ impl<'a> ProvisionalToolStroke<'a> {
                     bounds.and_then(|rect| rect.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING))
                 } else {
                     bounds
+                }
+            }
+            Self::Recognized {
+                shape,
+                ink,
+                ink_size,
+                ..
+            } => {
+                let shape_bounds = shape.bounding_box_with(measurer);
+                let ink_bounds = bounding_box_for_points(ink, *ink_size);
+                match (shape_bounds, ink_bounds) {
+                    (Some(shape_bounds), Some(ink_bounds)) => shape_bounds.union(ink_bounds),
+                    (bounds, None) | (None, bounds) => bounds,
                 }
             }
             Self::BlurReplayPreview(params) => {

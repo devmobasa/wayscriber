@@ -1,4 +1,5 @@
-//! Pure layout for the live rectangle/ellipse size readout.
+//! Pure layout for the live shape readout: rectangle and ellipse sizes, and
+//! the shape Shape Pen has recognized.
 
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
@@ -13,6 +14,42 @@ pub(crate) struct ShapeMeasureBadge {
     pub text: String,
     pub bounds: (f64, f64, f64, f64),
     pub baseline: (f64, f64),
+}
+
+/// What the live shape readout reports, in logical board pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ShapeReadout {
+    /// Recognized shape name. Shape Pen names what release will commit; the
+    /// dedicated shape tools already say what they draw.
+    pub kind: Option<&'static str>,
+    pub extent: ShapeExtent,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ShapeExtent {
+    Size(u32, u32),
+    Length(u32),
+}
+
+impl ShapeReadout {
+    #[cfg(test)]
+    pub(crate) fn size(width: u32, height: u32) -> Self {
+        Self {
+            kind: None,
+            extent: ShapeExtent::Size(width, height),
+        }
+    }
+
+    fn text(self) -> String {
+        let extent = match self.extent {
+            ShapeExtent::Size(width, height) => format!("{width} × {height}"),
+            ShapeExtent::Length(length) => length.to_string(),
+        };
+        match self.kind {
+            Some(kind) => format!("{kind} {extent}"),
+            None => extent,
+        }
+    }
 }
 
 pub(crate) fn shape_measure_badge_text_style() -> UiTextStyle<'static> {
@@ -30,7 +67,7 @@ pub(crate) fn shape_measure_badge_text_style() -> UiTextStyle<'static> {
 pub(crate) fn measure_shape_badge(
     engine: &UiTextEngine,
     enabled: bool,
-    size: (u32, u32),
+    readout: ShapeReadout,
     pointer: (f64, f64),
     screen_width: u32,
     screen_height: u32,
@@ -38,7 +75,7 @@ pub(crate) fn measure_shape_badge(
     if !enabled {
         return None;
     }
-    let text = format!("{} × {}", size.0, size.1);
+    let text = readout.text();
     let extents = engine.measure(shape_measure_badge_text_style(), &text, None)?;
     let width = (extents.width() + PADDING_X * 2.0)
         .min((screen_width as f64 - SCREEN_MARGIN * 2.0).max(0.0));
@@ -79,7 +116,7 @@ mod tests {
         let badge = measure_shape_badge(
             &UiTextEngine::default(),
             true,
-            (120, 80),
+            ShapeReadout::size(120, 80),
             (100.0, 100.0),
             1920,
             1080,
@@ -88,7 +125,7 @@ mod tests {
         let zero = measure_shape_badge(
             &UiTextEngine::default(),
             true,
-            (0, 0),
+            ShapeReadout::size(0, 0),
             (100.0, 100.0),
             1920,
             1080,
@@ -100,12 +137,37 @@ mod tests {
     }
 
     #[test]
+    fn recognized_shapes_are_named_before_their_extent() {
+        let text = |kind, extent| {
+            measure_shape_badge(
+                &UiTextEngine::default(),
+                true,
+                ShapeReadout {
+                    kind: Some(kind),
+                    extent,
+                },
+                (100.0, 100.0),
+                1920,
+                1080,
+            )
+            .expect("text measurement")
+            .text
+        };
+
+        assert_eq!(
+            text("Triangle", ShapeExtent::Size(120, 90)),
+            "Triangle 120 × 90"
+        );
+        assert_eq!(text("Line", ShapeExtent::Length(140)), "Line 140");
+    }
+
+    #[test]
     fn disabled_badge_has_no_visual() {
         assert!(
             measure_shape_badge(
                 &UiTextEngine::default(),
                 false,
-                (120, 80),
+                ShapeReadout::size(120, 80),
                 (100.0, 100.0),
                 1920,
                 1080
@@ -117,9 +179,16 @@ mod tests {
     #[test]
     fn badge_handles_every_horizontal_and_vertical_flip_combination() {
         let layout = |pointer| {
-            measure_shape_badge(&UiTextEngine::default(), true, (120, 80), pointer, 400, 300)
-                .expect("text measurement")
-                .bounds
+            measure_shape_badge(
+                &UiTextEngine::default(),
+                true,
+                ShapeReadout::size(120, 80),
+                pointer,
+                400,
+                300,
+            )
+            .expect("text measurement")
+            .bounds
         };
         let below_right = layout((20.0, 30.0));
         assert!(below_right.0 > 20.0 && below_right.1 > 30.0);
@@ -139,7 +208,7 @@ mod tests {
         let (x, y, width, height) = measure_shape_badge(
             &UiTextEngine::default(),
             true,
-            (3840, 2160),
+            ShapeReadout::size(3840, 2160),
             (2.0, 2.0),
             80,
             20,
@@ -156,7 +225,9 @@ mod tests {
     fn retained_measurement_owner_keeps_geometry_after_scaled_label_paint() {
         let engine = UiTextEngine::default();
         for size in [(120, 80), (3840, 2160), (120, 80)] {
-            let badge = measure_shape_badge(&engine, true, size, (100.0, 100.0), 800, 600).unwrap();
+            let readout = ShapeReadout::size(size.0, size.1);
+            let badge =
+                measure_shape_badge(&engine, true, readout, (100.0, 100.0), 800, 600).unwrap();
             for density in [1, 2, 1] {
                 let paint = |owner: &UiTextEngine| {
                     let mut surface = cairo::ImageSurface::create(
@@ -182,7 +253,7 @@ mod tests {
                 );
                 assert!(retained.iter().any(|byte| *byte != 0));
                 let repeated =
-                    measure_shape_badge(&engine, true, size, (100.0, 100.0), 800, 600).unwrap();
+                    measure_shape_badge(&engine, true, readout, (100.0, 100.0), 800, 600).unwrap();
                 assert_eq!(repeated.bounds, badge.bounds);
                 assert_eq!(repeated.baseline, badge.baseline);
                 assert_eq!(repeated.text, badge.text);

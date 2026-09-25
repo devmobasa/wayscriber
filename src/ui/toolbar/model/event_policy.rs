@@ -502,6 +502,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::NudgeMarkerOpacity(_)
         | ToolbarEvent::SetSpotlightMagnification(_)
         | ToolbarEvent::SetPenSmoothing(_)
+        | ToolbarEvent::SetShapeRecognitionSensitivity(_)
         | ToolbarEvent::SetEraserMode(_)
         | ToolbarEvent::SetFont(_)
         | ToolbarEvent::SetFontBold(_)

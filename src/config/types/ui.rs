@@ -121,7 +121,8 @@ pub struct UiConfig {
     #[serde(default = "default_show_onboarding_hints")]
     pub show_onboarding_hints: bool,
 
-    /// Show rectangle and ellipse preview dimensions in logical board pixels.
+    /// Show rectangle and ellipse preview dimensions in logical board pixels,
+    /// and the shape Shape Pen has recognized.
     #[serde(default = "default_show_shape_size_readout")]
     pub show_shape_size_readout: bool,
 

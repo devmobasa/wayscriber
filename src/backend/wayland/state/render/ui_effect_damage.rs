@@ -400,7 +400,7 @@ mod tests {
         let first = crate::ui::measure_shape_badge(
             &crate::ui_text::UiTextEngine::default(),
             true,
-            (20, 30),
+            crate::ui::ShapeReadout::size(20, 30),
             (100.0, 100.0),
             800,
             600,
@@ -409,7 +409,7 @@ mod tests {
         let second = crate::ui::measure_shape_badge(
             &crate::ui_text::UiTextEngine::default(),
             true,
-            (200, 300),
+            crate::ui::ShapeReadout::size(200, 300),
             (300.0, 250.0),
             800,
             600,

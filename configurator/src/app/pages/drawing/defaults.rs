@@ -55,6 +55,24 @@ pub(super) fn build(page: &mut PageBuilder) {
             |app| validate_usize_range(&app.draft.drawing_pen_smoothing, 0, 6),
         )
         .entry_row_validated(
+            "Shape Pen sensitivity (0-4)",
+            |app| app.draft.drawing_shape_recognition_sensitivity.clone(),
+            |value| Message::TextChanged(TextField::DrawingShapeRecognitionSensitivity, value),
+            |app| {
+                validate_usize_range(
+                    &app.draft.drawing_shape_recognition_sensitivity,
+                    0,
+                    usize::from(wayscriber::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+                )
+            },
+        )
+        .switch_row(
+            "Snap Shape Pen to board paper",
+            "Recognized lines, rectangles, ovals, and triangles line up with nearby grid lines and points",
+            |app| app.draft.drawing_shape_recognition_grid_snap,
+            |value| Message::ToggleChanged(ToggleField::DrawingShapeRecognitionGridSnap, value),
+        )
+        .entry_row_validated(
             "Undo stack limit",
             |app| app.draft.drawing_undo_stack_limit.clone(),
             |value| Message::TextChanged(TextField::DrawingUndoStackLimit, value),

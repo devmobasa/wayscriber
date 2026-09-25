@@ -4,6 +4,7 @@ use super::super::parse::{
 };
 use crate::models::error::FormError;
 use wayscriber::config::Config;
+use wayscriber::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
 use wayscriber::domain::{DragBindableTool, DragTool};
 use wayscriber::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::draw::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
@@ -59,6 +60,14 @@ impl ConfigDraft {
             errors,
             |value| config.drawing.pen_smoothing = value,
         );
+        parse_u8_in_range(
+            &self.drawing_shape_recognition_sensitivity,
+            "drawing.shape_recognition_sensitivity",
+            0,
+            MAX_SHAPE_RECOGNITION_SENSITIVITY,
+            errors,
+            |value| config.drawing.shape_recognition_sensitivity = value,
+        );
         parse_field_in_range(
             &self.drawing_marker_opacity,
             "drawing.marker_opacity",
@@ -76,6 +85,7 @@ impl ConfigDraft {
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
         config.drawing.text_halo_enabled = self.drawing_text_halo_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
+        config.drawing.shape_recognition_grid_snap = self.drawing_shape_recognition_grid_snap;
         config.drawing.drag_tool = legacy_tool(
             self.drawing_drag_tools.left.drag_tool,
             DragBindableTool::Pen,

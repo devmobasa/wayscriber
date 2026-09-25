@@ -224,6 +224,25 @@ impl InputState {
         true
     }
 
+    /// Steps how readily Shape Pen turns ink into shapes. Returns true if it
+    /// changed. Clamped rather than wrapped, like pen smoothing.
+    pub fn nudge_shape_recognition_sensitivity(&mut self, delta: i32) -> bool {
+        if !self.style.nudge_shape_recognition_sensitivity(delta) {
+            return false;
+        }
+        self.mark_session_dirty();
+        true
+    }
+
+    /// Sets the Shape Pen sensitivity directly, from the toolbar stepper.
+    pub fn set_shape_recognition_sensitivity(&mut self, level: u8) -> bool {
+        if !self.style.set_shape_recognition_sensitivity(level) {
+            return false;
+        }
+        self.mark_session_dirty();
+        true
+    }
+
     /// Sets the magnification stored on newly drawn spotlights.
     ///
     /// Deliberately requests no warning feedback: this changes what the *next*

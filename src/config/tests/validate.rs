@@ -86,6 +86,22 @@ fn drawing_polygon_sides_validation_keeps_supported_bounds() {
 }
 
 #[test]
+fn shape_recognition_sensitivity_defaults_and_clamps() {
+    let mut config = config_from_toml("[drawing]\n");
+    assert_eq!(
+        config.drawing.shape_recognition_sensitivity,
+        crate::config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY
+    );
+
+    config.drawing.shape_recognition_sensitivity = u8::MAX;
+    config.validate_and_clamp();
+    assert_eq!(
+        config.drawing.shape_recognition_sensitivity,
+        crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY
+    );
+}
+
+#[test]
 fn default_overlay_item_is_the_transparent_board() {
     let overlay = BoardsConfig::default_overlay_item();
     assert_eq!(overlay.id, "transparent");

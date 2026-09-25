@@ -104,6 +104,7 @@ pub(super) fn build_main_sections(
         title: "Drawing",
         rows: vec![
             action_row(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectLiveShapeTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectLineTool, "Shift+Drag"),
             action_row(bindings, Action::SelectRectTool, "Ctrl+Drag"),
             action_row(bindings, Action::SelectEllipseTool, "Tab+Drag"),
@@ -129,6 +130,17 @@ pub(super) fn build_main_sections(
                     NOT_BOUND_LABEL,
                 ),
                 "Adjust stroke smoothing",
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[
+                        Action::IncreaseShapeRecognitionSensitivity,
+                        Action::DecreaseShapeRecognitionSensitivity,
+                    ],
+                    NOT_BOUND_LABEL,
+                ),
+                "Adjust Shape Pen sensitivity",
             ),
         ],
         badges: color_badges.clone(),

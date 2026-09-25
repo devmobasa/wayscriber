@@ -9,11 +9,13 @@ impl WaylandState {
     ) -> Option<crate::ui::ShapeMeasureBadge> {
         let pointer = self.pointer.position();
         let world = self.canvas_world_coords(pointer.0 as f64, pointer.1 as f64);
-        let size = self.input_state.provisional_shape_size(world.0, world.1)?;
+        let readout = self
+            .input_state
+            .provisional_shape_readout(world.0, world.1)?;
         crate::ui::measure_shape_badge(
             self.render.ui_text(),
             self.config.ui.show_shape_size_readout,
-            size,
+            readout,
             (pointer.0 as f64, pointer.1 as f64),
             width,
             height,

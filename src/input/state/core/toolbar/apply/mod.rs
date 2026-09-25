@@ -95,6 +95,9 @@ impl InputState {
                 self.apply_toolbar_set_spotlight_magnification(value)
             }
             ToolbarEvent::SetPenSmoothing(level) => self.apply_toolbar_set_pen_smoothing(level),
+            ToolbarEvent::SetShapeRecognitionSensitivity(level) => {
+                self.set_shape_recognition_sensitivity(level)
+            }
             ToolbarEvent::OpenFontPicker => self.apply_toolbar_open_font_picker(),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),

@@ -38,6 +38,8 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::DecreaseMarkerOpacity
         | Action::IncreasePenSmoothing
         | Action::DecreasePenSmoothing
+        | Action::IncreaseShapeRecognitionSensitivity
+        | Action::DecreaseShapeRecognitionSensitivity
         | Action::CycleFontFamily
         | Action::OpenFontPicker
         | Action::SelectSelectionTool
@@ -48,6 +50,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::CycleBlurStyle
         | Action::CycleArrowStyle
         | Action::SelectPenTool
+        | Action::SelectLiveShapeTool
         | Action::SelectLineTool
         | Action::SelectRectTool
         | Action::SelectEllipseTool

@@ -1,5 +1,6 @@
 //! Pointer positions, hover invalidation, activity timing, and provisional bounds.
 
+use crate::input::tool::LiveShapeMemo;
 use crate::util::Rect;
 use std::time::Instant;
 
@@ -11,6 +12,10 @@ pub(in crate::input::state) struct PointerTracking {
     menu_hover_recalc_pending: bool,
     last_draw_activity: Instant,
     provisional_bounds: Option<Rect>,
+    live_shape: LiveShapeMemo,
+    /// Whether the last damaged Shape Pen preview showed a recognized shape
+    /// rather than plain ink.
+    live_shape_previewed_shape: bool,
 }
 
 impl Default for PointerTracking {
@@ -22,6 +27,8 @@ impl Default for PointerTracking {
             menu_hover_recalc_pending: false,
             last_draw_activity: Instant::now(),
             provisional_bounds: None,
+            live_shape: LiveShapeMemo::default(),
+            live_shape_previewed_shape: false,
         }
     }
 }
@@ -91,6 +98,25 @@ impl PointerTracking {
         bounds: Option<Rect>,
     ) -> Option<Rect> {
         std::mem::replace(&mut self.provisional_bounds, bounds)
+    }
+
+    /// Forget the previous stroke's Shape Pen preview.
+    pub(in crate::input::state) fn begin_stroke_preview(&mut self) {
+        self.live_shape = LiveShapeMemo::default();
+        self.live_shape_previewed_shape = false;
+    }
+
+    pub(in crate::input::state) fn live_shape(&self) -> &LiveShapeMemo {
+        &self.live_shape
+    }
+
+    /// Record whether the Shape Pen preview now shows a shape, returning
+    /// whether the previous one did.
+    pub(in crate::input::state) fn replace_live_shape_previewed_shape(
+        &mut self,
+        shape: bool,
+    ) -> bool {
+        std::mem::replace(&mut self.live_shape_previewed_shape, shape)
     }
 
     pub(in crate::input::state) fn union_provisional_bounds(&mut self, bounds: Rect) {

@@ -12,10 +12,15 @@ pub(crate) const DEFAULT_HIT_TEST_TOLERANCE: f64 = 6.0;
 /// Default release-time smoothing level for freehand and marker strokes.
 pub const DEFAULT_PEN_SMOOTHING: u8 = 3;
 
+/// Shape Pen recognition levels, from precise to forgiving. The default leans
+/// forgiving: quick shapes should become shapes, and one undo returns the ink.
+pub const DEFAULT_SHAPE_RECOGNITION_SENSITIVITY: u8 = 3;
+pub const MAX_SHAPE_RECOGNITION_SENSITIVITY: u8 = 4;
+
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
-/// Users can change these values at runtime using keybindings.
+/// Some values can also be changed at runtime using keybindings.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingConfig {
@@ -67,6 +72,14 @@ pub struct DrawingConfig {
     /// always follows the raw pointer, whatever this is set to.
     #[serde(default = "default_pen_smoothing")]
     pub pen_smoothing: u8,
+
+    /// How readily Shape Pen turns ink into lines, ellipses, rectangles, or triangles (0 - 4).
+    #[serde(default = "default_shape_recognition_sensitivity")]
+    pub shape_recognition_sensitivity: u8,
+
+    /// Whether Shape Pen results snap to nearby board-paper lines and points.
+    #[serde(default = "default_shape_recognition_grid_snap")]
+    pub shape_recognition_grid_snap: bool,
 
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
@@ -155,6 +168,8 @@ impl Default for DrawingConfig {
             marker_opacity: default_marker_opacity(),
             font_cycle: default_font_cycle(),
             pen_smoothing: default_pen_smoothing(),
+            shape_recognition_sensitivity: default_shape_recognition_sensitivity(),
+            shape_recognition_grid_snap: default_shape_recognition_grid_snap(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
@@ -912,6 +927,14 @@ fn default_font_cycle() -> Vec<String> {
 /// enough that a deliberate corner is still a corner.
 fn default_pen_smoothing() -> u8 {
     DEFAULT_PEN_SMOOTHING
+}
+
+fn default_shape_recognition_sensitivity() -> u8 {
+    DEFAULT_SHAPE_RECOGNITION_SENSITIVITY
+}
+
+fn default_shape_recognition_grid_snap() -> bool {
+    true
 }
 
 fn default_fill_enabled() -> bool {
