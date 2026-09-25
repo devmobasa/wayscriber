@@ -23,8 +23,8 @@ mod spec;
 
 pub(crate) use control::{TopToolbarControl, TopToolbarDivider, TopToolbarIsland, TopToolbarNode};
 pub(crate) use control_meta::{
-    TopToolbarControlId, TopToolbarControlRole, TopToolbarIcon, TopToolbarUtility, action_tooltip,
-    micro_ring_width, preset_slot,
+    RESTORE_TAB_SIZE, TopToolbarControlId, TopToolbarControlRole, TopToolbarIcon,
+    TopToolbarUtility, action_tooltip, micro_ring_width, preset_slot,
 };
 pub(crate) use spec::{TopStripPlan, TopToolbarSpec};
 

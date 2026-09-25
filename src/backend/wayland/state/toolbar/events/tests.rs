@@ -654,6 +654,27 @@ fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     assert!(toolbar_event_blocked_by_modal(&input_state));
 }
 
+/// The second click of a double-click on the restore tab lands on the
+/// restored strip; the shared dispatch drops it for both frontends.
+#[test]
+fn a_click_right_after_restoring_the_strip_is_dropped() {
+    let mut input_state = make_test_input_state();
+    input_state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
+    assert!(!toolbar_event_dropped(
+        &input_state,
+        std::time::Instant::now()
+    ));
+
+    input_state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
+
+    let now = std::time::Instant::now();
+    assert!(toolbar_event_dropped(&input_state, now));
+    assert!(!toolbar_event_dropped(
+        &input_state,
+        now + std::time::Duration::from_secs(1)
+    ));
+}
+
 fn failing_session_file_chooser(
     _mode: SessionFileDialogMode,
     _current_path: Option<&Path>,

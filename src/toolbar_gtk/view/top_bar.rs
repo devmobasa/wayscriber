@@ -69,7 +69,8 @@ const CHIP_SIZE: f64 = 28.0;
 const COMPACT_BUTTON: f64 = 26.0;
 const COMPACT_GAP: f64 = 1.0;
 const COMPACT_CHROME: f64 = 18.0;
-const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
+/// Restore-tab size, shared with the built-in tab (`model::RESTORE_TAB_SIZE`).
+const MINIMIZED_SIZE: (f64, f64) = model::RESTORE_TAB_SIZE;
 /// Micro-mode chip size (`ToolbarLayoutSpec::TOP_MICRO_SIZE`).
 const MICRO_SIZE: f64 = 44.0;
 /// Style pill spec-unit tokens (`ToolbarLayoutSpec::TOP_STYLE_*`).

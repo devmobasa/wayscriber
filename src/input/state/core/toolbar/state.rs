@@ -56,6 +56,32 @@ pub(in crate::input::state) struct ToolbarInteraction {
     top_popover_scroll: f64,
     top_minimized: bool,
     top_display_mode: TopDisplayMode,
+    restore_guard: RestoreClickGuard,
+}
+
+/// Swallows toolbar clicks for a moment after the minimized tab (or the
+/// micro chip) restores the strip.
+///
+/// The restored strip's first controls sit where the tab was, so the second
+/// click of a double-click on the tab used to select a tool. The window is a
+/// typical double-click interval: long enough to absorb that click, short
+/// enough that a deliberate next click still works.
+#[derive(Debug, Default, Clone, Copy)]
+pub(in crate::input::state) struct RestoreClickGuard {
+    until: Option<std::time::Instant>,
+}
+
+impl RestoreClickGuard {
+    pub(in crate::input::state) const WINDOW: std::time::Duration =
+        std::time::Duration::from_millis(450);
+
+    fn arm(&mut self, now: std::time::Instant) {
+        self.until = Some(now + Self::WINDOW);
+    }
+
+    fn blocks(&self, now: std::time::Instant) -> bool {
+        self.until.is_some_and(|until| now < until)
+    }
 }
 
 impl Default for ToolbarInteraction {
@@ -81,6 +107,7 @@ impl Default for ToolbarInteraction {
             top_popover_scroll: 0.0,
             top_minimized: false,
             top_display_mode: TopDisplayMode::Full,
+            restore_guard: RestoreClickGuard::default(),
         }
     }
 }
@@ -120,7 +147,17 @@ impl ToolbarInteraction {
             top_popover_scroll: 0.0,
             top_minimized: config.top_minimized,
             top_display_mode,
+            restore_guard: RestoreClickGuard::default(),
         }
+    }
+
+    /// Start the post-restore click guard (see [`RestoreClickGuard`]).
+    pub(in crate::input::state) fn arm_restore_guard(&mut self, now: std::time::Instant) {
+        self.restore_guard.arm(now);
+    }
+
+    pub(in crate::input::state) fn restore_guard_blocks(&self, now: std::time::Instant) -> bool {
+        self.restore_guard.blocks(now)
     }
 
     #[cfg(test)]

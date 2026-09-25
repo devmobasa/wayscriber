@@ -25,7 +25,7 @@ impl TopBar {
         let scale = effective_scale(snapshot);
         // A GTK toplevel never shrinks on its own; reset the default size
         // or the tab keeps the full strip's width. The panel padding is
-        // dropped so the tab hugs the 64x24 builtin footprint.
+        // dropped so the tab hugs the shared restore-tab footprint.
         self.window.set_default_size(
             (MINIMIZED_SIZE.0 * scale).round() as i32,
             (MINIMIZED_SIZE.1 * scale).round() as i32,
@@ -36,15 +36,23 @@ impl TopBar {
         self.root.add_css_class("minimized");
         let restore = sized_button(MINIMIZED_SIZE.0 * scale, MINIMIZED_SIZE.1 * scale);
         set_control_widget_id(&restore, control);
-        restore.add_css_class("chrome");
+        restore.add_css_class("restore-tab");
         let accessible_label = control.accessible_label(snapshot);
         restore.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         restore.set_tooltip_text(Some(&control.tooltip(snapshot)));
+        // Glyph plus a short caption, so the tab reads as a button to bring
+        // the tools back rather than a stray sliver.
+        let content = gtk4::Box::new(gtk4::Orientation::Horizontal, (6.0 * scale).round() as i32);
+        content.set_halign(gtk4::Align::Center);
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(model::TopToolbarIcon::Restore),
-            (MINIMIZED_SIZE.1 * 0.75 * scale).min(18.0 * scale),
+            top_toolbar_icon_painter(control.glyph(snapshot)),
+            (MINIMIZED_SIZE.1 * 0.56 * scale).min(18.0 * scale),
         );
-        restore.set_child(Some(&icon.area));
+        content.append(&icon.area);
+        let caption = gtk4::Label::new(Some(&control.label(snapshot)));
+        caption.add_css_class("restore-tab-label");
+        content.append(&caption);
+        restore.set_child(Some(&content));
         let sender = self.feedback.clone();
         let event = control.event(snapshot);
         restore.connect_clicked(move |_| {

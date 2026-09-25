@@ -244,6 +244,11 @@ pub(super) fn preset_tooltip(snapshot: &ToolbarSnapshot, index: usize) -> String
     }
 }
 
+/// Size of the minimized strip's restore tab, in spec units, shared by both
+/// frontends. Large enough to hit comfortably and to carry the restore glyph
+/// plus its "Tools" caption.
+pub(crate) const RESTORE_TAB_SIZE: (f64, f64) = (104.0, 32.0);
+
 /// Ring stroke width of the micro chip for a given stroke thickness.
 ///
 /// Perceptual mapping shared by both frontends: thickness 1px → 1.5px ring,

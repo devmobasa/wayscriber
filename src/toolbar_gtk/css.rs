@@ -34,9 +34,23 @@ window.wayscriber-toolbar {{
     padding: {pad_std}px {pad_panel_h}px;
 }}
 
-/* Minimized restore tabs hug the button, like the builtin 64x24 tab. */
+/* Minimized restore tabs hug the button, like the builtin tab. */
 .wayscriber-toolbar .panel.minimized {{
     padding: 0;
+}}
+/* The restore tab is raised and outlined so it stands out over busy
+   content, mirroring the builtin RestoreTab body. */
+.wayscriber-toolbar button.restore-tab {{
+    background-color: {button_hover};
+    border: {hairline}px solid {label_hint};
+    border-radius: {radius_panel}px;
+}}
+.wayscriber-toolbar button.restore-tab:hover {{
+    background-color: {pin_hover};
+    border-color: {text_primary};
+}}
+.wayscriber-toolbar label.restore-tab-label {{
+    font-weight: {weight_bold};
 }}
 
 /* Top-strip islands: detached pills sharing the panel treatment. The

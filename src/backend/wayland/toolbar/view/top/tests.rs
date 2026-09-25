@@ -603,8 +603,10 @@ fn minimized_strip_is_a_single_restore_tab() {
     let mut snapshot = snapshot();
     snapshot.top_minimized = true;
 
+    // A comfortable target (the old 64x24 sliver was easy to miss) that
+    // carries the restore glyph and its caption.
     let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    assert_eq!((w, h), (64, 24));
+    assert_eq!((w, h), (104, 32));
 
     let tree = build_top_view(
         &crate::ui_text::UiTextEngine::default(),
@@ -623,6 +625,17 @@ fn minimized_strip_is_a_single_restore_tab() {
         interactive[0].interact.as_ref().unwrap().event,
         ToolbarEvent::SetTopMinimized(false)
     ));
+    let WidgetKind::RestoreTab { label, .. } = &interactive[0].kind else {
+        panic!("the tab is a restore tab: {:?}", interactive[0].kind);
+    };
+    assert_eq!(label.text, "Tools");
+    assert_eq!(
+        interactive[0]
+            .interact
+            .as_ref()
+            .and_then(|interaction| interaction.tooltip.as_deref()),
+        Some("Show toolbar")
+    );
 }
 
 #[test]

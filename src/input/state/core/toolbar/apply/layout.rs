@@ -59,6 +59,13 @@ impl InputState {
         true
     }
 
+    /// Whether a toolbar click at `now` is the tail of the double-click that
+    /// just restored the strip from its minimized tab or micro chip. The
+    /// restored controls sit under the pointer, so such a click is dropped.
+    pub(crate) fn toolbar_restore_guard_blocks(&self, now: std::time::Instant) -> bool {
+        self.toolbar.restore_guard_blocks(now)
+    }
+
     /// Minimize keeps the surface mapped as a small restore tab instead of
     /// hiding it, so a presenter who "closes" a bar is never stranded.
     pub(crate) fn apply_toolbar_set_top_minimized(&mut self, minimized: bool) -> bool {
@@ -600,6 +607,39 @@ mod tests {
         state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(false)));
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+    }
+
+    /// The restored strip's first controls sit where the tab was, so the
+    /// second click of a double-click on the tab must not reach them.
+    #[test]
+    fn restoring_from_the_minimized_tab_guards_the_next_click() {
+        let mut state = make_test_input_state();
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true)));
+        assert!(
+            !state.toolbar_restore_guard_blocks(std::time::Instant::now()),
+            "minimizing arms nothing"
+        );
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false)));
+
+        let now = std::time::Instant::now();
+        assert!(state.toolbar_restore_guard_blocks(now));
+        assert!(!state.toolbar_restore_guard_blocks(now + std::time::Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn restoring_from_the_micro_chip_guards_the_next_click() {
+        let mut state = make_test_input_state();
+        state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(
+            crate::config::TopDisplayMode::Micro,
+        ));
+        assert!(!state.toolbar_restore_guard_blocks(std::time::Instant::now()));
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(
+            crate::config::TopDisplayMode::Full
+        )));
+
+        assert!(state.toolbar_restore_guard_blocks(std::time::Instant::now()));
     }
 
     /// The toolbar's Exit is an explicit request, so xdg stay-mode focus loss

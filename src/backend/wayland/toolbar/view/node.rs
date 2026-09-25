@@ -211,6 +211,9 @@ pub enum WidgetKind {
     PinButton { pinned: bool },
     /// Minimize chrome button (collapses the bar to its restore tab).
     MinimizeButton,
+    /// The minimized strip's restore tab: a raised, outlined body with the
+    /// restore glyph and a short caption, so it reads as a button.
+    RestoreTab { glyph: IconFn, label: LabelSpec },
     /// Anchored popover panel (shadow, background, caret at `caret_x`).
     Popover { caret_x: f64, caret_up: bool },
     /// Vertical scrollbar: proportional thumb (`thumb` fraction of the

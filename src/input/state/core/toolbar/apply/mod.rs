@@ -224,10 +224,20 @@ impl InputState {
             }
             ToolbarEvent::ScrollTopPopover(offset) => self.apply_toolbar_scroll_top_popover(offset),
             ToolbarEvent::SetTopMinimized(minimized) => {
-                self.apply_toolbar_set_top_minimized(minimized)
+                let changed = self.apply_toolbar_set_top_minimized(minimized);
+                if changed && !minimized {
+                    self.toolbar.arm_restore_guard(std::time::Instant::now());
+                }
+                changed
             }
             ToolbarEvent::SetTopDisplayMode(mode) => {
-                self.apply_toolbar_set_top_display_mode_with_resources(resources, mode)
+                let from_micro = self.top_display_state() == crate::config::TopDisplayMode::Micro;
+                let changed =
+                    self.apply_toolbar_set_top_display_mode_with_resources(resources, mode);
+                if changed && from_micro && mode == crate::config::TopDisplayMode::Full {
+                    self.toolbar.arm_restore_guard(std::time::Instant::now());
+                }
+                changed
             }
             ToolbarEvent::CloseTopToolbar => self.apply_toolbar_set_top_minimized(true),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),

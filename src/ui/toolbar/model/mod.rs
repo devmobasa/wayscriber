@@ -63,9 +63,9 @@ pub(crate) use tools::{
 };
 #[allow(unused_imports)]
 pub(crate) use top_spec::{
-    TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole, TopToolbarDivider,
-    TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec, TopToolbarUtility,
-    action_tooltip, micro_ring_width, preset_slot,
+    RESTORE_TAB_SIZE, TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole,
+    TopToolbarDivider, TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec,
+    TopToolbarUtility, action_tooltip, micro_ring_width, preset_slot,
 };
 
 #[cfg(test)]

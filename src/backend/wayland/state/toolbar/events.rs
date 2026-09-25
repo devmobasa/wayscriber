@@ -34,6 +34,14 @@ fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
 }
 
+/// Toolbar events the shared dispatch drops: anything under the command
+/// palette, and a click landing right after the minimized tab (or micro chip)
+/// restored the strip, whose controls now sit under the pointer. Both
+/// frontends deliver clicks through this one path.
+fn toolbar_event_dropped(input_state: &InputState, now: std::time::Instant) -> bool {
+    toolbar_event_blocked_by_modal(input_state) || input_state.toolbar_restore_guard_blocks(now)
+}
+
 fn finalize_pointer_gestures_before_toolbar_dispatch(
     input_state: &mut InputState,
     spotlight_wheel_idle_deadline: &mut Option<std::time::Instant>,
@@ -187,8 +195,9 @@ impl WaylandState {
         qh: Option<&QueueHandle<Self>>,
     ) {
         // GTK toolbar feedback bypasses the built-in pointer modal gate, so
-        // enforce the same rule in the shared event path as well.
-        if toolbar_event_blocked_by_modal(&self.input_state) {
+        // enforce the same rule in the shared event path as well. The same
+        // path drops the second click of a double-click on the restore tab.
+        if toolbar_event_dropped(&self.input_state, std::time::Instant::now()) {
             return;
         }
         // A toolbar interaction replaces the modal sampler. Do this before

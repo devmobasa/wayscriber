@@ -23,7 +23,8 @@ use super::widgets::{
     draw_divider_vertical, draw_drag_handle, draw_label_center, draw_label_center_color,
     draw_label_left, draw_label_left_color, draw_label_left_wrapped, draw_mini_checkbox,
     draw_minimize_button, draw_panel_background, draw_pin_button, draw_popover_panel,
-    draw_round_rect, draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
+    draw_restore_tab_body, draw_round_rect, draw_segmented_control, ellipsize_to_width,
+    point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
@@ -462,6 +463,24 @@ fn paint_node(
             draw_pin_button(ctx, x, y, w, *pinned, is_hover);
         }
         WidgetKind::MinimizeButton => draw_minimize_button(ctx, x, y, w, is_hover),
+        WidgetKind::RestoreTab { glyph, label } => {
+            draw_restore_tab_body(ctx, x, y, w, h, is_hover);
+            set_icon_color(ctx, is_hover);
+            let icon = (h * 0.56).min(18.0);
+            let pad = (h - icon) / 2.0 + 2.0;
+            (glyph.0)(ctx, x + pad, y + (h - icon) / 2.0, icon);
+            let text_x = x + pad + icon + 6.0;
+            draw_label_left(
+                engine,
+                ctx,
+                label_style(label.size, label.bold),
+                text_x,
+                y,
+                (x + w - text_x).max(0.0),
+                h,
+                &label.text,
+            );
+        }
         WidgetKind::Popover { caret_x, caret_up } => {
             draw_popover_panel(ctx, x, y, w, h, *caret_x, *caret_up);
         }

@@ -428,12 +428,11 @@ fn build_top_minimized_tab(
     tree.push(WidgetNode::new(
         control.id().render_id().into_owned(),
         (0.0, 0.0, width, height),
-        WidgetKind::IconButton {
+        WidgetKind::RestoreTab {
             glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                model::TopToolbarIcon::Restore,
+                control.glyph(snapshot),
             )),
-            icon_size: (height * 0.75).min(18.0),
-            style: ButtonStyle::plain(),
+            label: LabelSpec::new(control.label(snapshot), TOP_LABEL_FONT_SIZE - 1.0, true),
         },
         Some(Interaction::click(
             control.event(snapshot),

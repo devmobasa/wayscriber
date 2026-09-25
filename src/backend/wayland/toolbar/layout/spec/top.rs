@@ -5,8 +5,11 @@ use super::ToolbarLayoutSpec;
 
 impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 58);
-    /// Minimized top strip: the edge restore tab.
-    pub(in crate::backend::wayland::toolbar) const TOP_MINIMIZED_SIZE: (u32, u32) = (64, 24);
+    /// Minimized top strip: the edge restore tab (`model::RESTORE_TAB_SIZE`).
+    pub(in crate::backend::wayland::toolbar) const TOP_MINIMIZED_SIZE: (u32, u32) = (
+        crate::ui::toolbar::model::RESTORE_TAB_SIZE.0 as u32,
+        crate::ui::toolbar::model::RESTORE_TAB_SIZE.1 as u32,
+    );
     /// Micro-mode top strip: one round tool/color chip.
     pub(in crate::backend::wayland::toolbar) const TOP_MICRO_SIZE: (u32, u32) = (44, 44);
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_TEXT: (u32, u32) = (875, 60);

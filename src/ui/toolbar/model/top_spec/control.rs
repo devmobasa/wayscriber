@@ -317,7 +317,8 @@ impl TopToolbarControl {
 
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
-            Self::Restore => Cow::Borrowed("Show toolbar"),
+            // The tab's visible caption; screen readers get the full phrase.
+            Self::Restore => Cow::Borrowed("Tools"),
             Self::MicroChip => Cow::Borrowed("Show full toolbar"),
             Self::DragHandle => Cow::Borrowed("Drag toolbar"),
             Self::Tool(tool) => Cow::Borrowed(tool_label(tool)),
@@ -356,6 +357,7 @@ impl TopToolbarControl {
             Self::SessionMenu => Cow::Borrowed("Session menu"),
             Self::SettingsMenu => Cow::Borrowed("Settings menu"),
             Self::About => Cow::Borrowed(action_label(Action::OpenAbout)),
+            Self::Restore => Cow::Borrowed("Show toolbar"),
             _ => self.label(snapshot),
         }
     }

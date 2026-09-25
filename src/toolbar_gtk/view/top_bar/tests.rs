@@ -1239,6 +1239,15 @@ fn assert_builtin_node_kind(
             ));
             assert_eq!(expected.role, model::TopToolbarControlRole::Restore);
         }
+        W::RestoreTab { glyph, label } => {
+            let icon = expected.icon.expect("semantic icon for the restore tab");
+            assert!(std::ptr::fn_addr_eq(
+                glyph.0,
+                crate::toolbar_icons::top_toolbar_icon_painter(icon)
+            ));
+            assert_eq!(label.text, expected.label);
+            assert_eq!(expected.role, model::TopToolbarControlRole::Restore);
+        }
         W::PinButton { pinned } => assert_eq!(*pinned, expected.active),
         W::MiniCheckbox { checked, label } => {
             assert_eq!(*checked, expected.active);
