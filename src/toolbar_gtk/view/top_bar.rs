@@ -88,6 +88,9 @@ const STYLE_RESET_W: f64 = 56.0;
 const STYLE_FONT_PICK_W: f64 = 96.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_STEP_W`.
 const STYLE_STEP_W: f64 = 20.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_CAPTION_W`: the caption slot before a tool
+/// stepper ("Smooth", "Detect").
+const STYLE_CAPTION_W: f64 = 48.0;
 /// Segment tab height (matches the Settings pane's segmented tabs).
 const STYLE_TAB_H: f64 = 22.0;
 /// Extra clear gap before a segmented control in the pill (M7-C3), on top of

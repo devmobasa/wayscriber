@@ -23,6 +23,7 @@ use super::tree::WidgetTree;
 
 mod build;
 mod menus;
+mod stepper;
 
 const TOP_LABEL_FONT_SIZE: f64 = 14.0;
 const MINI_LABEL_FONT_SIZE: f64 = 10.0; // FONT_SIZE_SMALL

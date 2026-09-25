@@ -1195,6 +1195,71 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 }
 
 #[test]
+fn shape_pen_steppers_carry_visible_captions_inside_the_planned_width() {
+    let engine = crate::ui_text::UiTextEngine::default();
+    let snapshot = snapshot_for_tool(crate::input::Tool::LiveShape);
+    let tree = build(&snapshot);
+    let caption_style = crate::ui_text::UiTextStyle {
+        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP,
+    };
+
+    for (stepper, text) in [
+        ("top.style.pen-smoothing", "Smooth"),
+        ("top.style.shape-sensitivity", "Detect"),
+    ] {
+        let caption = tree
+            .node_by_id(&format!("{stepper}.caption").into())
+            .unwrap_or_else(|| panic!("{stepper} caption"));
+        let WidgetKind::Label(label) = &caption.kind else {
+            panic!("{stepper} caption kind {:?}", caption.kind);
+        };
+        assert_eq!(label.text, text);
+        assert!(label.caption, "{stepper} caption uses the caption tone");
+        assert!(caption.interact.is_none(), "{stepper} caption is decor");
+        assert_eq!(caption.rect.2, ToolbarLayoutSpec::TOP_STYLE_CAPTION_W);
+
+        // The word fits its slot with room to spare before the − half.
+        let drawn = engine
+            .measure(caption_style, text, None)
+            .expect("caption measures")
+            .width();
+        assert!(
+            drawn + 4.0 <= ToolbarLayoutSpec::TOP_STYLE_CAPTION_W,
+            "{text} is {drawn}px wide"
+        );
+
+        let minus = tree
+            .node_by_id(&format!("{stepper}.minus").into())
+            .unwrap_or_else(|| panic!("{stepper} minus half"));
+        assert!(
+            (minus.rect.0 - (caption.rect.0 + caption.rect.2)).abs() < 1e-9,
+            "{stepper} − half abuts its caption"
+        );
+
+        // The readout is the value being changed: primary tone, bold,
+        // centered between the halves.
+        let value = tree
+            .node_by_id(&format!("{stepper}.value").into())
+            .unwrap_or_else(|| panic!("{stepper} readout"));
+        let WidgetKind::Label(value) = &value.kind else {
+            panic!("{stepper} readout kind");
+        };
+        assert!(value.bold && value.centered && !value.caption, "{value:?}");
+    }
+
+    // The planner walks the same tree, so the captioned pill is inside the
+    // width the strip asks for.
+    let style = tree
+        .node_by_id(&"top.island.style".into())
+        .expect("style pill");
+    let (_, h) = top_size(&engine, &snapshot);
+    assert!(top_natural_width(&engine, &snapshot, h as f64) >= style.rect.0 + style.rect.2);
+}
+
+#[test]
 fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
     let mut snapshot = snapshot();
     snapshot.top_overflow_open = true;

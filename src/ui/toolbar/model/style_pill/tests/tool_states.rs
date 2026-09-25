@@ -182,6 +182,38 @@ fn a_numeric_weight_does_not_read_as_bold() {
 }
 
 #[test]
+fn the_tool_steppers_name_what_they_step_on_screen() {
+    // Shape Pen shows both steppers side by side; bare "− 3 +" twice says
+    // nothing about which is which.
+    let spec = StylePillSpec::build(&snapshot_for_tool(Tool::LiveShape), &plan());
+    let captions: Vec<_> = spec
+        .controls()
+        .iter()
+        .filter(|control| control.role() == StylePillRole::Stepper)
+        .map(|control| control.caption())
+        .collect();
+    assert_eq!(captions, [Some("Smooth"), Some("Detect")]);
+
+    // Docked selection steppers read "3px"/"24pt" and need no caption; the
+    // frontends only reserve a caption slot where the model asks for one.
+    for kind in [
+        SelectionPropertyKind::Thickness,
+        SelectionPropertyKind::FontSize,
+        SelectionPropertyKind::ArrowLength,
+    ] {
+        assert_eq!(StylePillControl::SelectionStepper(kind).caption(), None);
+    }
+    assert_eq!(StylePillControl::ColorChip.caption(), None);
+
+    // The caption is the short on-screen word; the accessible name stays
+    // the full one.
+    assert_eq!(
+        StylePillControl::ShapeSensitivityStepper.label(&snapshot()),
+        "Sensitivity"
+    );
+}
+
+#[test]
 fn the_smoothing_stepper_stops_at_both_ends_of_the_range() {
     let mut snapshot = snapshot_for_tool(Tool::Pen);
 

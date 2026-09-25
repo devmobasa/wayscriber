@@ -180,6 +180,17 @@ window.wayscriber-toolbar {{
     color: {label_hint};
     font-size: {font_small}px;
 }}
+/* Style-pill steppers: a caption naming what the stepper changes, and a
+   readout in the primary foreground at the weight of the numeral buttons
+   beside it (the builtin draws both in `view/top/stepper.rs`). */
+.wayscriber-toolbar label.stepper-caption {{
+    color: {label_hint};
+    font-size: {font_tooltip}px;
+}}
+.wayscriber-toolbar label.stepper-value {{
+    color: {text_primary};
+    font-weight: {weight_semibold};
+}}
 .wayscriber-toolbar label.shortcut-badge {{
     color: {badge_text};
     background-color: {badge_bg};

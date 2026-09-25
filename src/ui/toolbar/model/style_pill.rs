@@ -33,6 +33,7 @@ use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};
 
 mod control;
 mod slider;
+mod stepper;
 pub(crate) use slider::StylePillSlider;
 
 /// Morph state of the style pill, derived from the active tool's options

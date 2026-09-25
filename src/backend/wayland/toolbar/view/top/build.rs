@@ -907,47 +907,13 @@ fn push_style_pill(
             model::StylePillControl::PenSmoothingStepper
             | model::StylePillControl::ShapeSensitivityStepper
             | model::StylePillControl::SelectionStepper(_) => {
-                let enabled = control.enabled(snapshot);
-                let steps = control.required_steps(snapshot);
-                let step_w = ToolbarLayoutSpec::TOP_STYLE_STEP_W;
-                let value_w = ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W;
-                let step_style = if enabled {
-                    ButtonStyle::plain()
-                } else {
-                    ButtonStyle::disabled()
-                };
-                nodes.push(WidgetNode::new(
-                    steps[0].id,
-                    (x, center(row_h), step_w, row_h),
-                    WidgetKind::TextButton {
-                        label: LabelSpec::new(steps[0].label, TOP_LABEL_FONT_SIZE, true),
-                        style: step_style,
-                    },
-                    enabled.then(|| {
-                        Interaction::click(steps[0].event.clone(), Some(steps[0].tooltip.clone()))
-                    }),
-                ));
-                nodes.push(WidgetNode::decor(
-                    format!("{id}.value"),
-                    (x + step_w, center(row_h), value_w, row_h),
-                    WidgetKind::Label(LabelSpec::new(
-                        control.required_value_text(snapshot),
-                        TOP_LABEL_FONT_SIZE,
-                        true,
-                    )),
-                ));
-                nodes.push(WidgetNode::new(
-                    steps[1].id,
-                    (x + step_w + value_w, center(row_h), step_w, row_h),
-                    WidgetKind::TextButton {
-                        label: LabelSpec::new(steps[1].label, TOP_LABEL_FONT_SIZE, true),
-                        style: step_style,
-                    },
-                    enabled.then(|| {
-                        Interaction::click(steps[1].event.clone(), Some(steps[1].tooltip.clone()))
-                    }),
-                ));
-                x += step_w * 2.0 + value_w + gap;
+                x += super::stepper::push_style_stepper(
+                    &mut nodes,
+                    control,
+                    snapshot,
+                    x,
+                    center(row_h),
+                ) + gap;
                 // The docked control reports on the selected shape's own
                 // factor, so it needs the same unavailable state the slider has.
                 x += push_style_status_label(

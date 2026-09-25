@@ -76,6 +76,9 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEL_VALUE_W: f64 = 64.0;
     /// Stepper half (−/+) width for docked numeric selection properties.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_STEP_W: f64 = 20.0;
+    /// Caption slot before a tool stepper ("Smooth", "Detect"). Holds one
+    /// short word at the caption size plus the gap to the − half.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_CAPTION_W: f64 = 48.0;
 
     pub(in crate::backend::wayland::toolbar) fn top_size(
         &self,

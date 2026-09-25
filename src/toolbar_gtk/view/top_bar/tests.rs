@@ -1022,11 +1022,30 @@ fn assert_gtk_style_stepper(
         .clone()
         .downcast::<gtk4::Box>()
         .unwrap_or_else(|_| panic!("{id} is a stepper row"));
-    // The builtin lays the three parts out abutting and the width planner
-    // budgets step + value + step exactly.
+    // The builtin lays the parts out abutting and the width planner budgets
+    // caption + step + value + step exactly.
     assert_eq!(row.spacing(), 0, "{id} stepper spacing");
     assert_accessible_label(widget, &control.label(snapshot), id);
-    let minus = widget.first_child().expect("stepper minus half");
+    let mut first = widget.first_child().expect("stepper first child");
+    if let Some(caption) = control.caption() {
+        let caption_label = first
+            .clone()
+            .downcast::<gtk4::Label>()
+            .unwrap_or_else(|_| panic!("{id} caption is a label"));
+        assert_eq!(caption_label.text(), caption, "{id} caption text");
+        assert_eq!(
+            caption_label.widget_name().as_str(),
+            format!("{}.caption", control.id()),
+            "{id} caption id"
+        );
+        assert_eq!(
+            caption_label.width_request(),
+            STYLE_CAPTION_W.round() as i32,
+            "{id} caption keeps the planned slot"
+        );
+        first = caption_label.next_sibling().expect("stepper minus half");
+    }
+    let minus = first;
     let value = minus.next_sibling().expect("stepper value readout");
     let plus = value.next_sibling().expect("stepper plus half");
     assert!(plus.next_sibling().is_none(), "{id} has three children");
@@ -1070,6 +1089,10 @@ fn assert_gtk_style_stepper(
         Some(value_label.text().to_string()),
         control.value_text(snapshot),
         "{id} live value"
+    );
+    assert!(
+        value_label.has_css_class("stepper-value"),
+        "{id} readout uses the primary foreground"
     );
 }
 
@@ -1348,6 +1371,8 @@ enum StylePillNodeExpectation {
     StepHalf(model::StylePillControl, usize),
     /// The value readout between the stepper halves (decor).
     StepValue(model::StylePillControl),
+    /// The caption naming a tool stepper, before its − half (decor).
+    StepCaption(model::StylePillControl),
 }
 
 fn expected_style_pill_nodes(
@@ -1359,6 +1384,12 @@ fn expected_style_pill_nodes(
         // Steppers render as three nodes (−, readout, +) without a node
         // carrying the control id itself.
         if let Some(steps) = control.steps(snapshot) {
+            if control.caption().is_some() {
+                nodes.push((
+                    format!("{id}.caption"),
+                    StylePillNodeExpectation::StepCaption(control),
+                ));
+            }
             nodes.push((
                 steps[0].id.to_string(),
                 StylePillNodeExpectation::StepHalf(control, 0),
@@ -1412,6 +1443,10 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
     for (name, snapshot) in [
         ("regular", regular.clone()),
         ("pen", style_pill_tool_snapshot(&regular, Tool::Pen)),
+        (
+            "shape-pen",
+            style_pill_tool_snapshot(&regular, Tool::LiveShape),
+        ),
         ("marker", style_pill_tool_snapshot(&regular, Tool::Marker)),
         ("eraser", style_pill_tool_snapshot(&regular, Tool::Eraser)),
         ("shape", style_pill_tool_snapshot(&regular, Tool::Rect)),
@@ -1523,6 +1558,9 @@ fn assert_builtin_style_pill_node(
             id,
             *control,
         ),
+        StylePillNodeExpectation::StepCaption(control) => {
+            assert_builtin_style_pill_step_caption(name, kind, has_interaction, id, *control)
+        }
         StylePillNodeExpectation::SegmentHalf(control, index) => {
             assert_builtin_style_pill_segment_half(
                 name,
@@ -1744,6 +1782,29 @@ fn assert_builtin_style_pill_step_value(
     }
 }
 
+fn assert_builtin_style_pill_step_caption(
+    name: &str,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    assert!(!has_interaction, "{name}: {id} caption is decor");
+    match kind {
+        W::Label(label) => {
+            assert_eq!(
+                Some(label.text.as_str()),
+                control.caption(),
+                "{name}: {id} caption text"
+            );
+            assert!(label.caption, "{name}: {id} caption tone");
+        }
+        other => panic!("{name}: {id} stepper caption kind {other:?}"),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn assert_builtin_style_pill_segment_half(
     name: &str,
@@ -1885,6 +1946,7 @@ fn gtk_widget_contract_scenarios() -> (
             ("shape-tool", Tool::Rect),
             ("arrow-tool", Tool::Arrow),
             ("step-marker-tool", Tool::StepMarker),
+            ("shape-pen-tool", Tool::LiveShape),
             ("select-tool", Tool::Select),
         ]
         .map(|(name, tool)| (name, style_pill_tool_snapshot(&regular, tool))),

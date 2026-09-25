@@ -348,17 +348,29 @@ impl TopBar {
                 model::StylePillControl::PenSmoothingStepper
                 | model::StylePillControl::ShapeSensitivityStepper
                 | model::StylePillControl::SelectionStepper(_) => {
-                    // No spacing between the halves: the builtin lays the three
-                    // parts out abutting, at step + value + step exactly, and
-                    // the width planner budgets that. Two 2px child gaps here
-                    // would make this widget 4px wider than the arrangement the
-                    // planner declared fits.
+                    // No spacing between the parts: the builtin lays caption,
+                    // −, value, and + out abutting, and the width planner
+                    // budgets exactly that. Child gaps here would make this
+                    // widget wider than the arrangement the planner declared
+                    // fits.
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
                     set_semantic_widget_id(&row, control.id().as_ref());
-                    // A row of "−  3  +" says nothing about what it steps.
+                    // A row of "−  3  +" says nothing about what it steps: the
+                    // caption names it on screen, the label for assistive tech.
                     let accessible_label = control.label(snapshot);
                     row.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     row.set_valign(gtk4::Align::Center);
+                    if let Some(caption) = control.caption() {
+                        let caption_label = gtk4::Label::new(Some(caption));
+                        caption_label.add_css_class("stepper-caption");
+                        set_semantic_widget_id(
+                            &caption_label,
+                            &format!("{}.caption", control.id()),
+                        );
+                        caption_label.set_xalign(0.0);
+                        caption_label.set_width_request(px(STYLE_CAPTION_W));
+                        row.append(&caption_label);
+                    }
                     let steps = control.required_steps(snapshot);
                     let mut handles: Vec<gtk4::Button> = Vec::new();
                     let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
@@ -368,6 +380,7 @@ impl TopBar {
                     row.append(&minus);
                     handles.push(minus.clone());
                     let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
+                    value.add_css_class("stepper-value");
                     set_semantic_widget_id(&value, &format!("{}.value", control.id()));
                     value.set_width_request(px(STYLE_SEL_VALUE_W));
                     row.append(&value);

@@ -20,9 +20,9 @@ use super::widgets::constants::{
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
     draw_divider_vertical, draw_drag_handle, draw_label_center, draw_label_center_color,
-    draw_label_left, draw_label_left_wrapped, draw_mini_checkbox, draw_minimize_button,
-    draw_panel_background, draw_pin_button, draw_popover_panel, draw_round_rect,
-    draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
+    draw_label_left, draw_label_left_color, draw_label_left_wrapped, draw_mini_checkbox,
+    draw_minimize_button, draw_panel_background, draw_pin_button, draw_popover_panel,
+    draw_round_rect, draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
@@ -243,7 +243,20 @@ fn paint_node(
         }
         WidgetKind::Label(label) => {
             let text_style = label_style(label.size, label.bold);
-            if label.wrap {
+            if label.caption {
+                // Captions name the control beside them; they sit in the hint
+                // tone so the value they label stays the brightest text.
+                draw_label_left_color(
+                    engine,
+                    ctx,
+                    text_style,
+                    (x, y, h),
+                    &label.text,
+                    COLOR_LABEL_HINT,
+                );
+            } else if label.centered {
+                draw_label_center(engine, ctx, text_style, x, y, w, h, &label.text);
+            } else if label.wrap {
                 draw_label_left_wrapped(engine, ctx, text_style, x, y, w, h, &label.text);
             } else {
                 draw_label_left(engine, ctx, text_style, x, y, w, h, &label.text);

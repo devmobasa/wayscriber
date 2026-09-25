@@ -70,6 +70,10 @@ pub struct LabelSpec {
     pub size: f64,
     pub bold: bool,
     pub wrap: bool,
+    /// Center the text in its rect instead of starting at the left edge.
+    pub centered: bool,
+    /// Secondary (caption) tone instead of the primary foreground.
+    pub caption: bool,
 }
 
 impl LabelSpec {
@@ -79,11 +83,23 @@ impl LabelSpec {
             size,
             bold,
             wrap: false,
+            centered: false,
+            caption: false,
         }
     }
 
     pub fn wrapped(mut self) -> Self {
         self.wrap = true;
+        self
+    }
+
+    pub fn centered(mut self) -> Self {
+        self.centered = true;
+        self
+    }
+
+    pub fn caption(mut self) -> Self {
+        self.caption = true;
         self
     }
 }
