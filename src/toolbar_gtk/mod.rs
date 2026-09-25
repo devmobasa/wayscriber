@@ -172,8 +172,8 @@ pub enum GtkToolbarFeedback {
         logo: bool,
     },
     /// Pointer entered/left the GTK top strip. GTK runs on its own Wayland
-    /// connection, so the backend cannot observe this hover itself; it drives
-    /// the top-strip idle-fade restore/hold.
+    /// connection, so the backend cannot observe this hover itself; it holds
+    /// the top-strip idle fade.
     TopHover { hovered: bool },
     /// Drag-to-move lifecycle for the top bar. `End` is when the offsets get
     /// clamped and persisted; `seq` is the bar's monotonically increasing

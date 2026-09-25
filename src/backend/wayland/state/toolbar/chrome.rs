@@ -12,11 +12,10 @@ use crate::{
         },
         toolbar_intent::ToolbarIntent,
     },
-    ui::toolbar::{
-        ToolbarEvent,
-        snapshot::fade::{TopStripFade, TopStripFadeInputs},
-    },
+    ui::toolbar::{ToolbarEvent, snapshot::fade::TopStripFade},
 };
+
+use super::fade::StripRevealKey;
 
 const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
 
@@ -201,6 +200,7 @@ pub(in crate::backend::wayland) struct ToolbarChrome {
     configure_miss_count: u32,
     last_applied_top_margin: Option<(i32, i32)>,
     top_strip_fade: TopStripFade,
+    reveal_key: Option<StripRevealKey>,
     gtk_top_hover: bool,
     focus_active: bool,
     inline: InlineTopStrip,
@@ -217,6 +217,7 @@ impl ToolbarChrome {
             configure_miss_count: 0,
             last_applied_top_margin: None,
             top_strip_fade: TopStripFade::new(),
+            reveal_key: None,
             gtk_top_hover: false,
             focus_active: false,
             inline: InlineTopStrip::default(),
@@ -330,8 +331,11 @@ impl ToolbarChrome {
         self.inline.hover_start
     }
 
+    /// Whether an inline-strip position takes toolbar input. The idle-hidden
+    /// strip takes none, so a click on its invisible area draws instead.
     pub(in crate::backend::wayland) fn inline_contains(&self, position: (f64, f64)) -> bool {
-        self.inline.contains(position)
+        !crate::ui::toolbar::snapshot::fade::top_strip_hidden(self.top_strip_fade.value())
+            && self.inline.contains(position)
     }
 
     pub(in crate::backend::wayland) fn inline_primary_hit_at(
@@ -418,24 +422,21 @@ impl ToolbarChrome {
         &mut self.top_strip_fade
     }
 
-    pub(in crate::backend::wayland) fn fade_inputs(
-        &self,
-        toolbar_pointer_present: bool,
-        idle_for: Duration,
-        menus_open: bool,
-        reduced_chrome: bool,
-        idle_fade_enabled: bool,
-    ) -> TopStripFadeInputs {
-        TopStripFadeInputs {
-            idle_for,
-            pointer_near: self.pointer_over_toolbar
-                || toolbar_pointer_present
-                || self.inline.hover.is_some()
-                || self.gtk_top_hover,
-            menus_open,
-            reduced_chrome,
-            idle_fade_enabled,
-        }
+    /// Pointer, inline hover, GTK hover, or keyboard focus on the strip
+    /// itself. Holds the idle fade.
+    pub(in crate::backend::wayland) fn strip_engaged(&self) -> bool {
+        self.pointer_over_toolbar
+            || self.inline.hover.is_some()
+            || self.gtk_top_hover
+            || self.focus_active
+    }
+
+    /// Record the tool/color the strip displays. True when it changed since
+    /// the previous pass (the first observation is not a change).
+    pub(super) fn note_reveal_key(&mut self, key: StripRevealKey) -> bool {
+        let changed = self.reveal_key.is_some_and(|previous| previous != key);
+        self.reveal_key = Some(key);
+        changed
     }
 }
 

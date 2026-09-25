@@ -253,6 +253,25 @@ fn presets_render_as_slot_buttons_in_the_presets_island() {
 }
 
 #[test]
+fn idle_hidden_strip_keeps_its_size_but_passes_input_through() {
+    let engine = crate::ui_text::UiTextEngine::default();
+    let mut snapshot = snapshot();
+    let shown_size = top_size(&engine, &snapshot);
+    let (w, h) = (shown_size.0 as f64, shown_size.1 as f64);
+    let shown_rects = top_input_rects(&engine, &snapshot, w, h).expect("island rects");
+    assert!(!shown_rects.is_empty());
+
+    // Mid-fade the strip is still partly visible and keeps its islands.
+    snapshot.top_fade = 0.3;
+    assert_eq!(top_input_rects(&engine, &snapshot, w, h), Some(shown_rects));
+
+    // Fully hidden: same surface size (no configure churn), empty region.
+    snapshot.top_fade = crate::ui::toolbar::snapshot::fade::TOP_STRIP_HIDDEN_LEVEL;
+    assert_eq!(top_size(&engine, &snapshot), shown_size);
+    assert_eq!(top_input_rects(&engine, &snapshot, w, h), Some(Vec::new()));
+}
+
+#[test]
 fn shortcut_badges_follow_the_snapshot_bindings() {
     let state = make_test_input_state();
     let snapshot = ToolbarSnapshot::from_input_with_bindings(

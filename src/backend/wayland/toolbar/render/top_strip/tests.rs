@@ -180,3 +180,41 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
         }
     }
 }
+
+#[test]
+fn idle_hidden_strip_paints_nothing_but_keeps_its_hits() {
+    let engine = UiTextEngine::default();
+    let input = crate::input::state::test_support::make_test_input_state();
+    let mut snapshot =
+        ToolbarSnapshot::from_input_with_bindings(&input, ToolbarBindingHints::default());
+    let (width, height) = crate::backend::wayland::toolbar::top_size(&engine, &snapshot);
+    let render = |snapshot: &ToolbarSnapshot, hits: &mut Vec<HitRegion>| {
+        pixels(1, |ctx| {
+            render_top_strip(
+                &engine,
+                ctx,
+                width as f64,
+                height as f64,
+                snapshot,
+                hits,
+                None,
+                None,
+            )
+            .unwrap()
+        })
+    };
+
+    let mut shown_hits = Vec::new();
+    let shown = render(&snapshot, &mut shown_hits);
+    assert!(shown.iter().any(|byte| *byte != 0));
+
+    snapshot.top_fade = crate::ui::toolbar::snapshot::fade::TOP_STRIP_HIDDEN_LEVEL;
+    let mut hidden_hits = Vec::new();
+    let hidden = render(&snapshot, &mut hidden_hits);
+    assert!(hidden.iter().all(|byte| *byte == 0), "no ghosted strip");
+    assert_eq!(
+        hidden_hits.len(),
+        shown_hits.len(),
+        "keyboard focus targets"
+    );
+}

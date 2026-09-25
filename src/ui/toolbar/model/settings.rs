@@ -88,10 +88,10 @@ impl ToolbarSettingsModel {
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsIdleFade,
-                    "Dim toolbar when idle",
+                    "Hide toolbar when idle",
                     snapshot.idle_fade,
                     ToolbarEvent::ToggleIdleFade(!snapshot.idle_fade),
-                    "Fade the top bar to 55% after a few seconds without drawing. Turn off to keep it fully visible.",
+                    "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsInputHud,

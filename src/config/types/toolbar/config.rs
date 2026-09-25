@@ -114,7 +114,8 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_preset_toasts")]
     pub show_preset_toasts: bool,
 
-    /// Dim the top strip after a few seconds without drawing
+    /// Hide the top strip after a few seconds unused; it reappears when the
+    /// pointer comes near it
     #[serde(default = "default_idle_fade")]
     pub idle_fade: bool,
 

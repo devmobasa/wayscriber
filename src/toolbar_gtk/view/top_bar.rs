@@ -446,8 +446,9 @@ impl TopBar {
         window.set_child(Some(capture_surface.widget()));
 
         // Report top-window hover to the backend: GTK runs on its own
-        // Wayland connection, so this is the only way the backend's
-        // top-strip idle fade can restore on pointer approach.
+        // Wayland connection, so this is how the backend's top-strip idle
+        // fade holds while the pointer is on the strip. Approach while the
+        // strip is hidden (and click-through) is measured on the canvas.
         let hover = gtk4::EventControllerMotion::new();
         let enter_feedback = feedback.clone();
         hover.connect_enter(move |_, _, _| {
@@ -574,6 +575,7 @@ impl TopBar {
             }
         }
         self.window.set_visible(true);
+        let presentation = presentation.with_idle_hidden(snapshot.top_strip_hidden());
         self.capture_surface
             .set_transparent(presentation.capture_transparent);
         super::set_visual_hidden(

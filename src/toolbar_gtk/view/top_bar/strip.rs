@@ -437,10 +437,11 @@ impl TopBar {
         }
         self.root.append(&outer);
 
-        // Idle fade: the pill islands dim with the snapshot's fade value
-        // (1.0 full, 0.55 dimmed, in-between while animating; the backend
+        // Idle fade: the pill islands follow the snapshot's fade value (1.0
+        // shown, 0.0 idle-hidden, in-between while animating; the backend
         // engine snaps under reduced motion). Continuous opacity, driven
-        // per-update, so open popovers and hover state survive.
+        // per-update, so open popovers and hover state survive. `apply`
+        // handles the fully hidden frame and input passthrough.
         let fade_outer = outer.clone();
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
             fade_outer.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));

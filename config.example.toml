@@ -652,8 +652,10 @@ context_aware_ui = true
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 
-# Dim the top strip after ~4 seconds without drawing. Set false to keep
-# the bar fully visible (accessibility).
+# Hide the top strip after ~4 seconds without drawing or toolbar use. It
+# fades back in when the pointer comes near it or the top screen edge, and
+# briefly after a tool or color shortcut. Set false to keep the bar always
+# visible (accessibility).
 idle_fade = true
 
 # Show cursor tool preview bubble near the pointer

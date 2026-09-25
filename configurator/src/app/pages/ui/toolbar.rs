@@ -71,8 +71,8 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |value| Message::ToggleChanged(ToggleField::UiToolbarUseIcons, value),
         )
         .switch_row(
-            "Dim toolbar when idle",
-            "Fade the top bar to 55% after a few seconds without drawing. Turn off to keep it fully visible.",
+            "Hide toolbar when idle",
+            "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
             |app| app.draft.ui_toolbar_idle_fade,
             |value| Message::ToggleChanged(ToggleField::UiToolbarIdleFade, value),
         );

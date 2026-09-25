@@ -41,6 +41,20 @@ fn toolbar_surface_presentation(
     }
 }
 
+impl ToolbarSurfacePresentation {
+    /// The idle fade's fully hidden strip stays mapped (no configure churn)
+    /// but shows the capture path's real transparent frame, since GTK drops
+    /// opacity-zero widgets and an empty render tree commits no new buffer,
+    /// and passes pointer input through to the canvas.
+    fn with_idle_hidden(self, idle_hidden: bool) -> Self {
+        Self {
+            capture_transparent: self.capture_transparent || idle_hidden,
+            input_enabled: self.input_enabled && !idle_hidden,
+            ..self
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CaptureUpdatePlan {
     Apply,
@@ -722,6 +736,26 @@ mod tests {
                 input_enabled: true,
             }
         );
+    }
+
+    #[test]
+    fn idle_hidden_strip_stays_mapped_transparent_and_click_through() {
+        let shown = toolbar_surface_presentation(true, false, false, false);
+        assert_eq!(shown.with_idle_hidden(false), shown);
+        assert_eq!(
+            shown.with_idle_hidden(true),
+            ToolbarSurfacePresentation {
+                window_visible: true,
+                capture_transparent: true,
+                visual_hidden: false,
+                input_enabled: false,
+            }
+        );
+
+        // Capture suppression already owns transparency and input.
+        let capturing = toolbar_surface_presentation(true, true, false, false);
+        assert_eq!(capturing.with_idle_hidden(true), capturing);
+        assert_eq!(capturing.with_idle_hidden(false), capturing);
     }
 
     #[test]

@@ -365,7 +365,7 @@ pub struct ToolbarSnapshot {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
     pub show_preset_toasts: bool,
-    /// Whether the top strip dims after a few seconds without drawing
+    /// Whether the idle top strip hides and reappears near the pointer
     pub idle_fade: bool,
     /// Whether to show the Presets section
     pub show_presets: bool,
@@ -408,9 +408,10 @@ pub struct ToolbarSnapshot {
     /// Display form of the top strip (full strip vs. micro chip). `Hidden`
     /// never reaches a renderer — hidden strips have no surface.
     pub top_display_mode: TopDisplayMode,
-    /// Idle-fade opacity of the top-strip islands: 1.0 = full,
-    /// `fade::TOP_STRIP_DIM_LEVEL` = dimmed, values between while a fade
-    /// transition is in flight. Owned by the backend fade engine.
+    /// Idle-fade opacity of the top-strip islands: 1.0 = shown,
+    /// `fade::TOP_STRIP_HIDDEN_LEVEL` = idle-hidden (input passes through to
+    /// the canvas), values between while a fade transition is in flight.
+    /// Owned by the backend fade engine.
     pub top_fade: f64,
     /// Width available to the top strip in pre-scale spec units, when
     /// known; content past this degrades into the overflow menu.
@@ -491,6 +492,12 @@ impl ToolbarSnapshot {
     /// tab is the more explicit "bring me back" affordance.
     pub fn top_micro_active(&self) -> bool {
         self.top_display_mode == TopDisplayMode::Micro && !self.top_minimized
+    }
+
+    /// Whether the idle fade has the strip fully hidden. Every frontend keeps
+    /// the surface mapped but lets pointer input through to the canvas.
+    pub fn top_strip_hidden(&self) -> bool {
+        super::fade::top_strip_hidden(self.top_fade)
     }
 
     pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {

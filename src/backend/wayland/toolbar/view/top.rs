@@ -277,6 +277,11 @@ pub fn top_input_rects(
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return None;
     }
+    // The idle-hidden strip stays mapped at its size but takes no input, so
+    // clicks where it is invisible reach the canvas below.
+    if snapshot.top_strip_hidden() {
+        return Some(Vec::new());
+    }
     let plan = plan_top_strip(engine, snapshot);
     let bar_h = bar_band_height(snapshot, &plan);
     let tree = build_top_view(engine, snapshot, width, height);
