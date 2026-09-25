@@ -12,6 +12,8 @@ use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
 use crate::ui::theme::set_color;
+use crate::ui::theme::swatch::{chrome_rgb, swatch_edge_stroke};
+use crate::ui::theme::toolbar::COLOR_PANEL_BACKGROUND;
 use crate::ui::toolbar::ToolbarEvent;
 mod slider;
 pub(super) use slider::SliderRow;
@@ -477,9 +479,25 @@ impl SwatchButton {
             ctx.set_source_rgba(r, g, b, a);
             swatch_path(ctx);
             let _ = ctx.fill();
-            set_color(ctx, COLOR_SWATCH_HAIRLINE);
-            ctx.set_line_width(1.0);
-            rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
+            // The inner edge: the subtle hairline, or a contrast ring when the
+            // fill would vanish into the bar (the palette's black).
+            let (edge, edge_width) = swatch_edge_stroke(
+                (r, g, b, a),
+                chrome_rgb(COLOR_PANEL_BACKGROUND),
+                COLOR_SWATCH_HAIRLINE,
+                1.0,
+            );
+            let inset = 4.0 + edge_width / 2.0;
+            set_color(ctx, edge);
+            ctx.set_line_width(edge_width);
+            rounded_rect_path(
+                ctx,
+                inset,
+                inset,
+                size - inset * 2.0,
+                size - inset * 2.0,
+                8.0 - inset,
+            );
             let _ = ctx.stroke();
             if draw_selected.get() {
                 set_color(ctx, super::css::ACCENT);

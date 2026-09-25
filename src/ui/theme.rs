@@ -22,6 +22,7 @@
 //! — consolidation is deliberate follow-up work, not a side effect.
 
 pub mod css;
+pub mod swatch;
 
 use std::sync::OnceLock;
 

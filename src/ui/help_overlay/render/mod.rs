@@ -322,6 +322,7 @@ pub(crate) fn render_help_overlay_result_with_content(
         highlight: palette.highlight,
         section_card_bg: palette.section_card_bg,
         section_card_border: palette.section_card_border,
+        badge_backdrop: [palette.bg_top[0], palette.bg_top[1], palette.bg_top[2]],
     };
 
     // Clickable rows collect their screen rects here as the grid draws, so the

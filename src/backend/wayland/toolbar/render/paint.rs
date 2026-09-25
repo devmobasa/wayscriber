@@ -8,13 +8,14 @@
 use crate::backend::wayland::toolbar::view::{
     ButtonStyle, ShortcutBadgePlacement, WidgetKind, WidgetNode, WidgetTree,
 };
+use crate::ui::theme::swatch::{chrome_rgb, swatch_edge_stroke};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
-    COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED, COLOR_TEXT_SECONDARY,
-    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL,
-    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
+    COLOR_PANEL_BACKGROUND, COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED,
+    COLOR_TEXT_SECONDARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
+    FONT_SIZE_LABEL, PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
     PRESET_SLOT_SWATCH_RATIO, set_color,
 };
 use super::widgets::{
@@ -343,10 +344,25 @@ fn paint_node(
             ctx.set_source_rgba(color.0, color.1, color.2, color.3);
             swatch_path(ctx);
             let _ = ctx.fill();
-            // Subtle inner hairline keeps dark fills defined against the bar.
-            set_color(ctx, COLOR_SWATCH_HAIRLINE);
-            ctx.set_line_width(1.0);
-            draw_round_rect(ctx, x + 1.5, y + 1.5, w - 3.0, h - 3.0, 4.5);
+            // The inner edge: a subtle hairline, or a contrast ring when the
+            // fill would vanish into the bar (the palette's black).
+            let (edge, edge_width) = swatch_edge_stroke(
+                *color,
+                chrome_rgb(COLOR_PANEL_BACKGROUND),
+                COLOR_SWATCH_HAIRLINE,
+                1.0,
+            );
+            let inset = 1.0 + edge_width / 2.0;
+            set_color(ctx, edge);
+            ctx.set_line_width(edge_width);
+            draw_round_rect(
+                ctx,
+                x + inset,
+                y + inset,
+                w - inset * 2.0,
+                h - inset * 2.0,
+                6.0 - inset,
+            );
             let _ = ctx.stroke();
             if *selected {
                 set_color(ctx, COLOR_ACCENT);
@@ -559,6 +575,48 @@ mod tests {
         assert!(
             g > 0 && b > 0,
             "checkerboard did not show through: ({r}, {g}, {b})"
+        );
+    }
+
+    /// Paint one quick-color swatch node on the toolbar panel color and sample
+    /// the pixel on its inner edge, halfway down the left side.
+    fn swatch_edge_on_panel(color: (f64, f64, f64, f64)) -> (u8, u8, u8) {
+        let surface = ImageSurface::create(Format::Rgb24, 32, 32).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            let panel = COLOR_PANEL_BACKGROUND;
+            ctx.set_source_rgb(panel.0, panel.1, panel.2);
+            let _ = ctx.paint();
+            let node = WidgetNode::decor(
+                "test.swatch",
+                (4.0, 4.0, 24.0, 24.0),
+                WidgetKind::Swatch {
+                    color,
+                    selected: false,
+                },
+            );
+            paint_node(&UiTextEngine::default(), &ctx, &node, None);
+        }
+        let mut surface = surface;
+        pixel_at(&mut surface, 5, 16)
+    }
+
+    #[test]
+    fn a_dark_swatch_gets_a_light_ring_against_the_dark_bar() {
+        let black = crate::domain::color::PALETTE_BLACK;
+        let (r, g, b) = swatch_edge_on_panel((black.r, black.g, black.b, black.a));
+        let edge = (u32::from(r) + u32::from(g) + u32::from(b)) / 3;
+        assert!(
+            edge >= 120,
+            "the black swatch's edge should read against the bar: ({r}, {g}, {b})"
+        );
+
+        // A swatch that already stands out keeps the quiet hairline.
+        let red = crate::domain::color::PALETTE_RED;
+        let (r, g, b) = swatch_edge_on_panel((red.r, red.g, red.b, red.a));
+        assert!(
+            r > 200 && g < 120 && b < 120,
+            "red keeps its own edge: ({r}, {g}, {b})"
         );
     }
 

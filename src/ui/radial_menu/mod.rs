@@ -197,8 +197,17 @@ fn draw_static_base(
             theme::set_color(ctx, COLOR_ACTIVE_BORDER);
             ctx.set_line_width(2.5);
         } else {
-            theme::set_color(ctx, COLOR_SWATCH_BORDER);
-            ctx.set_line_width(1.0);
+            // A segment whose color melts into the chrome (the palette's black
+            // on the dark theme) takes a contrast ring instead of the dark
+            // border, which would only deepen it.
+            let (edge, edge_width) = theme::swatch::swatch_edge_stroke(
+                (c.r, c.g, c.b, c.a),
+                theme::swatch::chrome_rgb(theme.surface_pill),
+                COLOR_SWATCH_BORDER,
+                1.0,
+            );
+            theme::set_color(ctx, edge);
+            ctx.set_line_width(edge_width);
         }
         let _ = ctx.stroke();
     }

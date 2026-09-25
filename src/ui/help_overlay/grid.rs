@@ -40,6 +40,8 @@ pub(crate) struct GridColors {
     pub(crate) highlight: [f64; 4],
     pub(crate) section_card_bg: [f64; 4],
     pub(crate) section_card_border: [f64; 4],
+    /// Chrome behind the color badges, for their contrast outline.
+    pub(crate) badge_backdrop: [f64; 3],
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -295,8 +297,14 @@ pub(crate) fn draw_sections_grid(
                     ctx.set_source_rgba(badge.color[0], badge.color[1], badge.color[2], 0.25);
                     let _ = ctx.fill_preserve();
 
-                    ctx.set_source_rgba(badge.color[0], badge.color[1], badge.color[2], 0.85);
-                    ctx.set_line_width(1.0);
+                    // A badge whose color melts into the panel (the palette's
+                    // black) takes a contrast ring for its border.
+                    let border = (badge.color[0], badge.color[1], badge.color[2], 0.85);
+                    let [bg_r, bg_g, bg_b] = colors.badge_backdrop;
+                    let (edge, edge_width) =
+                        theme::swatch::swatch_edge_stroke(border, (bg_r, bg_g, bg_b), border, 1.0);
+                    theme::set_color(ctx, edge);
+                    ctx.set_line_width(edge_width);
                     let _ = ctx.stroke();
 
                     theme::set_color(ctx, BADGE_LABEL_TEXT);
