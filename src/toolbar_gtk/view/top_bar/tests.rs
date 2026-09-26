@@ -861,6 +861,7 @@ fn assert_gtk_style_widget(
         model::StylePillRole::Toggle => assert_gtk_style_toggle(widget, control, snapshot, &id),
         model::StylePillRole::Button => assert_gtk_style_button(widget, control, snapshot, &id),
         model::StylePillRole::Stepper => assert_gtk_style_stepper(widget, control, snapshot, &id),
+        model::StylePillRole::Meter => assert_gtk_style_meter(widget, control, snapshot, &id),
         model::StylePillRole::Segmented => {
             assert_gtk_style_segmented(widget, control, snapshot, &id)
         }
@@ -1009,6 +1010,118 @@ fn assert_gtk_style_button(
             "{id} lost the leading gap the builtin gives it"
         );
     }
+    if control == model::StylePillControl::PenFeelChip {
+        assert_gtk_pen_feel_chip(&button, control, snapshot, id);
+    }
+}
+
+/// The chip keeps the slot the planner budgets, reads as pressed while its
+/// panel is open, and names the current levels for assistive tech.
+fn assert_gtk_pen_feel_chip(
+    button: &gtk4::Button,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    assert_eq!(
+        button.width_request(),
+        STYLE_PEN_FEEL_W.round() as i32,
+        "{id} keeps the planned slot"
+    );
+    // A size request is a minimum: a label wider than the slot would grow the
+    // button past the arrangement the planner declared fits.
+    let label_w = button
+        .child()
+        .expect("chip label")
+        .measure(gtk4::Orientation::Horizontal, -1)
+        .1;
+    assert!(
+        label_w <= STYLE_PEN_FEEL_W.round() as i32,
+        "{id} label is {label_w}px wide"
+    );
+    assert_eq!(
+        button.has_css_class("active"),
+        control.active(snapshot),
+        "{id} pressed while open"
+    );
+    assert_accessible_label(
+        button.upcast_ref(),
+        &model::StylePillControl::pen_feel_accessible_label(snapshot),
+        id,
+    );
+}
+
+fn assert_gtk_style_meter(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let meter = control.meter(snapshot).expect("level meter");
+    let row = widget
+        .clone()
+        .downcast::<gtk4::Box>()
+        .unwrap_or_else(|_| panic!("{id} is a meter row"));
+    // The builtin lays the caption and bars out abutting and the width
+    // planner budgets caption + bar row exactly.
+    assert_eq!(row.spacing(), 0, "{id} meter spacing");
+    assert_accessible_label(widget, &control.label(snapshot), id);
+
+    let caption = control.caption().expect("meters carry a caption");
+    let caption_label = widget
+        .first_child()
+        .expect("meter caption")
+        .downcast::<gtk4::Label>()
+        .unwrap_or_else(|_| panic!("{id} caption is a label"));
+    assert_eq!(caption_label.text(), caption, "{id} caption text");
+    assert_eq!(
+        caption_label.widget_name().as_str(),
+        format!("{}.caption", control.id()),
+        "{id} caption id"
+    );
+    assert_eq!(
+        caption_label.width_request(),
+        STYLE_CAPTION_W.round() as i32,
+        "{id} caption keeps the planned slot"
+    );
+
+    let mut bar = caption_label.next_sibling();
+    let mut bar_widths = 0;
+    for segment in &meter.segments {
+        let button = bar
+            .clone()
+            .unwrap_or_else(|| panic!("{} exists", segment.id))
+            .downcast::<gtk4::Button>()
+            .unwrap_or_else(|_| panic!("{} is a button", segment.id));
+        assert_eq!(button.widget_name().as_str(), segment.id, "{id} bar id");
+        assert!(button.has_css_class("meter-bar"), "{} class", segment.id);
+        assert_eq!(
+            button.has_css_class("filled"),
+            segment.filled,
+            "{} fill",
+            segment.id
+        );
+        assert_eq!(
+            button.tooltip_text().as_deref(),
+            Some(segment.tooltip.as_str()),
+            "{} tooltip",
+            segment.id
+        );
+        assert_accessible_label(button.upcast_ref(), &segment.tooltip, &segment.id);
+        assert_eq!(
+            button.is_sensitive(),
+            control.enabled(snapshot),
+            "{} enabled",
+            segment.id
+        );
+        bar_widths += button.width_request();
+        bar = button.next_sibling();
+    }
+    assert!(bar.is_none(), "{id} has one bar per level");
+    assert!(
+        (bar_widths - STYLE_METER_W.round() as i32).abs() <= meter.segments.len() as i32,
+        "{id} bars fill the planned meter row: {bar_widths}"
+    );
 }
 
 fn assert_gtk_style_stepper(
@@ -1033,6 +1146,10 @@ fn assert_gtk_style_stepper(
             .downcast::<gtk4::Label>()
             .unwrap_or_else(|_| panic!("{id} caption is a label"));
         assert_eq!(caption_label.text(), caption, "{id} caption text");
+        assert!(
+            caption_label.has_css_class("stepper-caption"),
+            "{id} caption tone"
+        );
         assert_eq!(
             caption_label.widget_name().as_str(),
             format!("{}.caption", control.id()),
@@ -1158,6 +1275,7 @@ fn detach_test_popovers(top: &mut TopBar) {
     top.session.clear();
     top.settings.clear();
     top.layout.clear();
+    top.feel.clear();
 }
 
 fn assert_builtin_node(
@@ -1381,8 +1499,11 @@ enum StylePillNodeExpectation {
     StepHalf(model::StylePillControl, usize),
     /// The value readout between the stepper halves (decor).
     StepValue(model::StylePillControl),
-    /// The caption naming a tool stepper, before its − half (decor).
-    StepCaption(model::StylePillControl),
+    /// The caption naming a tool meter or stepper, before its bars or its
+    /// − half (decor).
+    Caption(model::StylePillControl),
+    /// One interactive bar of a level meter.
+    MeterBar(model::StylePillControl, usize),
 }
 
 fn expected_style_pill_nodes(
@@ -1391,13 +1512,27 @@ fn expected_style_pill_nodes(
 ) -> Vec<(String, StylePillNodeExpectation)> {
     let mut nodes = Vec::new();
     for (id, control) in style_pill_controls(snapshot, plan) {
-        // Steppers render as three nodes (−, readout, +) without a node
-        // carrying the control id itself.
+        // Meters render as a caption and one node per bar, and steppers as
+        // three nodes (−, readout, +), neither with a node carrying the
+        // control id itself.
+        if let Some(meter) = control.meter(snapshot) {
+            nodes.push((
+                format!("{id}.caption"),
+                StylePillNodeExpectation::Caption(control),
+            ));
+            for (index, segment) in meter.segments.iter().enumerate() {
+                nodes.push((
+                    segment.id.clone(),
+                    StylePillNodeExpectation::MeterBar(control, index),
+                ));
+            }
+            continue;
+        }
         if let Some(steps) = control.steps(snapshot) {
             if control.caption().is_some() {
                 nodes.push((
                     format!("{id}.caption"),
-                    StylePillNodeExpectation::StepCaption(control),
+                    StylePillNodeExpectation::Caption(control),
                 ));
             }
             nodes.push((
@@ -1470,9 +1605,36 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
         ("selection", style_pill_selection_snapshot(&regular)),
         ("minimized", minimized),
         ("micro", micro),
-    ] {
+    ]
+    .into_iter()
+    .chain(stroke_controls_scenarios(&regular))
+    {
         assert_builtin_style_pill_scenario(name, &snapshot);
     }
+}
+
+/// Pen, Marker, and Shape Pen in each `stroke_controls` style, plus Shape Pen
+/// with its Pen feel panel open.
+fn stroke_controls_scenarios(regular: &ToolbarSnapshot) -> Vec<(&'static str, ToolbarSnapshot)> {
+    use crate::config::ToolbarStrokeControls as S;
+
+    let styled = |tool, style| {
+        let mut snapshot = style_pill_tool_snapshot(regular, tool);
+        snapshot.stroke_controls = style;
+        snapshot
+    };
+    let mut open = styled(Tool::LiveShape, S::Panel);
+    open.pen_feel_open = true;
+    vec![
+        ("pen-panel", styled(Tool::Pen, S::Panel)),
+        ("pen-meter", styled(Tool::Pen, S::Meter)),
+        ("pen-stepper", styled(Tool::Pen, S::Stepper)),
+        ("marker-stepper", styled(Tool::Marker, S::Stepper)),
+        ("shape-pen-panel", styled(Tool::LiveShape, S::Panel)),
+        ("shape-pen-meter", styled(Tool::LiveShape, S::Meter)),
+        ("shape-pen-stepper", styled(Tool::LiveShape, S::Stepper)),
+        ("shape-pen-panel-open", open),
+    ]
 }
 
 fn assert_builtin_style_pill_scenario(name: &str, snapshot: &ToolbarSnapshot) {
@@ -1568,9 +1730,19 @@ fn assert_builtin_style_pill_node(
             id,
             *control,
         ),
-        StylePillNodeExpectation::StepCaption(control) => {
-            assert_builtin_style_pill_step_caption(name, kind, has_interaction, id, *control)
+        StylePillNodeExpectation::Caption(control) => {
+            assert_builtin_style_pill_caption(name, kind, has_interaction, id, *control)
         }
+        StylePillNodeExpectation::MeterBar(control, index) => assert_builtin_style_pill_meter_bar(
+            name,
+            snapshot,
+            kind,
+            interaction_event,
+            interaction_tooltip,
+            id,
+            *control,
+            *index,
+        ),
         StylePillNodeExpectation::SegmentHalf(control, index) => {
             assert_builtin_style_pill_segment_half(
                 name,
@@ -1696,6 +1868,11 @@ fn assert_builtin_style_pill_control_kind(
                 !control.enabled(snapshot),
                 "{name}: {id} disabled style"
             );
+            assert_eq!(
+                style.active,
+                control.active(snapshot),
+                "{name}: {id} active style"
+            );
         }
         (
             model::StylePillRole::Segmented,
@@ -1792,7 +1969,45 @@ fn assert_builtin_style_pill_step_value(
     }
 }
 
-fn assert_builtin_style_pill_step_caption(
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_meter_bar(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    id: &str,
+    control: model::StylePillControl,
+    index: usize,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    let meter = control.meter(snapshot).expect("level meter");
+    let segment = &meter.segments[index];
+    let enabled = control.enabled(snapshot);
+    match kind {
+        W::MeterBar {
+            filled,
+            enabled: painted_enabled,
+        } => {
+            assert_eq!(*filled, segment.filled, "{name}: {id} bar fill");
+            assert_eq!(*painted_enabled, enabled, "{name}: {id} bar enabled");
+        }
+        other => panic!("{name}: {id} meter bar kind {other:?}"),
+    }
+    assert_eq!(
+        interaction_event,
+        enabled.then_some(&segment.event),
+        "{name}: {id} bar event"
+    );
+    assert_eq!(
+        interaction_tooltip,
+        enabled.then_some(segment.tooltip.as_str()),
+        "{name}: {id} bar tooltip"
+    );
+}
+
+fn assert_builtin_style_pill_caption(
     name: &str,
     kind: &crate::backend::wayland::TopToolbarWidgetKind,
     has_interaction: bool,
@@ -1811,7 +2026,7 @@ fn assert_builtin_style_pill_step_caption(
             );
             assert!(label.caption, "{name}: {id} caption tone");
         }
-        other => panic!("{name}: {id} stepper caption kind {other:?}"),
+        other => panic!("{name}: {id} caption kind {other:?}"),
     }
 }
 
@@ -1875,6 +2090,26 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
         &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &thicker),
     );
     assert!(pen_key == thicker_key, "value churn must not rebuild");
+
+    // Every stroke-controls style is its own structure, even the meter and
+    // stepper whose control ids match; the open panel and the levels are not.
+    let key_of = |snapshot: &ToolbarSnapshot| {
+        StructureKey::of(
+            snapshot,
+            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), snapshot),
+        )
+    };
+    let styled = |style| {
+        let mut snapshot = pen.clone();
+        snapshot.stroke_controls = style;
+        key_of(&snapshot)
+    };
+    let [panel, meter, stepper] = crate::config::ToolbarStrokeControls::ALL.map(styled);
+    assert!(panel != meter && meter != stepper && panel != stepper);
+    let mut open = pen.clone();
+    open.pen_feel_open = true;
+    open.pen_smoothing = 6;
+    assert!(key_of(&open) == panel, "opening the panel must not rebuild");
 }
 
 fn find_widget_named(root: &gtk4::Widget, name: &str) -> Option<gtk4::Widget> {
@@ -1972,6 +2207,7 @@ fn gtk_widget_contract_scenarios() -> (
     );
     scenarios.push(("long-font-name", long_font));
     scenarios.push(("selection", style_pill_selection_snapshot(&regular)));
+    scenarios.extend(stroke_controls_scenarios(&regular));
     (regular, highlighted, scenarios)
 }
 
@@ -2684,7 +2920,265 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert_key_relay_contract(&regular);
 
     assert_layout_menu_contract(&regular);
+
+    assert_pen_feel_contract(&regular);
+    assert_meter_scroll_survives_delayed_snapshots();
     eprintln!("EXECUTED: GTK widget contract assertions");
+}
+
+fn assert_meter_scroll_survives_delayed_snapshots() {
+    for setting in [
+        model::StrokeSetting::Smoothing,
+        model::StrokeSetting::ShapeDetection,
+    ] {
+        let mut state = make_test_input_state();
+        state.set_pen_smoothing(1);
+        state.set_shape_recognition_sensitivity(1);
+        let snapshot = ToolbarSnapshot::from_input(&state);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        let refresh = super::meter::append_meter_bars(
+            &FeedbackSender::new(tx),
+            &row,
+            super::meter::MeterBarsSpec {
+                setting,
+                id_prefix: "test.meter".to_string(),
+                size: (STYLE_METER_W, STYLE_ROW_H),
+            },
+            |_| true,
+            &snapshot,
+            1.0,
+        );
+        let controllers = row.observe_controllers();
+        let wheel = (0..controllers.n_items())
+            .find_map(|index| {
+                controllers
+                    .item(index)?
+                    .downcast::<gtk4::EventControllerScroll>()
+                    .ok()
+            })
+            .expect("meter scroll controller");
+        let scroll = |state: &mut crate::input::InputState, dy: f64, expected: u8| {
+            assert!(wheel.emit_by_name::<bool>("scroll", &[&0.0f64, &dy]));
+            let GtkToolbarFeedback::Event { event, .. } = rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("meter wheel event")
+            else {
+                panic!("wheel sends a toolbar event");
+            };
+            state.apply_toolbar_event(event);
+            assert_eq!(
+                setting.level(&ToolbarSnapshot::from_input(state)),
+                expected,
+                "{setting:?} dy={dy}"
+            );
+        };
+
+        scroll(&mut state, -2.0, 3);
+        let delayed = ToolbarSnapshot::from_input(&state);
+        scroll(&mut state, -1.0, 4);
+        refresh(&delayed);
+        scroll(&mut state, 1.0, 3);
+        scroll(&mut state, -20.0, setting.max());
+        scroll(&mut state, -1.0, setting.max());
+        scroll(&mut state, 20.0, 0);
+        scroll(&mut state, 1.0, 0);
+    }
+}
+
+fn named<W: IsA<gtk4::Widget>>(root: &impl IsA<gtk4::Widget>, id: &str) -> W {
+    find_widget_named(root.as_ref(), id)
+        .unwrap_or_else(|| panic!("{id} exists"))
+        .downcast::<W>()
+        .unwrap_or_else(|_| panic!("{id} widget type"))
+}
+
+/// The Pen feel chip toggles a panel popover built from the shared
+/// sections: a meter per setting the tool uses (its bars send the shared
+/// level events), the live preview, and the level's name and hint, which
+/// the panel's updaters keep current while it stays open.
+fn assert_pen_feel_contract(regular: &ToolbarSnapshot) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let mut shape_pen = style_pill_tool_snapshot(regular, Tool::LiveShape);
+    shape_pen.stroke_controls = crate::config::ToolbarStrokeControls::Panel;
+    shape_pen.pen_smoothing = 3;
+    shape_pen.shape_recognition_sensitivity = 3;
+    top.build_strip(
+        &shape_pen,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &shape_pen),
+    );
+    assert!(top.feel.mounted.is_some(), "the chip carries its panel");
+    assert_pen_feel_popover_relays_keys(&top, &rx);
+
+    let chip: gtk4::Button = named(&top.root, "top.style.pen-feel");
+    for (open, event) in [(false, true), (true, false)] {
+        top.feel.expected_open.set(open);
+        chip.emit_clicked();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1)).expect("chip event"),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::TogglePenFeelPanel(event),
+                rebind_requested: false,
+            }
+        );
+    }
+    top.feel.expected_open.set(false);
+
+    let mut open = shape_pen.clone();
+    open.pen_feel_open = true;
+    let (content, updaters) = top.build_pen_feel_content(&open, 1.0);
+    assert!(
+        has_capture_phase_click_gesture(content.upcast_ref()),
+        "the panel captures click modifiers"
+    );
+    assert_eq!(
+        named::<gtk4::Label>(&content, "top.feel.title").text(),
+        "Pen feel"
+    );
+    for section in model::pen_feel_sections(&open) {
+        assert_pen_feel_section(&content, &section, &rx);
+    }
+
+    // Levels change while the panel stays open; nothing rebuilds.
+    let mut changed = open.clone();
+    changed.pen_smoothing = crate::draw::MAX_PEN_SMOOTHING;
+    changed.shape_recognition_sensitivity = 0;
+    for updater in &updaters {
+        updater(&changed);
+    }
+    for (id, text) in [
+        ("top.feel.smoothing.value", "Maximum"),
+        ("top.feel.smoothing.hint", "Smoothest; tight corners soften"),
+        ("top.feel.detection.value", "Precise"),
+        (
+            "top.feel.detection.hint",
+            "Only near-perfect strokes become shapes",
+        ),
+    ] {
+        assert_eq!(named::<gtk4::Label>(&content, id).text(), text, "{id}");
+    }
+    for bar in 1..=crate::draw::MAX_PEN_SMOOTHING {
+        let id = format!("top.feel.smoothing.level-{bar}");
+        assert!(named::<gtk4::Button>(&content, &id).has_css_class("filled"));
+    }
+    assert!(!named::<gtk4::Button>(&content, "top.feel.detection.level-1").has_css_class("filled"));
+
+    // Pen has only the smoothing section.
+    let mut pen = style_pill_tool_snapshot(regular, Tool::Pen);
+    pen.pen_feel_open = true;
+    let (pen_content, _) = top.build_pen_feel_content(&pen, 1.0);
+    assert!(find_widget_named(pen_content.upcast_ref(), "top.feel.smoothing.preview").is_some());
+    assert!(find_widget_named(pen_content.upcast_ref(), "top.feel.detection.label").is_none());
+
+    detach_test_popovers(&mut top);
+}
+
+/// Keys that reach the open panel go to the overlay like the other menus':
+/// Escape closes it, and a shortcut closes it and runs. Switching input on
+/// every snapshot leaves the popover targetable.
+fn assert_pen_feel_popover_relays_keys(
+    top: &TopBar,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    use crate::toolbar_gtk::widgets::key_relay_controller;
+    use gtk4::glib::translate::IntoGlib;
+
+    let resources = top.feel.mounted.as_ref().expect("Pen feel popover");
+    for _ in 0..2 {
+        resources.set_capture_transparent(false);
+    }
+    assert!(resources.popover.can_target(), "the panel takes input");
+
+    let relay = key_relay_controller(&resources.popover).expect("the panel relays keys");
+    for keyval in [gtk4::gdk::Key::Escape, gtk4::gdk::Key::s] {
+        let handled = relay.emit_by_name::<bool>(
+            "key-pressed",
+            &[&keyval, &0u32, &gtk4::gdk::ModifierType::empty()],
+        );
+        assert!(handled, "{keyval:?} leaves the panel for the overlay");
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("relayed key feedback"),
+            GtkToolbarFeedback::Key {
+                keyval: keyval.into_glib(),
+                ctrl: false,
+                shift: false,
+                alt: false,
+                logo: false,
+            }
+        );
+    }
+}
+
+fn assert_pen_feel_section(
+    content: &gtk4::Box,
+    section: &model::PenFeelSection,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let key = section.setting.panel_key();
+    assert_eq!(
+        named::<gtk4::Label>(content, &section.id("label")).text(),
+        section.setting.name(),
+        "{key} name"
+    );
+    assert_eq!(
+        named::<gtk4::Label>(content, &section.id("value")).text(),
+        section.level_name,
+        "{key} level"
+    );
+    assert_eq!(
+        named::<gtk4::Label>(content, &section.id("hint")).text(),
+        section.hint,
+        "{key} hint"
+    );
+
+    let mut widths = 0;
+    for segment in &section.meter.segments {
+        let bar: gtk4::Button = named(content, &segment.id);
+        assert!(bar.has_css_class("meter-bar"), "{}", segment.id);
+        assert_eq!(
+            bar.has_css_class("filled"),
+            segment.filled,
+            "{}",
+            segment.id
+        );
+        assert_eq!(
+            bar.tooltip_text().as_deref(),
+            Some(segment.tooltip.as_str())
+        );
+        assert_accessible_label(bar.upcast_ref(), &segment.tooltip, &segment.id);
+        widths += bar.width_request();
+        bar.emit_clicked();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("panel bar event"),
+            GtkToolbarFeedback::Event {
+                event: segment.event.clone(),
+                rebind_requested: false,
+            },
+            "{}",
+            segment.id
+        );
+    }
+    let column = model::PEN_FEEL_CONTENT_W.round() as i32;
+    assert!(
+        (widths - column).abs() <= section.meter.segments.len() as i32,
+        "{key} bars span the column: {widths}"
+    );
+
+    let preview = find_widget_named(content.upcast_ref(), &section.id("preview"));
+    assert_eq!(preview.is_some(), section.has_preview(), "{key} preview");
+    if let Some(preview) = preview {
+        let area = preview
+            .downcast::<gtk4::DrawingArea>()
+            .expect("the preview is a drawing area");
+        assert_eq!(area.content_width(), column);
+        assert_eq!(
+            area.content_height(),
+            model::PEN_FEEL_PREVIEW_H.round() as i32
+        );
+    }
 }
 
 /// The layout button opens a preset menu built from the shared entries; a

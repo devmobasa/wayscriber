@@ -132,6 +132,8 @@ pub struct GtkStylesheetValues {
     pub field_border: String,
     pub field_border_hover: String,
     pub scrollbar_slider: String,
+    pub track: String,
+    pub track_hover: String,
     pub text_on_fill: String,
     // ---- Scaled metrics (px) ----
     pub radius_panel: i32,
@@ -231,6 +233,8 @@ impl GtkStylesheetValues {
             field_border: rgba_css_compact(t::COLOR_FIELD_BORDER),
             field_border_hover: rgba_css_compact(t::COLOR_FIELD_BORDER_HOVER),
             scrollbar_slider: rgba_css_compact(t::COLOR_SCROLLBAR_SLIDER),
+            track: rgba_css(t::COLOR_TRACK_BACKGROUND),
+            track_hover: rgba_css(t::COLOR_METER_TRACK_HOVER),
             text_on_fill: hex_css(t::COLOR_TEXT_ON_FILL),
             radius_panel: px(t::RADIUS_PANEL),
             radius_card: px(t::RADIUS_CARD),

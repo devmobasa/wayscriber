@@ -89,8 +89,12 @@ pub enum ToolbarEvent {
     SetSpotlightMagnification(f64),
     /// Smoothing passes applied to freehand and marker strokes on release.
     SetPenSmoothing(u8),
+    /// Adjust smoothing by whole levels from the live application state.
+    NudgePenSmoothing(i32),
     /// How readily Shape Pen turns ink into shapes, 0 (precise) to 4.
     SetShapeRecognitionSensitivity(u8),
+    /// Adjust shape detection by whole levels from the live application state.
+    NudgeShapeRecognitionSensitivity(i32),
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
     /// Turn bold on or off for selected text, or for the next label typed.
@@ -298,6 +302,9 @@ pub enum ToolbarEvent {
     /// Open/close the chrome island's layout-preset menu. Choosing a preset
     /// from it (`SetToolbarLayoutMode`) closes it.
     ToggleLayoutMenu(bool),
+    /// Open/close the style pill's Pen feel panel. The smoothing and Shape
+    /// Pen detection changes made inside it keep it open.
+    TogglePenFeelPanel(bool),
     /// Hide or show a known toolbar item override.
     SetToolbarItemHidden(ToolbarItemId, bool),
     /// Move an orderable toolbar item by a relative row delta.

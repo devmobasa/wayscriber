@@ -78,6 +78,7 @@ impl WaylandState {
         self.focus.set_pointer_focused(false);
         // The pointer is gone, so no further wheel tick can extend the burst.
         self.input_state.flush_spotlight_magnification_gesture();
+        self.toolbar_chrome.meter_wheel_mut().reset();
         self.spotlight.clear_wheel_idle_deadline();
         if routed.surface == InputSurface::Canvas {
             self.cancel_region_selection_from(RegionInputSource::Pointer);

@@ -6,7 +6,8 @@ use super::super::super::fields::{
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
+    UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -171,6 +172,9 @@ impl ConfigDraft {
             ui_toolbar_show_zoom_chip: config.ui.toolbar.show_zoom_chip,
             ui_toolbar_rebind_modifier: ToolbarRebindModifierOption::from_config(
                 config.ui.toolbar.rebind_modifier,
+            ),
+            ui_toolbar_stroke_controls: ToolbarStrokeControlsOption::from_config(
+                config.ui.toolbar.stroke_controls,
             ),
             ui_toolbar_items: toolbar_items,
             ui_toolbar_show_presets: toolbar_visibility.show_presets,

@@ -690,6 +690,16 @@ force_inline = false
 # "ctrl_shift_alt", or "disabled".
 rebind_modifier = "ctrl_shift"
 
+# How the style pill shows pen smoothing and Shape Pen recognition
+# sensitivity while the Pen, Marker, or Shape Pen is up:
+# "panel" (default): one "Pen feel" chip that opens a small panel with a
+#   level meter for each setting, a live preview of the smoothing, and a
+#   one-line description of each level
+# "meter": inline level meters captioned Smooth / Shapes (click a bar or
+#   scroll over them)
+# "stepper": inline "- value +" steppers captioned Smooth / Detect
+stroke_controls = "panel"
+
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
 # Nothing is hidden by default; add "top.utility.screenshot" to hide the
@@ -1132,7 +1142,9 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # the hand. Smoothing runs when you lift the pen, never while you draw, so the
 # live stroke always sits exactly on the pointer. Neither endpoint ever moves.
 #
-# Also on the toolbar as the "Smoothing" stepper while the Pen or Marker is up.
+# Also on the toolbar while the Pen, Marker, or Shape Pen is up, in the style
+# pill's "Pen feel" panel (or its Smooth meter/stepper; see
+# [ui.toolbar] stroke_controls).
 # A session remembers the level it was saved at; this is the starting value.
 pen_smoothing = 3
 
@@ -1141,7 +1153,9 @@ pen_smoothing = 3
 # lines, ellipses, rectangles, and triangles; it does not change the dedicated
 # shape tools or grid spacing.
 #
-# Also on the toolbar as the "Sensitivity" stepper while Shape Pen is up.
+# Also on the toolbar while Shape Pen is up, in the style pill's "Pen feel"
+# panel (or its Shapes meter / Detect stepper; see [ui.toolbar]
+# stroke_controls).
 # A session remembers the level it was saved at; this is the starting value.
 shape_recognition_sensitivity = 3
 

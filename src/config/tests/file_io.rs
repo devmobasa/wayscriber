@@ -115,6 +115,33 @@ fn a_bad_value_in_one_section_keeps_every_other_section() {
     });
 }
 
+/// An unknown stroke-controls style falls back the way every enum key does:
+/// `[ui]` runs on defaults (so the style is the default panel), the error is
+/// reported, and the rest of the file still applies.
+#[test]
+fn an_unknown_stroke_controls_style_falls_back_to_the_default_panel() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            "[ui.toolbar]\nstroke_controls = \"dial\"\n\n[drawing]\ndefault_thickness = 7.0\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("a value error must not fail the load");
+
+        assert_eq!(loaded.config.drawing.default_thickness, 7.0);
+        assert_eq!(
+            loaded.config.ui.toolbar.stroke_controls,
+            crate::config::ToolbarStrokeControls::Panel
+        );
+        assert_eq!(loaded.section_errors.len(), 1);
+        assert_eq!(loaded.section_errors[0].section, "ui");
+    });
+}
+
 /// A top-level scalar gets the same treatment as a section.
 #[test]
 fn a_bad_top_level_value_reports_its_own_key() {
@@ -671,6 +698,7 @@ fn config_example_parses_and_documents_current_user_facing_fields() {
         "zoom_chip_display",
         "show_floating_badge",
         "show_zoom_chip",
+        "stroke_controls",
     ] {
         assert!(
             example.contains(&format!("{field} =")),

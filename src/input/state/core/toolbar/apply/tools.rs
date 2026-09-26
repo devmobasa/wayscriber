@@ -1,5 +1,6 @@
 use crate::draw::TextMeasurer;
 use crate::draw::{Color, FontDescriptor};
+use crate::input::state::TopMenuState;
 use crate::input::{DrawingState, EraserMode, InputState, Tool};
 
 use crate::ui::toolbar::PrecisionEntryTarget;
@@ -90,6 +91,40 @@ impl InputState {
 
     pub(super) fn apply_toolbar_set_pen_smoothing(&mut self, level: u8) -> bool {
         self.set_pen_smoothing(level)
+    }
+
+    pub(super) fn apply_toolbar_nudge_stroke_setting(
+        &mut self,
+        setting: crate::ui::toolbar::model::StrokeSetting,
+        steps: i32,
+    ) -> bool {
+        use crate::ui::toolbar::model::StrokeSetting;
+
+        let level = match setting {
+            StrokeSetting::Smoothing => self.style.pen_smoothing,
+            StrokeSetting::ShapeDetection => self.style.shape_recognition_sensitivity,
+        };
+        let Some(target) = setting.wheel_target(level, steps) else {
+            return false;
+        };
+
+        match setting {
+            StrokeSetting::Smoothing => self.set_pen_smoothing(target),
+            StrokeSetting::ShapeDetection => self.set_shape_recognition_sensitivity(target),
+        }
+    }
+
+    /// Open/close the style pill's Pen feel panel. Opening it closes every
+    /// other top-strip menu; the level changes made inside it keep it open
+    /// (they name the panel as their popover in the event policy).
+    pub(super) fn apply_toolbar_toggle_pen_feel_panel(&mut self, open: bool) -> bool {
+        let changed = self
+            .toolbar
+            .set_top_menu_open(TopMenuState::PenFeelPanel, open);
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
     }
 
     /// Open the overlay's system font picker from the toolbar.
@@ -269,8 +304,51 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::TopMenuState;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn pen_feel_panel_is_mutually_exclusive_with_the_other_top_menus() {
+        let mut state = make_test_input_state();
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleLayoutMenu(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(true)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::PenFeelPanel);
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
+
+        state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(false)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+        assert!(!state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(false)));
+    }
+
+    /// The panel's own controls change the levels without closing it; the
+    /// backend's dismissal policy spares them (see the event policy tests).
+    #[test]
+    fn level_changes_leave_the_pen_feel_panel_open() {
+        let mut state = make_test_input_state();
+        state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(true));
+
+        state.apply_toolbar_event(ToolbarEvent::SetPenSmoothing(5));
+        state.apply_toolbar_event(ToolbarEvent::SetShapeRecognitionSensitivity(1));
+
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::PenFeelPanel);
+        assert_eq!(state.style.pen_smoothing, 5);
+        assert_eq!(state.style.shape_recognition_sensitivity, 1);
+    }
+
+    #[test]
+    fn selecting_a_tool_closes_the_pen_feel_panel() {
+        let mut state = make_test_input_state();
+        state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(true));
+
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Marker));
+
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+    }
 
     #[test]
     fn edit_hex_color_opens_popup_with_hex_focused() {

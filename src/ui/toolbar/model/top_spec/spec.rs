@@ -17,7 +17,8 @@ pub(crate) struct TopStripPlan {
     ///
     /// The rung directly above `compact`, which hides the pill outright.
     ///
-    /// The smoothing stepper and the bold toggle leave first. Both are choices
+    /// The Pen feel chip (or the smoothing and detection meters or steppers)
+    /// and the bold toggle leave first. Both are choices
     /// made once for a session rather than adjusted mid-demo, unlike the color,
     /// the thickness, and the size beside them — and the rung below this one
     /// takes the whole pill, so shedding two controls is strictly better than

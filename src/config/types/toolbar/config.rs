@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, TopDisplayMode, ZoomChipDisplay,
+    ToolbarRebindModifier, ToolbarStrokeControls, TopDisplayMode, ZoomChipDisplay,
 };
 
 /// Toolbar visibility and pinning configuration.
@@ -138,6 +138,11 @@ pub struct ToolbarConfig {
     /// Modifier chord used to edit a clicked control's keyboard shortcut.
     #[serde(default)]
     pub rebind_modifier: ToolbarRebindModifier,
+
+    /// How the style pill shows pen smoothing and Shape Pen sensitivity
+    /// ("panel", "meter", "stepper")
+    #[serde(default)]
+    pub stroke_controls: ToolbarStrokeControls,
 }
 
 impl Default for ToolbarConfig {
@@ -173,6 +178,7 @@ impl Default for ToolbarConfig {
             top_offset_y: 0.0,
             force_inline: false,
             rebind_modifier: ToolbarRebindModifier::default(),
+            stroke_controls: ToolbarStrokeControls::default(),
         }
     }
 }

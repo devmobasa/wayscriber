@@ -416,6 +416,30 @@ fn zoom_chip_control_labels_expose_the_toolbar_settings_tab() {
 }
 
 #[test]
+fn stroke_controls_terms_expose_the_toolbar_settings_tab() {
+    for query in [
+        "stroke controls",
+        "pen feel",
+        "stepper",
+        "meters",
+        "smoothing",
+        "sensitivity",
+    ] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let ui = summary.tab(TabId::Ui).expect("UI match");
+
+        assert!(
+            ui.ui_tabs().contains(&UiTabId::Toolbar),
+            "{query} should expose Toolbar settings: {:?}",
+            ui.ui_tabs()
+        );
+    }
+}
+
+#[test]
 fn dynamic_matches_preserve_original_indices() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.draft.boards.items[1].name = "Meeting board".to_string();

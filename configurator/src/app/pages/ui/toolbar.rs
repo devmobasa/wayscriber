@@ -3,7 +3,7 @@ use relm4::ComponentSender;
 use crate::messages::Message;
 use crate::models::{
     OverrideOption, TabId, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ZoomChipDisplayOption,
+    ToolbarRebindModifierOption, ToolbarStrokeControlsOption, ZoomChipDisplayOption,
 };
 
 use super::super::super::state::ConfiguratorApp;
@@ -20,6 +20,8 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     });
     let (override_modes, override_mode_labels) =
         options(ToolbarLayoutModeOption::list(), |value| value.label());
+    let (stroke_styles, stroke_style_labels) =
+        options(ToolbarStrokeControlsOption::list(), |value| value.label());
 
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
@@ -57,6 +59,14 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             rebind_labels,
             |app| app.draft.ui_toolbar_rebind_modifier,
             Message::ToolbarRebindModifierChanged,
+        )
+        .combo_row(
+            "Stroke controls",
+            "How the style pill shows pen smoothing and Shape Pen sensitivity. Panel: one Pen feel button opening meters with a live smoothing preview. Meters or Steppers: inline controls.",
+            stroke_styles,
+            stroke_style_labels,
+            |app| app.draft.ui_toolbar_stroke_controls,
+            Message::ToolbarStrokeControlsChanged,
         )
         .switch_row(
             "Configured default: pin top toolbar",

@@ -183,6 +183,13 @@ pub enum WidgetKind {
     /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
     /// (`HitKind::DragSet*`); the paint only shows the current value.
     Slider { t: f64 },
+    /// One bar of a level meter. The node's rect is the bar's hit slot; the
+    /// painter draws a slimmer rounded bar centered in it, accent-filled at
+    /// or below the current level and track-colored above it.
+    MeterBar { filled: bool, enabled: bool },
+    /// The Pen feel panel's live smoothing preview at `level`, drawn by the
+    /// painter both frontends share (`toolbar_icons::draw_smoothing_preview`).
+    SmoothingPreview { level: u8 },
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),

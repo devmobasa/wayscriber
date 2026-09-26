@@ -33,4 +33,5 @@ fn control_ids(spec: &StylePillSpec) -> Vec<String> {
 }
 
 mod selection;
+mod stroke_controls;
 mod tool_states;

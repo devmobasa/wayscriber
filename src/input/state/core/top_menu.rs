@@ -9,6 +9,8 @@ pub(crate) enum TopMenuState {
     SettingsPopover,
     /// The chrome island's layout-preset menu (Simple / Regular / Advanced).
     LayoutMenu,
+    /// The style pill's Pen feel panel (smoothing and Shape Pen detection).
+    PenFeelPanel,
 }
 
 impl TopMenuState {
@@ -26,7 +28,7 @@ impl TopMenuState {
     pub(crate) const fn is_flyout(self) -> bool {
         matches!(
             self,
-            Self::ShapePicker | Self::TopOverflow | Self::LayoutMenu
+            Self::ShapePicker | Self::TopOverflow | Self::LayoutMenu | Self::PenFeelPanel
         )
     }
 
@@ -48,5 +50,20 @@ impl TopMenuState {
         let changed = self.is_open();
         *self = Self::Closed;
         changed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TopMenuState;
+
+    /// The built-in toolbar's own key handler closes flyouts on Escape before
+    /// anything else sees the key; the Pen feel panel is one, like the layout
+    /// menu, and every other key reaches the overlay's routing.
+    #[test]
+    fn the_pen_feel_panel_is_a_flyout_menu() {
+        assert!(TopMenuState::PenFeelPanel.is_open());
+        assert!(TopMenuState::PenFeelPanel.is_flyout());
+        assert!(!TopMenuState::PenFeelPanel.is_popover());
     }
 }

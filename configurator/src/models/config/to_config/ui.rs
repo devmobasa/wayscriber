@@ -55,6 +55,7 @@ impl ConfigDraft {
         config.ui.toolbar.zoom_chip_display = self.ui_toolbar_zoom_chip_display.to_config();
         config.ui.toolbar.show_zoom_chip = self.ui_toolbar_show_zoom_chip;
         config.ui.toolbar.rebind_modifier = self.ui_toolbar_rebind_modifier.to_config();
+        config.ui.toolbar.stroke_controls = self.ui_toolbar_stroke_controls.to_config();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.items = self.ui_toolbar_items.clone();
         let visibility = wayscriber::config::resolve_section_visibility(

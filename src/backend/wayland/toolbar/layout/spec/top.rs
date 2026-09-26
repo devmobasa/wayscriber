@@ -79,9 +79,16 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEL_VALUE_W: f64 = 64.0;
     /// Stepper half (−/+) width for docked numeric selection properties.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_STEP_W: f64 = 20.0;
-    /// Caption slot before a tool stepper ("Smooth", "Detect"). Holds one
-    /// short word at the caption size plus the gap to the − half.
+    /// Caption slot before a level meter or tool stepper ("Smooth", "Shapes",
+    /// "Detect"). Holds one short word at the caption size plus the gap to
+    /// the first bar or the − half.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_CAPTION_W: f64 = 48.0;
+    /// Bar row of a level meter. Fixed whatever the level count, so both
+    /// meters line up; each bar takes an equal share of it.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_METER_W: f64 = 84.0;
+    /// The Pen feel chip ("Pen feel ▾"): a fixed slot like the font button's,
+    /// so the planner budgets it whatever the levels behind it.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PEN_FEEL_W: f64 = 92.0;
 
     pub(in crate::backend::wayland::toolbar) fn top_size(
         &self,

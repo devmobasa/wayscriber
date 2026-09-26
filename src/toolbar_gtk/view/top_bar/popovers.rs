@@ -1,7 +1,8 @@
 //! GTK top-strip popover lifecycle and content.
 //!
-//! Keeps shapes, overflow, and Canvas/Session/Settings popovers synchronized
-//! without rebuilding content on unrelated snapshot changes.
+//! Keeps shapes, overflow, Canvas/Session/Settings, layout, and Pen feel
+//! popovers synchronized without rebuilding content on unrelated snapshot
+//! changes.
 
 use super::*;
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
@@ -21,14 +22,52 @@ pub(super) fn set_popover_capture_transparent(
     set_popover_input_enabled(popover, input_enabled);
 }
 
+/// What a popover's surface input region needs when its input is switched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PopoverInputRegion {
+    /// Leave GTK's own region alone.
+    Keep,
+    /// Take no input at all (capture suppression).
+    Empty,
+    /// Drop the capture-time empty region and let GTK shape it again.
+    Restore,
+}
+
+/// Only an actual switch touches the region.
+///
+/// GTK shapes a popover's input region to its panel and arrow; the drop
+/// shadow around them is part of the surface but not of that region. The
+/// shadow reaches about 15px above the arrow tip, over the lower part of the
+/// button the popover hangs from. This runs on every snapshot, and it used
+/// to reset the region to the whole surface each time, so the invisible
+/// shadow took input. Over a short anchor such as the 24px Pen feel chip,
+/// the pointer resting on the anchor after the click was then inside the
+/// freshly mapped popup, and the compositor moved keyboard focus off the
+/// toolbar: shortcuts typed next went to the window behind the overlay.
+fn popover_input_region(was_enabled: bool, enabled: bool) -> PopoverInputRegion {
+    match (was_enabled, enabled) {
+        (_, false) => PopoverInputRegion::Empty,
+        (false, true) => PopoverInputRegion::Restore,
+        (true, true) => PopoverInputRegion::Keep,
+    }
+}
+
 fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
+    let region = popover_input_region(popover.can_target(), enabled);
     popover.set_can_target(enabled);
+
     if let Some(surface) = popover.surface() {
-        if enabled {
-            surface.set_input_region(None);
-        } else {
-            let empty = gtk4::cairo::Region::create();
-            surface.set_input_region(Some(&empty));
+        match region {
+            PopoverInputRegion::Keep => {}
+            PopoverInputRegion::Empty => {
+                let empty = gtk4::cairo::Region::create();
+                surface.set_input_region(Some(&empty));
+            }
+            PopoverInputRegion::Restore => {
+                surface.set_input_region(None);
+                // GTK reshapes the region when it next lays the popover out.
+                popover.queue_allocate();
+            }
         }
     }
     popover.queue_draw();
@@ -45,6 +84,7 @@ impl TopBar {
             ("top-session-popover", self.session.mounted.as_ref()),
             ("top-settings-popover", self.settings.mounted.as_ref()),
             ("top-layout-popover", self.layout.mounted.as_ref()),
+            ("top-pen-feel-popover", self.feel.mounted.as_ref()),
         ]
         .into_iter()
         .filter_map(|(name, resources)| resources.map(|resources| (name, resources)))
@@ -57,6 +97,7 @@ impl TopBar {
         self.session.set_open(false);
         self.settings.set_open(false);
         self.layout.set_open(false);
+        self.feel.set_open(false);
     }
 
     /// Each native stays mapped with transparent proof content during capture.
@@ -166,6 +207,7 @@ impl TopBar {
 
         self.sync_menu_popovers(snapshot, scale);
         self.sync_layout_menu(snapshot, scale);
+        self.sync_pen_feel_panel(snapshot, scale);
     }
 
     /// Keep the Canvas/Session/Settings popovers' contents and open state in
@@ -501,4 +543,26 @@ fn menu_popover_viewport(
     scroller.set_max_content_height((MENU_MAX_CONTENT_H * scale).round() as i32);
     scroller.set_child(Some(content));
     scroller.upcast()
+}
+
+#[cfg(test)]
+mod input_region_tests {
+    use super::{PopoverInputRegion, popover_input_region};
+
+    /// Re-enabling input that was never disabled must leave GTK's shaped
+    /// region (panel and arrow, not the shadow) in place; only leaving
+    /// capture suppression restores it.
+    #[test]
+    fn only_an_input_switch_touches_the_popover_region() {
+        assert_eq!(popover_input_region(true, true), PopoverInputRegion::Keep);
+        assert_eq!(
+            popover_input_region(false, true),
+            PopoverInputRegion::Restore
+        );
+        assert_eq!(popover_input_region(true, false), PopoverInputRegion::Empty);
+        assert_eq!(
+            popover_input_region(false, false),
+            PopoverInputRegion::Empty
+        );
+    }
 }

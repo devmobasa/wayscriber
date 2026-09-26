@@ -1285,6 +1285,40 @@ fn config_draft_round_trips_zoom_chip_display() {
 }
 
 #[test]
+fn config_draft_round_trips_toolbar_stroke_controls() {
+    use super::super::fields::ToolbarStrokeControlsOption;
+    use wayscriber::config::ToolbarStrokeControls;
+
+    let default_draft = ConfigDraft::from_config(&Config::default());
+    assert_eq!(
+        default_draft.ui_toolbar_stroke_controls,
+        ToolbarStrokeControlsOption::Panel
+    );
+    let saved = default_draft
+        .to_config(&Config::default())
+        .expect("default draft should convert");
+    assert_eq!(
+        saved.ui.toolbar.stroke_controls,
+        ToolbarStrokeControls::Panel
+    );
+
+    for style in ToolbarStrokeControls::ALL {
+        let mut config = Config::default();
+        config.ui.toolbar.stroke_controls = style;
+        let draft = ConfigDraft::from_config(&config);
+        assert_eq!(draft.ui_toolbar_stroke_controls.to_config(), style);
+        let saved = draft.to_config(&config).expect("draft should convert");
+        assert_eq!(saved.ui.toolbar.stroke_controls, style);
+    }
+
+    let labels: Vec<_> = ToolbarStrokeControlsOption::list()
+        .iter()
+        .map(|option| option.label())
+        .collect();
+    assert_eq!(labels, ["Panel (default)", "Meters", "Steppers"]);
+}
+
+#[test]
 fn config_draft_round_trips_chrome_visibility_preferences() {
     let mut config = Config::default();
     config.ui.show_floating_badge = false;

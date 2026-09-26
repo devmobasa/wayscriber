@@ -5,8 +5,9 @@ use crate::{
         toolbar::{
             ToolbarCursorHint,
             hit::{
-                HitRegion, drag_intent_for_hit, focus_hover_point, focused_event, intent_for_hit,
-                next_focus_index, quick_color_slot_for_hit, resolve_focus_index,
+                HitRegion, drag_intent_for_hit, find_hit, focus_hover_point, focused_event,
+                intent_for_hit, next_focus_index, quick_color_slot_for_hit, resolve_focus_index,
+                resolve_hit_index,
             },
             render::TOOLTIP_DELAY,
         },
@@ -45,9 +46,7 @@ struct InlineTopStrip {
 
 impl InlineTopStrip {
     fn hit_index_at(&self, position: (f64, f64)) -> Option<usize> {
-        self.hits
-            .iter()
-            .position(|hit| hit.contains(position.0, position.1))
+        resolve_hit_index(&self.hits, position.0, position.1)
     }
 
     fn contains(&self, position: (f64, f64)) -> bool {
@@ -57,21 +56,18 @@ impl InlineTopStrip {
     }
 
     fn primary_hit_at(&self, position: (f64, f64)) -> Option<(ToolbarIntent, bool)> {
-        self.hits
-            .iter()
-            .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+        let (x, y) = position;
+        find_hit(&self.hits, x, y, |hit| intent_for_hit(hit, x, y))
     }
 
     fn quick_color_slot_at(&self, position: (f64, f64)) -> Option<usize> {
-        self.hits
-            .iter()
-            .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1))
+        let (x, y) = position;
+        find_hit(&self.hits, x, y, |hit| quick_color_slot_for_hit(hit, x, y))
     }
 
     fn drag_hit_at(&self, position: (f64, f64)) -> Option<ToolbarIntent> {
-        self.hits
-            .iter()
-            .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+        let (x, y) = position;
+        find_hit(&self.hits, x, y, |hit| drag_intent_for_hit(hit, x, y))
     }
 
     fn set_hover(&mut self, hover: Option<(f64, f64)>, now: Instant) -> HoverChange {
@@ -162,9 +158,8 @@ impl InlineTopStrip {
 
     fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
         let (x, y) = self.hover?;
-        self.hits
-            .iter()
-            .find(|hit| hit.contains(x, y))
+        resolve_hit_index(&self.hits, x, y)
+            .map(|index| &self.hits[index])
             .map_or(Some(ToolbarCursorHint::Default), |hit| {
                 Some(hit.kind.cursor_hint())
             })
@@ -204,6 +199,7 @@ pub(in crate::backend::wayland) struct ToolbarChrome {
     gtk_top_hover: bool,
     focus_active: bool,
     inline: InlineTopStrip,
+    meter_wheel: super::meter_wheel::MeterWheel,
 }
 
 impl ToolbarChrome {
@@ -221,7 +217,19 @@ impl ToolbarChrome {
             gtk_top_hover: false,
             focus_active: false,
             inline: InlineTopStrip::default(),
+            meter_wheel: super::meter_wheel::MeterWheel::default(),
         }
+    }
+
+    /// Partial wheel travel over a style-pill level meter.
+    pub(in crate::backend::wayland) fn meter_wheel(&self) -> &super::meter_wheel::MeterWheel {
+        &self.meter_wheel
+    }
+
+    pub(in crate::backend::wayland) fn meter_wheel_mut(
+        &mut self,
+    ) -> &mut super::meter_wheel::MeterWheel {
+        &mut self.meter_wheel
     }
 
     pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {

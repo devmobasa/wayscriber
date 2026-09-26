@@ -392,6 +392,7 @@ impl WaylandState {
             TopMenuState::SessionPopover => ToolbarPopover::Session,
             TopMenuState::SettingsPopover => ToolbarPopover::Settings,
             TopMenuState::LayoutMenu => ToolbarPopover::LayoutMenu,
+            TopMenuState::PenFeelPanel => ToolbarPopover::PenFeel,
         };
         if !event_dismisses_popover(event, open_popover) {
             return;

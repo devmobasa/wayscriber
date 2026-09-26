@@ -173,6 +173,11 @@ impl InputState {
         self.toolbar.rebind_modifier().click_label()
     }
 
+    /// How the style pill shows pen smoothing and Shape Pen sensitivity.
+    pub(crate) fn toolbar_stroke_controls(&self) -> crate::config::ToolbarStrokeControls {
+        self.toolbar.stroke_controls()
+    }
+
     pub(crate) fn toolbar_visibility_snapshot(&self) -> super::super::toolbar::ToolbarVisibility {
         self.toolbar.visibility_snapshot()
     }
@@ -430,6 +435,14 @@ impl InputState {
         modifier: crate::config::ToolbarRebindModifier,
     ) {
         self.toolbar.override_rebind_modifier_for_test(modifier);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_stroke_controls(
+        &mut self,
+        style: crate::config::ToolbarStrokeControls,
+    ) {
+        self.toolbar.override_stroke_controls_for_test(style);
     }
 
     /// Wrapper for undo that preserves existing action plumbing.

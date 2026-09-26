@@ -26,6 +26,8 @@ pub(crate) enum ToolbarPopover {
     PrecisionEntry,
     /// The chrome island's layout-preset menu.
     LayoutMenu,
+    /// The style pill's Pen feel panel.
+    PenFeel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -276,6 +278,13 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         // Choosing a preset is the menu's purpose, so it closes the menu;
         // only the toggle itself spares it.
         ToolbarEvent::ToggleLayoutMenu(_) => &[P::LayoutMenu],
+        // The Pen feel panel is adjusted in place: its meters change the
+        // levels live and the panel stays up until dismissed.
+        ToolbarEvent::TogglePenFeelPanel(_)
+        | ToolbarEvent::SetPenSmoothing(_)
+        | ToolbarEvent::NudgePenSmoothing(_)
+        | ToolbarEvent::SetShapeRecognitionSensitivity(_)
+        | ToolbarEvent::NudgeShapeRecognitionSensitivity(_) => &[P::PenFeel],
         // Shapes hosts its own inline options.
         ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_) => &[P::ShapePicker],
 
@@ -509,7 +518,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::NudgeMarkerOpacity(_)
         | ToolbarEvent::SetSpotlightMagnification(_)
         | ToolbarEvent::SetPenSmoothing(_)
+        | ToolbarEvent::NudgePenSmoothing(_)
         | ToolbarEvent::SetShapeRecognitionSensitivity(_)
+        | ToolbarEvent::NudgeShapeRecognitionSensitivity(_)
         | ToolbarEvent::SetEraserMode(_)
         | ToolbarEvent::SetFont(_)
         | ToolbarEvent::SetFontBold(_)
@@ -585,6 +596,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::CustomRedo
         | ToolbarEvent::ToggleTopOverflow(_)
         | ToolbarEvent::ToggleLayoutMenu(_)
+        | ToolbarEvent::TogglePenFeelPanel(_)
         | ToolbarEvent::ToggleSessionPopover(_)
         | ToolbarEvent::ToggleSettingsPopover(_)
         | ToolbarEvent::ToggleCanvasPopover(_)
@@ -750,5 +762,37 @@ mod popover_affinity_tests {
         assert!(configurator.contains(&P::Session) && configurator.contains(&P::Settings));
         let shapes = popovers_for_event(&ToolbarEvent::ToggleShapePicker(true));
         assert!(shapes.contains(&P::ShapePicker) && shapes.contains(&P::TopOverflow));
+    }
+
+    /// Clicks and wheel steps inside the Pen feel panel adjust the levels
+    /// with the panel still open; anything else closes it.
+    #[test]
+    fn the_pen_feel_panel_spares_its_own_controls() {
+        use ToolbarPopover as P;
+
+        for event in [
+            ToolbarEvent::TogglePenFeelPanel(false),
+            ToolbarEvent::SetPenSmoothing(4),
+            ToolbarEvent::NudgePenSmoothing(2),
+            ToolbarEvent::SetShapeRecognitionSensitivity(1),
+            ToolbarEvent::NudgeShapeRecognitionSensitivity(-1),
+        ] {
+            assert_eq!(popovers_for_event(&event), &[P::PenFeel], "{event:?}");
+        }
+        for event in [
+            ToolbarEvent::SelectTool(Tool::Pen),
+            ToolbarEvent::ToggleLayoutMenu(true),
+            ToolbarEvent::OpenColorPickerPopup,
+            ToolbarEvent::SetThickness(4.0),
+        ] {
+            assert!(
+                !popovers_for_event(&event).contains(&P::PenFeel),
+                "{event:?} closes the panel"
+            );
+        }
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::TogglePenFeelPanel(true)),
+            ToolbarPersistence::Ephemeral
+        );
     }
 }

@@ -25,9 +25,15 @@ mod build;
 mod chrome;
 mod layout_menu;
 mod menus;
+mod meter;
+mod pen_feel;
 mod stepper;
 
 const TOP_LABEL_FONT_SIZE: f64 = 14.0;
+/// Caption text size of the tool meters and steppers ("Smooth"). The GTK
+/// `.meter-caption`/`.stepper-caption` labels read the same token
+/// (`font_tooltip`), so both toolbars draw the word at one size.
+const CAPTION_FONT_SIZE: f64 = crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP;
 const MINI_LABEL_FONT_SIZE: f64 = 10.0; // FONT_SIZE_SMALL
 
 /// Extra advance consumed by a group divider (the 1px line plus breathing
@@ -312,6 +318,7 @@ pub fn top_input_rects(
         "top.menu.session.panel",
         "top.menu.settings.panel",
         "top.layout.panel",
+        "top.feel.panel",
     ] {
         if let Some(node) = tree.node_by_id(&id.to_string().into()) {
             let (x, y, w, h) = node.rect;
@@ -324,7 +331,8 @@ pub fn top_input_rects(
 
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, the style pill, the overflow
-/// popover, the Canvas/Session/Settings popovers, and the layout menu.
+/// popover, the Canvas/Session/Settings popovers, the layout menu, and the
+/// Pen feel panel.
 pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
@@ -340,6 +348,7 @@ pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f6
         .max(build::overflow_height_planned(snapshot, &plan))
         .max(menus::menu_popover_height_planned(engine, snapshot, &plan))
         .max(layout_menu::layout_menu_height_planned(snapshot, &plan))
+        .max(pen_feel::pen_feel_height_planned(snapshot, &plan))
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
@@ -394,6 +403,7 @@ fn natural_width_planned_at(
                 && !id.starts_with("top.overflow.")
                 && !id.starts_with("top.menu.")
                 && !id.starts_with("top.layout.")
+                && !id.starts_with("top.feel.")
         })
         .map(|node| node.rect.0 + node.rect.2)
         .fold(0.0_f64, f64::max);

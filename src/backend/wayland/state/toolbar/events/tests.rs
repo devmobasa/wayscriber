@@ -104,6 +104,41 @@ fn choosing_a_layout_preset_closes_the_layout_menu() {
     );
 }
 
+/// The Pen feel panel is adjusted in place: its meter clicks and wheel steps
+/// (the same level events the inline meters send) and its own chip spare it,
+/// while picking a tool or anything else outside the panel closes it.
+#[test]
+fn pen_feel_panel_survives_its_level_changes_and_closes_on_anything_else() {
+    for event in [
+        ToolbarEvent::TogglePenFeelPanel(false),
+        ToolbarEvent::SetPenSmoothing(0),
+        ToolbarEvent::SetPenSmoothing(6),
+        ToolbarEvent::NudgePenSmoothing(-2),
+        ToolbarEvent::SetShapeRecognitionSensitivity(4),
+        ToolbarEvent::NudgeShapeRecognitionSensitivity(2),
+    ] {
+        assert!(
+            !event_dismisses_popover(&event, ToolbarPopover::PenFeel),
+            "{event:?} keeps the panel open"
+        );
+    }
+    for event in [
+        ToolbarEvent::SelectTool(Tool::Marker),
+        ToolbarEvent::ToggleLayoutMenu(true),
+        ToolbarEvent::ToggleTopOverflow(true),
+        ToolbarEvent::Undo,
+    ] {
+        assert!(
+            event_dismisses_popover(&event, ToolbarPopover::PenFeel),
+            "{event:?} closes the panel"
+        );
+    }
+    assert_eq!(
+        persistence_for(&ToolbarEvent::TogglePenFeelPanel(true)),
+        ToolbarPersistence::Ephemeral
+    );
+}
+
 #[test]
 fn pin_confirmations_distinguish_persistent_and_live_only_changes() {
     let cases = [

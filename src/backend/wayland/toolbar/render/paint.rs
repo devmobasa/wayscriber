@@ -21,10 +21,10 @@ use super::widgets::constants::{
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
     draw_divider_vertical, draw_drag_handle, draw_label_center, draw_label_center_color,
-    draw_label_left, draw_label_left_color, draw_label_left_wrapped, draw_mini_checkbox,
-    draw_minimize_button, draw_panel_background, draw_pin_button, draw_popover_panel,
-    draw_restore_tab_body, draw_round_rect, draw_segmented_control, ellipsize_to_width,
-    point_in_rect, set_icon_color,
+    draw_label_left, draw_label_left_color, draw_label_left_wrapped, draw_meter_bar,
+    draw_mini_checkbox, draw_minimize_button, draw_panel_background, draw_pin_button,
+    draw_popover_panel, draw_restore_tab_body, draw_round_rect, draw_segmented_control,
+    ellipsize_to_width, point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
@@ -319,6 +319,12 @@ fn paint_node(
             );
         }
         WidgetKind::HitArea => {}
+        WidgetKind::MeterBar { filled, enabled } => {
+            draw_meter_bar(ctx, node.rect, *filled, is_hover, *enabled);
+        }
+        WidgetKind::SmoothingPreview { level } => {
+            crate::toolbar_icons::draw_smoothing_preview(ctx, node.rect, *level);
+        }
         WidgetKind::Slider { t } => {
             // Track and knob: a rounded track with the accent knob riding the
             // inset travel.

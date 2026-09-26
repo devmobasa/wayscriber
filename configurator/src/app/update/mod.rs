@@ -217,6 +217,9 @@ impl ConfiguratorApp {
             Message::ToolbarRebindModifierChanged(option) => {
                 self.handle_toolbar_rebind_modifier_changed(option)
             }
+            Message::ToolbarStrokeControlsChanged(option) => {
+                self.handle_toolbar_stroke_controls_changed(option)
+            }
             Message::ToolbarOverrideModeChanged(option) => {
                 self.handle_toolbar_override_mode_changed(option)
             }

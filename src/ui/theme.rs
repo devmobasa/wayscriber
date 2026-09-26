@@ -484,6 +484,15 @@ pub mod toolbar {
     pub const COLOR_TRACK_BACKGROUND: Rgba = (0.5, 0.5, 0.6, 0.6);
     /// Slider knob (accent at reduced alpha)
     pub const COLOR_TRACK_KNOB: Rgba = rgba(ACCENT_RGB, 0.9);
+    /// Empty level-meter bar under the pointer: the track, brightened so the
+    /// bar reads as the click target.
+    pub const COLOR_METER_TRACK_HOVER: Rgba = (0.5, 0.5, 0.6, 0.9);
+    /// The Pen feel panel's smoothing preview well: the segmented-control
+    /// inset, so the sample reads as a display rather than a control.
+    pub const COLOR_SMOOTHING_PREVIEW_BG: Rgba = COLOR_SEGMENT_BG;
+    /// The preview's sample stroke as drawn: a faint neutral under the
+    /// accent-colored smoothed stroke, which covers it wherever they agree.
+    pub const COLOR_SMOOTHING_PREVIEW_RAW: Rgba = (1.0, 1.0, 1.0, 0.35);
 
     // ---- Card/panel backgrounds ----
     /// Main panel background: the islands, popovers, and GTK panels. Opaque

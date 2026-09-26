@@ -7,6 +7,7 @@ mod actions;
 mod controls;
 mod history;
 mod security;
+mod smoothing_preview;
 pub(crate) mod svg;
 mod tools;
 mod zoom;
@@ -17,6 +18,8 @@ pub use history::*;
 pub use security::*;
 pub use tools::*;
 pub use zoom::*;
+
+pub(crate) use smoothing_preview::draw_smoothing_preview;
 
 pub(crate) type ToolbarIconPainter = fn(&cairo::Context, f64, f64, f64);
 

@@ -81,8 +81,8 @@ pub use toolbar::{
     ResolvedToolbarItems, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, TopDisplayMode,
-    ZoomChipDisplay, toolbar_item_definitions, toolbar_item_order_group,
+    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, ToolbarStrokeControls,
+    TopDisplayMode, ZoomChipDisplay, toolbar_item_definitions, toolbar_item_order_group,
 };
 pub(crate) use toolbar::{
     ToolbarItemVisibilitySetting, factory_individual_toolbar_item_visibility_settings,

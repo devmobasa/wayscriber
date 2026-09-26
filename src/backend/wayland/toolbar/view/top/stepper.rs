@@ -5,11 +5,7 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
 use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
-use super::TOP_LABEL_FONT_SIZE;
-
-/// Caption text size. The GTK `.caption` label reads the same token
-/// (`font_tooltip`), so both toolbars draw the word at one size.
-const CAPTION_FONT_SIZE: f64 = crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP;
+use super::{CAPTION_FONT_SIZE, TOP_LABEL_FONT_SIZE};
 
 /// Width one stepper occupies, caption included, without the trailing gap.
 ///

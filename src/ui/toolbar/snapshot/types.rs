@@ -74,13 +74,15 @@ pub struct ToolContext {
     pub show_font_controls: bool,
     /// Whether the text-size slider joins the font controls.
     pub show_font_size: bool,
-    /// Whether the pen-smoothing stepper should be shown.
+    /// Whether pen smoothing belongs in the style pill (as the Pen feel
+    /// panel's smoothing section, a meter, or a stepper).
     ///
     /// Follows the tool rather than the setting: smoothing is one number for
     /// the whole program, but it only reaches strokes the pen and marker
     /// accumulate, so a Line or Blur tool has nothing for the stepper to do.
     pub show_pen_smoothing: bool,
-    /// Whether the Shape Pen sensitivity stepper should be shown.
+    /// Whether Shape Pen sensitivity belongs in the style pill (as the Pen
+    /// feel panel's detection section, a meter, or a stepper).
     pub show_shape_sensitivity: bool,
 }
 
@@ -347,6 +349,8 @@ pub struct ToolbarSnapshot {
     pub toolbar_scale: f64,
     /// Current toolbar layout mode
     pub layout_mode: ToolbarLayoutMode,
+    /// How the style pill shows pen smoothing and Shape Pen sensitivity
+    pub stroke_controls: crate::config::ToolbarStrokeControls,
     /// Resolved known item-level toolbar visibility config.
     pub resolved_toolbar_items: ResolvedToolbarItems,
     /// Whether to show extended color palette
@@ -402,6 +406,8 @@ pub struct ToolbarSnapshot {
     pub canvas_popover_open: bool,
     /// Whether the chrome island's layout-preset menu is open
     pub layout_menu_open: bool,
+    /// Whether the style pill's Pen feel panel is open
+    pub pen_feel_open: bool,
     /// Whether exiting only hides the overlay: the daemon spawned this overlay
     /// and keeps running after it closes. Filled by the backend.
     pub exit_hides_overlay: bool,

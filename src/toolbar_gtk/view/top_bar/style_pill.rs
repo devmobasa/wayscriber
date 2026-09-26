@@ -14,7 +14,7 @@ use super::*;
 /// control. The GTK bars must never retain keyboard focus — the popups the
 /// pill opens (color picker, precise entry) live on the overlay surface,
 /// which keeps the keyboard.
-fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
+pub(super) fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
     let button = sized_button(width, height);
     button.set_label(label);
     button
@@ -46,7 +46,7 @@ impl TopBar {
     /// The label is built even while the status is empty, and hidden instead of
     /// omitted: the bar only rebuilds when the pill's control list changes, so a
     /// slot that appears later has to already exist.
-    fn append_style_status_label(
+    pub(super) fn append_style_status_label(
         &mut self,
         pill: &gtk4::Box,
         control: model::StylePillControl,
@@ -345,71 +345,17 @@ impl TopBar {
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
                 }
+                model::StylePillControl::PenFeelChip => {
+                    self.append_pen_feel_chip(&pill, control, snapshot, scale, px(gap));
+                }
+                model::StylePillControl::PenSmoothingMeter
+                | model::StylePillControl::ShapeSensitivityMeter => {
+                    self.append_style_meter(&pill, control, snapshot, scale, px(gap));
+                }
                 model::StylePillControl::PenSmoothingStepper
                 | model::StylePillControl::ShapeSensitivityStepper
                 | model::StylePillControl::SelectionStepper(_) => {
-                    // No spacing between the parts: the builtin lays caption,
-                    // −, value, and + out abutting, and the width planner
-                    // budgets exactly that. Child gaps here would make this
-                    // widget wider than the arrangement the planner declared
-                    // fits.
-                    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-                    set_semantic_widget_id(&row, control.id().as_ref());
-                    // A row of "−  3  +" says nothing about what it steps: the
-                    // caption names it on screen, the label for assistive tech.
-                    let accessible_label = control.label(snapshot);
-                    row.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
-                    row.set_valign(gtk4::Align::Center);
-                    if let Some(caption) = control.caption() {
-                        let caption_label = gtk4::Label::new(Some(caption));
-                        caption_label.add_css_class("stepper-caption");
-                        set_semantic_widget_id(
-                            &caption_label,
-                            &format!("{}.caption", control.id()),
-                        );
-                        caption_label.set_xalign(0.0);
-                        caption_label.set_width_request(px(STYLE_CAPTION_W));
-                        row.append(&caption_label);
-                    }
-                    let steps = control.required_steps(snapshot);
-                    let mut handles: Vec<gtk4::Button> = Vec::new();
-                    let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
-                    set_semantic_widget_id(&minus, steps[0].id);
-                    minus.set_tooltip_text(Some(&steps[0].tooltip));
-                    minus.update_property(&[gtk4::accessible::Property::Label(&steps[0].tooltip)]);
-                    row.append(&minus);
-                    handles.push(minus.clone());
-                    let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
-                    value.add_css_class("stepper-value");
-                    set_semantic_widget_id(&value, &format!("{}.value", control.id()));
-                    value.set_width_request(px(STYLE_SEL_VALUE_W));
-                    row.append(&value);
-                    let plus = pill_button(steps[1].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
-                    set_semantic_widget_id(&plus, steps[1].id);
-                    plus.set_tooltip_text(Some(&steps[1].tooltip));
-                    plus.update_property(&[gtk4::accessible::Property::Label(&steps[1].tooltip)]);
-                    row.append(&plus);
-                    handles.push(plus.clone());
-                    for (button, step) in handles.iter().zip(steps.iter()) {
-                        button.set_sensitive(control.enabled(snapshot));
-                        let sender = self.feedback.clone();
-                        let event = step.event.clone();
-                        button.connect_clicked(move |_| {
-                            send_event(&sender, event.clone());
-                        });
-                    }
-                    append_gap(&pill, row.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        value.set_label(&control.required_value_text(snapshot));
-                        let enabled = control.enabled(snapshot);
-                        for button in &handles {
-                            button.set_sensitive(enabled);
-                        }
-                    }));
-                    // The docked control reports on the selected shape's own
-                    // factor, so it needs the same unavailable state the
-                    // slider has.
-                    self.append_style_status_label(&pill, control, snapshot, px(gap));
+                    self.append_style_stepper(&pill, control, snapshot, scale, px(gap));
                 }
                 model::StylePillControl::EraserModeSegment => {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));

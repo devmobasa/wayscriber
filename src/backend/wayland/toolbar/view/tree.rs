@@ -63,11 +63,17 @@ impl WidgetTree {
     /// invariant tests below pin this native path to the same semantics.
     #[cfg(test)]
     pub fn hit(&self, x: f64, y: f64) -> Option<&WidgetNode> {
-        self.nodes
-            .iter()
-            .rev()
-            .filter(|node| node.interact.is_some())
-            .find(|node| rect_contains_with_min_target(node.rect, x, y))
+        // A node drawn under the point wins over one reached only through its
+        // inflated target, like the production `find_hit`.
+        let interactive = || {
+            self.nodes
+                .iter()
+                .rev()
+                .filter(|node| node.interact.is_some())
+        };
+        interactive()
+            .find(|node| drawn_contains(node.rect, x, y))
+            .or_else(|| interactive().find(|node| rect_contains_with_min_target(node.rect, x, y)))
     }
 
     /// Ids of keyboard-focusable nodes (click interactions), in paint order.
@@ -149,6 +155,12 @@ fn rects_overlap(first: (f64, f64, f64, f64), second: (f64, f64, f64, f64)) -> b
         && second.0 < first.0 + first.2
         && first.1 < second.1 + second.3
         && second.1 < first.1 + first.3
+}
+
+#[cfg(test)]
+fn drawn_contains(rect: (f64, f64, f64, f64), x: f64, y: f64) -> bool {
+    let (rx, ry, rw, rh) = rect;
+    x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
 }
 
 #[cfg(test)]

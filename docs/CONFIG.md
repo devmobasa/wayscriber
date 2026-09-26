@@ -385,7 +385,7 @@ drag_tool = "default"
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
-- **Shape Pen**: Press `S` (`select_live_shape_tool`), click **Shape Pen** next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** from the command palette. Confident lines, circles, ovals, rectangles, and triangles preview as shapes over a faint copy of the stroke and commit as editable shapes. Recognized ovals, rectangles, and triangles follow the Fill toggle, like the dedicated shape tools. If a stroke should have stayed ink, undo once to get the original stroke back; undo again to remove it. When a stroke is recognized, a small chip next to the shape names it with the undo shortcut, such as "Circle · Ctrl+Z keeps ink", and fades after about 1.5 seconds; the shortcut shown follows your undo binding. The chip is overlay chrome only and never appears in exports, captures, or saved sessions. Set `[drawing] shape_recognition_feedback = false`, or turn off **Name recognized Shape Pen shapes** in the configurator, to hide it. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (most forgiving), with 3 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. While Shape Pen is active, the style pill's **Detect** stepper changes it at once; so do **Increase / Decrease Shape Pen Sensitivity** in the command palette, or bind `increase_shape_recognition_sensitivity` / `decrease_shape_recognition_sensitivity`. A session remembers the level it was saved at; the config value is the starting level. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Rectangle and oval edges also snap to nearby Cartesian lines, and triangle corners to nearby Cartesian lines or isometric points. Set `[drawing] shape_recognition_grid_snap = false`, or turn off **Snap Shape Pen to board paper** in the configurator, to keep recognized shapes exactly where you drew them; axis alignment still applies. Rectangles drawn quickly, with leaning or skewed sides, are squared up to the average position of each side. Other ink stays freehand.
+- **Shape Pen**: Press `S` (`select_live_shape_tool`), click **Shape Pen** next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** from the command palette. Confident lines, circles, ovals, rectangles, and triangles preview as shapes over a faint copy of the stroke and commit as editable shapes. Recognized ovals, rectangles, and triangles follow the Fill toggle, like the dedicated shape tools. If a stroke should have stayed ink, undo once to get the original stroke back; undo again to remove it. When a stroke is recognized, a small chip next to the shape names it with the undo shortcut, such as "Circle · Ctrl+Z keeps ink", and fades after about 1.5 seconds; the shortcut shown follows your undo binding. The chip is overlay chrome only and never appears in exports, captures, or saved sessions. Set `[drawing] shape_recognition_feedback = false`, or turn off **Name recognized Shape Pen shapes** in the configurator, to hide it. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (most forgiving), with 3 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. While Shape Pen is active, the style pill changes it at once: the **Shape detection** meter in the **Pen feel** panel by default, or the **Shapes** meter or **Detect** stepper with `[ui.toolbar] stroke_controls = "meter"` or `"stepper"` (click a bar, or scroll over a meter); so do **Increase / Decrease Shape Pen Sensitivity** in the command palette, or bind `increase_shape_recognition_sensitivity` / `decrease_shape_recognition_sensitivity`. A session remembers the level it was saved at; the config value is the starting level. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Rectangle and oval edges also snap to nearby Cartesian lines, and triangle corners to nearby Cartesian lines or isometric points. Set `[drawing] shape_recognition_grid_snap = false`, or turn off **Snap Shape Pen to board paper** in the configurator, to keep recognized shapes exactly where you drew them; axis alignment still applies. Rectangles drawn quickly, with leaning or skewed sides, are squared up to the average position of each side. Other ink stays freehand.
 - **Laser pointer**: Press `L` (`select_laser_tool`), click the laser next to Marker on the toolbar (Regular and Advanced layouts), or choose **Laser Pointer Tool** from the command palette. The ink glows while you draw and fades away on its own (see [`[laser]`](#laser---laser-pointer))
 - **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
@@ -426,8 +426,8 @@ An empty list turns the action off.
 The toolbar's style pill carries a **Bold** toggle and a button showing the
 family in use; the button opens the font picker. Bold applies to selected text,
 or to the next label you type. Under width pressure, Bold leaves with the
-smoothing stepper; the family button remains until the whole style pill is
-hidden in the most compact layout.
+**Pen feel** chip (or the smoothing meter or stepper); the family button
+remains until the whole style pill is hidden in the most compact layout.
 
 Bold is a literal two-state control: it is checked for `font_weight = "bold"`
 and writes `"bold"` or `"normal"`. Numeric weights such as `700` still render at
@@ -573,10 +573,25 @@ the tool settings, so a session restores at the level it was saved at. A session
 written before this existed has no level recorded and restores at whatever
 `pen_smoothing` your config says.
 
-The level is also on the toolbar, as a stepper captioned **Smooth** in the style
-pill whenever the Pen, Marker, or Shape Pen is up. It reads `Off` at zero. The stepper is one of
-the first things the pill drops on a narrow output; the actions below still
-reach it there.
+The level is also on the toolbar whenever the Pen, Marker, or Shape Pen is up.
+`[ui.toolbar] stroke_controls` picks how the style pill shows it:
+
+- `"panel"` (the default): a **Pen feel ▾** chip whose tooltip names the
+  current levels. Clicking it opens a small panel with a **Smoothing** meter,
+  the name of the current level, a live preview that draws a sample shaky
+  stroke as drawn (faint) and as smoothed at the current level (accent), and
+  a one-line description of the level. With Shape Pen up, the panel also has
+  a **Shape detection** section. The panel stays open while you adjust it;
+  clicking the chip again, clicking elsewhere, or pressing Escape closes it.
+- `"meter"`: a meter captioned **Smooth**, one bar per level, filled up to the
+  current one.
+- `"stepper"`: a **Smooth** `− value +` stepper that reads `Off` at zero.
+
+On a meter, in the pill or in the panel, click a bar to set that level
+(clicking the highest filled bar steps one below it, down to `Off`), or scroll
+over it to step one level; the tooltip names the level. The chip, meter, or
+stepper is one of the first things the pill drops on a narrow output; the
+actions below still reach the level there.
 
 ### `[arrow]` - Arrow Geometry
 
@@ -1408,6 +1423,12 @@ force_inline = false
 # Values: "ctrl_shift", "ctrl_alt", "shift_alt", "ctrl_shift_alt", "disabled"
 rebind_modifier = "ctrl_shift"
 
+# How the style pill shows pen smoothing and Shape Pen sensitivity:
+# "panel" (default; a "Pen feel" chip opening a panel with meters and a
+# live smoothing preview), "meter" (inline level meters), or "stepper"
+# (inline - value + steppers)
+stroke_controls = "panel"
+
 [ui.toolbar.items]
 # Hide individual toolbar items or whole sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
@@ -1472,6 +1493,7 @@ top_controls = [
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
+- **Stroke controls**: `stroke_controls` picks how the style pill shows pen smoothing and Shape Pen recognition sensitivity while the Pen, Marker, or Shape Pen is up. `"panel"` (the default) shows one **Pen feel ▾** chip; its tooltip summarizes the current levels (for example "Smoothing: Medium · Shape detection: Forgiving — click to adjust"), and clicking it opens a panel under the chip with a **Smoothing** level meter, the level's name, a live preview of the smoothing on a sample stroke, and a one-line description of the level, plus a **Shape detection** meter and description while Shape Pen is up. Values change live while the panel stays open; the chip, Escape, another key, or a click elsewhere closes it, and it closes with the other top-strip menus. `"meter"` shows inline level meters captioned **Smooth** and **Shapes**, and `"stepper"` shows the inline **Smooth** / **Detect** `− value +` steppers. Click a meter bar (in the pill or the panel) to set that level, or scroll over the meter to step one level. An unknown value is reported like any other invalid `[ui]` value, and `[ui]` then runs on its defaults. The style is read at startup; change it with **Stroke controls** on the configurator's Toolbar page or in this file.
 - **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action, drawn on the selected or hovered row (<kbd>Ctrl+E</kbd>, <kbd>Ctrl+Delete</kbd>, <kbd>Ctrl+R</kbd> act on the selected row). With nothing typed, the palette lists recent commands, then everyday ones, then the rest by category, with Exit and the clear/delete commands last, so none of them is preselected. An accepted edit is written back to `config.toml` — only that action's `[keybindings]` entry, with the previous file copied to a timestamped `.bak` — so it survives a restart. The write runs on a background worker and the rebind takes effect as soon as it answers, so editing a shortcut never stalls drawing, and a chord the file has meanwhile given to another action is refused rather than applied and then taken back. Reset writes the shipped default out explicitly rather than removing the key, and when the action already resolves to that default — usually because the file omits it — there is nothing to write, so nothing is written and the toast says the action already uses the default shortcut. Conflicting shortcuts are rejected, naming the action that already owns the chord, and nothing is written; that includes a chord another action has been given in the file since this run started, which is refused rather than applied. If the file cannot be written the shortcut still changes for the run and the toast says the save failed. <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator's Keybindings screen.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 top bar exactly where the built-in bars would own a separate layer surface (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo top bar everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned` is the authored default for whether the top toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves this value alone. The show/hide keybinding (`toggle_toolbar`, default <kbd>F9</kbd>) updates the remembered pin, so the next start matches what was on screen.

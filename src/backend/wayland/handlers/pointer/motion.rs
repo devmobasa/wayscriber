@@ -142,6 +142,7 @@ impl WaylandState {
         event: &PointerEvent,
         routed: RoutedInput,
     ) -> bool {
+        self.forget_meter_wheel_off_meter(&event.surface, event.position);
         if routed.surface == InputSurface::Canvas
             && routed.inline_toolbars
             && self.inline_toolbar_motion(event.position)

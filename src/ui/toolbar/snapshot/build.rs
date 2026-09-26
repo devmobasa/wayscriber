@@ -162,6 +162,7 @@ impl ToolbarSnapshot {
             use_icons: state.toolbar_use_icons(),
             toolbar_scale: state.toolbar_scale(),
             layout_mode: state.toolbar_layout_mode(),
+            stroke_controls: state.toolbar_stroke_controls(),
             resolved_toolbar_items: state.resolved_toolbar_items().clone(),
             show_more_colors: state.ui_visibility.show_more_colors,
             show_actions_section: state.ui_visibility.show_actions_section,
@@ -207,6 +208,8 @@ impl ToolbarSnapshot {
                 == crate::input::state::TopMenuState::CanvasPopover,
             layout_menu_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::LayoutMenu,
+            pen_feel_open: state.toolbar_top_menu()
+                == crate::input::state::TopMenuState::PenFeelPanel,
             exit_hides_overlay: false,
             top_popover_scroll: state.toolbar_top_popover_scroll(),
             top_minimized: state.toolbar_top_minimized(),
@@ -266,30 +269,34 @@ mod tests {
     #[test]
     fn snapshot_projects_exactly_one_active_top_menu() {
         let cases = [
-            (TopMenuState::Closed, [false; 6]),
+            (TopMenuState::Closed, [false; 7]),
             (
                 TopMenuState::ShapePicker,
-                [true, false, false, false, false, false],
+                [true, false, false, false, false, false, false],
             ),
             (
                 TopMenuState::TopOverflow,
-                [false, true, false, false, false, false],
+                [false, true, false, false, false, false, false],
             ),
             (
                 TopMenuState::CanvasPopover,
-                [false, false, true, false, false, false],
+                [false, false, true, false, false, false, false],
             ),
             (
                 TopMenuState::SessionPopover,
-                [false, false, false, true, false, false],
+                [false, false, false, true, false, false, false],
             ),
             (
                 TopMenuState::SettingsPopover,
-                [false, false, false, false, true, false],
+                [false, false, false, false, true, false, false],
             ),
             (
                 TopMenuState::LayoutMenu,
-                [false, false, false, false, false, true],
+                [false, false, false, false, false, true, false],
+            ),
+            (
+                TopMenuState::PenFeelPanel,
+                [false, false, false, false, false, false, true],
             ),
         ];
 
@@ -305,6 +312,7 @@ mod tests {
                 snapshot.session_popover_open,
                 snapshot.settings_popover_open,
                 snapshot.layout_menu_open,
+                snapshot.pen_feel_open,
             ];
 
             assert_eq!(actual, expected, "projecting {top_menu:?}");

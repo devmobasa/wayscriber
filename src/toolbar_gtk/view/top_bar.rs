@@ -18,9 +18,12 @@
 mod controls;
 mod drag;
 mod layout_menu;
+mod meter;
+mod pen_feel;
 mod popover_owner;
 mod popovers;
 use popover_owner::{PopoverOwner, PopoverResources};
+mod stepper;
 mod strip;
 mod style_pill;
 #[cfg(test)]
@@ -90,9 +93,13 @@ const STYLE_RESET_W: f64 = 56.0;
 const STYLE_FONT_PICK_W: f64 = 96.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_STEP_W`.
 const STYLE_STEP_W: f64 = 20.0;
-/// `ToolbarLayoutSpec::TOP_STYLE_CAPTION_W`: the caption slot before a tool
-/// stepper ("Smooth", "Detect").
+/// `ToolbarLayoutSpec::TOP_STYLE_CAPTION_W`: the caption slot before a level
+/// meter or tool stepper ("Smooth", "Shapes", "Detect").
 const STYLE_CAPTION_W: f64 = 48.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_METER_W`: a level meter's bar row.
+const STYLE_METER_W: f64 = 84.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_PEN_FEEL_W`: the Pen feel chip's slot.
+const STYLE_PEN_FEEL_W: f64 = 92.0;
 /// Segment tab height (matches the Settings pane's segmented tabs).
 const STYLE_TAB_H: f64 = 22.0;
 /// Extra clear gap before a segmented control in the pill (M7-C3), on top of
@@ -299,6 +306,9 @@ struct StructureKey {
     /// (including swatch count, reset presence, and segment kind) so a
     /// tool change rebuilds the pill while value churn stays in updaters.
     style_pill: Vec<String>,
+    /// The smoothing meter and stepper share their control id, so the
+    /// stroke-controls style is keyed on its own.
+    stroke_controls: crate::config::ToolbarStrokeControls,
     /// Presets-island structure: the display toggle, slot count, and the
     /// saved slots. A change here (toggled visibility, a saved/cleared slot)
     /// rebuilds the island; the applied-slot highlight rides an updater.
@@ -325,6 +335,7 @@ impl StructureKey {
                 .iter()
                 .map(|control| control.id().into_owned())
                 .collect(),
+            stroke_controls: snapshot.stroke_controls,
             show_presets: snapshot.show_presets,
             preset_slot_count: snapshot.preset_slot_count,
             presets: snapshot.presets.clone(),
@@ -395,6 +406,8 @@ pub(in crate::toolbar_gtk) struct TopBar {
     settings: PopoverOwner<SettingsMenuContentKey>,
     /// The chrome island's layout-preset menu, keyed on the current preset.
     layout: PopoverOwner<ToolbarLayoutMode>,
+    /// The style pill's Pen feel panel, keyed on the sections it shows.
+    feel: PopoverOwner<Vec<model::StrokeSetting>>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -483,6 +496,7 @@ impl TopBar {
             session: PopoverOwner::default(),
             settings: PopoverOwner::default(),
             layout: PopoverOwner::default(),
+            feel: PopoverOwner::default(),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
@@ -584,6 +598,13 @@ impl TopBar {
                 updater(snapshot);
             }
         }
+        // The Pen feel panel's levels change while it stays open; its
+        // content key omits them, like the Canvas delay sliders.
+        if snapshot.pen_feel_open {
+            for updater in &self.feel.updaters {
+                updater(snapshot);
+            }
+        }
         self.window.set_visible(true);
         let presentation = presentation.with_idle_hidden(snapshot.top_strip_hidden());
         self.capture_surface
@@ -654,6 +675,7 @@ impl TopBar {
         self.session.clear();
         self.settings.clear();
         self.layout.clear();
+        self.feel.clear();
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }

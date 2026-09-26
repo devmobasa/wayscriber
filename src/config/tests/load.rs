@@ -224,6 +224,40 @@ fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
 }
 
 #[test]
+fn toolbar_stroke_controls_default_to_the_panel_and_parse_every_style() {
+    use crate::config::ToolbarStrokeControls;
+
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(
+        default_config.ui.toolbar.stroke_controls,
+        ToolbarStrokeControls::Panel
+    );
+
+    for (value, expected) in [
+        ("panel", ToolbarStrokeControls::Panel),
+        ("meter", ToolbarStrokeControls::Meter),
+        ("meters", ToolbarStrokeControls::Meter),
+        ("stepper", ToolbarStrokeControls::Stepper),
+        ("steppers", ToolbarStrokeControls::Stepper),
+    ] {
+        let config: Config =
+            toml::from_str(&format!("[ui.toolbar]\nstroke_controls = '{value}'\n"))
+                .unwrap_or_else(|err| panic!("stroke_controls = {value} should parse: {err}"));
+        assert_eq!(config.ui.toolbar.stroke_controls, expected, "{value}");
+
+        let serialized = toml::to_string(&config).expect("config serializes");
+        let reloaded: Config = toml::from_str(&serialized).expect("round trip parses");
+        assert_eq!(reloaded.ui.toolbar.stroke_controls, expected, "{value}");
+    }
+
+    // Like every enum key here, an unknown style is a mapping error: the
+    // loader salvages the other sections and runs `[ui]` on defaults.
+    let error = toml::from_str::<Config>("[ui.toolbar]\nstroke_controls = 'dial'\n")
+        .expect_err("unknown stroke controls style should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
 fn ui_theme_rejects_unknown_values() {
     let error = toml::from_str::<Config>("[ui]\ntheme = 'sepia'\n")
         .expect_err("unknown ui theme should fail");

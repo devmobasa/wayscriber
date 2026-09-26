@@ -95,9 +95,18 @@ impl InputState {
                 self.apply_toolbar_set_spotlight_magnification(value)
             }
             ToolbarEvent::SetPenSmoothing(level) => self.apply_toolbar_set_pen_smoothing(level),
+            ToolbarEvent::NudgePenSmoothing(steps) => self.apply_toolbar_nudge_stroke_setting(
+                crate::ui::toolbar::model::StrokeSetting::Smoothing,
+                steps,
+            ),
             ToolbarEvent::SetShapeRecognitionSensitivity(level) => {
                 self.set_shape_recognition_sensitivity(level)
             }
+            ToolbarEvent::NudgeShapeRecognitionSensitivity(steps) => self
+                .apply_toolbar_nudge_stroke_setting(
+                    crate::ui::toolbar::model::StrokeSetting::ShapeDetection,
+                    steps,
+                ),
             ToolbarEvent::OpenFontPicker => self.apply_toolbar_open_font_picker(),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
@@ -213,6 +222,9 @@ impl InputState {
             }
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
             ToolbarEvent::ToggleLayoutMenu(open) => self.apply_toolbar_toggle_layout_menu(open),
+            ToolbarEvent::TogglePenFeelPanel(open) => {
+                self.apply_toolbar_toggle_pen_feel_panel(open)
+            }
             ToolbarEvent::ToggleSessionPopover(open) => {
                 self.apply_toolbar_toggle_session_popover(open)
             }

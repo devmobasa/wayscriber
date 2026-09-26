@@ -110,12 +110,13 @@ mod tests {
         assert!(state.is_properties_panel_open());
     }
 
-    const EVERY_TOP_MENU: [TopMenuState; 5] = [
+    const EVERY_TOP_MENU: [TopMenuState; 6] = [
         TopMenuState::ShapePicker,
         TopMenuState::TopOverflow,
         TopMenuState::CanvasPopover,
         TopMenuState::SessionPopover,
         TopMenuState::SettingsPopover,
+        TopMenuState::PenFeelPanel,
     ];
 
     #[test]

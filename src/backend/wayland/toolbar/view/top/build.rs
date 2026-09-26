@@ -229,7 +229,7 @@ pub(super) fn build_top_view_planned(
     let layout_anchor = super::chrome::push_chrome_island(&mut tree, snapshot, &spec, plan, width);
 
     // --- Style pill (island D): contextual tool properties -------------------
-    push_style_pill(&mut tree, snapshot, plan, band_h);
+    let pen_feel_anchor = push_style_pill(&mut tree, snapshot, plan, band_h);
 
     push_overflow_popover(
         &mut tree,
@@ -261,6 +261,13 @@ pub(super) fn build_top_view_planned(
     }
 
     super::layout_menu::push_layout_menu(&mut tree, snapshot, layout_anchor, (width, height));
+    super::pen_feel::push_pen_feel_panel(
+        engine,
+        &mut tree,
+        snapshot,
+        pen_feel_anchor,
+        (width, height),
+    );
 
     tree
 }
@@ -594,16 +601,17 @@ pub(super) fn shape_popover_height_planned(snapshot: &ToolbarSnapshot, plan: &To
 
 /// Style pill (island D): the contextual tool-property row rendered as a
 /// fourth detached pill under the islands. Structure comes from the shared
-/// `StylePillSpec`; this function owns only the geometry.
+/// `StylePillSpec`; this function owns only the geometry. Returns the rect
+/// the Pen feel panel hangs from when the pill carries its chip.
 fn push_style_pill(
     tree: &mut WidgetTree,
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
     band_h: f64,
-) {
+) -> Option<(f64, f64, f64, f64)> {
     let spec = model::StylePillSpec::build(snapshot, plan);
     if spec.controls().is_empty() {
-        return;
+        return None;
     }
     let gap = planned_gap(plan);
     let (_, island_pad) = planned_island_metrics(plan);
@@ -615,6 +623,7 @@ fn push_style_pill(
     // Content nodes are collected first so the pill card — whose extent is
     // only known after the walk — can be pushed underneath them.
     let mut nodes: Vec<WidgetNode> = Vec::new();
+    let mut pen_feel_anchor = None;
     let mut x = island_pad;
     let swatch_count = spec
         .controls()
@@ -852,6 +861,22 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W + gap;
             }
+            model::StylePillControl::PenFeelChip => {
+                let chip_w = ToolbarLayoutSpec::TOP_STYLE_PEN_FEEL_W;
+                nodes.push(super::pen_feel::pen_feel_chip_node(
+                    control,
+                    snapshot,
+                    (x, center(row_h), chip_w, row_h),
+                ));
+                pen_feel_anchor = Some(super::pen_feel::pen_feel_anchor(x, pill_y));
+                x += chip_w + gap;
+            }
+            model::StylePillControl::PenSmoothingMeter
+            | model::StylePillControl::ShapeSensitivityMeter => {
+                x +=
+                    super::meter::push_style_meter(&mut nodes, control, snapshot, x, center(row_h))
+                        + gap;
+            }
             model::StylePillControl::PenSmoothingStepper
             | model::StylePillControl::ShapeSensitivityStepper
             | model::StylePillControl::SelectionStepper(_) => {
@@ -920,6 +945,7 @@ fn push_style_pill(
     for node in nodes {
         tree.push(node);
     }
+    pen_feel_anchor
 }
 
 /// Inline unavailable-state label for a control that has one, returning the

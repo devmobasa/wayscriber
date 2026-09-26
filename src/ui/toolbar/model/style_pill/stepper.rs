@@ -1,4 +1,6 @@
-//! The −/value/+ steppers of the style pill: their halves and their captions.
+//! The −/value/+ steppers of the style pill: the docked selection properties
+//! and, with `stroke_controls = "stepper"`, pen smoothing and Shape Pen
+//! detection.
 
 use super::*;
 
@@ -61,22 +63,6 @@ impl StylePillControl {
     pub(crate) fn required_steps(self, snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
         self.steps(snapshot)
             .expect("this style-pill stepper has minus/plus halves")
-    }
-
-    /// Short visible caption drawn before a stepper whose readout alone does
-    /// not say what it steps.
-    ///
-    /// A bare "− 3 +" names nothing, and Shape Pen shows two of them side by
-    /// side. The docked selection steppers need none: their readouts carry a
-    /// unit ("3px", "24pt"), and the properties popup names them in full.
-    /// Kept to one short word because both frontends budget a fixed caption
-    /// slot; the full name stays the accessible label.
-    pub(crate) fn caption(self) -> Option<&'static str> {
-        match self {
-            Self::PenSmoothingStepper => Some("Smooth"),
-            Self::ShapeSensitivityStepper => Some("Detect"),
-            _ => None,
-        }
     }
 }
 
