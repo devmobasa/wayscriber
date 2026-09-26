@@ -23,17 +23,35 @@
 use std::borrow::Cow;
 
 use crate::config::{
-    Action, QuickColorPalette, action_label, action_short_label, toolbar_item_ids as ids,
+    Action, QuickColorPalette, ToolbarStrokeControls, action_label, action_short_label,
+    toolbar_item_ids as ids,
 };
 use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
 use crate::label_format::{format_binding_label, format_quick_color_tooltip};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
+pub(crate) use arrow_menu::{
+    ARROW_STYLE_CHIP_GLYPH_H, ARROW_STYLE_CHIP_GLYPH_W, ARROW_STYLE_CHIP_W, ARROW_STYLE_MENU_INSET,
+    ARROW_STYLE_MENU_PAD, ARROW_STYLE_MENU_PREVIEW_H, ARROW_STYLE_MENU_PREVIEW_W,
+    ARROW_STYLE_MENU_ROW_GAP, ARROW_STYLE_MENU_ROW_H, ARROW_STYLE_MENU_ROW_W, ArrowStyleMenuEntry,
+    arrow_style_chip_label, arrow_style_menu_entries, arrow_style_menu_size,
+};
+pub(crate) use meter::{StrokeSetting, StylePillMeter, StylePillMeterSegment};
+pub(crate) use pen_feel::{
+    PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H, PEN_FEEL_HINT_H, PEN_FEEL_PAD,
+    PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE, PEN_FEEL_TITLE_H,
+    PenFeelSection, pen_feel_id, pen_feel_panel_size, pen_feel_sections, pen_feel_settings,
+};
+
 use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};
 
+mod arrow_menu;
 mod control;
+mod meter;
+mod pen_feel;
 mod slider;
-pub(crate) use slider::StylePillSlider;
+mod stepper;
+pub(crate) use slider::{OpacityPaint, StylePillSlider};
 
 /// Morph state of the style pill, derived from the active tool's options
 /// kind. `Hidden` covers Select without a selection plus the
@@ -91,22 +109,34 @@ pub(crate) enum StylePillControl {
     Slider(StylePillSlider),
     /// Live thickness numeral; clicking opens the precise-entry popup.
     ThicknessValue,
-    /// Pen/marker smoothing, as a −/value/+ stepper.
+    /// The Pen feel chip (`stroke_controls = "panel"`, the default): one
+    /// button standing in for pen smoothing and Shape Pen detection, opening
+    /// a panel with a meter for each, level names and hints, and a live
+    /// smoothing preview.
+    PenFeelChip,
+    /// Pen/marker smoothing, as a level meter with one bar per level
+    /// (`stroke_controls = "meter"`).
     ///
-    /// A stepper rather than a slider: the range is seven whole passes, which
-    /// on a 110px track is 18px of travel per step and fiddly to land on. It
-    /// also keeps the pill from reading as a row of near-identical bars.
+    /// A meter rather than a slider: the range is seven whole passes, which
+    /// on a 110px track is 18px of travel per step and fiddly to land on. A
+    /// meter shows how high the level is and how far it goes, which a bare
+    /// "− 3 +" readout did not.
+    PenSmoothingMeter,
+    /// Shape Pen recognition sensitivity, as a level meter over its five
+    /// levels (`stroke_controls = "meter"`).
+    ShapeSensitivityMeter,
+    /// Pen/marker smoothing, as a −/value/+ stepper
+    /// (`stroke_controls = "stepper"`).
     PenSmoothingStepper,
     /// Shape Pen recognition sensitivity, as a −/value/+ stepper over its
-    /// five levels.
+    /// five levels (`stroke_controls = "stepper"`).
     ShapeSensitivityStepper,
     /// Shape fill toggle.
     FillToggle,
-    /// Arrow style cycle button, showing the style the next arrow will use.
-    /// Clicking steps through [`ArrowStyle::ALL`]. A four-way choice does not
-    /// fit the two-half segmented control, and cycling is already how the
-    /// keyboard action and the docked selection entry step it.
-    ArrowStyleCycle,
+    /// Arrow style chip, showing the style the next arrow will use drawn and
+    /// named. Clicking opens the arrow style menu, which lists every style as
+    /// a preview (see `arrow_menu.rs`); the keyboard action still cycles.
+    ArrowStyleChip,
     /// Arrow auto-number toggle.
     AutoNumberToggle,
     /// Reset the arrow/step counter; tooltip carries the next number.
@@ -145,8 +175,11 @@ pub(crate) enum StylePillRole {
     Toggle,
     Button,
     Segmented,
-    /// −/value/+ stepper for docked numeric selection properties.
+    /// −/value/+ stepper (docked numeric selection properties, and the tool
+    /// steppers of `stroke_controls = "stepper"`).
     Stepper,
+    /// Row of level bars (pen smoothing, Shape Pen detection).
+    Meter,
 }
 
 /// One half of a pill segmented control.
@@ -273,12 +306,11 @@ impl StylePillSpec {
         if context.show_marker_opacity {
             controls.push(StylePillControl::Slider(StylePillSlider::Opacity));
         }
-        if context.show_pen_smoothing && !plan.drop_style_extras {
-            controls.push(StylePillControl::PenSmoothingStepper);
-        }
-        if context.show_shape_sensitivity && !plan.drop_style_extras {
-            controls.push(StylePillControl::ShapeSensitivityStepper);
-        }
+        controls.extend(stroke_feel_controls(
+            snapshot.stroke_controls,
+            context.show_pen_smoothing && !plan.drop_style_extras,
+            context.show_shape_sensitivity && !plan.drop_style_extras,
+        ));
         if context.tool_options_kind == ToolOptionsKind::Spotlight {
             controls.push(StylePillControl::Slider(
                 StylePillSlider::SpotlightMagnification,
@@ -288,7 +320,7 @@ impl StylePillSpec {
             controls.push(StylePillControl::FillToggle);
         }
         if context.tool_options_kind == ToolOptionsKind::Arrow {
-            controls.push(StylePillControl::ArrowStyleCycle);
+            controls.push(StylePillControl::ArrowStyleChip);
         }
         if context.show_arrow_labels {
             controls.push(StylePillControl::AutoNumberToggle);
@@ -300,8 +332,10 @@ impl StylePillSpec {
             controls.push(StylePillControl::CounterReset(StylePillCounter::Step));
         }
         if context.show_font_controls {
-            controls.push(StylePillControl::Slider(StylePillSlider::FontSize));
-            controls.push(StylePillControl::FontSizeValue);
+            if context.show_font_size {
+                controls.push(StylePillControl::Slider(StylePillSlider::FontSize));
+                controls.push(StylePillControl::FontSizeValue);
+            }
             if !plan.drop_style_extras {
                 controls.push(StylePillControl::FontWeightToggle);
             }
@@ -359,6 +393,39 @@ impl StylePillSpec {
             ToolOptionsKind::Text => StylePillState::Text,
         }
     }
+}
+
+/// The pill's pen smoothing and Shape Pen detection controls in one
+/// presentation style: the Pen feel chip standing in for whichever of the two
+/// the tool uses, or an inline meter or stepper for each.
+fn stroke_feel_controls(
+    style: ToolbarStrokeControls,
+    smoothing: bool,
+    detection: bool,
+) -> Vec<StylePillControl> {
+    let (smoothing_control, detection_control) = match style {
+        ToolbarStrokeControls::Panel => {
+            return (smoothing || detection)
+                .then_some(StylePillControl::PenFeelChip)
+                .into_iter()
+                .collect();
+        }
+        ToolbarStrokeControls::Meter => (
+            StylePillControl::PenSmoothingMeter,
+            StylePillControl::ShapeSensitivityMeter,
+        ),
+        ToolbarStrokeControls::Stepper => (
+            StylePillControl::PenSmoothingStepper,
+            StylePillControl::ShapeSensitivityStepper,
+        ),
+    };
+    [
+        smoothing.then_some(smoothing_control),
+        detection.then_some(detection_control),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 #[cfg(test)]

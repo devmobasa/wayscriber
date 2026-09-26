@@ -1,5 +1,6 @@
 //! Command palette for fuzzy action search.
 
+mod empty_query;
 mod input;
 mod layout;
 mod registry;
@@ -712,6 +713,65 @@ mod tests {
             results[1].action,
             crate::config::keybindings::Action::CaptureFileFull
         );
+    }
+
+    #[test]
+    fn opening_the_palette_never_preselects_exit_or_a_destructive_command() {
+        let mut state = make_state();
+        state.set_command_palette_recents(vec![Action::Exit, Action::ClearCanvas]);
+        state.toggle_command_palette();
+
+        let selected = state.selected_command().expect("a preselected command");
+        assert_eq!(selected.action, Action::Undo);
+        let results = state.filtered_commands();
+        assert!(
+            results
+                .last()
+                .is_some_and(|entry| empty_query::command_is_exit_or_destructive(entry.action))
+        );
+        let exit = results
+            .iter()
+            .position(|entry| entry.action == Action::Exit)
+            .expect("exit is still listed");
+        assert!(exit > results.len() / 2, "exit waits near the end");
+
+        // Typing still finds it first.
+        state.command_palette.set_query("exit");
+        assert_eq!(
+            state.selected_command().map(|entry| entry.action),
+            Some(Action::Exit)
+        );
+    }
+
+    #[test]
+    fn hidden_row_controls_cannot_be_clicked() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.update_pointer_position(0, 0);
+        let rows = state.command_palette_rows();
+        let geometry = state.command_palette_geometry_for_rows(1920, 1000, &rows);
+        let second = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| row.command_index().is_some())
+            .nth(1)
+            .map(|(display, _)| display)
+            .expect("two command rows");
+        let stride =
+            layout::COMMAND_PALETTE_ROW_ACTION_SIZE + layout::COMMAND_PALETTE_ROW_ACTION_GAP;
+        let actions_left = geometry.inner_x + geometry.inner_width
+            - stride * layout::COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+        let x = (geometry.x + actions_left + 2.0).round() as i32;
+        let y = (geometry.y
+            + geometry.items_top
+            + second as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+            + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+
+        // A tap that arrives with no hover (touch) on an unselected row runs
+        // the command instead of editing a shortcut nobody could see.
+        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
+        assert_eq!(state.keybinding_capture_action(), None);
+        assert!(!state.command_palette.open);
     }
 
     #[test]

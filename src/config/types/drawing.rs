@@ -81,6 +81,11 @@ pub struct DrawingConfig {
     #[serde(default = "default_shape_recognition_grid_snap")]
     pub shape_recognition_grid_snap: bool,
 
+    /// Whether Shape Pen briefly names the shape it recognized, with the undo
+    /// shortcut that turns it back into ink.
+    #[serde(default = "default_shape_recognition_feedback")]
+    pub shape_recognition_feedback: bool,
+
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
     pub default_fill_enabled: bool,
@@ -170,6 +175,7 @@ impl Default for DrawingConfig {
             pen_smoothing: default_pen_smoothing(),
             shape_recognition_sensitivity: default_shape_recognition_sensitivity(),
             shape_recognition_grid_snap: default_shape_recognition_grid_snap(),
+            shape_recognition_feedback: default_shape_recognition_feedback(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
@@ -934,6 +940,10 @@ fn default_shape_recognition_sensitivity() -> u8 {
 }
 
 fn default_shape_recognition_grid_snap() -> bool {
+    true
+}
+
+fn default_shape_recognition_feedback() -> bool {
     true
 }
 

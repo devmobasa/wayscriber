@@ -72,6 +72,8 @@ pub(crate) struct PaletteListView {
     scroll: usize,
     visible_count: usize,
     selected: usize,
+    /// The row under the pointer, which also shows its shortcut controls.
+    hovered: Option<usize>,
     bindings: std::collections::HashMap<crate::config::Action, Vec<String>>,
     tooltip: Option<(String, i32, i32)>,
 }
@@ -101,6 +103,7 @@ impl CommandPaletteView {
         let tooltip = state
             .command_palette_action_tooltip_for_layout(&rows, geometry)
             .map(|(text, x, y)| (text.to_string(), x, y));
+        let hovered = state.command_palette_hovered_command(&rows, geometry);
         Self::List(PaletteListView {
             query: state.command_palette.query().to_string(),
             rows,
@@ -108,6 +111,7 @@ impl CommandPaletteView {
             scroll: state.command_palette.scroll(),
             visible_count: geometry.visible_count,
             selected: state.command_palette.selected(),
+            hovered,
             bindings,
             tooltip,
         })
@@ -475,6 +479,7 @@ fn render_command_palette_rows(
                 command_index,
             } => {
                 let is_selected = *command_index == view.selected;
+                let show_row_actions = is_selected || view.hovered == Some(*command_index);
                 render_command_row(
                     theme,
                     engine,
@@ -490,6 +495,7 @@ fn render_command_palette_rows(
                     inner_width,
                     item_y,
                     is_selected,
+                    show_row_actions,
                 );
             }
         }

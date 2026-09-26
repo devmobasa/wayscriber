@@ -5,18 +5,18 @@ use crate::{
         toolbar::{
             ToolbarCursorHint,
             hit::{
-                HitRegion, drag_intent_for_hit, focus_hover_point, focused_event, intent_for_hit,
-                next_focus_index, quick_color_slot_for_hit, resolve_focus_index,
+                HitRegion, drag_intent_for_hit, find_hit, focus_hover_point, focused_event,
+                intent_for_hit, next_focus_index, quick_color_slot_for_hit, resolve_focus_index,
+                resolve_hit_index,
             },
             render::TOOLTIP_DELAY,
         },
         toolbar_intent::ToolbarIntent,
     },
-    ui::toolbar::{
-        ToolbarEvent,
-        snapshot::fade::{TopStripFade, TopStripFadeInputs},
-    },
+    ui::toolbar::{ToolbarEvent, snapshot::fade::TopStripFade},
 };
+
+use super::fade::StripRevealKey;
 
 const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
 
@@ -46,9 +46,7 @@ struct InlineTopStrip {
 
 impl InlineTopStrip {
     fn hit_index_at(&self, position: (f64, f64)) -> Option<usize> {
-        self.hits
-            .iter()
-            .position(|hit| hit.contains(position.0, position.1))
+        resolve_hit_index(&self.hits, position.0, position.1)
     }
 
     fn contains(&self, position: (f64, f64)) -> bool {
@@ -58,21 +56,18 @@ impl InlineTopStrip {
     }
 
     fn primary_hit_at(&self, position: (f64, f64)) -> Option<(ToolbarIntent, bool)> {
-        self.hits
-            .iter()
-            .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+        let (x, y) = position;
+        find_hit(&self.hits, x, y, |hit| intent_for_hit(hit, x, y))
     }
 
     fn quick_color_slot_at(&self, position: (f64, f64)) -> Option<usize> {
-        self.hits
-            .iter()
-            .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1))
+        let (x, y) = position;
+        find_hit(&self.hits, x, y, |hit| quick_color_slot_for_hit(hit, x, y))
     }
 
     fn drag_hit_at(&self, position: (f64, f64)) -> Option<ToolbarIntent> {
-        self.hits
-            .iter()
-            .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+        let (x, y) = position;
+        find_hit(&self.hits, x, y, |hit| drag_intent_for_hit(hit, x, y))
     }
 
     fn set_hover(&mut self, hover: Option<(f64, f64)>, now: Instant) -> HoverChange {
@@ -163,9 +158,8 @@ impl InlineTopStrip {
 
     fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
         let (x, y) = self.hover?;
-        self.hits
-            .iter()
-            .find(|hit| hit.contains(x, y))
+        resolve_hit_index(&self.hits, x, y)
+            .map(|index| &self.hits[index])
             .map_or(Some(ToolbarCursorHint::Default), |hit| {
                 Some(hit.kind.cursor_hint())
             })
@@ -201,9 +195,11 @@ pub(in crate::backend::wayland) struct ToolbarChrome {
     configure_miss_count: u32,
     last_applied_top_margin: Option<(i32, i32)>,
     top_strip_fade: TopStripFade,
+    reveal_key: Option<StripRevealKey>,
     gtk_top_hover: bool,
     focus_active: bool,
     inline: InlineTopStrip,
+    meter_wheel: super::meter_wheel::MeterWheel,
 }
 
 impl ToolbarChrome {
@@ -217,10 +213,23 @@ impl ToolbarChrome {
             configure_miss_count: 0,
             last_applied_top_margin: None,
             top_strip_fade: TopStripFade::new(),
+            reveal_key: None,
             gtk_top_hover: false,
             focus_active: false,
             inline: InlineTopStrip::default(),
+            meter_wheel: super::meter_wheel::MeterWheel::default(),
         }
+    }
+
+    /// Partial wheel travel over a style-pill level meter.
+    pub(in crate::backend::wayland) fn meter_wheel(&self) -> &super::meter_wheel::MeterWheel {
+        &self.meter_wheel
+    }
+
+    pub(in crate::backend::wayland) fn meter_wheel_mut(
+        &mut self,
+    ) -> &mut super::meter_wheel::MeterWheel {
+        &mut self.meter_wheel
     }
 
     pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {
@@ -330,8 +339,11 @@ impl ToolbarChrome {
         self.inline.hover_start
     }
 
+    /// Whether an inline-strip position takes toolbar input. The idle-hidden
+    /// strip takes none, so a click on its invisible area draws instead.
     pub(in crate::backend::wayland) fn inline_contains(&self, position: (f64, f64)) -> bool {
-        self.inline.contains(position)
+        !crate::ui::toolbar::snapshot::fade::top_strip_hidden(self.top_strip_fade.value())
+            && self.inline.contains(position)
     }
 
     pub(in crate::backend::wayland) fn inline_primary_hit_at(
@@ -418,24 +430,21 @@ impl ToolbarChrome {
         &mut self.top_strip_fade
     }
 
-    pub(in crate::backend::wayland) fn fade_inputs(
-        &self,
-        toolbar_pointer_present: bool,
-        idle_for: Duration,
-        menus_open: bool,
-        reduced_chrome: bool,
-        idle_fade_enabled: bool,
-    ) -> TopStripFadeInputs {
-        TopStripFadeInputs {
-            idle_for,
-            pointer_near: self.pointer_over_toolbar
-                || toolbar_pointer_present
-                || self.inline.hover.is_some()
-                || self.gtk_top_hover,
-            menus_open,
-            reduced_chrome,
-            idle_fade_enabled,
-        }
+    /// Pointer, inline hover, GTK hover, or keyboard focus on the strip
+    /// itself. Holds the idle fade.
+    pub(in crate::backend::wayland) fn strip_engaged(&self) -> bool {
+        self.pointer_over_toolbar
+            || self.inline.hover.is_some()
+            || self.gtk_top_hover
+            || self.focus_active
+    }
+
+    /// Record the tool/color the strip displays. True when it changed since
+    /// the previous pass (the first observation is not a change).
+    pub(super) fn note_reveal_key(&mut self, key: StripRevealKey) -> bool {
+        let changed = self.reveal_key.is_some_and(|previous| previous != key);
+        self.reveal_key = Some(key);
+        changed
     }
 }
 

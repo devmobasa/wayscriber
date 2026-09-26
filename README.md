@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 ## Why wayscriber?
 
 - **Annotate live** over any app without disrupting your workflow
-- **Professional presentation tools**: presenter mode, numbered callouts, click highlights, screen freeze, zoom
+- **Professional presentation tools**: presenter mode, laser pointer, numbered callouts, click highlights, screen freeze, zoom
 - **Persistent sessions** that survive restarts
 - **Native Wayland performance** with ZoomIt-like controls
 - **Lightweight daemon** with instant toggle via keybind
@@ -117,8 +117,8 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 
 ### Drawing and editing
 - Freehand pen, highlighter, eraser (circle/rect)
-- Shape Pen: draw naturally and confident strokes preview and become editable lines, circles, ovals, rectangles, or triangles; other strokes remain freehand, and one undo turns a recognized shape back into its ink. Press `S`, click it next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** in the command palette. Adjust recognition with the toolbar's **Sensitivity** stepper, `[drawing] shape_recognition_sensitivity` (0-4), or the configurator's Drawing page; the level is remembered with the session.
-- Pen smoothing: finished pen and marker strokes are cleaned up on release, so the live line never lags the cursor (`[drawing] pen_smoothing`, 0-6, or the toolbar's **Smoothing** stepper); tablet pressure values are preserved, and the level is remembered with the session
+- Shape Pen: draw naturally and confident strokes preview and become editable lines, circles, ovals, rectangles, or triangles; other strokes remain freehand, and one undo turns a recognized shape back into its ink; a brief chip such as "Circle · Ctrl+Z keeps ink" names each recognized shape (`[drawing] shape_recognition_feedback`). Press `S`, click it next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** in the command palette. Adjust recognition in the style pill's **Pen feel** panel (or its **Shapes** meter or **Detect** stepper, per `[ui.toolbar] stroke_controls`), `[drawing] shape_recognition_sensitivity` (0-4), or the configurator's Drawing page; the level is remembered with the session.
+- Pen smoothing: finished pen and marker strokes are cleaned up on release, so the live line never lags the cursor (`[drawing] pen_smoothing`, 0-6, or the style pill's **Pen feel** chip, which opens a panel with a smoothing meter and a live preview of the result; `[ui.toolbar] stroke_controls` swaps it for inline **Smooth** meters or steppers); tablet pressure values are preserved, and the level is remembered with the session
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows in four styles - standard, pointy, curved (drag its handle to route around what is in the way), and double-ended - with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
@@ -159,15 +159,15 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
 - Color picker with extended palettes and a screen eyedropper (toolbar, popup, or command palette)
-- Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items
-- Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
+- Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items (the output item appears with two or more outputs; About/version is opt-in)
+- Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>). Actions without a binding are hidden until you press <kbd>Tab</kbd> or click **Show Unbound**; search always finds them
 - Command palette (<kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd>)
 - Search, run, edit, unbind, or reset action shortcuts from the command palette. Hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> and click a bindable toolbar control to record its shortcut. You can configure this modifier chord. Wayscriber saves only that action's entry to `config.toml` and creates a timestamped `.bak` backup. Press <kbd>Ctrl+Shift+E</kbd> on a palette row to open the same shortcut in the configurator
 
 ### Multi-monitor
 - Move overlay focus between monitors: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
 - Toolbars and status bar follow the active output when output focus changes
-- Optional active output badge in status bar (`ui.active_output_badge`)
+- Active output badge in the status bar with two or more outputs (`ui.active_output_badge`; `ui.active_output_badge_always` keeps it with one output)
 - Output-scoped session restore when `session.per_output = true`
 - GNOME fallback output pinning via `ui.preferred_output` or `WAYSCRIBER_XDG_OUTPUT`
 
@@ -176,6 +176,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - Apply: <kbd>1</kbd>–<kbd>5</kbd>; save: <kbd>Shift+1</kbd>–<kbd>Shift+5</kbd>
 
 ### Presenter tools
+- Laser pointer (<kbd>L</kbd>): glowing ink that follows the pointer, stays for a moment after you release, then fades away. Strokes drawn before it fades stay together and disappear as one. Laser ink is never saved, undone, selected, exported, or captured. Its color, width, and timing are set under `[laser]` or on the configurator's Drawing page, and it keeps working in presenter mode (even with the tool locked to highlight) and light passthrough. See [docs/CONFIG.md](docs/CONFIG.md#laser---laser-pointer)
 - Click highlights with configurable colors/radius/duration
 - Persistent ring while the click highlight tool is active
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
@@ -595,6 +596,13 @@ Once the overlay is up:
 - <kbd>F11</kbd>: [configurator](#configurator-gui)
 - <kbd>Escape</kbd>: hide or exit
 
+The first launch shows a short tour card: draw and undo, the toolbar and how
+to leave, color and thickness, quick-access menus, and finding commands. It
+ends by offering background mode. Every card action is a button (**Got it**,
+**Set up**, **Not now**, **Skip tour**) with its key beside it; clicks on the
+card never draw. <kbd>Shift+Escape</kbd> skips the tour. Profiles that already
+finished or skipped the tour are not shown it again.
+
 Discovery and shortcut-coaching tips have **Got it** and **Tip settings…**
 controls. **Got it**
 permanently acknowledges only that tip; **Tip settings…** does the same and
@@ -755,6 +763,10 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 | Unbound | Measure a logical screen region without capturing it (`measure_mode`) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
+After a capture, a short toast names the saved file. When a file was saved,
+its **Open folder** and **Copy path** buttons open the capture folder or copy
+the file's full path.
+
 Region shortcuts use Wayscriber's native frozen-image picker by default. Set
 `capture.region.picker = "slurp"` for the external selector; native selection
 also falls back to `slurp` when no screen capture backend is available. The
@@ -873,12 +885,13 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Spotlight | **Shape picker** (bindable): drag an ellipse; everything else dims; set 1×–4× magnification in the style pill, scroll over the loupe, or select an unlocked loupe and drag its on-canvas knob |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
+| Laser pointer (fading ink) | <kbd>L</kbd>, then drag |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The full strip also shows Line and Arrow. The picker contains rectangle, ellipse, blur, spotlight, and polygon tools.
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. The simple strip shows Select, Pen, Marker, Step marker, and Eraser inline. The regular strip also shows Shape Pen, Laser, Line, and Arrow; its picker contains rectangle, ellipse, blur, spotlight, and polygon tools. The advanced strip also shows rectangle, ellipse, blur, and spotlight, so its picker keeps only the polygon tools. Pick a layout from the layout button at the right end of the strip.
 
-Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
+Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. The capture button beside Undo/Redo, for example, ships visible and hides with `hidden = ["top.utility.screenshot"]`.
 
 These tools' default keybindings are intentionally empty; bind them under `[keybindings.tools]` if you reach for them often. Drag and mouse-button mappings are configurable. See [Drag-tool mappings](#drag-tool-mappings).
 
@@ -888,6 +901,8 @@ These tools' default keybindings are intentionally empty; bind them under `[keyb
 <summary>Text editing</summary>
 
 While a text block or sticky note is being edited, these keys belong to the editor and are not configurable. Undo, tool switching, board navigation, and capture still use their usual bindings.
+
+A block placed near the edge of the screen, or one that grows past it while you type, shifts left or up so it stays fully visible. Editing a block that already crosses the edge does not move it.
 
 | Action | Key/Mouse |
 |--------|-----------|
@@ -1036,7 +1051,7 @@ pick_screen_color = ["I"]
 Notes:
 
 - Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>.
-- Arrow style (standard, pointy, curved, double) is set from the arrow toolbar's style button, or by the **Cycle Arrow Style** command - which restyles selected arrows when there are any, and otherwise sets the style for the next arrow. It has no default shortcut; bind `cycle_arrow_style` in `config.toml` for direct keyboard access, and set `[arrow] style` there to pick which style new arrows start with. A selected curved arrow shows a round handle at the middle of its arc: drag it to reshape the curve, holding <kbd>Shift</kbd> to snap.
+- Arrow style (standard, pointy, curved, double) is picked from the arrow toolbar's style menu, which draws each style, or set by the **Cycle Arrow Style** command - which restyles selected arrows when there are any, and otherwise sets the style for the next arrow. It has no default shortcut; bind `cycle_arrow_style` in `config.toml` for direct keyboard access, and set `[arrow] style` there to pick which style new arrows start with. A selected curved arrow shows a round handle at the middle of its arc: drag it to reshape the curve, holding <kbd>Shift</kbd> to snap.
 - Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`).
 - Preset slots can be saved/cleared from the toolbar; the slot changes right away and is written back to `config.toml` on a background worker, with the toast confirming it once the file has it. Edit names and advanced fields in the configurator's Presets tab.
 - The blur tool has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
@@ -1071,7 +1086,8 @@ start matches what was on screen), dragged top-strip positions, the top strip's 
 minimized state, individual toolbar item visibility/order, and board pins changed in the overlay
 are direct interaction state and are saved separately in the generated
 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
-preferences from the overlay Settings popover; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
+preferences from the overlay Settings popover (**Details** shows the file path, and **Reset
+toolbar changes** restores your configured defaults); see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
 
 The unified top toolbar is the only layout. Older panel keys such as `side_layout` remain
 readable and are preserved on save, but they no longer affect the running overlay; the
@@ -1188,6 +1204,7 @@ See [Session manager examples](examples/session-manager.md) for complete CLI, ov
 <details>
 <summary>Behavior notes</summary>
 
+- When a fresh launch restores ink onto the transparent overlay board, a toast such as "Restored 7 annotations from last session" offers **Clear** (undoable, like Clear Canvas), because that ink now sits over whatever is on screen. Daemon toggles, empty restores, and solid boards stay quiet.
 - Config values seed startup defaults. When `restore_tool_state` is enabled (default), the last-used tool settings saved in the session (including arrow head placement and the starting Spotlight magnification) override those config defaults on startup. Run `wayscriber --clear-tool-state` to remove only that saved tool layer so config defaults apply next startup while saved boards/history remain. In a running overlay, use Command Palette → Reset Tool Defaults to clear the saved layer and immediately apply config defaults to the active tools.
 - `--session-file` uses exactly the selected file, implies persistence for that overlay run, rejects directories/symlinks/special files, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
 - The overlay Session controls live in the top toolbar's Session popover (overflow menu → Session...). They can open an existing named session, save the current overlay as another named session, show session info, clear the active session, reopen recent named sessions, and jump to the configurator. The Open/Save As dialogs use `zenity` or `kdialog`; Save As appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
@@ -1334,6 +1351,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Board pages (multi-page boards)
 - [x] Presenter mode
 - [x] Click highlights
+- [x] Laser pointer with fading ink
 - [x] Screen freeze
 - [x] Light passthrough mode
 - [x] Command palette

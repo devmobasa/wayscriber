@@ -334,7 +334,14 @@ fn toolbar_context_matches_tool_profiles_for_each_tool() {
             context.show_marker_opacity, show_marker_opacity,
             "{tool:?} marker opacity"
         );
-        assert!(!context.show_font_controls, "{tool:?} font controls");
+        // Only the step marker draws text among these: its number uses the
+        // font's family and weight, sized by the marker's own slider.
+        assert_eq!(
+            context.show_font_controls,
+            tool == Tool::StepMarker,
+            "{tool:?} font controls"
+        );
+        assert!(!context.show_font_size, "{tool:?} text size");
     }
 }
 

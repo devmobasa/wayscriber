@@ -17,6 +17,8 @@ pub enum HelpOverlayCursorHint {
 pub enum HelpOverlayClick {
     /// A clickable row (or the "Replay tour" footer) was hit; run this action.
     Run(crate::config::Action),
+    /// The footer toggle that shows or hides actions without a binding.
+    ToggleUnbound,
     /// Inside the overlay chrome but not on an interactive element (no-op).
     Inside,
     /// Outside the overlay box entirely — treated as a dismiss click.
@@ -45,6 +47,8 @@ pub(crate) enum HelpOverlayPressSource {
 pub enum HelpOverlayReleaseOutcome {
     /// Press and release landed on the SAME clickable row; run its action.
     Run(crate::config::Action),
+    /// Press and release both landed on the unbound-actions toggle.
+    ToggleUnbound,
     /// Press and release both landed outside the overlay box; dismiss it.
     Dismiss,
     /// Anything else (mismatched targets, bare chrome, no recorded press):
@@ -88,6 +92,16 @@ impl InputState {
         self.open_help_overlay_internal(true, true);
     }
 
+    /// Show or hide help rows for actions without a binding.
+    pub(crate) fn toggle_help_overlay_unbound(&mut self) {
+        if !self.help_overlay.visible {
+            return;
+        }
+        self.help_overlay.toggle_show_unbound();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
     /// Close the help overlay and drop the stale pointer hit map so a later
     /// click can never act on the previous frame's rectangles.
     pub(crate) fn close_help_overlay(&mut self) {
@@ -104,6 +118,9 @@ impl InputState {
         match self.help_overlay.region_at(x as f64, y as f64) {
             Some(crate::help_overlay_interaction::HelpOverlayRegion::Row(action)) => {
                 HelpOverlayClick::Run(action)
+            }
+            Some(crate::help_overlay_interaction::HelpOverlayRegion::ToggleUnbound) => {
+                HelpOverlayClick::ToggleUnbound
             }
             Some(_) => HelpOverlayClick::Inside,
             None => HelpOverlayClick::Outside,
@@ -164,7 +181,8 @@ impl InputState {
             crate::help_overlay_interaction::HelpOverlayRegion::Search => {
                 Some(HelpOverlayCursorHint::Text)
             }
-            crate::help_overlay_interaction::HelpOverlayRegion::Row(_) => {
+            crate::help_overlay_interaction::HelpOverlayRegion::Row(_)
+            | crate::help_overlay_interaction::HelpOverlayRegion::ToggleUnbound => {
                 Some(HelpOverlayCursorHint::Pointer)
             }
             crate::help_overlay_interaction::HelpOverlayRegion::Inside => {

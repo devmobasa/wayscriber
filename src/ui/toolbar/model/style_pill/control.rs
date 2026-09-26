@@ -8,13 +8,20 @@ impl StylePillControl {
             Self::Slider(StylePillSlider::Thickness) => Cow::Borrowed("top.style.thickness"),
             Self::ThicknessValue => Cow::Borrowed("top.style.thickness-value"),
             Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("top.style.opacity"),
-            Self::PenSmoothingStepper => Cow::Borrowed("top.style.pen-smoothing"),
-            Self::ShapeSensitivityStepper => Cow::Borrowed("top.style.shape-sensitivity"),
+            Self::PenFeelChip => Cow::Borrowed("top.style.pen-feel"),
+            // One id per setting whatever its presentation: a config holds
+            // one style, so the meter and the stepper never share a pill.
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => {
+                Cow::Borrowed("top.style.pen-smoothing")
+            }
+            Self::ShapeSensitivityMeter | Self::ShapeSensitivityStepper => {
+                Cow::Borrowed("top.style.shape-sensitivity")
+            }
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
             Self::FillToggle => Cow::Borrowed("top.style.fill"),
-            Self::ArrowStyleCycle => Cow::Borrowed("top.style.arrow-style"),
+            Self::ArrowStyleChip => Cow::Borrowed("top.style.arrow-style"),
             Self::AutoNumberToggle => Cow::Borrowed("top.style.auto-number"),
             // Distinct per counter: classic mode (context_aware_ui = false)
             // can materialize both resets in one spec, and the frontends
@@ -47,19 +54,21 @@ impl StylePillControl {
             Self::FillToggle | Self::AutoNumberToggle | Self::FontWeightToggle => {
                 StylePillRole::Toggle
             }
-            Self::CounterReset(_) | Self::ArrowStyleCycle | Self::FontFamilyPicker => {
-                StylePillRole::Button
-            }
+            Self::CounterReset(_)
+            | Self::ArrowStyleChip
+            | Self::FontFamilyPicker
+            | Self::PenFeelChip => StylePillRole::Button,
             Self::EraserModeSegment => StylePillRole::Segmented,
             Self::SelectionCycle(_) => StylePillRole::Button,
+            Self::PenSmoothingMeter | Self::ShapeSensitivityMeter => StylePillRole::Meter,
             Self::PenSmoothingStepper
             | Self::ShapeSensitivityStepper
             | Self::SelectionStepper(_) => StylePillRole::Stepper,
         }
     }
 
-    /// Primary click/drag event. `None` for segmented controls and
-    /// selection steppers, whose events live on their halves.
+    /// Primary click/drag event. `None` for segmented controls, meters, and
+    /// steppers, whose events live on their halves and bars.
     pub(crate) fn event(self, snapshot: &ToolbarSnapshot) -> Option<ToolbarEvent> {
         Some(match self {
             Self::ColorChip => ToolbarEvent::OpenColorPickerPopup,
@@ -80,7 +89,10 @@ impl StylePillControl {
             Self::AutoNumberToggle => {
                 ToolbarEvent::ToggleArrowLabels(!snapshot.arrow_label_enabled)
             }
-            Self::ArrowStyleCycle => ToolbarEvent::CycleArrowStyle,
+            Self::ArrowStyleChip => {
+                ToolbarEvent::ToggleArrowStyleMenu(!snapshot.arrow_style_menu_open)
+            }
+            Self::PenFeelChip => ToolbarEvent::TogglePenFeelPanel(!snapshot.pen_feel_open),
             Self::CounterReset(StylePillCounter::Arrow) => ToolbarEvent::ResetArrowLabelCounter,
             Self::CounterReset(StylePillCounter::Step) => ToolbarEvent::ResetStepMarkerCounter,
             // The numerals open the precise-entry popup on the overlay.
@@ -96,6 +108,8 @@ impl StylePillControl {
                 ToolbarEvent::AdjustSelectionProperty { kind, direction: 1 }
             }
             Self::EraserModeSegment
+            | Self::PenSmoothingMeter
+            | Self::ShapeSensitivityMeter
             | Self::PenSmoothingStepper
             | Self::ShapeSensitivityStepper
             | Self::SelectionStepper(_) => {
@@ -136,6 +150,10 @@ impl StylePillControl {
             Self::FillToggle => snapshot.fill_enabled,
             Self::FontWeightToggle => snapshot.font_bold_target_is_bold(),
             Self::AutoNumberToggle => snapshot.arrow_label_enabled,
+            // The chip reads as pressed while its panel is open, like the
+            // layout button while its menu is.
+            Self::PenFeelChip => snapshot.pen_feel_open,
+            Self::ArrowStyleChip => snapshot.arrow_style_menu_open,
             _ => false,
         }
     }
@@ -165,6 +183,10 @@ impl StylePillControl {
                     snapshot.spotlight_magnification,
                 ))
             }
+            // Meters read out the level's name ("Medium"), not its number.
+            Self::PenSmoothingMeter | Self::ShapeSensitivityMeter => {
+                self.meter_level_name(snapshot).map(str::to_string)
+            }
             // "Off" rather than "0": the number is a count of passes, and zero
             // of them is a state worth naming rather than a quantity.
             Self::PenSmoothingStepper => Some(if snapshot.pen_smoothing == 0 {
@@ -178,7 +200,7 @@ impl StylePillControl {
             Self::Slider(StylePillSlider::FontSize) | Self::FontSizeValue => {
                 Some(StylePillSlider::FontSize.formatter()(snapshot.font_size))
             }
-            Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
+            Self::ArrowStyleChip => Some(snapshot.arrow_style.label().to_string()),
             Self::FontFamilyPicker => Some(short_family_label(&snapshot.font.family)),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 selection_entry(snapshot, kind).map(|entry| entry.value.clone())
@@ -258,7 +280,9 @@ impl StylePillControl {
                 Cow::Borrowed(ToolContext::from_snapshot(snapshot).thickness_label)
             }
             Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("Marker opacity"),
-            Self::PenSmoothingStepper => Cow::Borrowed("Smoothing"),
+            Self::PenFeelChip => Cow::Borrowed(super::pen_feel::PEN_FEEL_CHIP_LABEL),
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Cow::Borrowed("Smoothing"),
+            Self::ShapeSensitivityMeter => Cow::Borrowed("Shape detection"),
             Self::ShapeSensitivityStepper => Cow::Borrowed("Sensitivity"),
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Cow::Borrowed("Spotlight magnification")
@@ -267,7 +291,7 @@ impl StylePillControl {
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
             Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
             Self::FillToggle => Cow::Borrowed(action_short_label(Action::ToggleFill)),
-            Self::ArrowStyleCycle => Cow::Borrowed("Arrow style"),
+            Self::ArrowStyleChip => Cow::Borrowed("Arrow style"),
             Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
             Self::CounterReset(_) => Cow::Borrowed("Reset"),
             // The family in use, shortened: the pill is width-planned, and a
@@ -307,10 +331,13 @@ impl StylePillControl {
                     .binding_hints
                     .binding_for_action(Action::ToggleFill),
             )),
-            Self::ArrowStyleCycle => Some(format!(
-                "Next arrow style: {}",
-                snapshot.arrow_style.label()
-            )),
+            // The open menu shows every style; a tooltip would only cover it.
+            Self::ArrowStyleChip => (!snapshot.arrow_style_menu_open).then(|| {
+                format!(
+                    "Arrow style: {} \u{2014} click to choose",
+                    snapshot.arrow_style.label()
+                )
+            }),
             Self::AutoNumberToggle => Some("Auto-number arrows 1, 2, 3.".to_string()),
             Self::CounterReset(StylePillCounter::Arrow) => Some(format!(
                 "Reset numbering to 1 (next: {})",
@@ -322,8 +349,17 @@ impl StylePillControl {
             )),
             Self::SelectionCycle(kind) => selection_entry(snapshot, kind)
                 .map(|entry| format!("{}: {}", entry.label, entry.value)),
-            Self::PenSmoothingStepper => Some(
+            // The open panel already shows every level; a tooltip would only
+            // cover its title.
+            Self::PenFeelChip => {
+                (!snapshot.pen_feel_open).then(|| Self::pen_feel_tooltip(snapshot))
+            }
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Some(
                 "Smooth freehand and marker strokes when the pen lifts. Off keeps the exact path."
+                    .to_string(),
+            ),
+            Self::ShapeSensitivityMeter => Some(
+                "How readily Shape Pen turns ink into shapes: Precise needs a careful stroke, Very forgiving accepts rough ones."
                     .to_string(),
             ),
             Self::ShapeSensitivityStepper => Some(
@@ -348,13 +384,33 @@ impl StylePillControl {
                     label => format!("{label} of the next stroke you draw."),
                 })
             }
-            Self::Slider(StylePillSlider::Opacity) => {
-                Some("How much of the page shows through a highlighter stroke.".to_string())
-            }
+            // The pill shows the opacity as a swatch, so the number lives
+            // here as the setting, which also multiplies the color's alpha.
+            Self::Slider(StylePillSlider::Opacity) => Some(format!(
+                "Marker opacity setting: {}. Lower lets more of the page show through.",
+                StylePillSlider::Opacity.formatter()(snapshot.marker_opacity)
+            )),
             Self::Slider(StylePillSlider::FontSize) => {
                 Some("Point size of the next label you type.".to_string())
             }
             Self::EraserModeSegment | Self::SelectionStepper(_) => None,
+        }
+    }
+
+    /// Short visible caption drawn before a tool meter or stepper whose bars
+    /// or readout alone do not say what they adjust.
+    ///
+    /// A bare "− 3 +" or row of bars names nothing, and Shape Pen shows two
+    /// of them side by side. The docked selection steppers need none: their
+    /// readouts carry a unit ("3px", "24pt"), and the properties popup names
+    /// them in full. Kept to one short word because both frontends budget a
+    /// fixed caption slot; the full name stays the accessible label.
+    pub(crate) fn caption(self) -> Option<&'static str> {
+        match self {
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Some("Smooth"),
+            Self::ShapeSensitivityMeter => Some("Shapes"),
+            Self::ShapeSensitivityStepper => Some("Detect"),
+            _ => None,
         }
     }
 
@@ -386,119 +442,11 @@ impl StylePillControl {
         }
     }
 
-    /// The −/+ halves of a selection stepper, in reading order.
-    pub(crate) fn steps(self, snapshot: &ToolbarSnapshot) -> Option<[StylePillStep; 2]> {
-        if self == Self::PenSmoothingStepper {
-            return Some(pen_smoothing_steps(snapshot));
-        }
-        if self == Self::ShapeSensitivityStepper {
-            return Some(shape_sensitivity_steps(snapshot));
-        }
-        let Self::SelectionStepper(kind) = self else {
-            return None;
-        };
-        let entry = selection_entry(snapshot, kind)?;
-        let (minus_id, plus_id) = match kind {
-            SelectionPropertyKind::Thickness => (
-                "top.style.sel.thickness.minus",
-                "top.style.sel.thickness.plus",
-            ),
-            SelectionPropertyKind::FontSize => (
-                "top.style.sel.font-size.minus",
-                "top.style.sel.font-size.plus",
-            ),
-            SelectionPropertyKind::ArrowLength => (
-                "top.style.sel.arrow-length.minus",
-                "top.style.sel.arrow-length.plus",
-            ),
-            SelectionPropertyKind::ArrowAngle => (
-                "top.style.sel.arrow-angle.minus",
-                "top.style.sel.arrow-angle.plus",
-            ),
-            SelectionPropertyKind::SpotlightMagnification => (
-                "top.style.sel.spotlight-magnification.minus",
-                "top.style.sel.spotlight-magnification.plus",
-            ),
-            _ => return None,
-        };
-        Some([
-            StylePillStep {
-                id: minus_id,
-                label: "\u{2212}",
-                event: ToolbarEvent::AdjustSelectionProperty {
-                    kind,
-                    direction: -1,
-                },
-                tooltip: format!("Decrease {}", entry.label.to_lowercase()),
-            },
-            StylePillStep {
-                id: plus_id,
-                label: "+",
-                event: ToolbarEvent::AdjustSelectionProperty { kind, direction: 1 },
-                tooltip: format!("Increase {}", entry.label.to_lowercase()),
-            },
-        ])
-    }
-
     /// Segment halves for a control already matched as segmented.
     pub(crate) fn required_segments(self, snapshot: &ToolbarSnapshot) -> [StylePillSegment; 2] {
         self.segments(snapshot)
             .expect("this style-pill control is segmented")
     }
-
-    /// −/+ halves for a selection stepper already present in the spec.
-    pub(crate) fn required_steps(self, snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
-        self.steps(snapshot)
-            .expect("this style-pill stepper has minus/plus halves")
-    }
-}
-
-/// The smoothing stepper's halves, clamped to the range the setting accepts.
-///
-/// Each half carries the level it would land on rather than a direction: the
-/// pill's events are absolute, and computing the target here keeps the clamp in
-/// one place instead of in both frontends.
-fn pen_smoothing_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
-    let level = snapshot.pen_smoothing;
-    [
-        StylePillStep {
-            id: "top.style.pen-smoothing.minus",
-            label: "\u{2212}",
-            event: ToolbarEvent::SetPenSmoothing(level.saturating_sub(1)),
-            tooltip: "Less smoothing".to_string(),
-        },
-        StylePillStep {
-            id: "top.style.pen-smoothing.plus",
-            label: "+",
-            event: ToolbarEvent::SetPenSmoothing(
-                level.saturating_add(1).min(crate::draw::MAX_PEN_SMOOTHING),
-            ),
-            tooltip: "More smoothing".to_string(),
-        },
-    ]
-}
-
-/// The Shape Pen sensitivity stepper's halves, clamped like smoothing's.
-fn shape_sensitivity_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
-    let level = snapshot.shape_recognition_sensitivity;
-    [
-        StylePillStep {
-            id: "top.style.shape-sensitivity.minus",
-            label: "\u{2212}",
-            event: ToolbarEvent::SetShapeRecognitionSensitivity(level.saturating_sub(1)),
-            tooltip: "Keep more strokes as ink".to_string(),
-        },
-        StylePillStep {
-            id: "top.style.shape-sensitivity.plus",
-            label: "+",
-            event: ToolbarEvent::SetShapeRecognitionSensitivity(
-                level
-                    .saturating_add(1)
-                    .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
-            ),
-            tooltip: "Recognize rougher strokes".to_string(),
-        },
-    ]
 }
 
 /// A family name cut to something a width-planned pill can hold.

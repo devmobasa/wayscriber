@@ -224,6 +224,40 @@ fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
 }
 
 #[test]
+fn toolbar_stroke_controls_default_to_the_panel_and_parse_every_style() {
+    use crate::config::ToolbarStrokeControls;
+
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(
+        default_config.ui.toolbar.stroke_controls,
+        ToolbarStrokeControls::Panel
+    );
+
+    for (value, expected) in [
+        ("panel", ToolbarStrokeControls::Panel),
+        ("meter", ToolbarStrokeControls::Meter),
+        ("meters", ToolbarStrokeControls::Meter),
+        ("stepper", ToolbarStrokeControls::Stepper),
+        ("steppers", ToolbarStrokeControls::Stepper),
+    ] {
+        let config: Config =
+            toml::from_str(&format!("[ui.toolbar]\nstroke_controls = '{value}'\n"))
+                .unwrap_or_else(|err| panic!("stroke_controls = {value} should parse: {err}"));
+        assert_eq!(config.ui.toolbar.stroke_controls, expected, "{value}");
+
+        let serialized = toml::to_string(&config).expect("config serializes");
+        let reloaded: Config = toml::from_str(&serialized).expect("round trip parses");
+        assert_eq!(reloaded.ui.toolbar.stroke_controls, expected, "{value}");
+    }
+
+    // Like every enum key here, an unknown style is a mapping error: the
+    // loader salvages the other sections and runs `[ui]` on defaults.
+    let error = toml::from_str::<Config>("[ui.toolbar]\nstroke_controls = 'dial'\n")
+        .expect_err("unknown stroke controls style should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
 fn ui_theme_rejects_unknown_values() {
     let error = toml::from_str::<Config>("[ui]\ntheme = 'sepia'\n")
         .expect_err("unknown ui theme should fail");
@@ -261,14 +295,21 @@ fn ui_reduced_motion_maps_to_motion_enabled() {
 }
 
 #[test]
-fn status_bar_content_flags_default_true_and_round_trip() {
+fn status_bar_content_flags_have_documented_defaults_and_round_trip() {
     let defaults: Config = toml::from_str("").expect("empty config should use defaults");
     for item in StatusBarItem::ALL {
-        assert!(
+        // About/version is opt-in; About stays in the toolbar and help.
+        let expected = item != StatusBarItem::About;
+        assert_eq!(
             defaults.ui.status_bar_item_visible(item),
-            "{item:?} should be visible by default"
+            expected,
+            "{item:?} default visibility"
         );
     }
+    assert!(
+        !defaults.ui.active_output_badge_always,
+        "the output item waits for a second output by default"
+    );
 
     let source = r#"
 [ui]
@@ -300,6 +341,23 @@ show_status_about = false
     for item in StatusBarItem::ALL {
         assert!(!reloaded.ui.status_bar_item_visible(item));
     }
+}
+
+#[test]
+fn explicit_opt_ins_for_the_about_chip_and_single_output_badge_round_trip() {
+    let source = r#"
+[ui]
+show_status_about = true
+active_output_badge_always = true
+"#;
+    let config: Config = toml::from_str(source).expect("opt-in flags should parse");
+    assert!(config.ui.status_bar_item_visible(StatusBarItem::About));
+    assert!(config.ui.active_output_badge_always);
+
+    let serialized = toml::to_string(&config).expect("opt-in flags should serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("serialized flags should reload");
+    assert!(reloaded.ui.show_status_about);
+    assert!(reloaded.ui.active_output_badge_always);
 }
 
 #[test]

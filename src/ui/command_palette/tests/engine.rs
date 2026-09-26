@@ -145,6 +145,7 @@ fn prepared_palette_paints_without_application_state() {
         scroll: 0,
         visible_count: 8,
         selected: 0,
+        hovered: None,
         bindings: Default::default(),
         tooltip: None,
     });
@@ -240,4 +241,74 @@ fn palette_theme_refresh_covers_list_capture_and_tooltip() {
         assert_ne!(dark, light);
         assert_eq!(dark, paint(&crate::ui::theme::Theme::dark()));
     }
+}
+
+/// The shortcut controls' strip on one display row, in screen pixels.
+fn row_action_strip(input: &InputState, display_row: usize) -> (i32, i32, i32, i32) {
+    use crate::input::state::{
+        COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
+        COMMAND_PALETTE_ROW_ACTION_SIZE,
+    };
+
+    let rows = input.command_palette_rows();
+    let geometry = input.command_palette_geometry_for_rows(800, 600, &rows);
+    let right = geometry.x + geometry.inner_x + geometry.inner_width;
+    let stride = COMMAND_PALETTE_ROW_ACTION_SIZE + COMMAND_PALETTE_ROW_ACTION_GAP;
+    let left = right - stride * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+    let top = geometry.y
+        + geometry.items_top
+        + (display_row - input.command_palette.scroll()) as f64 * COMMAND_PALETTE_ITEM_HEIGHT;
+    (
+        left.ceil() as i32,
+        top.ceil() as i32 + 2,
+        right.floor() as i32,
+        (top + COMMAND_PALETTE_ITEM_HEIGHT).floor() as i32 - 4,
+    )
+}
+
+fn strip_is_blank(pixels: &[u8], (left, top, right, bottom): (i32, i32, i32, i32)) -> bool {
+    let at = |x: i32, y: i32| {
+        let offset = (y as usize * 800 + x as usize) * 4;
+        &pixels[offset..offset + 4]
+    };
+    let background = at(left, top);
+    (top..bottom).all(|y| (left..right).all(|x| at(x, y) == background))
+}
+
+#[test]
+fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
+    let engine = UiTextEngine::default();
+    let mut input = crate::input::state::test_support::make_test_input_state();
+    input.toggle_command_palette();
+    input.update_pointer_position(0, 0);
+    let rows = input.command_palette_rows();
+    let command_rows: Vec<usize> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| row.command_index().is_some())
+        .map(|(display, _)| display)
+        .collect();
+    let (selected_row, other_row) = (command_rows[0], command_rows[2]);
+
+    let idle = pixels(1, |ctx| {
+        render_command_palette_with_engine(&engine, ctx, &input, 800, 600)
+    });
+    assert!(
+        !strip_is_blank(&idle, row_action_strip(&input, selected_row)),
+        "the selected row keeps its controls"
+    );
+    assert!(
+        strip_is_blank(&idle, row_action_strip(&input, other_row)),
+        "other rows draw no trash/edit/reset icons"
+    );
+
+    let (left, top, _, bottom) = row_action_strip(&input, other_row);
+    input.update_pointer_position(left - 200, (top + bottom) / 2);
+    let hovered = pixels(1, |ctx| {
+        render_command_palette_with_engine(&engine, ctx, &input, 800, 600)
+    });
+    assert!(
+        !strip_is_blank(&hovered, row_action_strip(&input, other_row)),
+        "hovering a row reveals its controls"
+    );
 }

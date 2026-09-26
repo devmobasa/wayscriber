@@ -89,8 +89,12 @@ pub enum ToolbarEvent {
     SetSpotlightMagnification(f64),
     /// Smoothing passes applied to freehand and marker strokes on release.
     SetPenSmoothing(u8),
+    /// Adjust smoothing by whole levels from the live application state.
+    NudgePenSmoothing(i32),
     /// How readily Shape Pen turns ink into shapes, 0 (precise) to 4.
     SetShapeRecognitionSensitivity(u8),
+    /// Adjust shape detection by whole levels from the live application state.
+    NudgeShapeRecognitionSensitivity(i32),
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
     /// Turn bold on or off for selected text, or for the next label typed.
@@ -105,6 +109,9 @@ pub enum ToolbarEvent {
     ToggleArrowLabels(bool),
     /// Step the next arrow's style through the four arrow styles.
     CycleArrowStyle,
+    /// Use `style` for the next arrow; chosen from the arrow style menu,
+    /// which it closes.
+    SetArrowStyle(crate::draw::ArrowStyle),
     ResetArrowLabelCounter,
     ResetStepMarkerCounter,
     SetUndoDelay(f64),
@@ -121,6 +128,8 @@ pub enum ToolbarEvent {
     ClearCanvas {
         instant: bool,
     },
+    /// Start the interactive region capture: select a region, then choose
+    /// Copy, Save, Both, or Board.
     CaptureScreenshot,
     /// Select a screen region and copy the text recognized in it.
     CopyTextFromScreen,
@@ -167,6 +176,9 @@ pub enum ToolbarEvent {
     /// Open the standalone About dialog. The overlay exits first: it is a
     /// layer-shell surface, so an About toplevel underneath would be hidden.
     OpenAbout,
+    /// Close the overlay, exactly like the Exit shortcut. Under the daemon
+    /// this hides the overlay and the daemon keeps running.
+    ExitOverlay,
     /// Reset generated runtime UI preferences. Supported state resets
     /// immediately; newer unsupported state first requests confirmation.
     RequestRuntimeUiReset,
@@ -290,6 +302,15 @@ pub enum ToolbarEvent {
     ToggleFloatingBadgeAlways(bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
+    /// Open/close the chrome island's layout-preset menu. Choosing a preset
+    /// from it (`SetToolbarLayoutMode`) closes it.
+    ToggleLayoutMenu(bool),
+    /// Open/close the style pill's Pen feel panel. The smoothing and Shape
+    /// Pen detection changes made inside it keep it open.
+    TogglePenFeelPanel(bool),
+    /// Open/close the style pill's arrow style menu. Choosing a style from it
+    /// (`SetArrowStyle`) closes it.
+    ToggleArrowStyleMenu(bool),
     /// Hide or show a known toolbar item override.
     SetToolbarItemHidden(ToolbarItemId, bool),
     /// Move an orderable toolbar item by a relative row delta.
@@ -318,6 +339,9 @@ pub enum ToolbarEvent {
     SetToolbarItemCustomizationGroup(Option<ToolbarItemCustomizeGroup>),
     /// Show or hide the Settings drawer status-bar content sub-panel.
     SetStatusBarContentsOpen(bool),
+    /// Expand or collapse the Settings popover's "Details" disclosure, which
+    /// holds where toolbar changes are saved.
+    SetSettingsDetailsOpen(bool),
     /// Toggle the simple-mode shape picker
     ToggleShapePicker(bool),
     /// Drag handle for top toolbar (toolbar coords; screen coords when inline toolbars are active)

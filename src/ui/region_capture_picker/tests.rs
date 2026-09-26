@@ -74,7 +74,12 @@ fn the_shared_legend_paints_across_the_top_of_any_selector() {
     let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
 
     assert!(alpha(400, 24) > 0, "the strip sits along the top edge");
+    assert!(
+        alpha(400, 12 + super::legend::LEGEND_HEIGHT as usize - 2) > 0,
+        "the strip is tall enough for its readable text"
+    );
     assert_eq!(alpha(400, 300), 0, "and nowhere else");
+    const { assert!(super::legend::LEGEND_FONT_SIZE >= crate::ui::theme::overlay::FONT_SIZE_MIN_TEXT) };
 }
 
 #[test]

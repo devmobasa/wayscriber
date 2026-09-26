@@ -75,6 +75,7 @@ impl InputState {
             spotlight_wheel: Default::default(),
             pending_onboarding_usage: PendingOnboardingUsage::default(),
             click_highlight: ClickHighlightState::new(click_highlight_settings),
+            laser: crate::input::state::laser::LaserInk::new(Default::default()),
             input_hud: InputHudState::new(InputHudSettings::default()),
             selection_interaction: SelectionInteraction::default(),
             context_menu: Default::default(),
@@ -90,6 +91,7 @@ impl InputState {
             preset_slots: Default::default(),
             tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
+            recognition_feedback: Default::default(),
         };
 
         if state.click_highlight.uses_pen_color() {

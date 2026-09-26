@@ -185,6 +185,8 @@ pub enum TextInputMode {
 pub(crate) struct TextClipboardRequest {
     pub(crate) text: String,
     pub(crate) cut: Option<TextCutTarget>,
+    /// Toast shown once the copy lands. Editor copies stay silent.
+    pub(crate) confirmation: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -298,6 +300,8 @@ pub(crate) enum ToastCommand {
         tip: OnboardingTip,
         then: Option<Action>,
     },
+    /// Copy the most recent saved capture's full path as clipboard text.
+    CopyLastCapturePath,
 }
 
 /// Labeled command rendered as a toast action chip.
@@ -311,7 +315,7 @@ impl ToastAction {
     pub(crate) fn dispatch_action(&self) -> Option<Action> {
         match self.command {
             ToastCommand::Dispatch(action) => Some(action),
-            ToastCommand::AcknowledgeTip { .. } => None,
+            ToastCommand::AcknowledgeTip { .. } | ToastCommand::CopyLastCapturePath => None,
         }
     }
 }

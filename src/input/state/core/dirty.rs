@@ -1,8 +1,5 @@
-use super::base::{DrawingState, InputState, TextInputMode};
-use crate::draw::shape::{
-    CaretGeometry, LogicalBounds, bounding_box_for_points,
-    bounding_box_for_sticky_note_preview_with, bounding_box_for_text_with,
-};
+use super::base::{DrawingState, InputState};
+use crate::draw::shape::{CaretGeometry, LogicalBounds, bounding_box_for_points};
 use crate::draw::{Shape, TextMeasurer};
 use crate::input::tool::{
     PROVISIONAL_POLYGON_DAMAGE_PADDING, ToolMotionBehavior, ToolMotionSizeSource,
@@ -160,6 +157,9 @@ impl InputState {
             ToolMotionBehavior::AccumulatePath {
                 size_source: ToolMotionSizeSource::EraserSize,
             } => self.style.eraser_size,
+            ToolMotionBehavior::AccumulatePath {
+                size_source: ToolMotionSizeSource::LaserWidth,
+            } => self.laser_style().glow_width(),
         };
 
         let start = points.len().saturating_sub(2);
@@ -170,7 +170,12 @@ impl InputState {
     }
 
     /// Updates dirty tracking for the live text preview/caret overlay.
+    ///
+    /// Every draft change passes through here, so this is also where a draft
+    /// placed near, or growing past, the output edge is pulled back inside
+    /// before its new bounds are damaged.
     pub(crate) fn update_text_preview_dirty_with(&mut self, measurer: &TextMeasurer) {
+        self.keep_text_draft_inside_output_with(measurer);
         self.text_editing.mark_cursor_rect_dirty();
         let new_bounds = self.compute_text_preview_bounds(measurer);
         let previous = self.text_editing.replace_preview_bounds(new_bounds);
@@ -213,33 +218,8 @@ impl InputState {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
-        let cursor_glyph = if self.text_editing.edit_target().is_some() {
-            "|"
-        } else {
-            "_"
-        };
-        let preview = self.text_input_preview(cursor_glyph)?;
-        let text_bounds = match self.text_editing.mode() {
-            TextInputMode::Plain => bounding_box_for_text_with(
-                measurer,
-                *x,
-                *y,
-                &preview.text,
-                self.style.current_font_size,
-                &self.style.font_descriptor,
-                self.style.text_background_enabled,
-                self.style.text_wrap_width,
-            ),
-            TextInputMode::StickyNote => bounding_box_for_sticky_note_preview_with(
-                measurer,
-                *x,
-                *y,
-                &preview.text,
-                self.style.current_font_size,
-                &self.style.font_descriptor,
-                self.style.text_wrap_width,
-            ),
-        };
+        let preview = self.text_input_preview(self.text_preview_cursor_glyph())?;
+        let text_bounds = self.text_draft_body_bounds_with(measurer, *x, *y, &preview.text);
 
         // The caret is a full-line-height vertical bar that can extend past the
         // glyph ink box (above ascenders, below the baseline) and, mid-line,
@@ -470,7 +450,9 @@ fn append_only_damage_regions(
 
 #[cfg(test)]
 mod tests {
+    use super::super::base::TextInputMode;
     use super::*;
+    use crate::draw::shape::bounding_box_for_text_with;
     use crate::draw::{Color, FontDescriptor};
     use crate::input::state::test_support::make_test_input_state;
 

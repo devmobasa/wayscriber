@@ -47,10 +47,10 @@ impl OutputHandler for WaylandState {
     ) {
         debug!("Output destroyed");
         self.surface.clear_output(&output);
-        self.refresh_active_output_label();
         // SCTK 0.20 calls this before removing the output from OutputState, so
         // a walk of current outputs would still include it. Exclude it here;
         // there is no later callback after the removal.
+        self.refresh_active_output_label_excluding(Some(&output));
         self.refresh_freeze_zoom_geometry_excluding(Some(&output));
         self.cancel_screen_modals_if_source_changed();
     }

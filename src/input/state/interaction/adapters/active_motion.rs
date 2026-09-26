@@ -242,5 +242,8 @@ fn motion_sample_size(state: &InputState, tool: Tool) -> Option<f64> {
         ToolMotionBehavior::AccumulatePath {
             size_source: ToolMotionSizeSource::EraserSize,
         } => Some(state.style.eraser_size),
+        ToolMotionBehavior::AccumulatePath {
+            size_source: ToolMotionSizeSource::LaserWidth,
+        } => Some(state.laser_style().width),
     }
 }

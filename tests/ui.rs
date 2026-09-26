@@ -206,6 +206,12 @@ fn render_onboarding_card_tiny_surface_does_not_panic() {
             label: "Draw a stroke".to_string(),
             done: false,
         }],
+        buttons: vec![wayscriber::ui::OnboardingCardButton {
+            label: "Skip tour".to_string(),
+            key_hint: Some("Shift+Esc".to_string()),
+            action: wayscriber::ui::OnboardingCardAction::SkipTour,
+            primary: false,
+        }],
         footer: "Shift+Escape to skip".to_string(),
     };
 
@@ -222,6 +228,7 @@ fn render_onboarding_card_without_checklist_stays_compact() {
         title: "Enable background mode?".to_string(),
         body: "Keeps Wayscriber ready in the background for quick overlay access.".to_string(),
         items: Vec::new(),
+        buttons: Vec::new(),
         footer: "Y = set up now • N = skip • Shift+Escape = skip onboarding".to_string(),
     };
 
@@ -290,6 +297,36 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     assert!(
         found.contains(&Action::OpenAbout),
         "about is clickable from the help overlay: {found:?}"
+    );
+}
+
+/// Unbound actions are hidden by default; the footer offers a clickable toggle
+/// that brings them back.
+#[test]
+fn help_overlay_footer_offers_the_unbound_actions_toggle() {
+    use wayscriber::ui::HelpOverlayRegion;
+
+    let style = HelpOverlayStyle::default();
+    let (_surface, ctx) = surface_with_context(1400, 1000);
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
+    let result = wayscriber::ui::render_help_overlay_result(
+        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    );
+    drop(ctx);
+
+    let toggle = (0..1000)
+        .flat_map(|y| (0..1400).map(move |x| (x, y)))
+        .find(|&(x, y)| {
+            result.hit_map.region_at(x as f64, y as f64) == Some(HelpOverlayRegion::ToggleUnbound)
+        })
+        .expect("rendered unbound-actions toggle");
+
+    let mut interactive = make_input_state();
+    interactive.install_help_overlay_render_result(result);
+    assert_eq!(
+        interactive.help_overlay_click_at(toggle.0, toggle.1),
+        wayscriber::input::state::HelpOverlayClick::ToggleUnbound,
     );
 }
 

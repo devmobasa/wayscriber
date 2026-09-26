@@ -17,6 +17,9 @@ pub struct HelpOverlayState {
     pub(in crate::input::state) pending_presses: Vec<(HelpOverlayPressSource, HelpOverlayClick)>,
     pub(in crate::input::state) consume_only_presses: Vec<HelpOverlayPressSource>,
     pub(in crate::input::state) quick_mode: bool,
+    /// Show rows for actions without a binding. Kept across opens for the
+    /// rest of the process, so a user who asked for them keeps seeing them.
+    pub(in crate::input::state) show_unbound: bool,
 }
 
 impl HelpOverlayState {
@@ -38,6 +41,11 @@ impl HelpOverlayState {
 
     pub fn is_quick_mode(&self) -> bool {
         self.quick_mode
+    }
+
+    /// Whether rows for actions without a binding are shown.
+    pub fn shows_unbound(&self) -> bool {
+        self.show_unbound
     }
 
     /// Install geometry and scroll bounds from the same completed help paint.
@@ -135,11 +143,20 @@ impl HelpOverlayState {
             {
                 HelpOverlayReleaseOutcome::Run(released)
             }
+            (HelpOverlayClick::ToggleUnbound, HelpOverlayClick::ToggleUnbound) => {
+                HelpOverlayReleaseOutcome::ToggleUnbound
+            }
             (HelpOverlayClick::Outside, HelpOverlayClick::Outside) => {
                 HelpOverlayReleaseOutcome::Dismiss
             }
             _ => HelpOverlayReleaseOutcome::None,
         })
+    }
+
+    /// Flip unbound-row visibility. The row set changes, so scroll resets.
+    pub(crate) fn toggle_show_unbound(&mut self) {
+        self.show_unbound = !self.show_unbound;
+        self.scroll = 0.0;
     }
 
     pub(crate) fn scroll_by(&mut self, delta: f64) -> bool {
@@ -313,6 +330,50 @@ mod tests {
         assert_eq!(state.search_cursor, 3);
         assert!(state.clear_search());
         assert_eq!((state.search.as_str(), state.search_cursor), ("", 0));
+    }
+
+    #[test]
+    fn unbound_visibility_survives_reopening_and_resets_scroll() {
+        let mut state = HelpOverlayState {
+            scroll: 30.0,
+            ..Default::default()
+        };
+        assert!(!state.shows_unbound());
+
+        state.toggle_show_unbound();
+        assert!(state.shows_unbound());
+        assert_eq!(state.scroll, 0.0);
+
+        state.open(false);
+        assert!(state.close());
+        state.open(true);
+        assert!(state.shows_unbound(), "the choice lasts for the process");
+    }
+
+    #[test]
+    fn toggle_release_requires_press_on_the_toggle() {
+        let mut state = HelpOverlayState::default();
+        state.open(false);
+        state.note_press(
+            HelpOverlayPressSource::Pointer(1),
+            HelpOverlayClick::ToggleUnbound,
+        );
+        assert_eq!(
+            state.resolve_release(
+                HelpOverlayPressSource::Pointer(1),
+                HelpOverlayClick::ToggleUnbound
+            ),
+            Some(HelpOverlayReleaseOutcome::ToggleUnbound)
+        );
+
+        state.note_press(HelpOverlayPressSource::Pointer(1), HelpOverlayClick::Inside);
+        assert_eq!(
+            state.resolve_release(
+                HelpOverlayPressSource::Pointer(1),
+                HelpOverlayClick::ToggleUnbound
+            ),
+            Some(HelpOverlayReleaseOutcome::None)
+        );
     }
 
     #[test]

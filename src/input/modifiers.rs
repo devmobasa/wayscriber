@@ -192,7 +192,7 @@ impl DragToolBindings {
 /// Tracks which modifier keys (Shift, Ctrl, Alt, Super, Tab) are currently pressed.
 /// Super participates in shortcut matching; it does not change drag-tool priority.
 /// Tab is a drag-tool modifier only.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Modifiers {
     /// Shift key pressed
     pub shift: bool,

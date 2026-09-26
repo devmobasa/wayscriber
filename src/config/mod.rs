@@ -65,6 +65,7 @@ pub use types::{
     BoardItemConfig, BoardsConfig, CaptureConfig, ClickHighlightConfig, DEFAULT_OCR_LANGUAGES,
     DEFAULT_PEN_SMOOTHING, DEFAULT_SHAPE_RECOGNITION_SENSITIVITY, DragButtonConfig, DrawingConfig,
     ExportConfig, HelpOverlayStyle, HistoryConfig, InputHudConfig, InputHudMode, InputHudPosition,
+    LASER_FADE_MS_MAX, LASER_HOLD_MS_MAX, LASER_WIDTH_MAX, LASER_WIDTH_MIN, LaserConfig,
     MAX_SHAPE_RECOGNITION_SENSITIVITY, MouseDragToolsConfig, PDF_LABEL_APP_BOARD,
     PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME, PDF_LABEL_DEFAULT_TEMPLATE,
     PDF_LABEL_DOCUMENT_PAGE, PDF_LABEL_DOCUMENT_PAGES, PDF_LABEL_EXPORT_BOARD,
@@ -81,12 +82,12 @@ pub use types::{
     ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
     ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarItemsConfig,
     ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, ToolbarRebindModifier,
-    ToolbarSectionFlag, ToolbarSectionVisibility, TopDisplayMode, TrayConfig, TrayIconStyle,
-    UiConfig, UpdatesConfig, ZoomChipDisplay, default_quick_color_for_index,
-    fold_legacy_section_flags, resolve_section_visibility, section_flag_for_item,
-    set_section_visibility, toolbar_item_definitions, toolbar_item_ids, toolbar_item_order_group,
-    validate_capture_format, validate_filename_template, validate_ocr_languages,
-    validate_pdf_label_template,
+    ToolbarSectionFlag, ToolbarSectionVisibility, ToolbarStrokeControls, TopDisplayMode,
+    TrayConfig, TrayIconStyle, UiConfig, UpdatesConfig, ZoomChipDisplay,
+    default_quick_color_for_index, fold_legacy_section_flags, resolve_section_visibility,
+    section_flag_for_item, set_section_visibility, toolbar_item_definitions, toolbar_item_ids,
+    toolbar_item_order_group, validate_capture_format, validate_filename_template,
+    validate_ocr_languages, validate_pdf_label_template,
 };
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]

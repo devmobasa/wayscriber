@@ -63,17 +63,24 @@ impl WaylandState {
                 self.notify_output_transition_deferred();
             }
             OutputTransitionStart::LoadInitial => {
-                if let Err(err) = self.load_configured_session_for_options(
+                match self.load_configured_session_for_options(
                     staged_options.clone(),
                     "initial output load",
                 ) {
-                    warn!("Failed to load initial output session: {err:#}");
-                    self.session.stage_output_transition(
-                        staged_options,
-                        physical_output_identity,
-                        output_transition_retry_at(self.output_transition_failure_backoff()),
-                    );
-                    self.notify_output_transition_deferred();
+                    // A load that already knows its output is the output's
+                    // own session, so it settles the launch notice as well.
+                    Ok(()) => {
+                        self.announce_launch_restore(staged_options.output_identity().is_some())
+                    }
+                    Err(err) => {
+                        warn!("Failed to load initial output session: {err:#}");
+                        self.session.stage_output_transition(
+                            staged_options,
+                            physical_output_identity,
+                            output_transition_retry_at(self.output_transition_failure_backoff()),
+                        );
+                        self.notify_output_transition_deferred();
+                    }
                 }
             }
             OutputTransitionStart::ResolveTransition => {
@@ -237,6 +244,7 @@ impl WaylandState {
             physical_output_identity,
             self.session.target_epoch()
         );
+        self.announce_launch_restore(true);
         Ok(())
     }
 

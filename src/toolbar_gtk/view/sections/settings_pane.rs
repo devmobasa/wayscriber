@@ -38,6 +38,9 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
         }
         column.append(&label);
     }
+    if let Some(details) = settings_model.details() {
+        column.append(&details_toggle(ctx, details));
+    }
     if let Some(grid) = buttons_grid(ctx, settings_model.buttons()) {
         column.append(&grid);
     }
@@ -48,6 +51,24 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
         column.append(&items);
     }
     column
+}
+
+/// The collapsed "Details" disclosure toggle under the notices. The popover
+/// content key tracks its open state, so a click rebuilds the notices.
+fn details_toggle(ctx: &SectionCtx, details: &model::ToolbarSettingsDetails) -> gtk4::Button {
+    let button = gtk4::Button::with_label(details.label);
+    button.add_css_class("tab");
+    button.add_css_class("details");
+    button.set_halign(gtk4::Align::Start);
+    button.set_size_request(-1, ctx.px(22.0));
+    if let Some(tooltip) = details.tooltip.as_string() {
+        button.set_tooltip_text(Some(&tooltip));
+    }
+    set_active_class(&button, details.open);
+    let sender = ctx.feedback.clone();
+    let event = details.event.clone();
+    button.connect_clicked(move |_| send_event(&sender, event.clone()));
+    button
 }
 
 /// Simple / Regular / Advanced presets. Non-destructive: switching

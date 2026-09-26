@@ -1,5 +1,5 @@
-//! Drawing page: default color, quick colors, drawing defaults, per-button
-//! drag tool mapping, and font controls.
+//! Drawing page: default color, quick colors, drawing defaults, the laser
+//! pointer, per-button drag tool mapping, and font controls.
 //!
 //! Two shapes here go past the plain row helpers. A section that only applies
 //! in one mode — named versus RGB color, the open drag button — is a boxed
@@ -13,6 +13,7 @@ mod default_color;
 mod defaults;
 mod drag_mapping;
 mod font;
+mod laser;
 mod quick_colors;
 
 use relm4::prelude::*;
@@ -56,6 +57,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     default_color::build(&mut page);
     quick_colors::build(&mut page);
     defaults::build(&mut page);
+    laser::build(&mut page);
     drag_mapping::build(&mut page);
     font::build(&mut page);
 

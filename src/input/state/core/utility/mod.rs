@@ -1,5 +1,6 @@
 mod actions;
 mod arrow_labels;
+mod capture_feedback;
 mod focus_mode;
 mod font;
 mod frozen_zoom;
@@ -11,6 +12,7 @@ pub(crate) mod ocr_scan;
 mod pending;
 mod presenter_mode;
 mod render_profiles;
+mod restore_notice;
 mod sequence;
 mod step_markers;
 mod toasts;

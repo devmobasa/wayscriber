@@ -18,6 +18,19 @@ impl ToolbarSurfaceManager {
         None
     }
 
+    /// The top-strip hit under `position` without treating it as a press, for
+    /// wheel routing.
+    pub fn top_hit_at(
+        &self,
+        surface: &wl_surface::WlSurface,
+        position: (f64, f64),
+    ) -> Option<(ToolbarIntent, bool)> {
+        if self.top.is_surface(surface) {
+            return self.top.hit_at(position.0, position.1);
+        }
+        None
+    }
+
     /// The quick-color slot under the pointer, if the press landed on a
     /// palette swatch. Secondary click reads the same hit regions as the
     /// primary path, so the recolor gesture cannot drift from what is drawn.

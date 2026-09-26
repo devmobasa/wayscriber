@@ -39,12 +39,11 @@ fn axis_surface_route(
     input_state: &InputState,
     over_toolbar: bool,
     over_top_toolbar: bool,
-    scroll_direction: i32,
 ) -> AxisSurfaceRoute {
     if input_state.screen_modal_is_active() {
         AxisSurfaceRoute::Consumed
     } else if over_toolbar {
-        if scroll_direction != 0 && over_top_toolbar {
+        if over_top_toolbar {
             AxisSurfaceRoute::ScrollTopPopover
         } else {
             AxisSurfaceRoute::Consumed
@@ -124,6 +123,10 @@ impl WaylandState {
     ) {
         let stopped = vertical.stop;
         self.handle_pointer_axis_inner(event, routed, vertical, source);
+        // A finished scroll leaves no half notch waiting on a meter.
+        if stopped {
+            self.toolbar_chrome.meter_wheel_mut().reset();
+        }
         finalize_spotlight_wheel_if_axis_stopped(
             &mut self.input_state,
             self.spotlight.wheel_idle_deadline_mut(),
@@ -195,22 +198,24 @@ impl WaylandState {
             routed.surface == InputSurface::Toolbar || self.toolbar_chrome.pointer_over_toolbar();
         let over_top_toolbar =
             over_toolbar && self.wheel_over_top_toolbar(&event.surface, event.position);
-        match axis_surface_route(
-            &self.input_state,
-            over_toolbar,
-            over_top_toolbar,
-            scroll_direction,
-        ) {
+        match axis_surface_route(&self.input_state, over_toolbar, over_top_toolbar) {
             // Screen selectors own pointer input across every Wayscriber
             // surface, including toolbar popovers left open beneath them. A
             // top-strip wheel without a scrollable popover is also consumed.
-            AxisSurfaceRoute::Consumed => return,
-            // Canvas/Session/Settings popovers scroll their capped viewport.
-            AxisSurfaceRoute::ScrollTopPopover => {
-                self.scroll_top_popover_by_wheel(scroll_direction);
+            AxisSurfaceRoute::Consumed => {
+                self.toolbar_chrome.meter_wheel_mut().reset();
                 return;
             }
-            AxisSurfaceRoute::Canvas => {}
+            // Meters receive raw frames, including tiny vertical travel and
+            // horizontal-only frames that preserve a pending vertical notch.
+            // Canvas/Session/Settings popovers use the shared direction gate.
+            AxisSurfaceRoute::ScrollTopPopover => {
+                if !self.step_style_meter_by_wheel(&event.surface, event.position, vertical) {
+                    self.scroll_top_popover_by_wheel(scroll_direction);
+                }
+                return;
+            }
+            AxisSurfaceRoute::Canvas => self.toolbar_chrome.meter_wheel_mut().reset(),
         }
         // Everything below this line acts on the canvas or the active tool.
         // A surface covering the canvas has to stop here even when it has
@@ -498,13 +503,13 @@ mod tests {
         input_state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
 
         assert_eq!(
-            axis_surface_route(&input_state, true, true, 1),
+            axis_surface_route(&input_state, true, true),
             AxisSurfaceRoute::Consumed
         );
 
         input_state.cancel_eyedropper();
         assert_eq!(
-            axis_surface_route(&input_state, true, true, 1),
+            axis_surface_route(&input_state, true, true),
             AxisSurfaceRoute::ScrollTopPopover,
             "without the selector the same wheel reaches the toolbar popover"
         );
@@ -548,6 +553,17 @@ mod tests {
             position,
             1
         ));
+    }
+
+    #[test]
+    fn zero_direction_frames_keep_the_top_toolbar_scroll_route() {
+        let input_state = make_test_input_state();
+
+        assert_eq!(
+            axis_surface_route(&input_state, true, true),
+            AxisSurfaceRoute::ScrollTopPopover,
+            "tiny vertical and horizontal-only frames must reach the meter without clearing its remainder"
+        );
     }
 
     #[test]

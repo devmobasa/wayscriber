@@ -99,7 +99,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Capture,
         true,
         true,
-        false,
+        true,
         &["region", "snip", "paste to board", "screenshot"]
     ),
     meta!(

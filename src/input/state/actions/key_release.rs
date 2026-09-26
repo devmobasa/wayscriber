@@ -1,6 +1,7 @@
+use crate::input::Modifiers;
 use crate::input::events::Key;
 
-use super::super::{DrawingState, InputState};
+use super::super::InputState;
 
 impl InputState {
     /// Processes a key release event.
@@ -9,20 +10,14 @@ impl InputState {
     pub fn on_key_release(&mut self, key: Key) {
         self.release_command_palette_repeat_key(key);
         self.release_font_picker_repeat_key(key);
-        let was_modifier = matches!(
-            key,
-            Key::Shift | Key::Ctrl | Key::Alt | Key::Super | Key::Tab
-        );
-        match key {
-            Key::Shift => self.modifiers.shift = false,
-            Key::Ctrl => self.modifiers.ctrl = false,
-            Key::Alt => self.modifiers.alt = false,
-            Key::Super => self.modifiers.logo = false,
-            Key::Tab => self.modifiers.tab = false,
-            _ => {}
-        }
-        if was_modifier && matches!(self.state, DrawingState::Idle) {
-            self.sync_current_settings_from_active_tool();
-        }
+        let release: fn(&mut Modifiers) = match key {
+            Key::Shift => |modifiers| modifiers.shift = false,
+            Key::Ctrl => |modifiers| modifiers.ctrl = false,
+            Key::Alt => |modifiers| modifiers.alt = false,
+            Key::Super => |modifiers| modifiers.logo = false,
+            Key::Tab => |modifiers| modifiers.tab = false,
+            _ => return,
+        };
+        self.update_modifiers(release);
     }
 }

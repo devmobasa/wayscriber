@@ -2,14 +2,13 @@
 //!
 //! Owns construction and state-updater wiring for toolbar buttons and chrome.
 
-use super::popovers::attach_escape_dismiss;
 use super::*;
 
 use crate::ui::theme::set_color;
 use crate::ui::theme::toolbar::{
     COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_SECONDARY,
-    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
-    PRESET_SLOT_SWATCH_RATIO,
+    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_NUMBER_BOX, PRESET_SLOT_SWATCH_INSET,
+    PRESET_SLOT_SWATCH_RADIUS, PRESET_SLOT_SWATCH_RATIO,
 };
 
 use super::super::super::widgets::rounded_rect_path;
@@ -25,6 +24,7 @@ pub(super) fn event_for_toggle_state(
         }
         model::TopToolbarControl::Pin => ToolbarEvent::PinTopToolbar(next_active),
         model::TopToolbarControl::Overflow => ToolbarEvent::ToggleTopOverflow(next_active),
+        model::TopToolbarControl::LayoutMode => ToolbarEvent::ToggleLayoutMenu(next_active),
         model::TopToolbarControl::HighlightRing => {
             ToolbarEvent::ToggleHighlightToolRing(next_active)
         }
@@ -96,11 +96,7 @@ impl TopBar {
         // event or a canvas press), so an outside click both dismisses AND
         // activates the control under it — one click, like the builtin.
         popover.set_autohide(false);
-        attach_escape_dismiss(
-            &popover,
-            &self.feedback,
-            event_for_toggle_state(control, false),
-        );
+        install_key_relay(&popover, &self.feedback);
         let sender = self.feedback.clone();
         let expected = self.shapes.expected_open.clone();
         popover.connect_closed(move |_| {
@@ -296,10 +292,25 @@ impl TopBar {
                 rounded_rect_path(ctx, sx, sy, sw, sw, radius);
                 let _ = ctx.stroke();
             });
-            button.set_child(Some(&area));
+            // The slot number stays readable as a caption in the corner
+            // opposite the color, where the builtin paints it.
+            let face = gtk4::Overlay::new();
+            face.set_child(Some(&area));
+            let number = gtk4::Label::new(Some(&control.label(snapshot)));
+            number.add_css_class("preset-number");
+            number.set_can_target(false);
+            number.set_halign(gtk4::Align::Start);
+            number.set_valign(gtk4::Align::End);
+            let inset = (PRESET_SLOT_SWATCH_INSET * scale).round() as i32;
+            number.set_margin_start(inset);
+            number.set_margin_bottom(inset);
+            number.set_width_request((PRESET_SLOT_NUMBER_BOX * scale).round() as i32);
+            face.add_overlay(&number);
+            button.set_child(Some(&face));
         } else {
-            // Empty slot: the 1-based slot number.
+            // Empty slot: the 1-based slot number, muted until hovered.
             button.set_label(&control.label(snapshot));
+            button.add_css_class("empty");
         }
 
         let sender = self.feedback.clone();
@@ -397,11 +408,7 @@ impl TopBar {
         popover.set_position(gtk4::PositionType::Bottom);
         // See the shapes popover: dismissal stays with the backend policy.
         popover.set_autohide(false);
-        attach_escape_dismiss(
-            &popover,
-            &self.feedback,
-            event_for_toggle_state(control, false),
-        );
+        install_key_relay(&popover, &self.feedback);
         let sender = self.feedback.clone();
         let expected = self.overflow.expected_open.clone();
         popover.connect_closed(move |_| {
@@ -439,7 +446,8 @@ impl TopBar {
 
     /// One overflow-anchored Canvas/Session/Settings popover following the shapes/
     /// overflow pattern: no autohide grab (the backend dismissal policy owns
-    /// click-away), Escape wired explicitly, `closed` echoing user dismissal.
+    /// click-away), keys relayed to the overlay (whose routing closes the menu
+    /// on Escape or any shortcut), `closed` echoing user dismissal.
     fn menu_popover(
         &self,
         parent: &gtk4::Button,
@@ -450,7 +458,7 @@ impl TopBar {
         popover.set_parent(parent);
         popover.set_position(gtk4::PositionType::Bottom);
         popover.set_autohide(false);
-        attach_escape_dismiss(&popover, &self.feedback, dismiss.clone());
+        install_key_relay(&popover, &self.feedback);
         let sender = self.feedback.clone();
         popover.connect_closed(move |_| {
             if expected_open.get() {
@@ -462,25 +470,33 @@ impl TopBar {
         (popover, capture_surface)
     }
 
-    /// The chrome island's About entry. Styled like the other chrome buttons,
-    /// but it opens a window instead of changing the toolbar, so it carries no
-    /// active state.
+    /// The chrome island's About and Exit entries. Styled like the other
+    /// chrome buttons, but they leave the overlay instead of changing the
+    /// toolbar, so they carry no active state. The Exit binding rides the
+    /// structure key's binding hints, so its tooltip never goes stale.
     pub(super) fn about_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
         control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::About);
+        assert!(matches!(
+            control,
+            model::TopToolbarControl::About | model::TopToolbarControl::Exit
+        ));
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
-        button.add_css_class("about");
+        button.add_css_class(if control == model::TopToolbarControl::About {
+            "about"
+        } else {
+            "exit"
+        });
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(model::TopToolbarIcon::About),
+            top_toolbar_icon_painter(control.glyph(snapshot)),
             size * 0.6,
         );
         button.set_child(Some(&icon.area));
@@ -492,10 +508,10 @@ impl TopBar {
         button
     }
 
-    /// The chrome island's layout-cycle entry. A plain icon button like
-    /// About: `layout_mode` is part of the bar's structure key, so any mode
-    /// change rebuilds this button — the glyph, tooltip, and captured event
-    /// always describe the mode on screen without an updater.
+    /// The chrome island's layout entry: opens the layout-preset menu.
+    /// `layout_mode` is part of the bar's structure key, so any mode change
+    /// rebuilds this button and its menu — the glyph and tooltip always
+    /// describe the mode on screen. Only the open state rides an updater.
     pub(super) fn layout_mode_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
@@ -516,10 +532,33 @@ impl TopBar {
         );
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();
-        let event = control.event(snapshot);
+        let expected = self.layout.expected_open.clone();
         button.connect_clicked(move |_| {
-            send_event(&sender, event.clone());
+            send_event(&sender, event_for_toggle_state(control, !expected.get()));
         });
+        let handle = button.clone();
+        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            set_active_class(&handle, control.active(snapshot));
+        }));
+
+        // Same pattern as the other strip popovers: no autohide grab (the
+        // backend dismissal policy owns click-away), keys relayed to the
+        // overlay, `closed` echoing a user dismissal.
+        let popover = gtk4::Popover::new();
+        popover.set_parent(&button);
+        popover.set_position(gtk4::PositionType::Bottom);
+        popover.set_autohide(false);
+        install_key_relay(&popover, &self.feedback);
+        let sender = self.feedback.clone();
+        let expected = self.layout.expected_open.clone();
+        popover.connect_closed(move |_| {
+            if expected.get() {
+                send_event(&sender, event_for_toggle_state(control, false));
+            }
+        });
+        let capture_surface = CaptureSurfaceContent::empty();
+        popover.set_child(Some(capture_surface.widget()));
+        self.layout.install(popover, capture_surface);
         button
     }
 

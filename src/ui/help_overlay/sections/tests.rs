@@ -1,5 +1,7 @@
-use super::{HelpOverlayBindings, build_section_sets};
+use super::super::types::{Badge, Section, row};
+use super::{HelpOverlayBindings, build_section_sets, hide_unbound_rows};
 use crate::config::{Action, action_label};
+use crate::label_format::NOT_BOUND_LABEL;
 
 #[test]
 fn gesture_hints_remain_present() {
@@ -89,4 +91,42 @@ fn capture_free_measure_mode_stays_visible_when_capture_is_disabled() {
         row.action == action_label(Action::MeasureMode)
             && row.key == crate::label_format::NOT_BOUND_LABEL
     }));
+}
+
+#[test]
+fn hiding_unbound_rows_keeps_badge_sections_and_drops_empty_ones() {
+    let section = |title, rows, badges| Section {
+        title,
+        rows,
+        badges,
+        icon: None,
+    };
+    let sections = vec![
+        section(
+            "Mixed",
+            vec![row("F", "Pen Tool"), row(NOT_BOUND_LABEL, "Blur Tool")],
+            Vec::new(),
+        ),
+        section(
+            "Unbound",
+            vec![row(NOT_BOUND_LABEL, "Blur Tool")],
+            Vec::new(),
+        ),
+        section(
+            "Colors",
+            vec![row(NOT_BOUND_LABEL, "Blur Tool")],
+            vec![Badge {
+                label: "R".into(),
+                color: [1.0, 0.0, 0.0],
+            }],
+        ),
+    ];
+
+    let visible = hide_unbound_rows(&sections);
+
+    let titles: Vec<&str> = visible.iter().map(|section| section.title).collect();
+    assert_eq!(titles, ["Mixed", "Colors"]);
+    assert_eq!(visible[0].rows.len(), 1);
+    assert!(visible[1].rows.is_empty());
+    assert_eq!(sections[0].rows.len(), 2, "the source sections stay intact");
 }

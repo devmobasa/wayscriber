@@ -164,7 +164,7 @@ pub fn draw_icon_drag(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_drag(ctx, x, y, size);
 }
 
-/// Draw `count` centered horizontal density bars, the layout-cycle glyph
+/// Draw `count` centered horizontal density bars, the layout-button glyph
 /// family's shared geometry. The stroke is thinner than the lone minus so
 /// the three-bar variant still reads at the 18px compact chrome size.
 fn draw_layout_density_bars(ctx: &Context, x: f64, y: f64, size: f64, count: usize) {
@@ -183,17 +183,17 @@ fn draw_layout_density_bars(ctx: &Context, x: f64, y: f64, size: f64, count: usi
     }
 }
 
-/// Draw the layout-cycle glyph for the Simple preset (one density bar).
+/// Draw the layout-button glyph for the Simple preset (one density bar).
 pub fn draw_icon_layout_simple(ctx: &Context, x: f64, y: f64, size: f64) {
     draw_layout_density_bars(ctx, x, y, size, 1);
 }
 
-/// Draw the layout-cycle glyph for the Regular preset (two density bars).
+/// Draw the layout-button glyph for the Regular preset (two density bars).
 pub fn draw_icon_layout_regular(ctx: &Context, x: f64, y: f64, size: f64) {
     draw_layout_density_bars(ctx, x, y, size, 2);
 }
 
-/// Draw the layout-cycle glyph for the Advanced preset (three density bars).
+/// Draw the layout-button glyph for the Advanced preset (three density bars).
 pub fn draw_icon_layout_advanced(ctx: &Context, x: f64, y: f64, size: f64) {
     draw_layout_density_bars(ctx, x, y, size, 3);
 }
@@ -214,7 +214,6 @@ pub fn draw_icon_restore(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_restore(ctx, x, y, size);
 }
 
-#[allow(dead_code)] // part of the complete icon family; no close action today
 pub fn draw_icon_close(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_close(ctx, x, y, size);
 }

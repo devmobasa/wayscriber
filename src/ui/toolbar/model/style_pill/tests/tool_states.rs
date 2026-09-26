@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::ToolbarStrokeControls;
 
 #[test]
 fn state_derives_from_the_tool_options_kind() {
@@ -55,29 +56,29 @@ fn spotlight_state_is_a_magnification_slider_without_stroke_controls() {
 }
 
 #[test]
-fn the_smoothing_stepper_moves_one_whole_pass_at_a_time() {
-    // A stepper rather than a slider: seven whole passes across a 110px track
-    // is 18px per step, and the row of near-identical bars was the thing that
-    // made the pill hard to read.
+fn the_smoothing_meter_names_its_level_and_keeps_events_on_its_bars() {
+    // A meter rather than a slider: seven whole passes across a 110px track
+    // is 18px per step, and a bare "− 3 +" said neither how high 3 is nor how
+    // far the range goes.
     let mut snapshot = snapshot_for_tool(Tool::Pen);
     snapshot.pen_smoothing = 3;
 
-    let stepper = StylePillControl::PenSmoothingStepper;
-    assert_eq!(stepper.role(), StylePillRole::Stepper);
+    let meter = StylePillControl::PenSmoothingMeter;
+    assert_eq!(meter.role(), StylePillRole::Meter);
     assert_eq!(
-        stepper.event(&snapshot),
+        meter.event(&snapshot),
         None,
-        "a stepper keeps its events on its halves"
+        "a meter keeps its events on its bars"
     );
-    assert_eq!(stepper.value_text(&snapshot).as_deref(), Some("3"));
+    assert_eq!(meter.value_text(&snapshot).as_deref(), Some("Medium"));
 
-    let steps = stepper.required_steps(&snapshot);
-    assert_eq!(steps[0].event, ToolbarEvent::SetPenSmoothing(2));
-    assert_eq!(steps[1].event, ToolbarEvent::SetPenSmoothing(4));
+    let bars = meter.required_meter(&snapshot).segments;
+    assert_eq!(bars.len(), usize::from(crate::draw::MAX_PEN_SMOOTHING));
+    assert_eq!(bars[3].event, ToolbarEvent::SetPenSmoothing(4));
 
     // Zero passes is a state, not a quantity.
     snapshot.pen_smoothing = 0;
-    assert_eq!(stepper.value_text(&snapshot).as_deref(), Some("Off"));
+    assert_eq!(meter.value_text(&snapshot).as_deref(), Some("Off"));
 }
 
 #[test]
@@ -182,49 +183,105 @@ fn a_numeric_weight_does_not_read_as_bold() {
 }
 
 #[test]
-fn the_smoothing_stepper_stops_at_both_ends_of_the_range() {
+fn the_tool_meters_name_what_they_adjust_on_screen() {
+    // Shape Pen shows both meters side by side; the caption tells them apart
+    // before the bars are read.
+    let mut shape_pen = snapshot_for_tool(Tool::LiveShape);
+    shape_pen.stroke_controls = ToolbarStrokeControls::Meter;
+    let spec = StylePillSpec::build(&shape_pen, &plan());
+    let captions: Vec<_> = spec
+        .controls()
+        .iter()
+        .filter(|control| control.role() == StylePillRole::Meter)
+        .map(|control| control.caption())
+        .collect();
+    assert_eq!(captions, [Some("Smooth"), Some("Shapes")]);
+
+    // Docked selection steppers read "3px"/"24pt" and need no caption; the
+    // frontends only reserve a caption slot where the model asks for one.
+    for kind in [
+        SelectionPropertyKind::Thickness,
+        SelectionPropertyKind::FontSize,
+        SelectionPropertyKind::ArrowLength,
+    ] {
+        assert_eq!(StylePillControl::SelectionStepper(kind).caption(), None);
+    }
+    assert_eq!(StylePillControl::ColorChip.caption(), None);
+
+    // The caption is the short on-screen word; the accessible name stays
+    // the full one.
+    assert_eq!(
+        StylePillControl::ShapeSensitivityMeter.label(&snapshot()),
+        "Shape detection"
+    );
+}
+
+#[test]
+fn the_smoothing_meter_stops_at_both_ends_of_the_range() {
     let mut snapshot = snapshot_for_tool(Tool::Pen);
+    let meter = StylePillControl::PenSmoothingMeter;
 
     snapshot.pen_smoothing = 0;
-    let steps = StylePillControl::PenSmoothingStepper.required_steps(&snapshot);
     assert_eq!(
-        steps[0].event,
-        ToolbarEvent::SetPenSmoothing(0),
+        meter.meter_wheel_event(&snapshot, -1),
+        None,
         "there is nothing below off"
+    );
+    assert_eq!(
+        meter.required_meter(&snapshot).segments[0].event,
+        ToolbarEvent::SetPenSmoothing(1)
     );
 
     snapshot.pen_smoothing = crate::draw::MAX_PEN_SMOOTHING;
-    let steps = StylePillControl::PenSmoothingStepper.required_steps(&snapshot);
-    assert_eq!(
-        steps[1].event,
-        ToolbarEvent::SetPenSmoothing(crate::draw::MAX_PEN_SMOOTHING)
+    assert_eq!(meter.meter_wheel_event(&snapshot, 1), None);
+    assert!(
+        meter
+            .required_meter(&snapshot)
+            .segments
+            .iter()
+            .all(|bar| bar.filled)
     );
 }
 
 #[test]
-fn the_smoothing_stepper_follows_the_tool_it_can_change() {
+fn the_smoothing_control_follows_the_tool_it_can_change() {
     // Pen and Marker accumulate the paths smoothing runs on. Line and Blur
-    // share the Stroke control group but draw no path, so a stepper there
-    // would be a control that does nothing to what is about to be drawn.
-    for tool in [Tool::Pen, Tool::Marker] {
-        let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
-        assert!(
-            control_ids(&spec).contains(&"top.style.pen-smoothing".to_string()),
-            "{tool:?} draws a smoothed stroke"
-        );
-    }
-    for tool in [Tool::Line, Tool::Blur, Tool::Rect, Tool::Eraser] {
-        let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
-        assert!(
-            !control_ids(&spec).contains(&"top.style.pen-smoothing".to_string()),
-            "{tool:?} draws nothing smoothing reaches"
-        );
+    // share the Stroke control group but draw no path, so a control there
+    // would do nothing to what is about to be drawn. Whatever the style, the
+    // chip, meter, or stepper appears exactly where smoothing reaches.
+    for (style, id) in [
+        (ToolbarStrokeControls::Panel, "top.style.pen-feel"),
+        (ToolbarStrokeControls::Meter, "top.style.pen-smoothing"),
+        (ToolbarStrokeControls::Stepper, "top.style.pen-smoothing"),
+    ] {
+        let spec_for = |tool| {
+            let mut snapshot = snapshot_for_tool(tool);
+            snapshot.stroke_controls = style;
+            StylePillSpec::build(&snapshot, &plan())
+        };
+        for tool in [Tool::Pen, Tool::Marker] {
+            assert!(
+                control_ids(&spec_for(tool)).contains(&id.to_string()),
+                "{tool:?} draws a smoothed stroke ({style:?})"
+            );
+        }
+        for tool in [Tool::Line, Tool::Blur, Tool::Rect, Tool::Eraser] {
+            assert!(
+                !control_ids(&spec_for(tool)).contains(&id.to_string()),
+                "{tool:?} draws nothing smoothing reaches ({style:?})"
+            );
+        }
     }
 }
 
 #[test]
-fn the_shape_sensitivity_stepper_is_shape_pen_only_and_stays_in_range() {
-    let shape_pen = StylePillSpec::build(&snapshot_for_tool(Tool::LiveShape), &plan());
+fn the_shape_detection_meter_is_shape_pen_only_and_stays_in_range() {
+    let meter_style = |tool| {
+        let mut snapshot = snapshot_for_tool(tool);
+        snapshot.stroke_controls = ToolbarStrokeControls::Meter;
+        snapshot
+    };
+    let shape_pen = StylePillSpec::build(&meter_style(Tool::LiveShape), &plan());
     let ids = control_ids(&shape_pen);
     assert!(ids.contains(&"top.style.shape-sensitivity".to_string()));
     assert!(
@@ -232,39 +289,34 @@ fn the_shape_sensitivity_stepper_is_shape_pen_only_and_stays_in_range() {
         "ink Shape Pen keeps is still smoothed"
     );
     for tool in [Tool::Pen, Tool::Rect, Tool::Triangle] {
-        let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
+        let spec = StylePillSpec::build(&meter_style(tool), &plan());
         assert!(
             !control_ids(&spec).contains(&"top.style.shape-sensitivity".to_string()),
             "{tool:?} recognizes nothing"
         );
     }
 
-    let stepper = StylePillControl::ShapeSensitivityStepper;
+    let meter = StylePillControl::ShapeSensitivityMeter;
     let mut snapshot = snapshot_for_tool(Tool::LiveShape);
     snapshot.shape_recognition_sensitivity = 2;
-    assert_eq!(stepper.role(), StylePillRole::Stepper);
-    assert_eq!(stepper.value_text(&snapshot).as_deref(), Some("2"));
-    let steps = stepper.required_steps(&snapshot);
+    assert_eq!(meter.role(), StylePillRole::Meter);
+    assert_eq!(meter.value_text(&snapshot).as_deref(), Some("Balanced"));
+    let bars = meter.required_meter(&snapshot).segments;
+    assert_eq!(bars.len(), 4);
     assert_eq!(
-        steps[0].event,
+        bars[0].event,
         ToolbarEvent::SetShapeRecognitionSensitivity(1)
     );
     assert_eq!(
-        steps[1].event,
+        bars[2].event,
         ToolbarEvent::SetShapeRecognitionSensitivity(3)
     );
 
     let max = crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
     snapshot.shape_recognition_sensitivity = 0;
-    assert_eq!(
-        stepper.required_steps(&snapshot)[0].event,
-        ToolbarEvent::SetShapeRecognitionSensitivity(0)
-    );
+    assert_eq!(meter.meter_wheel_event(&snapshot, -1), None);
     snapshot.shape_recognition_sensitivity = max;
-    assert_eq!(
-        stepper.required_steps(&snapshot)[1].event,
-        ToolbarEvent::SetShapeRecognitionSensitivity(max)
-    );
+    assert_eq!(meter.meter_wheel_event(&snapshot, 1), None);
 }
 
 #[test]
@@ -294,13 +346,17 @@ fn the_font_button_shows_the_family_in_use_and_opens_the_picker() {
 
 #[test]
 fn a_squeezed_pill_sheds_its_extras_before_it_sheds_the_color_chip() {
+    // Classic mode pins the text controls onto the Pen, so one pill carries
+    // both extras (smoothing and Bold) beside the core.
     let mut snapshot = snapshot_for_tool(Tool::Pen);
+    snapshot.context_aware_ui = false;
     snapshot.show_text_controls = true;
     let mut squeezed = plan();
     squeezed.drop_style_extras = true;
 
     let ids = control_ids(&StylePillSpec::build(&snapshot, &squeezed));
 
+    assert!(!ids.contains(&"top.style.pen-feel".to_string()));
     assert!(!ids.contains(&"top.style.pen-smoothing".to_string()));
     assert!(!ids.contains(&"top.style.font-bold".to_string()));
     assert!(
@@ -400,8 +456,9 @@ fn stroke_state_orders_chip_swatches_slider_and_numeral() {
     expected.extend((0..swatch_count).map(|index| format!("top.style.swatch.{index}")));
     expected.push("top.style.thickness".to_string());
     expected.push("top.style.thickness-value".to_string());
-    // The pen draws the strokes smoothing applies to, so the pill offers it.
-    expected.push("top.style.pen-smoothing".to_string());
+    // The pen draws the strokes smoothing applies to, so the pill offers it
+    // behind the Pen feel chip (the default stroke-controls style).
+    expected.push("top.style.pen-feel".to_string());
     assert_eq!(control_ids(&spec), expected);
 
     let chip = spec.controls()[0];
@@ -551,7 +608,7 @@ fn arrow_state_gates_the_reset_button_on_the_toggle() {
 }
 
 #[test]
-fn next_arrow_style_control_does_not_advertise_the_selection_aware_shortcut() {
+fn arrow_style_chip_does_not_advertise_the_selection_aware_shortcut() {
     use crate::config::{Action, Shortcut};
     use crate::input::state::test_support::make_test_input_state_with_action_bindings;
     use std::collections::HashMap;
@@ -573,10 +630,10 @@ fn next_arrow_style_control_does_not_advertise_the_selection_aware_shortcut() {
     snapshot.show_marker_opacity_section = false;
 
     assert_eq!(
-        StylePillControl::ArrowStyleCycle
+        StylePillControl::ArrowStyleChip
             .tooltip(&snapshot)
             .as_deref(),
-        Some("Next arrow style: Standard")
+        Some("Arrow style: Standard \u{2014} click to choose")
     );
 }
 
@@ -603,7 +660,9 @@ fn step_marker_state_carries_the_step_reset() {
 
 #[test]
 fn marker_state_adds_the_opacity_slider() {
-    let snapshot = snapshot_for_tool(Tool::Marker);
+    let mut snapshot = snapshot_for_tool(Tool::Marker);
+    snapshot.color.a = 0.2;
+    snapshot.marker_opacity = 0.9;
     let spec = StylePillSpec::build(&snapshot, &plan());
     assert_eq!(spec.state(), StylePillState::Marker);
     let ids = control_ids(&spec);
@@ -632,6 +691,10 @@ fn marker_state_adds_the_opacity_slider() {
     assert_eq!(
         opacity.value_text(&snapshot),
         Some(format!("{:.0}%", snapshot.marker_opacity * 100.0))
+    );
+    assert_eq!(
+        opacity.tooltip(&snapshot).as_deref(),
+        Some("Marker opacity setting: 90%. Lower lets more of the page show through.")
     );
 }
 
@@ -698,10 +761,12 @@ fn text_state_is_swatches_size_and_one_font_control() {
         ]
     );
     assert!(!ids.contains(&"top.style.thickness".to_string()));
-    assert!(
-        !ids.contains(&"top.style.pen-smoothing".to_string()),
-        "typing text draws no stroke for smoothing to reach"
-    );
+    for id in ["top.style.pen-smoothing", "top.style.pen-feel"] {
+        assert!(
+            !ids.contains(&id.to_string()),
+            "typing text draws no stroke for smoothing to reach"
+        );
+    }
 
     let slider = StylePillControl::Slider(StylePillSlider::FontSize);
     assert_eq!(
@@ -767,8 +832,55 @@ fn settings_overrides_extend_the_stroke_state() {
     snapshot.show_marker_opacity_section = true;
     let ids = control_ids(&StylePillSpec::build(&snapshot, &plan()));
     assert!(ids.contains(&"top.style.opacity".to_string()));
-    assert!(ids.contains(&"top.style.font-size".to_string()));
-    assert!(ids.contains(&"top.style.font-family-picker".to_string()));
+}
+
+#[test]
+fn text_controls_appear_only_where_text_is_drawn_while_the_pill_adapts() {
+    let font_ids = [
+        "top.style.font-size",
+        "top.style.font-size-value",
+        "top.style.font-bold",
+        "top.style.font-family-picker",
+    ];
+    let present = |snapshot: &ToolbarSnapshot| -> Vec<&str> {
+        let ids = control_ids(&StylePillSpec::build(snapshot, &plan()));
+        font_ids
+            .into_iter()
+            .filter(|id| ids.iter().any(|candidate| candidate == id))
+            .collect()
+    };
+
+    // The shipped default pins text controls on; adapting to the tool still
+    // keeps them off tools whose strokes carry no text.
+    for tool in [Tool::Pen, Tool::LiveShape, Tool::Marker, Tool::Rect] {
+        let mut snapshot = snapshot_for_tool(tool);
+        snapshot.show_text_controls = true;
+        assert!(present(&snapshot).is_empty(), "{tool:?}");
+    }
+
+    let mut arrow = snapshot_for_tool(Tool::Arrow);
+    arrow.show_text_controls = true;
+    assert!(present(&arrow).is_empty(), "unnumbered arrows draw no text");
+    arrow.arrow_label_enabled = true;
+    assert_eq!(present(&arrow), font_ids, "numbered arrows draw labels");
+
+    // A step marker's number takes the face, not the text size.
+    assert_eq!(
+        present(&snapshot_for_tool(Tool::StepMarker)),
+        ["top.style.font-bold", "top.style.font-family-picker"]
+    );
+
+    let mut text = snapshot_for_tool(Tool::Pen);
+    text.text_active = true;
+    assert_eq!(present(&text), font_ids);
+
+    // Classic mode keeps the old meaning: the setting pins them everywhere.
+    let mut classic = snapshot_for_tool(Tool::Pen);
+    classic.context_aware_ui = false;
+    classic.show_text_controls = true;
+    assert_eq!(present(&classic), font_ids);
+    classic.show_text_controls = false;
+    assert!(present(&classic).is_empty());
 }
 
 #[test]

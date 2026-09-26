@@ -13,6 +13,11 @@ pub(super) fn finish_moving_selection(
     if moved {
         state.push_translation_undo(measurer, snapshots);
     }
+
+    // The handles stay hidden while the selection is held, so returning to
+    // idle shows them again even when nothing moved.
+    state.mark_selection_chrome_dirty_with(measurer);
+    state.needs_redraw = true;
 }
 
 pub(super) fn finish_selection_drag(
@@ -24,15 +29,15 @@ pub(super) fn finish_selection_drag(
     end_y: i32,
     additive: bool,
 ) {
+    // The rubber band is erased on every release, whatever it selected.
     state.clear_provisional_dirty();
+    state.needs_redraw = true;
+
     let dx = (end_x - start_x).abs();
     let dy = (end_y - start_y).abs();
     if dx < SELECTION_DRAG_THRESHOLD && dy < SELECTION_DRAG_THRESHOLD {
         if !additive {
-            let bounds = state.selection_bounding_box_with(measurer, state.selected_shape_ids());
-            state.clear_selection();
-            state.mark_selection_dirty_region(bounds);
-            state.needs_redraw = true;
+            state.clear_selection_with(measurer);
         }
         return;
     }
@@ -40,11 +45,10 @@ pub(super) fn finish_selection_drag(
     if let Some(rect) = InputState::selection_rect_from_points(start_x, start_y, end_x, end_y) {
         let ids = state.shape_ids_in_rect_with(measurer, rect);
         if additive {
-            state.extend_selection(ids);
+            state.extend_selection_with(measurer, ids);
         } else {
-            state.set_selection(ids);
+            state.set_selection_with(measurer, ids);
         }
-        state.needs_redraw = true;
     }
 }
 

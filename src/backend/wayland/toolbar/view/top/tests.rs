@@ -253,6 +253,25 @@ fn presets_render_as_slot_buttons_in_the_presets_island() {
 }
 
 #[test]
+fn idle_hidden_strip_keeps_its_size_but_passes_input_through() {
+    let engine = crate::ui_text::UiTextEngine::default();
+    let mut snapshot = snapshot();
+    let shown_size = top_size(&engine, &snapshot);
+    let (w, h) = (shown_size.0 as f64, shown_size.1 as f64);
+    let shown_rects = top_input_rects(&engine, &snapshot, w, h).expect("island rects");
+    assert!(!shown_rects.is_empty());
+
+    // Mid-fade the strip is still partly visible and keeps its islands.
+    snapshot.top_fade = 0.3;
+    assert_eq!(top_input_rects(&engine, &snapshot, w, h), Some(shown_rects));
+
+    // Fully hidden: same surface size (no configure churn), empty region.
+    snapshot.top_fade = crate::ui::toolbar::snapshot::fade::TOP_STRIP_HIDDEN_LEVEL;
+    assert_eq!(top_size(&engine, &snapshot), shown_size);
+    assert_eq!(top_input_rects(&engine, &snapshot, w, h), Some(Vec::new()));
+}
+
+#[test]
 fn shortcut_badges_follow_the_snapshot_bindings() {
     let state = make_test_input_state();
     let snapshot = ToolbarSnapshot::from_input_with_bindings(
@@ -378,6 +397,45 @@ fn shape_picker_grid_hosts_the_relocated_shapes() {
     assert!(picker_ids.contains(&"top.picker.top.tool.rect"));
     assert!(picker_ids.contains(&"top.picker.top.tool.blur"));
     assert!(picker_ids.contains(&"top.picker.top.tool.regular-polygon"));
+}
+
+#[test]
+fn a_tool_with_its_own_button_does_not_also_light_the_shapes_picker() {
+    use crate::input::Tool;
+
+    // Band buttons painted in the active (blue) state. The picker's own
+    // popover stays closed, so only tool state can light it.
+    let active_band_buttons = |tool: Tool| -> Vec<String> {
+        let mut snapshot = snapshot();
+        snapshot.active_tool = tool;
+        snapshot.tool_override = Some(tool);
+        snapshot.shape_picker_open = false;
+        build(&snapshot)
+            .nodes()
+            .iter()
+            .filter(|node| match &node.kind {
+                WidgetKind::IconButton { style, .. } | WidgetKind::TextButton { style, .. } => {
+                    style.active
+                }
+                _ => false,
+            })
+            .map(|node| node.id.as_str().to_string())
+            .filter(|id| {
+                id.starts_with("top.tool.") || id == ids::TOP_UTILITY_SHAPE_PICKER.as_str()
+            })
+            .collect()
+    };
+
+    assert_eq!(
+        active_band_buttons(Tool::LiveShape),
+        ["top.tool.live-shape"]
+    );
+    assert_eq!(active_band_buttons(Tool::Arrow), ["top.tool.arrow"]);
+    assert_eq!(
+        active_band_buttons(Tool::Rect),
+        [ids::TOP_UTILITY_SHAPE_PICKER.as_str()],
+        "a tool inside the picker lights the picker alone"
+    );
 }
 
 #[test]
@@ -545,8 +603,10 @@ fn minimized_strip_is_a_single_restore_tab() {
     let mut snapshot = snapshot();
     snapshot.top_minimized = true;
 
+    // A comfortable target (the old 64x24 sliver was easy to miss) that
+    // carries the restore glyph and its caption.
     let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    assert_eq!((w, h), (64, 24));
+    assert_eq!((w, h), (104, 32));
 
     let tree = build_top_view(
         &crate::ui_text::UiTextEngine::default(),
@@ -565,6 +625,17 @@ fn minimized_strip_is_a_single_restore_tab() {
         interactive[0].interact.as_ref().unwrap().event,
         ToolbarEvent::SetTopMinimized(false)
     ));
+    let WidgetKind::RestoreTab { label, .. } = &interactive[0].kind else {
+        panic!("the tab is a restore tab: {:?}", interactive[0].kind);
+    };
+    assert_eq!(label.text, "Tools");
+    assert_eq!(
+        interactive[0]
+            .interact
+            .as_ref()
+            .and_then(|interaction| interaction.tooltip.as_deref()),
+        Some("Show toolbar")
+    );
 }
 
 #[test]
@@ -851,8 +922,9 @@ fn assert_marker_style_pill() {
     use crate::backend::wayland::toolbar::events::HitKind;
     use crate::input::Tool;
 
-    // Marker: thickness (targeting the marker size) plus the opacity slider
-    // with its inline readout decoration.
+    // Marker: thickness (targeting the marker size) plus the opacity slider,
+    // its track fading to the stroke color and its readout a swatch of the
+    // stroke rather than a percentage.
     let marker = snapshot_for_tool(Tool::Marker);
     let tree = build(&marker);
     let opacity = tree
@@ -866,15 +938,39 @@ fn assert_marker_style_pill() {
             max: spec.max,
         }
     );
+    let paint = model::OpacityPaint {
+        rgb: (marker.color.r, marker.color.g, marker.color.b),
+        stroke_alpha: marker.marker_opacity,
+        alpha_stops: [
+            (0.0, spec.min),
+            (0.0, spec.min),
+            (1.0, spec.max),
+            (1.0, spec.max),
+        ],
+    };
+    assert!(matches!(
+        opacity.kind,
+        WidgetKind::OpacitySlider { paint: track, .. } if track == paint
+    ));
+    let tooltip = opacity.interact.as_ref().unwrap().tooltip.as_deref();
+    assert_eq!(
+        tooltip,
+        Some(
+            format!(
+                "Marker opacity setting: {:.0}%. Lower lets more of the page show through.",
+                marker.marker_opacity * 100.0
+            )
+            .as_str()
+        ),
+        "the number the swatch replaces lives in the tooltip"
+    );
     let readout = tree
         .node_by_id(&"top.style.opacity.readout".into())
         .expect("opacity readout");
-    match &readout.kind {
-        WidgetKind::Label(label) => {
-            assert_eq!(label.text, format!("{:.0}%", marker.marker_opacity * 100.0));
-        }
-        other => panic!("readout kind, got {other:?}"),
-    }
+    assert!(matches!(
+        readout.kind,
+        WidgetKind::OpacitySwatch { paint: swatch } if swatch == paint
+    ));
     assert!(readout.interact.is_none());
 }
 
@@ -1195,6 +1291,181 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 }
 
 #[test]
+fn a_press_on_a_meter_bar_activates_that_bar_not_its_neighbour() {
+    let mut snapshot = snapshot_for_tool(crate::input::Tool::Pen);
+    snapshot.stroke_controls = crate::config::ToolbarStrokeControls::Meter;
+    snapshot.pen_smoothing = 3;
+    let tree = build(&snapshot);
+    let hits = tree.to_hit_regions();
+
+    let first = tree
+        .node_by_id(&"top.style.pen-smoothing.level-1".into())
+        .expect("first smoothing bar");
+    // 11px into the row: inside bar 1, and inside bar 2's inflated target.
+    let (x, y) = (first.rect.0 + 11.0, first.rect.1 + first.rect.3 / 2.0);
+    let pressed = crate::backend::wayland::toolbar::hit::find_hit(&hits, x, y, |hit| {
+        crate::backend::wayland::toolbar::hit::intent_for_hit(hit, x, y)
+    })
+    .map(|(intent, _)| intent.into_event());
+
+    assert_eq!(pressed, Some(ToolbarEvent::SetPenSmoothing(1)));
+}
+
+#[test]
+fn shape_pen_meters_carry_captions_and_level_bars_inside_the_planned_width() {
+    let engine = crate::ui_text::UiTextEngine::default();
+    let mut snapshot = snapshot_for_tool(crate::input::Tool::LiveShape);
+    snapshot.stroke_controls = crate::config::ToolbarStrokeControls::Meter;
+    let tree = build(&snapshot);
+    let caption_style = crate::ui_text::UiTextStyle {
+        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP,
+    };
+
+    for (meter_id, text, level, bars) in [
+        (
+            "top.style.pen-smoothing",
+            "Smooth",
+            snapshot.pen_smoothing,
+            6,
+        ),
+        (
+            "top.style.shape-sensitivity",
+            "Shapes",
+            snapshot.shape_recognition_sensitivity,
+            4,
+        ),
+    ] {
+        let caption = tree
+            .node_by_id(&format!("{meter_id}.caption").into())
+            .unwrap_or_else(|| panic!("{meter_id} caption"));
+        let WidgetKind::Label(label) = &caption.kind else {
+            panic!("{meter_id} caption kind {:?}", caption.kind);
+        };
+        assert_eq!(label.text, text);
+        assert!(label.caption, "{meter_id} caption uses the caption tone");
+        assert!(caption.interact.is_none(), "{meter_id} caption is decor");
+        assert_eq!(caption.rect.2, ToolbarLayoutSpec::TOP_STYLE_CAPTION_W);
+
+        // The word fits its slot with room to spare before the first bar.
+        let drawn = engine
+            .measure(caption_style, text, None)
+            .expect("caption measures")
+            .width();
+        assert!(
+            drawn + 4.0 <= ToolbarLayoutSpec::TOP_STYLE_CAPTION_W,
+            "{text} is {drawn}px wide"
+        );
+
+        // One interactive bar per level above zero, abutting the caption and
+        // each other, filling the fixed bar row, filled up to the level.
+        let mut left = caption.rect.0 + caption.rect.2;
+        for bar in 1..=bars {
+            let node = tree
+                .node_by_id(&format!("{meter_id}.level-{bar}").into())
+                .unwrap_or_else(|| panic!("{meter_id} bar {bar}"));
+            let WidgetKind::MeterBar { filled, enabled } = node.kind else {
+                panic!("{meter_id} bar kind {:?}", node.kind);
+            };
+            assert_eq!(filled, bar <= level, "{meter_id} bar {bar} fill");
+            assert!(enabled, "{meter_id} bar {bar} enabled");
+            assert!(node.interact.is_some(), "{meter_id} bar {bar} clickable");
+            assert!(
+                (node.rect.0 - left).abs() < 1e-9,
+                "{meter_id} bar {bar} abuts"
+            );
+            left += node.rect.2;
+        }
+        let row_end = caption.rect.0 + caption.rect.2 + ToolbarLayoutSpec::TOP_STYLE_METER_W;
+        assert!(
+            (left - row_end).abs() < 1e-9,
+            "{meter_id} bars fill the row"
+        );
+        assert!(
+            tree.node_by_id(&format!("{meter_id}.level-{}", bars + 1).into())
+                .is_none(),
+            "{meter_id} has no bar past its maximum"
+        );
+    }
+
+    // The planner walks the same tree, so the pill is inside the width the
+    // strip asks for.
+    let style = tree
+        .node_by_id(&"top.island.style".into())
+        .expect("style pill");
+    let (_, h) = top_size(&engine, &snapshot);
+    assert!(top_natural_width(&engine, &snapshot, h as f64) >= style.rect.0 + style.rect.2);
+}
+
+#[test]
+fn shape_pen_steppers_carry_visible_captions_inside_the_planned_width() {
+    let engine = crate::ui_text::UiTextEngine::default();
+    let mut snapshot = snapshot_for_tool(crate::input::Tool::LiveShape);
+    snapshot.stroke_controls = crate::config::ToolbarStrokeControls::Stepper;
+    let tree = build(&snapshot);
+    let caption_style = crate::ui_text::UiTextStyle {
+        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP,
+    };
+
+    for (stepper, text) in [
+        ("top.style.pen-smoothing", "Smooth"),
+        ("top.style.shape-sensitivity", "Detect"),
+    ] {
+        let caption = tree
+            .node_by_id(&format!("{stepper}.caption").into())
+            .unwrap_or_else(|| panic!("{stepper} caption"));
+        let WidgetKind::Label(label) = &caption.kind else {
+            panic!("{stepper} caption kind {:?}", caption.kind);
+        };
+        assert_eq!(label.text, text);
+        assert!(label.caption, "{stepper} caption uses the caption tone");
+        assert!(caption.interact.is_none(), "{stepper} caption is decor");
+        assert_eq!(caption.rect.2, ToolbarLayoutSpec::TOP_STYLE_CAPTION_W);
+
+        // The word fits its slot with room to spare before the − half.
+        let drawn = engine
+            .measure(caption_style, text, None)
+            .expect("caption measures")
+            .width();
+        assert!(
+            drawn + 4.0 <= ToolbarLayoutSpec::TOP_STYLE_CAPTION_W,
+            "{text} is {drawn}px wide"
+        );
+
+        let minus = tree
+            .node_by_id(&format!("{stepper}.minus").into())
+            .unwrap_or_else(|| panic!("{stepper} minus half"));
+        assert!(
+            (minus.rect.0 - (caption.rect.0 + caption.rect.2)).abs() < 1e-9,
+            "{stepper} − half abuts its caption"
+        );
+
+        // The readout is the value being changed: primary tone, bold,
+        // centered between the halves.
+        let value = tree
+            .node_by_id(&format!("{stepper}.value").into())
+            .unwrap_or_else(|| panic!("{stepper} readout"));
+        let WidgetKind::Label(value) = &value.kind else {
+            panic!("{stepper} readout kind");
+        };
+        assert!(value.bold && value.centered && !value.caption, "{value:?}");
+    }
+
+    // The planner walks the same tree, so the captioned pill is inside the
+    // width the strip asks for.
+    let style = tree
+        .node_by_id(&"top.island.style".into())
+        .expect("style pill");
+    let (_, h) = top_size(&engine, &snapshot);
+    assert!(top_natural_width(&engine, &snapshot, h as f64) >= style.rect.0 + style.rect.2);
+}
+
+#[test]
 fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
     let mut snapshot = snapshot();
     snapshot.top_overflow_open = true;
@@ -1226,6 +1497,8 @@ fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
 #[test]
 fn overflow_popover_anchors_directly_below_its_button_like_gtk() {
     let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+    // Classic mode pins every control, so the pill reaches under the panel.
+    snapshot.context_aware_ui = false;
     snapshot.show_text_controls = true;
     snapshot.top_viewport_max = Some(850.0);
     snapshot.top_overflow_open = true;
@@ -1291,6 +1564,8 @@ fn menu_popovers_anchor_directly_below_overflow_button_like_gtk() {
         ("settings", (false, false, true)),
     ] {
         let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+        // Classic mode pins every control, so the pill reaches under the panel.
+        snapshot.context_aware_ui = false;
         snapshot.show_text_controls = true;
         snapshot.top_viewport_max = Some(850.0);
         snapshot.canvas_popover_open = open.0;
@@ -1832,10 +2107,81 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
     }
 }
 
+/// The storage path used to greet every visit to Settings. It now waits
+/// behind a collapsed "Details" toggle under a plain summary, and the reset
+/// button stays in the grid either way.
+#[test]
+fn settings_popover_tucks_the_runtime_path_behind_details() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    let runtime_path =
+        std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
+    snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+        path: runtime_path.clone(),
+        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
+        detail: None,
+        recovery_artifacts: Vec::new(),
+    });
+    let label_texts = |tree: &WidgetTree| -> Vec<String> {
+        tree.nodes()
+            .iter()
+            .filter_map(|node| match &node.kind {
+                WidgetKind::Label(label) => Some(label.text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    let tree = build(&snapshot);
+    let labels = label_texts(&tree);
+    assert!(labels.contains(&"Toolbar changes are saved automatically".to_string()));
+    assert!(
+        labels
+            .iter()
+            .all(|text| !text.contains(runtime_path.to_string_lossy().as_ref())),
+        "the path stays collapsed: {labels:?}"
+    );
+    let toggle = tree
+        .node_by_id(&"top.menu.settings.details".into())
+        .expect("details toggle");
+    assert_eq!(
+        toggle
+            .interact
+            .as_ref()
+            .map(|interaction| &interaction.event),
+        Some(&ToolbarEvent::SetSettingsDetailsOpen(true))
+    );
+    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
+        .expect("settings model");
+    assert!(
+        model
+            .buttons()
+            .iter()
+            .any(|button| button.event == ToolbarEvent::RequestRuntimeUiReset),
+        "the reset action stays discoverable"
+    );
+
+    snapshot.settings_details_open = true;
+    let tree = build(&snapshot);
+    assert!(
+        label_texts(&tree)
+            .iter()
+            .any(|text| text.contains(runtime_path.to_string_lossy().as_ref())),
+        "expanding Details shows the path"
+    );
+    assert_eq!(
+        tree.node_by_id(&"top.menu.settings.details".into())
+            .and_then(|node| node.interact.as_ref())
+            .map(|interaction| &interaction.event),
+        Some(&ToolbarEvent::SetSettingsDetailsOpen(false))
+    );
+}
+
 #[test]
 fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
+    snapshot.settings_details_open = true;
     let runtime_path =
         std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
     snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
@@ -1856,7 +2202,10 @@ fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
         2,
         "summary and path should remain logical rows instead of fixed character chunks"
     );
-    let path_text = format!("Runtime state: {}", runtime_path.display());
+    let path_text = format!(
+        "Saved separately from config.toml, in {}",
+        runtime_path.display()
+    );
     let path_notice = notices
         .iter()
         .find(|node| matches!(&node.kind, WidgetKind::Label(label) if label.text == path_text))

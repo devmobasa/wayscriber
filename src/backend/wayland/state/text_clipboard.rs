@@ -31,6 +31,20 @@ impl WaylandState {
         }
     }
 
+    /// Copy the last saved capture's full path (the capture toast's "Copy
+    /// path" button) through the same text clipboard pipeline.
+    pub(in crate::backend::wayland) fn copy_last_capture_path(&mut self) {
+        let Some(request) = self.input_state.last_capture_path_copy_request() else {
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "text_clipboard",
+                Toast::warning("No saved capture to copy."),
+            );
+            return;
+        };
+        self.handle_copy_text(request);
+    }
+
     /// Poll the async text-copy pipeline, surface failures, and restart a
     /// queued copy once the controller goes idle.
     pub(in crate::backend::wayland) fn poll_text_copy_completion(&mut self) {
@@ -40,9 +54,17 @@ impl WaylandState {
                 context: request,
                 outcome: TextCopyOutcome::Copied,
                 ..
-            } => self
-                .input_state
-                .complete_text_copy_with(self.render.text_measurer(), request),
+            } => {
+                if let Some(message) = request.confirmation {
+                    self.input_state.push_toast(
+                        ToastPriority::Info,
+                        "text_clipboard",
+                        Toast::info(message),
+                    );
+                }
+                self.input_state
+                    .complete_text_copy_with(self.render.text_measurer(), request);
+            }
             RuntimeOperationPoll::Ready {
                 outcome: TextCopyOutcome::Failed,
                 ..

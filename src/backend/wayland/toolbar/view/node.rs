@@ -70,6 +70,10 @@ pub struct LabelSpec {
     pub size: f64,
     pub bold: bool,
     pub wrap: bool,
+    /// Center the text in its rect instead of starting at the left edge.
+    pub centered: bool,
+    /// Secondary (caption) tone instead of the primary foreground.
+    pub caption: bool,
 }
 
 impl LabelSpec {
@@ -79,11 +83,23 @@ impl LabelSpec {
             size,
             bold,
             wrap: false,
+            centered: false,
+            caption: false,
         }
     }
 
     pub fn wrapped(mut self) -> Self {
         self.wrap = true;
+        self
+    }
+
+    pub fn centered(mut self) -> Self {
+        self.centered = true;
+        self
+    }
+
+    pub fn caption(mut self) -> Self {
+        self.caption = true;
         self
     }
 }
@@ -167,6 +183,27 @@ pub enum WidgetKind {
     /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
     /// (`HitKind::DragSet*`); the paint only shows the current value.
     Slider { t: f64 },
+    /// The marker opacity slider: a [`WidgetKind::Slider`] whose track fades
+    /// from clear to solid in the stroke color (`paint.alpha_stops`).
+    OpacitySlider {
+        t: f64,
+        paint: crate::ui::toolbar::model::OpacityPaint,
+    },
+    /// The marker opacity slider's readout: a stroke at `paint.stroke_alpha`
+    /// over sample text, drawn by the painter both frontends share.
+    OpacitySwatch {
+        paint: crate::ui::toolbar::model::OpacityPaint,
+    },
+    /// One bar of a level meter. The node's rect is the bar's hit slot; the
+    /// painter draws a slimmer rounded bar centered in it, accent-filled at
+    /// or below the current level and track-colored above it.
+    MeterBar { filled: bool, enabled: bool },
+    /// The Pen feel panel's live smoothing preview at `level`, drawn by the
+    /// painter both frontends share (`toolbar_icons::draw_smoothing_preview`).
+    SmoothingPreview { level: u8 },
+    /// An arrow style drawn left to right in the foreground tone, by the
+    /// painter both frontends share (`toolbar_icons::draw_arrow_style_preview`).
+    ArrowStylePreview { style: crate::draw::ArrowStyle },
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),
@@ -195,6 +232,9 @@ pub enum WidgetKind {
     PinButton { pinned: bool },
     /// Minimize chrome button (collapses the bar to its restore tab).
     MinimizeButton,
+    /// The minimized strip's restore tab: a raised, outlined body with the
+    /// restore glyph and a short caption, so it reads as a button.
+    RestoreTab { glyph: IconFn, label: LabelSpec },
     /// Anchored popover panel (shadow, background, caret at `caret_x`).
     Popover { caret_x: f64, caret_up: bool },
     /// Vertical scrollbar: proportional thumb (`thumb` fraction of the

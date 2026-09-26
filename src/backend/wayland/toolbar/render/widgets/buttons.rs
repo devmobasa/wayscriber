@@ -2,11 +2,11 @@ use super::constants::{
     COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
     COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
     COLOR_CLOSE_HOVER, COLOR_DRAG_HANDLE, COLOR_DRAG_HANDLE_HOVER, COLOR_FOCUS_RING,
-    COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
-    COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
-    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY,
-    COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, SEGMENT_PADDING, SEGMENT_RADIUS,
-    SEGMENT_SELECTED_RADIUS, set_color,
+    COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_LABEL_HINT, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT,
+    COLOR_PIN_HOVER, COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER,
+    COLOR_SEGMENT_HOVER, COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE,
+    COLOR_TEXT_PRIMARY, COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, SEGMENT_PADDING,
+    SEGMENT_RADIUS, SEGMENT_SELECTED_RADIUS, set_color,
 };
 use super::draw_round_rect;
 use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba};
@@ -63,6 +63,41 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
         y + (h - icon_size) / 2.0,
         icon_size,
     );
+}
+
+/// The restore tab's body: a raised fill with a light outline, so the tab
+/// stands out against busy content instead of reading as a faint sliver.
+pub(in crate::backend::wayland::toolbar::render) fn draw_restore_tab_body(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    hover: bool,
+) {
+    let radius = (h / 2.0).min(RADIUS_LG);
+    set_color(
+        ctx,
+        if hover {
+            COLOR_PIN_HOVER
+        } else {
+            COLOR_BUTTON_HOVER
+        },
+    );
+    draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, radius);
+    let _ = ctx.fill();
+
+    set_color(
+        ctx,
+        if hover {
+            COLOR_TEXT_PRIMARY
+        } else {
+            COLOR_LABEL_HINT
+        },
+    );
+    ctx.set_line_width(1.0);
+    draw_round_rect(ctx, x + 1.5, y + 1.5, w - 3.0, h - 3.0, radius);
+    let _ = ctx.stroke();
 }
 
 /// Minimize the horizontal top bar into its edge restore tab.

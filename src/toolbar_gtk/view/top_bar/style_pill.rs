@@ -14,7 +14,7 @@ use super::*;
 /// control. The GTK bars must never retain keyboard focus — the popups the
 /// pill opens (color picker, precise entry) live on the overlay surface,
 /// which keeps the keyboard.
-fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
+pub(super) fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
     let button = sized_button(width, height);
     button.set_label(label);
     button
@@ -46,7 +46,7 @@ impl TopBar {
     /// The label is built even while the status is empty, and hidden instead of
     /// omitted: the bar only rebuilds when the pill's control list changes, so a
     /// slot that appears later has to already exist.
-    fn append_style_status_label(
+    pub(super) fn append_style_status_label(
         &mut self,
         pill: &gtk4::Box,
         control: model::StylePillControl,
@@ -173,7 +173,24 @@ impl TopBar {
                     // other readouts sit beside a full-width track, matching
                     // the built-in toolbar instead of borrowing track space.
                     let carries_readout = control.carries_inline_readout();
-                    slider.configure_inline_readout(carries_readout, px(STYLE_VALUE_W));
+                    // The marker opacity reads out as a swatch in the same
+                    // slot; its number moves to the tooltip.
+                    let opacity_paint = slider_kind.opacity_paint(snapshot);
+                    slider.configure_inline_readout(
+                        carries_readout && opacity_paint.is_none(),
+                        px(STYLE_VALUE_W),
+                    );
+                    slider.set_opacity_paint(opacity_paint);
+                    let swatch = opacity_paint.map(|paint| {
+                        let swatch = OpacitySwatch::new(
+                            paint,
+                            &format!("{}.readout", control.id()),
+                            px(STYLE_VALUE_W),
+                            px(SWATCH_SIZE),
+                        );
+                        slider.root.append(&swatch.area);
+                        swatch
+                    });
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
                     // A bare track with a numeral beside it has no visible
                     // name, so the accessible one is all a screen reader has.
@@ -181,9 +198,9 @@ impl TopBar {
                     slider
                         .root
                         .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
-                    if let Some(tooltip) = control.tooltip(snapshot) {
-                        slider.root.set_tooltip_text(Some(&tooltip));
-                    }
+                    slider
+                        .root
+                        .set_tooltip_text(control.tooltip(snapshot).as_deref());
                     let slider_width = STYLE_SLIDER_W
                         + if carries_readout {
                             STYLE_PILL_GAP + STYLE_VALUE_W
@@ -196,6 +213,17 @@ impl TopBar {
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
                         let value = slider_kind.value(snapshot).1;
                         slider.set_value(value);
+                        if let Some(swatch) = &swatch {
+                            let paint = slider_kind.opacity_paint(snapshot);
+                            slider.set_opacity_paint(paint);
+                            if let Some(paint) = paint {
+                                swatch.set_paint(paint);
+                            }
+                            // The tooltip carries the swatch's number.
+                            slider
+                                .root
+                                .set_tooltip_text(control.tooltip(snapshot).as_deref());
+                        }
                     }));
                     self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
@@ -319,8 +347,10 @@ impl TopBar {
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
                 }
-                model::StylePillControl::SelectionCycle(_)
-                | model::StylePillControl::ArrowStyleCycle => {
+                model::StylePillControl::ArrowStyleChip => {
+                    self.append_arrow_style_chip(&pill, control, snapshot, scale, px(gap));
+                }
+                model::StylePillControl::SelectionCycle(_) => {
                     let button = pill_button(
                         &control.required_value_text(snapshot),
                         sz(STYLE_SEL_VALUE_W),
@@ -345,58 +375,17 @@ impl TopBar {
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
                 }
+                model::StylePillControl::PenFeelChip => {
+                    self.append_pen_feel_chip(&pill, control, snapshot, scale, px(gap));
+                }
+                model::StylePillControl::PenSmoothingMeter
+                | model::StylePillControl::ShapeSensitivityMeter => {
+                    self.append_style_meter(&pill, control, snapshot, scale, px(gap));
+                }
                 model::StylePillControl::PenSmoothingStepper
                 | model::StylePillControl::ShapeSensitivityStepper
                 | model::StylePillControl::SelectionStepper(_) => {
-                    // No spacing between the halves: the builtin lays the three
-                    // parts out abutting, at step + value + step exactly, and
-                    // the width planner budgets that. Two 2px child gaps here
-                    // would make this widget 4px wider than the arrangement the
-                    // planner declared fits.
-                    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-                    set_semantic_widget_id(&row, control.id().as_ref());
-                    // A row of "−  3  +" says nothing about what it steps.
-                    let accessible_label = control.label(snapshot);
-                    row.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
-                    row.set_valign(gtk4::Align::Center);
-                    let steps = control.required_steps(snapshot);
-                    let mut handles: Vec<gtk4::Button> = Vec::new();
-                    let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
-                    set_semantic_widget_id(&minus, steps[0].id);
-                    minus.set_tooltip_text(Some(&steps[0].tooltip));
-                    minus.update_property(&[gtk4::accessible::Property::Label(&steps[0].tooltip)]);
-                    row.append(&minus);
-                    handles.push(minus.clone());
-                    let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
-                    set_semantic_widget_id(&value, &format!("{}.value", control.id()));
-                    value.set_width_request(px(STYLE_SEL_VALUE_W));
-                    row.append(&value);
-                    let plus = pill_button(steps[1].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
-                    set_semantic_widget_id(&plus, steps[1].id);
-                    plus.set_tooltip_text(Some(&steps[1].tooltip));
-                    plus.update_property(&[gtk4::accessible::Property::Label(&steps[1].tooltip)]);
-                    row.append(&plus);
-                    handles.push(plus.clone());
-                    for (button, step) in handles.iter().zip(steps.iter()) {
-                        button.set_sensitive(control.enabled(snapshot));
-                        let sender = self.feedback.clone();
-                        let event = step.event.clone();
-                        button.connect_clicked(move |_| {
-                            send_event(&sender, event.clone());
-                        });
-                    }
-                    append_gap(&pill, row.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        value.set_label(&control.required_value_text(snapshot));
-                        let enabled = control.enabled(snapshot);
-                        for button in &handles {
-                            button.set_sensitive(enabled);
-                        }
-                    }));
-                    // The docked control reports on the selected shape's own
-                    // factor, so it needs the same unavailable state the
-                    // slider has.
-                    self.append_style_status_label(&pill, control, snapshot, px(gap));
+                    self.append_style_stepper(&pill, control, snapshot, scale, px(gap));
                 }
                 model::StylePillControl::EraserModeSegment => {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
@@ -444,5 +433,45 @@ impl TopBar {
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
             pill.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
         }));
+    }
+}
+
+/// The marker opacity slider's readout: a stroke at the current opacity over
+/// sample text, drawn by the painter the built-in toolbar shares.
+struct OpacitySwatch {
+    area: gtk4::DrawingArea,
+    paint: Rc<Cell<model::OpacityPaint>>,
+}
+
+impl OpacitySwatch {
+    fn new(paint: model::OpacityPaint, id: &str, width: i32, height: i32) -> Self {
+        // Decoration: the slider beside it is the control, and its accessible
+        // value text already reads the percentage.
+        let area = gtk4::DrawingArea::builder()
+            .accessible_role(gtk4::AccessibleRole::Presentation)
+            .build();
+        area.set_content_width(width);
+        area.set_content_height(height);
+        area.set_valign(gtk4::Align::Center);
+        area.set_can_target(false);
+        set_semantic_widget_id(&area, id);
+        let paint = Rc::new(Cell::new(paint));
+        let draw_paint = paint.clone();
+        area.set_draw_func(move |_, ctx, width, height| {
+            let paint = draw_paint.get();
+            crate::toolbar_icons::draw_opacity_swatch(
+                ctx,
+                (0.0, 0.0, f64::from(width), f64::from(height)),
+                paint.rgb,
+                paint.stroke_alpha,
+            );
+        });
+        Self { area, paint }
+    }
+
+    fn set_paint(&self, paint: model::OpacityPaint) {
+        if self.paint.replace(paint) != paint {
+            self.area.queue_draw();
+        }
     }
 }

@@ -51,36 +51,23 @@ impl InputState {
 
     fn select_hovered_context_menu_shape_with(&mut self, measurer: &crate::draw::TextMeasurer) {
         if let Some(hovered_shape) = self.hovered_context_menu_shape() {
-            let previous_ids = self.selected_shape_ids().to_vec();
-            let previous_bounds = {
-                let frame = self.boards.active_frame();
-                previous_ids
-                    .iter()
-                    .filter_map(|id| {
-                        frame
-                            .shape(*id)
-                            .and_then(|shape| shape.bounding_box_with(measurer))
-                    })
-                    .collect::<Vec<_>>()
-            };
-
-            self.set_selection(vec![hovered_shape]);
-
-            for bounds in previous_bounds {
-                self.mark_selection_dirty_region(Some(bounds));
-            }
-            let hovered_bounds = {
-                let frame = self.boards.active_frame();
-                frame
-                    .shape(hovered_shape)
-                    .and_then(|shape| shape.bounding_box_with(measurer))
-            };
-            self.mark_selection_dirty_region(hovered_bounds);
-
+            self.set_selection_with(measurer, vec![hovered_shape]);
             self.close_context_menu();
         } else {
             self.close_context_menu();
         }
+    }
+
+    /// Closes the menu, then runs `action`. Closing first keeps the menu from
+    /// painting over what the action shows, and keeps Exit from spending
+    /// itself on cancelling the menu.
+    fn close_menu_and_run(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        action: Action,
+    ) {
+        self.close_context_menu();
+        self.handle_action_with_resources(resources, action);
     }
 
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
@@ -176,6 +163,12 @@ impl InputState {
                 self.request_zoom_action(crate::input::ZoomAction::Reset);
                 self.close_context_menu();
             }
+            MenuCommand::Undo => self.close_menu_and_run(resources, Action::Undo),
+            MenuCommand::Redo => self.close_menu_and_run(resources, Action::Redo),
+            MenuCommand::CaptureRegion => {
+                self.close_menu_and_run(resources, Action::CaptureRegionInteractive);
+            }
+            MenuCommand::Exit => self.close_menu_and_run(resources, Action::Exit),
             MenuCommand::ToggleHighlightTool => {
                 // Through the action, not the primitive: the action is what
                 // queues the durable click-highlight change, and the other

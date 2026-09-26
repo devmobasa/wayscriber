@@ -9,6 +9,7 @@ mod export;
 mod fonts;
 mod history;
 mod keybindings;
+mod laser;
 mod performance;
 mod presets;
 mod render_profiles;
@@ -65,6 +66,7 @@ impl Config {
     /// - `spotlight.dim_opacity`: 0.1 - 0.95
     /// - `spotlight.feather`: 0.0 - 0.9
     /// - `spotlight.magnification`: 1.0 - 4.0
+    /// - `laser.width`: 2.0 - 30.0; `laser.hold_ms`: 0 - 30000; `laser.fade_ms`: 0 - 5000
     /// - `buffer_count`: 2 - 4
     ///
     /// Returns what the user should be told about: a clamp is a silent
@@ -78,6 +80,7 @@ impl Config {
         self.validate_history();
         self.validate_arrow();
         self.validate_spotlight();
+        self.validate_laser();
         self.validate_performance();
         self.validate_fonts();
         self.validate_boards();

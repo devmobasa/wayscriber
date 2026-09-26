@@ -33,6 +33,29 @@ impl TopDisplayMode {
     }
 }
 
+/// How the style pill exposes pen smoothing and Shape Pen recognition
+/// sensitivity while a tool that uses them is active.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolbarStrokeControls {
+    /// One compact "Pen feel" chip that opens a panel with level meters, a
+    /// live smoothing preview, and a hint for each level.
+    #[default]
+    Panel,
+    /// Inline level meters: one bar per level, clicked or scrolled.
+    #[serde(alias = "meters")]
+    Meter,
+    /// Inline −/value/+ steppers.
+    #[serde(alias = "steppers")]
+    Stepper,
+}
+
+impl ToolbarStrokeControls {
+    /// Every style, in the order the configurator lists them.
+    pub const ALL: [Self; 3] = [Self::Panel, Self::Meter, Self::Stepper];
+}
+
 /// When the bottom-right zoom chip is shown (while `show_zoom_actions` is
 /// on and the persisted master preference has not been hidden via
 /// `Action::ToggleZoomChip`).

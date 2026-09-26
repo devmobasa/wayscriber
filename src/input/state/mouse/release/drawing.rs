@@ -3,7 +3,9 @@ use log::warn;
 use crate::draw::Shape;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::shape::bounding_box_for_points;
-use crate::input::tool::{FinishedToolStroke, PolygonStrokeSnapshot, ToolStrokeSnapshot};
+use crate::input::tool::{
+    FinishedToolStroke, PolygonStrokeSnapshot, ToolStrokeSnapshot, ToolUsage,
+};
 use crate::input::{InputState, Tool};
 use crate::util::Rect;
 
@@ -98,6 +100,10 @@ pub(super) fn finish_drawing(
             }
             return;
         }
+        FinishedToolStroke::Laser { points } => {
+            state.commit_laser_stroke(points);
+            return;
+        }
         FinishedToolStroke::Noop => {
             state.clear_provisional_dirty();
             return;
@@ -105,11 +111,7 @@ pub(super) fn finish_drawing(
     };
 
     let bounds = shape.bounding_box_with(measurer);
-    let magnified_spotlight = matches!(
-        shape,
-        Shape::Spotlight { magnification, .. }
-            if crate::draw::spotlight_magnification_is_active(magnification)
-    );
+    let recognized = ink.is_some();
     let path_damage = finished_path_damage_regions(&shape, bounds);
     // Two previews can leave pixels outside anything the committed stroke
     // damages, so their whole bounds are repainted.
@@ -199,19 +201,10 @@ pub(super) fn finish_drawing(
             state.clear_provisional_dirty();
             state.dirty_tracker.mark_optional_rect(bounds);
         }
-        state.clear_selection();
+        state.clear_selection_with(measurer);
         state.needs_redraw = true;
         state.mark_session_dirty();
-        state.record_first_stroke_done_for_onboarding();
-        if magnified_spotlight {
-            state.request_spotlight_magnifier_feedback();
-        }
-        if usage.bump_arrow_label {
-            state.bump_arrow_label();
-        }
-        if usage.bump_step_marker {
-            state.bump_step_marker();
-        }
+        follow_committed_stroke(state, &shape, bounds, recognized, usage);
     } else {
         state.clear_provisional_dirty();
         if limit_reached {
@@ -220,6 +213,33 @@ pub(super) fn finish_drawing(
                 state.max_shapes_per_frame()
             );
         }
+    }
+}
+
+/// Feedback and counters that follow a stroke once it is on the canvas.
+fn follow_committed_stroke(
+    state: &mut InputState,
+    shape: &Shape,
+    bounds: Option<Rect>,
+    recognized: bool,
+    usage: ToolUsage,
+) {
+    state.record_first_stroke_done_for_onboarding();
+    if recognized {
+        state.show_recognition_chip(shape, bounds, std::time::Instant::now());
+    }
+    if matches!(
+        shape,
+        Shape::Spotlight { magnification, .. }
+            if crate::draw::spotlight_magnification_is_active(*magnification)
+    ) {
+        state.request_spotlight_magnifier_feedback();
+    }
+    if usage.bump_arrow_label {
+        state.bump_arrow_label();
+    }
+    if usage.bump_step_marker {
+        state.bump_step_marker();
     }
 }
 

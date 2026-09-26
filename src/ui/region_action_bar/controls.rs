@@ -6,10 +6,10 @@ use crate::ui::theme::{self, Rgba, overlay};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 const ITEM_RADIUS: f64 = overlay::RADIUS_MD;
-const LABEL_FONT_SIZE: f64 = 11.0;
-const KEYCAP_FONT_SIZE: f64 = 8.5;
+pub(super) const LABEL_FONT_SIZE: f64 = overlay::FONT_SIZE_CONTROL_LABEL;
+pub(super) const KEYCAP_FONT_SIZE: f64 = overlay::FONT_SIZE_MIN_KEYCAP;
 /// Gap between an action's label and the keycap chip under it.
-const LABEL_KEYCAP_GAP: f64 = 3.0;
+pub(super) const LABEL_KEYCAP_GAP: f64 = 3.0;
 
 const ITEM_BG: Rgba = (1.0, 1.0, 1.0, 0.06);
 const ITEM_BORDER: Rgba = (1.0, 1.0, 1.0, 0.10);
@@ -274,7 +274,7 @@ fn draw_checkbox(ctx: &cairo::Context, x: f64, y: f64, size: f64, checked: bool)
     let _ = ctx.stroke();
 }
 
-fn label_style() -> UiTextStyle<'static> {
+pub(super) fn label_style() -> UiTextStyle<'static> {
     UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
@@ -283,6 +283,6 @@ fn label_style() -> UiTextStyle<'static> {
     }
 }
 
-fn toggle_label_style() -> UiTextStyle<'static> {
+pub(super) fn toggle_label_style() -> UiTextStyle<'static> {
     status_label_style(TOGGLE_FONT_SIZE)
 }

@@ -248,6 +248,8 @@ pen_smoothing = 3
 shape_recognition_sensitivity = 3
 # Snap Shape Pen results to nearby board-paper lines and points
 shape_recognition_grid_snap = true
+# Briefly name each recognized shape with the undo that keeps the ink
+shape_recognition_feedback = true
 
 # Default fill state for fill-capable shape tools
 default_fill_enabled = false
@@ -383,7 +385,8 @@ drag_tool = "default"
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
-- **Shape Pen**: Press `S` (`select_live_shape_tool`), click **Shape Pen** next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** from the command palette. Confident lines, circles, ovals, rectangles, and triangles preview as shapes over a faint copy of the stroke and commit as editable shapes. Circles and ovals can overlap their starting point by up to half a turn while the extra stroke stays close to the first lap. Larger ovals tolerate larger differences between the two passes; strokes that drift too far from the first lap stay freehand. Recognized ovals, rectangles, and triangles follow the Fill toggle, like the dedicated shape tools. If a stroke should have stayed ink, undo once to get the original stroke back; undo again to remove it. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (most forgiving), with 3 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. While Shape Pen is active, the toolbar's **Sensitivity** stepper changes it at once; so do **Increase / Decrease Shape Pen Sensitivity** in the command palette, or bind `increase_shape_recognition_sensitivity` / `decrease_shape_recognition_sensitivity`. A session remembers the level it was saved at; the config value is the starting level. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Rectangle and oval edges also snap to nearby Cartesian lines, and triangle corners to nearby Cartesian lines or isometric points. Set `[drawing] shape_recognition_grid_snap = false`, or turn off **Snap Shape Pen to board paper** in the configurator, to keep recognized shapes exactly where you drew them; axis alignment still applies. Rectangles drawn quickly, with leaning or skewed sides, are squared up to the average position of each side. Other ink stays freehand.
+- **Shape Pen**: Press `S` (`select_live_shape_tool`), click **Shape Pen** next to Pen on the toolbar (in the Shapes picker in simple mode), or choose **Shape Pen Tool** from the command palette. Confident lines, circles, ovals, rectangles, and triangles preview as shapes over a faint copy of the stroke and commit as editable shapes. Circles and ovals can overlap their starting point by up to half a turn while the extra stroke stays close to the first lap. Larger ovals tolerate larger differences between the two passes; strokes that drift too far from the first lap stay freehand. Recognized ovals, rectangles, and triangles follow the Fill toggle, like the dedicated shape tools. If a stroke should have stayed ink, undo once to get the original stroke back; undo again to remove it. When a stroke is recognized, a small chip next to the shape names it with the undo shortcut, such as "Circle · Ctrl+Z keeps ink", and fades after about 1.5 seconds; the shortcut shown follows your undo binding. The chip is overlay chrome only and never appears in exports, captures, or saved sessions. Set `[drawing] shape_recognition_feedback = false`, or turn off **Name recognized Shape Pen shapes** in the configurator, to hide it. Set `[drawing] shape_recognition_sensitivity` from 0 (precise) to 4 (most forgiving), with 3 as the default, or edit **Shape Pen sensitivity** on the configurator's Drawing page. While Shape Pen is active, the style pill changes it at once: the **Shape detection** meter in the **Pen feel** panel by default, or the **Shapes** meter or **Detect** stepper with `[ui.toolbar] stroke_controls = "meter"` or `"stepper"` (click a bar, or scroll over a meter); so do **Increase / Decrease Shape Pen Sensitivity** in the command palette, or bind `increase_shape_recognition_sensitivity` / `decrease_shape_recognition_sensitivity`. A session remembers the level it was saved at; the config value is the starting level. The setting affects recognition by Shape Pen, not the dedicated shape tools. Lines close to Cartesian or isometric board-paper lines snap to them; without a nearby grid line, nearly horizontal or vertical strokes align to that axis and skew lines keep their angle. Nearly horizontal or vertical triangle sides align the same way. Rectangle and oval edges also snap to nearby Cartesian lines, and triangle corners to nearby Cartesian lines or isometric points. Set `[drawing] shape_recognition_grid_snap = false`, or turn off **Snap Shape Pen to board paper** in the configurator, to keep recognized shapes exactly where you drew them; axis alignment still applies. Rectangles drawn quickly, with leaning or skewed sides, are squared up to the average position of each side. Other ink stays freehand.
+- **Laser pointer**: Press `L` (`select_laser_tool`), click the laser next to Marker on the toolbar (Regular and Advanced layouts), or choose **Laser Pointer Tool** from the command palette. The ink glows while you draw and fades away on its own (see [`[laser]`](#laser---laser-pointer))
 - **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -423,8 +426,8 @@ An empty list turns the action off.
 The toolbar's style pill carries a **Bold** toggle and a button showing the
 family in use; the button opens the font picker. Bold applies to selected text,
 or to the next label you type. Under width pressure, Bold leaves with the
-smoothing stepper; the family button remains until the whole style pill is
-hidden in the most compact layout.
+**Pen feel** chip (or the smoothing meter or stepper); the family button
+remains until the whole style pill is hidden in the most compact layout.
 
 Bold is a literal two-state control: it is checked for `font_weight = "bold"`
 and writes `"bold"` or `"normal"`. Numeric weights such as `700` still render at
@@ -570,10 +573,25 @@ the tool settings, so a session restores at the level it was saved at. A session
 written before this existed has no level recorded and restores at whatever
 `pen_smoothing` your config says.
 
-The level is also on the toolbar, as a **Smoothing** stepper in the style pill
-whenever the Pen or Marker is up. It reads `Off` at zero. The stepper is one of
-the first things the pill drops on a narrow output; the actions below still
-reach it there.
+The level is also on the toolbar whenever the Pen, Marker, or Shape Pen is up.
+`[ui.toolbar] stroke_controls` picks how the style pill shows it:
+
+- `"panel"` (the default): a **Pen feel ▾** chip whose tooltip names the
+  current levels. Clicking it opens a small panel with a **Smoothing** meter,
+  the name of the current level, a live preview that draws a sample shaky
+  stroke as drawn (faint) and as smoothed at the current level (accent), and
+  a one-line description of the level. With Shape Pen up, the panel also has
+  a **Shape detection** section. The panel stays open while you adjust it;
+  clicking the chip again, clicking elsewhere, or pressing Escape closes it.
+- `"meter"`: a meter captioned **Smooth**, one bar per level, filled up to the
+  current one.
+- `"stepper"`: a **Smooth** `− value +` stepper that reads `Off` at zero.
+
+On a meter, in the pill or in the panel, click a bar to set that level
+(clicking the highest filled bar steps one below it, down to `Off`), or scroll
+over it to step one level; the tooltip names the level. The chip, meter, or
+stepper is one of the first things the pill drops on a narrow output; the
+actions below still reach the level there.
 
 ### `[arrow]` - Arrow Geometry
 
@@ -610,9 +628,56 @@ style = "standard"
 | Curved | Shaft follows an arc instead of a straight line, so an arrow can route around whatever sits between the pointer and its target. Drag the round handle at the arc's midpoint to reshape it; hold <kbd>Shift</kbd> to snap the bend to tenths. |
 | Double | Parallel-sided shaft with a head at both ends. `head_at_end` has no effect on it. |
 
+### `[laser]` - Laser Pointer
+
+Laser ink is presenter feedback, not a drawing. It follows the pointer as a bright, glowing stroke, stays fully visible for `hold_ms` after you release, then fades out over `fade_ms`.
+
+```toml
+# Laser pointer: glowing ink that fades away on its own. Press `L`, click the
+# laser next to Marker on the toolbar (Regular and Advanced layouts), or choose
+# Laser Pointer Tool from the command palette. Laser ink is never saved, never
+# undone, never selected, and never appears in captures or exports.
+[laser]
+# Ink color as [red, green, blue, alpha], each 0.0 - 1.0. Independent of the
+# pen color; the color picker and quick colors do not change it.
+color = [1.0, 0.16, 0.12, 1.0]
+
+# Width of the bright core in pixels (2.0 - 30.0). The glow around it is about
+# three times as wide.
+width = 6.0
+
+# How long the ink stays fully visible after you release, in ms (0 - 30000).
+# Another stroke drawn before the ink has faded keeps the whole group on
+# screen, so they all fade together.
+hold_ms = 1200
+
+# How long the ink then takes to fade out, in ms (0 - 5000). 0 removes it at
+# once. With [ui] reduced_motion the ink stays solid and disappears in one step
+# at the end of hold_ms + fade_ms.
+fade_ms = 500
+```
+
+**Defaults:**
+- Color: `[1.0, 0.16, 0.12, 1.0]` (vivid red)
+- Width: 6.0px core, with a glow about three times as wide
+- Hold: 1200 ms
+- Fade: 500 ms
+
+**Behavior:**
+- **Strokes fade as a group.** Each release restarts the hold for all ink on screen, and drawing another stroke keeps the whole group fully visible. A gesture made of several strokes, such as circling a word and underlining it, therefore disappears together.
+- **Nothing is kept.** Laser strokes never enter the page: they are not in undo/redo, the saved session, selection, hit testing, canvas or PDF export, or screenshots and region captures (captures render without transient overlays). **Clear Canvas** removes laser ink immediately.
+- **Own style.** The laser uses `color` and `width` from this section rather than the pen's color and thickness, so it has no style controls on the toolbar.
+- **Presenter and light modes.** The laser works with presenter mode, including `tool_behavior = "force-highlight-locked"`, which otherwise allows only the highlight tool. Entering light passthrough keeps the laser when it is the active tool, instead of switching to the pen. It works on transparent and solid boards, over a frozen screen, and while zoomed.
+- The configurator edits these values on its Drawing page, under **Laser pointer**. They take effect the next time the overlay opens.
+
 ### `[presets]` - Quick Tool Slots
 
 Configure 3-5 tool presets that you can apply via hotkeys or the toolbar strip.
+
+On the strip, a saved slot shows its tool's icon, its color as a corner swatch, and its slot
+number in the opposite corner; hovering it names the tool, color, and size. An empty slot shows
+only its number, dimmed, and its tooltip names the key that saves the current tool there
+(`save_preset_N`); clicking an empty slot saves too.
 
 Saving or clearing a slot from the overlay writes that one `[presets.slot_N]` table back to
 `config.toml`, leaving every other setting and your comments alone and copying the previous file to
@@ -871,8 +936,12 @@ status_bar_interactive = true
 # keep this fixed order; narrow layouts may compact labels and temporarily
 # shed items without changing these choices. Mode badges such as
 # FROZEN/ZOOM/PAN are separate.
-# The active output appears only when an output label is available.
+# The active output appears only while two or more outputs are connected
+# (and an output label is available); a single output's name is noise.
 active_output_badge = true
+
+# Show the active output even with a single output connected
+active_output_badge_always = false
 
 # Selection dimensions appear only while one or more shapes are selected.
 show_status_selection_info = true
@@ -902,8 +971,9 @@ show_toolbar_hint = true
 # Show the Help shortcut segment
 show_status_help = true
 
-# Show the About/version segment
-show_status_about = true
+# Show the About/version segment. Off by default; the toolbar and the help
+# overlay keep About one click away.
+show_status_about = false
 
 # Master visibility for the floating board/page badge. The
 # toggle_floating_badge palette/keyboard action flips it for the current run
@@ -970,7 +1040,7 @@ font_size = 14.0
 font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
 padding = 32.0
-bg_color = [0.09, 0.1, 0.13, 0.92]   # Deep slate background
+bg_color = [0.09, 0.1, 0.13, 1.0]    # Opaque deep slate background
 border_color = [0.33, 0.39, 0.52, 0.88] # Muted steel border
 border_width = 2.0
 text_color = [0.95, 0.96, 0.98, 1.0] # Near-white
@@ -1031,7 +1101,7 @@ enabled = true
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Light mode**: `force_in_light_mode = true` preserves the default behavior of enabling click highlights on light mode entry; set it to `false` to keep the current click highlight state
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
-- **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
+- **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar once two or more outputs are connected (`active_output_badge_always = true` keeps it with a single output)
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized; `xdg_focus_loss_behavior` controls whether losing focus closes (`exit`) or keeps (`stay`) the overlay
 - **Radial menu trigger**: `radial_menu_mouse_binding` selects which mouse button opens radial menu (`middle` default, `right`, or `disabled`)
 
@@ -1047,13 +1117,13 @@ enabled = true
 - Reduced motion: auto (full motion)
 - Show status bar: true
 - Interactive status bar segments: true
-- All status bar content items: true
+- Status bar content items: true, except the About/version chip (false); the output item appears only with two or more outputs
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle
 - Status bar font: 21px
-- Help overlay font: 14px
-- Semi-transparent dark backgrounds with muted borders
+- Help overlay font: 14px (the body size of the help rows; secondary text never drops below 12px)
+- Semi-transparent dark status bar; opaque help panel, both with muted borders
 
 ### `[ui.input_hud]` - Input HUD (keystrokes and clicks)
 
@@ -1216,6 +1286,10 @@ Controls the unified top toolbar (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd
 backend = "auto"
 
 # Toolbar layout preset: "simple", "regular" (the default), or "advanced"
+# Simple: core pens and one Shapes picker. Regular adds Shape Pen, Line,
+# Arrow, presets, and Clear. Advanced also puts Rectangle, Ellipse, Blur, and
+# Spotlight on the strip (only polygons stay in the picker) and turns on the
+# advanced actions and multi-step undo in the Canvas popover.
 # "full" is accepted as a legacy alias for "regular"
 layout_mode = "regular"
 
@@ -1312,7 +1386,8 @@ show_presets = true
 # Show Step Undo/Redo section
 show_step_section = false
 
-# Keep text controls visible even when text is inactive
+# Keep text controls visible on every tool when context_aware_ui = false.
+# With context-aware UI, font controls appear only for tools that draw text
 show_text_controls = true
 
 # Show delayed undo/redo sliders in the Canvas popover's Step section
@@ -1327,8 +1402,10 @@ context_aware_ui = true
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 
-# Dim the top strip after ~4 seconds without drawing. Set false to keep
-# the bar fully visible (accessibility).
+# Hide the top strip after ~4 seconds without drawing or toolbar use. It
+# fades back in when the pointer comes near it or the top screen edge, and
+# briefly after a tool or color shortcut. Set false to keep the bar always
+# visible (accessibility).
 idle_fade = true
 
 # Show cursor tool preview bubble
@@ -1345,6 +1422,12 @@ force_inline = false
 # Modifier-click a toolbar action to capture a replacement shortcut.
 # Values: "ctrl_shift", "ctrl_alt", "shift_alt", "ctrl_shift_alt", "disabled"
 rebind_modifier = "ctrl_shift"
+
+# How the style pill shows pen smoothing and Shape Pen sensitivity:
+# "panel" (default; a "Pen feel" chip opening a panel with meters and a
+# live smoothing preview), "meter" (inline level meters), or "stepper"
+# (inline - value + steppers)
+stroke_controls = "panel"
 
 [ui.toolbar.items]
 # Hide individual toolbar items or whole sections by stable ID.
@@ -1373,6 +1456,7 @@ top_tools = [
   "top.tool.pen",
   "top.tool.live-shape",
   "top.tool.marker",
+  "top.tool.laser",
   "top.tool.step-marker",
   "top.tool.eraser",
 ]
@@ -1389,13 +1473,13 @@ top_controls = [
 - **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
 - **Scale**: `scale` multiplies toolbar UI sizing (useful for HiDPI when output scale=1).
 - **Colors**: `show_more_colors` toggles the extended palette row.
-- **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
+- **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode. **Simple** shows Select, Pen, Marker, Step marker, and Eraser with every shape in one Shapes picker. **Regular** adds Shape Pen, Line, and Arrow to the strip, plus the presets island and Clear. **Advanced** also puts Rectangle, Ellipse, Blur, and Spotlight on the strip (the Shapes picker keeps only the polygons) and turns on the advanced actions and multi-step undo in the Canvas popover. Under width pressure Advanced's extra tools move to the overflow menu first.
 - **Actions**: `show_actions_section` controls the basic Undo/Redo/Clear group in the Canvas popover; `show_actions_advanced` controls the separate advanced action group.
 - **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas popover.
 - **Pages**: `show_pages_section` toggles the page navigation block in the Canvas popover.
 - **Boards**: `show_boards_section` toggles the board navigation block in the Canvas popover.
 - **Presets**: `show_presets` hides/shows the top-strip preset slots.
-- **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
+- **Text controls**: with `context_aware_ui = true`, the style pill shows the text size, **Bold**, and font family only where they change what is drawn: text and sticky notes, arrows while **Auto-number** is on (their labels use the text font at 0.6× the text size), and step markers (**Bold** and family only; the number is sized by the marker's own **Size** slider). A text selection keeps its size stepper and **Bold**. `show_text_controls` keeps the text controls on every tool when `context_aware_ui = false`.
 - **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo block in the Canvas popover.
 - **Settings**: Settings is always reachable from the top-strip overflow popover.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the Canvas popover's Step section.
@@ -1409,17 +1493,19 @@ top_controls = [
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
-- **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action (<kbd>Ctrl+E</kbd>, <kbd>Ctrl+Delete</kbd>, <kbd>Ctrl+R</kbd>). An accepted edit is written back to `config.toml` — only that action's `[keybindings]` entry, with the previous file copied to a timestamped `.bak` — so it survives a restart. The write runs on a background worker and the rebind takes effect as soon as it answers, so editing a shortcut never stalls drawing, and a chord the file has meanwhile given to another action is refused rather than applied and then taken back. Reset writes the shipped default out explicitly rather than removing the key, and when the action already resolves to that default — usually because the file omits it — there is nothing to write, so nothing is written and the toast says the action already uses the default shortcut. Conflicting shortcuts are rejected, naming the action that already owns the chord, and nothing is written; that includes a chord another action has been given in the file since this run started, which is refused rather than applied. If the file cannot be written the shortcut still changes for the run and the toast says the save failed. <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator's Keybindings screen.
+- **Stroke controls**: `stroke_controls` picks how the style pill shows pen smoothing and Shape Pen recognition sensitivity while the Pen, Marker, or Shape Pen is up. `"panel"` (the default) shows one **Pen feel ▾** chip; its tooltip summarizes the current levels (for example "Smoothing: Medium · Shape detection: Forgiving — click to adjust"), and clicking it opens a panel under the chip with a **Smoothing** level meter, the level's name, a live preview of the smoothing on a sample stroke, and a one-line description of the level, plus a **Shape detection** meter and description while Shape Pen is up. Values change live while the panel stays open; the chip, Escape, another key, or a click elsewhere closes it, and it closes with the other top-strip menus. `"meter"` shows inline level meters captioned **Smooth** and **Shapes**, and `"stepper"` shows the inline **Smooth** / **Detect** `− value +` steppers. Click a meter bar (in the pill or the panel) to set that level, or scroll over the meter to step one level. An unknown value is reported like any other invalid `[ui]` value, and `[ui]` then runs on its defaults. The style is read at startup; change it with **Stroke controls** on the configurator's Toolbar page or in this file.
+- **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action, drawn on the selected or hovered row (<kbd>Ctrl+E</kbd>, <kbd>Ctrl+Delete</kbd>, <kbd>Ctrl+R</kbd> act on the selected row). With nothing typed, the palette lists recent commands, then everyday ones, then the rest by category, with Exit and the clear/delete commands last, so none of them is preselected. An accepted edit is written back to `config.toml` — only that action's `[keybindings]` entry, with the previous file copied to a timestamped `.bak` — so it survives a restart. The write runs on a background worker and the rebind takes effect as soon as it answers, so editing a shortcut never stalls drawing, and a chord the file has meanwhile given to another action is refused rather than applied and then taken back. Reset writes the shipped default out explicitly rather than removing the key, and when the action already resolves to that default — usually because the file omits it — there is nothing to write, so nothing is written and the toast says the action already uses the default shortcut. Conflicting shortcuts are rejected, naming the action that already owns the chord, and nothing is written; that includes a chord another action has been given in the file since this run started, which is refused rather than applied. If the file cannot be written the shortcut still changes for the run and the toast says the save failed. <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator's Keybindings screen.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 top bar exactly where the built-in bars would own a separate layer surface (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo top bar everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned` is the authored default for whether the top toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves this value alone. The show/hide keybinding (`toggle_toolbar`, default <kbd>F9</kbd>) updates the remembered pin, so the next start matches what was on screen.
-- **Minimize**: the toolbar minimize button collapses the top strip to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized` is the authored default, and the state you leave the bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
+- **Minimize**: the toolbar minimize button collapses the top strip to an edge tab labelled **Tools** instead of hiding it, so there is always an on-screen way back. Clicking the tab restores the strip; a click that lands within about half a second of the restore (the second click of a double-click) is ignored, so it cannot hit the restored controls under the pointer. The same guard follows a click on the micro chip; `top_minimized` is the authored default, and the state you leave the bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
+- **Exit**: the last chrome-island button (`top.chrome.exit`) runs the Exit action, so the overlay can be closed without the keyboard; its tooltip shows the configured Exit keys. When the daemon started the overlay, the button reads **Hide overlay**, because the daemon keeps running and shows the overlay again on the next toggle. Like the other chrome buttons it can be hidden through toolbar customization.
 - **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists as a runtime preference in `runtime-ui.toml`, seeded by the authored `top_display_mode`; the hidden step alone is runtime-only — the next start derives the strip's visibility from the remembered pin (which the F9 show/hide toggle updates durably), so a cycle-hidden strip comes back. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
-- **Idle fade**: `idle_fade` dims the top-strip islands to 55% opacity after ~4 seconds without drawing activity and restores when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating. Set `idle_fade = false` (or uncheck **Idle fade** in the overlay Settings popover / **Dim toolbar when idle** in the configurator) to keep the bar fully visible.
+- **Idle fade**: `idle_fade` hides the top strip and its style pill after ~4 seconds without drawing or toolbar use. The strip fades back in when the pointer comes within 64 px of it or touches the top screen edge, stays up while the pointer or keyboard focus is on it, and shows for about 1.5 seconds after a tool or color shortcut so you can see the change. A new stroke keeps a visible strip up but does not bring back a hidden one. While hidden the strip is click-through, so a stroke that starts where it sits draws on the canvas. Open top-strip menus, the minimized tab, and the micro chip never hide. With `[ui] reduced_motion` the fade snaps instantly instead of animating. Set `idle_fade = false` (or uncheck **Hide toolbar when idle** in the overlay Settings popover or the configurator) to keep the bar always visible.
 - **Top-only toolbar**: the unified top toolbar is the only supported layout. Drawing properties live in the contextual style pill; canvas management lives in the **"Canvas…" overflow popover**, the **bottom-right zoom chip**, and the **status-bar board picker**; presets live in the **top-strip presets island**; Session and Settings live in overflow popovers. Older panel keys (`side_layout`, `side_pinned`, `side_minimized`, `side_active_pane`, `collapsed_sections`, `side_offset`, `side_offset_x`, `show_settings_section`, and the retired `items.order.*` lists `side_sections`, `actions`, `pages`, `boards`, `presets`, `tool_options`, and `sessions`) remain readable, are preserved on unrelated saves, and surface as retired-setting diagnostics so they can be removed manually.
-- **Session/Settings popovers**: the top strip's overflow menu always carries "Session..." and "Settings..." entries. Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
+- **Session/Settings popovers**: the top strip's overflow menu always carries "Session..." and "Settings..." entries. Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally. Every top-strip menu (Shapes, the overflow menu, and the Canvas/Session/Settings popovers) closes on Escape, and any other shortcut typed while one is open closes it and then runs, including when the GTK toolbar holds keyboard focus.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
-- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings popover, and the top strip's chrome-island layout button cycles Simple → Regular → Advanced one click at a time. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings popover, and the top strip's chrome-island layout button opens a small menu listing Simple, Regular, and Advanced with a one-line description each and the current preset marked; choosing one applies it and closes the menu. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
 - **Item order**: `ui.toolbar.items.order.top_tools` and `top_controls` reorder supported top-strip items. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves. Panel-era order lists (`actions`, `pages`, `boards`, `presets`, `tool_options`, `sessions`, `side_sections`) are retired: authored `config.toml` values stay as retired settings, while matching keys under `runtime-ui.toml`'s recognized `item_order` map are pruned on rewrite.
 - **Historical item IDs**: some `side.*` IDs still control sections and commands in the unified top toolbar. Their serialized spellings remain configuration contracts even though the side palette is gone. Removed IDs in `items.hidden` and `items.shown` are preserved as unknown values across saves but have no runtime effect.
 - **Live customization**: the overlay Customize surface supports show/hide, move up/down, and drag reorder for supported top groups. The configurator supports the same saved order with up/down controls.
@@ -1428,7 +1514,7 @@ top_controls = [
 - **Recoloring a swatch**: right-clicking any quick-color swatch in the style pill opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK applies the color to that slot and writes it back to `config.toml` — only that one `[[drawing.quick_colors]]` entry, with the previous file copied to a timestamped `.bak` — and Cancel/Escape restores it. Recoloring a slot the file only implies writes the palette out as far as that slot and no further, so the slots after it keep tracking the shipped defaults. If the file cannot be written the color still applies for the run and the toast says the save failed; picking the color the slot already paints writes nothing and says so. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
 - **Restoring a swatch's shipped color**: while recoloring a slot, the picker adds a **Default** button next to OK/Cancel that loads the color wayscriber ships for that slot. It stages the color like any other pick — the swatch previews it, OK applies and saves it, Cancel backs out — so it is not a separate destructive action. The button only appears for the eleven built-in slots; extra slots you added past them have no shipped default, and the tool-color picker never shows it. Restoring sets the built-in value in your palette rather than deleting the entry, so the slot keeps its identity.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
-- **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
+- **Capture toolbar button**: `top.utility.screenshot` sits beside Undo/Redo and is shown by default. It starts the interactive region capture (select a region, then choose Copy, Save, Both, or Board). Add it to `ui.toolbar.items.hidden`, or uncheck it in the configurator/overlay customization, to hide it. Under width pressure it moves into the overflow menu first.
 
 **Defaults:** all set as above.
 
@@ -1526,7 +1612,7 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
   rests on it, or on click, and the menu stays open. Clicking the row again collapses it. From
   the keyboard, → opens a submenu and ← or Esc returns to its row. The parent row shows the
   submenu's current state, such as the zoom level or the active page.
-- Right-click menus expose **Paste**; shape menus also expose **Copy** for the selected annotations.
+- The canvas right-click menu starts with **Undo**, **Redo** (dimmed when there is nothing to undo or redo), **Paste**, and **Capture Region…**, and ends with **Clear All** and then **Exit** (**Hide Overlay** when the background daemon owns the overlay), each in its own group. Shape menus also end with **Exit** and expose **Copy** for the selected annotations. **Paste** is enabled once annotations have been copied or a capture was copied to the clipboard in this run; the system clipboard is not probed, so an image copied from another app pastes with <kbd>Ctrl+Alt+V</kbd>. The key hints sit inside the bottom of the menu.
 - Pan offsets are stored per page, so each page keeps its own position.
 
 **CLI Override:**
@@ -1817,7 +1903,7 @@ does not change the active tool, the drawing history, or the board.
   the rest of the capture family had left; rebind it in the configurator or in
   `[keybindings.capture]`.
 - It is also in the command palette (search for "OCR"), and as an optional top
-  toolbar button (`top.utility.ocr`), hidden by default like Screenshot.
+  toolbar button (`top.utility.ocr`), hidden by default.
 - `ocr_languages` accepts one language or several joined with `+`
   (`eng`, `eng+deu`). Only letters, digits, `_` and `-` are accepted; anything
   else falls back to `eng`.
@@ -2196,6 +2282,7 @@ select_freeform_polygon_tool = []
 select_arrow_tool = []
 select_blur_tool = []
 select_highlight_tool = []
+select_laser_tool = ["L"]           # fading laser pointer ink
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 
 # Reset label counters

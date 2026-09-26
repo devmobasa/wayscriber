@@ -26,11 +26,13 @@ impl InputState {
             presenter_mode_config: config.presenter_mode.clone(),
         });
         input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
+        input_state.init_laser_from_config(&config.laser);
         input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(
             &config.render_profiles,
         ));
 
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
+        input_state.set_shape_recognition_feedback(config.drawing.shape_recognition_feedback);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
         input_state

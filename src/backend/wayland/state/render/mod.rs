@@ -19,6 +19,7 @@ mod paint;
 mod plan;
 mod prepare;
 mod profile;
+mod recognition_chip;
 mod runtime;
 mod submit;
 mod tool_preview;

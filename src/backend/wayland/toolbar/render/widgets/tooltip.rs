@@ -6,7 +6,7 @@ use super::constants::{
     SPACING_STD, SPACING_XS, set_color,
 };
 use super::draw_round_rect;
-use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::backend::wayland::toolbar::hit::{HitRegion, find_hit};
 use crate::backend::wayland::toolbar::render::TOOLTIP_DELAY;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
@@ -30,90 +30,92 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip_with_delay(
         return;
     }
 
-    for hit in hits {
-        if hit.contains(hx, hy)
-            && let Some(text) = &hit.tooltip
-        {
-            let style = UiTextStyle {
-                family: FONT_FAMILY_DEFAULT,
-                slant: cairo::FontSlant::Normal,
-                weight: cairo::FontWeight::Normal,
-                size: FONT_SIZE_TOOLTIP,
-            };
-            let pad = SPACING_STD;
-            let max_tooltip_w = (panel_width - SPACING_LG).max(40.0);
-            let max_text_w = (max_tooltip_w - pad * 2.0).max(20.0);
-            let layout = engine.layout(ctx, style, text, Some(max_text_w));
-            let ink_extents = layout.ink_extents();
-            let text_w = ink_extents.width().max(1.0);
-            let text_h = ink_extents.height().max(1.0);
-            let tooltip_w = (text_w + pad * 2.0).min(max_tooltip_w);
-            let tooltip_h = text_h + pad * 2.0;
+    // The hit a press here would activate, so the tooltip never names a
+    // neighbour whose inflated target overlaps the control under the pointer.
+    let target = find_hit(hits, hx, hy, |hit| {
+        (hit.contains(hx, hy) && hit.tooltip.is_some()).then_some(hit)
+    });
+    if let Some(hit) = target
+        && let Some(text) = &hit.tooltip
+    {
+        let style = UiTextStyle {
+            family: FONT_FAMILY_DEFAULT,
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: FONT_SIZE_TOOLTIP,
+        };
+        let pad = SPACING_STD;
+        let max_tooltip_w = (panel_width - SPACING_LG).max(40.0);
+        let max_text_w = (max_tooltip_w - pad * 2.0).max(20.0);
+        let layout = engine.layout(ctx, style, text, Some(max_text_w));
+        let ink_extents = layout.ink_extents();
+        let text_w = ink_extents.width().max(1.0);
+        let text_h = ink_extents.height().max(1.0);
+        let tooltip_w = (text_w + pad * 2.0).min(max_tooltip_w);
+        let tooltip_h = text_h + pad * 2.0;
 
-            let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
-            let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
-            let gap = SPACING_STD;
+        let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
+        let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
+        let gap = SPACING_STD;
 
-            // Determine if tooltip should render above or below
-            // If rendering below would extend past panel height, render above only when there's room.
-            let render_above = if above {
-                true
-            } else {
-                let below_y = hit.rect.1 + hit.rect.3 + gap + tooltip_h;
-                let space_above = hit.rect.1 - tooltip_h - gap >= SPACING_MD;
-                below_y > panel_height - SPACING_MD && space_above
-            };
+        // Determine if tooltip should render above or below
+        // If rendering below would extend past panel height, render above only when there's room.
+        let render_above = if above {
+            true
+        } else {
+            let below_y = hit.rect.1 + hit.rect.3 + gap + tooltip_h;
+            let space_above = hit.rect.1 - tooltip_h - gap >= SPACING_MD;
+            below_y > panel_height - SPACING_MD && space_above
+        };
 
-            let mut tooltip_y = if render_above {
-                hit.rect.1 - tooltip_h - gap
-            } else {
-                hit.rect.1 + hit.rect.3 + gap
-            };
+        let mut tooltip_y = if render_above {
+            hit.rect.1 - tooltip_h - gap
+        } else {
+            hit.rect.1 + hit.rect.3 + gap
+        };
 
-            if tooltip_x < SPACING_MD {
-                tooltip_x = SPACING_MD;
-            }
-            if tooltip_x + tooltip_w > panel_width - SPACING_MD {
-                tooltip_x = panel_width - tooltip_w - SPACING_MD;
-            }
-            let min_y = SPACING_MD;
-            let max_y = panel_height - tooltip_h - SPACING_MD;
-            if max_y >= min_y {
-                if tooltip_y < min_y {
-                    tooltip_y = min_y;
-                } else if tooltip_y > max_y {
-                    tooltip_y = max_y;
-                }
-            } else {
-                tooltip_y = min_y;
-            }
-
-            let shadow_offset = SPACING_XS;
-            set_color(ctx, COLOR_TOOLTIP_SHADOW);
-            draw_round_rect(
-                ctx,
-                tooltip_x + shadow_offset,
-                tooltip_y + shadow_offset,
-                tooltip_w,
-                tooltip_h,
-                RADIUS_STD,
-            );
-            let _ = ctx.fill();
-
-            set_color(ctx, COLOR_TOOLTIP_BACKGROUND);
-            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
-            let _ = ctx.fill();
-
-            set_color(ctx, COLOR_TOOLTIP_BORDER);
-            ctx.set_line_width(LINE_WIDTH_THIN);
-            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
-            let _ = ctx.stroke();
-
-            let text_x = tooltip_x + pad - ink_extents.x_bearing();
-            let text_y = tooltip_y + pad - ink_extents.y_bearing();
-            set_color(ctx, COLOR_TEXT_PRIMARY);
-            layout.show_at_baseline(ctx, text_x, text_y);
-            break;
+        if tooltip_x < SPACING_MD {
+            tooltip_x = SPACING_MD;
         }
+        if tooltip_x + tooltip_w > panel_width - SPACING_MD {
+            tooltip_x = panel_width - tooltip_w - SPACING_MD;
+        }
+        let min_y = SPACING_MD;
+        let max_y = panel_height - tooltip_h - SPACING_MD;
+        if max_y >= min_y {
+            if tooltip_y < min_y {
+                tooltip_y = min_y;
+            } else if tooltip_y > max_y {
+                tooltip_y = max_y;
+            }
+        } else {
+            tooltip_y = min_y;
+        }
+
+        let shadow_offset = SPACING_XS;
+        set_color(ctx, COLOR_TOOLTIP_SHADOW);
+        draw_round_rect(
+            ctx,
+            tooltip_x + shadow_offset,
+            tooltip_y + shadow_offset,
+            tooltip_w,
+            tooltip_h,
+            RADIUS_STD,
+        );
+        let _ = ctx.fill();
+
+        set_color(ctx, COLOR_TOOLTIP_BACKGROUND);
+        draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
+        let _ = ctx.fill();
+
+        set_color(ctx, COLOR_TOOLTIP_BORDER);
+        ctx.set_line_width(LINE_WIDTH_THIN);
+        draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
+        let _ = ctx.stroke();
+
+        let text_x = tooltip_x + pad - ink_extents.x_bearing();
+        let text_y = tooltip_y + pad - ink_extents.y_bearing();
+        set_color(ctx, COLOR_TEXT_PRIMARY);
+        layout.show_at_baseline(ctx, text_x, text_y);
     }
 }

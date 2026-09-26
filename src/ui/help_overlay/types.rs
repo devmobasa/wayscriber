@@ -14,6 +14,12 @@ impl Row {
         self.action_id = Some(action);
         self
     }
+
+    /// Whether this row only documents an action that has no binding. Such
+    /// rows are hidden by default and shown on request or by search.
+    pub(crate) fn is_unbound(&self) -> bool {
+        self.key == crate::label_format::NOT_BOUND_LABEL
+    }
 }
 
 #[derive(Clone)]
@@ -35,7 +41,9 @@ pub(crate) struct MeasuredSection {
     pub(crate) section: Section,
     pub(crate) width: f64,
     pub(crate) height: f64,
-    pub(crate) key_column_width: f64,
+    /// Width of the widest action label. Key chips start just past it, so
+    /// every row reads "label … keys" with the keys in one aligned column.
+    pub(crate) label_column_width: f64,
     pub(crate) badge_text_metrics: Vec<BadgeTextMetrics>,
 }
 

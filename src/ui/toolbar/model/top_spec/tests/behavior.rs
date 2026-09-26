@@ -110,6 +110,91 @@ fn allocation_free_queries_match_the_materialized_spec() {
     }
 }
 
+/// Capture used to be reachable only through shortcuts and the palette. It
+/// now ships visible in the history island, after Redo and before the
+/// overflow toggle, and runs the interactive region capture.
+#[test]
+fn capture_ships_beside_undo_redo_and_runs_the_interactive_capture() {
+    let snapshot = snapshot();
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let capture = TopToolbarControl::Utility(TopToolbarUtility::Screenshot);
+
+    let history: Vec<_> = spec
+        .strip()
+        .iter()
+        .filter_map(|node| match node {
+            TopToolbarNode::Control(control) if node.island() == TopToolbarIsland::History => {
+                Some(*control)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        history,
+        [
+            TopToolbarControl::Undo,
+            TopToolbarControl::Redo,
+            capture,
+            TopToolbarControl::Overflow,
+        ]
+    );
+    assert_eq!(capture.event(&snapshot), ToolbarEvent::CaptureScreenshot);
+    assert_eq!(
+        capture.action(&snapshot),
+        Some(Action::CaptureRegionInteractive)
+    );
+    assert_eq!(capture.label(&snapshot), "Capture");
+
+    // Width pressure moves it into the overflow menu like other utilities.
+    let mut narrow = TopStripPlan::unconstrained();
+    narrow.dropped_utilities = vec![TopUtilityButton::Screenshot];
+    let spec = TopToolbarSpec::build(&snapshot, &narrow);
+    assert!(!spec.strip().contains(&TopToolbarNode::Control(capture)));
+    assert!(spec.overflow().contains(&capture));
+}
+
+/// A mouse-only user could not leave the overlay. Exit ends the chrome
+/// island, runs the Exit action, names its configured key in the tooltip,
+/// and says "hide" when the daemon keeps running behind it.
+#[test]
+fn exit_ends_the_chrome_island_and_runs_the_exit_action() {
+    let state = make_test_input_state();
+    let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let exit = TopToolbarControl::Exit;
+
+    assert_eq!(spec.chrome().last().copied(), Some(exit));
+    assert_eq!(exit.event(&snapshot), ToolbarEvent::ExitOverlay);
+    assert_eq!(exit.action(&snapshot), Some(Action::Exit));
+    assert_eq!(exit.role(), TopToolbarControlRole::Chrome);
+    assert_eq!(exit.island(), TopToolbarIsland::Chrome);
+    assert_eq!(exit.id(), TopToolbarControlId::Item(ids::TOP_CHROME_EXIT));
+    assert_eq!(exit.glyph(&snapshot), TopToolbarIcon::Exit);
+    assert!(!exit.active(&snapshot));
+    assert_eq!(exit.label(&snapshot), "Exit");
+    let binding = snapshot
+        .binding_hints
+        .binding_for_action(Action::Exit)
+        .expect("Exit has a default binding")
+        .to_string();
+    assert!(binding.contains("Esc"), "{binding}");
+    assert_eq!(exit.tooltip(&snapshot), format!("Exit ({binding})"));
+
+    snapshot.exit_hides_overlay = true;
+    assert_eq!(exit.label(&snapshot), "Hide overlay");
+    assert_eq!(exit.tooltip(&snapshot), format!("Hide overlay ({binding})"));
+    assert_eq!(exit.event(&snapshot), ToolbarEvent::ExitOverlay);
+
+    let mut items = ToolbarItemsConfig::default();
+    items.set_hidden(ids::TOP_CHROME_EXIT, true);
+    snapshot.resolved_toolbar_items = items.resolved();
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    assert!(!spec.chrome().contains(&exit), "Exit is hideable");
+}
+
 /// About sits in the chrome island, opens the dialog rather than changing
 /// the toolbar, and can be hidden like any other chrome entry.
 #[test]
@@ -120,7 +205,7 @@ fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
     assert_eq!(
         spec.chrome().get(1).copied(),
         Some(TopToolbarControl::About),
-        "About leads the window-chrome trio, after the layout cycle"
+        "About leads the window-chrome trio, after the layout menu"
     );
     assert_eq!(TopToolbarControl::About.island(), TopToolbarIsland::Chrome);
     assert_eq!(
@@ -149,48 +234,49 @@ fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
 
     assert_eq!(
         chrome_ids(&spec),
-        ["top.chrome.layout", "top.chrome.pin", "top.chrome.close"],
+        [
+            "top.chrome.layout",
+            "top.chrome.pin",
+            "top.chrome.close",
+            "top.chrome.exit"
+        ],
         "hiding the item leaves the rest of the chrome island intact"
     );
 }
 
-/// The layout cycle advances Simple → Regular → Advanced → Simple while
-/// its glyph names the mode currently on screen, so the icon is the
-/// state and the click is the transition.
+/// The layout button opens the preset menu instead of cycling presets: a
+/// cycling button jumped under the pointer because each preset changes the
+/// strip width. Its glyph still names the mode currently on screen, and it
+/// reads as active while the menu is open.
 #[test]
-fn layout_cycle_control_maps_each_mode_to_its_next_event_and_current_icon() {
+fn layout_control_toggles_the_preset_menu_and_shows_the_current_icon() {
     let control = TopToolbarControl::LayoutMode;
-    for (mode, next, icon) in [
-        (
-            ToolbarLayoutMode::Simple,
-            ToolbarLayoutMode::Regular,
-            TopToolbarIcon::LayoutSimple,
-        ),
-        (
-            ToolbarLayoutMode::Regular,
-            ToolbarLayoutMode::Advanced,
-            TopToolbarIcon::LayoutRegular,
-        ),
-        (
-            ToolbarLayoutMode::Advanced,
-            ToolbarLayoutMode::Simple,
-            TopToolbarIcon::LayoutAdvanced,
-        ),
+    for (mode, icon) in [
+        (ToolbarLayoutMode::Simple, TopToolbarIcon::LayoutSimple),
+        (ToolbarLayoutMode::Regular, TopToolbarIcon::LayoutRegular),
+        (ToolbarLayoutMode::Advanced, TopToolbarIcon::LayoutAdvanced),
     ] {
         let mut snapshot = snapshot();
         snapshot.layout_mode = mode;
         assert_eq!(
             control.event(&snapshot),
-            ToolbarEvent::SetToolbarLayoutMode(next),
-            "{mode:?} advances to {next:?}"
+            ToolbarEvent::ToggleLayoutMenu(true),
+            "{mode:?} opens the menu"
         );
         assert_eq!(
             control.icon(&snapshot),
             Some(icon),
             "{mode:?} shows the current mode's glyph"
         );
-        // A cycle, not a toggle: it never reads as active.
         assert!(!control.active(&snapshot));
+
+        snapshot.layout_menu_open = true;
+        assert_eq!(
+            control.event(&snapshot),
+            ToolbarEvent::ToggleLayoutMenu(false),
+            "a second click closes the menu"
+        );
+        assert!(control.active(&snapshot), "the open menu marks its button");
     }
     let snapshot = snapshot();
     assert_eq!(control.role(), TopToolbarControlRole::Chrome);
@@ -199,7 +285,7 @@ fn layout_cycle_control_maps_each_mode_to_its_next_event_and_current_icon() {
         control.id(),
         TopToolbarControlId::Item(ids::TOP_CHROME_LAYOUT)
     );
-    assert_eq!(control.accessible_label(&snapshot), "Cycle toolbar layout");
+    assert_eq!(control.accessible_label(&snapshot), "Toolbar layout");
 }
 
 #[test]
@@ -235,23 +321,22 @@ fn required_chrome_and_tool_controls_have_a_glyph() {
     assert_eq!(TopToolbarControl::HighlightRing.icon(&snapshot), None);
 }
 
-/// The tooltip names the current mode and where the click lands, for all
-/// three presets.
+/// The tooltip names the current mode for all three presets.
 #[test]
-fn layout_cycle_tooltip_names_current_and_next_mode() {
+fn layout_tooltip_names_the_current_mode() {
     let control = TopToolbarControl::LayoutMode;
     for (mode, tooltip) in [
         (
             ToolbarLayoutMode::Simple,
-            "Layout: Simple (click for Regular)",
+            "Layout: Simple (click to choose)",
         ),
         (
             ToolbarLayoutMode::Regular,
-            "Layout: Regular (click for Advanced)",
+            "Layout: Regular (click to choose)",
         ),
         (
             ToolbarLayoutMode::Advanced,
-            "Layout: Advanced (click for Simple)",
+            "Layout: Advanced (click to choose)",
         ),
     ] {
         let mut snapshot = snapshot();
@@ -260,7 +345,63 @@ fn layout_cycle_tooltip_names_current_and_next_mode() {
     }
 }
 
-/// Like the other chrome entries, the layout cycle is hideable; hiding
+/// Regular and Advanced used to render the same strip. Advanced now brings
+/// the everyday shapes and the presenter effects out of the Shapes picker,
+/// which keeps only the polygons.
+#[test]
+fn advanced_layout_shows_shapes_inline_and_keeps_polygons_in_the_picker() {
+    use crate::ui::toolbar::model::{visible_shape_picker_rows, visible_top_tool_buttons};
+
+    let mut regular = snapshot();
+    regular.layout_mode = ToolbarLayoutMode::Regular;
+    let mut advanced = regular.clone();
+    advanced.layout_mode = ToolbarLayoutMode::Advanced;
+
+    let regular_tools: Vec<_> = visible_top_tool_buttons(regular.layout_mode, &regular).collect();
+    let advanced_tools: Vec<_> =
+        visible_top_tool_buttons(advanced.layout_mode, &advanced).collect();
+    for tool in [Tool::Rect, Tool::Ellipse, Tool::Blur, Tool::Spotlight] {
+        assert!(
+            !regular_tools.contains(&tool),
+            "{tool:?} stays in Regular's picker"
+        );
+        assert!(
+            advanced_tools.contains(&tool),
+            "{tool:?} is inline in Advanced"
+        );
+    }
+    assert!(
+        regular_tools
+            .iter()
+            .all(|tool| advanced_tools.contains(tool)),
+        "Advanced keeps every Regular tool"
+    );
+
+    let picker: Vec<_> = visible_shape_picker_rows(&advanced, advanced.layout_mode)
+        .into_iter()
+        .flatten()
+        .collect();
+    assert_eq!(
+        picker,
+        [
+            Tool::Triangle,
+            Tool::Parallelogram,
+            Tool::Rhombus,
+            Tool::RegularPolygon,
+            Tool::FreeformPolygon,
+        ]
+    );
+
+    let regular_spec = TopToolbarSpec::build(&regular, &TopStripPlan::unconstrained());
+    let advanced_spec = TopToolbarSpec::build(&advanced, &TopStripPlan::unconstrained());
+    assert_ne!(
+        regular_spec.strip(),
+        advanced_spec.strip(),
+        "the two presets render different strips"
+    );
+}
+
+/// Like the other chrome entries, the layout menu is hideable; hiding
 /// it leaves the window-chrome trio in reading order.
 #[test]
 fn hiding_the_layout_cycle_leaves_the_chrome_trio_in_order() {
@@ -272,8 +413,13 @@ fn hiding_the_layout_cycle_leaves_the_chrome_trio_in_order() {
     let spec = TopToolbarSpec::build(&hidden, &TopStripPlan::unconstrained());
     assert_eq!(
         chrome_ids(&spec),
-        ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
-        "hiding the layout cycle leaves About, pin, minimize in order"
+        [
+            "top.chrome.about",
+            "top.chrome.pin",
+            "top.chrome.close",
+            "top.chrome.exit"
+        ],
+        "hiding the layout menu leaves About, pin, minimize in order"
     );
 }
 
@@ -391,4 +537,170 @@ fn presets_island_hosts_the_saved_slots() {
     let mut dropped = TopStripPlan::unconstrained();
     dropped.drop_presets = true;
     assert!(!has_preset(&TopToolbarSpec::build(&snapshot, &dropped)));
+}
+
+fn preset(
+    tool: Tool,
+    color: crate::draw::Color,
+    size: f64,
+) -> crate::ui::toolbar::PresetSlotSnapshot {
+    crate::ui::toolbar::PresetSlotSnapshot {
+        name: None,
+        tool,
+        color,
+        size,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+    }
+}
+
+#[test]
+fn preset_slots_say_what_they_hold_and_how_to_fill_them() {
+    let state = make_test_input_state();
+    let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let red = snapshot.quick_colors.rendered_entries()[0].clone();
+    snapshot.presets = vec![None; 5];
+    snapshot.presets[0] = Some(preset(Tool::Pen, red.color, 4.0));
+    snapshot.presets[1] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+        name: Some("Lecture".to_string()),
+        ..preset(
+            Tool::Marker,
+            crate::draw::Color::new(0.2, 0.4, 0.6, 1.0),
+            12.0,
+        )
+    });
+    snapshot.presets[2] = Some(preset(Tool::Eraser, red.color, 18.0));
+
+    // A filled slot names the tool, the color in the palette's words, and
+    // the size, followed by its apply key.
+    let pen = format!("Preset 1: Pen, {}, 4px", red.label);
+    assert_eq!(
+        TopToolbarControl::Preset(0).accessible_label(&snapshot),
+        pen
+    );
+    assert_eq!(
+        TopToolbarControl::Preset(0).tooltip(&snapshot),
+        format_binding_label(&pen, snapshot.binding_hints.apply_preset(1))
+    );
+
+    // A color off the palette reads as hex; a name the user gave leads.
+    assert!(
+        TopToolbarControl::Preset(1)
+            .tooltip(&snapshot)
+            .starts_with("Preset 2: Lecture \u{2014} Marker, #336699, 12px"),
+        "{}",
+        TopToolbarControl::Preset(1).tooltip(&snapshot)
+    );
+
+    // Tools without a color skip it.
+    assert!(
+        TopToolbarControl::Preset(2)
+            .tooltip(&snapshot)
+            .starts_with("Preset 3: Eraser, 18px")
+    );
+
+    // An empty slot says so and names the configured save key.
+    let save = snapshot
+        .binding_hints
+        .save_preset(4)
+        .expect("preset 4 has a default save binding")
+        .to_string();
+    let empty = TopToolbarControl::Preset(3).tooltip(&snapshot);
+    assert!(empty.starts_with("Preset 4 (empty)"), "{empty}");
+    assert!(empty.contains(&save), "{empty} names {save}");
+    assert_eq!(
+        TopToolbarControl::Preset(3).accessible_label(&snapshot),
+        "Preset 4 (empty)"
+    );
+
+    // Without a binding the click is the only way in, and the tooltip says so.
+    let unbound = TopToolbarControl::Preset(3).tooltip(&self::snapshot());
+    assert_eq!(
+        unbound,
+        "Preset 4 (empty) \u{2014} click to save the current tool"
+    );
+}
+
+/// Strip controls that currently read as the active tool: tool buttons plus
+/// the Shapes picker standing in for the tools it hosts.
+fn active_tool_controls(snapshot: &ToolbarSnapshot) -> Vec<TopToolbarControl> {
+    TopToolbarSpec::build(snapshot, &TopStripPlan::unconstrained())
+        .strip()
+        .iter()
+        .filter_map(|node| match node {
+            TopToolbarNode::Control(control) => Some(*control),
+            TopToolbarNode::Divider(_) => None,
+        })
+        .filter(|control| {
+            matches!(
+                control,
+                TopToolbarControl::Tool(_) | TopToolbarControl::ShapePicker
+            )
+        })
+        .filter(|control| control.active(snapshot))
+        .collect()
+}
+
+#[test]
+fn a_grouped_tool_lights_one_button() {
+    let mut full = snapshot();
+    full.layout_mode = ToolbarLayoutMode::Regular;
+    full.shape_picker_open = false;
+
+    // Shape Pen, Line, and Arrow have buttons of their own in full layouts,
+    // so the Shapes picker stays quiet for them.
+    for tool in [Tool::LiveShape, Tool::Line, Tool::Arrow] {
+        full.active_tool = tool;
+        full.tool_override = Some(tool);
+        assert_eq!(
+            active_tool_controls(&full),
+            [TopToolbarControl::Tool(tool)],
+            "{tool:?}"
+        );
+    }
+
+    // Tools that live inside the picker light the picker instead.
+    for tool in [Tool::Rect, Tool::Ellipse, Tool::RegularPolygon, Tool::Blur] {
+        full.active_tool = tool;
+        full.tool_override = Some(tool);
+        assert_eq!(
+            active_tool_controls(&full),
+            [TopToolbarControl::ShapePicker],
+            "{tool:?}"
+        );
+    }
+
+    // Simple layouts move Shape Pen, Line, and Arrow into the picker.
+    let mut simple = full.clone();
+    simple.layout_mode = ToolbarLayoutMode::Simple;
+    for tool in [Tool::LiveShape, Tool::Line, Tool::Arrow] {
+        simple.active_tool = tool;
+        simple.tool_override = Some(tool);
+        assert_eq!(
+            active_tool_controls(&simple),
+            [TopToolbarControl::ShapePicker],
+            "simple {tool:?}"
+        );
+    }
+}
+
+#[test]
+fn an_open_shapes_picker_reads_active_whatever_the_tool() {
+    let mut snapshot = snapshot();
+    snapshot.active_tool = Tool::Pen;
+    snapshot.tool_override = Some(Tool::Pen);
+    snapshot.shape_picker_open = true;
+
+    assert!(TopToolbarControl::ShapePicker.active(&snapshot));
 }

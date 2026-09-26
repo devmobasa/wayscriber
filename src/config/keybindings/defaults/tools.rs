@@ -136,6 +136,12 @@ pub(crate) fn default_select_highlight_tool() -> Vec<String> {
     Vec::new()
 }
 
+/// `L` for laser: free in every default map, and presenters reach for it
+/// while the toolbar is hidden.
+pub(crate) fn default_select_laser_tool() -> Vec<String> {
+    vec!["L".to_string()]
+}
+
 pub(crate) fn default_toggle_highlight_tool() -> Vec<String> {
     vec!["Ctrl+Alt+H".to_string()]
 }

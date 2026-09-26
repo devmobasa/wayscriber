@@ -226,6 +226,7 @@ fn draw_semantic_tool_icon(
         SemanticToolIcon::Spotlight => toolbar_icons::draw_icon_spotlight(ctx, x, y, size),
         SemanticToolIcon::Marker => toolbar_icons::draw_icon_marker(ctx, x, y, size),
         SemanticToolIcon::Highlight => toolbar_icons::draw_icon_highlight(ctx, x, y, size),
+        SemanticToolIcon::Laser => toolbar_icons::draw_icon_laser(ctx, x, y, size),
         SemanticToolIcon::StepMarker => toolbar_icons::draw_icon_step_marker(ctx, x, y, size),
         SemanticToolIcon::Eraser => toolbar_icons::draw_icon_eraser(ctx, x, y, size),
     }

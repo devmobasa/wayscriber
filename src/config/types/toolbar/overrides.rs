@@ -34,7 +34,7 @@ pub struct ToolbarModeOverride {
     #[serde(default)]
     pub show_step_section: Option<bool>,
 
-    /// Keep text controls visible even when text is not active
+    /// Keep text controls visible on every tool when `context_aware_ui` is off
     #[serde(default)]
     pub show_text_controls: Option<bool>,
 }

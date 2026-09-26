@@ -103,6 +103,7 @@ fn entering_micro_unminimizes_and_closes_top_menus() {
         TopMenuState::CanvasPopover,
         TopMenuState::SessionPopover,
         TopMenuState::SettingsPopover,
+        TopMenuState::PenFeelPanel,
     ] {
         let mut state = create_test_input_state();
         state.test_set_toolbar_display_state(state.toolbar_top_display_mode(), true);

@@ -1,4 +1,6 @@
-use wayscriber::config::{ToolbarLayoutMode, ToolbarRebindModifier, ZoomChipDisplay};
+use wayscriber::config::{
+    ToolbarLayoutMode, ToolbarRebindModifier, ToolbarStrokeControls, ZoomChipDisplay,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarRebindModifierOption {
@@ -136,6 +138,54 @@ impl ZoomChipDisplayOption {
 }
 
 impl std::fmt::Display for ZoomChipDisplayOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+/// How the toolbar's style pill shows pen smoothing and Shape Pen
+/// sensitivity (`[ui.toolbar] stroke_controls`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarStrokeControlsOption {
+    Panel,
+    Meter,
+    Stepper,
+}
+
+impl ToolbarStrokeControlsOption {
+    pub fn list() -> Vec<Self> {
+        ToolbarStrokeControls::ALL
+            .into_iter()
+            .map(Self::from_config)
+            .collect()
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Panel => "Panel (default)",
+            Self::Meter => "Meters",
+            Self::Stepper => "Steppers",
+        }
+    }
+
+    pub fn to_config(self) -> ToolbarStrokeControls {
+        match self {
+            Self::Panel => ToolbarStrokeControls::Panel,
+            Self::Meter => ToolbarStrokeControls::Meter,
+            Self::Stepper => ToolbarStrokeControls::Stepper,
+        }
+    }
+
+    pub fn from_config(value: ToolbarStrokeControls) -> Self {
+        match value {
+            ToolbarStrokeControls::Panel => Self::Panel,
+            ToolbarStrokeControls::Meter => Self::Meter,
+            ToolbarStrokeControls::Stepper => Self::Stepper,
+        }
+    }
+}
+
+impl std::fmt::Display for ToolbarStrokeControlsOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

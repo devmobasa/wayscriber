@@ -149,6 +149,17 @@ impl WaylandState {
         capture_picker_chrome_suppressed_for(self.input_state.region_state())
     }
 
+    /// Derived toolbar suppression: the capture picker, or a full-attention
+    /// modal (help, command palette, board/font/color pickers) that would
+    /// otherwise sit underneath the separately stacked toolbar surfaces.
+    ///
+    /// Like the capture picker this never writes toolbar preferences, so
+    /// closing the modal reveals the bars with their position, pin, minimize,
+    /// and popover state intact.
+    pub(in crate::backend::wayland) fn toolbar_chrome_suppressed(&self) -> bool {
+        self.capture_picker_chrome_suppressed() || self.input_state.modal_hides_toolbar_chrome()
+    }
+
     pub(in crate::backend::wayland) fn overlay_passthrough_requested(&self) -> bool {
         self.suppression
             .passthrough_requested(self.input_state.light_mode_passthrough())

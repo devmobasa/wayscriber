@@ -63,6 +63,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectBlurTool
         | Action::SelectSpotlightTool
         | Action::SelectHighlightTool
+        | Action::SelectLaserTool
         | Action::IncreaseFontSize
         | Action::DecreaseFontSize
         | Action::ResetArrowLabelCounter

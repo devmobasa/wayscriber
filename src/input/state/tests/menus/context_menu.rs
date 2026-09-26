@@ -843,6 +843,190 @@ fn page_move_to_board_command_moves_page_switches_board_and_closes_menu() {
     assert!(!state.is_context_menu_open());
 }
 
+fn canvas_menu_commands(state: &InputState) -> Vec<Option<MenuCommand>> {
+    state
+        .context_menu_entries()
+        .into_iter()
+        .map(|entry| entry.command)
+        .collect()
+}
+
+#[test]
+fn canvas_menu_leads_with_history_and_ends_with_clear_then_exit() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+
+    let entries = state.context_menu_entries();
+    let commands = canvas_menu_commands(&state);
+    assert_eq!(
+        &commands[..4],
+        &[
+            Some(MenuCommand::Undo),
+            Some(MenuCommand::Redo),
+            Some(MenuCommand::Paste),
+            Some(MenuCommand::CaptureRegion),
+        ]
+    );
+    assert!(entries[0].disabled && entries[1].disabled, "no history yet");
+    assert!(entries[2].separator_before, "Paste starts its own group");
+    assert_eq!(entries[3].label, "Capture Region…");
+
+    let clear = commands
+        .iter()
+        .position(|command| *command == Some(MenuCommand::ClearAll))
+        .expect("clear entry");
+    let exit = entries.last().expect("entries");
+    assert_eq!(exit.command, Some(MenuCommand::Exit));
+    assert_eq!(exit.label, "Exit");
+    assert!(exit.separator_before);
+    assert_eq!(clear, entries.len() - 2, "Clear sits just above Exit");
+    assert!(entries[clear].separator_before, "Clear is fenced off");
+    assert!(clear > 8, "Clear is nowhere near Paste");
+}
+
+#[test]
+fn highlight_row_uses_the_action_short_label() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+
+    let highlight = menu_entry(&state, MenuCommand::ToggleHighlightTool);
+
+    assert_eq!(highlight.label, "Highlight");
+    assert!(!highlight.label.contains("(tool + click)"));
+}
+
+#[test]
+fn undo_and_redo_rows_follow_history_and_run_it() {
+    let mut state = create_test_input_state();
+    state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.style.current_color,
+        thick: 2.0,
+    });
+    let shapes = state.boards.active_frame().shapes.clone();
+    state.boards.active_frame_mut().push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(0, shapes[0].clone())],
+        },
+        16,
+    );
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+    assert!(!menu_entry(&state, MenuCommand::Undo).disabled);
+    assert!(menu_entry(&state, MenuCommand::Redo).disabled);
+
+    state.execute_menu_command(MenuCommand::Undo);
+
+    assert!(!state.is_context_menu_open());
+    assert!(state.boards.active_frame().shapes.is_empty());
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+    assert!(menu_entry(&state, MenuCommand::Undo).disabled);
+    assert!(!menu_entry(&state, MenuCommand::Redo).disabled);
+}
+
+#[test]
+fn exit_row_exits_or_hides_a_daemon_overlay() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+
+    state.execute_menu_command(MenuCommand::Exit);
+
+    assert!(!state.is_context_menu_open());
+    assert!(state.should_exit);
+
+    let mut state = create_test_input_state();
+    state.set_context_menu_exit_hides_overlay(true);
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+    assert_eq!(menu_entry(&state, MenuCommand::Exit).label, "Hide Overlay");
+}
+
+#[test]
+fn capture_region_row_hands_the_capture_to_the_backend() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+
+    state.execute_menu_command(MenuCommand::CaptureRegion);
+
+    assert!(!state.is_context_menu_open());
+    assert!(matches!(
+        state.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::Screenshot(
+            Action::CaptureRegionInteractive
+        ))
+    ));
+}
+
+#[test]
+fn shape_menu_also_ends_with_exit() {
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.style.current_color,
+        thick: 2.0,
+    });
+    state.set_selection(vec![shape_id]);
+    state.open_context_menu(
+        (40, 40),
+        vec![shape_id],
+        ContextMenuKind::Shape,
+        Some(shape_id),
+    );
+
+    let entries = state.context_menu_entries();
+    let exit = entries.last().expect("entries");
+    assert_eq!(exit.command, Some(MenuCommand::Exit));
+    assert!(exit.separator_before);
+    assert!(
+        !entries[0].separator_before,
+        "the first row never has a divider"
+    );
+}
+
+#[test]
+fn the_footer_lives_inside_the_menu_and_leaves_row_hits_alone() {
+    let engine = crate::ui_text::UiTextEngine::default();
+    let mut state = create_test_input_state();
+    state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
+    state.update_context_menu_layout_with_engine(&engine, 1280, 900);
+    let layout = *state.context_menu_layout().expect("layout");
+    let rows = state.context_menu_entries().len();
+
+    assert!(layout.footer_height > 0.0);
+    assert!(layout.footer_font_size >= 12.0, "readable footer");
+    let rows_bottom = layout.origin_y + layout.padding_y + layout.row_height * rows as f64;
+    assert!(
+        (layout.origin_y + layout.height - (rows_bottom + layout.footer_height + layout.padding_y))
+            .abs()
+            < 0.01,
+        "the footer is part of the box"
+    );
+    let x = (layout.origin_x + layout.padding_x) as i32;
+    let last_row_y = (rows_bottom - layout.row_height * 0.5) as i32;
+    assert_eq!(state.context_menu_index_at(x, last_row_y), Some(rows - 1));
+    let footer_y = (rows_bottom + layout.footer_height * 0.5) as i32;
+    assert_eq!(state.context_menu_index_at(x, footer_y), None);
+
+    // A submenu has no footer of its own.
+    let boards = state
+        .context_menu_entries()
+        .iter()
+        .position(|entry| entry.label == "Boards")
+        .expect("boards row");
+    assert!(state.open_context_submenu(boards, false));
+    state.update_context_menu_layout_with_engine(&engine, 1280, 900);
+    assert_eq!(
+        state.context_submenu_layout().expect("pane").footer_height,
+        0.0
+    );
+}
+
 #[test]
 fn open_board_picker_command_closes_context_menu_and_opens_picker() {
     let mut state = create_test_input_state();

@@ -89,6 +89,9 @@ impl InputState {
     }
 
     fn finalize_text_input_with(&mut self, measurer: &TextMeasurer) {
+        // A style change since the last keystroke (a larger font, say) may
+        // have grown the block past the edge without moving it.
+        self.keep_text_draft_inside_output_with(measurer);
         let (x, y, text) = if let DrawingState::TextInput { x, y, buffer, .. } = &self.state {
             (*x, *y, buffer.clone())
         } else {
@@ -327,7 +330,11 @@ impl TextEditing {
 
     fn copy_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
         let (_, text) = self.selected_text(state)?;
-        Some(TextClipboardRequest { text, cut: None })
+        Some(TextClipboardRequest {
+            text,
+            cut: None,
+            confirmation: None,
+        })
     }
 
     fn cut_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
@@ -340,6 +347,7 @@ impl TextEditing {
                 revision,
                 range,
             }),
+            confirmation: None,
         })
     }
 

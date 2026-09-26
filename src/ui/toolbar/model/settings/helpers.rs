@@ -108,9 +108,9 @@ fn runtime_persistence_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         Mode::Missing => Vec::new(),
         Mode::Supported | Mode::UnsupportedReadOnly { .. } => vec![button(
             ToolbarControlId::ResetRuntimeUi,
-            "Reset runtime preferences",
+            "Reset toolbar changes",
             ToolbarEvent::RequestRuntimeUiReset,
-            "Restore runtime toolbar and board preferences to their configured defaults",
+            "Undo toolbar and board changes made in the overlay, back to your configured defaults",
         )],
         Mode::Resetting | Mode::CancellingRecovery => Vec::new(),
         Mode::AwaitingUnsupportedResetConfirmation { .. } => vec![

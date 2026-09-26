@@ -31,15 +31,17 @@ pub fn render_top_strip(
     // Idle fade: the backend fade engine publishes `top_fade` on the
     // snapshot (forced to 1.0 while menus are open, the pointer is near, or
     // the strip is minimized/micro). Painting through a group keeps the
-    // translucent islands compositing correctly at reduced alpha.
+    // islands and their translucent control fills compositing as one layer
+    // at reduced alpha. The idle-hidden strip paints nothing but keeps its
+    // hits, so keyboard focus can still reach (and reveal) it.
     let fade = snapshot.top_fade.clamp(0.0, 1.0);
-    if fade < 1.0 {
+    if fade >= 1.0 {
+        paint_tree(engine, ctx, &tree, hover);
+    } else if !snapshot.top_strip_hidden() {
         ctx.push_group();
         paint_tree(engine, ctx, &tree, hover);
         let _ = ctx.pop_group_to_source();
         let _ = ctx.paint_with_alpha(fade);
-    } else {
-        paint_tree(engine, ctx, &tree, hover);
     }
     hits.extend(tree.to_hit_regions());
     draw_tooltip_with_delay(engine, ctx, hits, hover, width, height, false, hover_start);

@@ -78,6 +78,8 @@ pub struct InputState {
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
     /// Click highlight animation state
     pub(crate) click_highlight: ClickHighlightState,
+    /// Finished laser strokes and their fade clock; never part of a frame.
+    pub(in crate::input::state) laser: crate::input::state::laser::LaserInk,
     /// On-screen input HUD (keystroke/click chips) state
     pub(crate) input_hud: InputHudState,
     /// Selection membership, nudge direction, and polygon click timing.
@@ -110,4 +112,7 @@ pub struct InputState {
     pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
+    /// The transient chip naming what Shape Pen just recognized.
+    pub(in crate::input::state) recognition_feedback:
+        crate::input::state::core::RecognitionFeedback,
 }

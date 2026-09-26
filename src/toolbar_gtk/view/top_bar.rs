@@ -3,7 +3,7 @@
 //! Adapts the shared `TopToolbarSpec` into four detached pill islands —
 //! tools (drag grip | pens | shapes | shapes-picker | annotations | quick
 //! colors + chip), history (undo/redo + the overflow toggle anchoring Clear
-//! and width-dropped items), chrome (layout cycle, About, pin, minimize),
+//! and width-dropped items), chrome (layout menu, About, pin, minimize),
 //! and the contextual
 //! style pill (island D, `style_pill` module, from `StylePillSpec`) — as
 //! GTK widgets. Width degradation uses the same shared plan as the
@@ -15,11 +15,16 @@
 //! through stored updater closures so open popovers and hover states
 //! survive snapshot churn.
 
+mod arrow_menu;
 mod controls;
 mod drag;
+mod layout_menu;
+mod meter;
+mod pen_feel;
 mod popover_owner;
 mod popovers;
 use popover_owner::{PopoverOwner, PopoverResources};
+mod stepper;
 mod strip;
 mod style_pill;
 #[cfg(test)]
@@ -41,8 +46,8 @@ use model::TopStripPlan;
 use super::super::icons::IconWidget;
 use super::super::widgets::{
     FeedbackSender, SliderRow, SwatchButton, add_button_shortcut_hint, icon_button,
-    install_click_modifier_capture, install_quick_color_recolor, install_shortcut_focus_policy,
-    send_event, set_active_class, sized_button, text_button,
+    install_click_modifier_capture, install_key_relay, install_quick_color_recolor,
+    install_shortcut_focus_policy, send_event, set_active_class, sized_button, text_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 
@@ -68,7 +73,8 @@ const CHIP_SIZE: f64 = 28.0;
 const COMPACT_BUTTON: f64 = 26.0;
 const COMPACT_GAP: f64 = 1.0;
 const COMPACT_CHROME: f64 = 18.0;
-const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
+/// Restore-tab size, shared with the built-in tab (`model::RESTORE_TAB_SIZE`).
+const MINIMIZED_SIZE: (f64, f64) = model::RESTORE_TAB_SIZE;
 /// Micro-mode chip size (`ToolbarLayoutSpec::TOP_MICRO_SIZE`).
 const MICRO_SIZE: f64 = 44.0;
 /// Style pill spec-unit tokens (`ToolbarLayoutSpec::TOP_STYLE_*`).
@@ -88,6 +94,13 @@ const STYLE_RESET_W: f64 = 56.0;
 const STYLE_FONT_PICK_W: f64 = 96.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_STEP_W`.
 const STYLE_STEP_W: f64 = 20.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_CAPTION_W`: the caption slot before a level
+/// meter or tool stepper ("Smooth", "Shapes", "Detect").
+const STYLE_CAPTION_W: f64 = 48.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_METER_W`: a level meter's bar row.
+const STYLE_METER_W: f64 = 84.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_PEN_FEEL_W`: the Pen feel chip's slot.
+const STYLE_PEN_FEEL_W: f64 = 92.0;
 /// Segment tab height (matches the Settings pane's segmented tabs).
 const STYLE_TAB_H: f64 = 22.0;
 /// Extra clear gap before a segmented control in the pill (M7-C3), on top of
@@ -244,6 +257,8 @@ struct SettingsMenuContentKey {
     /// only appear through a keyed rebuild.
     items: crate::config::ResolvedToolbarItems,
     status_bar_contents_open: bool,
+    /// The "Details" disclosure adds and removes notice rows.
+    settings_details_open: bool,
     layout_mode: ToolbarLayoutMode,
     runtime_ui_persistence: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
 }
@@ -256,6 +271,7 @@ impl SettingsMenuContentKey {
             customize_items_group: snapshot.customize_items_group,
             items: snapshot.resolved_toolbar_items.clone(),
             status_bar_contents_open: snapshot.status_bar_contents_open,
+            settings_details_open: snapshot.settings_details_open,
             layout_mode: snapshot.layout_mode,
             runtime_ui_persistence: snapshot.runtime_ui_persistence.clone(),
         }
@@ -291,6 +307,9 @@ struct StructureKey {
     /// (including swatch count, reset presence, and segment kind) so a
     /// tool change rebuilds the pill while value churn stays in updaters.
     style_pill: Vec<String>,
+    /// The smoothing meter and stepper share their control id, so the
+    /// stroke-controls style is keyed on its own.
+    stroke_controls: crate::config::ToolbarStrokeControls,
     /// Presets-island structure: the display toggle, slot count, and the
     /// saved slots. A change here (toggled visibility, a saved/cleared slot)
     /// rebuilds the island; the applied-slot highlight rides an updater.
@@ -317,6 +336,7 @@ impl StructureKey {
                 .iter()
                 .map(|control| control.id().into_owned())
                 .collect(),
+            stroke_controls: snapshot.stroke_controls,
             show_presets: snapshot.show_presets,
             preset_slot_count: snapshot.preset_slot_count,
             presets: snapshot.presets.clone(),
@@ -385,6 +405,12 @@ pub(in crate::toolbar_gtk) struct TopBar {
     canvas: PopoverOwner<CanvasMenuContentKey>,
     session: PopoverOwner<SessionMenuContentKey>,
     settings: PopoverOwner<SettingsMenuContentKey>,
+    /// The chrome island's layout-preset menu, keyed on the current preset.
+    layout: PopoverOwner<ToolbarLayoutMode>,
+    /// The style pill's Pen feel panel, keyed on the sections it shows.
+    feel: PopoverOwner<Vec<model::StrokeSetting>>,
+    /// The style pill's arrow style menu, keyed on the current style.
+    arrow_style: PopoverOwner<crate::draw::ArrowStyle>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -443,8 +469,9 @@ impl TopBar {
         window.set_child(Some(capture_surface.widget()));
 
         // Report top-window hover to the backend: GTK runs on its own
-        // Wayland connection, so this is the only way the backend's
-        // top-strip idle fade can restore on pointer approach.
+        // Wayland connection, so this is how the backend's top-strip idle
+        // fade holds while the pointer is on the strip. Approach while the
+        // strip is hidden (and click-through) is measured on the canvas.
         let hover = gtk4::EventControllerMotion::new();
         let enter_feedback = feedback.clone();
         hover.connect_enter(move |_, _, _| {
@@ -455,6 +482,8 @@ impl TopBar {
             let _ = leave_feedback.send(GtkToolbarFeedback::TopHover { hovered: false });
         });
         window.add_controller(hover);
+        // Keys typed while this window holds keyboard focus go to the overlay.
+        install_key_relay(&window, &feedback);
 
         Self {
             ui_text: crate::ui_text::UiTextEngine::default(),
@@ -469,6 +498,9 @@ impl TopBar {
             canvas: PopoverOwner::default(),
             session: PopoverOwner::default(),
             settings: PopoverOwner::default(),
+            layout: PopoverOwner::default(),
+            feel: PopoverOwner::default(),
+            arrow_style: PopoverOwner::default(),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
@@ -570,7 +602,15 @@ impl TopBar {
                 updater(snapshot);
             }
         }
+        // The Pen feel panel's levels change while it stays open; its
+        // content key omits them, like the Canvas delay sliders.
+        if snapshot.pen_feel_open {
+            for updater in &self.feel.updaters {
+                updater(snapshot);
+            }
+        }
         self.window.set_visible(true);
+        let presentation = presentation.with_idle_hidden(snapshot.top_strip_hidden());
         self.capture_surface
             .set_transparent(presentation.capture_transparent);
         super::set_visual_hidden(
@@ -638,6 +678,9 @@ impl TopBar {
         self.canvas.clear();
         self.session.clear();
         self.settings.clear();
+        self.layout.clear();
+        self.feel.clear();
+        self.arrow_style.clear();
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }

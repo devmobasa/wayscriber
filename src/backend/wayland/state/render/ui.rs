@@ -25,6 +25,7 @@ impl WaylandState {
     fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
         if !render_ui {
             self.input_state.clear_context_menu_layout();
+            self.onboarding_card.set_layout(None);
             return;
         }
         let capture_picker = self.capture_picker_chrome_suppressed();
@@ -34,6 +35,9 @@ impl WaylandState {
         self.render_cursor_chrome(ctx, width, height, capture_picker);
         self.render_mode_badges(ctx, width, height, capture_picker);
         self.render_status_surfaces(ctx, width, height, capture_picker);
+        // Inline bars stand in for the layer-shell toolbar surfaces, but every
+        // popup and modal below must paint above them.
+        self.render_inline_toolbar_chrome(ctx, capture_picker);
         self.render_help_and_pickers(ctx, width, height, capture_picker);
         self.render_radial_menu_and_feedback(ctx, width, height, capture_picker);
         self.render_properties_and_context(ctx, width, height, capture_picker);
@@ -231,6 +235,7 @@ impl WaylandState {
                     self.input_state.help_overlay.query(),
                     self.input_state.help_overlay.scroll(),
                     self.input_state.help_overlay.is_quick_mode(),
+                    self.input_state.help_overlay.shows_unbound(),
                 )
             };
             self.input_state.help_overlay.install_render_result(result);
@@ -327,6 +332,9 @@ impl WaylandState {
         } else {
             self.input_state.clear_radial_menu_layout();
         }
+        if !capture_picker {
+            self.render_recognition_chip(ctx, width, height);
+        }
         let toast_geometry = crate::ui::render_ui_toast_with_engine(
             self.render.ui_text(),
             ctx,
@@ -391,6 +399,21 @@ impl WaylandState {
         crate::ui::render_context_menu_with_engine(self.render.ui_text(), ctx, &self.input_state);
     }
 
+    fn render_inline_toolbar_chrome(&mut self, ctx: &cairo::Context, capture_picker: bool) {
+        if capture_picker
+            || self.toolbar_chrome_suppressed()
+            || !self.toolbar.is_visible()
+            || !self.inline_toolbars_render_active()
+        {
+            return;
+        }
+        let snapshot = self.toolbar_snapshot();
+        if self.toolbar.update_snapshot(&snapshot) {
+            self.toolbar.mark_dirty();
+        }
+        self.render_inline_toolbars(ctx, &snapshot);
+    }
+
     fn render_inline_and_modal_ui(
         &mut self,
         ctx: &cairo::Context,
@@ -398,13 +421,6 @@ impl WaylandState {
         height: u32,
         capture_picker: bool,
     ) {
-        if !capture_picker && self.toolbar.is_visible() && self.inline_toolbars_render_active() {
-            let snapshot = self.toolbar_snapshot();
-            if self.toolbar.update_snapshot(&snapshot) {
-                self.toolbar.mark_dirty();
-            }
-            self.render_inline_toolbars(ctx, &snapshot);
-        }
         if self.input_state.region_state().purpose()
             == Some(crate::input::state::RegionPurposeTag::Measure)
         {
@@ -412,17 +428,20 @@ impl WaylandState {
         }
         self.render_ocr_scan(ctx, width, height);
         if capture_picker {
+            self.onboarding_card.set_layout(None);
             return;
         }
-        if let Some(card) = self.first_run_onboarding_card() {
+        let card_layout = self.first_run_onboarding_card().map(|card| {
             crate::ui::render_onboarding_card_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
                 height,
                 &card,
-            );
-        }
+                self.onboarding_card.hovered(),
+            )
+        });
+        self.onboarding_card.set_layout(card_layout);
         let palette_view = crate::ui::CommandPaletteView::prepare(&self.input_state, width, height);
         crate::ui::paint_command_palette(
             self.render.theme(),

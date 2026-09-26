@@ -37,7 +37,8 @@ pub fn render_help_overlay(
     .scroll_max
 }
 
-/// Paint once and return owned scroll and hit geometry.
+/// Paint once and return owned scroll and hit geometry. Actions without a
+/// binding stay hidden, as they are when help opens.
 ///
 /// Query `result.hit_map.region_at(x, y)` directly, or pass the result to
 /// [`crate::input::InputState::install_help_overlay_render_result`] before using
@@ -81,5 +82,6 @@ pub fn render_help_overlay_result(
         capture_enabled,
         scroll_offset,
         quick_mode,
+        false,
     )
 }
