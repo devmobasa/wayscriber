@@ -3,15 +3,35 @@ mod primary;
 mod prune;
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::draw::shape::Shape;
 
 use super::super::core::Frame;
 use super::super::types::{HistoryTrimStats, ShapeId, UndoAction};
 
+static NEXT_HISTORY_REVISION: AtomicU64 = AtomicU64::new(1);
+
+pub(in crate::draw::frame) fn fresh_history_revision() -> u64 {
+    NEXT_HISTORY_REVISION.fetch_add(1, Ordering::Relaxed)
+}
+
 impl Frame {
+    /// Identifies the entry the next undo would take: it changes on every
+    /// push, undo, redo, and history clear, and trimming the oldest entries
+    /// leaves it alone. Feedback that advertises a particular undo (the
+    /// Shape Pen chip) compares it to know the undo still means that.
+    pub fn history_revision(&self) -> u64 {
+        self.history_revision
+    }
+
+    pub(in crate::draw::frame) fn touch_history(&mut self) {
+        self.history_revision = fresh_history_revision();
+    }
+
     /// Records an undoable action, enforcing a stack limit.
     pub fn push_undo_action(&mut self, action: UndoAction, limit: usize) {
+        self.touch_history();
         self.undo_stack.push(action);
         if limit > 0 && self.undo_stack.len() > limit {
             let overflow = self.undo_stack.len() - limit;
@@ -23,6 +43,7 @@ impl Frame {
     /// Undoes the most recent action, returning it for external bookkeeping.
     pub fn undo_last(&mut self) -> Option<UndoAction> {
         let action = self.undo_stack.pop()?;
+        self.touch_history();
         self.apply_inverse(&action);
         self.redo_stack.push(action.clone());
         Some(action)
@@ -31,6 +52,7 @@ impl Frame {
     /// Redoes the most recently undone action.
     pub fn redo_last(&mut self) -> Option<UndoAction> {
         let action = self.redo_stack.pop()?;
+        self.touch_history();
         self.apply_action(&action);
         self.undo_stack.push(action.clone());
         Some(action)
@@ -69,6 +91,7 @@ impl Frame {
             if !self.undo_stack.is_empty() {
                 stats.add_undo(self.undo_stack.len());
                 self.undo_stack.clear();
+                self.touch_history();
             }
             if !self.redo_stack.is_empty() {
                 stats.add_redo(self.redo_stack.len());
@@ -91,6 +114,11 @@ impl Frame {
             return HistoryTrimStats::default();
         }
         let mut stats = HistoryTrimStats::default();
+        // These rewrite or drop entries anywhere in the stack, the newest
+        // included, so what the next undo means may have changed.
+        if !self.undo_stack.is_empty() {
+            self.touch_history();
+        }
         stats.add_undo(Self::prune_stack_for_removed_ids(
             &mut self.undo_stack,
             removed,
@@ -108,6 +136,11 @@ impl Frame {
             return self.clamp_history_depth(0);
         }
         let mut stats = HistoryTrimStats::default();
+        // These rewrite or drop entries anywhere in the stack, the newest
+        // included, so what the next undo means may have changed.
+        if !self.undo_stack.is_empty() {
+            self.touch_history();
+        }
         stats.add_undo(Self::prune_stack_by_depth(&mut self.undo_stack, max_depth));
         stats.add_redo(Self::prune_stack_by_depth(&mut self.redo_stack, max_depth));
         stats
@@ -123,6 +156,11 @@ impl Frame {
             return HistoryTrimStats::default();
         }
         let mut stats = HistoryTrimStats::default();
+        // These rewrite or drop entries anywhere in the stack, the newest
+        // included, so what the next undo means may have changed.
+        if !self.undo_stack.is_empty() {
+            self.touch_history();
+        }
         stats.add_undo(Self::prune_stack_for_missing_shapes(
             &mut self.undo_stack,
             &ids,

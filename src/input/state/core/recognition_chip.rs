@@ -28,6 +28,10 @@ pub(crate) struct RecognitionChip {
     /// Canvas bounds of the recognized shape; the chip sits beside them.
     anchor: Rect,
     started: Instant,
+    /// The active frame's history revision right after the recognized stroke
+    /// committed. The chip advertises that one undo gives the ink back, which
+    /// holds only while the next undo is still that stroke's.
+    history_revision: u64,
 }
 
 impl RecognitionChip {
@@ -105,6 +109,7 @@ impl InputState {
             label,
             anchor,
             started: now,
+            history_revision: self.boards.active_frame().history_revision(),
         });
         self.needs_redraw = true;
     }
@@ -116,13 +121,18 @@ impl InputState {
         }
     }
 
-    /// The chip currently shown, if any.
+    /// The chip currently shown, if any. A chip whose undo no longer gives
+    /// the ink back (a later edit, an undo, or another page) is not shown.
     pub(crate) fn recognition_chip(&self) -> Option<&RecognitionChip> {
-        self.recognition_feedback.chip.as_ref()
+        self.recognition_feedback
+            .chip
+            .as_ref()
+            .filter(|chip| self.recognition_chip_current(chip))
     }
 
-    /// Expires the chip once its lifetime is over. Returns whether it is still
-    /// up and so needs frames for its fade.
+    /// Expires the chip once its lifetime is over, or once the undo it
+    /// advertises would do something else. Returns whether it is still up and
+    /// so needs frames for its fade.
     pub fn advance_recognition_chip(&mut self, now: Instant) -> bool {
         let Some(chip) = &self.recognition_feedback.chip else {
             return false;
@@ -131,7 +141,15 @@ impl InputState {
             self.recognition_feedback.chip = None;
             return false;
         }
+        if !self.recognition_chip_current(chip) {
+            self.clear_recognition_chip();
+            return false;
+        }
         true
+    }
+
+    fn recognition_chip_current(&self, chip: &RecognitionChip) -> bool {
+        chip.history_revision == self.boards.active_frame().history_revision()
     }
 
     /// "Ctrl+Z keeps ink" with the configured undo shortcut, or a plain

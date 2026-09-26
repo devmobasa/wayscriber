@@ -113,6 +113,47 @@ fn the_undo_the_chip_advertises_takes_it_away() {
     assert_eq!(chip_label(&state), None);
 }
 
+/// The chip promises that one undo gives this stroke's ink back. A later
+/// stroke that stays ink makes the next undo remove that stroke instead, so
+/// the promise, and the chip, go.
+#[test]
+fn a_later_stroke_retires_the_chip_that_no_longer_describes_undo() {
+    let mut state = shape_pen_state(create_test_input_state());
+    draw(&mut state, &RECTANGLE);
+    assert!(state.recognition_chip().is_some());
+
+    let offset: Vec<(i32, i32)> = SCRIBBLE.iter().map(|&(x, y)| (x + 200, y)).collect();
+    draw(&mut state, &offset);
+
+    assert!(matches!(
+        state.boards.active_frame().shapes[1].shape,
+        Shape::Freehand { .. } | Shape::FreehandPressure { .. }
+    ));
+    assert_eq!(chip_label(&state), None);
+    state.needs_redraw = false;
+    assert!(!state.advance_recognition_chip(Instant::now()));
+    assert!(
+        state.needs_redraw,
+        "the stale chip's footprint is repainted"
+    );
+}
+
+#[test]
+fn any_edit_that_changes_the_next_undo_retires_the_chip() {
+    let mut state = shape_pen_state(create_test_input_state());
+    draw(&mut state, &RECTANGLE);
+    let id = state.boards.active_frame().shapes[0].id;
+
+    state.set_selection(vec![id]);
+    assert!(
+        state.recognition_chip().is_some(),
+        "selecting changes nothing undo would do"
+    );
+    run_action(&mut state, Action::DeleteSelection);
+
+    assert_eq!(chip_label(&state), None);
+}
+
 #[test]
 fn the_chip_names_the_configured_undo_shortcut() {
     let mut keybindings = crate::config::KeybindingsConfig::default();

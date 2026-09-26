@@ -27,6 +27,12 @@ pub struct Frame {
     /// This is runtime-only: persisted frames rebuild caches after loading.
     #[serde(skip)]
     pub(super) shape_order_generation: u64,
+    /// Changes whenever the entry the next undo would take changes (a push,
+    /// an undo, a redo, or clearing history). Globally unique per change, so
+    /// two frames only share one when one is a copy of the other. Runtime
+    /// only.
+    #[serde(skip)]
+    pub(super) history_revision: u64,
 }
 
 impl Default for Frame {
@@ -46,6 +52,7 @@ impl Frame {
             redo_stack: Vec::new(),
             next_shape_id: 1,
             shape_order_generation: 0,
+            history_revision: super::history::fresh_history_revision(),
         }
     }
 
@@ -58,6 +65,7 @@ impl Frame {
         self.shapes.clear();
         self.undo_stack.clear();
         self.redo_stack.clear();
+        self.touch_history();
         self.view_offset = (0, 0);
         self.next_shape_id = 1;
     }
