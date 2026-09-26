@@ -83,6 +83,68 @@ fn recognized_closed_shapes_follow_the_fill_toggle() {
 }
 
 #[test]
+fn overlapping_ovals_keep_their_preview_and_commit_as_ellipses() {
+    for (rx, ry) in [(60.0, 60.0), (90.0, 50.0)] {
+        for direction in [-1.0, 1.0] {
+            for start in [0.0, 1.3] {
+                for (level, samples, wobble) in
+                    [(0, 96, 0.0), (3, 96, 2.0), (3, 360, 2.0), (4, 96, 2.0)]
+                {
+                    let mut state = shape_pen_state();
+                    state.style.shape_recognition_sensitivity = level;
+                    let end = samples * 3 / 2;
+                    let path: Vec<_> = (0..=end)
+                        .map(|step| {
+                            let angle = start
+                                + direction * std::f64::consts::TAU * step as f64 / samples as f64;
+                            let sway = wobble * (7.0 * angle).sin();
+                            (
+                                (200.0 + (rx + sway) * angle.cos()).round() as i32,
+                                (200.0 + (ry + sway) * angle.sin()).round() as i32,
+                            )
+                        })
+                        .collect();
+
+                    draw_path(&mut state, &path[..=samples]);
+                    for &(x, y) in &path[samples..end] {
+                        state.on_mouse_motion(x, y);
+                        assert!(
+                            matches!(
+                                state.provisional_tool_stroke(x, y),
+                                ProvisionalToolStroke::Recognized {
+                                    shape: Shape::Ellipse { .. },
+                                    ..
+                                }
+                            ),
+                            "oval ({rx}, {ry}), direction {direction}, start {start}, level {level}, samples {samples} at ({x}, {y})"
+                        );
+                    }
+                    // Release can supply the final point without a motion event.
+                    release_at_end(&mut state, &path);
+
+                    let Shape::Ellipse {
+                        cx,
+                        cy,
+                        rx: actual_rx,
+                        ry: actual_ry,
+                        ..
+                    } = state.boards.active_frame().shapes[0].shape
+                    else {
+                        panic!(
+                            "oval ({rx}, {ry}), direction {direction}, start {start}, level {level}, samples {samples} committed as {}",
+                            state.boards.active_frame().shapes[0].shape.kind_name()
+                        );
+                    };
+                    assert!((cx - 200).abs() <= 3 && (cy - 200).abs() <= 3);
+                    assert!((f64::from(actual_rx) - rx).abs() <= 3.0);
+                    assert!((f64::from(actual_ry) - ry).abs() <= 3.0);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn shape_pen_style_pill_offers_fill_and_smoothing() {
     let state = shape_pen_state();
 
