@@ -221,7 +221,7 @@ pub(crate) fn render_preset_toast_with_engine(
         PresetFeedbackKind::Clear => TOAST_ERROR,
     };
 
-    constants::set_color_alpha(ctx, (r, g, b), 0.85 * fade);
+    constants::set_color_alpha(ctx, (r, g, b), fade);
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
 
@@ -278,12 +278,9 @@ pub(crate) fn render_ui_toast_with_engine(
         UiToastKind::Error => TOAST_ERROR,
     };
 
-    let background_alpha = if toast.kind == UiToastKind::Warning {
-        1.0
-    } else {
-        0.92
-    };
-    constants::set_color_alpha(ctx, (r, g, b), background_alpha * fade);
+    // Opaque fill (only the enter/exit fade is translucent) so the message
+    // keeps its contrast over any board.
+    constants::set_color_alpha(ctx, (r, g, b), fade);
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
 

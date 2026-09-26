@@ -8,21 +8,23 @@
 use crate::backend::wayland::toolbar::view::{
     ButtonStyle, ShortcutBadgePlacement, WidgetKind, WidgetNode, WidgetTree,
 };
+use crate::ui::theme::swatch::{chrome_rgb, swatch_edge_stroke};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
-    COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED, COLOR_TEXT_SECONDARY,
-    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL,
-    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
-    PRESET_SLOT_SWATCH_RATIO, set_color,
+    COLOR_PANEL_BACKGROUND, COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED,
+    COLOR_TEXT_SECONDARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
+    FONT_SIZE_LABEL, FONT_SIZE_SWATCH_KEY, PRESET_SLOT_ICON_RATIO, PRESET_SLOT_NUMBER_BOX,
+    PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS, PRESET_SLOT_SWATCH_RATIO, set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
     draw_divider_vertical, draw_drag_handle, draw_label_center, draw_label_center_color,
-    draw_label_left, draw_label_left_wrapped, draw_mini_checkbox, draw_minimize_button,
-    draw_panel_background, draw_pin_button, draw_popover_panel, draw_round_rect,
-    draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
+    draw_label_left, draw_label_left_color, draw_label_left_wrapped, draw_meter_bar,
+    draw_mini_checkbox, draw_minimize_button, draw_panel_background, draw_pin_button,
+    draw_popover_panel, draw_restore_tab_body, draw_round_rect, draw_segmented_control,
+    ellipsize_to_width, point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
@@ -119,6 +121,16 @@ fn paint_preset_color_swatch(
     ctx.set_line_width(1.0);
     draw_round_rect(ctx, sx, sy, size, size, PRESET_SLOT_SWATCH_RADIUS);
     let _ = ctx.stroke();
+}
+
+/// The accent knob riding a slider's inset travel at `t` in `[0, 1]`.
+fn draw_slider_knob(ctx: &cairo::Context, rect: (f64, f64, f64, f64), t: f64) {
+    let (x, y, w, h) = rect;
+    let knob_r = (h / 2.0).min(7.0);
+    let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
+    set_color(ctx, COLOR_TRACK_KNOB);
+    ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
 }
 
 fn paint_shortcut_badge(engine: &UiTextEngine, ctx: &cairo::Context, node: &WidgetNode) {
@@ -243,7 +255,20 @@ fn paint_node(
         }
         WidgetKind::Label(label) => {
             let text_style = label_style(label.size, label.bold);
-            if label.wrap {
+            if label.caption {
+                // Captions name the control beside them; they sit in the hint
+                // tone so the value they label stays the brightest text.
+                draw_label_left_color(
+                    engine,
+                    ctx,
+                    text_style,
+                    (x, y, h),
+                    &label.text,
+                    COLOR_LABEL_HINT,
+                );
+            } else if label.centered {
+                draw_label_center(engine, ctx, text_style, x, y, w, h, &label.text);
+            } else if label.wrap {
                 draw_label_left_wrapped(engine, ctx, text_style, x, y, w, h, &label.text);
             } else {
                 draw_label_left(engine, ctx, text_style, x, y, w, h, &label.text);
@@ -304,6 +329,12 @@ fn paint_node(
             );
         }
         WidgetKind::HitArea => {}
+        WidgetKind::MeterBar { filled, enabled } => {
+            draw_meter_bar(ctx, node.rect, *filled, is_hover, *enabled);
+        }
+        WidgetKind::SmoothingPreview { level } => {
+            crate::toolbar_icons::draw_smoothing_preview(ctx, node.rect, *level);
+        }
         WidgetKind::Slider { t } => {
             // Track and knob: a rounded track with the accent knob riding the
             // inset travel.
@@ -312,11 +343,27 @@ fn paint_node(
             set_color(ctx, COLOR_TRACK_BACKGROUND);
             draw_round_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
             let _ = ctx.fill();
-            let knob_r = (h / 2.0).min(7.0);
-            let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
-            set_color(ctx, COLOR_TRACK_KNOB);
-            ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            let _ = ctx.fill();
+            draw_slider_knob(ctx, node.rect, *t);
+        }
+        WidgetKind::OpacitySlider { t, paint } => {
+            crate::toolbar_icons::draw_opacity_track(ctx, node.rect, paint.rgb, paint.alpha_stops);
+            draw_slider_knob(ctx, node.rect, *t);
+        }
+        WidgetKind::ArrowStylePreview { style } => {
+            crate::toolbar_icons::draw_arrow_style_preview(
+                ctx,
+                node.rect,
+                *style,
+                crate::ui::theme::toolbar::COLOR_TEXT_PRIMARY,
+            );
+        }
+        WidgetKind::OpacitySwatch { paint } => {
+            crate::toolbar_icons::draw_opacity_swatch(
+                ctx,
+                node.rect,
+                paint.rgb,
+                paint.stroke_alpha,
+            );
         }
         WidgetKind::Swatch { color, selected } => {
             // Rounded square inset one pixel so the accent selection ring
@@ -330,10 +377,25 @@ fn paint_node(
             ctx.set_source_rgba(color.0, color.1, color.2, color.3);
             swatch_path(ctx);
             let _ = ctx.fill();
-            // Subtle inner hairline keeps dark fills defined against the bar.
-            set_color(ctx, COLOR_SWATCH_HAIRLINE);
-            ctx.set_line_width(1.0);
-            draw_round_rect(ctx, x + 1.5, y + 1.5, w - 3.0, h - 3.0, 4.5);
+            // The inner edge: a subtle hairline, or a contrast ring when the
+            // fill would vanish into the bar (the palette's black).
+            let (edge, edge_width) = swatch_edge_stroke(
+                *color,
+                chrome_rgb(COLOR_PANEL_BACKGROUND),
+                COLOR_SWATCH_HAIRLINE,
+                1.0,
+            );
+            let inset = 1.0 + edge_width / 2.0;
+            set_color(ctx, edge);
+            ctx.set_line_width(edge_width);
+            draw_round_rect(
+                ctx,
+                x + inset,
+                y + inset,
+                w - inset * 2.0,
+                h - inset * 2.0,
+                6.0 - inset,
+            );
             let _ = ctx.stroke();
             if *selected {
                 set_color(ctx, COLOR_ACCENT);
@@ -369,9 +431,24 @@ fn paint_node(
                         icon_size,
                     );
                     paint_preset_color_swatch(ctx, x, y, w, h, *color);
+                    // The slot number stays readable as a small caption in the
+                    // corner opposite the color, like the key captions under
+                    // the tool icons.
+                    let number = PRESET_SLOT_NUMBER_BOX;
+                    draw_label_center_color(
+                        engine,
+                        ctx,
+                        label_style(FONT_SIZE_SWATCH_KEY, true),
+                        x + PRESET_SLOT_SWATCH_INSET,
+                        y + h - number - PRESET_SLOT_SWATCH_INSET,
+                        number,
+                        number,
+                        label,
+                        COLOR_LABEL_HINT,
+                    );
                 }
-                // Empty slot: the 1-based slot number in the secondary text
-                // color, inviting a save.
+                // Empty slot: the 1-based slot number, muted so a filled slot
+                // reads as the one holding something; hover brings it up.
                 None => {
                     draw_label_center_color(
                         engine,
@@ -382,7 +459,11 @@ fn paint_node(
                         w,
                         h,
                         label,
-                        COLOR_TEXT_SECONDARY,
+                        if is_hover {
+                            COLOR_TEXT_SECONDARY
+                        } else {
+                            COLOR_LABEL_HINT
+                        },
                     );
                 }
             }
@@ -414,6 +495,24 @@ fn paint_node(
             draw_pin_button(ctx, x, y, w, *pinned, is_hover);
         }
         WidgetKind::MinimizeButton => draw_minimize_button(ctx, x, y, w, is_hover),
+        WidgetKind::RestoreTab { glyph, label } => {
+            draw_restore_tab_body(ctx, x, y, w, h, is_hover);
+            set_icon_color(ctx, is_hover);
+            let icon = (h * 0.56).min(18.0);
+            let pad = (h - icon) / 2.0 + 2.0;
+            (glyph.0)(ctx, x + pad, y + (h - icon) / 2.0, icon);
+            let text_x = x + pad + icon + 6.0;
+            draw_label_left(
+                engine,
+                ctx,
+                label_style(label.size, label.bold),
+                text_x,
+                y,
+                (x + w - text_x).max(0.0),
+                h,
+                &label.text,
+            );
+        }
         WidgetKind::Popover { caret_x, caret_up } => {
             draw_popover_panel(ctx, x, y, w, h, *caret_x, *caret_up);
         }
@@ -546,6 +645,129 @@ mod tests {
         assert!(
             g > 0 && b > 0,
             "checkerboard did not show through: ({r}, {g}, {b})"
+        );
+    }
+
+    /// Paint one quick-color swatch node on the toolbar panel color and sample
+    /// the pixel on its inner edge, halfway down the left side.
+    fn swatch_edge_on_panel(color: (f64, f64, f64, f64)) -> (u8, u8, u8) {
+        let surface = ImageSurface::create(Format::Rgb24, 32, 32).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            let panel = COLOR_PANEL_BACKGROUND;
+            ctx.set_source_rgb(panel.0, panel.1, panel.2);
+            let _ = ctx.paint();
+            let node = WidgetNode::decor(
+                "test.swatch",
+                (4.0, 4.0, 24.0, 24.0),
+                WidgetKind::Swatch {
+                    color,
+                    selected: false,
+                },
+            );
+            paint_node(&UiTextEngine::default(), &ctx, &node, None);
+        }
+        let mut surface = surface;
+        pixel_at(&mut surface, 5, 16)
+    }
+
+    #[test]
+    fn a_dark_swatch_gets_a_light_ring_against_the_dark_bar() {
+        let black = crate::domain::color::PALETTE_BLACK;
+        let (r, g, b) = swatch_edge_on_panel((black.r, black.g, black.b, black.a));
+        let edge = (u32::from(r) + u32::from(g) + u32::from(b)) / 3;
+        assert!(
+            edge >= 120,
+            "the black swatch's edge should read against the bar: ({r}, {g}, {b})"
+        );
+
+        // A swatch that already stands out keeps the quiet hairline.
+        let red = crate::domain::color::PALETTE_RED;
+        let (r, g, b) = swatch_edge_on_panel((red.r, red.g, red.b, red.a));
+        assert!(
+            r > 200 && g < 120 && b < 120,
+            "red keeps its own edge: ({r}, {g}, {b})"
+        );
+    }
+
+    /// Paint one 46px preset slot on black and return its pixels as luma.
+    fn preset_slot_luma(filled: bool, label: &str, hover: Option<(f64, f64)>) -> Vec<Vec<u32>> {
+        const SIZE: i32 = 46;
+        let surface = ImageSurface::create(Format::Rgb24, SIZE, SIZE).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(0.0, 0.0, 0.0);
+            let _ = ctx.paint();
+            let glyph = filled.then(|| {
+                crate::backend::wayland::toolbar::view::node::IconFn(
+                    crate::toolbar_icons::top_toolbar_icon_painter(
+                        crate::ui::toolbar::model::TopToolbarIcon::Tool(
+                            crate::ui::toolbar::model::SemanticToolIcon::Pen,
+                        ),
+                    ),
+                )
+            });
+            let node = WidgetNode::new(
+                "test.preset",
+                (0.0, 0.0, SIZE as f64, SIZE as f64),
+                WidgetKind::PresetSlot {
+                    glyph,
+                    color: (1.0, 0.0, 0.0, 1.0),
+                    label: label.to_string(),
+                    active: false,
+                },
+                Some(
+                    crate::backend::wayland::toolbar::view::node::Interaction::click(
+                        crate::ui::toolbar::ToolbarEvent::SavePreset(1),
+                        None,
+                    ),
+                ),
+            );
+            paint_node(&UiTextEngine::default(), &ctx, &node, hover);
+        }
+        let mut surface = surface;
+        (0..SIZE)
+            .map(|y| {
+                (0..SIZE)
+                    .map(|x| {
+                        let (r, g, b) = pixel_at(&mut surface, x, y);
+                        (u32::from(r) + u32::from(g) + u32::from(b)) / 3
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_filled_preset_slot_keeps_its_number_in_the_corner() {
+        let with_number = preset_slot_luma(true, "1", None);
+        let without = preset_slot_luma(true, "", None);
+
+        // The number sits in the bottom-left box, clear of the color swatch
+        // in the opposite corner.
+        let inset = PRESET_SLOT_SWATCH_INSET as usize;
+        let box_size = PRESET_SLOT_NUMBER_BOX as usize;
+        let rows = 46 - inset - box_size..46 - inset;
+        let columns = inset..inset + box_size;
+        let changed = rows
+            .flat_map(|y| columns.clone().map(move |x| (x, y)))
+            .filter(|&(x, y)| with_number[y][x] != without[y][x])
+            .count();
+        assert!(
+            changed > 4,
+            "the slot number should paint in its corner box"
+        );
+    }
+
+    #[test]
+    fn an_empty_preset_slot_is_muted_until_hovered() {
+        let brightest = |pixels: &[Vec<u32>]| pixels.iter().flatten().copied().max().unwrap_or(0);
+        let resting = brightest(&preset_slot_luma(false, "1", None));
+        let hovered = brightest(&preset_slot_luma(false, "1", Some((23.0, 23.0))));
+
+        assert!(
+            resting + 30 < hovered,
+            "the empty slot's number rests muted ({resting}) and lifts on hover ({hovered})"
         );
     }
 

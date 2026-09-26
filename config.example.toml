@@ -150,6 +150,7 @@ select_freeform_polygon_tool = []
 select_arrow_tool = []
 select_blur_tool = []
 select_highlight_tool = []
+select_laser_tool = ["L"]
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 
 # Reset label counters
@@ -423,8 +424,12 @@ status_bar_interactive = true
 # keep this fixed order; narrow layouts may compact labels and temporarily
 # shed items without changing these choices. Mode badges such as
 # FROZEN/ZOOM/PAN are separate.
-# The active output appears only when an output label is available.
+# The active output appears only while two or more outputs are connected
+# (and an output label is available); a single output's name is noise.
 active_output_badge = true
+
+# Show the active output even with a single output connected
+active_output_badge_always = false
 
 # Selection dimensions appear only while one or more shapes are selected.
 show_status_selection_info = true
@@ -454,8 +459,9 @@ show_toolbar_hint = true
 # Show the Help shortcut segment
 show_status_help = true
 
-# Show the About/version segment
-show_status_about = true
+# Show the About/version segment. Off by default; the toolbar and the help
+# overlay keep About one click away.
+show_status_about = false
 
 # Master visibility for the floating board/page badge. The
 # toggle_floating_badge palette/keyboard action flips it for the current run
@@ -522,6 +528,10 @@ radial_menu_mouse_binding = "middle"
 backend = "auto"
 
 # Toolbar layout preset: "simple", "regular" (the default), or "advanced"
+# Simple: core pens and one Shapes picker. Regular adds Shape Pen, Line,
+# Arrow, presets, and Clear. Advanced also puts Rectangle, Ellipse, Blur, and
+# Spotlight on the strip (only polygons stay in the picker) and turns on the
+# advanced actions and multi-step undo in the Canvas popover.
 # "full" is accepted as a legacy alias for "regular"
 layout_mode = "regular"
 
@@ -631,7 +641,8 @@ show_presets = true
 # Show step undo/redo section
 show_step_section = false
 
-# Keep text controls visible even when text is inactive
+# Keep text controls visible on every tool when context_aware_ui = false.
+# With context-aware UI, font controls appear only for tools that draw text
 show_text_controls = true
 
 # Show timing delay sliders in the Canvas popover's Step section
@@ -643,15 +654,18 @@ show_delay_sliders = false
 show_marker_opacity_section = false
 
 # Enable context-aware UI that shows/hides controls based on the active tool
-# When enabled, only relevant controls appear (e.g., no color picker for eraser)
+# When enabled, only relevant controls appear (e.g., no color picker for eraser,
+# and font controls only for text, sticky notes, numbered arrows, and step markers)
 # Disable to always show all controls regardless of the active tool
 context_aware_ui = true
 
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 
-# Dim the top strip after ~4 seconds without drawing. Set false to keep
-# the bar fully visible (accessibility).
+# Hide the top strip after ~4 seconds without drawing or toolbar use. It
+# fades back in when the pointer comes near it or the top screen edge, and
+# briefly after a tool or color shortcut. Set false to keep the bar always
+# visible (accessibility).
 idle_fade = true
 
 # Show cursor tool preview bubble near the pointer
@@ -676,17 +690,26 @@ force_inline = false
 # "ctrl_shift_alt", or "disabled".
 rebind_modifier = "ctrl_shift"
 
+# How the style pill shows pen smoothing and Shape Pen recognition
+# sensitivity while the Pen, Marker, or Shape Pen is up:
+# "panel" (default): one "Pen feel" chip that opens a small panel with a
+#   level meter for each setting, a live preview of the smoothing, and a
+#   one-line description of each level
+# "meter": inline level meters captioned Smooth / Shapes (click a bar or
+#   scroll over them)
+# "stepper": inline "- value +" steppers captioned Smooth / Detect
+stroke_controls = "panel"
+
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
-# The screenshot toolbar button is hidden by default.
+# Nothing is hidden by default; add "top.utility.screenshot" to hide the
+# capture button beside Undo/Redo.
 # Copy text (OCR) is hidden by a built-in baseline instead of by this list,
 # so upgrading a config written before it existed cannot reveal it; enable it
 # through toolbar customization, which records an entry in `shown` below.
 # Section-level ids (side.group.*) act as explicit overrides that beat the
 # layout-mode baseline and survive mode switches.
-hidden = [
-  "top.utility.screenshot",
-]
+hidden = []
 
 # IDs explicitly shown, overriding the layout-mode baseline (for example
 # keeping presets visible in simple mode). The overlay updates this as you
@@ -703,6 +726,7 @@ top_tools = [
   "top.tool.pen",
   "top.tool.live-shape",
   "top.tool.marker",
+  "top.tool.laser",
   "top.tool.step-marker",
   "top.tool.eraser",
   "top.tool.line",
@@ -879,8 +903,8 @@ line_height = 22.0
 padding = 32.0
 
 # Background color [R, G, B, A] (0.0-1.0 range)
-# Default: deep slate (higher contrast than status bar)
-bg_color = [0.09, 0.1, 0.13, 0.92]
+# Default: opaque deep slate, so the canvas never shows through the panel
+bg_color = [0.09, 0.1, 0.13, 1.0]
 
 # Border color [R, G, B, A] (0.0-1.0 range)
 # Default: muted steel
@@ -1118,7 +1142,9 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # the hand. Smoothing runs when you lift the pen, never while you draw, so the
 # live stroke always sits exactly on the pointer. Neither endpoint ever moves.
 #
-# Also on the toolbar as the "Smoothing" stepper while the Pen or Marker is up.
+# Also on the toolbar while the Pen, Marker, or Shape Pen is up, in the style
+# pill's "Pen feel" panel (or its Smooth meter/stepper; see
+# [ui.toolbar] stroke_controls).
 # A session remembers the level it was saved at; this is the starting value.
 pen_smoothing = 3
 
@@ -1127,7 +1153,9 @@ pen_smoothing = 3
 # lines, ellipses, rectangles, and triangles; it does not change the dedicated
 # shape tools or grid spacing.
 #
-# Also on the toolbar as the "Sensitivity" stepper while Shape Pen is up.
+# Also on the toolbar while Shape Pen is up, in the style pill's "Pen feel"
+# panel (or its Shapes meter / Detect stepper; see [ui.toolbar]
+# stroke_controls).
 # A session remembers the level it was saved at; this is the starting value.
 shape_recognition_sensitivity = 3
 
@@ -1136,6 +1164,12 @@ shape_recognition_sensitivity = 3
 # Cartesian lines or isometric points. Set to false to keep recognized shapes
 # exactly where you drew them.
 shape_recognition_grid_snap = true
+
+# Briefly name the shape Shape Pen recognized, next to it, with the undo
+# shortcut that turns it back into ink (for example "Circle · Ctrl+Z keeps
+# ink"). The chip fades after about 1.5 seconds and never appears in exports,
+# captures, or saved sessions. Set to false to hide it.
+shape_recognition_feedback = true
 
 # Default fill state for fill-capable shapes
 default_fill_enabled = false
@@ -1361,6 +1395,29 @@ style = "standard"
 # ═══════════════════════════════════════════════════════════════════════════════
 # PERFORMANCE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Laser pointer: glowing ink that fades away on its own. Press `L`, click the
+# laser next to Marker on the toolbar (Regular and Advanced layouts), or choose
+# Laser Pointer Tool from the command palette. Laser ink is never saved, never
+# undone, never selected, and never appears in captures or exports.
+[laser]
+# Ink color as [red, green, blue, alpha], each 0.0 - 1.0. Independent of the
+# pen color; the color picker and quick colors do not change it.
+color = [1.0, 0.16, 0.12, 1.0]
+
+# Width of the bright core in pixels (2.0 - 30.0). The glow around it is about
+# three times as wide.
+width = 6.0
+
+# How long the ink stays fully visible after you release, in ms (0 - 30000).
+# Another stroke drawn before the ink has faded keeps the whole group on
+# screen, so they all fade together.
+hold_ms = 1200
+
+# How long the ink then takes to fade out, in ms (0 - 5000). 0 removes it at
+# once. With [ui] reduced_motion the ink stays solid and disappears in one step
+# at the end of hold_ms + fade_ms.
+fade_ms = 500
 
 # Spotlight tool: dims the whole overlay except the regions you draw, so
 # attention lands where you point. Select the tool from the toolbar or bind

@@ -214,6 +214,16 @@ impl WaylandState {
             return;
         }
 
+        // The onboarding card owns a pen tap on it just as it owns a click:
+        // no stroke starts, so none can tick off its "Draw a stroke" step.
+        let (x, y) = self.current_stylus_position();
+        if let Some(press) = self.onboarding_card_press_at(x, y) {
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
+            self.onboarding_card.set_stylus_press(press);
+            return;
+        }
+
         // Canvas click-away: a pen-down on the canvas with a top popover open
         // (Canvas/Session/Settings) dismisses it and swallows the pen-down,
         // matching the mouse and touch paths — otherwise the pen-down would
@@ -260,6 +270,18 @@ impl WaylandState {
 
     fn commit_stylus_up(&mut self) {
         if !self.tablet.on_overlay {
+            return;
+        }
+
+        if let Some(press) = self.onboarding_card.take_stylus_press() {
+            // The tap never became a contact, so there is no stroke to end
+            // and no pressure thickness to commit.
+            self.tablet.tip_down = false;
+            self.tablet.pressure_thickness = None;
+            self.tablet.peak_thickness = None;
+            let (x, y) = self.current_stylus_position();
+            self.release_onboarding_card_press(press, x, y);
+            self.input_state.needs_redraw = true;
             return;
         }
 

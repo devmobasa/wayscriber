@@ -127,19 +127,23 @@ pub(crate) fn handle_properties_panel_key(
     Some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }
 
-/// Escape dismisses an open top-strip Canvas/Session/Settings popover,
-/// mirroring the GTK popovers' Escape wiring. Click-away dismissal lives with
-/// the backend pointer path; this adapter only owns the keyboard route.
-pub(crate) fn handle_top_popover_dismiss_key(
-    state: &mut InputState,
-    key: Key,
-) -> Option<RoutingOutcome> {
-    if matches!(key, Key::Escape) && state.toolbar_top_menu().is_popover() {
-        state.close_top_toolbar_menus();
-        return Some(RoutingOutcome::Canceled(CancelTarget::TopPopover));
+/// A key press dismisses any open top-strip menu: the shapes picker, the
+/// overflow flyout, and the Canvas/Session/Settings popovers.
+///
+/// Escape only closes the menu. Every other key closes it and then continues
+/// to ordinary shortcut handling, so a tool key typed while a menu is open
+/// selects the tool instead of vanishing. Modifier presses never get here:
+/// the global modifier adapter consumes them first, so holding Ctrl before a
+/// chord leaves the menu open until the chord's key arrives. Click-away
+/// dismissal lives with the backend pointer path; this adapter only owns the
+/// keyboard route.
+pub(crate) fn handle_top_menu_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
+    if !state.toolbar_top_menu().is_open() {
+        return None;
     }
 
-    None
+    state.close_top_toolbar_menus();
+    matches!(key, Key::Escape).then_some(RoutingOutcome::Canceled(CancelTarget::TopMenu))
 }
 
 pub(crate) fn handle_pending_delete_cancel_key(
@@ -167,10 +171,7 @@ pub(crate) fn handle_idle_selection_cancel_key(
         && matches!(state.state, DrawingState::Idle)
         && state.has_selection()
     {
-        let bounds = state.selection_bounding_box_with(measurer, state.selected_shape_ids());
-        state.clear_selection();
-        state.mark_selection_dirty_region(bounds);
-        state.needs_redraw = true;
+        state.clear_selection_with(measurer);
         return Some(RoutingOutcome::Canceled(CancelTarget::Selection));
     }
 

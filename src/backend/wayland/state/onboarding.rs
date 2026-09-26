@@ -6,7 +6,11 @@ use std::time::{Duration, Instant};
 
 use super::*;
 
+mod card;
 mod first_run;
+mod first_run_card;
+
+pub(in crate::backend::wayland) use card::OnboardingCardChrome;
 
 /// Slow-path threshold: this many shortcut-bound command-palette runs of the
 /// same action before the coach offers the keyboard shortcut.
@@ -149,6 +153,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_toast_command(&mut self, command: ToastCommand) {
         match command {
             ToastCommand::Dispatch(action) => self.dispatch_input_action(action),
+            ToastCommand::CopyLastCapturePath => self.copy_last_capture_path(),
             ToastCommand::AcknowledgeTip { tip, then } => {
                 let outcome = acknowledge_tip_command(
                     self.preferences.onboarding_mut().acknowledge_tip(tip),

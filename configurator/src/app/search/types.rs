@@ -6,6 +6,7 @@ use crate::models::{
 pub(crate) enum SearchArea {
     DrawingColor,
     DrawingDefaults,
+    DrawingLaser,
     DrawingDragTools,
     DrawingFont,
     PresetControls,

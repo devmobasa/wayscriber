@@ -53,6 +53,7 @@ struct LayoutCacheKey {
     content_revision: u64,
     search_query: String,
     quick_mode: bool,
+    show_unbound: bool,
 }
 
 struct CachedLayout {
@@ -90,6 +91,7 @@ impl HelpLayoutCache {
         note_text_base: &str,
         close_hint_text: &str,
         quick_mode: bool,
+        show_unbound: bool,
     ) -> OverlayLayout {
         let key = LayoutCacheKey {
             style: StyleKey::from_style(style),
@@ -99,6 +101,7 @@ impl HelpLayoutCache {
             content_revision: content.revision,
             search_query: search_query.to_string(),
             quick_mode,
+            show_unbound,
         };
 
         // Check if we have a valid cached layout
@@ -129,6 +132,7 @@ impl HelpLayoutCache {
             note_text_base,
             close_hint_text,
             quick_mode,
+            show_unbound,
         );
 
         // Store in cache

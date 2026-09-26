@@ -8,10 +8,12 @@ const ITEM_GAP: f64 = 6.0;
 /// Vertical gap between the action row and the drawings toggle. The hairline
 /// divider is centred in it.
 pub(super) const ROW_GAP: f64 = 8.0;
-const ACTION_ROW_HEIGHT: f64 = 38.0;
-const EDIT_ROW_HEIGHT: f64 = 28.0;
-const TOGGLE_ROW_HEIGHT: f64 = 26.0;
-pub(super) const STATUS_ROW_HEIGHT: f64 = 16.0;
+// Row heights fit a 13px label over an 11px keycap (the overlay's readable
+// floor) with breathing room.
+const ACTION_ROW_HEIGHT: f64 = 44.0;
+const EDIT_ROW_HEIGHT: f64 = 36.0;
+const TOGGLE_ROW_HEIGHT: f64 = 28.0;
+pub(super) const STATUS_ROW_HEIGHT: f64 = 18.0;
 pub(super) const BAR_HEIGHT: f64 = BAR_PADDING * 2.0
     + ACTION_ROW_HEIGHT
     + ROW_GAP
@@ -22,8 +24,8 @@ pub(super) const BAR_HEIGHT: f64 = BAR_PADDING * 2.0
     + STATUS_ROW_HEIGHT;
 /// Resting width of one action control. The bar sizes itself from this instead
 /// of stretching controls across an arbitrary fixed width.
-pub(super) const ACTION_ITEM_WIDTH: f64 = 74.0;
-const BAR_WIDTH: f64 = BAR_PADDING * 2.0 + ACTION_ITEM_WIDTH * 4.0 + ITEM_GAP * 3.0;
+pub(super) const ACTION_ITEM_WIDTH: f64 = 78.0;
+pub(super) const BAR_WIDTH: f64 = BAR_PADDING * 2.0 + ACTION_ITEM_WIDTH * 4.0 + ITEM_GAP * 3.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct RegionActionRect {

@@ -14,5 +14,6 @@ mod geometry;
 pub(crate) use geometry::clamp_floating_axis_offset;
 mod gtk_feedback;
 mod inline;
+mod meter_wheel;
 mod scroll;
 mod visibility;

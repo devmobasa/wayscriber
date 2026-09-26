@@ -18,6 +18,7 @@ mod precision_entry;
 mod primitives;
 mod properties_panel;
 mod radial_menu;
+mod recognition_chip;
 mod render_context;
 pub(crate) use render_context::{UiRenderCaches, UiRenderCtx};
 mod region_action_bar;
@@ -64,17 +65,27 @@ pub(crate) use measure_badge::{
 pub(crate) use ocr_scan::{
     ocr_scan_geometry, render_ocr_scan_result, render_ocr_scan_still, render_ocr_scan_sweep,
 };
-pub(crate) use onboarding_card::render_onboarding_card_with_engine;
-pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
+#[cfg(test)]
+pub(crate) use onboarding_card::OnboardingCardButtonHit;
+pub use onboarding_card::{
+    OnboardingCard, OnboardingCardAction, OnboardingCardButton, OnboardingChecklistItem,
+    render_onboarding_card,
+};
+pub(crate) use onboarding_card::{
+    OnboardingCardLayout, OnboardingCardPress, render_onboarding_card_with_engine,
+};
 pub use precision_entry::render_precision_entry_popup;
 pub(crate) use precision_entry::render_precision_entry_popup_with_engine;
 /// Shared measured-text trimming, also used by the standalone about dialog.
 pub(crate) use primitives::ellipsize_to_fit_with_engine;
-pub(crate) use primitives::{checkerboard_behind, draw_pill};
+pub(crate) use primitives::{checkerboard_behind, draw_pill, draw_rounded_rect};
 pub use properties_panel::render_properties_panel;
 pub(crate) use properties_panel::render_properties_panel_with_engine;
 pub use radial_menu::render_radial_menu;
 pub(crate) use radial_menu::render_radial_menu_with_context;
+pub(crate) use recognition_chip::{
+    RecognitionChipVisual, recognition_chip_layout, render_recognition_chip,
+};
 pub(crate) use region_action_bar::{
     RegionAction, RegionActionAvailability, RegionActionBar, RegionCutStatus,
 };

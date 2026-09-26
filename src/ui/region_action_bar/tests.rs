@@ -1,6 +1,13 @@
-use super::layout::{ACTION_ITEM_WIDTH, BAR_HEIGHT, BAR_PADDING, ROW_GAP, SELECTION_GAP};
+use super::controls::{
+    KEYCAP_FONT_SIZE, LABEL_FONT_SIZE, LABEL_KEYCAP_GAP, label_style, toggle_label_style,
+};
+use super::layout::{
+    ACTION_ITEM_WIDTH, BAR_HEIGHT, BAR_PADDING, BAR_WIDTH, ROW_GAP, SELECTION_GAP,
+};
 use super::*;
 use crate::input::state::RegionSelection;
+use crate::ui::primitives::keycap_size_with_engine;
+use crate::ui::theme::overlay;
 use crate::ui_text::UiTextEngine;
 
 fn sample_bar() -> RegionActionBar {
@@ -58,7 +65,7 @@ fn action_bar_prefers_below_then_flips_above_and_clamps_to_the_surface() {
     let centered = sample_bar();
     assert_eq!(
         centered.bounds(),
-        RegionActionRect::new(35.0, 212.0, 330.0, BAR_HEIGHT)
+        RegionActionRect::new((400.0 - BAR_WIDTH) / 2.0, 212.0, BAR_WIDTH, BAR_HEIGHT)
     );
 
     let flipped = RegionActionBar::place(
@@ -70,8 +77,49 @@ fn action_bar_prefers_below_then_flips_above_and_clamps_to_the_surface() {
     );
     assert_eq!(
         flipped.bounds(),
-        RegionActionRect::new(462.0, 560.0 - SELECTION_GAP - BAR_HEIGHT, 330.0, BAR_HEIGHT)
+        RegionActionRect::new(
+            800.0 - BAR_WIDTH - 8.0,
+            560.0 - SELECTION_GAP - BAR_HEIGHT,
+            BAR_WIDTH,
+            BAR_HEIGHT
+        )
     );
+}
+
+#[test]
+fn control_text_meets_the_readable_floor_and_fits_every_control() {
+    const { assert!(LABEL_FONT_SIZE >= overlay::FONT_SIZE_MIN_TEXT) };
+    const { assert!(KEYCAP_FONT_SIZE >= overlay::FONT_SIZE_MIN_KEYCAP) };
+    assert!(toggle_label_style().size >= overlay::FONT_SIZE_MIN_TEXT);
+
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let engine = UiTextEngine::default();
+    let bar = sample_bar();
+    for item in bar.items.iter().chain(bar.edit.iter()) {
+        let label = engine
+            .layout(&ctx, label_style(), item.action.label(), None)
+            .ink_extents();
+        let (keycap_width, keycap_height) =
+            keycap_size_with_engine(&engine, &ctx, item.action.shortcut(), KEYCAP_FONT_SIZE);
+        let stack = if item.action.shortcut().is_empty() {
+            label.height()
+        } else {
+            label.height() + LABEL_KEYCAP_GAP + keycap_height
+        };
+        assert!(
+            stack + 4.0 <= item.bounds.height,
+            "{:?}: label and keycap ({stack}) fit the control ({})",
+            item.action,
+            item.bounds.height
+        );
+        assert!(label.width().max(keycap_width) + 8.0 <= item.bounds.width);
+    }
+
+    let toggle = bar.toggle;
+    let (_, keycap_height) =
+        keycap_size_with_engine(&engine, &ctx, toggle.action.shortcut(), KEYCAP_FONT_SIZE);
+    assert!(keycap_height <= toggle.bounds.height);
 }
 
 #[test]
@@ -81,20 +129,29 @@ fn action_bar_hit_returns_typed_controls_and_rejects_gaps() {
     let edit_y = bar.edit[0].bounds.y + bar.edit[0].bounds.height / 2.0;
     let toggle_y = bar.toggle.bounds.y + bar.toggle.bounds.height / 2.0;
 
-    assert_eq!(bar.hit((80.0, action_y)), Some(RegionAction::Copy));
-    assert_eq!(bar.hit((160.0, action_y)), Some(RegionAction::Save));
-    assert_eq!(bar.hit((240.0, action_y)), Some(RegionAction::Both));
-    assert_eq!(bar.hit((320.0, action_y)), Some(RegionAction::Board));
-    assert_eq!(bar.hit((80.0, edit_y)), Some(RegionAction::CutBand));
-    assert_eq!(bar.hit((160.0, edit_y)), Some(RegionAction::UndoCut));
-    assert_eq!(bar.hit((240.0, edit_y)), Some(RegionAction::RedoCut));
-    assert_eq!(bar.hit((320.0, edit_y)), Some(RegionAction::ResetCuts));
+    let column_x = |index: usize| {
+        let bounds = bar.items[index].bounds;
+        bounds.x + bounds.width / 2.0
+    };
+    let gap_x = bar.items[0].bounds.x + bar.items[0].bounds.width + 1.0;
+
+    assert_eq!(bar.hit((column_x(0), action_y)), Some(RegionAction::Copy));
+    assert_eq!(bar.hit((column_x(1), action_y)), Some(RegionAction::Save));
+    assert_eq!(bar.hit((column_x(2), action_y)), Some(RegionAction::Both));
+    assert_eq!(bar.hit((column_x(3), action_y)), Some(RegionAction::Board));
+    assert_eq!(bar.hit((column_x(0), edit_y)), Some(RegionAction::CutBand));
+    assert_eq!(bar.hit((column_x(1), edit_y)), Some(RegionAction::UndoCut));
+    assert_eq!(bar.hit((column_x(2), edit_y)), Some(RegionAction::RedoCut));
+    assert_eq!(
+        bar.hit((column_x(3), edit_y)),
+        Some(RegionAction::ResetCuts)
+    );
     assert_eq!(
         bar.hit((200.0, toggle_y)),
         Some(RegionAction::ToggleIncludeDrawings)
     );
-    assert_eq!(bar.hit((119.0, action_y)), None, "inter-item gap");
-    assert!(bar.contains((119.0, action_y)), "bar gaps stay modal-owned");
+    assert_eq!(bar.hit((gap_x, action_y)), None, "inter-item gap");
+    assert!(bar.contains((gap_x, action_y)), "bar gaps stay modal-owned");
     assert_eq!(bar.hit((20.0, 20.0)), None, "outside the bar");
     assert!(!bar.contains((20.0, 20.0)));
 }

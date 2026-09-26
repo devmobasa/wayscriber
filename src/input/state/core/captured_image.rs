@@ -89,7 +89,7 @@ impl InputState {
         if target_active {
             self.mark_selection_dirty_region(bounds);
             self.invalidate_hit_cache_for_with(measurer, id);
-            self.set_selection(vec![id]);
+            self.set_selection_with(measurer, vec![id]);
         }
         self.needs_redraw = true;
         self.push_toast(

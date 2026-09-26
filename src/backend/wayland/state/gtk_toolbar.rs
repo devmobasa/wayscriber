@@ -5,6 +5,7 @@
 use wayland_client::{Connection, QueueHandle};
 
 use super::WaylandState;
+use crate::backend::wayland::handlers::keyboard::ForwardedKey;
 use crate::toolbar_gtk::select::{
     GtkPreconditions, ToolbarFrontend, requested_backend, resolve_frontend,
 };
@@ -22,9 +23,9 @@ fn gtk_toolbar_feedback_blocked(input_state: &crate::input::InputState) -> bool 
 fn gtk_toolbar_top_visible(
     requested: bool,
     unmap_suppressed: bool,
-    capture_picker_suppressed: bool,
+    chrome_suppressed: bool,
 ) -> bool {
-    requested && !unmap_suppressed && !capture_picker_suppressed
+    requested && !unmap_suppressed && !chrome_suppressed
 }
 
 impl WaylandState {
@@ -141,6 +142,25 @@ impl WaylandState {
                         self.try_dispatch_gdk_pointer_shortcut(button, ctrl, shift, alt, logo);
                     }
                 }
+                GtkToolbarFeedback::Key {
+                    keyval,
+                    ctrl,
+                    shift,
+                    alt,
+                    logo,
+                } => {
+                    self.dispatch_gtk_forwarded_key(
+                        ForwardedKey {
+                            keyval,
+                            ctrl,
+                            shift,
+                            alt,
+                            logo,
+                        },
+                        conn,
+                        qh,
+                    );
+                }
                 GtkToolbarFeedback::TopHover { hovered } => {
                     self.toolbar_chrome.set_gtk_top_hover(hovered);
                 }
@@ -185,12 +205,14 @@ impl WaylandState {
         // snapshots. Other suppression and light passthrough still unmap.
         let capture_suppressed = self.suppression.requires_capture_barrier();
         let unmap_suppressed = self.overlay_passthrough_requested() && !capture_suppressed;
-        let capture_picker_suppressed = self.capture_picker_chrome_suppressed();
+        // The capture picker and full-attention modals hide the bars through
+        // the same unmap path; GTK keeps open popovers across the cycle.
+        let chrome_suppressed = self.toolbar_chrome_suppressed();
         let update = GtkToolbarUpdate {
             top_visible: gtk_toolbar_top_visible(
                 self.input_state.toolbar_top_visible(),
                 unmap_suppressed,
-                capture_picker_suppressed,
+                chrome_suppressed,
             ),
             top_offset: self.toolbar_chrome.top_offset(),
             top_offset_seq: self.toolbar_drag.gtk_offset_seq(),
@@ -272,5 +294,31 @@ mod modal_tests {
         assert!(gtk_toolbar_top_visible(requested, false, false));
         assert!(!gtk_toolbar_top_visible(requested, true, false));
         assert!(requested, "the persisted/live request remains untouched");
+    }
+
+    #[test]
+    fn help_overlay_unmaps_the_gtk_bars_until_it_closes() {
+        let mut input_state = make_test_input_state();
+        let requested = input_state.toolbar_top_visible();
+        assert!(gtk_toolbar_top_visible(
+            requested,
+            false,
+            input_state.modal_hides_toolbar_chrome()
+        ));
+
+        input_state.toggle_help_overlay();
+        assert!(!gtk_toolbar_top_visible(
+            input_state.toolbar_top_visible(),
+            false,
+            input_state.modal_hides_toolbar_chrome()
+        ));
+
+        input_state.toggle_help_overlay();
+        assert_eq!(input_state.toolbar_top_visible(), requested);
+        assert!(gtk_toolbar_top_visible(
+            input_state.toolbar_top_visible(),
+            false,
+            input_state.modal_hides_toolbar_chrome()
+        ));
     }
 }

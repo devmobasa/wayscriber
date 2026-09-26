@@ -17,7 +17,8 @@ pub(crate) struct TopStripPlan {
     ///
     /// The rung directly above `compact`, which hides the pill outright.
     ///
-    /// The smoothing stepper and the bold toggle leave first. Both are choices
+    /// The Pen feel chip (or the smoothing and detection meters or steppers)
+    /// and the bold toggle leave first. Both are choices
     /// made once for a session rather than adjusted mid-demo, unlike the color,
     /// the thickness, and the size beside them — and the rung below this one
     /// takes the whole pill, so shedding two controls is strictly better than
@@ -80,7 +81,7 @@ impl TopToolbarSpec {
 
         let mut previous_tool_group = None;
         let mut tool_control_present = false;
-        for tool in visible_top_tool_buttons(simple, snapshot) {
+        for tool in visible_top_tool_buttons(snapshot.layout_mode, snapshot) {
             if plan.dropped_tools.contains(&tool) {
                 continue;
             }
@@ -102,10 +103,17 @@ impl TopToolbarSpec {
         }
 
         let visible_utilities = visible_top_utility_buttons(snapshot, simple, snapshot.use_icons);
+        // Clear lives in the overflow menu and Capture beside Undo/Redo, so
+        // neither joins the annotation utilities here.
         let utilities: Vec<_> = visible_utilities
             .iter()
             .copied()
-            .filter(|utility| *utility != TopUtilityButton::ClearCanvas)
+            .filter(|utility| {
+                !matches!(
+                    utility,
+                    TopUtilityButton::ClearCanvas | TopUtilityButton::Screenshot
+                )
+            })
             .filter(|utility| !plan.dropped_utilities.contains(utility))
             .collect();
         if tool_control_present && !utilities.is_empty() {
@@ -130,10 +138,11 @@ impl TopToolbarSpec {
             );
         }
 
-        // The history island: Undo/Redo plus the always-anchored overflow
-        // toggle. Clear lives inside the overflow menu (first entry), so the
-        // toggle shows whenever the menu has content — not only under width
-        // pressure.
+        // The history island: Undo/Redo, the capture button, and the
+        // always-anchored overflow toggle. Clear lives inside the overflow menu
+        // (first entry), so the toggle shows whenever the menu has content —
+        // not only under width pressure. Capture yields to the overflow menu
+        // first under width pressure, like the other utilities.
         let undo_visible = toolbar_item_visible(snapshot, ids::TOP_UTILITY_UNDO);
         let redo_visible = toolbar_item_visible(snapshot, ids::TOP_UTILITY_REDO);
         if undo_visible {
@@ -141,6 +150,15 @@ impl TopToolbarSpec {
         }
         if redo_visible {
             strip.push(TopToolbarNode::Control(TopToolbarControl::Redo));
+        }
+        if visible_utilities.contains(&TopUtilityButton::Screenshot)
+            && !plan
+                .dropped_utilities
+                .contains(&TopUtilityButton::Screenshot)
+        {
+            strip.push(TopToolbarNode::Control(TopToolbarControl::Utility(
+                TopToolbarUtility::Screenshot,
+            )));
         }
         let overflow: Vec<_> =
             Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).collect();
@@ -221,13 +239,13 @@ impl TopToolbarSpec {
         Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).count()
     }
 
-    /// Chrome island content, in reading order: layout cycle, then About,
-    /// then pin, then minimize. The layout cycle sits on the content-adjacent
-    /// edge because it reshapes the strip's content, while the window-chrome
-    /// trio (About leading among them because it is the only entry that
-    /// leaves the overlay) stays against the window edge. All four are
-    /// hideable through toolbar customization.
-    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 4] {
+    /// Chrome island content, in reading order: layout menu, then About,
+    /// then pin, then minimize, then exit. The layout menu sits on the
+    /// content-adjacent edge because it reshapes the strip's content, while
+    /// the window-chrome entries stay against the window edge, Exit last where
+    /// a close button is expected. All five are hideable through toolbar
+    /// customization.
+    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 5] {
         [
             toolbar_item_visible(snapshot, ids::TOP_CHROME_LAYOUT)
                 .then_some(TopToolbarControl::LayoutMode),
@@ -236,6 +254,7 @@ impl TopToolbarSpec {
             toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN).then_some(TopToolbarControl::Pin),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE)
                 .then_some(TopToolbarControl::Minimize),
+            toolbar_item_visible(snapshot, ids::TOP_CHROME_EXIT).then_some(TopToolbarControl::Exit),
         ]
     }
 

@@ -126,7 +126,7 @@ pub(crate) fn render_status_bar_with_resources(
     }
 
     let tool = input_state.active_tool();
-    let dot_color = input_state.color_for_tool(tool);
+    let dot_color = input_state.status_color_for_tool(tool);
     for run in &layout.runs {
         match run {
             StatusHudRun::Text { text, x, accent } => {

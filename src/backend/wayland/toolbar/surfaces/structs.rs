@@ -88,11 +88,11 @@ impl ToolbarSurface {
     /// Get cursor hint for the current hover position.
     pub fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
         let (hx, hy) = self.hover?;
-        for hit in &self.hit_regions {
-            if hit.contains(hx, hy) {
-                return Some(hit.kind.cursor_hint());
-            }
-        }
-        Some(ToolbarCursorHint::Default)
+        let hint =
+            crate::backend::wayland::toolbar::hit::resolve_hit_index(&self.hit_regions, hx, hy)
+                .map_or(ToolbarCursorHint::Default, |index| {
+                    self.hit_regions[index].kind.cursor_hint()
+                });
+        Some(hint)
     }
 }

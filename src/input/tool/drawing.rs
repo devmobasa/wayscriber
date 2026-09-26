@@ -3,8 +3,8 @@ use crate::draw::shape::{
     smooth_pressure_path,
 };
 use crate::draw::{
-    ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, Shape,
-    TextMeasurer,
+    ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, LaserStyle,
+    Shape, TextMeasurer,
 };
 use crate::input::tool::{
     EraserMode, Tool, ToolDrawingBehavior, ToolPathKind, ToolPressureBehavior,
@@ -90,6 +90,10 @@ pub(crate) enum FinishedToolStroke {
     EraseStroke {
         path: Vec<(i32, i32)>,
     },
+    /// Laser ink, handed to the fading ink owner rather than the frame.
+    Laser {
+        points: Vec<(i32, i32)>,
+    },
     Noop,
 }
 
@@ -123,6 +127,8 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) step_marker_label: Option<crate::draw::StepMarkerLabel>,
     /// Shape Pen's recognition of this stroke so far.
     pub(crate) live_shape_memo: &'a super::LiveShapeMemo,
+    /// Color and width of laser ink, which no tool slot stores.
+    pub(crate) laser_style: LaserStyle,
 }
 
 /// Borrowed inputs needed to render the current live polygon preview.
@@ -166,6 +172,11 @@ pub(crate) enum ProvisionalToolStroke<'a> {
         ink_size: f64,
     },
     BlurReplayPreview(BlurRectParams),
+    /// The laser stroke under the pointer, drawn exactly as its finished ink.
+    Laser {
+        points: &'a [(i32, i32)],
+        style: LaserStyle,
+    },
     None,
 }
 
@@ -321,6 +332,13 @@ impl Tool {
                 })
             }
             ToolDrawingBehavior::Eraser => finish_eraser(snapshot),
+            ToolDrawingBehavior::Laser => {
+                let mut points = snapshot.points;
+                if points.last().copied() != Some(snapshot.end) {
+                    points.push(snapshot.end);
+                }
+                FinishedToolStroke::Laser { points }
+            }
         }
     }
 
@@ -504,6 +522,10 @@ impl Tool {
                 points: snapshot.points,
                 size: snapshot.eraser_size,
             },
+            ToolDrawingBehavior::Laser => ProvisionalToolStroke::Laser {
+                points: snapshot.points,
+                style: snapshot.laser_style,
+            },
         }
     }
 }
@@ -549,6 +571,7 @@ impl<'a> ProvisionalToolStroke<'a> {
             Self::BlurReplayPreview(params) => {
                 bounding_box_for_blur(params.x, params.y, params.w, params.h)
             }
+            Self::Laser { points, style } => style.bounds(points),
             Self::None => None,
         }
     }

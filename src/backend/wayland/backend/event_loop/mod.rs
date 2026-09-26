@@ -225,6 +225,9 @@ fn advance_post_dispatch_state(
     if state.input_state.ocr_scan_due(Instant::now()) {
         state.input_state.needs_redraw = true;
     }
+    if state.input_state.laser_ink_due(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
     state.input_state.tick_radial_menu_paint(Instant::now());
     state.input_state.tick_context_menu_hover(Instant::now());
     capture::handle_pending_actions(state, qh);
@@ -269,12 +272,15 @@ fn event_loop_timeout(
     let animation_timeout = min_timeout(
         min_timeout(
             min_timeout(
-                state.ui_animation.timeout(now),
-                state.top_strip_fade_timeout(now),
+                min_timeout(
+                    state.ui_animation.timeout(now),
+                    state.top_strip_fade_timeout(now),
+                ),
+                state.inline_toolbar_tooltip_timeout(now),
             ),
-            state.inline_toolbar_tooltip_timeout(now),
+            state.input_state.ocr_scan_wake_after(now),
         ),
-        state.input_state.ocr_scan_wake_after(now),
+        state.input_state.laser_ink_wake_after(now),
     );
     let autosave_timeout = session_save::autosave_timeout(state, now);
     let focus_exit_timeout = state.focus.exit_timeout(now);

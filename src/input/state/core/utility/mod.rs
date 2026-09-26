@@ -1,5 +1,6 @@
 mod actions;
 mod arrow_labels;
+mod capture_feedback;
 mod focus_mode;
 mod font;
 mod frozen_zoom;
@@ -11,11 +12,13 @@ pub(crate) mod ocr_scan;
 mod pending;
 mod presenter_mode;
 mod render_profiles;
+mod restore_notice;
 mod sequence;
 mod step_markers;
 mod toasts;
 
 pub(crate) use help_overlay::HelpOverlayPressSource;
 pub use help_overlay::{HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome};
+pub(in crate::input::state) use restore_notice::RestoreNoticeContext;
 pub(crate) use sequence::{PendingSequence, SequenceMatch, SequenceTrie};
 pub(crate) use step_markers::default_step_marker_size;

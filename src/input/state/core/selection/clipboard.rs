@@ -46,6 +46,10 @@ pub(in crate::input::state::core) struct SelectionClipboard {
     paste_request_counter: u64,
     active_paste_request_id: Option<u64>,
     pending_image_fallback: Option<PendingClipboardFallback>,
+    /// A capture copied an image to the system clipboard during this run and
+    /// nothing copied here since. The system clipboard cannot be probed
+    /// without blocking, so this and the local shapes are all Paste knows.
+    capture_image_published: bool,
 }
 
 /// Immutable selection clipboard state used while the backend plans a transfer.
@@ -68,6 +72,7 @@ impl Default for SelectionClipboard {
             paste_request_counter: 0,
             active_paste_request_id: None,
             pending_image_fallback: None,
+            capture_image_published: false,
         }
     }
 }
@@ -84,6 +89,7 @@ impl SelectionClipboard {
         self.generation = self.generation.wrapping_add(1);
         self.publish_state = SelectionPublishState::NotAttempted;
         self.shapes = Some(shapes.clone());
+        self.capture_image_published = false;
         let payload = WayscriberClipboardSelection {
             schema_version: PRIVATE_CLIPBOARD_SCHEMA_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -97,6 +103,16 @@ impl SelectionClipboard {
                 generation: payload.copy_generation,
                 payload_json,
             })
+    }
+
+    pub(in crate::input::state::core) fn note_capture_image_published(&mut self) {
+        self.capture_image_published = true;
+    }
+
+    /// Whether Paste has something known to paste: copied shapes, or an image
+    /// a capture put on the clipboard.
+    pub(in crate::input::state::core) fn has_known_content(&self) -> bool {
+        !self.is_empty() || self.capture_image_published
     }
 
     pub(in crate::input::state::core) fn is_empty(&self) -> bool {

@@ -309,6 +309,25 @@ fn draw_highlight(ctx: &Context) {
     dot(ctx, 12.0, 12.0, 1.0);
 }
 
+fn draw_laser(ctx: &Context) {
+    // A pointer body aimed up and to the right, its beam, and the lit spot.
+    ctx.set_line_width(4.0);
+    ctx.move_to(4.5, 19.5);
+    ctx.line_to(9.5, 14.5);
+    stroke(ctx);
+    ctx.set_line_width(2.0);
+
+    ctx.move_to(12.0, 12.0);
+    ctx.line_to(14.5, 9.5);
+    stroke(ctx);
+
+    dot(ctx, 18.0, 6.0, 2.0);
+    ctx.set_line_width(1.25);
+    circle(ctx, 18.0, 6.0, 3.9);
+    stroke(ctx);
+    ctx.set_line_width(2.0);
+}
+
 fn draw_undo(ctx: &Context) {
     ctx.move_to(8.5, 7.0);
     ctx.line_to(4.5, 11.0);
@@ -595,6 +614,7 @@ renderers!(
     (render_screenshot, draw_screenshot),
     (render_ocr, draw_ocr),
     (render_highlight, draw_highlight),
+    (render_laser, draw_laser),
     (render_undo, draw_undo),
     (render_redo, draw_redo),
     (render_clear_canvas, draw_clear_canvas),
@@ -625,7 +645,7 @@ mod tests {
     type IconRender = fn(&Context, f64, f64, f64);
 
     const SIZES: [i32; 5] = [18, 20, 22, 24, 28];
-    const ICONS: [(&str, IconRender); 34] = [
+    const ICONS: [(&str, IconRender); 35] = [
         ("drag", render_drag),
         ("select", render_select),
         ("pen", render_pen),
@@ -640,6 +660,7 @@ mod tests {
         ("screenshot", render_screenshot),
         ("ocr", render_ocr),
         ("highlight", render_highlight),
+        ("laser", render_laser),
         ("undo", render_undo),
         ("redo", render_redo),
         ("clear_canvas", render_clear_canvas),

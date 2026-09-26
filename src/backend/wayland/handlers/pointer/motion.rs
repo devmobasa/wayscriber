@@ -142,6 +142,7 @@ impl WaylandState {
         event: &PointerEvent,
         routed: RoutedInput,
     ) -> bool {
+        self.forget_meter_wheel_off_meter(&event.surface, event.position);
         if routed.surface == InputSurface::Canvas
             && routed.inline_toolbars
             && self.inline_toolbar_motion(event.position)
@@ -242,6 +243,17 @@ impl WaylandState {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
+        let idle = matches!(self.input_state.state, crate::input::DrawingState::Idle);
+        self.update_onboarding_card_hover(idle.then_some((sx, sy)));
+        // Hovering the onboarding card is chrome motion, not canvas motion. A
+        // stroke already in progress keeps its motion as it crosses the card.
+        if idle && self.onboarding_card_press_at(sx, sy).is_some() {
+            self.input_state
+                .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
+            self.update_pointer_cursor(false, conn);
+            self.mark_mouse_tool_preview_dirty(previous, next);
+            return;
+        }
         self.input_state
             .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
         self.input_state.on_mouse_motion_with_canvas_and_resources(

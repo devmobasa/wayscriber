@@ -6,7 +6,8 @@ use super::super::super::fields::{
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
+    UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -79,6 +80,7 @@ impl ConfigDraft {
                 .shape_recognition_sensitivity
                 .to_string(),
             drawing_shape_recognition_grid_snap: config.drawing.shape_recognition_grid_snap,
+            drawing_shape_recognition_feedback: config.drawing.shape_recognition_feedback,
             drawing_font_cycle: FontCycleDraft::from_entries(config.drawing.font_cycle.clone()),
             drawing_hit_test_tolerance: format_float(config.drawing.hit_test_tolerance),
             drawing_hit_test_linear_threshold: config.drawing.hit_test_linear_threshold.to_string(),
@@ -111,6 +113,11 @@ impl ConfigDraft {
             arrow_head_at_end: config.arrow.head_at_end,
             arrow_style: ArrowStyleOption::from_style(config.arrow.style),
 
+            laser_color: ColorQuadInput::from(config.laser.color),
+            laser_width: format_float(config.laser.width),
+            laser_hold_ms: config.laser.hold_ms.to_string(),
+            laser_fade_ms: config.laser.fade_ms.to_string(),
+
             history: super::super::history::HistoryDraft::from_config(&config.history),
 
             performance_buffer_count: config.performance.buffer_count,
@@ -123,6 +130,7 @@ impl ConfigDraft {
             ui_show_status_bar: config.ui.show_status_bar,
             ui_status_bar_interactive: config.ui.status_bar_interactive,
             ui_active_output_badge: config.ui.active_output_badge,
+            ui_active_output_badge_always: config.ui.active_output_badge_always,
             ui_show_status_selection_info: config.ui.show_status_selection_info,
             ui_show_status_board_badge: config.ui.show_status_board_badge,
             ui_show_status_page_badge: config.ui.show_status_page_badge,
@@ -164,6 +172,9 @@ impl ConfigDraft {
             ui_toolbar_show_zoom_chip: config.ui.toolbar.show_zoom_chip,
             ui_toolbar_rebind_modifier: ToolbarRebindModifierOption::from_config(
                 config.ui.toolbar.rebind_modifier,
+            ),
+            ui_toolbar_stroke_controls: ToolbarStrokeControlsOption::from_config(
+                config.ui.toolbar.stroke_controls,
             ),
             ui_toolbar_items: toolbar_items,
             ui_toolbar_show_presets: toolbar_visibility.show_presets,

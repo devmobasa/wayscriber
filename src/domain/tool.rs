@@ -40,6 +40,8 @@ pub enum Tool {
     Marker,
     /// Highlight-only tool (no drawing, emits click highlight)
     Highlight,
+    /// Glowing pointer ink that fades away and never becomes a shape
+    Laser,
     /// Numbered step marker tool (places auto-incrementing bubbles)
     StepMarker,
     /// Eraser brush that removes content within its stroke
@@ -84,6 +86,8 @@ pub enum DragTool {
     Marker,
     /// Highlight-only tool.
     Highlight,
+    /// Fading laser pointer ink.
+    Laser,
     /// Numbered step marker tool.
     StepMarker,
     /// Eraser brush.
@@ -121,6 +125,7 @@ pub enum DragBindableTool {
     Blur,
     Marker,
     Highlight,
+    Laser,
     StepMarker,
     Eraser,
 }
@@ -142,6 +147,7 @@ impl DragBindableTool {
             Self::Blur => DragTool::Blur,
             Self::Marker => DragTool::Marker,
             Self::Highlight => DragTool::Highlight,
+            Self::Laser => DragTool::Laser,
             Self::StepMarker => DragTool::StepMarker,
             Self::Eraser => DragTool::Eraser,
         }
@@ -163,6 +169,7 @@ impl DragBindableTool {
             Self::Blur => Tool::Blur,
             Self::Marker => Tool::Marker,
             Self::Highlight => Tool::Highlight,
+            Self::Laser => Tool::Laser,
             Self::StepMarker => Tool::StepMarker,
             Self::Eraser => Tool::Eraser,
         }
@@ -187,6 +194,7 @@ impl DragBindableTool {
             Tool::Spotlight => None,
             Tool::Marker => Some(Self::Marker),
             Tool::Highlight => Some(Self::Highlight),
+            Tool::Laser => Some(Self::Laser),
             Tool::StepMarker => Some(Self::StepMarker),
             Tool::Eraser => Some(Self::Eraser),
         }
@@ -209,6 +217,7 @@ impl DragBindableTool {
             DragTool::Blur => Some(Self::Blur),
             DragTool::Marker => Some(Self::Marker),
             DragTool::Highlight => Some(Self::Highlight),
+            DragTool::Laser => Some(Self::Laser),
             DragTool::StepMarker => Some(Self::StepMarker),
             DragTool::Eraser => Some(Self::Eraser),
         }

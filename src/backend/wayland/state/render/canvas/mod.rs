@@ -290,6 +290,11 @@ impl WaylandState {
 
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 
+        // Finished laser ink sits over committed shapes and under whatever is
+        // being drawn now. It is a transient, so captures and the capture
+        // picker, which render without transients, never include it.
+        self.input_state.render_laser_ink(ctx);
+
         let replay_ctx = eraser_ctx.replay_context();
         let provisional = self.input_state.provisional_tool_stroke(mx, my);
         let provisional_points = provisional_point_count(&provisional);
@@ -477,6 +482,7 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
         | crate::input::tool::ProvisionalToolStroke::BorrowedPressureFreehand { points, .. }
         | crate::input::tool::ProvisionalToolStroke::BorrowedMarker { points, .. }
         | crate::input::tool::ProvisionalToolStroke::EraserPreview { points, .. }
+        | crate::input::tool::ProvisionalToolStroke::Laser { points, .. }
         | crate::input::tool::ProvisionalToolStroke::Recognized { ink: points, .. } => points.len(),
         crate::input::tool::ProvisionalToolStroke::Shape(_)
         | crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(_)

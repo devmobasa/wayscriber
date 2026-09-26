@@ -673,6 +673,23 @@ fn append_settings_notices(
         ));
         *y += notice_h + MENU_TOGGLE_GAP;
     }
+
+    // The collapsed "Details" disclosure keeps the storage path out of the
+    // way; its toggle sits right under the summary it expands.
+    if let Some(details) = model.details() {
+        let width = row_item_width(MENU_CONTENT_W, 2, MENU_TOGGLE_GAP);
+        nodes.push(text_button(
+            "top.menu.settings.details".to_string(),
+            (0.0, *y, width, MENU_BUTTON_H),
+            LabelSpec::new(details.label, MENU_LABEL_FONT, true),
+            ButtonStyle::active(details.open),
+            Some(Interaction::click(
+                details.event.clone(),
+                details.tooltip.as_string(),
+            )),
+        ));
+        *y += MENU_BUTTON_H + MENU_TOGGLE_GAP;
+    }
 }
 
 fn settings_notice_height(engine: &UiTextEngine, text: &str, bold: bool) -> f64 {

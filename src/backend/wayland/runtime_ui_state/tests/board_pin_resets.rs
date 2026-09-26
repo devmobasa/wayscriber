@@ -179,8 +179,9 @@ fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
             .hidden
             .contains(&ids::TOP_TOOL_PEN)
     );
+    // The factory default now shows the capture button, so the reset keeps it.
     assert!(
-        restarted_input
+        !restarted_input
             .resolved_toolbar_items()
             .hidden
             .contains(&ids::TOP_UTILITY_SCREENSHOT)

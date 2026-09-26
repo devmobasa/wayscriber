@@ -250,6 +250,8 @@ fn status_hud_click_version_chip_returns_open_about_action() {
     let test_text_measurer = crate::draw::TextMeasurer::default();
 
     let mut input = create_test_input_state();
+    // The version chip is opt-in.
+    input.ui_visibility.show_status_about = true;
     update_hud_layout(&mut input, 1920, 1080);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::About);
 
@@ -267,6 +269,7 @@ fn status_hud_click_version_chip_returns_open_about_action() {
 #[test]
 fn a_narrow_status_hud_sheds_the_version_chip_first() {
     let mut input = create_test_input_state();
+    input.ui_visibility.show_status_about = true;
     update_hud_layout(&mut input, 420, 720);
     let layout = input.status_hud_layout().expect("status hud layout");
 
@@ -463,7 +466,7 @@ fn changing_status_hud_content_leaves_damage_to_the_effect_pass() {
     assert!(input.set_status_bar_item_visible_with_resources(
         &crate::ui_text::UiTextEngine::default(),
         &crate::draw::TextMeasurer::default(),
-        StatusBarItem::About,
+        StatusBarItem::Help,
         false
     ));
 

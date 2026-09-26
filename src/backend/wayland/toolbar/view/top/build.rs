@@ -50,7 +50,6 @@ pub(super) fn build_top_view_planned(
     } else {
         ToolbarLayoutSpec::TOP_START_X
     };
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let use_icons = planned_use_icons(snapshot, plan);
     let (btn_w, btn_h) = planned_button_size(snapshot, plan);
     let base_height = base_bar_height(snapshot);
@@ -181,6 +180,7 @@ pub(super) fn build_top_view_planned(
                 | model::TopToolbarControl::Pin
                 | model::TopToolbarControl::Minimize
                 | model::TopToolbarControl::About
+                | model::TopToolbarControl::Exit
                 | model::TopToolbarControl::LayoutMode
                 | model::TopToolbarControl::ClearCanvas
                 | model::TopToolbarControl::CanvasMenu
@@ -224,63 +224,12 @@ pub(super) fn build_top_view_planned(
         (btn_w, btn_h),
         gap,
         use_icons,
-        is_simple,
     );
 
-    // --- Right-aligned chrome island --------------------------------------------
-    let chrome_metrics = super::ChromeMetrics::for_plan(plan);
-    let chrome_size = chrome_metrics.size;
-    let chrome_gap = chrome_metrics.gap;
-    let chrome_y = (base_height - chrome_size) / 2.0;
-    let chrome_count = spec.chrome().len();
-    let chrome_width = chrome_metrics.block_width(chrome_count);
-    let mut chrome_x = width - chrome_metrics.margin_right - chrome_width;
-    if chrome_count > 0 {
-        let pill_left = chrome_x - island_pad;
-        tree.push(WidgetNode::decor(
-            "top.island.chrome",
-            (pill_left, 0.0, width - pill_left, band_h),
-            WidgetKind::Panel,
-        ));
-    }
-    for control in spec.chrome().iter().copied() {
-        let rect = (chrome_x, chrome_y, chrome_size, chrome_size);
-        chrome_x += chrome_size + chrome_gap;
-        // About and the layout cycle are ordinary icon buttons in chrome
-        // styling; pin and minimize keep their bespoke glyph widgets.
-        if matches!(
-            control,
-            model::TopToolbarControl::About | model::TopToolbarControl::LayoutMode
-        ) {
-            tree.push(control_button_node(
-                snapshot,
-                control,
-                control.id().render_id().into_owned(),
-                rect,
-                true,
-            ));
-            continue;
-        }
-        let kind = match control {
-            model::TopToolbarControl::Pin => WidgetKind::PinButton {
-                pinned: control.active(snapshot),
-            },
-            model::TopToolbarControl::Minimize => WidgetKind::MinimizeButton,
-            _ => unreachable!("non-chrome control in chrome specification"),
-        };
-        tree.push(WidgetNode::new(
-            control.id().render_id().into_owned(),
-            rect,
-            kind,
-            Some(Interaction::click(
-                control.event(snapshot),
-                Some(control.tooltip(snapshot)),
-            )),
-        ));
-    }
+    let layout_anchor = super::chrome::push_chrome_island(&mut tree, snapshot, &spec, plan, width);
 
     // --- Style pill (island D): contextual tool properties -------------------
-    push_style_pill(&mut tree, snapshot, plan, band_h);
+    let pill_anchors = push_style_pill(&mut tree, snapshot, plan, band_h);
 
     push_overflow_popover(
         &mut tree,
@@ -311,6 +260,21 @@ pub(super) fn build_top_view_planned(
         );
     }
 
+    super::layout_menu::push_layout_menu(&mut tree, snapshot, layout_anchor, (width, height));
+    super::pen_feel::push_pen_feel_panel(
+        engine,
+        &mut tree,
+        snapshot,
+        pill_anchors.pen_feel,
+        (width, height),
+    );
+    super::arrow_menu::push_arrow_style_menu(
+        &mut tree,
+        snapshot,
+        pill_anchors.arrow_style,
+        (width, height),
+    );
+
     tree
 }
 
@@ -324,12 +288,11 @@ fn push_shape_popover(
     button_size: (f64, f64),
     gap: f64,
     use_icons: bool,
-    is_simple: bool,
 ) {
     let Some(anchor) = anchor.filter(|_| snapshot.shape_picker_open) else {
         return;
     };
-    let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+    let rows = model::visible_shape_picker_rows(snapshot, snapshot.layout_mode);
     let option_rows = shape_option_rows(snapshot);
     let max_row_len = rows.iter().map(Vec::len).max().unwrap_or(0);
     if max_row_len == 0 && option_rows.is_empty() {
@@ -478,12 +441,11 @@ fn build_top_minimized_tab(
     tree.push(WidgetNode::new(
         control.id().render_id().into_owned(),
         (0.0, 0.0, width, height),
-        WidgetKind::IconButton {
+        WidgetKind::RestoreTab {
             glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                model::TopToolbarIcon::Restore,
+                control.glyph(snapshot),
             )),
-            icon_size: (height * 0.75).min(18.0),
-            style: ButtonStyle::plain(),
+            label: LabelSpec::new(control.label(snapshot), TOP_LABEL_FONT_SIZE - 1.0, true),
         },
         Some(Interaction::click(
             control.event(snapshot),
@@ -625,11 +587,10 @@ pub(super) fn shape_popover_height_planned(snapshot: &ToolbarSnapshot, plan: &To
     if !snapshot.shape_picker_open || !model::TopToolbarSpec::shape_picker_visible(snapshot) {
         return 0.0;
     }
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let (_, btn_h) = planned_button_size(snapshot, plan);
     let gap = planned_gap(plan);
     let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
-    let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+    let rows = model::visible_shape_picker_rows(snapshot, snapshot.layout_mode);
     let option_rows = shape_option_rows(snapshot);
     if rows.is_empty() && option_rows.is_empty() {
         return 0.0;
@@ -646,16 +607,18 @@ pub(super) fn shape_popover_height_planned(snapshot: &ToolbarSnapshot, plan: &To
 
 /// Style pill (island D): the contextual tool-property row rendered as a
 /// fourth detached pill under the islands. Structure comes from the shared
-/// `StylePillSpec`; this function owns only the geometry.
+/// `StylePillSpec`; this function owns only the geometry. Returns the rects
+/// the pill's panels hang from, for the chips it carries.
 fn push_style_pill(
     tree: &mut WidgetTree,
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
     band_h: f64,
-) {
+) -> StylePillAnchors {
+    let mut anchors = StylePillAnchors::default();
     let spec = model::StylePillSpec::build(snapshot, plan);
     if spec.controls().is_empty() {
-        return;
+        return anchors;
     }
     let gap = planned_gap(plan);
     let (_, island_pad) = planned_island_metrics(plan);
@@ -736,11 +699,14 @@ fn push_style_pill(
                     ToolbarLayoutSpec::TOP_STYLE_SLIDER_W,
                     row_h,
                 );
+                let t = slider_spec.t_from_value(value);
+                let opacity_paint = slider_kind.opacity_paint(snapshot);
                 nodes.push(WidgetNode::new(
                     id,
                     rect,
-                    WidgetKind::Slider {
-                        t: slider_spec.t_from_value(value),
+                    match opacity_paint {
+                        Some(paint) => WidgetKind::OpacitySlider { t, paint },
+                        None => WidgetKind::Slider { t },
                     },
                     Some(Interaction {
                         event,
@@ -753,20 +719,29 @@ fn push_style_pill(
                 x += ToolbarLayoutSpec::TOP_STYLE_SLIDER_W + gap;
                 // The opacity slider carries its readout as decoration; the
                 // thickness/text-size numerals are distinct value controls.
+                // The marker opacity shows as a swatch; its number is in the
+                // tooltip.
                 if control.carries_inline_readout() {
+                    let readout_h = match opacity_paint {
+                        Some(_) => TOP_SWATCH_SIZE.min(row_h),
+                        None => row_h,
+                    };
                     nodes.push(WidgetNode::decor(
                         format!("{}.readout", control.id()),
                         (
                             x,
-                            center(row_h),
+                            center(readout_h),
                             ToolbarLayoutSpec::TOP_STYLE_VALUE_W,
-                            row_h,
+                            readout_h,
                         ),
-                        WidgetKind::Label(LabelSpec::new(
-                            control.required_value_text(snapshot),
-                            TOP_LABEL_FONT_SIZE,
-                            true,
-                        )),
+                        match opacity_paint {
+                            Some(paint) => WidgetKind::OpacitySwatch { paint },
+                            None => WidgetKind::Label(LabelSpec::new(
+                                control.required_value_text(snapshot),
+                                TOP_LABEL_FONT_SIZE,
+                                true,
+                            )),
+                        },
                     ));
                     x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
                     x += push_style_status_label(
@@ -875,8 +850,17 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_FONT_PICK_W + gap;
             }
-            model::StylePillControl::SelectionCycle(_)
-            | model::StylePillControl::ArrowStyleCycle => {
+            model::StylePillControl::ArrowStyleChip => {
+                let chip_w = model::ARROW_STYLE_CHIP_W;
+                nodes.extend(super::arrow_menu::arrow_style_chip_nodes(
+                    control,
+                    snapshot,
+                    (x, center(row_h), chip_w, row_h),
+                ));
+                anchors.arrow_style = Some(super::arrow_menu::arrow_style_anchor(x, pill_y));
+                x += chip_w + gap;
+            }
+            model::StylePillControl::SelectionCycle(_) => {
                 let enabled = control.enabled(snapshot);
                 nodes.push(WidgetNode::new(
                     id,
@@ -904,50 +888,32 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W + gap;
             }
+            model::StylePillControl::PenFeelChip => {
+                let chip_w = ToolbarLayoutSpec::TOP_STYLE_PEN_FEEL_W;
+                nodes.push(super::pen_feel::pen_feel_chip_node(
+                    control,
+                    snapshot,
+                    (x, center(row_h), chip_w, row_h),
+                ));
+                anchors.pen_feel = Some(super::pen_feel::pen_feel_anchor(x, pill_y));
+                x += chip_w + gap;
+            }
+            model::StylePillControl::PenSmoothingMeter
+            | model::StylePillControl::ShapeSensitivityMeter => {
+                x +=
+                    super::meter::push_style_meter(&mut nodes, control, snapshot, x, center(row_h))
+                        + gap;
+            }
             model::StylePillControl::PenSmoothingStepper
             | model::StylePillControl::ShapeSensitivityStepper
             | model::StylePillControl::SelectionStepper(_) => {
-                let enabled = control.enabled(snapshot);
-                let steps = control.required_steps(snapshot);
-                let step_w = ToolbarLayoutSpec::TOP_STYLE_STEP_W;
-                let value_w = ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W;
-                let step_style = if enabled {
-                    ButtonStyle::plain()
-                } else {
-                    ButtonStyle::disabled()
-                };
-                nodes.push(WidgetNode::new(
-                    steps[0].id,
-                    (x, center(row_h), step_w, row_h),
-                    WidgetKind::TextButton {
-                        label: LabelSpec::new(steps[0].label, TOP_LABEL_FONT_SIZE, true),
-                        style: step_style,
-                    },
-                    enabled.then(|| {
-                        Interaction::click(steps[0].event.clone(), Some(steps[0].tooltip.clone()))
-                    }),
-                ));
-                nodes.push(WidgetNode::decor(
-                    format!("{id}.value"),
-                    (x + step_w, center(row_h), value_w, row_h),
-                    WidgetKind::Label(LabelSpec::new(
-                        control.required_value_text(snapshot),
-                        TOP_LABEL_FONT_SIZE,
-                        true,
-                    )),
-                ));
-                nodes.push(WidgetNode::new(
-                    steps[1].id,
-                    (x + step_w + value_w, center(row_h), step_w, row_h),
-                    WidgetKind::TextButton {
-                        label: LabelSpec::new(steps[1].label, TOP_LABEL_FONT_SIZE, true),
-                        style: step_style,
-                    },
-                    enabled.then(|| {
-                        Interaction::click(steps[1].event.clone(), Some(steps[1].tooltip.clone()))
-                    }),
-                ));
-                x += step_w * 2.0 + value_w + gap;
+                x += super::stepper::push_style_stepper(
+                    &mut nodes,
+                    control,
+                    snapshot,
+                    x,
+                    center(row_h),
+                ) + gap;
                 // The docked control reports on the selected shape's own
                 // factor, so it needs the same unavailable state the slider has.
                 x += push_style_status_label(
@@ -1006,6 +972,15 @@ fn push_style_pill(
     for node in nodes {
         tree.push(node);
     }
+    anchors
+}
+
+/// Where the style pill's panels hang from: the Pen feel chip's and the
+/// arrow style chip's columns, when the pill carries them.
+#[derive(Debug, Default)]
+struct StylePillAnchors {
+    pen_feel: Option<(f64, f64, f64, f64)>,
+    arrow_style: Option<(f64, f64, f64, f64)>,
 }
 
 /// Inline unavailable-state label for a control that has one, returning the
@@ -1127,7 +1102,7 @@ fn tool_button_node(
     )
 }
 
-fn control_button_node(
+pub(super) fn control_button_node(
     snapshot: &ToolbarSnapshot,
     control: model::TopToolbarControl,
     id: impl Into<super::super::node::WidgetId>,

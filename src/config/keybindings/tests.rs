@@ -763,6 +763,7 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("select_blur_tool", &[]),
     ("select_spotlight_tool", &[]),
     ("select_highlight_tool", &[]),
+    ("select_laser_tool", &["L"]),
     ("toggle_highlight_tool", &["Ctrl+Alt+H"]),
     ("increase_font_size", &["Ctrl+Shift++", "Ctrl+Shift+="]),
     ("decrease_font_size", &["Ctrl+Shift+-", "Ctrl+Shift+_"]),

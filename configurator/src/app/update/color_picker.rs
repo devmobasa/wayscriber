@@ -99,6 +99,7 @@ impl ConfiguratorApp {
             ColorPickerId::StatusBarText,
             ColorPickerId::HighlightFill,
             ColorPickerId::HighlightOutline,
+            ColorPickerId::LaserColor,
             ColorPickerId::HelpBg,
             ColorPickerId::HelpBorder,
             ColorPickerId::HelpText,
@@ -178,6 +179,9 @@ impl ConfiguratorApp {
             }
             ColorPickerId::HighlightOutline => {
                 self.apply_quad_rgb(QuadField::HighlightOutline, values, alpha);
+            }
+            ColorPickerId::LaserColor => {
+                self.apply_quad_rgb(QuadField::LaserColor, values, alpha);
             }
             ColorPickerId::HelpBg => {
                 self.apply_quad_rgb(QuadField::HelpBg, values, alpha);
@@ -261,6 +265,10 @@ impl ConfiguratorApp {
             ColorPickerId::HighlightOutline => {
                 let values =
                     parse_quad_values(&self.draft.click_highlight_outline_color.components);
+                Some(([values[0], values[1], values[2]], Some(values[3])))
+            }
+            ColorPickerId::LaserColor => {
+                let values = parse_quad_values(&self.draft.laser_color.components);
                 Some(([values[0], values[1], values[2]], Some(values[3])))
             }
             ColorPickerId::HelpBg => {

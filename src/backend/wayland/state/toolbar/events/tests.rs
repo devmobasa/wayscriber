@@ -72,6 +72,73 @@ fn persistence_for(event: &ToolbarEvent) -> ToolbarPersistence {
     ToolbarEventPolicy::for_event(event).persistence
 }
 
+/// Choosing a preset is the layout menu's purpose, so it closes the menu;
+/// only the menu's own toggle spares it.
+#[test]
+fn choosing_a_layout_preset_closes_the_layout_menu() {
+    for mode in ToolbarLayoutMode::ALL {
+        assert!(event_dismisses_popover(
+            &ToolbarEvent::SetToolbarLayoutMode(mode),
+            ToolbarPopover::LayoutMenu
+        ));
+    }
+    assert!(!event_dismisses_popover(
+        &ToolbarEvent::ToggleLayoutMenu(false),
+        ToolbarPopover::LayoutMenu
+    ));
+    assert!(event_dismisses_popover(
+        &ToolbarEvent::SelectTool(Tool::Pen),
+        ToolbarPopover::LayoutMenu
+    ));
+    // Opening the menu is transient chrome; the preset it picks is what
+    // persists, through the unchanged layout-mode runtime target.
+    assert_eq!(
+        persistence_for(&ToolbarEvent::ToggleLayoutMenu(true)),
+        ToolbarPersistence::Ephemeral
+    );
+    assert_eq!(
+        persistence_for(&ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced
+        )),
+        ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::LayoutMode)
+    );
+}
+
+/// The Pen feel panel is adjusted in place: its meter clicks and wheel steps
+/// (the same level events the inline meters send) and its own chip spare it,
+/// while picking a tool or anything else outside the panel closes it.
+#[test]
+fn pen_feel_panel_survives_its_level_changes_and_closes_on_anything_else() {
+    for event in [
+        ToolbarEvent::TogglePenFeelPanel(false),
+        ToolbarEvent::SetPenSmoothing(0),
+        ToolbarEvent::SetPenSmoothing(6),
+        ToolbarEvent::NudgePenSmoothing(-2),
+        ToolbarEvent::SetShapeRecognitionSensitivity(4),
+        ToolbarEvent::NudgeShapeRecognitionSensitivity(2),
+    ] {
+        assert!(
+            !event_dismisses_popover(&event, ToolbarPopover::PenFeel),
+            "{event:?} keeps the panel open"
+        );
+    }
+    for event in [
+        ToolbarEvent::SelectTool(Tool::Marker),
+        ToolbarEvent::ToggleLayoutMenu(true),
+        ToolbarEvent::ToggleTopOverflow(true),
+        ToolbarEvent::Undo,
+    ] {
+        assert!(
+            event_dismisses_popover(&event, ToolbarPopover::PenFeel),
+            "{event:?} closes the panel"
+        );
+    }
+    assert_eq!(
+        persistence_for(&ToolbarEvent::TogglePenFeelPanel(true)),
+        ToolbarPersistence::Ephemeral
+    );
+}
+
 #[test]
 fn pin_confirmations_distinguish_persistent_and_live_only_changes() {
     let cases = [
@@ -620,6 +687,27 @@ fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     input_state.toggle_command_palette();
     assert!(input_state.begin_keybinding_capture(Action::Undo));
     assert!(toolbar_event_blocked_by_modal(&input_state));
+}
+
+/// The second click of a double-click on the restore tab lands on the
+/// restored strip; the shared dispatch drops it for both frontends.
+#[test]
+fn a_click_right_after_restoring_the_strip_is_dropped() {
+    let mut input_state = make_test_input_state();
+    input_state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
+    assert!(!toolbar_event_dropped(
+        &input_state,
+        std::time::Instant::now()
+    ));
+
+    input_state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
+
+    let now = std::time::Instant::now();
+    assert!(toolbar_event_dropped(&input_state, now));
+    assert!(!toolbar_event_dropped(
+        &input_state,
+        now + std::time::Duration::from_secs(1)
+    ));
 }
 
 fn failing_session_file_chooser(

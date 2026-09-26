@@ -3,8 +3,10 @@ use super::super::content::HelpContentSnapshot;
 use super::super::fonts::resolve_help_font_family;
 use super::super::layout::{GridLayout, build_grid, measure_sections};
 use super::super::nav::{NavState, build_nav_state};
-use super::super::sections::filter_sections_for_search;
+use super::super::sections::{filter_sections_for_search, hide_unbound_rows};
+use super::super::types::Section;
 use super::BULLET;
+use super::footer::{footer_pills, measure_footer_pills};
 use super::header::{HeaderContent, measure_hints, title_row_width};
 use super::metrics::RenderMetrics;
 use super::palette::RenderPalette;
@@ -46,29 +48,37 @@ pub(super) fn build_overlay_layout(
     note_text_base: &str,
     close_hint_text: &str,
     quick_mode: bool,
+    show_unbound: bool,
 ) -> OverlayLayout {
     let search_query = search_query.trim();
     let search_active = !search_query.is_empty();
     let search_lower = search_query.to_ascii_lowercase();
     let help_font_family = resolve_help_font_family(&style.font_family);
 
+    // Unbound rows are hidden unless the user asked for them. Search always
+    // sees every row, so typing still finds actions without a binding.
     let section_sets = &content.sections;
-    let page_count = if quick_mode || section_sets.page2.is_empty() {
-        1
-    } else {
-        2
+    let visible = |sections: &[Section]| {
+        if show_unbound {
+            sections.to_vec()
+        } else {
+            hide_unbound_rows(sections)
+        }
     };
+    let page1 = visible(&section_sets.page1);
+    let page2 = visible(&section_sets.page2);
+    let page_count = if quick_mode || page2.is_empty() { 1 } else { 2 };
     let page_index = page_index.min(page_count - 1);
     let nav_title = if quick_mode { "Quick Ref" } else { "Controls" };
 
     let sections = if quick_mode {
-        section_sets.quick.clone()
+        visible(&section_sets.quick)
     } else if search_active {
         filter_sections_for_search(section_sets.all.clone(), &search_lower)
     } else if page_index == 0 {
-        section_sets.page1.clone()
+        page1
     } else {
-        section_sets.page2.clone()
+        page2
     };
 
     let metrics = RenderMetrics::from_style(style, screen_width, screen_height);
@@ -98,21 +108,7 @@ pub(super) fn build_overlay_layout(
         engine,
         ctx,
         sections,
-        help_font_family.as_str(),
-        metrics.body_font_size,
-        metrics.heading_font_size,
-        metrics.heading_line_height,
-        metrics.heading_icon_size,
-        metrics.heading_icon_gap,
-        metrics.row_line_height,
-        metrics.row_gap_after_heading,
-        metrics.key_desc_gap,
-        metrics.badge_font_size,
-        metrics.badge_padding_x,
-        metrics.badge_gap,
-        metrics.badge_height,
-        metrics.badge_top_gap,
-        metrics.section_card_padding,
+        &metrics.grid_style(help_font_family.as_str()),
     );
 
     let max_content_width = (metrics.max_box_width - metrics.padding * 2.0).max(0.0);
@@ -150,6 +146,14 @@ pub(super) fn build_overlay_layout(
         close_hint_text,
     )
     .width();
+    let footer_width = measure_footer_pills(
+        engine,
+        ctx,
+        help_font_family.as_str(),
+        metrics.footer_font_size,
+        metrics.key_font_size,
+        &footer_pills(show_unbound),
+    );
 
     let note_to_close_gap = metrics.note_to_close_gap;
     let header_height = metrics.accent_line_height
@@ -198,7 +202,8 @@ pub(super) fn build_overlay_layout(
         .max(nav_state.nav_primary_width)
         .max(nav_state.nav_secondary_width)
         .max(note_width)
-        .max(close_hint_width);
+        .max(close_hint_width)
+        .max(footer_width);
     // Don't let search text expand the overlay - it will be clamped/elided
     if grid.rows.is_empty() {
         content_width = content_width.max(title_row).max(subtitle_width);
@@ -231,3 +236,7 @@ pub(super) fn build_overlay_layout(
         scroll_offset,
     }
 }
+
+#[cfg(test)]
+#[path = "tests/layout.rs"]
+mod tests;

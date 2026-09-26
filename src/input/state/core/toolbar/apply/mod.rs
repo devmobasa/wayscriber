@@ -95,9 +95,18 @@ impl InputState {
                 self.apply_toolbar_set_spotlight_magnification(value)
             }
             ToolbarEvent::SetPenSmoothing(level) => self.apply_toolbar_set_pen_smoothing(level),
+            ToolbarEvent::NudgePenSmoothing(steps) => self.apply_toolbar_nudge_stroke_setting(
+                crate::ui::toolbar::model::StrokeSetting::Smoothing,
+                steps,
+            ),
             ToolbarEvent::SetShapeRecognitionSensitivity(level) => {
                 self.set_shape_recognition_sensitivity(level)
             }
+            ToolbarEvent::NudgeShapeRecognitionSensitivity(steps) => self
+                .apply_toolbar_nudge_stroke_setting(
+                    crate::ui::toolbar::model::StrokeSetting::ShapeDetection,
+                    steps,
+                ),
             ToolbarEvent::OpenFontPicker => self.apply_toolbar_open_font_picker(),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
@@ -115,6 +124,7 @@ impl InputState {
                 self.apply_toolbar_toggle_arrow_labels(enable)
             }
             ToolbarEvent::CycleArrowStyle => self.apply_toolbar_cycle_arrow_style(),
+            ToolbarEvent::SetArrowStyle(style) => self.set_arrow_style(style),
             ToolbarEvent::ResetArrowLabelCounter => self.apply_toolbar_reset_arrow_label_counter(),
             ToolbarEvent::ResetStepMarkerCounter => self.apply_toolbar_reset_step_marker_counter(),
             ToolbarEvent::SetUndoDelay(delay_secs) => self.apply_toolbar_set_undo_delay(delay_secs),
@@ -198,6 +208,7 @@ impl InputState {
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
             ToolbarEvent::OpenAbout => self.apply_toolbar_open_about(),
+            ToolbarEvent::ExitOverlay => self.apply_toolbar_exit_overlay(),
             ToolbarEvent::RequestRuntimeUiReset
             | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
             | ToolbarEvent::CancelUnsupportedRuntimeUiReset
@@ -211,6 +222,13 @@ impl InputState {
                 self.apply_toolbar_open_command_palette_with_resources(resources)
             }
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
+            ToolbarEvent::ToggleLayoutMenu(open) => self.apply_toolbar_toggle_layout_menu(open),
+            ToolbarEvent::TogglePenFeelPanel(open) => {
+                self.apply_toolbar_toggle_pen_feel_panel(open)
+            }
+            ToolbarEvent::ToggleArrowStyleMenu(open) => {
+                self.apply_toolbar_toggle_arrow_style_menu(open)
+            }
             ToolbarEvent::ToggleSessionPopover(open) => {
                 self.apply_toolbar_toggle_session_popover(open)
             }
@@ -222,10 +240,20 @@ impl InputState {
             }
             ToolbarEvent::ScrollTopPopover(offset) => self.apply_toolbar_scroll_top_popover(offset),
             ToolbarEvent::SetTopMinimized(minimized) => {
-                self.apply_toolbar_set_top_minimized(minimized)
+                let changed = self.apply_toolbar_set_top_minimized(minimized);
+                if changed && !minimized {
+                    self.toolbar.arm_restore_guard(std::time::Instant::now());
+                }
+                changed
             }
             ToolbarEvent::SetTopDisplayMode(mode) => {
-                self.apply_toolbar_set_top_display_mode_with_resources(resources, mode)
+                let from_micro = self.top_display_state() == crate::config::TopDisplayMode::Micro;
+                let changed =
+                    self.apply_toolbar_set_top_display_mode_with_resources(resources, mode);
+                if changed && from_micro && mode == crate::config::TopDisplayMode::Full {
+                    self.toolbar.arm_restore_guard(std::time::Instant::now());
+                }
+                changed
             }
             ToolbarEvent::CloseTopToolbar => self.apply_toolbar_set_top_minimized(true),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),
@@ -320,6 +348,9 @@ impl InputState {
             }
             ToolbarEvent::SetStatusBarContentsOpen(open) => {
                 self.apply_toolbar_set_status_bar_contents_open(open)
+            }
+            ToolbarEvent::SetSettingsDetailsOpen(open) => {
+                self.apply_toolbar_set_settings_details_open(open)
             }
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
             ToolbarEvent::ApplyPreset(slot) => {

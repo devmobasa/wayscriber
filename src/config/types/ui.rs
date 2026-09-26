@@ -75,8 +75,9 @@ pub struct UiConfig {
     #[serde(default = "default_status_bar_item_visible")]
     pub show_status_help: bool,
 
-    /// Show the About/version chip in the status bar
-    #[serde(default = "default_status_bar_item_visible")]
+    /// Show the About/version chip in the status bar. Off by default; About
+    /// stays one click away in the toolbar and the help overlay.
+    #[serde(default = "default_show_status_about")]
     pub show_status_about: bool,
 
     /// Master visibility for the floating board/page badge; the
@@ -138,9 +139,16 @@ pub struct UiConfig {
     #[serde(default = "default_multi_monitor_enabled")]
     pub multi_monitor_enabled: bool,
 
-    /// Show active output identity in the status bar.
+    /// Show active output identity in the status bar. It appears only while
+    /// two or more outputs are connected, unless `active_output_badge_always`
+    /// is set.
     #[serde(default = "default_active_output_badge")]
     pub active_output_badge: bool,
+
+    /// Show the active output in the status bar even with a single output.
+    /// Has no effect while `active_output_badge` is off.
+    #[serde(default)]
+    pub active_output_badge_always: bool,
 
     /// Duration for command palette action toasts (ms)
     #[serde(default = "default_command_palette_toast_duration_ms")]
@@ -194,7 +202,7 @@ impl Default for UiConfig {
             show_status_context_indicators: default_status_bar_item_visible(),
             show_toolbar_hint: default_show_toolbar_hint(),
             show_status_help: default_status_bar_item_visible(),
-            show_status_about: default_status_bar_item_visible(),
+            show_status_about: default_show_status_about(),
             show_floating_badge: default_show_floating_badge(),
             show_floating_badge_always: default_show_page_badge_with_status_bar(),
             show_frozen_badge: default_show_frozen_badge(),
@@ -208,6 +216,7 @@ impl Default for UiConfig {
             preferred_output: None,
             multi_monitor_enabled: default_multi_monitor_enabled(),
             active_output_badge: default_active_output_badge(),
+            active_output_badge_always: false,
             command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),
             xdg_fullscreen: default_xdg_fullscreen(),
             xdg_focus_loss_behavior: default_xdg_focus_loss_behavior(),
@@ -341,6 +350,10 @@ fn default_multi_monitor_enabled() -> bool {
 
 fn default_active_output_badge() -> bool {
     true
+}
+
+fn default_show_status_about() -> bool {
+    false
 }
 
 fn default_status_position() -> StatusPosition {

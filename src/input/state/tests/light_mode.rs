@@ -44,6 +44,26 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
 }
 
 #[test]
+fn light_mode_keeps_an_active_laser_instead_of_switching_to_the_pen() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
+    let mut state = create_light_mode_test_state();
+    state.set_tool_override(Some(Tool::Laser));
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+    assert!(state.light_mode_active());
+    assert_eq!(state.tool_override(), Some(Tool::Laser));
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+    assert_eq!(state.tool_override(), Some(Tool::Laser));
+}
+
+#[test]
 fn light_mode_drawing_toggle_disables_passthrough_without_exiting() {
     let test_text_measurer = crate::draw::TextMeasurer::default();
     let test_ui_engine = crate::ui_text::UiTextEngine::default();

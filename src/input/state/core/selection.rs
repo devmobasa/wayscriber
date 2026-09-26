@@ -157,21 +157,78 @@ impl InputState {
     }
 
     pub fn clear_selection(&mut self) {
-        self.selection_interaction.clear();
-        self.close_properties_panel();
+        let measurer = TextMeasurer::default();
+        self.clear_selection_with(&measurer);
+    }
+
+    pub(crate) fn clear_selection_with(&mut self, measurer: &TextMeasurer) {
+        self.change_selection_with(measurer, SelectionInteraction::clear);
     }
 
     pub fn set_selection(&mut self, ids: Vec<ShapeId>) {
-        self.selection_interaction.set(ids);
-        self.close_properties_panel();
+        let measurer = TextMeasurer::default();
+        self.set_selection_with(&measurer, ids);
+    }
+
+    pub(crate) fn set_selection_with(&mut self, measurer: &TextMeasurer, ids: Vec<ShapeId>) {
+        self.change_selection_with(measurer, |selection| selection.set(ids));
     }
 
     pub fn extend_selection<I>(&mut self, iter: I)
     where
         I: IntoIterator<Item = ShapeId>,
     {
-        self.selection_interaction.extend(iter);
+        let measurer = TextMeasurer::default();
+        self.extend_selection_with(&measurer, iter);
+    }
+
+    pub(crate) fn extend_selection_with<I>(&mut self, measurer: &TextMeasurer, iter: I)
+    where
+        I: IntoIterator<Item = ShapeId>,
+    {
+        self.change_selection_with(measurer, |selection| selection.extend(iter));
+    }
+
+    /// Applies one membership change and repaints the selection chrome both
+    /// where it was drawn and where it now belongs.
+    ///
+    /// Every selection change goes through here, so a click, a rubber band, a
+    /// deselect, or an undo cannot leave a stale halo behind or show the new
+    /// one only after an unrelated repaint.
+    fn change_selection_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        change: impl FnOnce(&mut SelectionInteraction),
+    ) {
+        let previous_ids = self.selected_shape_ids().to_vec();
+        let previous_chrome = self.selection_chrome_bounds_with(measurer);
+
+        change(&mut self.selection_interaction);
         self.close_properties_panel();
+
+        if self.selected_shape_ids() != previous_ids.as_slice() {
+            self.mark_selection_dirty_region(previous_chrome);
+            self.mark_selection_chrome_dirty_with(measurer);
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Canvas bounds of everything painted for the selection: the halos, the
+    /// dashed handle frame, and the resize handle of a lone text shape, which
+    /// sits outside the shape.
+    pub(crate) fn selection_chrome_bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
+        let bounds = self.selection_bounds_with(measurer)?;
+        match self.selected_text_resize_handle_with(measurer) {
+            Some((_, handle)) => bounds.union(handle),
+            None => Some(bounds),
+        }
+    }
+
+    /// Repaints the current selection chrome. Also used when an interaction
+    /// ends and the handles it hid reappear without a membership change.
+    pub(crate) fn mark_selection_chrome_dirty_with(&mut self, measurer: &TextMeasurer) {
+        let chrome = self.selection_chrome_bounds_with(measurer);
+        self.mark_selection_dirty_region(chrome);
     }
 
     pub(crate) fn selection_bounding_box_with(

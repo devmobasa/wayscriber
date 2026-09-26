@@ -39,6 +39,9 @@ pub struct ContextMenuPanel {
     pub(in crate::input::state) hover_open_suppressed: Option<usize>,
     /// An outside left press dismissed the menu but still owns its release.
     dismissal_release_pending: bool,
+    /// A background daemon owns this overlay, so the last row hides it
+    /// instead of exiting.
+    pub(in crate::input::state) exit_hides_overlay: bool,
 }
 
 impl ContextMenuPanel {
@@ -148,6 +151,7 @@ impl Default for ContextMenuPanel {
             pending_hover: None,
             hover_open_suppressed: None,
             dismissal_release_pending: false,
+            exit_hides_overlay: false,
         }
     }
 }

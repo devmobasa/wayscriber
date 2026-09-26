@@ -14,6 +14,7 @@ struct Inputs {
     board: bool,
     capture: bool,
     quick: bool,
+    show_unbound: bool,
 }
 
 impl Default for Inputs {
@@ -30,6 +31,7 @@ impl Default for Inputs {
             board: true,
             capture: true,
             quick: false,
+            show_unbound: false,
         }
     }
 }
@@ -62,6 +64,7 @@ fn layout(cache: &mut HelpLayoutCache, inputs: &Inputs, scroll: f64) -> OverlayL
         "Note",
         "Esc to close",
         inputs.quick,
+        inputs.show_unbound,
     )
 }
 
@@ -118,6 +121,7 @@ fn every_layout_key_dimension_invalidates_independently() {
         ("board", |v| v.board = false),
         ("capture", |v| v.capture = false),
         ("quick", |v| v.quick = true),
+        ("show unbound", |v| v.show_unbound = true),
         ("font size", |v| v.style.font_size += 1.0),
         ("font family", |v| v.style.font_family = "Monospace".into()),
         ("line height", |v| v.style.line_height += 1.0),
@@ -193,6 +197,7 @@ fn paint(
             inputs.capture,
             scroll,
             inputs.quick,
+            inputs.show_unbound,
         );
     }
     surface.flush();
@@ -254,6 +259,10 @@ fn owners_keep_independent_layouts_and_reused_rendering_matches_fresh_pixels() {
         },
         Inputs {
             page: 1,
+            ..Inputs::default()
+        },
+        Inputs {
+            show_unbound: true,
             ..Inputs::default()
         },
     ] {

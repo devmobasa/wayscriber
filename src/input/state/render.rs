@@ -1,7 +1,8 @@
 use crate::draw::render::{render_freehand_pressure_preview_borrowed, render_polygon_preview};
 use crate::draw::shape::bounding_box_for_points;
 use crate::draw::{
-    Color, RenderCaches, RenderCtx, Shape, render_freehand_borrowed, render_marker_stroke_borrowed,
+    Color, RenderCaches, RenderCtx, Shape, render_freehand_borrowed, render_laser_stroke,
+    render_marker_stroke_borrowed,
 };
 use crate::input::Tool;
 use crate::input::tool::{
@@ -129,6 +130,7 @@ impl InputState {
             },
             step_marker_label: (*tool == Tool::StepMarker).then(|| self.next_step_marker_label()),
             live_shape_memo: self.pointer.live_shape(),
+            laser_style: self.laser_style(),
         };
         tool.provisional_stroke(snapshot)
     }
@@ -202,6 +204,13 @@ impl InputState {
                         style: params.style,
                     },
                 );
+                true
+            }
+            // Always the whole stroke, never damage-clipped ranges: the glow is
+            // translucent, and two ranges meeting inside one damage rect would
+            // paint their shared joint twice as bright.
+            ProvisionalToolStroke::Laser { points, style } => {
+                render_laser_stroke(ctx, points, style, 1.0);
                 true
             }
             ProvisionalToolStroke::None => false,

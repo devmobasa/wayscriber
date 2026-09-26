@@ -1,17 +1,19 @@
 use super::first_run::{
-    apply_persisted_usage_signals, background_mode_prompt_active, background_mode_prompt_choice,
-    color_thickness_completed, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
-    first_run_step_eyebrow, quick_access_completed, shortcut_rebind_footer,
+    FirstRunAdvance, FirstRunEnvironment, advance_first_run_steps, apply_persisted_usage_signals,
+    background_mode_prompt_active, color_thickness_completed, first_run_card_hidden_by_ui_state,
+    first_run_card_key_action, first_run_skip_allowed, quick_access_completed,
 };
+use super::first_run_card::{first_run_step_eyebrow, toolbar_exit_body};
 use super::{
     acknowledge_tip_command, automatic_onboarding_allowed, automatic_tip_toast,
     canvas_popover_hint_relevant, shortcut_coach_should_fire, status_bar_board_picker_entry,
 };
-use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
+use crate::config::RadialMenuMouseBinding;
 use crate::domain::{Action, OnboardingTip};
 use crate::input::state::{CompositorCapabilities, ToastCommand};
 use crate::input::{Key, state::PendingOnboardingUsage};
 use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, FirstRunStep, OnboardingState};
+use crate::ui::OnboardingCardAction;
 use std::time::{Duration, Instant};
 
 #[test]
@@ -99,24 +101,24 @@ fn tip_settings_navigation_survives_an_acknowledgement_write_failure() {
 }
 
 #[test]
-fn first_run_eyebrow_shows_progress() {
+fn first_run_eyebrow_counts_drawing_first_and_background_mode_last() {
+    let steps = [
+        (FirstRunStep::DrawUndo, "Step 1 / 6"),
+        (FirstRunStep::WaitDraw, "Step 1 / 6"),
+        (FirstRunStep::ToolbarExit, "Step 2 / 6"),
+        (FirstRunStep::ColorThickness, "Step 3 / 6"),
+        (FirstRunStep::QuickAccess, "Step 4 / 6"),
+        (FirstRunStep::Reference, "Step 5 / 6"),
+        (FirstRunStep::BackgroundModeSetup, "Step 6 / 6"),
+    ];
+    for (step, expected) in steps {
+        assert_eq!(first_run_step_eyebrow(step, true), expected, "{step:?}");
+    }
+
+    // A tour that already answered the background prompt ends at step 5.
     assert_eq!(
-        first_run_step_eyebrow(FirstRunStep::BackgroundModeSetup),
-        "Step 1 / 6"
-    );
-    assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 2 / 6");
-    assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 3 / 6");
-    assert_eq!(
-        first_run_step_eyebrow(FirstRunStep::ColorThickness),
-        "Step 4 / 6"
-    );
-    assert_eq!(
-        first_run_step_eyebrow(FirstRunStep::QuickAccess),
-        "Step 5 / 6"
-    );
-    assert_eq!(
-        first_run_step_eyebrow(FirstRunStep::Reference),
-        "Step 6 / 6"
+        first_run_step_eyebrow(FirstRunStep::Reference, false),
+        "Step 5 / 5"
     );
 }
 
@@ -262,29 +264,71 @@ fn status_bar_hint_requires_a_visible_board_picker_segment() {
 }
 
 #[test]
-fn shortcut_rebind_footer_uses_configured_modifier() {
-    for (modifier, expected_chord) in [
-        (ToolbarRebindModifier::CtrlShift, "Ctrl+Shift+click"),
-        (ToolbarRebindModifier::CtrlAlt, "Ctrl+Alt+click"),
-        (ToolbarRebindModifier::ShiftAlt, "Shift+Alt+click"),
-        (ToolbarRebindModifier::CtrlShiftAlt, "Ctrl+Shift+Alt+click"),
-    ] {
-        let footer = shortcut_rebind_footer(modifier);
-        assert!(footer.contains(expected_chord), "footer={footer:?}");
-        assert!(footer.contains("bindable toolbar control to rebind"));
-    }
+fn toolbar_exit_copy_names_the_live_bindings() {
+    let body = toolbar_exit_body("Esc", Some("F9"));
+    assert!(body.contains("Press Esc to leave the overlay"), "{body}");
+    assert!(body.contains("F9 hides or shows it"), "{body}");
 
-    assert!(shortcut_rebind_footer(ToolbarRebindModifier::Disabled).contains("editing disabled"));
+    let unbound = toolbar_exit_body("Ctrl+Q", None);
+    assert!(unbound.contains("Press Ctrl+Q"), "{unbound}");
+    assert!(!unbound.contains("hides or shows"), "{unbound}");
 }
 
 #[test]
-fn background_mode_prompt_choice_accepts_yes_and_no_keys() {
-    assert_eq!(background_mode_prompt_choice(Key::Char('y')), Some(true));
-    assert_eq!(background_mode_prompt_choice(Key::Char('Y')), Some(true));
-    assert_eq!(background_mode_prompt_choice(Key::Char('n')), Some(false));
-    assert_eq!(background_mode_prompt_choice(Key::Char('N')), Some(false));
-    assert_eq!(background_mode_prompt_choice(Key::Char('x')), None);
-    assert_eq!(background_mode_prompt_choice(Key::Escape), None);
+fn card_keys_answer_only_their_own_step() {
+    use FirstRunStep::{BackgroundModeSetup, DrawUndo, ToolbarExit};
+
+    for (key, expected) in [
+        (
+            Key::Char('y'),
+            Some(OnboardingCardAction::SetUpBackgroundMode),
+        ),
+        (
+            Key::Char('Y'),
+            Some(OnboardingCardAction::SetUpBackgroundMode),
+        ),
+        (
+            Key::Char('n'),
+            Some(OnboardingCardAction::SkipBackgroundMode),
+        ),
+        (
+            Key::Char('N'),
+            Some(OnboardingCardAction::SkipBackgroundMode),
+        ),
+        (Key::Char('x'), None),
+        (Key::Escape, None),
+        (Key::Return, None),
+    ] {
+        assert_eq!(
+            first_run_card_key_action(BackgroundModeSetup, key, true),
+            expected,
+            "{key:?}"
+        );
+    }
+    assert_eq!(
+        first_run_card_key_action(ToolbarExit, Key::Return, true),
+        Some(OnboardingCardAction::Continue)
+    );
+
+    // Y and N keep choosing a color and a sticky note on every other step.
+    assert_eq!(
+        first_run_card_key_action(DrawUndo, Key::Char('y'), true),
+        None
+    );
+    assert_eq!(
+        first_run_card_key_action(ToolbarExit, Key::Char('n'), true),
+        None
+    );
+    assert_eq!(first_run_card_key_action(DrawUndo, Key::Return, true), None);
+    // A chord or an in-progress gesture never answers the card.
+    assert_eq!(
+        first_run_card_key_action(BackgroundModeSetup, Key::Char('n'), false),
+        None
+    );
+    assert_eq!(
+        first_run_card_key_action(ToolbarExit, Key::Return, false),
+        None
+    );
 }
 
 #[test]
@@ -441,4 +485,115 @@ fn persisted_usage_signals_apply_after_first_run_completion() {
     assert!(state.used_board_picker);
     assert!(state.used_zoom_control);
     assert!(state.used_canvas_popover);
+}
+
+fn tour_environment() -> FirstRunEnvironment {
+    FirstRunEnvironment {
+        context_enabled: true,
+        radial_binding: RadialMenuMouseBinding::Middle,
+        radial_available: true,
+        context_keyboard_available: true,
+        toolbar_visible: true,
+    }
+}
+
+#[test]
+fn the_tour_runs_value_first_and_asks_about_background_mode_last() {
+    let environment = tour_environment();
+    let mut state = OnboardingState::default();
+
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::DrawUndo));
+
+    state.first_stroke_done = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(
+        state.active_step,
+        Some(FirstRunStep::DrawUndo),
+        "drawing alone does not finish the step"
+    );
+    state.first_undo_done = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::ToolbarExit));
+
+    // The toolbar-and-exit step waits for "Got it".
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::ToolbarExit));
+    state.first_run_toolbar_exit_seen = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::ColorThickness));
+
+    state.first_color_done = true;
+    state.first_thickness_done = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::QuickAccess));
+
+    state.used_radial_menu = true;
+    state.used_context_menu_right_click = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::Reference));
+
+    state.used_help_overlay = true;
+    state.used_command_palette = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::BackgroundModeSetup));
+    assert!(state.first_run_active());
+
+    state.first_run_background_mode_prompted = true;
+    let advance = advance_first_run_steps(&mut state, environment);
+    assert_eq!(
+        advance,
+        FirstRunAdvance {
+            changed: true,
+            completed: true
+        }
+    );
+    assert!(state.first_run_completed);
+    assert_eq!(state.active_step, None);
+}
+
+#[test]
+fn an_answered_background_prompt_ends_the_tour_after_find_anything() {
+    let mut state = OnboardingState {
+        active_step: Some(FirstRunStep::Reference),
+        first_run_background_mode_prompted: true,
+        used_help_overlay: true,
+        used_command_palette: true,
+        ..OnboardingState::default()
+    };
+
+    let advance = advance_first_run_steps(&mut state, tour_environment());
+
+    assert!(advance.completed);
+    assert!(state.first_run_completed);
+}
+
+#[test]
+fn retired_steps_resume_in_the_new_order() {
+    let mut state = OnboardingState {
+        active_step: Some(FirstRunStep::WaitDraw),
+        ..OnboardingState::default()
+    };
+    advance_first_run_steps(&mut state, tour_environment());
+    assert_eq!(state.active_step, Some(FirstRunStep::DrawUndo));
+
+    state.active_step = Some(FirstRunStep::RadialFlick);
+    advance_first_run_steps(&mut state, tour_environment());
+    assert_eq!(state.active_step, Some(FirstRunStep::Reference));
+}
+
+#[test]
+fn a_finished_tour_clears_any_leftover_step() {
+    let mut state = OnboardingState {
+        first_run_completed: true,
+        active_step: Some(FirstRunStep::QuickAccess),
+        quick_access_requires_toolbar: true,
+        ..OnboardingState::default()
+    };
+
+    let advance = advance_first_run_steps(&mut state, tour_environment());
+
+    assert!(advance.changed && !advance.completed);
+    assert_eq!(state.active_step, None);
+    assert!(!state.quick_access_requires_toolbar);
 }

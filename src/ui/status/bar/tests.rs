@@ -62,6 +62,7 @@ fn make_worst_case_state() -> InputState {
     assert!(state.set_active_output_label(Some(
         "DP-3 Dell UltraSharp U2723QE 3840x2160@60".to_string(),
     )));
+    assert!(state.set_output_count(2));
     state
 }
 

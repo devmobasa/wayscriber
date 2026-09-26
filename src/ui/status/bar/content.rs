@@ -336,7 +336,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     }
     if input_state.ui_visibility.show_status_size {
         pieces.push(StatusHudPiece::text(
-            format!("{}px", input_state.size_for_active_tool() as i32),
+            format!("{}px", input_state.status_size_for_tool(tool) as i32),
             Some(StatusHudSegmentKind::Size),
             false,
         ));
@@ -422,9 +422,7 @@ pub(super) fn build_prefix_text(
     measurer: &crate::draw::TextMeasurer,
 ) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
-    if input_state.ui_visibility.show_active_output_badge
-        && let Some(label) = input_state.active_output_label()
-    {
+    if let Some(label) = input_state.status_output_label() {
         let label = crate::util::truncate_with_ellipsis(label, 28);
         parts.push(format!("Output: {label}"));
     }

@@ -3,7 +3,7 @@ use std::time::Instant;
 use super::*;
 
 impl WaylandState {
-    fn inline_toolbar_hit_at(
+    pub(in crate::backend::wayland) fn inline_toolbar_hit_at(
         &self,
         position: (f64, f64),
     ) -> Option<(crate::backend::wayland::toolbar_intent::ToolbarIntent, bool)> {

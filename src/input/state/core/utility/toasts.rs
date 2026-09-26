@@ -8,7 +8,6 @@ use crate::capture::{
     file::{FileSaveConfig, save_screenshot},
 };
 use crate::domain::Action;
-use std::path::Path;
 use std::time::Instant;
 
 impl InputState {
@@ -94,41 +93,6 @@ impl InputState {
     #[cfg(test)]
     pub(crate) fn test_blocked_feedback_active(&self) -> bool {
         self.feedback.blocked_action_active()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn set_capture_feedback(
-        &mut self,
-        saved_path: Option<&Path>,
-        copied_to_clipboard: bool,
-        open_folder_binding: Option<&str>,
-    ) {
-        let mut parts = Vec::new();
-        self.set_last_capture_path(saved_path.map(|path| path.to_path_buf()));
-        if let Some(path) = saved_path {
-            let mut saved = format!("Saved to {}", path.display());
-            if let Some(binding) = open_folder_binding {
-                saved.push_str(&format!(" ({binding} opens folder)"));
-            }
-            parts.push(saved);
-        }
-
-        if copied_to_clipboard {
-            if saved_path.is_none() {
-                parts.push("Clipboard only (no file saved)".to_string());
-            }
-            parts.push("Copied to clipboard".to_string());
-        }
-
-        if parts.is_empty() {
-            parts.push("Screenshot captured".to_string());
-        }
-
-        self.push_toast(
-            ToastPriority::Info,
-            "capture.feedback",
-            Toast::info(parts.join(" | ")),
-        );
     }
 
     pub fn advance_ui_toast(&mut self, now: Instant) -> bool {
@@ -232,25 +196,7 @@ impl InputState {
                     fallback.operation.saved_log_label(),
                     path.display()
                 );
-                self.set_last_capture_path(Some(path.clone()));
-                if let Some(filename) = path.file_name() {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "capture.save",
-                        Toast::info(format!("Saved to {}", filename.to_string_lossy())),
-                    );
-                } else {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "capture.save",
-                        Toast::info(match fallback.operation {
-                            ImageOperationKind::Screenshot => "Screenshot saved",
-                            ImageOperationKind::CanvasExport => "Canvas exported",
-                            ImageOperationKind::BoardPdfExport => "Board exported",
-                            ImageOperationKind::AllBoardsPdfExport => "Boards exported",
-                        }),
-                    );
-                }
+                self.set_capture_feedback(Some(&path), false);
                 // Exit if exit-after-capture was originally enabled
                 if fallback.exit_after_save {
                     self.request_explicit_exit();

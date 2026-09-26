@@ -19,6 +19,8 @@ pub struct UiVisibility {
     pub show_floating_badge: bool,
     pub show_zoom_chip: bool,
     pub show_active_output_badge: bool,
+    /// Keep the output item with a single output (`active_output_badge_always`).
+    pub show_active_output_badge_always: bool,
     pub show_delay_sliders: bool,
     pub show_marker_opacity_section: bool,
     pub show_preset_toasts: bool,
@@ -56,6 +58,7 @@ impl From<&UiConfig> for UiVisibility {
             show_floating_badge: config.show_floating_badge,
             show_zoom_chip: toolbar.show_zoom_chip,
             show_active_output_badge: config.active_output_badge,
+            show_active_output_badge_always: config.active_output_badge_always,
             show_delay_sliders: toolbar.show_delay_sliders,
             show_marker_opacity_section: toolbar.show_marker_opacity_section,
             show_preset_toasts: toolbar.show_preset_toasts,

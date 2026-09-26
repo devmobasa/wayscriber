@@ -13,6 +13,8 @@ struct RenderAnimationState {
     text_edit_entry: bool,
     input_hud: bool,
     ocr_scan: bool,
+    laser_ink: bool,
+    recognition_chip: bool,
 }
 
 impl RenderAnimationState {
@@ -25,6 +27,8 @@ impl RenderAnimationState {
             self.text_edit_entry,
             self.input_hud,
             self.ocr_scan,
+            self.laser_ink,
+            self.recognition_chip,
         ]
         .into_iter()
         .any(|active| active)
@@ -114,6 +118,8 @@ impl WaylandState {
             text_edit_entry: self.input_state.advance_text_edit_entry_feedback(now),
             input_hud: self.input_state.advance_input_hud(now),
             ocr_scan: self.input_state.advance_ocr_scan(now),
+            laser_ink: self.input_state.advance_laser_ink(now),
+            recognition_chip: self.input_state.advance_recognition_chip(now),
         }
     }
 
@@ -170,6 +176,10 @@ impl WaylandState {
             .with(
                 UiEffect::ShapeMeasureBadge,
                 render_ui && !self.capture_picker_chrome_suppressed(),
+            )
+            .with(
+                UiEffect::RecognitionChip,
+                render_ui && animation.recognition_chip && !self.capture_picker_chrome_suppressed(),
             )
             .with_blocked_feedback(animation.blocked_feedback);
         let ui_effect_damage =

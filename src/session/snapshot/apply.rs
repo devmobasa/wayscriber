@@ -188,6 +188,8 @@ fn clear_board_pages(input: &mut InputState, measurer: &crate::draw::TextMeasure
     input.invalidate_hit_cache();
     input.sync_canvas_pointer_to_current_transform();
     input.clear_session_delete_restore_state();
+    input.retract_restore_notice();
+
     for board in input.boards.board_states_mut() {
         board.pages = BoardPages::new();
         board.pages.bump_generation();

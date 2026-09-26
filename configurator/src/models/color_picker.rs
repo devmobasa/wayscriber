@@ -10,6 +10,7 @@ pub enum ColorPickerId {
     StatusBarText,
     HighlightFill,
     HighlightOutline,
+    LaserColor,
     HelpBg,
     HelpBorder,
     HelpText,
@@ -26,6 +27,7 @@ impl ColorPickerId {
                 | Self::StatusBarText
                 | Self::HighlightFill
                 | Self::HighlightOutline
+                | Self::LaserColor
                 | Self::HelpBg
                 | Self::HelpBorder
                 | Self::HelpText

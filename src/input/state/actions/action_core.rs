@@ -52,6 +52,9 @@ impl InputState {
                 true
             }
             Action::ClearCanvas => {
+                // Laser ink is not canvas content, but a presenter clearing
+                // the screen expects it gone too.
+                self.clear_laser_ink();
                 let (has_locked, has_unlocked) = {
                     let frame = self.boards.active_frame();
                     let mut has_locked = false;

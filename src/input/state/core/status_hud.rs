@@ -31,6 +31,15 @@ impl InputState {
         self.ui_visibility.show_status_bar && self.status_hud.is_effectively_visible()
     }
 
+    /// Output name for the status bar. With a single output the name adds
+    /// nothing, so it shows only while two or more outputs are connected,
+    /// unless `active_output_badge_always` asks for it anyway.
+    pub(crate) fn status_output_label(&self) -> Option<&str> {
+        let visible = self.ui_visibility.show_active_output_badge
+            && (self.output_count() >= 2 || self.ui_visibility.show_active_output_badge_always);
+        visible.then(|| self.active_output_label()).flatten()
+    }
+
     pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
         match item {
             StatusBarItem::ActiveOutput => self.ui_visibility.show_active_output_badge,

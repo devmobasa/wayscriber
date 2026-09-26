@@ -25,6 +25,50 @@ fn toggle_help_overlay_opens_and_tracks_usage() {
 }
 
 #[test]
+fn tab_toggles_unbound_rows_without_typing_into_search() {
+    let mut state = make_state();
+    state.toggle_help_overlay();
+    state.needs_redraw = false;
+
+    assert!(state.handle_help_overlay_key(crate::input::events::Key::Tab));
+    assert!(state.help_overlay.shows_unbound());
+    assert!(state.needs_redraw);
+    assert_eq!(state.help_overlay.query(), "");
+
+    assert!(state.handle_help_overlay_key(crate::input::events::Key::Tab));
+    assert!(!state.help_overlay.shows_unbound());
+}
+
+#[test]
+fn help_overlay_toggle_region_maps_to_a_pointer_toggle_click() {
+    let mut state = make_state();
+    state.toggle_help_overlay();
+    state.install_help_overlay_render_result(crate::help_overlay_interaction::HelpRenderResult {
+        scroll_max: 0.0,
+        hit_map: crate::help_overlay_interaction::HelpHitMap::new(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            [],
+        )
+        .with_unbound_toggle((120.0, 350.0, 80.0, 30.0)),
+    });
+
+    assert_eq!(
+        state.help_overlay_click_at(150, 360),
+        HelpOverlayClick::ToggleUnbound
+    );
+    assert_eq!(
+        state.help_overlay_cursor_hint_at(150, 360),
+        Some(HelpOverlayCursorHint::Pointer)
+    );
+    state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 360);
+    assert_eq!(
+        state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 360),
+        Some(HelpOverlayReleaseOutcome::ToggleUnbound)
+    );
+}
+
+#[test]
 fn opening_help_closes_radial_menu() {
     let mut state = make_state();
     state.open_radial_menu(320.0, 240.0);

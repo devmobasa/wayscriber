@@ -114,6 +114,36 @@ pub(super) fn point_in_rect(px: f64, py: f64, x: f64, y: f64, w: f64, h: f64) ->
     px >= x && px <= x + w && py >= y && py <= y + h
 }
 
+/// How far around the top strip's bounds the pointer reveals an idle-hidden
+/// strip, in logical pixels.
+pub(super) const TOP_STRIP_REVEAL_MARGIN: f64 = 64.0;
+/// Band along the output's top edge that reveals the strip from anywhere
+/// across the output, in logical pixels.
+pub(super) const TOP_EDGE_REVEAL_BAND: f64 = 8.0;
+
+/// Whether a canvas point is close enough to the top strip (`strip` is its
+/// `(x, y, w, h)` in the same coordinates) to reveal it: within
+/// [`TOP_STRIP_REVEAL_MARGIN`] of its bounds, or in the top edge band.
+pub(super) fn point_in_top_strip_reveal_zone(
+    point: (f64, f64),
+    strip: (f64, f64, f64, f64),
+) -> bool {
+    let (px, py) = point;
+    if (0.0..=TOP_EDGE_REVEAL_BAND).contains(&py) {
+        return true;
+    }
+
+    let (x, y, w, h) = strip;
+    point_in_rect(
+        px,
+        py,
+        x - TOP_STRIP_REVEAL_MARGIN,
+        y - TOP_STRIP_REVEAL_MARGIN,
+        w + 2.0 * TOP_STRIP_REVEAL_MARGIN,
+        h + 2.0 * TOP_STRIP_REVEAL_MARGIN,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +185,45 @@ mod tests {
         assert!(point_in_rect(10.0, 10.0, 10.0, 10.0, 20.0, 20.0));
         assert!(point_in_rect(30.0, 30.0, 10.0, 10.0, 20.0, 20.0));
         assert!(!point_in_rect(30.1, 30.0, 10.0, 10.0, 20.0, 20.0));
+    }
+
+    #[test]
+    fn reveal_zone_extends_the_strip_bounds_by_the_margin() {
+        let strip = (24.0, 12.0, 1000.0, 104.0);
+
+        // On the strip and just inside the margin on every side.
+        assert!(point_in_top_strip_reveal_zone((500.0, 60.0), strip));
+        assert!(point_in_top_strip_reveal_zone((24.0 - 64.0, 60.0), strip));
+        assert!(point_in_top_strip_reveal_zone((1024.0 + 64.0, 60.0), strip));
+        assert!(point_in_top_strip_reveal_zone((500.0, 116.0 + 64.0), strip));
+
+        // Just past the margin.
+        assert!(!point_in_top_strip_reveal_zone(
+            (1024.0 + 64.5, 60.0),
+            strip
+        ));
+        assert!(!point_in_top_strip_reveal_zone(
+            (500.0, 116.0 + 64.5),
+            strip
+        ));
+        assert!(!point_in_top_strip_reveal_zone((1500.0, 600.0), strip));
+    }
+
+    #[test]
+    fn reveal_zone_includes_the_top_edge_band_across_the_output() {
+        // A strip dragged down to the middle of a wide output.
+        let strip = (200.0, 500.0, 600.0, 60.0);
+
+        assert!(point_in_top_strip_reveal_zone((1800.0, 0.0), strip));
+        assert!(point_in_top_strip_reveal_zone(
+            (1800.0, TOP_EDGE_REVEAL_BAND),
+            strip
+        ));
+        assert!(!point_in_top_strip_reveal_zone(
+            (1800.0, TOP_EDGE_REVEAL_BAND + 1.0),
+            strip
+        ));
+        assert!(!point_in_top_strip_reveal_zone((1800.0, -1.0), strip));
     }
 
     #[test]

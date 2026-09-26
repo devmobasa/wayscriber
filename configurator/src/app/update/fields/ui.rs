@@ -3,7 +3,7 @@ use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 use crate::models::{
     InputHudModeOption, InputHudPositionOption, OverrideOption, ReducedMotionOption,
     StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
+    ToolbarRebindModifierOption, ToolbarStrokeControlsOption, UiThemeOption, ZoomChipDisplayOption,
 };
 
 use super::super::super::effects::Effect;
@@ -86,6 +86,16 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.ui_toolbar_rebind_modifier = option;
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_toolbar_stroke_controls_changed(
+        &mut self,
+        option: ToolbarStrokeControlsOption,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_toolbar_stroke_controls = option;
         self.refresh_dirty_flag();
         Vec::new()
     }

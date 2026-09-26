@@ -1,6 +1,38 @@
 use super::super::color::ColorInput;
 
 #[test]
+fn laser_settings_round_trip_and_reject_out_of_range_drafts() {
+    let mut config = Config::default();
+    config.laser.color = [0.0, 0.5, 1.0, 0.75];
+    config.laser.width = 8.0;
+    config.laser.hold_ms = 2000;
+    config.laser.fade_ms = 250;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.laser_width, "8");
+    assert_eq!(draft.laser_hold_ms, "2000");
+    assert_eq!(draft.laser_fade_ms, "250");
+
+    draft.laser_width = "12".to_string();
+    draft.laser_hold_ms = "0".to_string();
+    draft.set_quad(QuadField::LaserColor, 0, "1".to_string());
+    let saved = draft.to_config(&config).expect("valid laser draft");
+    assert_eq!(saved.laser.width, 12.0);
+    assert_eq!(saved.laser.hold_ms, 0);
+    assert_eq!(saved.laser.fade_ms, 250);
+    assert_eq!(saved.laser.color, [1.0, 0.5, 1.0, 0.75]);
+
+    for (width, hold, fade) in [("1", "0", "0"), ("8", "40000", "0"), ("8", "0", "9000")] {
+        draft.laser_width = width.to_string();
+        draft.laser_hold_ms = hold.to_string();
+        draft.laser_fade_ms = fade.to_string();
+        assert!(
+            draft.to_config(&config).is_err(),
+            "width {width}, hold {hold}, fade {fade} must be refused"
+        );
+    }
+}
+
+#[test]
 fn shape_pen_sensitivity_round_trips_and_rejects_invalid_drafts() {
     let mut config = Config::default();
     config.drawing.shape_recognition_sensitivity = 3;
@@ -38,6 +70,25 @@ fn shape_pen_grid_snap_round_trips() {
             .expect("valid draft")
             .drawing
             .shape_recognition_grid_snap
+    );
+}
+
+#[test]
+fn shape_pen_recognition_feedback_round_trips() {
+    let mut config = Config::default();
+    assert!(config.drawing.shape_recognition_feedback);
+    config.drawing.shape_recognition_feedback = false;
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.drawing_shape_recognition_feedback);
+
+    draft.set_toggle(ToggleField::DrawingShapeRecognitionFeedback, true);
+    assert!(
+        draft
+            .to_config(&config)
+            .expect("valid draft")
+            .drawing
+            .shape_recognition_feedback
     );
 }
 
@@ -1234,6 +1285,40 @@ fn config_draft_round_trips_zoom_chip_display() {
 }
 
 #[test]
+fn config_draft_round_trips_toolbar_stroke_controls() {
+    use super::super::fields::ToolbarStrokeControlsOption;
+    use wayscriber::config::ToolbarStrokeControls;
+
+    let default_draft = ConfigDraft::from_config(&Config::default());
+    assert_eq!(
+        default_draft.ui_toolbar_stroke_controls,
+        ToolbarStrokeControlsOption::Panel
+    );
+    let saved = default_draft
+        .to_config(&Config::default())
+        .expect("default draft should convert");
+    assert_eq!(
+        saved.ui.toolbar.stroke_controls,
+        ToolbarStrokeControls::Panel
+    );
+
+    for style in ToolbarStrokeControls::ALL {
+        let mut config = Config::default();
+        config.ui.toolbar.stroke_controls = style;
+        let draft = ConfigDraft::from_config(&config);
+        assert_eq!(draft.ui_toolbar_stroke_controls.to_config(), style);
+        let saved = draft.to_config(&config).expect("draft should convert");
+        assert_eq!(saved.ui.toolbar.stroke_controls, style);
+    }
+
+    let labels: Vec<_> = ToolbarStrokeControlsOption::list()
+        .iter()
+        .map(|option| option.label())
+        .collect();
+    assert_eq!(labels, ["Panel (default)", "Meters", "Steppers"]);
+}
+
+#[test]
 fn config_draft_round_trips_chrome_visibility_preferences() {
     let mut config = Config::default();
     config.ui.show_floating_badge = false;
@@ -1258,9 +1343,12 @@ fn config_draft_round_trips_every_status_bar_content_preference() {
         config.ui.set_status_bar_item_visible(item, false);
     }
 
+    config.ui.active_output_badge_always = true;
+
     let draft = ConfigDraft::from_config(&config);
     assert!(!draft.ui_status_bar_interactive);
     assert!(!draft.ui_active_output_badge);
+    assert!(draft.ui_active_output_badge_always);
     assert!(!draft.ui_show_status_selection_info);
     assert!(!draft.ui_show_status_board_badge);
     assert!(!draft.ui_show_status_page_badge);
@@ -1274,6 +1362,7 @@ fn config_draft_round_trips_every_status_bar_content_preference() {
 
     let saved = draft.to_config(&config).expect("draft should convert");
     assert!(!saved.ui.status_bar_interactive);
+    assert!(saved.ui.active_output_badge_always);
     for item in StatusBarItem::ALL {
         assert!(
             !saved.ui.status_bar_item_visible(item),

@@ -76,6 +76,10 @@ pub fn draw_icon_highlight(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_highlight(ctx, x, y, size);
 }
 
+pub fn draw_icon_laser(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_laser(ctx, x, y, size);
+}
+
 pub fn draw_icon_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_marker(ctx, x, y, size);
 }

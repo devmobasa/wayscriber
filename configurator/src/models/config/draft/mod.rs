@@ -8,7 +8,8 @@ use super::super::fields::{
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
+    UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -44,6 +45,7 @@ pub struct ConfigDraft {
     pub drawing_pen_smoothing: String,
     pub drawing_shape_recognition_sensitivity: String,
     pub drawing_shape_recognition_grid_snap: bool,
+    pub drawing_shape_recognition_feedback: bool,
     /// Families `Shift+T` steps through, in order. A list rather than a
     /// comma-separated line: a family name can contain a comma, and the row
     /// editor picks from what is installed instead of asking for exact text.
@@ -71,6 +73,11 @@ pub struct ConfigDraft {
     pub arrow_head_at_end: bool,
     pub arrow_style: ArrowStyleOption,
 
+    pub laser_color: ColorQuadInput,
+    pub laser_width: String,
+    pub laser_hold_ms: String,
+    pub laser_fade_ms: String,
+
     pub history: super::history::HistoryDraft,
 
     pub performance_buffer_count: u32,
@@ -83,6 +90,7 @@ pub struct ConfigDraft {
     pub ui_show_status_bar: bool,
     pub ui_status_bar_interactive: bool,
     pub ui_active_output_badge: bool,
+    pub ui_active_output_badge_always: bool,
     pub ui_show_status_selection_info: bool,
     pub ui_show_status_board_badge: bool,
     pub ui_show_status_page_badge: bool,
@@ -113,6 +121,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_zoom_chip_display: ZoomChipDisplayOption,
     pub ui_toolbar_show_zoom_chip: bool,
     pub ui_toolbar_rebind_modifier: ToolbarRebindModifierOption,
+    pub ui_toolbar_stroke_controls: ToolbarStrokeControlsOption,
     pub ui_toolbar_items: ToolbarItemsConfig,
     pub ui_toolbar_show_presets: bool,
     pub ui_toolbar_show_actions_section: bool,

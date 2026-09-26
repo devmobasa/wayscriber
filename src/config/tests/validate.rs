@@ -1626,3 +1626,57 @@ fn a_font_cycle_repeat_in_another_case_is_still_a_repeat() {
 
     assert_eq!(config.drawing.font_cycle, ["Sans"]);
 }
+
+#[test]
+fn laser_section_parses_and_defaults_when_omitted() {
+    let config = config_from_toml("[drawing]\n");
+    let defaults = LaserConfig::default();
+    assert_eq!(config.laser.width, defaults.width);
+    assert_eq!(config.laser.hold_ms, 1200);
+    assert_eq!(config.laser.fade_ms, 500);
+    assert_eq!(config.laser.color, defaults.color);
+
+    let config = config_from_toml(
+        "[laser]\ncolor = [0.0, 1.0, 0.5, 0.8]\nwidth = 9.5\nhold_ms = 3000\nfade_ms = 0\n",
+    );
+    assert_eq!(config.laser.color, [0.0, 1.0, 0.5, 0.8]);
+    assert_eq!(config.laser.width, 9.5);
+    assert_eq!(config.laser.hold_ms, 3000);
+    assert_eq!(config.laser.fade_ms, 0);
+}
+
+#[test]
+fn validate_and_clamp_keeps_laser_settings_in_range() {
+    let mut config = Config::default();
+    config.laser.color = [1.5, -0.2, 0.5, 2.0];
+    config.laser.width = 100.0;
+    config.laser.hold_ms = 60_000;
+    config.laser.fade_ms = 60_000;
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.laser.color, [1.0, 0.0, 0.5, 1.0]);
+    assert_eq!(config.laser.width, LASER_WIDTH_MAX);
+    assert_eq!(config.laser.hold_ms, LASER_HOLD_MS_MAX);
+    assert_eq!(config.laser.fade_ms, LASER_FADE_MS_MAX);
+
+    config.laser.width = 0.5;
+    config.validate_and_clamp();
+    assert_eq!(config.laser.width, LASER_WIDTH_MIN);
+}
+
+#[test]
+fn validate_and_clamp_resets_non_finite_laser_values() {
+    let defaults = LaserConfig::default();
+
+    for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut config = Config::default();
+        config.laser.width = invalid;
+        config.laser.color = [invalid; 4];
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.laser.width, defaults.width);
+        assert_eq!(config.laser.color, defaults.color);
+    }
+}

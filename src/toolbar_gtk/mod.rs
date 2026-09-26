@@ -171,9 +171,24 @@ pub enum GtkToolbarFeedback {
         alt: bool,
         logo: bool,
     },
+    /// A key press the toolbar received while it held keyboard focus.
+    ///
+    /// GTK runs on its own Wayland connection, so a key typed while the
+    /// toolbar owns focus (typically right after a click opened one of its
+    /// popovers) never reaches the overlay's keyboard. The toolbar hands the
+    /// press over instead and the backend routes it like its own: Escape
+    /// closes the open menu, and a shortcut closes it and runs. `keyval` is
+    /// the GDK keyval; the modifiers are GTK's state for this press.
+    Key {
+        keyval: u32,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+        logo: bool,
+    },
     /// Pointer entered/left the GTK top strip. GTK runs on its own Wayland
-    /// connection, so the backend cannot observe this hover itself; it drives
-    /// the top-strip idle-fade restore/hold.
+    /// connection, so the backend cannot observe this hover itself; it holds
+    /// the top-strip idle fade.
     TopHover { hovered: bool },
     /// Drag-to-move lifecycle for the top bar. `End` is when the offsets get
     /// clamped and persisted; `seq` is the bar's monotonically increasing

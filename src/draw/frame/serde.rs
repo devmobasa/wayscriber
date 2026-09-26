@@ -76,6 +76,7 @@ impl<'de> Deserialize<'de> for Frame {
             redo_stack: helper.redo_stack,
             next_shape_id: 1,
             shape_order_generation: 0,
+            history_revision: super::history::fresh_history_revision(),
         };
         frame.rebuild_next_id();
         Ok(frame)

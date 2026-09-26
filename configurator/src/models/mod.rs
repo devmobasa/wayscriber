@@ -31,7 +31,8 @@ pub use fields::{
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
     ReducedMotionOption, RegionPickerOption, SessionCompressionOption, SessionStorageModeOption,
     StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, ToolbarStrokeControlsOption, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

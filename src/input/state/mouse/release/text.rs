@@ -20,7 +20,7 @@ pub(super) fn handle_pending_text_click(
         TEXT_DOUBLE_CLICK_DISTANCE,
     );
     if is_double {
-        state.set_selection(vec![shape_id]);
+        state.set_selection_with(measurer, vec![shape_id]);
         let _ = state.edit_selected_text_with(measurer);
     }
 }

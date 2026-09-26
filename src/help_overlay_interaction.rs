@@ -9,6 +9,8 @@ pub enum HelpOverlayRegion {
     Search,
     /// A clickable action row or footer action.
     Row(Action),
+    /// The footer toggle that shows or hides actions without a binding.
+    ToggleUnbound,
     /// Overlay chrome outside an interactive element.
     Inside,
 }
@@ -34,12 +36,14 @@ impl HitRect {
 /// Last-painted screen-space geometry for one help overlay.
 ///
 /// The default map is empty. Rows are tested in insertion order before the
-/// search well and bare chrome, with the outer bounds checked first.
+/// unbound-actions toggle, the search well, and bare chrome, with the outer
+/// bounds checked first.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HelpHitMap {
     box_rect: Option<HitRect>,
     search_rect: Option<HitRect>,
     rows: Vec<(HitRect, Action)>,
+    unbound_toggle: Option<HitRect>,
 }
 
 impl HelpHitMap {
@@ -57,7 +61,14 @@ impl HelpHitMap {
                 .into_iter()
                 .map(|(rect, action)| (HitRect::from_tuple(rect), action))
                 .collect(),
+            unbound_toggle: None,
         }
+    }
+
+    /// Register the painted unbound-actions toggle, as `(x, y, width, height)`.
+    pub fn with_unbound_toggle(mut self, rect: (f64, f64, f64, f64)) -> Self {
+        self.unbound_toggle = Some(HitRect::from_tuple(rect));
+        self
     }
 
     /// Return the most specific target at a point, including rectangle edges.
@@ -69,6 +80,9 @@ impl HelpHitMap {
             if rect.contains(x, y) {
                 return Some(HelpOverlayRegion::Row(action));
             }
+        }
+        if self.unbound_toggle.is_some_and(|rect| rect.contains(x, y)) {
+            return Some(HelpOverlayRegion::ToggleUnbound);
         }
         if self.search_rect.is_some_and(|rect| rect.contains(x, y)) {
             return Some(HelpOverlayRegion::Search);
@@ -127,6 +141,27 @@ mod tests {
         );
         assert_eq!(map.region_at(60.0, 60.0), Some(HelpOverlayRegion::Search));
         assert_eq!(map.region_at(90.0, 90.0), Some(HelpOverlayRegion::Inside));
+    }
+
+    #[test]
+    fn unbound_toggle_sits_between_rows_and_search() {
+        let map = HelpHitMap::new(
+            (0.0, 0.0, 100.0, 100.0),
+            Some((0.0, 0.0, 100.0, 30.0)),
+            [((0.0, 0.0, 100.0, 10.0), Action::ToggleHelp)],
+        )
+        .with_unbound_toggle((0.0, 0.0, 50.0, 20.0));
+
+        assert_eq!(
+            map.region_at(5.0, 5.0),
+            Some(HelpOverlayRegion::Row(Action::ToggleHelp))
+        );
+        assert_eq!(
+            map.region_at(5.0, 15.0),
+            Some(HelpOverlayRegion::ToggleUnbound)
+        );
+        assert_eq!(map.region_at(75.0, 15.0), Some(HelpOverlayRegion::Search));
+        assert_eq!(map.region_at(5.0, 150.0), None);
     }
 
     #[test]

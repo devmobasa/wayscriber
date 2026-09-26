@@ -110,29 +110,65 @@ mod tests {
         assert!(state.is_properties_panel_open());
     }
 
+    const EVERY_TOP_MENU: [TopMenuState; 7] = [
+        TopMenuState::ShapePicker,
+        TopMenuState::TopOverflow,
+        TopMenuState::CanvasPopover,
+        TopMenuState::SessionPopover,
+        TopMenuState::SettingsPopover,
+        TopMenuState::PenFeelPanel,
+        TopMenuState::ArrowStyleMenu,
+    ];
+
     #[test]
-    fn escape_dismisses_the_open_top_popover_with_named_outcome() {
+    fn escape_dismisses_every_open_top_menu_with_named_outcome() {
+        let mut state = make_test_input_state();
+
+        for menu in EVERY_TOP_MENU {
+            state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
+
+            assert_eq!(
+                route_key_press(&mut state, Key::Escape),
+                RoutingOutcome::Canceled(CancelTarget::TopMenu),
+                "Escape over {menu:?}"
+            );
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed, "{menu:?}");
+            assert!(!state.should_exit, "Escape over {menu:?} must not exit");
+        }
+    }
+
+    /// A shortcut typed while a toolbar menu is open used to vanish. It now
+    /// closes the menu and still reaches its binding.
+    #[test]
+    fn shortcut_key_closes_an_open_top_menu_and_still_dispatches() {
+        let mut state = make_test_input_state();
+
+        for menu in EVERY_TOP_MENU {
+            state.set_tool_override(Some(Tool::Pen));
+            state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
+
+            let outcome = route_key_press(&mut state, Key::Char('v'));
+
+            assert!(
+                matches!(outcome, RoutingOutcome::DispatchedAction(_)),
+                "the select-tool binding still dispatches over {menu:?}: {outcome:?}"
+            );
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed, "{menu:?}");
+            assert_eq!(state.active_tool(), Tool::Select, "{menu:?}");
+        }
+    }
+
+    #[test]
+    fn modifier_press_leaves_an_open_top_menu_open() {
         let mut state = make_test_input_state();
         state.test_set_toolbar_menu_state(
-            TopMenuState::SettingsPopover,
+            TopMenuState::TopOverflow,
             state.toolbar_top_popover_scroll(),
         );
 
-        assert_eq!(
-            route_key_press(&mut state, Key::Escape),
-            RoutingOutcome::Canceled(CancelTarget::TopPopover)
-        );
-        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+        route_key_press(&mut state, Key::Ctrl);
 
-        state.test_set_toolbar_menu_state(
-            TopMenuState::SessionPopover,
-            state.toolbar_top_popover_scroll(),
-        );
-        assert_eq!(
-            route_key_press(&mut state, Key::Escape),
-            RoutingOutcome::Canceled(CancelTarget::TopPopover)
-        );
-        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
     }
 
     #[test]
@@ -197,8 +233,10 @@ mod tests {
         assert!(!state.pointer_drag_active());
     }
 
+    /// Zoom used to swallow right-click; the menu now opens over the zoomed
+    /// view like anywhere else.
     #[test]
-    fn right_click_suppression_paths_return_named_side_effects() {
+    fn right_click_opens_the_context_menu_while_zoomed() {
         let pointer_measurer = crate::draw::TextMeasurer::default();
         let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
         let pointer_resources = crate::input::state::InputTextResources {
@@ -214,10 +252,19 @@ mod tests {
                 pointer_resources,
                 PointerPress::new(MouseButton::Right, points())
             ),
-            RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
-                PointerSideEffect::RightClickSuppressedByZoom
-            ))
+            RoutingOutcome::Consumed(ConsumedBy::RightClickContextMenu)
         );
+        assert!(zoomed.is_context_menu_open());
+    }
+
+    #[test]
+    fn right_click_suppression_paths_return_named_side_effects() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &pointer_ui_engine,
+        };
 
         let mut disabled = make_test_input_state();
         disabled.set_context_menu_enabled(false);

@@ -81,7 +81,6 @@ impl InputState {
 
     fn right_click_chrome_recovery_available(&self) -> bool {
         self.context_menu_enabled()
-            && !self.zoom_active()
             && self.radial_menu.mouse_binding != RadialMenuMouseBinding::Right
     }
 
@@ -149,6 +148,10 @@ impl InputState {
         self.toolbar.status_bar_contents_open()
     }
 
+    pub(crate) fn toolbar_settings_details_open(&self) -> bool {
+        self.toolbar.settings_details_open()
+    }
+
     pub(crate) fn toolbar_top_popover_scroll(&self) -> f64 {
         self.toolbar.top_popover_scroll()
     }
@@ -167,6 +170,11 @@ impl InputState {
 
     pub(crate) fn toolbar_rebind_click_label(&self) -> Option<&'static str> {
         self.toolbar.rebind_modifier().click_label()
+    }
+
+    /// How the style pill shows pen smoothing and Shape Pen sensitivity.
+    pub(crate) fn toolbar_stroke_controls(&self) -> crate::config::ToolbarStrokeControls {
+        self.toolbar.stroke_controls()
     }
 
     pub(crate) fn toolbar_visibility_snapshot(&self) -> super::super::toolbar::ToolbarVisibility {
@@ -428,6 +436,14 @@ impl InputState {
         self.toolbar.override_rebind_modifier_for_test(modifier);
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_stroke_controls(
+        &mut self,
+        style: crate::config::ToolbarStrokeControls,
+    ) {
+        self.toolbar.override_stroke_controls_for_test(style);
+    }
+
     /// Wrapper for undo that preserves existing action plumbing.
     pub fn toolbar_undo(&mut self) {
         let measurer = crate::draw::TextMeasurer::default();
@@ -593,7 +609,7 @@ mod tests {
         let mut state = make_test_input_state();
         let section = crate::config::ToolbarSectionFlag::Actions.item_id();
         let mut items = ToolbarItemsConfig::default();
-        items.set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
+        items.set_hidden(ids::TOP_UTILITY_SCREENSHOT, true);
         items.set_hidden(ids::TOP_UTILITY_OCR, false);
         items.set_hidden(ids::TOP_TOOL_PEN, true);
         items.set_hidden(section, true);
@@ -604,7 +620,8 @@ mod tests {
         assert!(state.reset_toolbar_item_hidden_overrides());
 
         let resolved = state.toolbar_items().resolved();
-        assert!(resolved.hidden.contains(&ids::TOP_UTILITY_SCREENSHOT));
+        // The capture button ships visible, so the reset brings it back.
+        assert!(!resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
         // Restored to its baseline rather than to an explicit entry.
         assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));
         assert!(!resolved.hidden.contains(&ids::TOP_UTILITY_OCR));

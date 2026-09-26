@@ -12,20 +12,39 @@ fn add_rect(state: &mut InputState) -> crate::draw::ShapeId {
     })
 }
 
-#[test]
-fn canvas_menu_includes_paste_entry() {
-    let mut state = create_test_input_state();
-    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
-
-    let paste_entry = state
+fn paste_entry(state: &InputState) -> ContextMenuEntry {
+    state
         .context_menu_entries()
         .into_iter()
         .find(|entry| entry.command == Some(MenuCommand::Paste))
-        .expect("paste entry");
+        .expect("paste entry")
+}
 
-    assert_eq!(paste_entry.label, "Paste");
-    assert_eq!(paste_entry.shortcut.as_deref(), Some("Ctrl+Alt+V"));
-    assert!(!paste_entry.disabled);
+#[test]
+fn canvas_menu_paste_waits_for_something_to_paste() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
+
+    let paste = paste_entry(&state);
+    assert_eq!(paste.label, "Paste");
+    assert_eq!(paste.shortcut.as_deref(), Some("Ctrl+Alt+V"));
+    assert!(paste.disabled, "nothing copied yet");
+
+    let shape_id = add_rect(&mut state);
+    state.set_selection(vec![shape_id]);
+    assert_eq!(state.copy_selection(), 1);
+    assert!(!paste_entry(&state).disabled, "copied shapes enable it");
+}
+
+#[test]
+fn a_capture_copied_to_the_clipboard_enables_paste() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
+    assert!(paste_entry(&state).disabled);
+
+    state.note_capture_image_on_clipboard();
+
+    assert!(!paste_entry(&state).disabled);
 }
 
 #[test]
@@ -55,7 +74,7 @@ fn shape_menu_includes_copy_and_paste_entries_for_selection() {
     assert!(!copy_entry.disabled);
     assert_eq!(paste_entry.label, "Paste");
     assert_eq!(paste_entry.shortcut.as_deref(), Some("Ctrl+Alt+V"));
-    assert!(!paste_entry.disabled);
+    assert!(paste_entry.disabled, "nothing has been copied yet");
 }
 
 #[test]

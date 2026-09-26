@@ -30,9 +30,15 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     page.group("Contents")
         .switch_row(
             "Show active output",
-            "",
+            "Appears while two or more outputs are connected",
             |app| app.draft.ui_active_output_badge,
             |value| Message::ToggleChanged(ToggleField::UiActiveOutputBadge, value),
+        )
+        .switch_row(
+            "Show active output with a single output",
+            "",
+            |app| app.draft.ui_active_output_badge_always,
+            |value| Message::ToggleChanged(ToggleField::UiActiveOutputBadgeAlways, value),
         )
         .switch_row(
             "Show selection dimensions",

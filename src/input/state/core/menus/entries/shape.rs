@@ -28,36 +28,39 @@ impl InputState {
             ));
         }
 
-        entries.push(ContextMenuEntry::new(
+        let delete = ContextMenuEntry::new(
             "Delete",
             self.shortcut_for_action(Action::DeleteSelection),
             all_locked,
             Some(MenuCommand::Delete),
-        ));
+        );
+        entries.push(if entries.is_empty() {
+            delete
+        } else {
+            delete.with_separator()
+        });
         entries.push(ContextMenuEntry::new(
             "Copy",
             self.shortcut_for_action(Action::CopySelection),
             all_locked,
             Some(MenuCommand::Copy),
         ));
-        entries.push(ContextMenuEntry::new(
-            "Paste",
-            self.shortcut_for_action(Action::PasteSelection),
-            false,
-            Some(MenuCommand::Paste),
-        ));
+        entries.push(self.paste_entry());
         entries.push(ContextMenuEntry::new(
             "Duplicate",
             self.shortcut_for_action(Action::DuplicateSelection),
             false,
             Some(MenuCommand::Duplicate),
         ));
-        entries.push(ContextMenuEntry::new(
-            "Move to Front",
-            self.shortcut_for_action(Action::MoveSelectionToFront),
-            false,
-            Some(MenuCommand::MoveToFront),
-        ));
+        entries.push(
+            ContextMenuEntry::new(
+                "Move to Front",
+                self.shortcut_for_action(Action::MoveSelectionToFront),
+                false,
+                Some(MenuCommand::MoveToFront),
+            )
+            .with_separator(),
+        );
         entries.push(ContextMenuEntry::new(
             "Move to Back",
             self.shortcut_for_action(Action::MoveSelectionToBack),
@@ -80,6 +83,7 @@ impl InputState {
             false,
             Some(MenuCommand::Properties),
         ));
+        let view_group_start = entries.len();
         if self.boards.pan_enabled() && !self.board_is_transparent() {
             let reset_disabled = self.boards.active_frame().view_offset() == (0, 0);
             entries.push(ContextMenuEntry::new(
@@ -93,6 +97,7 @@ impl InputState {
             ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
                 .with_submenu(ContextMenuKind::Zoom),
         );
+        entries[view_group_start].separator_before = true;
         entries.push(ContextMenuEntry::new(
             "Radial Menu",
             self.shortcut_for_action(Action::ToggleRadialMenu),
@@ -120,6 +125,7 @@ impl InputState {
         }
 
         self.push_chrome_recovery_entries(&mut entries);
+        entries.push(self.exit_entry());
 
         entries
     }

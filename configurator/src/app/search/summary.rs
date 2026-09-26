@@ -74,6 +74,13 @@ fn drawing_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
         query,
         summary,
         TabId::Drawing,
+        SearchArea::DrawingLaser,
+        DRAWING_LASER_TERMS,
+    );
+    add_area_if(
+        query,
+        summary,
+        TabId::Drawing,
         SearchArea::DrawingDragTools,
         DRAWING_DRAG_TERMS,
     );

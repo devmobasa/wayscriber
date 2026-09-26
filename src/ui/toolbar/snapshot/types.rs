@@ -72,13 +72,17 @@ pub struct ToolContext {
     pub show_polygon_sides_control: bool,
     /// Whether font controls should be shown
     pub show_font_controls: bool,
-    /// Whether the pen-smoothing stepper should be shown.
+    /// Whether the text-size slider joins the font controls.
+    pub show_font_size: bool,
+    /// Whether pen smoothing belongs in the style pill (as the Pen feel
+    /// panel's smoothing section, a meter, or a stepper).
     ///
     /// Follows the tool rather than the setting: smoothing is one number for
     /// the whole program, but it only reaches strokes the pen and marker
     /// accumulate, so a Line or Blur tool has nothing for the stepper to do.
     pub show_pen_smoothing: bool,
-    /// Whether the Shape Pen sensitivity stepper should be shown.
+    /// Whether Shape Pen sensitivity belongs in the style pill (as the Pen
+    /// feel panel's detection section, a meter, or a stepper).
     pub show_shape_sensitivity: bool,
 }
 
@@ -108,6 +112,7 @@ impl ToolContext {
                 show_marker_opacity: snapshot.show_marker_opacity_section,
                 show_polygon_sides_control: false,
                 show_font_controls: true,
+                show_font_size: true,
                 show_pen_smoothing: false,
                 show_shape_sensitivity: false,
             };
@@ -129,10 +134,10 @@ impl ToolContext {
         if snapshot.thickness_targets_marker {
             ctx.show_marker_opacity = true;
         }
-        // show_text_controls: keep font controls visible even when text mode is inactive
-        if snapshot.show_text_controls {
-            ctx.show_font_controls = true;
-        }
+        // Font controls follow what the tool draws; `show_text_controls` pins
+        // them on every tool only in classic mode (`all_visible`).
+        let text = super::text_controls::DrawnTextControls::for_tool(effective_tool, snapshot);
+        (ctx.show_font_controls, ctx.show_font_size) = (text.face, text.size);
         // show_marker_opacity_section: keep opacity slider visible for all tools
         if snapshot.show_marker_opacity_section {
             ctx.show_marker_opacity = true;
@@ -159,6 +164,7 @@ impl ToolContext {
             show_marker_opacity: profile.show_marker_opacity(),
             show_polygon_sides_control: false,
             show_font_controls: false,
+            show_font_size: false,
             // Set from the tool by `from_snapshot`; a profile alone cannot say.
             show_pen_smoothing: false,
             show_shape_sensitivity: false,
@@ -193,6 +199,7 @@ impl ToolContext {
             show_marker_opacity,
             show_polygon_sides_control,
             show_font_controls,
+            show_font_size: show_font_controls,
             show_pen_smoothing: true,
             show_shape_sensitivity: true,
         }
@@ -342,6 +349,8 @@ pub struct ToolbarSnapshot {
     pub toolbar_scale: f64,
     /// Current toolbar layout mode
     pub layout_mode: ToolbarLayoutMode,
+    /// How the style pill shows pen smoothing and Shape Pen sensitivity
+    pub stroke_controls: crate::config::ToolbarStrokeControls,
     /// Resolved known item-level toolbar visibility config.
     pub resolved_toolbar_items: ResolvedToolbarItems,
     /// Whether to show extended color palette
@@ -360,7 +369,7 @@ pub struct ToolbarSnapshot {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
     pub show_preset_toasts: bool,
-    /// Whether the top strip dims after a few seconds without drawing
+    /// Whether the idle top strip hides and reappears near the pointer
     pub idle_fade: bool,
     /// Whether to show the Presets section
     pub show_presets: bool,
@@ -395,6 +404,15 @@ pub struct ToolbarSnapshot {
     pub settings_popover_open: bool,
     /// Whether the Canvas popover (anchored to the overflow toggle) is open
     pub canvas_popover_open: bool,
+    /// Whether the chrome island's layout-preset menu is open
+    pub layout_menu_open: bool,
+    /// Whether the style pill's Pen feel panel is open
+    pub pen_feel_open: bool,
+    /// Whether the style pill's arrow style menu is open
+    pub arrow_style_menu_open: bool,
+    /// Whether exiting only hides the overlay: the daemon spawned this overlay
+    /// and keeps running after it closes. Filled by the backend.
+    pub exit_hides_overlay: bool,
     /// Internal scroll offset of the open Canvas/Session/Settings popover
     /// (logical pixels, clamped at render)
     pub top_popover_scroll: f64,
@@ -403,9 +421,10 @@ pub struct ToolbarSnapshot {
     /// Display form of the top strip (full strip vs. micro chip). `Hidden`
     /// never reaches a renderer — hidden strips have no surface.
     pub top_display_mode: TopDisplayMode,
-    /// Idle-fade opacity of the top-strip islands: 1.0 = full,
-    /// `fade::TOP_STRIP_DIM_LEVEL` = dimmed, values between while a fade
-    /// transition is in flight. Owned by the backend fade engine.
+    /// Idle-fade opacity of the top-strip islands: 1.0 = shown,
+    /// `fade::TOP_STRIP_HIDDEN_LEVEL` = idle-hidden (input passes through to
+    /// the canvas), values between while a fade transition is in flight.
+    /// Owned by the backend fade engine.
     pub top_fade: f64,
     /// Width available to the top strip in pre-scale spec units, when
     /// known; content past this degrades into the overflow menu.
@@ -423,6 +442,8 @@ pub struct ToolbarSnapshot {
     pub customize_items_group: Option<super::super::events::ToolbarItemCustomizeGroup>,
     /// Whether the Settings drawer is showing status-bar content controls.
     pub status_bar_contents_open: bool,
+    /// Whether the Settings popover's "Details" disclosure is expanded.
+    pub settings_details_open: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews
@@ -486,6 +507,12 @@ impl ToolbarSnapshot {
     /// tab is the more explicit "bring me back" affordance.
     pub fn top_micro_active(&self) -> bool {
         self.top_display_mode == TopDisplayMode::Micro && !self.top_minimized
+    }
+
+    /// Whether the idle fade has the strip fully hidden. Every frontend keeps
+    /// the surface mapped but lets pointer input through to the canvas.
+    pub fn top_strip_hidden(&self) -> bool {
+        super::fade::top_strip_hidden(self.top_fade)
     }
 
     pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {
