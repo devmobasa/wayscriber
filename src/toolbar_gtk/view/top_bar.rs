@@ -96,7 +96,7 @@ const STYLE_FONT_PICK_W: f64 = 96.0;
 const STYLE_STEP_W: f64 = 20.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_CAPTION_W`: the caption slot before a level
 /// meter or tool stepper ("Smooth", "Shapes", "Detect").
-const STYLE_CAPTION_W: f64 = 48.0;
+const STYLE_CAPTION_W: f64 = 56.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_METER_W`: a level meter's bar row.
 const STYLE_METER_W: f64 = 84.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_PEN_FEEL_W`: the Pen feel chip's slot.

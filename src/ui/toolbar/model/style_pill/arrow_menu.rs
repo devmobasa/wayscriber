@@ -12,7 +12,7 @@ use crate::draw::ArrowStyle;
 
 /// Chip geometry in spec units, shared by both frontends: its slot in the
 /// pill and the drawn glyph before its label.
-pub(crate) const ARROW_STYLE_CHIP_W: f64 = 120.0;
+pub(crate) const ARROW_STYLE_CHIP_W: f64 = 136.0;
 pub(crate) const ARROW_STYLE_CHIP_GLYPH_W: f64 = 26.0;
 pub(crate) const ARROW_STYLE_CHIP_GLYPH_H: f64 = 12.0;
 /// Menu geometry in spec units: the padding around the rows, each row, the

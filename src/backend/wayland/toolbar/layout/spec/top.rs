@@ -82,7 +82,7 @@ impl ToolbarLayoutSpec {
     /// Caption slot before a level meter or tool stepper ("Smooth", "Shapes",
     /// "Detect"). Holds one short word at the caption size plus the gap to
     /// the first bar or the − half.
-    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_CAPTION_W: f64 = 48.0;
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_CAPTION_W: f64 = 56.0;
     /// Bar row of a level meter. Fixed whatever the level count, so both
     /// meters line up; each bar takes an equal share of it.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_METER_W: f64 = 84.0;

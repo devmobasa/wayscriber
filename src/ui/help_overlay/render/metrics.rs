@@ -85,7 +85,9 @@ impl RenderMetrics {
         let row_gap_after_heading = 10.0 * scale;
         let key_desc_gap = 18.0 * scale;
         let row_gap = 36.0 * scale;
-        let column_gap = 56.0 * scale;
+        // Leave room for both default cards with wider fallback fonts while
+        // keeping the grid inside its 60% width budget.
+        let column_gap = 40.0 * scale;
         let section_card_padding = 14.0 * scale;
         let section_card_radius = 10.0 * scale;
         let badge_font_size = (body_font_size - 2.0 * scale).max(min_font_size);

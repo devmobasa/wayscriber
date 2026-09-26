@@ -118,7 +118,20 @@ fn key_column_starts_after_the_widest_label() {
 #[test]
 fn default_help_fits_a_1080p_output_without_scrolling() {
     let first = build("", 0, false, 1920, 1080);
-    assert_eq!(first.scroll_max, 0.0, "page 1 fits without scrolling");
+    assert_eq!(
+        first.scroll_max,
+        0.0,
+        "page 1 fits without scrolling: {:?}",
+        first
+            .grid
+            .rows
+            .iter()
+            .map(|row| row
+                .iter()
+                .map(|section| (section.section.title, section.width, section.height))
+                .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    );
 
     // Page 2 carries five sections; it may scroll, but never outgrows the
     // output.
