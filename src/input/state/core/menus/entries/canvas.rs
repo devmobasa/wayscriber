@@ -8,16 +8,27 @@ impl InputState {
     /// The right-click menu on empty canvas, in groups: history, paste and
     /// capture, view and boards, the other surfaces, the destructive Clear,
     /// and the way out last.
+    ///
+    /// While zoomed, the zoom controls lead instead of sitting in a submenu:
+    /// the menu is the obvious place to look for the way back out.
     pub(super) fn canvas_menu_entries(&self) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
+        if self.zoom_active() {
+            entries.extend(self.zoom_menu_entries(true));
+        }
 
         let frame = self.boards.active_frame();
-        entries.push(ContextMenuEntry::new(
+        let undo = ContextMenuEntry::new(
             "Undo",
             self.shortcut_for_action(Action::Undo),
             frame.undo_stack_len() == 0,
             Some(MenuCommand::Undo),
-        ));
+        );
+        entries.push(if entries.is_empty() {
+            undo
+        } else {
+            undo.with_separator()
+        });
         entries.push(ContextMenuEntry::new(
             "Redo",
             self.shortcut_for_action(Action::Redo),
@@ -89,12 +100,15 @@ impl InputState {
 
     /// Zoom, canvas position, highlight, and board/page switching.
     fn push_canvas_view_entries(&self, entries: &mut Vec<ContextMenuEntry>) {
-        // Parent rows show their submenu's current state in the shortcut column.
-        entries.push(
-            ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
-                .with_submenu(ContextMenuKind::Zoom)
-                .with_separator(),
-        );
+        let group_start = entries.len();
+        // Parent rows show their submenu's current state in the shortcut
+        // column. A zoomed menu already leads with the zoom controls.
+        if !self.zoom_active() {
+            entries.push(
+                ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
+                    .with_submenu(ContextMenuKind::Zoom),
+            );
+        }
         if self.boards.pan_enabled() && !self.board_is_transparent() {
             let reset_disabled = self.boards.active_frame().view_offset() == (0, 0);
             entries.push(ContextMenuEntry::new(
@@ -120,6 +134,9 @@ impl InputState {
                 .with_submenu(ContextMenuKind::Pages),
         );
         self.push_board_switch_entries(entries);
+        if let Some(first) = entries.get_mut(group_start) {
+            first.separator_before = true;
+        }
     }
 
     /// Quick switches between the transparent overlay and the paper boards.

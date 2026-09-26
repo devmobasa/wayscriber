@@ -115,9 +115,7 @@ impl InputState {
                 true
             }
             Action::OpenContextMenu => {
-                if !self.zoom_active() {
-                    self.toggle_context_menu_via_keyboard_with(resources.measurer);
-                }
+                self.toggle_context_menu_via_keyboard_with(resources.measurer);
                 true
             }
             Action::ToggleSelectionProperties => {

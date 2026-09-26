@@ -409,7 +409,7 @@ impl WaylandState {
         if matches!(key, Key::Space) && self.pointer.board_pan_key_held() {
             return;
         }
-        if self.zoom.active {
+        if self.zoom.active && !self.zoom_keys_yield_to_open_menu() {
             match key {
                 Key::Up | Key::Down | Key::Left | Key::Right => {
                     if self.zoom.locked {

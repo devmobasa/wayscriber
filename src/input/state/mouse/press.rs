@@ -56,9 +56,6 @@ impl InputState {
         if self.try_cancel_active_interaction_with(measurer) {
             return;
         }
-        if self.zoom_active() {
-            return;
-        }
         if !self.context_menu_enabled() {
             return;
         }

@@ -75,6 +75,7 @@ pub enum MenuCommand {
     ZoomIn,
     ZoomOut,
     ResetZoom,
+    ToggleZoomLock,
     ToggleHighlightTool,
     Undo,
     Redo,

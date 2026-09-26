@@ -233,8 +233,10 @@ mod tests {
         assert!(!state.pointer_drag_active());
     }
 
+    /// Zoom used to swallow right-click; the menu now opens over the zoomed
+    /// view like anywhere else.
     #[test]
-    fn right_click_suppression_paths_return_named_side_effects() {
+    fn right_click_opens_the_context_menu_while_zoomed() {
         let pointer_measurer = crate::draw::TextMeasurer::default();
         let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
         let pointer_resources = crate::input::state::InputTextResources {
@@ -250,10 +252,19 @@ mod tests {
                 pointer_resources,
                 PointerPress::new(MouseButton::Right, points())
             ),
-            RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
-                PointerSideEffect::RightClickSuppressedByZoom
-            ))
+            RoutingOutcome::Consumed(ConsumedBy::RightClickContextMenu)
         );
+        assert!(zoomed.is_context_menu_open());
+    }
+
+    #[test]
+    fn right_click_suppression_paths_return_named_side_effects() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &pointer_ui_engine,
+        };
 
         let mut disabled = make_test_input_state();
         disabled.set_context_menu_enabled(false);

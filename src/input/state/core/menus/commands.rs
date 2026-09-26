@@ -163,6 +163,10 @@ impl InputState {
                 self.request_zoom_action(crate::input::ZoomAction::Reset);
                 self.close_context_menu();
             }
+            MenuCommand::ToggleZoomLock => {
+                self.request_zoom_action(crate::input::ZoomAction::ToggleLock);
+                self.close_context_menu();
+            }
             MenuCommand::Undo => self.close_menu_and_run(resources, Action::Undo),
             MenuCommand::Redo => self.close_menu_and_run(resources, Action::Redo),
             MenuCommand::CaptureRegion => {

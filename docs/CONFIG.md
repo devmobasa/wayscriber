@@ -1608,6 +1608,10 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 - Transparent overlay does not pan; it stays anchored to the live screen.
 - The canvas context menu includes **Reset Canvas Position** when board panning is enabled.
 - The same right-click menu exposes **Zoom** → **Zoom In**, **Zoom Out**, and **Reset Zoom**.
+  Right-click and the context-menu shortcut keep working while zoomed; the canvas menu then
+  starts with the zoom level and **Zoom In**, **Zoom Out**, **Exit Zoom**, and **Lock View** (or
+  **Unlock View**). While a menu or the properties panel is open, <kbd>Esc</kbd> and the arrow
+  keys go to it rather than exiting or panning the zoom.
 - Submenus such as **Zoom**, **Boards**, and **Pages** open beside their row once the pointer
   rests on it, or on click, and the menu stays open. Clicking the row again collapses it. From
   the keyboard, → opens a submenu and ← or Esc returns to its row. The parent row shows the

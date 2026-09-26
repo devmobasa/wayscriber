@@ -273,11 +273,6 @@ pub(crate) fn handle_right_press(
     {
         return RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(kind));
     }
-    if state.zoom_active() {
-        return RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
-            PointerSideEffect::RightClickSuppressedByZoom,
-        ));
-    }
     if !state.context_menu_enabled() {
         return RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
             PointerSideEffect::RightClickContextMenuDisabled,

@@ -64,7 +64,6 @@ pub(crate) enum InteractionSideEffect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerSideEffect {
     IdleEraserHover,
-    RightClickSuppressedByZoom,
     RightClickContextMenuDisabled,
 }
 

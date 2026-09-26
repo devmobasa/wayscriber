@@ -191,7 +191,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
   - Zoom in/out: <kbd>Ctrl+Alt</kbd> + scroll or <kbd>Ctrl+Alt</kbd> + <kbd>+</kbd>/<kbd>-</kbd>
   - Reset: <kbd>Ctrl+Alt+0</kbd>; lock view: <kbd>Ctrl+Alt+L</kbd>
   - Pan: middle drag or arrow keys
-  - Right-click menu: **Zoom** → Zoom In / Zoom Out / Reset Zoom
+  - Right-click menu: **Zoom** → Zoom In / Zoom Out / Reset Zoom; while zoomed, right-click still opens the menu, which then starts with Zoom In, Zoom Out, Exit Zoom, and Lock View
 
 ---
 

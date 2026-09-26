@@ -133,7 +133,7 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return;
         }
-        if self.zoom.is_engaged() {
+        if self.zoom.is_engaged() && !self.zoom_keys_yield_to_open_menu() {
             match key {
                 Key::Escape => {
                     self.exit_zoom();

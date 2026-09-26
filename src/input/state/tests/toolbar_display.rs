@@ -743,20 +743,15 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
         Some(Action::ToggleToolbar)
     );
 
+    // Zoom no longer swallows right-click, so the menu is a way back there
+    // too.
     let mut zoomed = create_test_input_state();
     unbind_chrome_visibility_actions(&mut zoomed);
     zoomed.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     hide_all_chrome(&mut zoomed);
     assert_eq!(
         zoomed.active_toast().map(|toast| toast.message.as_str()),
-        Some("All UI hidden — select the recovery action")
-    );
-    assert_eq!(
-        zoomed
-            .active_toast()
-            .and_then(|toast| toast.action.as_ref())
-            .and_then(|action| action.dispatch_action()),
-        Some(Action::ToggleToolbar)
+        Some("All UI hidden — right-click to restore")
     );
 
     let mut right_click_radial = create_test_input_state();
