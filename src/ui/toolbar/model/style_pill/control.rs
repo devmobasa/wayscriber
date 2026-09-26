@@ -21,7 +21,7 @@ impl StylePillControl {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
             Self::FillToggle => Cow::Borrowed("top.style.fill"),
-            Self::ArrowStyleCycle => Cow::Borrowed("top.style.arrow-style"),
+            Self::ArrowStyleChip => Cow::Borrowed("top.style.arrow-style"),
             Self::AutoNumberToggle => Cow::Borrowed("top.style.auto-number"),
             // Distinct per counter: classic mode (context_aware_ui = false)
             // can materialize both resets in one spec, and the frontends
@@ -55,7 +55,7 @@ impl StylePillControl {
                 StylePillRole::Toggle
             }
             Self::CounterReset(_)
-            | Self::ArrowStyleCycle
+            | Self::ArrowStyleChip
             | Self::FontFamilyPicker
             | Self::PenFeelChip => StylePillRole::Button,
             Self::EraserModeSegment => StylePillRole::Segmented,
@@ -89,7 +89,9 @@ impl StylePillControl {
             Self::AutoNumberToggle => {
                 ToolbarEvent::ToggleArrowLabels(!snapshot.arrow_label_enabled)
             }
-            Self::ArrowStyleCycle => ToolbarEvent::CycleArrowStyle,
+            Self::ArrowStyleChip => {
+                ToolbarEvent::ToggleArrowStyleMenu(!snapshot.arrow_style_menu_open)
+            }
             Self::PenFeelChip => ToolbarEvent::TogglePenFeelPanel(!snapshot.pen_feel_open),
             Self::CounterReset(StylePillCounter::Arrow) => ToolbarEvent::ResetArrowLabelCounter,
             Self::CounterReset(StylePillCounter::Step) => ToolbarEvent::ResetStepMarkerCounter,
@@ -151,6 +153,7 @@ impl StylePillControl {
             // The chip reads as pressed while its panel is open, like the
             // layout button while its menu is.
             Self::PenFeelChip => snapshot.pen_feel_open,
+            Self::ArrowStyleChip => snapshot.arrow_style_menu_open,
             _ => false,
         }
     }
@@ -197,7 +200,7 @@ impl StylePillControl {
             Self::Slider(StylePillSlider::FontSize) | Self::FontSizeValue => {
                 Some(StylePillSlider::FontSize.formatter()(snapshot.font_size))
             }
-            Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
+            Self::ArrowStyleChip => Some(snapshot.arrow_style.label().to_string()),
             Self::FontFamilyPicker => Some(short_family_label(&snapshot.font.family)),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 selection_entry(snapshot, kind).map(|entry| entry.value.clone())
@@ -288,7 +291,7 @@ impl StylePillControl {
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
             Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
             Self::FillToggle => Cow::Borrowed(action_short_label(Action::ToggleFill)),
-            Self::ArrowStyleCycle => Cow::Borrowed("Arrow style"),
+            Self::ArrowStyleChip => Cow::Borrowed("Arrow style"),
             Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
             Self::CounterReset(_) => Cow::Borrowed("Reset"),
             // The family in use, shortened: the pill is width-planned, and a
@@ -328,10 +331,13 @@ impl StylePillControl {
                     .binding_hints
                     .binding_for_action(Action::ToggleFill),
             )),
-            Self::ArrowStyleCycle => Some(format!(
-                "Next arrow style: {}",
-                snapshot.arrow_style.label()
-            )),
+            // The open menu shows every style; a tooltip would only cover it.
+            Self::ArrowStyleChip => (!snapshot.arrow_style_menu_open).then(|| {
+                format!(
+                    "Arrow style: {} \u{2014} click to choose",
+                    snapshot.arrow_style.label()
+                )
+            }),
             Self::AutoNumberToggle => Some("Auto-number arrows 1, 2, 3.".to_string()),
             Self::CounterReset(StylePillCounter::Arrow) => Some(format!(
                 "Reset numbering to 1 (next: {})",

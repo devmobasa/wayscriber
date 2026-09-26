@@ -85,6 +85,7 @@ impl TopBar {
             ("top-settings-popover", self.settings.mounted.as_ref()),
             ("top-layout-popover", self.layout.mounted.as_ref()),
             ("top-pen-feel-popover", self.feel.mounted.as_ref()),
+            ("top-arrow-style-popover", self.arrow_style.mounted.as_ref()),
         ]
         .into_iter()
         .filter_map(|(name, resources)| resources.map(|resources| (name, resources)))
@@ -98,6 +99,7 @@ impl TopBar {
         self.settings.set_open(false);
         self.layout.set_open(false);
         self.feel.set_open(false);
+        self.arrow_style.set_open(false);
     }
 
     /// Each native stays mapped with transparent proof content during capture.
@@ -208,6 +210,7 @@ impl TopBar {
         self.sync_menu_popovers(snapshot, scale);
         self.sync_layout_menu(snapshot, scale);
         self.sync_pen_feel_panel(snapshot, scale);
+        self.sync_arrow_style_menu(snapshot, scale);
     }
 
     /// Keep the Canvas/Session/Settings popovers' contents and open state in

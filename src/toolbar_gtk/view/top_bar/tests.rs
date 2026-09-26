@@ -1010,16 +1010,17 @@ fn assert_gtk_style_button(
         .downcast::<gtk4::Button>()
         .unwrap_or_else(|_| panic!("{id} is a button"));
     // Cycle buttons show the live value they step; plain buttons show their
-    // label.
+    // label. The arrow chip lays its glyph and name out as a child instead.
     let expected_text = match control {
-        model::StylePillControl::SelectionCycle(_) | model::StylePillControl::ArrowStyleCycle => {
-            control.value_text(snapshot).expect("cycle value text")
+        model::StylePillControl::SelectionCycle(_) => {
+            Some(control.value_text(snapshot).expect("cycle value text"))
         }
-        _ => control.label(snapshot).into_owned(),
+        model::StylePillControl::ArrowStyleChip => None,
+        _ => Some(control.label(snapshot).into_owned()),
     };
     assert_eq!(
         button.label().as_deref(),
-        Some(expected_text.as_str()),
+        expected_text.as_deref(),
         "{id} text"
     );
     assert_eq!(
@@ -1043,6 +1044,46 @@ fn assert_gtk_style_button(
     if control == model::StylePillControl::PenFeelChip {
         assert_gtk_pen_feel_chip(&button, control, snapshot, id);
     }
+    if control == model::StylePillControl::ArrowStyleChip {
+        assert_gtk_arrow_style_chip(&button, control, snapshot, id);
+    }
+}
+
+/// The chip keeps its planned slot with the glyph and the style's name
+/// inside it, reads as pressed while its menu is open, and names the style
+/// for assistive tech.
+fn assert_gtk_arrow_style_chip(
+    button: &gtk4::Button,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let slot = (model::ARROW_STYLE_CHIP_W).round() as i32;
+    assert_eq!(button.width_request(), slot, "{id} keeps the planned slot");
+    let content = button.child().expect("chip content");
+    let content_w = content.measure(gtk4::Orientation::Horizontal, -1).1 + content.margin_start();
+    assert!(content_w <= slot, "{id} content is {content_w}px wide");
+    let glyph = content.first_child().expect("chip glyph");
+    assert!(glyph.is::<gtk4::DrawingArea>(), "{id} glyph");
+    let label = glyph
+        .next_sibling()
+        .and_then(|label| label.downcast::<gtk4::Label>().ok())
+        .expect("chip label");
+    assert_eq!(
+        label.label(),
+        model::arrow_style_chip_label(snapshot.arrow_style),
+        "{id} label"
+    );
+    assert_eq!(
+        button.has_css_class("active"),
+        control.active(snapshot),
+        "{id} pressed while open"
+    );
+    assert_accessible_label(
+        button.upcast_ref(),
+        &format!("Arrow style: {}", snapshot.arrow_style.label()),
+        id,
+    );
 }
 
 /// The chip keeps the slot the planner budgets, reads as pressed while its
@@ -1306,6 +1347,7 @@ fn detach_test_popovers(top: &mut TopBar) {
     top.settings.clear();
     top.layout.clear();
     top.feel.clear();
+    top.arrow_style.clear();
 }
 
 fn assert_builtin_node(
@@ -1534,6 +1576,10 @@ enum StylePillNodeExpectation {
     Caption(model::StylePillControl),
     /// One interactive bar of a level meter.
     MeterBar(model::StylePillControl, usize),
+    /// The arrow style chip's drawn glyph and its name (decor laid over the
+    /// chip's button body).
+    ArrowChipGlyph,
+    ArrowChipLabel,
 }
 
 fn expected_style_pill_nodes(
@@ -1580,6 +1626,16 @@ fn expected_style_pill_nodes(
             continue;
         }
         nodes.push((id.clone(), StylePillNodeExpectation::Control(control)));
+        if control == model::StylePillControl::ArrowStyleChip {
+            nodes.push((
+                format!("{id}.glyph"),
+                StylePillNodeExpectation::ArrowChipGlyph,
+            ));
+            nodes.push((
+                format!("{id}.label"),
+                StylePillNodeExpectation::ArrowChipLabel,
+            ));
+        }
         if control.carries_inline_readout() {
             nodes.push((
                 format!("{id}.readout"),
@@ -1773,6 +1829,29 @@ fn assert_builtin_style_pill_node(
             *control,
             *index,
         ),
+        StylePillNodeExpectation::ArrowChipGlyph => {
+            use crate::backend::wayland::TopToolbarWidgetKind as W;
+            assert!(!has_interaction, "{name}: {id} is decor");
+            assert_eq!(
+                kind,
+                &W::ArrowStylePreview {
+                    style: snapshot.arrow_style
+                },
+                "{name}: {id}"
+            );
+        }
+        StylePillNodeExpectation::ArrowChipLabel => {
+            use crate::backend::wayland::TopToolbarWidgetKind as W;
+            assert!(!has_interaction, "{name}: {id} is decor");
+            assert!(
+                matches!(
+                    kind,
+                    W::Label(label)
+                        if label.text == model::arrow_style_chip_label(snapshot.arrow_style)
+                ),
+                "{name}: {id} kind {kind:?}"
+            );
+        }
         StylePillNodeExpectation::SegmentHalf(control, index) => {
             assert_builtin_style_pill_segment_half(
                 name,
@@ -1885,10 +1964,11 @@ fn assert_builtin_style_pill_control_kind(
         }
         (model::StylePillRole::Button, W::TextButton { label, style }) => {
             let expected_text = match control {
-                model::StylePillControl::SelectionCycle(_)
-                | model::StylePillControl::ArrowStyleCycle => {
+                model::StylePillControl::SelectionCycle(_) => {
                     control.value_text(snapshot).expect("cycle value text")
                 }
+                // The chip's glyph and name are decor nodes laid over it.
+                model::StylePillControl::ArrowStyleChip => String::new(),
                 _ => control.label(snapshot).into_owned(),
             };
             assert_eq!(label.text, expected_text, "{name}: {id} text");
@@ -1947,6 +2027,38 @@ fn assert_builtin_style_pill_readout(
     }
 }
 
+/// A builtin slider sits at the model's position and paints the model's
+/// opacity track exactly when the model has one.
+fn assert_builtin_style_pill_slider(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    t: f64,
+    paint: Option<model::OpacityPaint>,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    let (spec, value) = control.slider(snapshot).expect("slider spec");
+    assert!(
+        (t - spec.t_from_value(value)).abs() < 1e-9,
+        "{name}: {id} slider position"
+    );
+    assert_eq!(
+        paint,
+        slider_opacity_paint(control, snapshot),
+        "{name}: {id} track paint"
+    );
+}
+
+fn slider_opacity_paint(
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+) -> Option<model::OpacityPaint> {
+    match control {
+        model::StylePillControl::Slider(slider) => slider.opacity_paint(snapshot),
+        _ => None,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn assert_builtin_style_pill_step_half(
     name: &str,
@@ -2000,38 +2112,6 @@ fn assert_builtin_style_pill_step_value(
             "{name}: {id} stepper readout"
         ),
         other => panic!("{name}: {id} stepper readout kind {other:?}"),
-    }
-}
-
-/// A builtin slider sits at the model's position and paints the model's
-/// opacity track exactly when the model has one.
-fn assert_builtin_style_pill_slider(
-    name: &str,
-    snapshot: &ToolbarSnapshot,
-    t: f64,
-    paint: Option<model::OpacityPaint>,
-    id: &str,
-    control: model::StylePillControl,
-) {
-    let (spec, value) = control.slider(snapshot).expect("slider spec");
-    assert!(
-        (t - spec.t_from_value(value)).abs() < 1e-9,
-        "{name}: {id} slider position"
-    );
-    assert_eq!(
-        paint,
-        slider_opacity_paint(control, snapshot),
-        "{name}: {id} track paint"
-    );
-}
-
-fn slider_opacity_paint(
-    control: model::StylePillControl,
-    snapshot: &ToolbarSnapshot,
-) -> Option<model::OpacityPaint> {
-    match control {
-        model::StylePillControl::Slider(slider) => slider.opacity_paint(snapshot),
-        _ => None,
     }
 }
 
@@ -2986,6 +3066,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert_key_relay_contract(&regular);
 
     assert_layout_menu_contract(&regular);
+    assert_arrow_style_menu_contract(&regular);
 
     assert_pen_feel_contract(&regular);
     assert_meter_scroll_survives_delayed_snapshots();
@@ -3289,6 +3370,68 @@ fn assert_layout_menu_contract(regular: &ToolbarSnapshot) {
                 .expect("layout row event"),
             GtkToolbarFeedback::Event {
                 event: ToolbarEvent::SetToolbarLayoutMode(entry.mode),
+                rebind_requested: false,
+            }
+        );
+    }
+
+    detach_test_popovers(&mut top);
+}
+
+/// The arrow chip opens a menu built from the shared entries; a row sets its
+/// style. The chip no longer cycles.
+fn assert_arrow_style_menu_contract(regular: &ToolbarSnapshot) {
+    let arrow = style_pill_tool_snapshot(regular, Tool::Arrow);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    top.build_strip(
+        &arrow,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &arrow),
+    );
+    assert!(
+        top.arrow_style.mounted.is_some(),
+        "the arrow style menu popover exists"
+    );
+
+    let chip = find_widget_named(top.root.upcast_ref(), "top.style.arrow-style")
+        .and_then(|widget| widget.downcast::<gtk4::Button>().ok())
+        .expect("arrow style chip");
+    chip.emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("arrow chip event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::ToggleArrowStyleMenu(true),
+            rebind_requested: false,
+        }
+    );
+
+    let mut open = arrow.clone();
+    open.arrow_style = crate::draw::ArrowStyle::Double;
+    open.arrow_style_menu_open = true;
+    let content = top.build_arrow_style_menu_content(&open, 1.0);
+    for entry in model::arrow_style_menu_entries(open.arrow_style) {
+        let id = entry.id();
+        let row = find_widget_named(content.upcast_ref(), &id)
+            .and_then(|widget| widget.downcast::<gtk4::Button>().ok())
+            .unwrap_or_else(|| panic!("{id} row"));
+        assert_eq!(row.has_css_class("active"), entry.current, "{id} mark");
+        assert_eq!(
+            row.tooltip_text().as_deref(),
+            Some(entry.tooltip().as_str()),
+            "{id} tooltip"
+        );
+        assert!(
+            find_widget_named(row.upcast_ref(), &format!("{id}.preview"))
+                .is_some_and(|preview| preview.is::<gtk4::DrawingArea>()),
+            "{id} draws its preview"
+        );
+        row.emit_clicked();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("arrow row event"),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::SetArrowStyle(entry.style),
                 rebind_requested: false,
             }
         );

@@ -30,6 +30,12 @@ use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
 use crate::label_format::{format_binding_label, format_quick_color_tooltip};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
+pub(crate) use arrow_menu::{
+    ARROW_STYLE_CHIP_GLYPH_H, ARROW_STYLE_CHIP_GLYPH_W, ARROW_STYLE_CHIP_W, ARROW_STYLE_MENU_INSET,
+    ARROW_STYLE_MENU_PAD, ARROW_STYLE_MENU_PREVIEW_H, ARROW_STYLE_MENU_PREVIEW_W,
+    ARROW_STYLE_MENU_ROW_GAP, ARROW_STYLE_MENU_ROW_H, ARROW_STYLE_MENU_ROW_W, ArrowStyleMenuEntry,
+    arrow_style_chip_label, arrow_style_menu_entries, arrow_style_menu_size,
+};
 pub(crate) use meter::{StrokeSetting, StylePillMeter, StylePillMeterSegment};
 pub(crate) use pen_feel::{
     PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H, PEN_FEEL_HINT_H, PEN_FEEL_PAD,
@@ -39,6 +45,7 @@ pub(crate) use pen_feel::{
 
 use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};
 
+mod arrow_menu;
 mod control;
 mod meter;
 mod pen_feel;
@@ -126,11 +133,10 @@ pub(crate) enum StylePillControl {
     ShapeSensitivityStepper,
     /// Shape fill toggle.
     FillToggle,
-    /// Arrow style cycle button, showing the style the next arrow will use.
-    /// Clicking steps through [`ArrowStyle::ALL`]. A four-way choice does not
-    /// fit the two-half segmented control, and cycling is already how the
-    /// keyboard action and the docked selection entry step it.
-    ArrowStyleCycle,
+    /// Arrow style chip, showing the style the next arrow will use drawn and
+    /// named. Clicking opens the arrow style menu, which lists every style as
+    /// a preview (see `arrow_menu.rs`); the keyboard action still cycles.
+    ArrowStyleChip,
     /// Arrow auto-number toggle.
     AutoNumberToggle,
     /// Reset the arrow/step counter; tooltip carries the next number.
@@ -314,7 +320,7 @@ impl StylePillSpec {
             controls.push(StylePillControl::FillToggle);
         }
         if context.tool_options_kind == ToolOptionsKind::Arrow {
-            controls.push(StylePillControl::ArrowStyleCycle);
+            controls.push(StylePillControl::ArrowStyleChip);
         }
         if context.show_arrow_labels {
             controls.push(StylePillControl::AutoNumberToggle);

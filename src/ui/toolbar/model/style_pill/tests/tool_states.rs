@@ -608,7 +608,7 @@ fn arrow_state_gates_the_reset_button_on_the_toggle() {
 }
 
 #[test]
-fn next_arrow_style_control_does_not_advertise_the_selection_aware_shortcut() {
+fn arrow_style_chip_does_not_advertise_the_selection_aware_shortcut() {
     use crate::config::{Action, Shortcut};
     use crate::input::state::test_support::make_test_input_state_with_action_bindings;
     use std::collections::HashMap;
@@ -630,10 +630,10 @@ fn next_arrow_style_control_does_not_advertise_the_selection_aware_shortcut() {
     snapshot.show_marker_opacity_section = false;
 
     assert_eq!(
-        StylePillControl::ArrowStyleCycle
+        StylePillControl::ArrowStyleChip
             .tooltip(&snapshot)
             .as_deref(),
-        Some("Next arrow style: Standard")
+        Some("Arrow style: Standard \u{2014} click to choose")
     );
 }
 

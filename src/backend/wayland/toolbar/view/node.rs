@@ -201,6 +201,9 @@ pub enum WidgetKind {
     /// The Pen feel panel's live smoothing preview at `level`, drawn by the
     /// painter both frontends share (`toolbar_icons::draw_smoothing_preview`).
     SmoothingPreview { level: u8 },
+    /// An arrow style drawn left to right in the foreground tone, by the
+    /// painter both frontends share (`toolbar_icons::draw_arrow_style_preview`).
+    ArrowStylePreview { style: crate::draw::ArrowStyle },
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),

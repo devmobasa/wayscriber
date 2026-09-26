@@ -180,6 +180,7 @@ mod tests {
             TopMenuState::SessionPopover,
             TopMenuState::SettingsPopover,
             TopMenuState::PenFeelPanel,
+            TopMenuState::ArrowStyleMenu,
         ] {
             input.test_set_toolbar_menu_state(menu, input.toolbar_top_popover_scroll());
             assert!(top_menus_open(&input), "{menu:?}");

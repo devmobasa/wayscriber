@@ -206,10 +206,11 @@ mod tests {
         assert!(panel.1 + panel.3 <= h as f64, "the panel fits the surface");
         let rects = top_input_rects(&engine, &open, w as f64, h as f64).expect("rects");
         assert!(
-            rects
-                .iter()
-                .any(|rect| rect.0 <= panel.0 && rect.0 + rect.2 >= panel.0 + panel.2),
-            "the panel accepts input: {rects:?}"
+            rects.iter().any(|rect| rect.0 <= panel.0
+                && rect.1 <= panel.1
+                && rect.0 + rect.2 >= panel.0 + panel.2
+                && rect.1 + rect.3 >= panel.1 + panel.3),
+            "the whole panel accepts input: {panel:?} in {rects:?}"
         );
     }
 }

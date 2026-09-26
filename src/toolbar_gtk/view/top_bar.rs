@@ -15,6 +15,7 @@
 //! through stored updater closures so open popovers and hover states
 //! survive snapshot churn.
 
+mod arrow_menu;
 mod controls;
 mod drag;
 mod layout_menu;
@@ -408,6 +409,8 @@ pub(in crate::toolbar_gtk) struct TopBar {
     layout: PopoverOwner<ToolbarLayoutMode>,
     /// The style pill's Pen feel panel, keyed on the sections it shows.
     feel: PopoverOwner<Vec<model::StrokeSetting>>,
+    /// The style pill's arrow style menu, keyed on the current style.
+    arrow_style: PopoverOwner<crate::draw::ArrowStyle>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -497,6 +500,7 @@ impl TopBar {
             settings: PopoverOwner::default(),
             layout: PopoverOwner::default(),
             feel: PopoverOwner::default(),
+            arrow_style: PopoverOwner::default(),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
@@ -676,6 +680,7 @@ impl TopBar {
         self.settings.clear();
         self.layout.clear();
         self.feel.clear();
+        self.arrow_style.clear();
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }

@@ -229,7 +229,7 @@ pub(super) fn build_top_view_planned(
     let layout_anchor = super::chrome::push_chrome_island(&mut tree, snapshot, &spec, plan, width);
 
     // --- Style pill (island D): contextual tool properties -------------------
-    let pen_feel_anchor = push_style_pill(&mut tree, snapshot, plan, band_h);
+    let pill_anchors = push_style_pill(&mut tree, snapshot, plan, band_h);
 
     push_overflow_popover(
         &mut tree,
@@ -265,7 +265,13 @@ pub(super) fn build_top_view_planned(
         engine,
         &mut tree,
         snapshot,
-        pen_feel_anchor,
+        pill_anchors.pen_feel,
+        (width, height),
+    );
+    super::arrow_menu::push_arrow_style_menu(
+        &mut tree,
+        snapshot,
+        pill_anchors.arrow_style,
         (width, height),
     );
 
@@ -601,17 +607,18 @@ pub(super) fn shape_popover_height_planned(snapshot: &ToolbarSnapshot, plan: &To
 
 /// Style pill (island D): the contextual tool-property row rendered as a
 /// fourth detached pill under the islands. Structure comes from the shared
-/// `StylePillSpec`; this function owns only the geometry. Returns the rect
-/// the Pen feel panel hangs from when the pill carries its chip.
+/// `StylePillSpec`; this function owns only the geometry. Returns the rects
+/// the pill's panels hang from, for the chips it carries.
 fn push_style_pill(
     tree: &mut WidgetTree,
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
     band_h: f64,
-) -> Option<(f64, f64, f64, f64)> {
+) -> StylePillAnchors {
+    let mut anchors = StylePillAnchors::default();
     let spec = model::StylePillSpec::build(snapshot, plan);
     if spec.controls().is_empty() {
-        return None;
+        return anchors;
     }
     let gap = planned_gap(plan);
     let (_, island_pad) = planned_island_metrics(plan);
@@ -623,7 +630,6 @@ fn push_style_pill(
     // Content nodes are collected first so the pill card — whose extent is
     // only known after the walk — can be pushed underneath them.
     let mut nodes: Vec<WidgetNode> = Vec::new();
-    let mut pen_feel_anchor = None;
     let mut x = island_pad;
     let swatch_count = spec
         .controls()
@@ -844,8 +850,17 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_FONT_PICK_W + gap;
             }
-            model::StylePillControl::SelectionCycle(_)
-            | model::StylePillControl::ArrowStyleCycle => {
+            model::StylePillControl::ArrowStyleChip => {
+                let chip_w = model::ARROW_STYLE_CHIP_W;
+                nodes.extend(super::arrow_menu::arrow_style_chip_nodes(
+                    control,
+                    snapshot,
+                    (x, center(row_h), chip_w, row_h),
+                ));
+                anchors.arrow_style = Some(super::arrow_menu::arrow_style_anchor(x, pill_y));
+                x += chip_w + gap;
+            }
+            model::StylePillControl::SelectionCycle(_) => {
                 let enabled = control.enabled(snapshot);
                 nodes.push(WidgetNode::new(
                     id,
@@ -880,7 +895,7 @@ fn push_style_pill(
                     snapshot,
                     (x, center(row_h), chip_w, row_h),
                 ));
-                pen_feel_anchor = Some(super::pen_feel::pen_feel_anchor(x, pill_y));
+                anchors.pen_feel = Some(super::pen_feel::pen_feel_anchor(x, pill_y));
                 x += chip_w + gap;
             }
             model::StylePillControl::PenSmoothingMeter
@@ -957,7 +972,15 @@ fn push_style_pill(
     for node in nodes {
         tree.push(node);
     }
-    pen_feel_anchor
+    anchors
+}
+
+/// Where the style pill's panels hang from: the Pen feel chip's and the
+/// arrow style chip's columns, when the pill carries them.
+#[derive(Debug, Default)]
+struct StylePillAnchors {
+    pen_feel: Option<(f64, f64, f64, f64)>,
+    arrow_style: Option<(f64, f64, f64, f64)>,
 }
 
 /// Inline unavailable-state label for a control that has one, returning the

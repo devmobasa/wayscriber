@@ -4,6 +4,7 @@
 //! for the tool icon call sites that used to render embedded SVG files.
 
 mod actions;
+mod arrow_style_preview;
 mod controls;
 mod history;
 mod opacity_preview;
@@ -20,6 +21,7 @@ pub use security::*;
 pub use tools::*;
 pub use zoom::*;
 
+pub(crate) use arrow_style_preview::draw_arrow_style_preview;
 pub(crate) use opacity_preview::{draw_opacity_swatch, draw_opacity_track};
 pub(crate) use smoothing_preview::draw_smoothing_preview;
 

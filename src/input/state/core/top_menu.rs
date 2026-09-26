@@ -11,6 +11,8 @@ pub(crate) enum TopMenuState {
     LayoutMenu,
     /// The style pill's Pen feel panel (smoothing and Shape Pen detection).
     PenFeelPanel,
+    /// The style pill's arrow style menu (Standard / Pointy / Curved / Double).
+    ArrowStyleMenu,
 }
 
 impl TopMenuState {
@@ -28,7 +30,11 @@ impl TopMenuState {
     pub(crate) const fn is_flyout(self) -> bool {
         matches!(
             self,
-            Self::ShapePicker | Self::TopOverflow | Self::LayoutMenu | Self::PenFeelPanel
+            Self::ShapePicker
+                | Self::TopOverflow
+                | Self::LayoutMenu
+                | Self::PenFeelPanel
+                | Self::ArrowStyleMenu
         )
     }
 
@@ -65,5 +71,8 @@ mod tests {
         assert!(TopMenuState::PenFeelPanel.is_open());
         assert!(TopMenuState::PenFeelPanel.is_flyout());
         assert!(!TopMenuState::PenFeelPanel.is_popover());
+        assert!(TopMenuState::ArrowStyleMenu.is_open());
+        assert!(TopMenuState::ArrowStyleMenu.is_flyout());
+        assert!(!TopMenuState::ArrowStyleMenu.is_popover());
     }
 }

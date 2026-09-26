@@ -355,6 +355,14 @@ fn paint_node(
             );
             draw_slider_knob(ctx, node.rect, *t);
         }
+        WidgetKind::ArrowStylePreview { style } => {
+            crate::toolbar_icons::draw_arrow_style_preview(
+                ctx,
+                node.rect,
+                *style,
+                crate::ui::theme::toolbar::COLOR_TEXT_PRIMARY,
+            );
+        }
         WidgetKind::OpacitySwatch { paint } => {
             crate::toolbar_icons::draw_opacity_swatch(
                 ctx,

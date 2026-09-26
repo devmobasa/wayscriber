@@ -21,6 +21,7 @@ use crate::ui::toolbar::{ToolbarSnapshot, model};
 
 use super::tree::WidgetTree;
 
+mod arrow_menu;
 mod build;
 mod chrome;
 mod layout_menu;
@@ -319,6 +320,7 @@ pub fn top_input_rects(
         "top.menu.settings.panel",
         "top.layout.panel",
         "top.feel.panel",
+        "top.arrow-style.panel",
     ] {
         if let Some(node) = tree.node_by_id(&id.to_string().into()) {
             let (x, y, w, h) = node.rect;
@@ -331,8 +333,8 @@ pub fn top_input_rects(
 
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, the style pill, the overflow
-/// popover, the Canvas/Session/Settings popovers, the layout menu, and the
-/// Pen feel panel.
+/// popover, the Canvas/Session/Settings popovers, the layout menu, the Pen
+/// feel panel, and the arrow style menu.
 pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
@@ -349,6 +351,7 @@ pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f6
         .max(menus::menu_popover_height_planned(engine, snapshot, &plan))
         .max(layout_menu::layout_menu_height_planned(snapshot, &plan))
         .max(pen_feel::pen_feel_height_planned(snapshot, &plan))
+        .max(arrow_menu::arrow_style_menu_height_planned(snapshot, &plan))
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as

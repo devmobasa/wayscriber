@@ -124,6 +124,7 @@ impl InputState {
                 self.apply_toolbar_toggle_arrow_labels(enable)
             }
             ToolbarEvent::CycleArrowStyle => self.apply_toolbar_cycle_arrow_style(),
+            ToolbarEvent::SetArrowStyle(style) => self.set_arrow_style(style),
             ToolbarEvent::ResetArrowLabelCounter => self.apply_toolbar_reset_arrow_label_counter(),
             ToolbarEvent::ResetStepMarkerCounter => self.apply_toolbar_reset_step_marker_counter(),
             ToolbarEvent::SetUndoDelay(delay_secs) => self.apply_toolbar_set_undo_delay(delay_secs),
@@ -224,6 +225,9 @@ impl InputState {
             ToolbarEvent::ToggleLayoutMenu(open) => self.apply_toolbar_toggle_layout_menu(open),
             ToolbarEvent::TogglePenFeelPanel(open) => {
                 self.apply_toolbar_toggle_pen_feel_panel(open)
+            }
+            ToolbarEvent::ToggleArrowStyleMenu(open) => {
+                self.apply_toolbar_toggle_arrow_style_menu(open)
             }
             ToolbarEvent::ToggleSessionPopover(open) => {
                 self.apply_toolbar_toggle_session_popover(open)

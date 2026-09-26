@@ -28,6 +28,8 @@ pub(crate) enum ToolbarPopover {
     LayoutMenu,
     /// The style pill's Pen feel panel.
     PenFeel,
+    /// The style pill's arrow style menu.
+    ArrowStyleMenu,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -278,6 +280,8 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         // Choosing a preset is the menu's purpose, so it closes the menu;
         // only the toggle itself spares it.
         ToolbarEvent::ToggleLayoutMenu(_) => &[P::LayoutMenu],
+        // Likewise choosing an arrow style (`SetArrowStyle`) closes its menu.
+        ToolbarEvent::ToggleArrowStyleMenu(_) => &[P::ArrowStyleMenu],
         // The Pen feel panel is adjusted in place: its meters change the
         // levels live and the panel stays up until dismissed.
         ToolbarEvent::TogglePenFeelPanel(_)
@@ -531,6 +535,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::NudgePolygonSides(_)
         | ToolbarEvent::ToggleArrowLabels(_)
         | ToolbarEvent::CycleArrowStyle
+        | ToolbarEvent::SetArrowStyle(_)
         | ToolbarEvent::ResetArrowLabelCounter
         | ToolbarEvent::ResetStepMarkerCounter
         | ToolbarEvent::SetUndoDelay(_)
@@ -597,6 +602,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ToggleTopOverflow(_)
         | ToolbarEvent::ToggleLayoutMenu(_)
         | ToolbarEvent::TogglePenFeelPanel(_)
+        | ToolbarEvent::ToggleArrowStyleMenu(_)
         | ToolbarEvent::ToggleSessionPopover(_)
         | ToolbarEvent::ToggleSettingsPopover(_)
         | ToolbarEvent::ToggleCanvasPopover(_)
@@ -793,6 +799,39 @@ mod popover_affinity_tests {
         assert_eq!(
             persistence_for_event(&ToolbarEvent::TogglePenFeelPanel(true)),
             ToolbarPersistence::Ephemeral
+        );
+    }
+
+    /// Choosing a style is the arrow menu's purpose, so it closes the menu;
+    /// only the toggle spares it.
+    #[test]
+    fn choosing_an_arrow_style_closes_its_menu() {
+        use ToolbarPopover as P;
+
+        assert_eq!(
+            popovers_for_event(&ToolbarEvent::ToggleArrowStyleMenu(false)),
+            &[P::ArrowStyleMenu]
+        );
+        for event in [
+            ToolbarEvent::SetArrowStyle(crate::draw::ArrowStyle::Pointy),
+            ToolbarEvent::CycleArrowStyle,
+            ToolbarEvent::TogglePenFeelPanel(true),
+        ] {
+            assert!(
+                !popovers_for_event(&event).contains(&P::ArrowStyleMenu),
+                "{event:?} closes the menu"
+            );
+        }
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::ToggleArrowStyleMenu(true)),
+            ToolbarPersistence::Ephemeral
+        );
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::SetArrowStyle(
+                crate::draw::ArrowStyle::Curved
+            )),
+            persistence_for_event(&ToolbarEvent::CycleArrowStyle),
+            "picking a style persists like cycling to it"
         );
     }
 }

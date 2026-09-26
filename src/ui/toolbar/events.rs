@@ -109,6 +109,9 @@ pub enum ToolbarEvent {
     ToggleArrowLabels(bool),
     /// Step the next arrow's style through the four arrow styles.
     CycleArrowStyle,
+    /// Use `style` for the next arrow; chosen from the arrow style menu,
+    /// which it closes.
+    SetArrowStyle(crate::draw::ArrowStyle),
     ResetArrowLabelCounter,
     ResetStepMarkerCounter,
     SetUndoDelay(f64),
@@ -305,6 +308,9 @@ pub enum ToolbarEvent {
     /// Open/close the style pill's Pen feel panel. The smoothing and Shape
     /// Pen detection changes made inside it keep it open.
     TogglePenFeelPanel(bool),
+    /// Open/close the style pill's arrow style menu. Choosing a style from it
+    /// (`SetArrowStyle`) closes it.
+    ToggleArrowStyleMenu(bool),
     /// Hide or show a known toolbar item override.
     SetToolbarItemHidden(ToolbarItemId, bool),
     /// Move an orderable toolbar item by a relative row delta.

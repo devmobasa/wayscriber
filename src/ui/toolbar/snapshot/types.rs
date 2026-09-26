@@ -408,6 +408,8 @@ pub struct ToolbarSnapshot {
     pub layout_menu_open: bool,
     /// Whether the style pill's Pen feel panel is open
     pub pen_feel_open: bool,
+    /// Whether the style pill's arrow style menu is open
+    pub arrow_style_menu_open: bool,
     /// Whether exiting only hides the overlay: the daemon spawned this overlay
     /// and keeps running after it closes. Filled by the backend.
     pub exit_hides_overlay: bool,

@@ -127,6 +127,18 @@ impl InputState {
         changed
     }
 
+    /// Open/close the style pill's arrow style menu. Opening it closes every
+    /// other top-strip menu; choosing a style closes it (the event policy).
+    pub(super) fn apply_toolbar_toggle_arrow_style_menu(&mut self, open: bool) -> bool {
+        let changed = self
+            .toolbar
+            .set_top_menu_open(TopMenuState::ArrowStyleMenu, open);
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
     /// Open the overlay's system font picker from the toolbar.
     ///
     /// The same route the color chip takes to the gradient picker: the toolbar
@@ -338,6 +350,24 @@ mod tests {
         assert_eq!(state.toolbar_top_menu(), TopMenuState::PenFeelPanel);
         assert_eq!(state.style.pen_smoothing, 5);
         assert_eq!(state.style.shape_recognition_sensitivity, 1);
+    }
+
+    #[test]
+    fn arrow_style_menu_opens_alone_and_sets_the_style() {
+        let mut state = make_test_input_state();
+
+        state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleArrowStyleMenu(true)));
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::ArrowStyleMenu);
+
+        assert!(
+            state.apply_toolbar_event(ToolbarEvent::SetArrowStyle(crate::draw::ArrowStyle::Curved))
+        );
+        assert_eq!(state.style.arrow_style, crate::draw::ArrowStyle::Curved);
+        assert!(
+            !state
+                .apply_toolbar_event(ToolbarEvent::SetArrowStyle(crate::draw::ArrowStyle::Curved))
+        );
     }
 
     #[test]
