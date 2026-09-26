@@ -941,7 +941,12 @@ fn assert_marker_style_pill() {
     let paint = model::OpacityPaint {
         rgb: (marker.color.r, marker.color.g, marker.color.b),
         stroke_alpha: marker.marker_opacity,
-        alpha_range: (spec.min, spec.max),
+        alpha_stops: [
+            (0.0, spec.min),
+            (0.0, spec.min),
+            (1.0, spec.max),
+            (1.0, spec.max),
+        ],
     };
     assert!(matches!(
         opacity.kind,
@@ -952,7 +957,7 @@ fn assert_marker_style_pill() {
         tooltip,
         Some(
             format!(
-                "Marker opacity: {:.0}% solid. Lower lets more of the page show through.",
+                "Marker opacity setting: {:.0}%. Lower lets more of the page show through.",
                 marker.marker_opacity * 100.0
             )
             .as_str()

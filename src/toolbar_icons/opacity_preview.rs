@@ -61,28 +61,33 @@ pub(crate) fn draw_opacity_swatch(
     let _ = ctx.restore();
 }
 
-/// Paint a slider track in `rect` that fades from `alpha_range.0` to
-/// `alpha_range.1` of `rgb` over the checkerboard, so the knob's position
-/// reads as how solid the stroke will be.
+/// Paint the opacity track inside the slider's full `rect`. Gradient stops
+/// follow stroke alpha over the knob's inset travel, including any plateau
+/// at the canvas's minimum opacity.
 pub(crate) fn draw_opacity_track(
     ctx: &cairo::Context,
     rect: (f64, f64, f64, f64),
     rgb: (f64, f64, f64),
-    alpha_range: (f64, f64),
+    alpha_stops: [(f64, f64); 4],
 ) {
     let (x, y, w, h) = rect;
     if w <= 0.0 || h <= 0.0 {
         return;
     }
 
-    let radius = h / 2.0;
+    let track_h = (h * 0.5).min(8.0);
+    let track_y = y + (h - track_h) / 2.0;
+    let knob_r = (h / 2.0).min(7.0);
     let _ = ctx.save();
-    checkerboard_behind(ctx, 0.0, |ctx| draw_rounded_rect(ctx, x, y, w, h, radius));
-    let gradient = cairo::LinearGradient::new(x, 0.0, x + w, 0.0);
-    gradient.add_color_stop_rgba(0.0, rgb.0, rgb.1, rgb.2, alpha_range.0);
-    gradient.add_color_stop_rgba(1.0, rgb.0, rgb.1, rgb.2, alpha_range.1);
+    checkerboard_behind(ctx, 0.0, |ctx| {
+        draw_rounded_rect(ctx, x, track_y, w, track_h, track_h / 2.0)
+    });
+    let gradient = cairo::LinearGradient::new(x + knob_r, 0.0, x + w - knob_r, 0.0);
+    for (position, alpha) in alpha_stops {
+        gradient.add_color_stop_rgba(position, rgb.0, rgb.1, rgb.2, alpha);
+    }
     let _ = ctx.set_source(&gradient);
-    draw_rounded_rect(ctx, x, y, w, h, radius);
+    draw_rounded_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
     let _ = ctx.fill();
     let _ = ctx.restore();
 }
@@ -90,6 +95,68 @@ pub(crate) fn draw_opacity_track(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarBindingHints;
+    use crate::ui::toolbar::model::StylePillSlider;
+
+    #[test]
+    fn the_opacity_track_matches_stroke_alpha_through_the_minimum_plateau() {
+        let state = make_test_input_state();
+        let mut snapshot = crate::ui::toolbar::ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::default(),
+        );
+        snapshot.color.r = 0.0;
+        snapshot.color.g = 0.0;
+        snapshot.color.b = 0.0;
+        let h = 24;
+
+        for (w, color_alpha, setting, expected_alpha) in [
+            (1000, 0.2, 0.2, 0.05),
+            (1000, 0.2, 0.25, 0.05),
+            (1000, 0.2, 0.5, 0.1),
+            (1000, 0.2, 0.9, 0.18),
+            (1000, 0.0, 0.5, 0.05),
+            (1000, 0.02, 0.9, 0.05),
+            (101, 1.0, 0.2, 0.2),
+            (101, 1.0, 0.9, 0.9),
+        ] {
+            snapshot.color.a = color_alpha;
+            snapshot.marker_opacity = setting;
+            let paint = StylePillSlider::Opacity
+                .opacity_paint(&snapshot)
+                .expect("marker opacity paint");
+            let t = (setting - 0.05) / 0.85;
+            let x = (7.0 + t * (f64::from(w) - 14.0)).floor() as usize;
+            let sample = |alpha_stops| {
+                let mut surface =
+                    cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).expect("surface");
+                {
+                    let ctx = cairo::Context::new(&surface).expect("context");
+                    draw_opacity_track(
+                        &ctx,
+                        (0.0, 0.0, f64::from(w), f64::from(h)),
+                        paint.rgb,
+                        alpha_stops,
+                    );
+                }
+                surface.flush();
+                let stride = surface.stride() as usize;
+                let data = surface.data().expect("pixels");
+                let offset = (h as usize / 2) * stride + x * 4;
+                let pixel = u32::from_ne_bytes(data[offset..offset + 4].try_into().unwrap());
+                f64::from((pixel >> 16) & 0xff)
+            };
+            let background = sample([(0.0, 0.0); 4]);
+            let actual = sample(paint.alpha_stops);
+            let expected = background * (1.0 - expected_alpha);
+
+            assert!(
+                (actual - expected).abs() <= 1.5,
+                "color alpha {color_alpha}, setting {setting}: pixel {actual}, expected {expected}"
+            );
+        }
+    }
 
     /// Red channel of the swatch's covered line, center of the swatch, for a
     /// black ink line under a pure red marker at `opacity`.

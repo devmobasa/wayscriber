@@ -660,7 +660,9 @@ fn step_marker_state_carries_the_step_reset() {
 
 #[test]
 fn marker_state_adds_the_opacity_slider() {
-    let snapshot = snapshot_for_tool(Tool::Marker);
+    let mut snapshot = snapshot_for_tool(Tool::Marker);
+    snapshot.color.a = 0.2;
+    snapshot.marker_opacity = 0.9;
     let spec = StylePillSpec::build(&snapshot, &plan());
     assert_eq!(spec.state(), StylePillState::Marker);
     let ids = control_ids(&spec);
@@ -689,6 +691,10 @@ fn marker_state_adds_the_opacity_slider() {
     assert_eq!(
         opacity.value_text(&snapshot),
         Some(format!("{:.0}%", snapshot.marker_opacity * 100.0))
+    );
+    assert_eq!(
+        opacity.tooltip(&snapshot).as_deref(),
+        Some("Marker opacity setting: 90%. Lower lets more of the page show through.")
     );
 }
 

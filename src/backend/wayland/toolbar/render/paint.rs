@@ -346,13 +346,7 @@ fn paint_node(
             draw_slider_knob(ctx, node.rect, *t);
         }
         WidgetKind::OpacitySlider { t, paint } => {
-            let track_h = (h * 0.5).min(8.0);
-            crate::toolbar_icons::draw_opacity_track(
-                ctx,
-                (x, y + (h - track_h) / 2.0, w, track_h),
-                paint.rgb,
-                paint.alpha_range,
-            );
+            crate::toolbar_icons::draw_opacity_track(ctx, node.rect, paint.rgb, paint.alpha_stops);
             draw_slider_knob(ctx, node.rect, *t);
         }
         WidgetKind::ArrowStylePreview { style } => {

@@ -80,9 +80,9 @@ impl SliderRow {
             if let Some(paint) = draw_state.opacity_paint.get() {
                 crate::toolbar_icons::draw_opacity_track(
                     ctx,
-                    (0.0, track_y, w, track_h),
+                    (0.0, 0.0, w, h),
                     paint.rgb,
-                    paint.alpha_range,
+                    paint.alpha_stops,
                 );
             } else {
                 // Track

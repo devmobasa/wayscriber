@@ -184,7 +184,7 @@ pub enum WidgetKind {
     /// (`HitKind::DragSet*`); the paint only shows the current value.
     Slider { t: f64 },
     /// The marker opacity slider: a [`WidgetKind::Slider`] whose track fades
-    /// from clear to solid in the stroke color (`paint.alpha_range`).
+    /// from clear to solid in the stroke color (`paint.alpha_stops`).
     OpacitySlider {
         t: f64,
         paint: crate::ui::toolbar::model::OpacityPaint,

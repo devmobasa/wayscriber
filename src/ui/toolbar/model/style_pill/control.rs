@@ -385,9 +385,9 @@ impl StylePillControl {
                 })
             }
             // The pill shows the opacity as a swatch, so the number lives
-            // here; "solid" says which way it runs.
+            // here as the setting, which also multiplies the color's alpha.
             Self::Slider(StylePillSlider::Opacity) => Some(format!(
-                "Marker opacity: {} solid. Lower lets more of the page show through.",
+                "Marker opacity setting: {}. Lower lets more of the page show through.",
                 StylePillSlider::Opacity.formatter()(snapshot.marker_opacity)
             )),
             Self::Slider(StylePillSlider::FontSize) => {

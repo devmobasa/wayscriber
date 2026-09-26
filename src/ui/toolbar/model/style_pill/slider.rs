@@ -10,9 +10,9 @@ pub(crate) struct OpacityPaint {
     /// The alpha a marker stroke gets at the slider's value: the color's own
     /// alpha times the marker opacity, clamped as the canvas clamps it.
     pub(crate) stroke_alpha: f64,
-    /// The stroke alphas at the slider's two ends, the ends of the track's
-    /// fade.
-    pub(crate) alpha_range: (f64, f64),
+    /// Gradient stops as (normalized slider position, stroke alpha), including
+    /// the transitions into and out of the canvas's clamped alpha range.
+    pub(crate) alpha_stops: [(f64, f64); 4],
 }
 
 /// Slider-only policy shared by the GTK and Cairo adapters.
@@ -56,10 +56,25 @@ impl StylePillSlider {
             let color = snapshot.color;
             let stroke_alpha =
                 |opacity: f64| crate::input::tool::marker_color_with_opacity(color, opacity).a;
+            let min_alpha = stroke_alpha(spec.min);
+            let max_alpha = stroke_alpha(spec.max);
+            let position_for_alpha = |alpha| {
+                if color.a > 0.0 {
+                    spec.t_from_value(alpha / color.a)
+                } else {
+                    0.0
+                }
+            };
+
             OpacityPaint {
                 rgb: (color.r, color.g, color.b),
                 stroke_alpha: stroke_alpha(spec.clamp(value)),
-                alpha_range: (stroke_alpha(spec.min), stroke_alpha(spec.max)),
+                alpha_stops: [
+                    (0.0, min_alpha),
+                    (position_for_alpha(min_alpha), min_alpha),
+                    (position_for_alpha(max_alpha), max_alpha),
+                    (1.0, max_alpha),
+                ],
             }
         })
     }
@@ -107,8 +122,8 @@ mod tests {
             .expect("opacity paint");
 
         assert!((paint.stroke_alpha - 0.18).abs() < 1e-9, "{paint:?}");
-        assert!((paint.alpha_range.0 - 0.05).abs() < 1e-9, "{paint:?}");
-        assert!((paint.alpha_range.1 - 0.18).abs() < 1e-9, "{paint:?}");
+        assert!((paint.alpha_stops[0].1 - 0.05).abs() < 1e-9, "{paint:?}");
+        assert!((paint.alpha_stops[3].1 - 0.18).abs() < 1e-9, "{paint:?}");
         assert_eq!(
             StylePillSlider::Thickness.opacity_paint(&snapshot(translucent, 0.9)),
             None
