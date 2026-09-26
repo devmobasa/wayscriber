@@ -115,4 +115,8 @@ pub struct InputState {
     /// The transient chip naming what Shape Pen just recognized.
     pub(in crate::input::state) recognition_feedback:
         crate::input::state::core::RecognitionFeedback,
+    /// The board and page the launch restore notice counted, while it may
+    /// still be showing.
+    pub(in crate::input::state) restore_notice:
+        Option<crate::input::state::core::utility::RestoreNoticeContext>,
 }

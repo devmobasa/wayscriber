@@ -19,5 +19,6 @@ mod toasts;
 
 pub(crate) use help_overlay::HelpOverlayPressSource;
 pub use help_overlay::{HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome};
+pub(in crate::input::state) use restore_notice::RestoreNoticeContext;
 pub(crate) use sequence::{PendingSequence, SequenceMatch, SequenceTrie};
 pub(crate) use step_markers::default_step_marker_size;

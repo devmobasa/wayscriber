@@ -92,6 +92,7 @@ impl InputState {
             tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
             recognition_feedback: Default::default(),
+            restore_notice: None,
         };
 
         if state.click_highlight.uses_pen_color() {

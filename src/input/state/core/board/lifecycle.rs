@@ -13,6 +13,7 @@ impl InputState {
         self.mark_session_dirty();
         // The chip points at a shape on the surface that was just replaced.
         self.clear_recognition_chip();
+        self.retract_restore_notice_if_context_changed();
     }
 
     pub(super) fn finish_active_board_transition(&mut self) {
