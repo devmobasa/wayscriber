@@ -378,9 +378,12 @@ impl StylePillControl {
                     label => format!("{label} of the next stroke you draw."),
                 })
             }
-            Self::Slider(StylePillSlider::Opacity) => {
-                Some("How much of the page shows through a highlighter stroke.".to_string())
-            }
+            // The pill shows the opacity as a swatch, so the number lives
+            // here; "solid" says which way it runs.
+            Self::Slider(StylePillSlider::Opacity) => Some(format!(
+                "Marker opacity: {} solid. Lower lets more of the page show through.",
+                StylePillSlider::Opacity.formatter()(snapshot.marker_opacity)
+            )),
             Self::Slider(StylePillSlider::FontSize) => {
                 Some("Point size of the next label you type.".to_string())
             }

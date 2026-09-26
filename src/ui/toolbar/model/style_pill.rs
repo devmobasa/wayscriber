@@ -44,7 +44,7 @@ mod meter;
 mod pen_feel;
 mod slider;
 mod stepper;
-pub(crate) use slider::StylePillSlider;
+pub(crate) use slider::{OpacityPaint, StylePillSlider};
 
 /// Morph state of the style pill, derived from the active tool's options
 /// kind. `Hidden` covers Select without a selection plus the

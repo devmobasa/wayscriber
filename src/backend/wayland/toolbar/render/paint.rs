@@ -123,6 +123,16 @@ fn paint_preset_color_swatch(
     let _ = ctx.stroke();
 }
 
+/// The accent knob riding a slider's inset travel at `t` in `[0, 1]`.
+fn draw_slider_knob(ctx: &cairo::Context, rect: (f64, f64, f64, f64), t: f64) {
+    let (x, y, w, h) = rect;
+    let knob_r = (h / 2.0).min(7.0);
+    let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
+    set_color(ctx, COLOR_TRACK_KNOB);
+    ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+}
+
 fn paint_shortcut_badge(engine: &UiTextEngine, ctx: &cairo::Context, node: &WidgetNode) {
     let Some(badge) = &node.shortcut_badge else {
         return;
@@ -333,11 +343,25 @@ fn paint_node(
             set_color(ctx, COLOR_TRACK_BACKGROUND);
             draw_round_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
             let _ = ctx.fill();
-            let knob_r = (h / 2.0).min(7.0);
-            let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
-            set_color(ctx, COLOR_TRACK_KNOB);
-            ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            let _ = ctx.fill();
+            draw_slider_knob(ctx, node.rect, *t);
+        }
+        WidgetKind::OpacitySlider { t, paint } => {
+            let track_h = (h * 0.5).min(8.0);
+            crate::toolbar_icons::draw_opacity_track(
+                ctx,
+                (x, y + (h - track_h) / 2.0, w, track_h),
+                paint.rgb,
+                paint.alpha_range,
+            );
+            draw_slider_knob(ctx, node.rect, *t);
+        }
+        WidgetKind::OpacitySwatch { paint } => {
+            crate::toolbar_icons::draw_opacity_swatch(
+                ctx,
+                node.rect,
+                paint.rgb,
+                paint.stroke_alpha,
+            );
         }
         WidgetKind::Swatch { color, selected } => {
             // Rounded square inset one pixel so the accent selection ring

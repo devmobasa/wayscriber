@@ -183,6 +183,17 @@ pub enum WidgetKind {
     /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
     /// (`HitKind::DragSet*`); the paint only shows the current value.
     Slider { t: f64 },
+    /// The marker opacity slider: a [`WidgetKind::Slider`] whose track fades
+    /// from clear to solid in the stroke color (`paint.alpha_range`).
+    OpacitySlider {
+        t: f64,
+        paint: crate::ui::toolbar::model::OpacityPaint,
+    },
+    /// The marker opacity slider's readout: a stroke at `paint.stroke_alpha`
+    /// over sample text, drawn by the painter both frontends share.
+    OpacitySwatch {
+        paint: crate::ui::toolbar::model::OpacityPaint,
+    },
     /// One bar of a level meter. The node's rect is the bar's hit slot; the
     /// painter draws a slimmer rounded bar centered in it, accent-filled at
     /// or below the current level and track-colored above it.

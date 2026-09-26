@@ -856,7 +856,7 @@ fn assert_gtk_style_widget(
     let id = widget.widget_name().to_string();
     match control.role() {
         model::StylePillRole::Swatch => assert_gtk_style_swatch(widget, control, snapshot, &id),
-        model::StylePillRole::Slider => assert_gtk_style_slider(widget, control, &id),
+        model::StylePillRole::Slider => assert_gtk_style_slider(widget, control, snapshot, &id),
         model::StylePillRole::Value => assert_gtk_style_value(widget, control, snapshot, &id),
         model::StylePillRole::Toggle => assert_gtk_style_toggle(widget, control, snapshot, &id),
         model::StylePillRole::Button => assert_gtk_style_button(widget, control, snapshot, &id),
@@ -887,7 +887,12 @@ fn assert_gtk_style_swatch(
     assert_accessible_label(widget, &control.label(snapshot), id);
 }
 
-fn assert_gtk_style_slider(widget: &gtk4::Widget, control: model::StylePillControl, id: &str) {
+fn assert_gtk_style_slider(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
     // SliderRow: a box hosting the hand-drawn track DrawingArea.
     let row = widget
         .clone()
@@ -900,11 +905,36 @@ fn assert_gtk_style_slider(widget: &gtk4::Widget, control: model::StylePillContr
         .downcast::<gtk4::Label>()
         .unwrap_or_else(|_| panic!("{id} value readout is a label"));
     let carries_readout = control.carries_inline_readout();
+    // The marker opacity reads out as a swatch in the label's slot.
+    let opacity_paint = slider_opacity_paint(control, snapshot);
     assert_eq!(
         value.property::<bool>("visible"),
-        carries_readout,
+        carries_readout && opacity_paint.is_none(),
         "{id} readout visibility"
     );
+    let swatch = value.next_sibling();
+    assert_eq!(
+        swatch
+            .as_ref()
+            .map(|swatch| swatch.is::<gtk4::DrawingArea>()),
+        opacity_paint.map(|_| true),
+        "{id} readout swatch"
+    );
+    if let Some(swatch) = swatch {
+        assert_eq!(
+            swatch.width_request(),
+            -1,
+            "{id} swatch sizes by its content"
+        );
+        assert_eq!(
+            swatch
+                .downcast::<gtk4::DrawingArea>()
+                .expect("swatch area")
+                .content_width(),
+            STYLE_VALUE_W.round() as i32,
+            "{id} swatch fills the readout slot"
+        );
+    }
     let expected_width = if carries_readout {
         STYLE_SLIDER_W + STYLE_PILL_GAP + STYLE_VALUE_W
     } else {
@@ -915,7 +945,7 @@ fn assert_gtk_style_slider(widget: &gtk4::Widget, control: model::StylePillContr
         expected_width.round() as i32,
         "{id} keeps the shared track width when its readout is visible"
     );
-    if carries_readout {
+    if carries_readout && opacity_paint.is_none() {
         assert_eq!(
             value.xalign(),
             0.0,
@@ -1829,11 +1859,10 @@ fn assert_builtin_style_pill_control_kind(
             assert_eq!(*selected, control.active(snapshot), "{name}: {id}");
         }
         (model::StylePillRole::Slider, W::Slider { t }) => {
-            let (spec, value) = control.slider(snapshot).expect("slider spec");
-            assert!(
-                (*t - spec.t_from_value(value)).abs() < 1e-9,
-                "{name}: {id} slider position"
-            );
+            assert_builtin_style_pill_slider(name, snapshot, *t, None, id, control);
+        }
+        (model::StylePillRole::Slider, W::OpacitySlider { t, paint }) => {
+            assert_builtin_style_pill_slider(name, snapshot, *t, Some(*paint), id, control);
         }
         (model::StylePillRole::Value, W::TextButton { label, .. }) => {
             assert_eq!(
@@ -1909,6 +1938,11 @@ fn assert_builtin_style_pill_readout(
             control.value_text(snapshot),
             "{name}: {id} readout"
         ),
+        W::OpacitySwatch { paint } => assert_eq!(
+            Some(*paint),
+            slider_opacity_paint(control, snapshot),
+            "{name}: {id} readout swatch"
+        ),
         other => panic!("{name}: {id} readout kind {other:?}"),
     }
 }
@@ -1966,6 +2000,38 @@ fn assert_builtin_style_pill_step_value(
             "{name}: {id} stepper readout"
         ),
         other => panic!("{name}: {id} stepper readout kind {other:?}"),
+    }
+}
+
+/// A builtin slider sits at the model's position and paints the model's
+/// opacity track exactly when the model has one.
+fn assert_builtin_style_pill_slider(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    t: f64,
+    paint: Option<model::OpacityPaint>,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    let (spec, value) = control.slider(snapshot).expect("slider spec");
+    assert!(
+        (t - spec.t_from_value(value)).abs() < 1e-9,
+        "{name}: {id} slider position"
+    );
+    assert_eq!(
+        paint,
+        slider_opacity_paint(control, snapshot),
+        "{name}: {id} track paint"
+    );
+}
+
+fn slider_opacity_paint(
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+) -> Option<model::OpacityPaint> {
+    match control {
+        model::StylePillControl::Slider(slider) => slider.opacity_paint(snapshot),
+        _ => None,
     }
 }
 

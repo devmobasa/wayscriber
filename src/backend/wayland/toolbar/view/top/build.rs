@@ -693,11 +693,14 @@ fn push_style_pill(
                     ToolbarLayoutSpec::TOP_STYLE_SLIDER_W,
                     row_h,
                 );
+                let t = slider_spec.t_from_value(value);
+                let opacity_paint = slider_kind.opacity_paint(snapshot);
                 nodes.push(WidgetNode::new(
                     id,
                     rect,
-                    WidgetKind::Slider {
-                        t: slider_spec.t_from_value(value),
+                    match opacity_paint {
+                        Some(paint) => WidgetKind::OpacitySlider { t, paint },
+                        None => WidgetKind::Slider { t },
                     },
                     Some(Interaction {
                         event,
@@ -710,20 +713,29 @@ fn push_style_pill(
                 x += ToolbarLayoutSpec::TOP_STYLE_SLIDER_W + gap;
                 // The opacity slider carries its readout as decoration; the
                 // thickness/text-size numerals are distinct value controls.
+                // The marker opacity shows as a swatch; its number is in the
+                // tooltip.
                 if control.carries_inline_readout() {
+                    let readout_h = match opacity_paint {
+                        Some(_) => TOP_SWATCH_SIZE.min(row_h),
+                        None => row_h,
+                    };
                     nodes.push(WidgetNode::decor(
                         format!("{}.readout", control.id()),
                         (
                             x,
-                            center(row_h),
+                            center(readout_h),
                             ToolbarLayoutSpec::TOP_STYLE_VALUE_W,
-                            row_h,
+                            readout_h,
                         ),
-                        WidgetKind::Label(LabelSpec::new(
-                            control.required_value_text(snapshot),
-                            TOP_LABEL_FONT_SIZE,
-                            true,
-                        )),
+                        match opacity_paint {
+                            Some(paint) => WidgetKind::OpacitySwatch { paint },
+                            None => WidgetKind::Label(LabelSpec::new(
+                                control.required_value_text(snapshot),
+                                TOP_LABEL_FONT_SIZE,
+                                true,
+                            )),
+                        },
                     ));
                     x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
                     x += push_style_status_label(

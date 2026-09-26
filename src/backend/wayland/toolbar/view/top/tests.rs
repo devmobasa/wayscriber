@@ -922,8 +922,9 @@ fn assert_marker_style_pill() {
     use crate::backend::wayland::toolbar::events::HitKind;
     use crate::input::Tool;
 
-    // Marker: thickness (targeting the marker size) plus the opacity slider
-    // with its inline readout decoration.
+    // Marker: thickness (targeting the marker size) plus the opacity slider,
+    // its track fading to the stroke color and its readout a swatch of the
+    // stroke rather than a percentage.
     let marker = snapshot_for_tool(Tool::Marker);
     let tree = build(&marker);
     let opacity = tree
@@ -937,15 +938,34 @@ fn assert_marker_style_pill() {
             max: spec.max,
         }
     );
+    let paint = model::OpacityPaint {
+        rgb: (marker.color.r, marker.color.g, marker.color.b),
+        stroke_alpha: marker.marker_opacity,
+        alpha_range: (spec.min, spec.max),
+    };
+    assert!(matches!(
+        opacity.kind,
+        WidgetKind::OpacitySlider { paint: track, .. } if track == paint
+    ));
+    let tooltip = opacity.interact.as_ref().unwrap().tooltip.as_deref();
+    assert_eq!(
+        tooltip,
+        Some(
+            format!(
+                "Marker opacity: {:.0}% solid. Lower lets more of the page show through.",
+                marker.marker_opacity * 100.0
+            )
+            .as_str()
+        ),
+        "the number the swatch replaces lives in the tooltip"
+    );
     let readout = tree
         .node_by_id(&"top.style.opacity.readout".into())
         .expect("opacity readout");
-    match &readout.kind {
-        WidgetKind::Label(label) => {
-            assert_eq!(label.text, format!("{:.0}%", marker.marker_opacity * 100.0));
-        }
-        other => panic!("readout kind, got {other:?}"),
-    }
+    assert!(matches!(
+        readout.kind,
+        WidgetKind::OpacitySwatch { paint: swatch } if swatch == paint
+    ));
     assert!(readout.interact.is_none());
 }
 

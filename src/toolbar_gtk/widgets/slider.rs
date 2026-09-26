@@ -1,7 +1,7 @@
 //! Slider interaction retains the Cairo geometry and the active-drag update barrier.
 use super::rounded_rect_path;
 use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
-use crate::ui::toolbar::model::ToolbarSliderSpec;
+use crate::ui::toolbar::model::{OpacityPaint, ToolbarSliderSpec};
 use gtk4::prelude::*;
 use std::{cell::Cell, rc::Rc};
 
@@ -22,6 +22,9 @@ struct SliderState {
     spec: ToolbarSliderSpec,
     value: Cell<f64>,
     dragging: Cell<bool>,
+    /// Set for the marker opacity slider: its track fades from clear to
+    /// solid in the stroke color instead of filling with the accent.
+    opacity_paint: Cell<Option<OpacityPaint>>,
 }
 
 impl SliderRow {
@@ -43,6 +46,7 @@ impl SliderRow {
             spec,
             value: Cell::new(initial),
             dragging: Cell::new(false),
+            opacity_paint: Cell::new(None),
         });
 
         let area = gtk4::DrawingArea::builder()
@@ -73,14 +77,23 @@ impl SliderRow {
                 rounded_rect_path(ctx, 1.0, 1.0, w - 2.0, h - 2.0, 3.0);
                 let _ = ctx.stroke();
             }
-            // Track
-            rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
-            set_color(ctx, crate::toolbar_gtk::css::TRACK_BACKGROUND);
-            let _ = ctx.fill();
-            // Filled portion (accent at reduced alpha)
-            rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
-            set_color(ctx, COLOR_TRACK_FILL);
-            let _ = ctx.fill();
+            if let Some(paint) = draw_state.opacity_paint.get() {
+                crate::toolbar_icons::draw_opacity_track(
+                    ctx,
+                    (0.0, track_y, w, track_h),
+                    paint.rgb,
+                    paint.alpha_range,
+                );
+            } else {
+                // Track
+                rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
+                set_color(ctx, crate::toolbar_gtk::css::TRACK_BACKGROUND);
+                let _ = ctx.fill();
+                // Filled portion (accent at reduced alpha)
+                rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
+                set_color(ctx, COLOR_TRACK_FILL);
+                let _ = ctx.fill();
+            }
             // Knob
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = knob_r + t * (w - knob_r * 2.0);
@@ -194,6 +207,14 @@ impl SliderRow {
             self.value_label.set_width_chars(-1);
             self.value_label.set_size_request(width, -1);
             self.value_label.set_xalign(0.0);
+        }
+    }
+
+    /// Paint the track as the marker opacity fade (`Some`) or the plain
+    /// accent fill (`None`); redraws only when the paint changes.
+    pub(in crate::toolbar_gtk) fn set_opacity_paint(&self, paint: Option<OpacityPaint>) {
+        if self.state.opacity_paint.replace(paint) != paint {
+            self.area.queue_draw();
         }
     }
 

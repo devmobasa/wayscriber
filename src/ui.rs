@@ -78,7 +78,7 @@ pub use precision_entry::render_precision_entry_popup;
 pub(crate) use precision_entry::render_precision_entry_popup_with_engine;
 /// Shared measured-text trimming, also used by the standalone about dialog.
 pub(crate) use primitives::ellipsize_to_fit_with_engine;
-pub(crate) use primitives::{checkerboard_behind, draw_pill};
+pub(crate) use primitives::{checkerboard_behind, draw_pill, draw_rounded_rect};
 pub use properties_panel::render_properties_panel;
 pub(crate) use properties_panel::render_properties_panel_with_engine;
 pub use radial_menu::render_radial_menu;
