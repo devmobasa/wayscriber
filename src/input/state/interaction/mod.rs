@@ -123,9 +123,8 @@ mod tests {
 
     #[test]
     fn escape_dismisses_every_open_top_menu_with_named_outcome() {
-        let mut state = make_test_input_state();
-
         for menu in EVERY_TOP_MENU {
+            let mut state = make_test_input_state();
             state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
 
             assert_eq!(

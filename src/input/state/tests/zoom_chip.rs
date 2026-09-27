@@ -118,7 +118,7 @@ fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
 }
 
 #[test]
-fn zoom_chip_reclassifies_hover_after_fit_removes_the_lock_button() {
+fn zoom_chip_preserves_fit_hover_when_lock_disappears() {
     let mut input = create_test_input_state();
     input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     update_chip_layout(&mut input, 1280, 720);
@@ -132,7 +132,7 @@ fn zoom_chip_reclassifies_hover_after_fit_removes_the_lock_button() {
     input.set_zoom_status(false, false, 1.0, (0.0, 0.0));
     update_chip_layout(&mut input, 1280, 720);
     let button_now_under_pointer = input.zoom_chip_button_at(x, y);
-    assert_ne!(button_now_under_pointer, Some(ZoomChipButtonKind::Fit));
+    assert_eq!(button_now_under_pointer, Some(ZoomChipButtonKind::Fit));
     assert_eq!(
         input.zoom_chip.hover, button_now_under_pointer,
         "hover must follow the rebuilt geometry, not the old button identity"
@@ -542,4 +542,23 @@ fn passive_chip_release_does_not_finish_in_flight_interaction() {
     );
     assert_eq!(input.boards.active_frame().shapes.len(), 0);
     assert_eq!(input.take_pending_zoom_action(), None);
+}
+
+#[test]
+fn zoom_chip_buttons_stay_put_when_zoom_and_lock_change() {
+    let mut input = create_test_input_state();
+    update_chip_layout(&mut input, 1920, 1080);
+    let kinds = [
+        ZoomChipButtonKind::Out,
+        ZoomChipButtonKind::In,
+        ZoomChipButtonKind::Fit,
+    ];
+    let centers = kinds.map(|kind| button_center(&input, kind));
+    for scale in [1.25, 2.0, 10.0, 1.0] {
+        input.set_zoom_status(scale != 1.0, false, scale, (0.0, 0.0));
+        update_chip_layout(&mut input, 1920, 1080);
+        for (kind, center) in kinds.into_iter().zip(centers) {
+            assert_eq!(button_center(&input, kind), center, "{kind:?} at {scale}");
+        }
+    }
 }

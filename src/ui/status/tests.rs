@@ -166,7 +166,7 @@ fn explicit_frame_layout_rehits_stationary_pointer_and_clears_unfocused_hover() 
         .zoom_chip_layout()
         .unwrap()
         .button_at(f64::from(x), f64::from(y));
-    assert_ne!(expected, Some(ZoomChipButtonKind::Fit));
+    assert_eq!(expected, Some(ZoomChipButtonKind::Fit));
     assert_eq!(input.zoom_chip.hover(), expected);
     update(&engine, &mut input, &style, false);
     assert_eq!(input.zoom_chip.hover(), None);

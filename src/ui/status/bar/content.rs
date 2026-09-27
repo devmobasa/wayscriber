@@ -336,7 +336,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     }
     if input_state.ui_visibility.show_status_size {
         pieces.push(StatusHudPiece::text(
-            format!("{}px", input_state.status_size_for_tool(tool) as i32),
+            format!("{:.0}px", input_state.status_size_for_tool(tool)),
             Some(StatusHudSegmentKind::Size),
             false,
         ));

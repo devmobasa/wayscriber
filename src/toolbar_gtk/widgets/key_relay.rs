@@ -20,8 +20,11 @@ pub(super) enum FocusedKeys {
     Nothing,
     /// A focused control that Space and Return activate, such as a checkbox.
     Activation,
-    /// A widget that owns typing and arrow keys: the hex entry and sliders.
-    /// These handle Escape themselves.
+    /// A slider owns its value-navigation keys, and Escape, which releases
+    /// its focus (or closes the popover hosting it) instead of exiting.
+    Slider,
+    /// A widget that owns typing and arrow keys: the hex entry.
+    /// Escape is relayed so dismissal shares the overlay's exit guard.
     Editing,
 }
 
@@ -46,8 +49,35 @@ pub(super) fn key_stays_local(
             keyval,
             Key::space | Key::KP_Space | Key::Return | Key::KP_Enter | Key::ISO_Enter
         ),
-        FocusedKeys::Editing => true,
+        FocusedKeys::Slider => matches!(
+            keyval,
+            Key::Left
+                | Key::Right
+                | Key::Up
+                | Key::Down
+                | Key::Home
+                | Key::End
+                | Key::Page_Up
+                | Key::Page_Down
+                | Key::KP_Left
+                | Key::KP_Right
+                | Key::KP_Up
+                | Key::KP_Down
+                | Key::KP_Home
+                | Key::KP_End
+                | Key::KP_Page_Up
+                | Key::KP_Page_Down
+                | Key::Escape
+        ),
+        FocusedKeys::Editing => keyval != Key::Escape,
     }
+}
+
+/// Whether this press is an Escape the focused widget spends on its own
+/// dismissal. The overlay still has to hear about it, so a second Escape
+/// right behind it does not exit.
+pub(super) fn escape_dismisses_locally(keyval: gtk4::gdk::Key, focus: FocusedKeys) -> bool {
+    focus == FocusedKeys::Slider && keyval == gtk4::gdk::Key::Escape
 }
 
 pub(super) fn forwarded_key_feedback(
@@ -69,9 +99,9 @@ fn focused_keys(widget: &gtk4::Widget) -> FocusedKeys {
         return FocusedKeys::Nothing;
     };
 
-    let editing = focus.ancestor(gtk4::Entry::static_type()).is_some()
-        || focus.accessible_role() == gtk4::AccessibleRole::Slider;
-    if editing {
+    if focus.accessible_role() == gtk4::AccessibleRole::Slider {
+        FocusedKeys::Slider
+    } else if focus.ancestor(gtk4::Entry::static_type()).is_some() {
         FocusedKeys::Editing
     } else {
         FocusedKeys::Activation
@@ -99,6 +129,9 @@ pub(in crate::toolbar_gtk) fn install_key_relay(
             .widget()
             .map_or(FocusedKeys::Nothing, |widget| focused_keys(&widget));
         if key_stays_local(keyval, is_modifier, focus) {
+            if escape_dismisses_locally(keyval, focus) {
+                let _ = feedback.send(GtkToolbarFeedback::EscapeDismissed);
+            }
             return gtk4::glib::Propagation::Proceed;
         }
 
@@ -159,8 +192,46 @@ mod tests {
     }
 
     #[test]
-    fn editing_widgets_keep_every_key() {
-        for keyval in [Key::Escape, Key::a, Key::Left, Key::BackSpace] {
+    fn focused_slider_relays_shortcuts_but_keeps_navigation() {
+        for keyval in [Key::h, Key::w, Key::space, Key::Return] {
+            assert!(!key_stays_local(keyval, false, FocusedKeys::Slider));
+        }
+        for keyval in [
+            Key::Left,
+            Key::Right,
+            Key::Up,
+            Key::Down,
+            Key::Home,
+            Key::End,
+            Key::Page_Up,
+            Key::Page_Down,
+        ] {
+            assert!(key_stays_local(keyval, false, FocusedKeys::Slider));
+        }
+    }
+
+    /// Escape on a Tab-focused slider releases the slider's focus instead of
+    /// reaching the overlay, where no open menu would turn it into Exit. The
+    /// overlay is still told, so its guard swallows a second Escape.
+    #[test]
+    fn escape_on_a_focused_slider_dismisses_locally_and_arms_the_guard() {
+        assert!(key_stays_local(Key::Escape, false, FocusedKeys::Slider));
+        assert!(escape_dismisses_locally(Key::Escape, FocusedKeys::Slider));
+
+        assert!(!escape_dismisses_locally(Key::Left, FocusedKeys::Slider));
+        for focus in [
+            FocusedKeys::Nothing,
+            FocusedKeys::Activation,
+            FocusedKeys::Editing,
+        ] {
+            assert!(!escape_dismisses_locally(Key::Escape, focus));
+        }
+    }
+
+    #[test]
+    fn editing_widgets_keep_typing_keys_and_relay_escape() {
+        assert!(!key_stays_local(Key::Escape, false, FocusedKeys::Editing));
+        for keyval in [Key::a, Key::Left, Key::BackSpace] {
             assert!(key_stays_local(keyval, false, FocusedKeys::Editing));
         }
     }

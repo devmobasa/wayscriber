@@ -52,6 +52,7 @@ impl SliderRow {
         let area = gtk4::DrawingArea::builder()
             .accessible_role(gtk4::AccessibleRole::Slider)
             .focusable(true)
+            .focus_on_click(false)
             .build();
         area.update_property(&[
             gtk4::accessible::Property::Label(name),
@@ -114,7 +115,6 @@ impl SliderRow {
         let begin_label = value_label.clone();
         drag.connect_drag_begin(move |gesture, x, _| {
             drag_state.dragging.set(true);
-            drag_area.grab_focus();
             // Jump the knob to the pressed position, like the built-in track.
             let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
             let t = (x / width).clamp(0.0, 1.0);
@@ -295,8 +295,8 @@ pub(super) fn assert_widget_contract() {
             &gtk4::gdk::ModifierType::empty(),
         ],
     );
-    assert_eq!(slider.state.value.get(), 5.5);
-    assert_eq!(changes.borrow().as_slice(), &[5.5]);
+    assert_eq!(slider.state.value.get(), 6.0);
+    assert_eq!(changes.borrow().as_slice(), &[6.0]);
     let window = gtk4::Window::new();
     window.set_child(Some(&slider.root));
     gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
@@ -314,11 +314,11 @@ pub(super) fn assert_widget_contract() {
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_some());
     slider.set_value(10.0);
-    assert_eq!(slider.state.value.get(), 5.5);
+    assert_eq!(slider.state.value.get(), 6.0);
     slider.state.dragging.set(false);
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_none());
-    assert_eq!(slider.state.value.get(), 5.5);
+    assert_eq!(slider.state.value.get(), 6.0);
     window.set_child(None::<&gtk4::Widget>);
     let anchor = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     window.set_child(Some(&anchor));
@@ -337,9 +337,50 @@ pub(super) fn assert_widget_contract() {
     assert_eq!(slider.state.value.get(), 6.25);
     assert_eq!(
         changes.borrow().as_slice(),
-        &[5.5],
+        &[6.0],
         "backend updates emit no user event"
     );
+}
+
+/// Escape on a Tab-focused slider must release the slider, not reach the
+/// overlay, where no open menu would route it to Exit. The relay leaves the
+/// press to the slider and only tells the overlay, which arms its guard.
+#[cfg(test)]
+pub(super) fn assert_focused_slider_escape_stays_local() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let slider = SliderRow::new(
+        1.0,
+        "Thickness",
+        ToolbarSliderSpec::THICKNESS,
+        4.0,
+        |value| format!("{value} px"),
+        |_| {},
+    );
+    let window = gtk4::Window::new();
+    window.set_child(Some(&slider.root));
+    super::install_key_relay(&window, &super::FeedbackSender::new(tx));
+    let relay = super::key_relay_controller(&window).expect("the window relays keys");
+    gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
+
+    let handled = relay.emit_by_name::<bool>(
+        "key-pressed",
+        &[
+            &gtk4::gdk::Key::Escape,
+            &0u32,
+            &gtk4::gdk::ModifierType::empty(),
+        ],
+    );
+
+    assert!(!handled, "Escape goes on to the focused slider");
+    assert_eq!(
+        rx.try_recv(),
+        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed)
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "no key is relayed, so the overlay routes no Exit"
+    );
+    window.set_child(None::<&gtk4::Widget>);
 }
 
 #[cfg(test)]

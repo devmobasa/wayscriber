@@ -139,6 +139,26 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
+    /// Whether first-run guidance keeps the top strip on screen, so the
+    /// toolbar the tour introduces never fades out from under a new user.
+    pub(in crate::backend::wayland) fn first_run_holds_toolbar(&self) -> bool {
+        let onboarding = self.preferences.onboarding();
+
+        super::automatic_onboarding_allowed(
+            self.config.ui.show_onboarding_hints,
+            onboarding.persistence_available(),
+        ) && first_run_holds_toolbar(onboarding.state())
+    }
+
+    /// Whether this frame paints the first-run card, without building its copy.
+    pub(in crate::backend::wayland) fn first_run_card_shown(&self) -> bool {
+        let state = self.preferences.onboarding().state();
+
+        state.first_run_active()
+            && state.active_step.is_some()
+            && self.first_run_onboarding_card_visible()
+    }
+
     pub(super) fn first_run_onboarding_card_visible(&self) -> bool {
         if !super::automatic_onboarding_allowed(
             self.config.ui.show_onboarding_hints,
@@ -473,6 +493,12 @@ fn mark_background_mode_prompt(state: &mut OnboardingState, enabled: bool) {
 
 pub(super) fn first_run_skip_allowed(first_run_active: bool, card_visible: bool) -> bool {
     first_run_active && card_visible
+}
+
+/// The strip stays up while the first-run tour runs and for the rest of the
+/// first session, including the moments after "Tour complete".
+pub(super) fn first_run_holds_toolbar(state: &OnboardingState) -> bool {
+    state.first_run_active() || state.sessions_seen <= 1
 }
 
 pub(super) fn first_run_card_hidden_by_ui_state(

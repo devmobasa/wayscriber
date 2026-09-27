@@ -52,12 +52,10 @@ impl WaylandState {
         self.canvas_world_coords(screen_x, screen_y)
     }
 
-    /// Whether an open context menu or properties panel takes Escape and the
-    /// arrow keys ahead of zoom, which otherwise exits on Escape and pans on
-    /// the arrows. Both can open over a zoomed view, and a menu the arrows
-    /// cannot walk, or that Escape closes along with the zoom, is a trap.
+    /// Open UI takes Escape and arrows before zoom so dismissal never also
+    /// exits zoom, and menu navigation never pans the canvas.
     pub(in crate::backend::wayland) fn zoom_keys_yield_to_open_menu(&self) -> bool {
-        self.input_state.is_context_menu_open() || self.input_state.is_properties_panel_open()
+        self.input_state.modal_owns_text_input() || self.input_state.toolbar_top_menu().is_open()
     }
 
     pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, action: ZoomAction) {
@@ -96,14 +94,18 @@ impl WaylandState {
     }
 
     fn zoom_keyboard_anchor(&self) -> (f64, f64) {
-        if self.focus.pointer_focused() {
-            let (sx, sy) = self.pointer.position();
-            (sx as f64, sy as f64)
-        } else {
-            let cx = (self.surface.width() as f64) * 0.5;
-            let cy = (self.surface.height() as f64) * 0.5;
-            (cx, cy)
-        }
+        zoom_action_anchor(
+            self.focus
+                .pointer_focused()
+                .then_some(self.pointer.position()),
+            crate::ui::zoom_chip_geometry(
+                &self.input_state,
+                self.surface.width(),
+                self.surface.height(),
+            ),
+            self.surface.width(),
+            self.surface.height(),
+        )
     }
 
     pub(in crate::backend::wayland) fn handle_zoom_scroll(
@@ -244,9 +246,48 @@ fn zoom_suppression_keyboard_policy(use_fallback: bool) -> OverlaySuppressionKey
     }
 }
 
+/// Chip clicks and unfocused keyboard actions zoom around the screen center.
+fn zoom_action_anchor(
+    pointer: Option<(i32, i32)>,
+    chip: Option<(f64, f64, f64, f64)>,
+    width: u32,
+    height: u32,
+) -> (f64, f64) {
+    if let Some((sx, sy)) = pointer {
+        let point = (sx as f64, sy as f64);
+        let on_chip = chip.is_some_and(|(x, y, w, h)| {
+            point.0 >= x && point.0 <= x + w && point.1 >= y && point.1 <= y + h
+        });
+        if !on_chip {
+            return point;
+        }
+    }
+
+    (width as f64 * 0.5, height as f64 * 0.5)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zoom_chip_anchor_is_center_and_canvas_anchor_remains_pointer() {
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.update_zoom_chip_layout(&crate::config::StatusBarStyle::default(), 1920, 1080);
+        let chip = crate::ui::zoom_chip_geometry(&input, 1920, 1080).unwrap();
+        let pointer = (
+            (chip.0 + chip.2 / 2.0) as i32,
+            (chip.1 + chip.3 / 2.0) as i32,
+        );
+        assert_eq!(
+            zoom_action_anchor(Some(pointer), Some(chip), 1920, 1080),
+            (960.0, 540.0)
+        );
+        assert_eq!(
+            zoom_action_anchor(Some((300, 200)), Some(chip), 1920, 1080),
+            (300.0, 200.0)
+        );
+    }
 
     #[test]
     fn native_zoom_retains_keyboard_but_portal_zoom_releases_it() {

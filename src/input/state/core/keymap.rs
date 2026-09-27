@@ -18,6 +18,7 @@ pub(in crate::input::state) struct Keymap {
     sequence_trie: SequenceTrie,
     pending_sequence: Option<PendingSequence>,
     keymap_revision: u64,
+    escape_dismissed_at: Option<Instant>,
     drag_tool_bindings: DragToolBindings,
     consumed_pointer_buttons: HashSet<u32>,
     keybinding_capture_action: Option<Action>,
@@ -51,12 +52,23 @@ impl Keymap {
             sequence_trie,
             pending_sequence: None,
             keymap_revision: 0,
+            escape_dismissed_at: None,
             drag_tool_bindings,
             consumed_pointer_buttons: HashSet::new(),
             keybinding_capture_action: None,
             active_drag_button: None,
             active_drag_color: None,
         }
+    }
+
+    pub(in crate::input::state) fn note_escape_dismissal(&mut self, now: Instant) {
+        self.escape_dismissed_at = Some(now);
+    }
+
+    pub(in crate::input::state) fn suppress_escape_after_dismissal(&self, now: Instant) -> bool {
+        self.escape_dismissed_at.is_some_and(|dismissed| {
+            now.saturating_duration_since(dismissed) < Duration::from_millis(400)
+        })
     }
 
     pub(in crate::input::state) fn find_action(

@@ -110,19 +110,36 @@ impl WaylandState {
         // A finished scan card is transient chrome: the next interaction of any
         // kind takes it away rather than making the user wait it out.
         self.input_state.dismiss_ocr_scan_result();
+        if key == Key::Escape
+            && self
+                .input_state
+                .suppress_escape_after_dismissal(Instant::now())
+        {
+            return;
+        }
         if self.try_handle_region_key(conn, key) {
+            if key == Key::Escape {
+                self.input_state.note_escape_dismissal(Instant::now());
+            }
             return;
         }
         if self.try_handle_eyedropper_key(key) {
+            if key == Key::Escape {
+                self.input_state.note_escape_dismissal(Instant::now());
+            }
             return;
         }
         if matches!(key, Key::Escape)
             && self.input_state.modifiers.shift
             && self.try_skip_first_run_onboarding()
         {
+            self.input_state.note_escape_dismissal(Instant::now());
             return;
         }
         if self.try_handle_first_run_card_key(key) {
+            if key == Key::Escape {
+                self.input_state.note_escape_dismissal(Instant::now());
+            }
             return;
         }
         if matches!(key, Key::Space)
@@ -137,6 +154,7 @@ impl WaylandState {
             match key {
                 Key::Escape => {
                     self.exit_zoom();
+                    self.input_state.note_escape_dismissal(Instant::now());
                     return;
                 }
                 Key::Up | Key::Down | Key::Left | Key::Right => {
@@ -178,6 +196,9 @@ impl WaylandState {
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
+            if key == Key::Escape {
+                self.input_state.note_escape_dismissal(Instant::now());
+            }
             return;
         }
 

@@ -181,6 +181,12 @@ impl WaylandState {
                 UiEffect::RecognitionChip,
                 render_ui && animation.recognition_chip && !self.capture_picker_chrome_suppressed(),
             )
+            .with(
+                UiEffect::OnboardingCard,
+                render_ui
+                    && !self.capture_picker_chrome_suppressed()
+                    && self.first_run_card_shown(),
+            )
             .with_blocked_feedback(animation.blocked_feedback);
         let ui_effect_damage =
             self.collect_ui_effect_damage(ui_effects, geometry.width, geometry.height);

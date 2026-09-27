@@ -167,6 +167,25 @@ fn arrow_length_of(state: &InputState, id: ShapeId) -> f64 {
 }
 
 #[test]
+fn stepping_thickness_lands_on_whole_pixels() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    if let Shape::Rect { thick, .. } =
+        &mut state.boards.active_frame_mut().shape_mut(id).unwrap().shape
+    {
+        *thick = 3.2;
+    }
+    open(&mut state, vec![id]);
+    state.set_properties_panel_focus(Some(row(&state, "Thickness")));
+
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Right));
+    assert_eq!(rect_of(&state, id).2, 4.0);
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Left));
+    assert_eq!(rect_of(&state, id).2, 3.0);
+}
+
+#[test]
 fn stepper_buttons_step_a_number_down_and_up() {
     let mut state = create_test_input_state();
     let id = add_arrow(&mut state, ArrowStyle::Standard, true);
