@@ -196,6 +196,17 @@ pub struct PropertiesRowGeometry {
     pub control: PropertiesRowControl,
 }
 
+/// The rows' scroll state when they overflow the panel.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PanelScroll {
+    /// How far the rows are scrolled up.
+    pub offset: f64,
+    /// The largest offset, where the last row meets the viewport's bottom.
+    pub max_offset: f64,
+    /// The visible band of rows, from `rows_top` down to here.
+    pub viewport_bottom: f64,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct PropertiesPanelLayout {
     pub origin_x: f64,
@@ -220,6 +231,9 @@ pub struct PropertiesPanelLayout {
     /// How tall a column may grow before the next row starts another one.
     /// Unbounded unless one column would not fit the screen.
     pub column_budget: f64,
+    /// Set when even columns cannot fit the rows on screen: one column of
+    /// rows scrolls inside the panel.
+    pub scroll: Option<PanelScroll>,
     /// The hovered part's tooltip box, which may reach past the panel.
     pub tooltip: Option<PanelRect>,
 }
@@ -246,6 +260,8 @@ pub struct ShapePropertiesPanel {
     /// Whether the focus ring shows: keyboard navigation moves focus visibly,
     /// while a click only remembers the row so arrow keys continue there.
     pub focus_visible: bool,
+    /// How far the rows are scrolled, when they overflow a short screen.
+    pub scroll: f64,
     pub multiple_selection: bool,
 }
 

@@ -5,14 +5,14 @@ use super::super::super::base::InputState;
 use super::super::metrics::{
     BODY_FONT, COLUMN_GAP, COLUMN_SPACING, EMPTY_HEIGHT, FOOTER_HEIGHT, HEADER_GAP, LOCK_INSET,
     LOCK_SIZE, MIN_WIDTH, PADDING_BOTTOM, PADDING_TOP, PADDING_X, PREVIEW_GAP, PREVIEW_WIDTH,
-    ROWS_GAP, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SEGMENT_PAD, SEGMENT_TEXT_PADDING,
+    ROW_HEIGHT, ROWS_GAP, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SEGMENT_PAD, SEGMENT_TEXT_PADDING,
     STEP_BUTTON_WIDTH, STEPPER_MIN_VALUE_WIDTH, STEPPER_VALUE_PADDING, STYLE_BUTTON_GAP,
     STYLE_BUTTON_MIN_WIDTH, SUBTITLE_FONT, SUBTITLE_STEP, SWITCH_VALUE_GAP, SWITCH_WIDTH,
     TITLE_FONT, TOOLTIP_FONT, TOOLTIP_GAP, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y, VALUE_FONT,
     text_style,
 };
 use super::super::types::{
-    PanelRect, PropertiesPanelLayout, SelectionPropertyValue, ShapePropertiesPanel,
+    PanelRect, PanelScroll, PropertiesPanelLayout, SelectionPropertyValue, ShapePropertiesPanel,
 };
 use super::geometry::{
     balanced_column_budget, column_slots, row_height, shows_thickness_preview, swatch_grid_width,
@@ -186,7 +186,27 @@ impl InputState {
             .iter()
             .map(|entry| row_height(entry, panel.swatches.len()))
             .collect();
-        let fit = fit_rows(&heights, rows_top, screen_height as f64);
+        let fit = fit_rows(
+            &heights,
+            rows_top,
+            column_width,
+            screen_width as f64,
+            screen_height as f64,
+        );
+        let scroll = fit.scrolled_content.map(|content| {
+            let max_offset = (content - fit.height).max(0.0);
+            let focused = panel
+                .keyboard_focus
+                .filter(|_| panel.focus_visible)
+                .map(|row| {
+                    let top: f64 = heights[..row].iter().sum();
+                    (top, top + heights[row])
+                });
+            (
+                scroll_offset(panel.scroll, max_offset, fit.height, focused),
+                max_offset,
+            )
+        });
 
         let columns = fit.columns as f64;
         let panel_width =
@@ -235,16 +255,33 @@ impl InputState {
             head_segment_width: measured.head_segment_width,
             column_width,
             column_budget: fit.budget,
+            scroll: scroll.map(|(offset, max_offset)| PanelScroll {
+                offset,
+                max_offset,
+                viewport_bottom: origin_y + rows_top + fit.height,
+            }),
             tooltip: None,
         });
+        let mut scrolled = false;
+        if let Some(panel) = self.properties.panel.as_mut() {
+            let offset = scroll.map_or(0.0, |(offset, _)| offset);
+            scrolled = panel.scroll != offset;
+            panel.scroll = offset;
+        }
 
-        if self.properties.pending_hover_recalc {
-            let focus_set = self
+        if self.properties.pending_hover_recalc || scrolled {
+            // Keyboard navigation owns the highlight; a row a click merely
+            // remembered does not, so the pointer's hover is re-read (after a
+            // scroll, say) rather than left on a control that moved away.
+            // Rows that just scrolled, whatever moved them (the keyboard
+            // bringing its row into view, too), always re-read it: the old
+            // hover may name a control that is no longer there.
+            let keyboard_owns_focus = self
                 .properties
                 .panel
                 .as_ref()
-                .is_some_and(|panel| panel.keyboard_focus.is_some());
-            if !focus_set {
+                .is_some_and(|panel| panel.focus_visible && panel.keyboard_focus.is_some());
+            if scrolled || !keyboard_owns_focus {
                 let (px, py) = self.pointer.screen();
                 self.update_properties_panel_hover_from_pointer_internal(px, py, false);
             }
@@ -308,42 +345,60 @@ impl InputState {
     }
 }
 
-/// How the rows fit the screen's height.
+/// How the rows fit the screen.
 struct RowFit {
     footer: bool,
     columns: usize,
     /// The column budget the geometry fills rows against.
     budget: f64,
-    /// Height of the tallest column.
+    /// Height of the rows' band: the tallest column, or the scroll viewport.
     height: f64,
+    /// Height of the rows' content, when it scrolls inside a shorter band.
+    scrolled_content: Option<f64>,
 }
 
-/// Fits the rows under a header of `rows_top` into `screen_h`: in one column
-/// with the keyboard hints when they fit, then without the hints, and
-/// otherwise in as few even columns as fit. Every row stays on screen and
-/// the wheel keeps stepping the row under it, which scrolling would take away.
-fn fit_rows(heights: &[f64], rows_top: f64, screen_h: f64) -> RowFit {
+/// Fits the rows under a header of `rows_top` onto the screen. In order: one
+/// column with the keyboard hints; one without them; as few even columns as
+/// fit both the height and the width; and, when no arrangement fits, one
+/// column scrolling inside the panel. Only the last gives up the wheel for
+/// stepping rows, since the wheel has to scroll there.
+fn fit_rows(
+    heights: &[f64],
+    rows_top: f64,
+    column_width: f64,
+    screen_w: f64,
+    screen_h: f64,
+) -> RowFit {
     let total: f64 = heights.iter().sum();
-    let available = if screen_h > 0.0 {
-        screen_h - PANEL_MARGIN * 2.0
-    } else {
-        f64::INFINITY
+    let available = |screen: f64| {
+        if screen > 0.0 {
+            screen - PANEL_MARGIN * 2.0
+        } else {
+            f64::INFINITY
+        }
     };
+    let (available_w, available_h) = (available(screen_w), available(screen_h));
     let single = |footer: bool| RowFit {
         footer,
         columns: 1,
         budget: f64::INFINITY,
         height: total,
+        scrolled_content: None,
     };
 
-    if rows_top + total + FOOTER_HEIGHT + PADDING_BOTTOM <= available {
+    if rows_top + total + FOOTER_HEIGHT + PADDING_BOTTOM <= available_h {
         return single(true);
     }
-    if rows_top + total + PADDING_BOTTOM <= available {
+    let band = available_h - rows_top - PADDING_BOTTOM;
+    if total <= band {
         return single(false);
     }
 
-    let budget = balanced_column_budget(heights, available - rows_top - PADDING_BOTTOM);
+    let max_columns = ((available_w - PADDING_X * 2.0 + COLUMN_SPACING)
+        / (column_width + COLUMN_SPACING))
+        .floor()
+        .max(1.0) as usize;
+    let budget = balanced_column_budget(heights, band);
     let mut column_heights: Vec<f64> = Vec::new();
     for ((column, offset), height) in column_slots(heights.iter().copied(), budget)
         .into_iter()
@@ -354,12 +409,44 @@ fn fit_rows(heights: &[f64], rows_top: f64, screen_h: f64) -> RowFit {
         }
         column_heights[column] = offset + height;
     }
+    let tallest = column_heights.iter().copied().fold(0.0, f64::max);
+    if column_heights.len() > 1 && column_heights.len() <= max_columns && tallest <= band {
+        return RowFit {
+            footer: false,
+            columns: column_heights.len(),
+            budget,
+            height: tallest,
+            scrolled_content: None,
+        };
+    }
+
     RowFit {
         footer: false,
-        columns: column_heights.len().max(1),
-        budget,
-        height: column_heights.iter().copied().fold(0.0, f64::max),
+        columns: 1,
+        budget: f64::INFINITY,
+        height: band.max(ROW_HEIGHT),
+        scrolled_content: Some(total),
     }
+}
+
+/// The scroll offset to draw with: the panel's, kept in range, and moved just
+/// enough to show a row the keyboard focused. A row taller than the viewport
+/// shows its top, every time, rather than flipping between its two ends.
+fn scroll_offset(
+    requested: f64,
+    max_offset: f64,
+    viewport: f64,
+    focused: Option<(f64, f64)>,
+) -> f64 {
+    let mut offset = requested;
+    if let Some((top, bottom)) = focused {
+        if top < offset {
+            offset = top;
+        } else if bottom > offset + viewport {
+            offset = (bottom - viewport).min(top);
+        }
+    }
+    offset.clamp(0.0, max_offset)
 }
 
 /// Picks the panel's top-left corner: beside the selection on whichever side
@@ -474,5 +561,34 @@ fn mark_properties_panel_region(state: &mut InputState, layout: PropertiesPanelL
         state.dirty_tracker.mark_rect(rect);
     } else {
         state.dirty_tracker.mark_full();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scroll_offset;
+
+    #[test]
+    fn a_focused_row_taller_than_the_viewport_keeps_its_top_in_view() {
+        let (top, bottom, viewport, max_offset) = (5.0, 95.0, 85.0, 200.0);
+
+        let mut offset = 0.0;
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            offset = scroll_offset(offset, max_offset, viewport, Some((top, bottom)));
+            seen.push(offset);
+        }
+
+        assert_eq!(seen, vec![top; 4], "one offset, frame after frame");
+        assert_eq!(
+            scroll_offset(50.0, max_offset, viewport, Some((top, bottom))),
+            top,
+            "scrolled past it, the row comes back to its top"
+        );
+    }
+
+    #[test]
+    fn a_focused_row_below_the_viewport_aligns_its_bottom() {
+        assert_eq!(scroll_offset(0.0, 200.0, 85.0, Some((100.0, 134.0))), 49.0);
     }
 }

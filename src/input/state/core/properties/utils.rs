@@ -35,9 +35,26 @@ pub(super) fn color_palette_index(
     palette: &[QuickColorPaletteEntry],
     color: Color,
 ) -> Option<usize> {
-    palette
-        .iter()
-        .position(|entry| color_eq(&entry.color, &color))
+    palette_position(palette.iter().map(|entry| entry.color), color)
+}
+
+/// Where `color` sits among `colors`: the entry with exactly this color and
+/// opacity, or else the first with the same hue. A palette can hold one hue
+/// at two opacities, however close, and only an exact match tells them
+/// apart; a recolor copies the palette's value, so an exact match is there
+/// to find.
+pub(super) fn palette_position(
+    colors: impl Iterator<Item = Color> + Clone,
+    color: Color,
+) -> Option<usize> {
+    colors
+        .clone()
+        .position(|candidate| candidate == color)
+        .or_else(|| {
+            colors
+                .clone()
+                .position(|candidate| color_eq(&candidate, &color))
+        })
 }
 
 /// The palette's name for `color`, or "Custom" for a color it does not hold.
@@ -49,6 +66,11 @@ pub(super) fn color_label(palette: &[QuickColorPaletteEntry], color: Color) -> S
 
 pub(super) fn color_eq(a: &Color, b: &Color) -> bool {
     approx_eq(&a.r, &b.r) && approx_eq(&a.g, &b.g) && approx_eq(&a.b, &b.b)
+}
+
+/// [`color_eq`] that also compares opacity.
+pub(super) fn color_rgba_eq(a: &Color, b: &Color) -> bool {
+    color_eq(a, b) && approx_eq(&a.a, &b.a)
 }
 
 pub(super) fn approx_eq(a: &f64, b: &f64) -> bool {
@@ -122,6 +144,40 @@ mod tests {
 
         assert_eq!(color_palette_index(&palette(), custom), None);
         assert_eq!(color_label(&palette(), custom), "Custom");
+    }
+
+    #[test]
+    fn an_exact_opacity_match_wins_over_an_earlier_entry_of_the_same_hue() {
+        let translucent_red = Color {
+            a: 0.4,
+            ..PALETTE_RED
+        };
+        let colors = [PALETTE_RED, translucent_red, PALETTE_GREEN];
+
+        assert_eq!(
+            palette_position(colors.into_iter(), translucent_red),
+            Some(1)
+        );
+        assert_eq!(palette_position(colors.into_iter(), PALETTE_RED), Some(0));
+        let nearly_opaque = Color {
+            a: 254.0 / 255.0,
+            ..PALETTE_RED
+        };
+        let close = [PALETTE_RED, nearly_opaque];
+        assert_eq!(
+            palette_position(close.into_iter(), nearly_opaque),
+            Some(1),
+            "near-identical opacities are still different entries"
+        );
+        let other_opacity = Color {
+            a: 0.7,
+            ..PALETTE_RED
+        };
+        assert_eq!(
+            palette_position(colors.into_iter(), other_opacity),
+            Some(0),
+            "without an exact match the first entry of the hue stands in"
+        );
     }
 
     #[test]

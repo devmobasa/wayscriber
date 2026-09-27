@@ -11,7 +11,7 @@ mod utils;
 
 pub use state::PropertiesPanelState;
 pub use types::{
-    PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
+    PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
     PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry,
     SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
 };

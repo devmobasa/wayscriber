@@ -1,7 +1,7 @@
 use crate::draw::TextMeasurer;
 use crate::draw::{Color, Shape};
 use crate::input::state::core::base::InputState;
-use crate::input::state::core::properties::utils::{color_palette_index, palette_step};
+use crate::input::state::core::properties::utils::{cycle_index, palette_position, palette_step};
 use crate::input::state::{Toast, ToastPriority};
 
 /// The color `shape` has now and the one a recolor to `target` gives it, or
@@ -97,12 +97,18 @@ impl InputState {
         measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
-        let palette = self.style.quick_colors.rendered_entries();
+        let palette: Vec<Color> = self
+            .style
+            .quick_colors
+            .rendered_entries()
+            .iter()
+            .map(|entry| entry.color)
+            .collect();
         let current = self
             .selection_primary_color()
-            .and_then(|color| color_palette_index(palette, color));
+            .and_then(|color| palette_position(palette.iter().copied(), color));
         let offset = if direction < 0 { -1 } else { 1 };
-        let Some(next) = palette_step(palette.len(), current, offset) else {
+        let Some(first) = palette_step(palette.len(), current, offset) else {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
@@ -110,7 +116,17 @@ impl InputState {
             );
             return false;
         };
-        let target = palette[next].color;
+        // Step past entries that would leave the selection as it is: a marker
+        // keeps its own opacity, so the next swatch of the same hue changes
+        // nothing, and stopping there would pin every later step to it.
+        let mut next = first;
+        for _ in 0..palette.len() {
+            if self.selection_recolor_changes(palette[next]) {
+                break;
+            }
+            next = cycle_index(next, palette.len(), offset);
+        }
+        let target = palette[next];
 
         self.apply_selection_color_value_with(measurer, target)
     }

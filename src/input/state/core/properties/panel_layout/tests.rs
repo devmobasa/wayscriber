@@ -383,3 +383,203 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         "the columns come out about even: {heights:?}"
     );
 }
+
+fn four_kinds(state: &mut InputState) -> Vec<ShapeId> {
+    let rect = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 300,
+        y: 200,
+        w: 40,
+        h: 40,
+        fill: false,
+        color: PALETTE_RED,
+        thick: 2.0,
+    });
+    vec![rect, arrow(state), text(state, "Note"), spotlight(state)]
+}
+
+/// Every control of every row wholly inside the scroll viewport answers the
+/// pointer where it is drawn, and those rows sit on screen.
+fn assert_visible_rows_reachable(state: &InputState, screen: (f64, f64)) -> Vec<usize> {
+    let layout = *state.properties_panel_layout().expect("layout");
+    let panel = state.properties_panel().expect("panel");
+    let viewport = layout.rows_viewport();
+    let mut visible = Vec::new();
+    for row in layout.rows(panel) {
+        if !inside(viewport, row.rect) {
+            continue;
+        }
+        visible.push(row.index);
+        assert!(row.rect.right() <= screen.0 - 12.0 + 1e-9);
+        assert!(row.rect.bottom() <= screen.1 - 12.0 + 1e-9);
+        for (rect, expected) in control_hits(&row) {
+            let (cx, cy) = rect.center();
+            assert_eq!(layout.hit_at(panel, cx, cy), Some(expected));
+        }
+    }
+    visible
+}
+
+#[test]
+fn when_columns_would_leave_the_screen_the_rows_scroll_instead() {
+    let measurer = TextMeasurer::default();
+    let screen = (480, 360);
+    let mut state = crate::input::state::test_support::make_test_input_state();
+    let ids = four_kinds(&mut state);
+    open_panel(ids, &mut state);
+
+    lay_out(&mut state, screen);
+
+    let layout = *state.properties_panel_layout().expect("layout");
+    let scroll = layout.scroll.expect("the rows scroll");
+    assert_eq!(scroll.offset, 0.0);
+    assert!(layout.origin_x >= 12.0 - 1e-9);
+    assert!(
+        layout.origin_x + layout.width <= 480.0 - 12.0 + 1e-9,
+        "no column runs off the right"
+    );
+    assert!(layout.origin_y + layout.height <= 360.0 - 12.0 + 1e-9);
+    assert!(layout.lock.right() <= 480.0 - 12.0 + 1e-9);
+    let first = assert_visible_rows_reachable(&state, (480.0, 360.0));
+    assert!(first.contains(&0));
+
+    // A row clipped out of the viewport takes no clicks.
+    let hidden = rows(&state)
+        .into_iter()
+        .find(|row| row.rect.y >= layout.rows_viewport().bottom())
+        .expect("a row below the viewport");
+    let (hx, hy) = hidden.rect.center();
+    assert_eq!(
+        layout.hit_at(state.properties_panel().unwrap(), hx, hy),
+        None
+    );
+
+    // The wheel scrolls rather than stepping a row, down to the last row.
+    let (x, y) = layout.rows_viewport().center();
+    for _ in 0..40 {
+        assert!(state.properties_panel_wheel_with(&measurer, x as i32, y as i32, 1));
+    }
+    lay_out(&mut state, screen);
+    let scroll = state
+        .properties_panel_layout()
+        .unwrap()
+        .scroll
+        .expect("still scrolling");
+    assert_eq!(scroll.offset, scroll.max_offset);
+    let last = state.properties_panel().unwrap().entries.len() - 1;
+    assert!(assert_visible_rows_reachable(&state, (480.0, 360.0)).contains(&last));
+}
+
+#[test]
+fn keyboard_focus_scrolls_its_row_into_view() {
+    let screen = (480, 360);
+    let mut state = crate::input::state::test_support::make_test_input_state();
+    let ids = four_kinds(&mut state);
+    open_panel(ids, &mut state);
+    lay_out(&mut state, screen);
+    let last = state.properties_panel().unwrap().entries.len() - 1;
+
+    state.set_properties_panel_focus(Some(last));
+    lay_out(&mut state, screen);
+
+    let layout = *state.properties_panel_layout().expect("layout");
+    let row = rows(&state).into_iter().nth(last).expect("last row");
+    assert!(inside(layout.rows_viewport(), row.rect));
+
+    state.set_properties_panel_focus(Some(0));
+    lay_out(&mut state, screen);
+    let row = rows(&state).into_iter().next().expect("first row");
+    assert!(inside(
+        state.properties_panel_layout().unwrap().rows_viewport(),
+        row.rect
+    ));
+}
+
+#[test]
+fn scrolling_after_a_click_moves_hover_off_the_control_that_scrolled_away() {
+    let measurer = TextMeasurer::default();
+    let screen = (480, 360);
+    let mut state = crate::input::state::test_support::make_test_input_state();
+    let ids = four_kinds(&mut state);
+    open_panel(ids, &mut state);
+    lay_out(&mut state, screen);
+    let swatch = PropertiesPanelHit::Swatch { row: 0, index: 1 };
+    let rect = state
+        .properties_panel_layout()
+        .unwrap()
+        .hit_rect(state.properties_panel().unwrap(), swatch)
+        .expect("swatch");
+    let (x, y) = (rect.center().0 as i32, rect.center().1 as i32);
+
+    // A click remembers the row quietly, and the pointer rests on the swatch.
+    state.update_pointer_position(x, y);
+    assert!(state.press_properties_panel_at(x, y));
+    state.release_properties_panel_at_with(&measurer, x, y);
+    lay_out(&mut state, screen);
+    state.update_properties_panel_hover_from_pointer(x, y);
+    lay_out(&mut state, screen);
+    assert_eq!(state.properties_panel().unwrap().keyboard_focus, Some(0));
+    assert_eq!(state.properties_panel().unwrap().hover, Some(swatch));
+    assert!(state.properties_panel_layout().unwrap().tooltip.is_some());
+
+    for _ in 0..3 {
+        assert!(state.properties_panel_wheel_with(&measurer, x, y, 1));
+    }
+    lay_out(&mut state, screen);
+
+    let panel = state.properties_panel().unwrap();
+    let layout = state.properties_panel_layout().unwrap();
+    assert_ne!(panel.hover, Some(swatch), "the swatch scrolled away");
+    assert_eq!(
+        panel.hover,
+        state.properties_panel_active_hit_at(x, y),
+        "hover follows whatever now sits under the pointer"
+    );
+    if panel.hover.and_then(|hit| panel.tooltip(hit)).is_none() {
+        assert!(layout.tooltip.is_none(), "no tooltip left behind");
+    }
+}
+
+#[test]
+fn keyboard_scrolling_drops_the_hover_of_a_swatch_it_scrolls_away() {
+    let measurer = TextMeasurer::default();
+    let screen = (480, 360);
+    let mut state = crate::input::state::test_support::make_test_input_state();
+    let ids = four_kinds(&mut state);
+    open_panel(ids, &mut state);
+    lay_out(&mut state, screen);
+    let swatch = PropertiesPanelHit::Swatch { row: 0, index: 1 };
+    let rect = state
+        .properties_panel_layout()
+        .unwrap()
+        .hit_rect(state.properties_panel().unwrap(), swatch)
+        .expect("swatch");
+    let (x, y) = (rect.center().0 as i32, rect.center().1 as i32);
+    state.update_pointer_position(x, y);
+    state.update_properties_panel_hover_from_pointer(x, y);
+    lay_out(&mut state, screen);
+    assert_eq!(state.properties_panel().unwrap().hover, Some(swatch));
+
+    let length = state
+        .properties_panel()
+        .unwrap()
+        .entries
+        .iter()
+        .position(|entry| entry.label == "Arrow length")
+        .expect("arrow length row");
+    state.set_properties_panel_focus(Some(0));
+    while state.properties_panel().unwrap().keyboard_focus != Some(length) {
+        assert!(
+            state.handle_properties_panel_key_with_measurer(&measurer, crate::input::Key::Down)
+        );
+        lay_out(&mut state, screen);
+    }
+
+    let panel = state.properties_panel().unwrap();
+    let layout = state.properties_panel_layout().unwrap();
+    assert!(layout.scroll.expect("scrolls").offset > 0.0);
+    assert_ne!(panel.hover, Some(swatch), "the swatch scrolled out of view");
+    assert_eq!(panel.hover, state.properties_panel_active_hit_at(x, y));
+    if panel.hover.and_then(|hit| panel.tooltip(hit)).is_none() {
+        assert!(layout.tooltip.is_none(), "no tooltip left over the header");
+    }
+}

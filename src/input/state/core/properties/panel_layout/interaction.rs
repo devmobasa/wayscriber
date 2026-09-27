@@ -2,6 +2,9 @@ use super::super::super::base::InputState;
 use super::super::types::PropertiesPanelHit;
 use crate::draw::TextMeasurer;
 
+/// How far one wheel tick scrolls overflowing rows.
+const WHEEL_SCROLL_STEP: f64 = 40.0;
+
 impl InputState {
     /// The panel part under `(x, y)`, before any disabled-row filtering.
     pub fn properties_panel_hit_at(&self, x: i32, y: i32) -> Option<PropertiesPanelHit> {
@@ -113,8 +116,9 @@ impl InputState {
 
     /// A wheel tick at `(x, y)`. Over a row it steps that row's property;
     /// anywhere else on the panel it is swallowed, so it cannot fall through
-    /// to the canvas and resize the tool behind the panel. Returns whether
-    /// the panel took the tick.
+    /// to the canvas and resize the tool behind the panel. When the rows
+    /// overflow a short screen and scroll, the wheel scrolls them instead.
+    /// Returns whether the panel took the tick.
     pub(crate) fn properties_panel_wheel_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -125,9 +129,43 @@ impl InputState {
         if !self.is_properties_panel_open() || !self.properties_panel_contains(x, y) {
             return false;
         }
+        if self.scroll_properties_panel_rows(scroll_direction) {
+            return true;
+        }
         if let Some(row) = self.properties_panel_index_at(x, y) {
             let _ = self.step_properties_panel_row_by_wheel_with(measurer, row, scroll_direction);
         }
+        true
+    }
+
+    /// Scrolls overflowing rows by one wheel tick. Returns false when the rows
+    /// fit and do not scroll.
+    fn scroll_properties_panel_rows(&mut self, scroll_direction: i32) -> bool {
+        let Some(scroll) = self
+            .properties
+            .layout
+            .as_ref()
+            .and_then(|layout| layout.scroll)
+        else {
+            return false;
+        };
+        let offset = (scroll.offset + f64::from(scroll_direction) * WHEEL_SCROLL_STEP)
+            .clamp(0.0, scroll.max_offset);
+
+        if let Some(panel) = self.properties.panel.as_mut() {
+            panel.scroll = offset;
+            // The wheel took over from the keyboard, so a focused row may
+            // scroll away.
+            panel.focus_visible = false;
+        }
+        if let Some(layout) = self.properties.layout.as_mut()
+            && let Some(scroll) = layout.scroll.as_mut()
+        {
+            scroll.offset = offset;
+        }
+        self.properties.request_hover_recalc();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
         true
     }
 }

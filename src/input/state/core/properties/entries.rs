@@ -5,7 +5,7 @@ use super::summary::{
     shape_thickness, summarize_property,
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue};
-use super::utils::{approx_eq, color_eq, color_label};
+use super::utils::{approx_eq, color_label, color_rgba_eq};
 use crate::draw::{Shape, ShapeId};
 use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
@@ -61,7 +61,7 @@ impl InputState {
     /// Whether some selected shape has a color that is not locked.
     pub(crate) fn selection_has_editable_color(&self) -> bool {
         let frame = self.boards.active_frame();
-        summarize_property(frame, self.selected_shape_ids(), shape_color, color_eq).editable
+        summarize_property(frame, self.selected_shape_ids(), shape_color, color_rgba_eq).editable
     }
 
     pub(super) fn build_selection_property_entries(
@@ -72,7 +72,8 @@ impl InputState {
         let palette = self.style.quick_colors.rendered_entries();
         let mut entries = Vec::new();
 
-        let color_summary = summarize_property(frame, ids, shape_color, color_eq);
+        // Opacity counts: two reds at different opacities are a mixed color.
+        let color_summary = summarize_property(frame, ids, shape_color, color_rgba_eq);
         if color_summary.applicable {
             entries.push(entry(
                 "Color",

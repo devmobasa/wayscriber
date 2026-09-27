@@ -103,6 +103,7 @@ impl InputState {
             pressed: None,
             keyboard_focus: None,
             focus_visible: false,
+            scroll: 0.0,
             multiple_selection: contents.multiple_selection,
         });
         true

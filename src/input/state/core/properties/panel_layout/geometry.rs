@@ -13,7 +13,7 @@ use super::super::types::{
     PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyKind,
     SelectionPropertyValue, ShapePropertiesPanel,
 };
-use super::super::utils::color_eq;
+use super::super::utils::palette_position;
 use crate::draw::ArrowStyle;
 
 /// How a row presents its control.
@@ -133,6 +133,25 @@ impl PropertiesPanelLayout {
         self.origin_x + self.width - self.padding_x
     }
 
+    /// The band rows are drawn in: to the footer, the panel's bottom, or the
+    /// scroll viewport's.
+    pub fn rows_viewport(&self) -> PanelRect {
+        let bottom = self
+            .scroll
+            .map_or(self.origin_y + self.height, |scroll| scroll.viewport_bottom);
+        PanelRect::new(
+            self.origin_x,
+            self.rows_top,
+            self.width,
+            bottom - self.rows_top,
+        )
+    }
+
+    fn rows_visible_at(&self, y: f64) -> bool {
+        self.scroll
+            .is_none_or(|scroll| y >= self.rows_top && y < scroll.viewport_bottom)
+    }
+
     /// Left edge of the content of `column`.
     pub fn column_x(&self, column: usize) -> f64 {
         self.content_x() + column as f64 * (self.column_width + COLUMN_SPACING)
@@ -164,7 +183,7 @@ impl PropertiesPanelLayout {
             .zip(slots)
             .enumerate()
             .map(|(index, ((entry, height), (column, offset)))| {
-                let top = self.rows_top + offset;
+                let top = self.rows_top + offset - self.scroll.map_or(0.0, |scroll| scroll.offset);
                 self.row_geometry(index, entry, top, height, self.column_x(column), swatches)
             })
             .collect()
@@ -299,6 +318,10 @@ impl PropertiesPanelLayout {
         }
         if self.title_rect().contains(x, y) {
             return Some(PropertiesPanelHit::Title);
+        }
+        // Rows scrolled out of the viewport are clipped, so they take no clicks.
+        if !self.rows_visible_at(y) {
+            return None;
         }
 
         let row = self
@@ -441,9 +464,7 @@ impl ShapePropertiesPanel {
         let SelectionPropertyValue::Color(Some(color)) = entry.state else {
             return None;
         };
-        self.swatches
-            .iter()
-            .position(|swatch| color_eq(&swatch.color, &color))
+        palette_position(self.swatches.iter().map(|swatch| swatch.color), color)
     }
 
     /// The text shown while the pointer rests on `hit`, if it has any.

@@ -13,8 +13,8 @@ use crate::input::state::properties_panel_metrics::{
     TOOLTIP_FONT, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y, VALUE_FONT, text_style,
 };
 use crate::input::state::{
-    PropertiesPanelHit, PropertiesPanelLayout, PropertiesRowControl, PropertiesRowGeometry,
-    ShapePropertiesPanel,
+    PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, PropertiesRowControl,
+    PropertiesRowGeometry, ShapePropertiesPanel,
 };
 use crate::input::{SelectionPropertyEntry, SelectionPropertyValue};
 use crate::ui::primitives::{draw_keycap_with_engine, draw_rounded_rect, keycap_size_with_engine};
@@ -36,6 +36,11 @@ use controls::{
 /// Wash behind the hovered row: a quieter `BG_HOVER`, so the control under
 /// the pointer still stands out inside it.
 const ROW_HOVER: Rgba = (0.25, 0.32, 0.45, 0.45);
+/// Scrollbar thumb for rows that overflow a short screen.
+const SCROLLBAR_THUMB: Rgba = (1.0, 1.0, 1.0, 0.28);
+const SCROLLBAR_WIDTH: f64 = 4.0;
+const SCROLLBAR_INSET: f64 = 4.0;
+const SCROLLBAR_MIN_THUMB: f64 = 24.0;
 
 pub fn render_properties_panel(
     ctx: &cairo::Context,
@@ -139,9 +144,21 @@ pub(crate) fn render_properties_panel_with_engine(
             None,
         );
     } else {
+        // Rows that overflow a short screen scroll inside the panel, clipped
+        // to their viewport.
+        let _ = ctx.save();
+        if layout.scroll.is_some() {
+            let viewport = layout.rows_viewport();
+            ctx.rectangle(viewport.x, viewport.y, viewport.width, viewport.height);
+            ctx.clip();
+        }
         for row in layout.rows(panel) {
             let entry = &panel.entries[row.index];
             draw_row(engine, ctx, panel, &row, entry);
+        }
+        let _ = ctx.restore();
+        if let Some(scroll) = layout.scroll {
+            draw_scrollbar(ctx, layout, scroll);
         }
     }
 
@@ -277,6 +294,34 @@ fn draw_row(
             draw_arrow_head_segments(engine, ctx, *well, *start, *end, at_end, state);
         }
     }
+}
+
+/// A thin thumb in the right padding showing which part of the rows is in
+/// view.
+fn draw_scrollbar(ctx: &cairo::Context, layout: &PropertiesPanelLayout, scroll: PanelScroll) {
+    let viewport = layout.rows_viewport();
+    let content = viewport.height + scroll.max_offset;
+    if content <= 0.0 {
+        return;
+    }
+    let thumb_height = (viewport.height * viewport.height / content).max(SCROLLBAR_MIN_THUMB);
+    let travel = viewport.height - thumb_height;
+    let progress = if scroll.max_offset > 0.0 {
+        scroll.offset / scroll.max_offset
+    } else {
+        0.0
+    };
+    let x = layout.origin_x + layout.width - SCROLLBAR_INSET - SCROLLBAR_WIDTH;
+    set_color(ctx, SCROLLBAR_THUMB);
+    draw_rounded_rect(
+        ctx,
+        x,
+        viewport.y + travel * progress,
+        SCROLLBAR_WIDTH,
+        thumb_height,
+        SCROLLBAR_WIDTH / 2.0,
+    );
+    let _ = ctx.fill();
 }
 
 /// A block row's value, right-aligned on its label line: which color or

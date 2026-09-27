@@ -544,3 +544,88 @@ fn ok_evens_out_shapes_that_differ_only_in_opacity() {
     assert_eq!(rect_of(&state, solid).0, PALETTE_RED);
     assert_eq!(rect_of(&state, faint).0, PALETTE_RED);
 }
+
+fn opacity_variant_palette() -> crate::config::QuickColorPalette {
+    let entry = |label: &str, color: Color| crate::config::QuickColorPaletteEntry {
+        label: label.to_string(),
+        color,
+    };
+    crate::config::QuickColorPalette::from_entries(vec![
+        entry("Red", PALETTE_RED),
+        entry(
+            "Faint red",
+            Color {
+                a: 0.4,
+                ..PALETTE_RED
+            },
+        ),
+        entry("Green", PALETTE_GREEN),
+    ])
+}
+
+#[test]
+fn stepping_the_color_tells_opacity_variants_of_one_hue_apart() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    state.set_quick_colors(opacity_variant_palette());
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    state.set_properties_panel_focus(Some(row(&state, "Color")));
+
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Right));
+        seen.push(rect_of(&state, id).0);
+    }
+
+    assert_eq!(
+        seen,
+        vec![
+            Color {
+                a: 0.4,
+                ..PALETTE_RED
+            },
+            PALETTE_GREEN,
+            PALETTE_RED
+        ]
+    );
+    let panel = state.properties_panel().unwrap();
+    let color_row = row(&state, "Color");
+    assert_eq!(panel.entries[color_row].value, "Red");
+    assert_eq!(panel.current_swatch(&panel.entries[color_row]), Some(0));
+}
+
+#[test]
+fn stepping_a_marker_skips_the_opacity_variant_it_cannot_take() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    state.set_quick_colors(opacity_variant_palette());
+    let marker = state
+        .boards
+        .active_frame_mut()
+        .add_shape(Shape::MarkerStroke {
+            points: vec![(100, 100), (200, 120)],
+            color: Color {
+                a: 0.3,
+                ..PALETTE_RED
+            },
+            thick: 12.0,
+        });
+    open(&mut state, vec![marker]);
+    state.set_properties_panel_focus(Some(row(&state, "Color")));
+
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Right));
+
+    match &state.boards.active_frame().shape(marker).unwrap().shape {
+        Shape::MarkerStroke { color, .. } => {
+            assert_eq!(
+                *color,
+                Color {
+                    a: 0.3,
+                    ..PALETTE_GREEN
+                }
+            );
+        }
+        other => panic!("expected marker, got {other:?}"),
+    }
+}
