@@ -38,9 +38,11 @@ impl WaylandState {
         // Inline bars stand in for the layer-shell toolbar surfaces, but every
         // popup and modal below must paint above them.
         self.render_inline_toolbar_chrome(ctx, capture_picker);
+        // Below the pickers: the color picker the panel opens has to cover it.
+        self.render_properties_panel(ctx, width, height, capture_picker);
         self.render_help_and_pickers(ctx, width, height, capture_picker);
         self.render_radial_menu_and_feedback(ctx, width, height, capture_picker);
-        self.render_properties_and_context(ctx, width, height, capture_picker);
+        self.render_context_menu(ctx, capture_picker);
         self.render_inline_and_modal_ui(ctx, width, height, capture_picker);
     }
 
@@ -358,34 +360,27 @@ impl WaylandState {
         crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
     }
 
-    fn render_properties_and_context(
+    fn render_properties_panel(
         &mut self,
         ctx: &cairo::Context,
         width: u32,
         height: u32,
         capture_picker: bool,
     ) {
-        // Board and page menus open on top of the board picker, so the picker
-        // must not hide this pass. It never shares the screen with the
-        // properties panel. Both surfaces are laid out in screen space from
-        // zoom-aware anchors, so they draw over a zoomed view too.
-        if capture_picker {
-            self.input_state.clear_context_menu_layout();
+        // Laid out in screen space from a zoom-aware anchor, so it draws over
+        // a zoomed view too.
+        if capture_picker || !self.input_state.is_properties_panel_open() {
             self.input_state.clear_properties_panel_layout();
             return;
         }
-        if self.input_state.is_properties_panel_open() {
-            self.input_state
-                .update_properties_panel_layout_with_resources(
-                    self.render.ui_text(),
-                    self.render.text_measurer(),
-                    ctx,
-                    width,
-                    height,
-                );
-        } else {
-            self.input_state.clear_properties_panel_layout();
-        }
+        self.input_state
+            .update_properties_panel_layout_with_resources(
+                self.render.ui_text(),
+                self.render.text_measurer(),
+                ctx,
+                width,
+                height,
+            );
         crate::ui::render_properties_panel_with_engine(
             self.render.ui_text(),
             ctx,
@@ -393,6 +388,15 @@ impl WaylandState {
             width,
             height,
         );
+    }
+
+    fn render_context_menu(&mut self, ctx: &cairo::Context, capture_picker: bool) {
+        // Board and page menus open on top of the board picker, so the picker
+        // must not hide this pass.
+        if capture_picker {
+            self.input_state.clear_context_menu_layout();
+            return;
+        }
         // An open menu was already laid out along with this frame's damage.
         if !self.input_state.is_context_menu_open() {
             self.input_state.clear_context_menu_layout();

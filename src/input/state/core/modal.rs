@@ -85,7 +85,9 @@ impl ModalSurface {
     ///
     /// The properties panel is deliberately out. It docks beside the canvas
     /// rather than over it, and the canvas stays drawable underneath — so the
-    /// wheel still means what it means everywhere else.
+    /// wheel still means what it means everywhere else. A tick over the panel
+    /// itself steps the row under the pointer; the axis handler routes that
+    /// before it gets here.
     fn owns_wheel(self) -> bool {
         !matches!(self, ModalSurface::PropertiesPanel)
     }

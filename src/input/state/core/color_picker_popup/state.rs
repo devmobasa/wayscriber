@@ -89,6 +89,25 @@ impl InputState {
         true
     }
 
+    /// Opens the popup on the selection's color, from the properties panel's
+    /// "More colors" button. The panel stays open underneath so the accepted
+    /// color shows up in it. Returns false when nothing selected has a color.
+    pub(crate) fn open_color_picker_popup_for_selection_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+    ) -> bool {
+        if !self.selection_has_editable_color() {
+            return false;
+        }
+        let color = self
+            .selection_primary_color()
+            .unwrap_or_else(|| self.color_for_tool(self.active_tool()));
+        self.discard_open_color_picker_recolor();
+        self.clear_properties_panel_pointer_state();
+        self.open_color_picker_popup_for(measurer, ColorPickerTarget::Selection, color);
+        true
+    }
+
     /// Whether the open popup edits the paper sheet's color draft.
     pub fn color_picker_popup_edits_board_paper(&self) -> bool {
         self.color_picker_popup.target() == Some(ColorPickerTarget::BoardPaper)
@@ -160,6 +179,12 @@ impl InputState {
                 ModalSurface::ColorPicker,
                 ModalSurface::BoardPicker,
             );
+        } else if target == ColorPickerTarget::Selection {
+            // Opened from the properties panel, which shows the result.
+            self.close_modals_for_open_keeping(
+                ModalSurface::ColorPicker,
+                ModalSurface::PropertiesPanel,
+            );
         } else {
             self.close_modals_for_open(ModalSurface::ColorPicker);
         }
@@ -186,6 +211,7 @@ impl InputState {
                 }
             }
             Some(ColorPickerTarget::BoardPaper) => Cow::Borrowed("Paper Color"),
+            Some(ColorPickerTarget::Selection) => Cow::Borrowed("Selection Color"),
             Some(ColorPickerTarget::Tool) | None => Cow::Borrowed("Select Color"),
         }
     }
@@ -237,7 +263,13 @@ impl InputState {
                 // The sheet's draft is the target; its own Apply commits.
                 let _ = self.board_appearance_palette(opaque(color));
             }
-            ColorPickerPopupState::Hidden => {}
+            // Shapes change on OK only, as one undo entry; a live preview
+            // would record one per drag step.
+            ColorPickerPopupState::Open {
+                target: ColorPickerTarget::Selection,
+                ..
+            }
+            | ColorPickerPopupState::Hidden => {}
         }
     }
 
@@ -269,6 +301,10 @@ impl InputState {
 
     /// Applies the current color and closes the popup.
     pub fn apply_color_picker_popup(&mut self) {
+        self.apply_color_picker_popup_with_measurer(&TextMeasurer::default());
+    }
+
+    fn apply_color_picker_popup_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.cancel_pending_color_picker_paste();
         let mut applied_color = None;
         if let ColorPickerPopupState::Open {
@@ -303,6 +339,17 @@ impl InputState {
             // has to put it back.
             self.color_picker_popup_preview(color);
         }
+        // Decided by the shapes, not by the color the popup opened on: that
+        // was only the first shape's, so a selection whose shapes disagree in
+        // hue or opacity still takes an accepted color that matches it.
+        if let Some((_, ColorPickerTarget::Selection, _, color)) = applied_color
+            && self.selection_recolor_changes(color)
+        {
+            self.finish_active_arrow_bend();
+            if self.apply_selection_color_value_with(measurer, color) {
+                self.note_recent_color(color);
+            }
+        }
         if let Some((tool, target, original_color, color)) = applied_color
             && original_color != color
         {
@@ -334,6 +381,8 @@ impl InputState {
                 // The draft already holds the color; the sheet's Apply decides
                 // whether the board changes, so nothing is dirty yet.
                 ColorPickerTarget::BoardPaper => {}
+                // Applied above, whether or not the color moved.
+                ColorPickerTarget::Selection => {}
             }
         }
         self.color_picker_popup.hide();

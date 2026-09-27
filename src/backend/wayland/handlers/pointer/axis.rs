@@ -194,6 +194,17 @@ impl WaylandState {
         ) {
             return;
         }
+        if routed.surface == InputSurface::Canvas
+            && !self.toolbar_chrome.pointer_over_toolbar()
+            && try_handle_properties_panel_axis(
+                &mut self.input_state,
+                self.render.text_measurer(),
+                event.position,
+                scroll_direction,
+            )
+        {
+            return;
+        }
         let over_toolbar =
             routed.surface == InputSurface::Toolbar || self.toolbar_chrome.pointer_over_toolbar();
         let over_top_toolbar =
@@ -381,6 +392,24 @@ fn try_handle_board_picker_page_panel_axis(
     let delta = if scroll_direction > 0 { 1 } else { -1 };
     let _ = input_state.board_picker_scroll_page_panel_rows(delta);
     true
+}
+
+/// A wheel tick over the properties panel steps the row under it, and one
+/// anywhere else on the panel is swallowed rather than resizing the tool
+/// behind it. A surface covering the panel (the color picker it opened) keeps
+/// the tick.
+fn try_handle_properties_panel_axis(
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    position: (f64, f64),
+    scroll_direction: i32,
+) -> bool {
+    if scroll_direction == 0 || input_state.modal_owns_wheel() {
+        return false;
+    }
+    let x = position.0.round() as i32;
+    let y = position.1.round() as i32;
+    input_state.properties_panel_wheel_with(measurer, x, y, scroll_direction)
 }
 
 #[cfg(test)]

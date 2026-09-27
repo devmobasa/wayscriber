@@ -193,9 +193,7 @@ impl InputState {
         }
         match button {
             MouseButton::Left => {
-                if let Some(index) = self.properties_panel_index_at(x, y) {
-                    self.set_properties_panel_focus(Some(index));
-                } else {
+                if !self.press_properties_panel_at(x, y) {
                     self.close_properties_panel();
                 }
             }

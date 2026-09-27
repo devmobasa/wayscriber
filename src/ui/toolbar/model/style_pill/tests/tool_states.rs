@@ -441,6 +441,22 @@ fn minimized_and_micro_strips_hide_the_pill() {
 }
 
 #[test]
+fn an_unconstrained_pill_offers_the_whole_built_in_palette() {
+    let snapshot = snapshot_for_tool(Tool::Pen);
+    let palette = crate::config::QuickColorPalette::default();
+    assert!(palette.rendered_entries().len() <= StylePillSpec::MAX_SWATCHES);
+
+    let spec = StylePillSpec::build(&snapshot, &plan());
+
+    let swatches = spec
+        .controls()
+        .iter()
+        .filter(|control| matches!(control, StylePillControl::QuickSwatch(_)))
+        .count();
+    assert_eq!(swatches, palette.rendered_entries().len());
+}
+
+#[test]
 fn stroke_state_orders_chip_swatches_slider_and_numeral() {
     let snapshot = snapshot_for_tool(Tool::Pen);
     let spec = StylePillSpec::build(&snapshot, &plan());
@@ -898,6 +914,7 @@ fn the_docked_selection_control_reports_on_the_selected_shape_not_the_tool_defau
             label: "Magnification".to_string(),
             value: "3x".to_string(),
             kind: crate::input::SelectionPropertyKind::SpotlightMagnification,
+            state: crate::input::SelectionPropertyValue::Number(Some(3.0)),
             disabled: false,
         });
 

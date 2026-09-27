@@ -71,7 +71,30 @@ impl InputState {
         measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
-        let target = match self.selection_arrow_style_target(direction) {
+        let target = self.selection_arrow_style_target(direction);
+        self.restyle_selected_arrows(measurer, target)
+    }
+
+    /// Sets every editable selected arrow to `style`, as picking one of the
+    /// drawn styles does.
+    pub(in crate::input::state::core::properties) fn apply_selection_arrow_style_value(
+        &mut self,
+        measurer: &TextMeasurer,
+        style: ArrowStyle,
+    ) -> bool {
+        let target = match self.selection_arrow_style_target(0) {
+            ArrowStyleTarget::Style(_) => ArrowStyleTarget::Style(style),
+            other => other,
+        };
+        self.restyle_selected_arrows(measurer, target)
+    }
+
+    fn restyle_selected_arrows(
+        &mut self,
+        measurer: &TextMeasurer,
+        target: ArrowStyleTarget,
+    ) -> bool {
+        let target = match target {
             ArrowStyleTarget::NoArrows => {
                 self.push_toast(
                     ToastPriority::Info,

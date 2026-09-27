@@ -1,8 +1,153 @@
 use super::super::base::InputState;
-use super::types::SelectionPropertyKind;
-use crate::draw::{Shape, TextMeasurer};
+use super::types::{
+    PropertiesPanelHit, PropertiesPanelLock, SelectionPropertyEntry, SelectionPropertyKind,
+    SelectionPropertyValue,
+};
+use crate::draw::{ArrowStyle, Color, Shape, TextMeasurer};
 
 impl InputState {
+    /// Acts on the panel control `hit`: a swatch sets that color, a stepper
+    /// button steps its property, and so on. Returns whether anything changed
+    /// (for the "More colors" button: whether the color picker opened).
+    pub(crate) fn activate_properties_panel_hit_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        hit: PropertiesPanelHit,
+    ) -> bool {
+        if hit == PropertiesPanelHit::Lock {
+            return self.toggle_properties_panel_lock_with(measurer);
+        }
+        let Some(entry) = hit.row().and_then(|row| self.enabled_properties_entry(row)) else {
+            return false;
+        };
+
+        let changed = match hit {
+            PropertiesPanelHit::Title | PropertiesPanelHit::Lock => false,
+            PropertiesPanelHit::Swatch { index, .. } => {
+                let Some(color) = self
+                    .properties
+                    .panel
+                    .as_ref()
+                    .and_then(|panel| panel.swatches.get(index))
+                    .map(|swatch| swatch.color)
+                else {
+                    return false;
+                };
+                self.set_selection_color_from_panel(measurer, color)
+            }
+            PropertiesPanelHit::MoreColors(_) => {
+                return self.open_color_picker_popup_for_selection_with_measurer(measurer);
+            }
+            PropertiesPanelHit::StepDown(_) => {
+                self.dispatch_selection_property(measurer, entry.kind, -1)
+            }
+            PropertiesPanelHit::StepUp(_) => {
+                self.dispatch_selection_property(measurer, entry.kind, 1)
+            }
+            PropertiesPanelHit::Toggle(_) => {
+                self.dispatch_selection_property(measurer, entry.kind, 0)
+            }
+            PropertiesPanelHit::ArrowHead { at_end, .. } => {
+                if entry.state == SelectionPropertyValue::ArrowHead(Some(at_end)) {
+                    return false;
+                }
+                let direction = if at_end { 1 } else { -1 };
+                self.dispatch_selection_property(measurer, entry.kind, direction)
+            }
+            PropertiesPanelHit::ArrowStyle { style, .. } => {
+                if entry.state == SelectionPropertyValue::ArrowStyle(Some(style)) {
+                    return false;
+                }
+                self.set_selection_arrow_style_from_panel(measurer, style)
+            }
+            // A click beside a switch flips it, the way a click on a checkbox
+            // label does; every other row only takes focus.
+            PropertiesPanelHit::Row(_) => match entry.state {
+                SelectionPropertyValue::Toggle(_) => {
+                    self.dispatch_selection_property(measurer, entry.kind, 0)
+                }
+                _ => false,
+            },
+        };
+
+        if changed {
+            self.refresh_properties_panel_with(measurer);
+        }
+        changed
+    }
+
+    /// Steps the row under a wheel tick: up raises a number, turns a switch
+    /// on, or moves to the next swatch or style, and down does the opposite.
+    pub(crate) fn step_properties_panel_row_by_wheel_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        row: usize,
+        scroll_direction: i32,
+    ) -> bool {
+        if scroll_direction == 0 {
+            return false;
+        }
+        let Some(entry) = self.enabled_properties_entry(row) else {
+            return false;
+        };
+
+        let changed = self.dispatch_selection_property(measurer, entry.kind, -scroll_direction);
+
+        if changed {
+            self.refresh_properties_panel_with(measurer);
+        }
+        changed
+    }
+
+    fn enabled_properties_entry(&self, row: usize) -> Option<SelectionPropertyEntry> {
+        self.properties
+            .panel
+            .as_ref()?
+            .entries
+            .get(row)
+            .filter(|entry| !entry.disabled)
+            .cloned()
+    }
+
+    fn set_selection_color_from_panel(&mut self, measurer: &TextMeasurer, color: Color) -> bool {
+        // Picking the color the selection already has is a no-op, not a
+        // "No changes applied" toast. A swatch with the same hue still
+        // changes a shape of another opacity.
+        if !self.selection_recolor_changes(color) {
+            return false;
+        }
+        self.finish_active_arrow_bend();
+        self.apply_selection_color_value_with(measurer, color)
+    }
+
+    fn set_selection_arrow_style_from_panel(
+        &mut self,
+        measurer: &TextMeasurer,
+        style: ArrowStyle,
+    ) -> bool {
+        // See `dispatch_selection_property`: a restyle must end a live bend
+        // drag before it records its own undo entry.
+        self.finish_active_arrow_bend();
+        self.apply_selection_arrow_style_value(measurer, style)
+    }
+
+    /// Locks every selected shape, or unlocks them all once every one is
+    /// locked. Locked shapes refuse edits, so this is also how the panel's
+    /// disabled rows come back.
+    fn toggle_properties_panel_lock_with(&mut self, measurer: &TextMeasurer) -> bool {
+        let Some(lock) = self.properties.panel.as_ref().map(|panel| panel.lock) else {
+            return false;
+        };
+        let lock_all = lock != PropertiesPanelLock::Locked;
+
+        let changed = self.set_selection_locked_with(measurer, lock_all);
+
+        if changed {
+            self.refresh_properties_panel_with(measurer);
+        }
+        changed
+    }
+
     pub(crate) fn activate_properties_panel_entry_with(&mut self, measurer: &TextMeasurer) -> bool {
         self.adjust_properties_panel_entry_with(measurer, 0)
     }
@@ -157,6 +302,7 @@ impl InputState {
 }
 
 fn direction_or_default(direction: i32) -> i32 {
-    // Treat activation (0) as a forward step; preserve negative direction.
-    if direction < 0 { -1 } else { 1 }
+    // Treat activation (0) as a forward step. The magnitude is kept, so a
+    // coarse keyboard step moves a number several steps at once.
+    if direction == 0 { 1 } else { direction }
 }

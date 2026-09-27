@@ -29,6 +29,7 @@ mod pages;
 mod presenter_mode;
 mod pressure_modes;
 mod properties_panel;
+mod properties_panel_controls;
 mod radial_menu;
 mod selection;
 mod session_preflight;
