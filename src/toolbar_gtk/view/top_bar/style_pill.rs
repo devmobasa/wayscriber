@@ -169,6 +169,10 @@ impl TopBar {
                         slider_kind.formatter(),
                         move |value| send_event(&sender, slider_kind.event(value)),
                     );
+                    let release_sender = self.feedback.clone();
+                    slider.on_keyboard_released(move || {
+                        let _ = release_sender.send(GtkToolbarFeedback::KeyboardReleased);
+                    });
                     // Thickness/text-size use distinct numeral controls. The
                     // other readouts sit beside a full-width track, matching
                     // the built-in toolbar instead of borrowing track space.

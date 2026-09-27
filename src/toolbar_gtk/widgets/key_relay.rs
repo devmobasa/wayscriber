@@ -91,16 +91,6 @@ pub(super) fn forwarded_key_feedback(
     }
 }
 
-/// Whether the focused widget lives in a popover. Escape there closes the
-/// popover and the toolbar window keeps the keyboard; outside one it drops
-/// the toolbar's keyboard focus altogether.
-fn focus_in_popover(widget: &gtk4::Widget) -> bool {
-    widget
-        .root()
-        .and_then(|root| root.focus())
-        .is_some_and(|focus| focus.ancestor(gtk4::Popover::static_type()).is_some())
-}
-
 fn focused_keys(widget: &gtk4::Widget) -> FocusedKeys {
     let Some(focus) = widget.root().and_then(|root| root.focus()) else {
         return FocusedKeys::Nothing;
@@ -136,11 +126,11 @@ pub(in crate::toolbar_gtk) fn install_key_relay(
             .widget()
             .map_or(FocusedKeys::Nothing, |widget| focused_keys(&widget));
         if key_stays_local(keyval, is_modifier, is_chord(state), focus) {
+            // The guard only: whether the slider really gives up the keyboard
+            // (not mid-drag, not in a popover) is its own call, reported by
+            // the slider when it happens.
             if escape_dismisses_locally(keyval, focus) {
-                let released_keyboard = controller
-                    .widget()
-                    .is_some_and(|widget| !focus_in_popover(&widget));
-                let _ = feedback.send(GtkToolbarFeedback::EscapeDismissed { released_keyboard });
+                let _ = feedback.send(GtkToolbarFeedback::EscapeDismissed);
             }
             return gtk4::glib::Propagation::Proceed;
         }

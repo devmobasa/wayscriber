@@ -328,7 +328,8 @@ impl GtkToolbarFeedback {
             Self::Event { .. }
             | Self::PointerShortcut { .. }
             | Self::Key { .. }
-            | Self::EscapeDismissed { .. }
+            | Self::EscapeDismissed
+            | Self::KeyboardReleased
             | Self::TopHover { .. }
             | Self::CaptureSuppressionReady { .. }
             | Self::CaptureSuppressionFailed { .. } => None,

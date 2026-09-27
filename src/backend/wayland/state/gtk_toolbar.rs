@@ -161,12 +161,12 @@ impl WaylandState {
                         qh,
                     );
                 }
-                GtkToolbarFeedback::EscapeDismissed { released_keyboard } => {
-                    let now = std::time::Instant::now();
-                    self.input_state.note_escape_dismissal(now);
-                    if released_keyboard {
-                        self.reclaim_keyboard_after_toolbar_release(now);
-                    }
+                GtkToolbarFeedback::EscapeDismissed => {
+                    self.input_state
+                        .note_escape_dismissal(std::time::Instant::now());
+                }
+                GtkToolbarFeedback::KeyboardReleased => {
+                    self.reclaim_keyboard_after_toolbar_release(std::time::Instant::now());
                 }
                 GtkToolbarFeedback::TopHover { hovered } => {
                     self.toolbar_chrome.set_gtk_top_hover(hovered);

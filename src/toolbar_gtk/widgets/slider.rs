@@ -25,6 +25,8 @@ struct SliderState {
     /// Set for the marker opacity slider: its track fades from clear to
     /// solid in the stroke color instead of filling with the accent.
     opacity_paint: Cell<Option<OpacityPaint>>,
+    /// Told when Escape made this slider give up the toolbar's keyboard focus.
+    keyboard_released: std::cell::RefCell<Option<Rc<dyn Fn()>>>,
 }
 
 impl SliderRow {
@@ -47,6 +49,7 @@ impl SliderRow {
             value: Cell::new(initial),
             dragging: Cell::new(false),
             opacity_paint: Cell::new(None),
+            keyboard_released: std::cell::RefCell::new(None),
         });
 
         let area = gtk4::DrawingArea::builder()
@@ -173,6 +176,10 @@ impl SliderRow {
                         popover.popdown();
                     } else {
                         super::release_window_keyboard_focus(&key_area);
+                        let released = key_state.keyboard_released.borrow().clone();
+                        if let Some(released) = released {
+                            released();
+                        }
                     }
                 }
                 return gtk4::glib::Propagation::Stop;
@@ -240,6 +247,13 @@ impl SliderRow {
             self.value_label.set_size_request(width, -1);
             self.value_label.set_xalign(0.0);
         }
+    }
+
+    /// Run `on_release` whenever Escape makes this slider give up the
+    /// toolbar's keyboard focus. Not during a drag, which keeps focus, and not
+    /// inside a popover, where Escape closes the popover instead.
+    pub(in crate::toolbar_gtk) fn on_keyboard_released(&self, on_release: impl Fn() + 'static) {
+        *self.state.keyboard_released.borrow_mut() = Some(Rc::new(on_release));
     }
 
     /// Paint the track as the marker opacity fade (`Some`) or the plain
@@ -369,6 +383,21 @@ pub(super) fn assert_widget_contract() {
     // An off-grid 4.5 steps up to the adjacent whole value, 5, not 6.
     assert_eq!(slider.state.value.get(), 5.0);
     assert_eq!(changes.borrow().as_slice(), &[5.0]);
+    assert_escape_contract(&slider, &key);
+    slider.set_value(6.25);
+    assert_eq!(slider.state.value.get(), 6.25);
+    assert_eq!(
+        changes.borrow().as_slice(),
+        &[5.0],
+        "backend updates emit no user event"
+    );
+}
+
+/// Escape outside a drag gives up the keyboard and reports it; during a drag
+/// it keeps focus; inside a popover it closes the popover and releases
+/// nothing. Backend values are ignored mid-drag.
+#[cfg(test)]
+fn assert_escape_contract(slider: &SliderRow, key: &gtk4::EventControllerKey) {
     let window = gtk4::Window::new();
     window.set_child(Some(&slider.root));
     gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
@@ -382,14 +411,21 @@ pub(super) fn assert_widget_contract() {
             ],
         )
     };
+    // The release callback reports only a release that happened: a drag
+    // keeps focus, and a popover slider closes the popover instead.
+    let releases = Rc::new(Cell::new(0u32));
+    let counted = releases.clone();
+    slider.on_keyboard_released(move || counted.set(counted.get() + 1));
     slider.state.dragging.set(true);
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_some());
+    assert_eq!(releases.get(), 0, "a drag keeps the keyboard");
     slider.set_value(10.0);
     assert_eq!(slider.state.value.get(), 5.0);
     slider.state.dragging.set(false);
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_none());
+    assert_eq!(releases.get(), 1, "the release is reported once");
     assert_eq!(slider.state.value.get(), 5.0);
     window.set_child(None::<&gtk4::Widget>);
     let anchor = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
@@ -403,15 +439,9 @@ pub(super) fn assert_widget_contract() {
         !popover.is_visible(),
         "Escape dismisses the slider's popover"
     );
+    assert_eq!(releases.get(), 1, "closing a popover releases nothing");
     popover.set_child(None::<&gtk4::Widget>);
     popover.unparent();
-    slider.set_value(6.25);
-    assert_eq!(slider.state.value.get(), 6.25);
-    assert_eq!(
-        changes.borrow().as_slice(),
-        &[5.0],
-        "backend updates emit no user event"
-    );
 }
 
 /// Escape on a Tab-focused slider must release the slider, not reach the
@@ -446,10 +476,8 @@ pub(super) fn assert_focused_slider_escape_stays_local() {
     assert!(!handled, "Escape goes on to the focused slider");
     assert_eq!(
         rx.try_recv(),
-        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed {
-            released_keyboard: true
-        }),
-        "a bar slider drops the toolbar keyboard, so the overlay takes it back"
+        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed),
+        "the relay arms the overlay's Escape guard; the slider reports any release"
     );
     assert!(
         rx.try_recv().is_err(),
