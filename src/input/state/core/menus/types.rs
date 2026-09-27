@@ -6,6 +6,8 @@ pub enum ContextMenuKind {
     Shape,
     Canvas,
     Zoom,
+    /// Stacking order for the selection: front, forward, backward, back.
+    Arrange,
     Pages,
     Boards,
     Page,

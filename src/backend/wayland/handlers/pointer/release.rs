@@ -51,7 +51,7 @@ impl WaylandState {
         }
 
         // Block pointer input when modal overlays are active
-        if self.input_state.command_palette.is_open() || self.input_state.tour.is_active() {
+        if self.input_state.command_palette.is_open() {
             // For command palette, press handles the click - release is a no-op
             self.pointer.clear_chrome_press();
             return;
@@ -213,7 +213,10 @@ impl WaylandState {
                 .input_state
                 .check_zoom_chip_click(kind, screen_x, screen_y);
             if let Some(action) = action {
-                self.dispatch_input_action(action);
+                self.dispatch_input_action_anchored(
+                    action,
+                    crate::input::state::ZoomAnchor::ScreenCenter,
+                );
             }
         }
         pressed.is_pending()

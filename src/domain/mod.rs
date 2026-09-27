@@ -25,7 +25,7 @@ pub use board_validation::{
     BoardIdChangeSet, BoundaryBoardId, BoundaryBoardIdSet, clamp_board_rgb,
 };
 pub use color::Color;
-pub use drawing::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+pub use drawing::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, step_stroke_thickness};
 pub use onboarding::OnboardingTip;
 pub use tool::{DragBindableTool, DragTool, EraserMode, Tool};
 

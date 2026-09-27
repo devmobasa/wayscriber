@@ -124,7 +124,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
 - Spotlight tool: dims everything except the regions you draw, with optional 1×–4× magnification
 - Multiline text and sticky notes with smoothing; optional text halos take their contrast from the background the label sits on, so a label stays readable over a board, a filled shape, or a frozen screen (disable with `[drawing] text_halo_enabled = false`; a live transparent board has no pixels to sample and falls back to the text color)
-- Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel (<kbd>Ctrl+Alt+P</kbd> or right-click → **Properties**): swatches from your quick-color palette plus **+** for the full color picker (an opaque swatch changes the hue and keeps each shape's opacity), thickness and opacity sliders (one drag is one undo step), a fill row for rectangles, ellipses, and polygons whose first swatch is "no fill" and whose others fill with their own color, independent of the border, −/+ steppers, on/off switches, the arrow head's Start/End, drawn arrow styles, a lock toggle, and buttons to send the selection to the back, back one step, forward one step, or to the front, and to duplicate or delete it; a preset row applies a tool preset's style to the selection (keeping the current tool), and **Save** then a slot stores the selection's style as that preset; scroll over a row to step it, and hover the title for the shape's ID and creation time
+- Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel (double-click a shape, <kbd>Ctrl+Alt+P</kbd>, or right-click → **Properties**; double-clicking text or a sticky note edits it instead): swatches from your quick-color palette plus **+** for the full color picker (an opaque swatch changes the hue and keeps each shape's opacity), thickness and opacity sliders (one drag is one undo step), a fill row for rectangles, ellipses, and polygons whose first swatch is "no fill" and whose others fill with their own color, independent of the border, −/+ steppers, on/off switches, the arrow head's Start/End, drawn arrow styles, a lock toggle, and buttons to send the selection to the back, back one step, forward one step, or to the front, and to duplicate or delete it; a preset row applies a tool preset's style to the selection (keeping the current tool), and **Save** then a slot stores the selection's style as that preset; scroll over a row to step it, and hover the title for the shape's ID and creation time
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
 - Text font cycling with <kbd>Shift+T</kbd> over a configurable list (`[drawing] font_cycle`); with text selected it restyles that text
@@ -188,7 +188,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 ### Callouts and zoom
 - **Numbered callouts:** auto-numbered arrow labels and step markers; reset arrow labels with <kbd>Ctrl+Shift+R</kbd>
 - **Zoom:** spotlight details with ZoomIt-style controls
-  - Zoom in/out: <kbd>Ctrl+Alt</kbd> + scroll or <kbd>Ctrl+Alt</kbd> + <kbd>+</kbd>/<kbd>-</kbd>
+  - Zoom in/out: <kbd>Ctrl</kbd> + scroll (<kbd>Ctrl+Alt</kbd> + scroll also works) or <kbd>Ctrl+Alt</kbd> + <kbd>+</kbd>/<kbd>-</kbd>
   - Reset: <kbd>Ctrl+Alt+0</kbd>; lock view: <kbd>Ctrl+Alt+L</kbd>
   - Pan: middle drag or arrow keys
   - Right-click menu: **Zoom** → Zoom In / Zoom Out / Reset Zoom; while zoomed, right-click still opens the menu, which then starts with Zoom In, Zoom Out, Exit Zoom, and Lock View
@@ -601,7 +601,9 @@ to leave, color and thickness, quick-access menus, and finding commands. It
 ends by offering background mode. Every card action is a button (**Got it**,
 **Set up**, **Not now**, **Skip tour**) with its key beside it; clicks on the
 card never draw. <kbd>Shift+Escape</kbd> skips the tour. Profiles that already
-finished or skipped the tour are not shown it again.
+finished or skipped the tour are not shown it again; **Replay Tour** (command
+palette, or the help overlay's footer) runs the cards again. It leaves zoom
+first, and in presenter mode it waits until you leave it.
 
 Discovery and shortcut-coaching tips have **Got it** and **Tip settings…**
 controls. **Got it**
@@ -1040,7 +1042,7 @@ pick_screen_color = ["I"]
 | Toggle light passthrough (in-overlay) | <kbd>F6</kbd> (see [Light passthrough mode](#light-passthrough-mode)) |
 | Reset arrow labels | <kbd>Ctrl+Shift+R</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
-| Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt</kbd> + <kbd>+</kbd> / <kbd>Ctrl+Alt</kbd> + <kbd>-</kbd> |
+| Zoom in/out | <kbd>Ctrl</kbd> + scroll / <kbd>Ctrl+Alt</kbd> + <kbd>+</kbd> / <kbd>Ctrl+Alt</kbd> + <kbd>-</kbd> |
 | Reset zoom | <kbd>Ctrl+Alt+0</kbd> |
 | Toggle zoom lock | <kbd>Ctrl+Alt+L</kbd> |
 | Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |

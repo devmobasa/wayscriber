@@ -433,25 +433,6 @@ fn opening_help_drops_stale_hit_map_geometry() {
 }
 
 #[test]
-fn starting_the_tour_routes_help_close_through_the_canonical_closer() {
-    let mut state = make_state();
-    state.toggle_help_overlay();
-    install_hit_map(
-        &mut state,
-        (100.0, 100.0, 200.0, 300.0),
-        None,
-        &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
-    );
-
-    state.start_tour();
-
-    assert!(!state.help_overlay.visible);
-    // Routing through close_help_overlay dropped the cached hit map, so a
-    // click after help reopens can never act on this stale layout.
-    assert_eq!(state.help_overlay.region_at(150.0, 215.0), None);
-}
-
-#[test]
 fn opening_the_command_palette_routes_help_close_through_the_canonical_closer() {
     let mut state = make_state();
     state.toggle_help_overlay();

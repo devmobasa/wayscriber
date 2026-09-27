@@ -165,7 +165,7 @@ impl InputState {
                 true
             }
             Action::ReplayTour => {
-                self.start_tour_replay_with_resources(resources);
+                self.set_pending_backend_action(PendingBackendAction::ReplayFirstRunTour);
                 true
             }
             Action::ToggleCommandPalette => {

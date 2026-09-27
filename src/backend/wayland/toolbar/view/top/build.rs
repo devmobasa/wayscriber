@@ -706,7 +706,10 @@ fn push_style_pill(
                     rect,
                     match opacity_paint {
                         Some(paint) => WidgetKind::OpacitySlider { t, paint },
-                        None => WidgetKind::Slider { t },
+                        None => WidgetKind::Slider {
+                            t,
+                            spec: slider_spec,
+                        },
                     },
                     Some(Interaction {
                         event,

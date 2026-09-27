@@ -31,10 +31,14 @@ pub(super) enum FocusedKeys {
 /// Whether a key press stays with GTK instead of going to the overlay.
 ///
 /// Modifier presses stay: their state rides on the next forwarded key. Tab
-/// stays so keyboard navigation between popover controls keeps working.
+/// stays so keyboard navigation between popover controls keeps working. A
+/// `chord` (Ctrl, Alt, or Super held) is always a shortcut to a slider or an
+/// activatable control, so Ctrl+PgUp switches boards even while a slider has
+/// focus; the hex entry keeps its editing chords.
 pub(super) fn key_stays_local(
     keyval: gtk4::gdk::Key,
     is_modifier: bool,
+    chord: bool,
     focus: FocusedKeys,
 ) -> bool {
     use gtk4::gdk::Key;
@@ -45,32 +49,25 @@ pub(super) fn key_stays_local(
 
     match focus {
         FocusedKeys::Nothing => false,
-        FocusedKeys::Activation => matches!(
-            keyval,
-            Key::space | Key::KP_Space | Key::Return | Key::KP_Enter | Key::ISO_Enter
-        ),
-        FocusedKeys::Slider => matches!(
-            keyval,
-            Key::Left
-                | Key::Right
-                | Key::Up
-                | Key::Down
-                | Key::Home
-                | Key::End
-                | Key::Page_Up
-                | Key::Page_Down
-                | Key::KP_Left
-                | Key::KP_Right
-                | Key::KP_Up
-                | Key::KP_Down
-                | Key::KP_Home
-                | Key::KP_End
-                | Key::KP_Page_Up
-                | Key::KP_Page_Down
-                | Key::Escape
-        ),
+        FocusedKeys::Activation => {
+            !chord
+                && matches!(
+                    keyval,
+                    Key::space | Key::KP_Space | Key::Return | Key::KP_Enter | Key::ISO_Enter
+                )
+        }
+        FocusedKeys::Slider => {
+            !chord && (keyval == Key::Escape || super::slider::is_slider_navigation_key(keyval))
+        }
         FocusedKeys::Editing => keyval != Key::Escape,
     }
+}
+
+/// Whether Ctrl, Alt, or Super is held, which makes a press a shortcut.
+fn is_chord(state: gtk4::gdk::ModifierType) -> bool {
+    let (ctrl, _shift, alt, logo) = gdk_pointer_modifiers(state);
+
+    ctrl || alt || logo
 }
 
 /// Whether this press is an Escape the focused widget spends on its own
@@ -128,7 +125,10 @@ pub(in crate::toolbar_gtk) fn install_key_relay(
         let focus = controller
             .widget()
             .map_or(FocusedKeys::Nothing, |widget| focused_keys(&widget));
-        if key_stays_local(keyval, is_modifier, focus) {
+        if key_stays_local(keyval, is_modifier, is_chord(state), focus) {
+            // The guard only: whether the slider really gives up the keyboard
+            // (not mid-drag, not in a popover) is its own call, reported by
+            // the slider when it happens.
             if escape_dismisses_locally(keyval, focus) {
                 let _ = feedback.send(GtkToolbarFeedback::EscapeDismissed);
             }
@@ -162,7 +162,7 @@ mod tests {
     fn shortcut_and_escape_keys_leave_the_toolbar() {
         for keyval in [Key::Escape, Key::s, Key::S, Key::z, Key::F1, Key::space] {
             assert!(
-                !key_stays_local(keyval, false, FocusedKeys::Nothing),
+                !key_stays_local(keyval, false, false, FocusedKeys::Nothing),
                 "{keyval:?} reaches the overlay"
             );
         }
@@ -170,10 +170,21 @@ mod tests {
 
     #[test]
     fn modifiers_and_tab_stay_with_gtk() {
-        assert!(key_stays_local(Key::Control_L, true, FocusedKeys::Nothing));
-        assert!(key_stays_local(Key::Tab, false, FocusedKeys::Nothing));
+        assert!(key_stays_local(
+            Key::Control_L,
+            true,
+            false,
+            FocusedKeys::Nothing
+        ));
+        assert!(key_stays_local(
+            Key::Tab,
+            false,
+            false,
+            FocusedKeys::Nothing
+        ));
         assert!(key_stays_local(
             Key::ISO_Left_Tab,
+            false,
             false,
             FocusedKeys::Nothing
         ));
@@ -181,20 +192,36 @@ mod tests {
 
     #[test]
     fn a_focused_control_keeps_only_its_activation_keys() {
-        assert!(key_stays_local(Key::space, false, FocusedKeys::Activation));
-        assert!(key_stays_local(Key::Return, false, FocusedKeys::Activation));
-        assert!(!key_stays_local(
-            Key::Escape,
+        assert!(key_stays_local(
+            Key::space,
+            false,
             false,
             FocusedKeys::Activation
         ));
-        assert!(!key_stays_local(Key::v, false, FocusedKeys::Activation));
+        assert!(key_stays_local(
+            Key::Return,
+            false,
+            false,
+            FocusedKeys::Activation
+        ));
+        assert!(!key_stays_local(
+            Key::Escape,
+            false,
+            false,
+            FocusedKeys::Activation
+        ));
+        assert!(!key_stays_local(
+            Key::v,
+            false,
+            false,
+            FocusedKeys::Activation
+        ));
     }
 
     #[test]
     fn focused_slider_relays_shortcuts_but_keeps_navigation() {
         for keyval in [Key::h, Key::w, Key::space, Key::Return] {
-            assert!(!key_stays_local(keyval, false, FocusedKeys::Slider));
+            assert!(!key_stays_local(keyval, false, false, FocusedKeys::Slider));
         }
         for keyval in [
             Key::Left,
@@ -206,8 +233,66 @@ mod tests {
             Key::Page_Up,
             Key::Page_Down,
         ] {
-            assert!(key_stays_local(keyval, false, FocusedKeys::Slider));
+            assert!(key_stays_local(keyval, false, false, FocusedKeys::Slider));
         }
+    }
+
+    /// Ctrl+PgUp/PgDn switch boards and Ctrl+Arrows are shortcuts too, so a
+    /// focused slider must not keep them just because the bare key is its own.
+    /// Shift alone is not a chord; the keypad arrows are slider keys.
+    #[test]
+    fn chords_leave_a_focused_slider_for_the_overlay() {
+        for keyval in [
+            Key::Page_Up,
+            Key::Page_Down,
+            Key::Left,
+            Key::Right,
+            Key::Home,
+            Key::End,
+            Key::Escape,
+        ] {
+            assert!(
+                !key_stays_local(keyval, false, true, FocusedKeys::Slider),
+                "a chord on {keyval:?} reaches the overlay"
+            );
+        }
+        assert!(!key_stays_local(
+            Key::Return,
+            false,
+            true,
+            FocusedKeys::Activation
+        ));
+
+        assert!(key_stays_local(
+            Key::Left,
+            false,
+            false,
+            FocusedKeys::Slider
+        ));
+        assert!(key_stays_local(
+            Key::KP_Left,
+            false,
+            false,
+            FocusedKeys::Slider
+        ));
+        assert!(key_stays_local(
+            Key::KP_Page_Up,
+            false,
+            false,
+            FocusedKeys::Slider
+        ));
+        assert!(key_stays_local(Key::a, false, true, FocusedKeys::Editing));
+    }
+
+    #[test]
+    fn only_ctrl_alt_and_super_make_a_chord() {
+        use gtk4::gdk::ModifierType;
+
+        assert!(!is_chord(ModifierType::empty()));
+        assert!(!is_chord(ModifierType::SHIFT_MASK));
+        assert!(is_chord(ModifierType::CONTROL_MASK));
+        assert!(is_chord(ModifierType::ALT_MASK));
+        assert!(is_chord(ModifierType::SUPER_MASK));
     }
 
     /// Escape on a Tab-focused slider releases the slider's focus instead of
@@ -215,7 +300,12 @@ mod tests {
     /// overlay is still told, so its guard swallows a second Escape.
     #[test]
     fn escape_on_a_focused_slider_dismisses_locally_and_arms_the_guard() {
-        assert!(key_stays_local(Key::Escape, false, FocusedKeys::Slider));
+        assert!(key_stays_local(
+            Key::Escape,
+            false,
+            false,
+            FocusedKeys::Slider
+        ));
         assert!(escape_dismisses_locally(Key::Escape, FocusedKeys::Slider));
 
         assert!(!escape_dismisses_locally(Key::Left, FocusedKeys::Slider));
@@ -230,9 +320,14 @@ mod tests {
 
     #[test]
     fn editing_widgets_keep_typing_keys_and_relay_escape() {
-        assert!(!key_stays_local(Key::Escape, false, FocusedKeys::Editing));
+        assert!(!key_stays_local(
+            Key::Escape,
+            false,
+            false,
+            FocusedKeys::Editing
+        ));
         for keyval in [Key::a, Key::Left, Key::BackSpace] {
-            assert!(key_stays_local(keyval, false, FocusedKeys::Editing));
+            assert!(key_stays_local(keyval, false, false, FocusedKeys::Editing));
         }
     }
 

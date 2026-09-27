@@ -196,10 +196,6 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.tour.is_active() {
-            return;
-        }
-
         // Help owns stylus tip input just as it owns mouse and touch input.
         // Record the press target but do not begin a canvas interaction.
         if self.input_state.help_overlay.is_visible() {
@@ -364,15 +360,11 @@ mod tests {
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
-    fn help_and_tour_block_stylus_barrel_actions() {
+    fn help_blocks_stylus_barrel_actions() {
         let mut state = make_test_input_state();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
 
         state.toggle_help_overlay();
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-
-        state.toggle_help_overlay();
-        state.start_tour();
         assert!(modal_blocks_stylus_barrel_actions(&state));
     }
 

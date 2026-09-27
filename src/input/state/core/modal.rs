@@ -16,7 +16,6 @@ use crate::input::state::InputState;
 /// keyboard router's precedence order (earlier gets first refusal of a key).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ModalSurface {
-    Tour,
     CommandPalette,
     HelpOverlay,
     RadialMenu,
@@ -29,8 +28,7 @@ pub(crate) enum ModalSurface {
 }
 
 impl ModalSurface {
-    pub(crate) const ALL: [ModalSurface; 10] = [
-        ModalSurface::Tour,
+    pub(crate) const ALL: [ModalSurface; 9] = [
         ModalSurface::CommandPalette,
         ModalSurface::HelpOverlay,
         ModalSurface::RadialMenu,
@@ -44,11 +42,6 @@ impl ModalSurface {
 
     /// Whether opening `self` leaves an open `other` in place. Exclusion is
     /// the default; every entry here is a deliberate pairing.
-    ///
-    /// The tour is deliberately *not* an exception: it consumes every key
-    /// (`tour.rs` swallows the unmatched arm) and covers the overlay, so a
-    /// surface opened underneath it — a toolbar click during the tour reaches
-    /// the openers — would receive neither keyboard nor pointer input.
     fn keeps_open(self, other: ModalSurface) -> bool {
         match (self, other) {
             // The board picker's page rows have their own context menus, so a
@@ -100,8 +93,7 @@ impl ModalSurface {
     /// otherwise sit underneath them (help's title ended up behind the style
     /// pill). Surfaces anchored at the pointer or beside the toolbar — the
     /// context and radial menus, the precision entry, the docked properties
-    /// panel — keep the bars. The tour keeps them too: one of its steps
-    /// introduces the toolbar.
+    /// panel — keep the bars.
     fn hides_toolbar_chrome(self) -> bool {
         matches!(
             self,
@@ -118,7 +110,6 @@ impl InputState {
     /// Whether the surface is open right now.
     pub(crate) fn modal_is_open(&self, surface: ModalSurface) -> bool {
         match surface {
-            ModalSurface::Tour => self.tour.is_active(),
             ModalSurface::CommandPalette => self.command_palette.is_open(),
             ModalSurface::HelpOverlay => self.help_overlay.visible,
             ModalSurface::RadialMenu => self.is_radial_menu_open(),
@@ -151,11 +142,6 @@ impl InputState {
     /// drops them.
     pub(crate) fn close_modal(&mut self, surface: ModalSurface) {
         match surface {
-            // Through end_tour, not a bare flag clear: the tour hides pinned
-            // toolbar chrome and end_tour is what restores it. The palette's
-            // old shortcut cleared the flag directly and left the toolbars
-            // hidden.
-            ModalSurface::Tour => self.end_tour(),
             ModalSurface::CommandPalette => {
                 self.command_palette.close();
                 self.clear_command_palette_repeat();
@@ -216,8 +202,7 @@ impl InputState {
     /// had drifted: the font picker and the precise-entry popup were both
     /// missing, so a selector opened over one of them hid it and left it to
     /// reappear when the selector closed. Going through the registry also means
-    /// each surface is dismissed by its own closer — the tour used to be a bare
-    /// flag clear here, which left the toolbar chrome it hides still hidden.
+    /// each surface is dismissed by its own closer.
     pub(crate) fn prepare_for_screen_modal_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.cancel_active_interaction_with(measurer);
         for surface in ModalSurface::ALL {
@@ -499,11 +484,5 @@ mod toolbar_chrome_tests {
         assert!(state.is_radial_menu_open());
         assert!(!state.modal_hides_toolbar_chrome(), "radial menu");
         state.close_radial_menu();
-
-        state.start_tour();
-        assert!(
-            !state.modal_hides_toolbar_chrome(),
-            "the tour introduces the toolbar, so it stays"
-        );
     }
 }

@@ -209,6 +209,7 @@ pub(super) fn build_main_sections(
         rows: vec![
             action_row(bindings, Action::ZoomIn, NOT_BOUND_LABEL),
             action_row(bindings, Action::ZoomOut, NOT_BOUND_LABEL),
+            row("Ctrl + Scroll", "Zoom at pointer"),
             action_row(bindings, Action::ResetZoom, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleZoomLock, NOT_BOUND_LABEL),
             row("Middle drag / arrow keys", "Pan view"),

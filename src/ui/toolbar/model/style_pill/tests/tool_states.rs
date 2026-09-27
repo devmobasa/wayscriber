@@ -519,7 +519,10 @@ fn stroke_state_orders_chip_swatches_slider_and_numeral() {
         numeral.value_text(&snapshot),
         Some(format!("{:.0}px", snapshot.thickness))
     );
-    assert_eq!(numeral.tooltip(&snapshot).as_deref(), Some("Thickness"));
+    assert_eq!(
+        numeral.tooltip(&snapshot).as_deref(),
+        Some("Thickness \u{2014} click to type, scroll to adjust")
+    );
 }
 
 #[test]
@@ -733,7 +736,7 @@ fn eraser_state_is_size_slider_plus_mode_segment_without_color() {
         StylePillControl::ThicknessValue
             .tooltip(&snapshot)
             .as_deref(),
-        Some("Eraser size")
+        Some("Eraser size \u{2014} click to type, scroll to adjust")
     );
 
     let segment = StylePillControl::EraserModeSegment;

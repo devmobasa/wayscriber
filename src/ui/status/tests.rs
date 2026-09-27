@@ -152,22 +152,26 @@ fn explicit_frame_layout_rehits_stationary_pointer_and_clears_unfocused_hover() 
         .unwrap()
         .buttons
         .iter()
-        .find(|b| b.kind == ZoomChipButtonKind::Fit)
+        .find(|b| b.kind == ZoomChipButtonKind::Reset)
         .unwrap();
     let (x, y) = (
         (fit.x + fit.width / 2.0).round() as i32,
         (fit.y + fit.height / 2.0).round() as i32,
     );
     input.on_mouse_motion_with_canvas(x, y, x, y);
-    assert_eq!(input.zoom_chip.hover(), Some(ZoomChipButtonKind::Fit));
+    assert_eq!(input.zoom_chip.hover(), Some(ZoomChipButtonKind::Reset));
     input.set_zoom_status(false, false, 1.0, (0.0, 0.0));
     update(&engine, &mut input, &style, true);
-    let expected = input
+    let under_pointer = input
         .zoom_chip_layout()
         .unwrap()
         .button_at(f64::from(x), f64::from(y));
-    assert_eq!(expected, Some(ZoomChipButtonKind::Fit));
-    assert_eq!(input.zoom_chip.hover(), expected);
+    assert_eq!(under_pointer, Some(ZoomChipButtonKind::Reset));
+    assert_eq!(
+        input.zoom_chip.hover(),
+        None,
+        "Reset is disabled at 100%, so the rebuilt layout drops its hover"
+    );
     update(&engine, &mut input, &style, false);
     assert_eq!(input.zoom_chip.hover(), None);
 

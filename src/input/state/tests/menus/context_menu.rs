@@ -44,7 +44,7 @@ fn context_menu_respects_enable_flag() {
 }
 
 #[test]
-fn shape_menu_includes_select_this_entry_whenever_hovered() {
+fn shape_menu_offers_select_this_only_when_it_narrows_the_selection() {
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -88,11 +88,46 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
 
     let entries_single = state.context_menu_entries();
     assert!(
-        entries_single
+        !entries_single
             .iter()
             .any(|entry| entry.label == "Select This Shape"),
-        "Expected Select This Shape entry even for single selection"
+        "the clicked shape is already the whole selection, so the row would do nothing"
     );
+}
+
+/// A right-click on a shape leads with what it is usually for: the shape's
+/// editor, then Properties. The four stacking moves share one Arrange row, and
+/// Delete sits in its own group just above Exit, never under the pointer.
+#[test]
+fn shape_menu_leads_with_editing_and_keeps_delete_away_from_the_top() {
+    let mut state = create_test_input_state();
+    let text = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 60,
+        text: "Hello".to_string(),
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
+        wrap_width: None,
+    });
+    state.set_selection(vec![text]);
+    state.open_context_menu((0, 0), vec![text], ContextMenuKind::Shape, Some(text));
+
+    let entries = state.context_menu_entries();
+    let labels: Vec<_> = entries.iter().map(|entry| entry.label.as_str()).collect();
+
+    assert_eq!(&labels[..2], ["Edit Text", "Properties\u{2026}"]);
+    let arrange = entries
+        .iter()
+        .find(|entry| entry.label == "Arrange")
+        .expect("arrange row");
+    assert_eq!(arrange.submenu, Some(ContextMenuKind::Arrange));
+    assert!(!labels.contains(&"Move to Front"));
+
+    let delete = labels.iter().position(|label| *label == "Delete").unwrap();
+    assert_eq!(delete, labels.len() - 2, "Delete sits just above Exit");
+    assert!(entries[delete].separator_before);
 }
 
 #[test]
@@ -397,6 +432,42 @@ fn zoom_in_command_queues_zoom_action_and_closes_menu() {
     assert!(!state.is_context_menu_open());
 }
 
+/// Zoom from the menu centres where the user right-clicked, not on the menu
+/// row the pointer rests on when the command runs.
+#[test]
+fn context_menu_zoom_centres_on_the_right_click_origin() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Zoom, None);
+
+    state.execute_menu_command(MenuCommand::ZoomIn);
+
+    assert_eq!(
+        state.take_pending_zoom_request(),
+        Some(crate::input::ZoomRequest {
+            action: ZoomAction::In,
+            anchor: crate::input::ZoomAnchor::At(12, 34),
+        })
+    );
+}
+
+/// A canvas menu opened from the keyboard sits in a corner, which is not a
+/// point the user chose, so its zoom centres the screen.
+#[test]
+fn keyboard_opened_canvas_menu_zooms_the_screen_centre() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+    assert!(state.is_context_menu_open());
+
+    state.execute_menu_command(MenuCommand::ZoomIn);
+
+    assert_eq!(
+        state
+            .take_pending_zoom_request()
+            .map(|request| request.anchor),
+        Some(crate::input::ZoomAnchor::ScreenCenter)
+    );
+}
+
 #[test]
 fn context_menu_open_radial_command_opens_radial_and_closes_context_menu() {
     let mut state = create_test_input_state();
@@ -535,6 +606,34 @@ fn pages_menu_shows_window_indicators_around_active_page() {
 }
 
 #[test]
+fn boards_menu_offers_the_board_picker_between_the_list_and_the_commands() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+
+    let entries = state.context_menu_entries();
+    let picker = entries
+        .iter()
+        .position(|entry| entry.label == "Board Picker\u{2026}")
+        .expect("board picker row");
+    let entry = &entries[picker];
+    assert_eq!(entry.command, Some(MenuCommand::OpenBoardPicker));
+    assert!(!entry.disabled);
+    assert!(entry.shortcut.is_some(), "the row names its shortcut");
+    assert!(entry.separator_before, "it starts the command group");
+    assert!(
+        entries[picker - 1].label.starts_with("  "),
+        "the board list ends right above it"
+    );
+    assert_eq!(entries[picker + 1].label, "Previous Board");
+
+    let new_board = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::BoardNew))
+        .expect("new board row");
+    assert!(new_board.separator_before, "management is its own group");
+}
+
+#[test]
 fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() {
     let mut state = create_test_input_state();
     state.switch_board_slot(8);
@@ -544,10 +643,12 @@ fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() 
     let overflow_entries = state
         .context_menu_entries()
         .into_iter()
-        .filter(|entry| entry.command == Some(MenuCommand::OpenBoardPicker))
+        .filter(|entry| {
+            entry.command == Some(MenuCommand::OpenBoardPicker)
+                && entry.label.contains("open picker")
+        })
         .collect::<Vec<_>>();
     assert_eq!(overflow_entries.len(), 1);
-    assert!(overflow_entries[0].label.contains("open picker"));
 
     state.switch_board(BOARD_ID_TRANSPARENT);
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
@@ -1066,7 +1167,7 @@ fn shape_menu_orders_by_steps_and_dims_the_way_the_shape_cannot_go() {
     let bottom = state.boards.active_frame_mut().add_shape(rect(0));
     let _top = state.boards.active_frame_mut().add_shape(rect(20));
     state.set_selection(vec![bottom]);
-    state.open_context_menu((0, 0), vec![bottom], ContextMenuKind::Shape, Some(bottom));
+    state.open_context_menu((0, 0), vec![bottom], ContextMenuKind::Arrange, None);
 
     let entries = state.context_menu_entries();
     let disabled = |label: &str| {

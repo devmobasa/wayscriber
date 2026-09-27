@@ -26,7 +26,15 @@ pub(in crate::backend::wayland) struct FocusState {
     pending_activation_token: Option<String>,
     startup_activation_token: Option<String>,
     current_keyboard_interactivity: Option<KeyboardInteractivity>,
+    /// When a reclaim after a toolbar keyboard release stops asking for
+    /// Exclusive if no keyboard enter arrived, so the GTK bars (click-through
+    /// while the overlay is Exclusive) can never stay unusable.
+    keyboard_reclaim_deadline: Option<Instant>,
 }
+
+/// How long the overlay asks for Exclusive keyboard interactivity to take the
+/// keyboard back from a toolbar that released it.
+const KEYBOARD_RECLAIM_WINDOW: Duration = Duration::from_millis(750);
 
 impl FocusState {
     pub(in crate::backend::wayland) fn new(startup_activation_token: Option<String>) -> Self {
@@ -43,6 +51,7 @@ impl FocusState {
             pending_activation_token: None,
             startup_activation_token,
             current_keyboard_interactivity: None,
+            keyboard_reclaim_deadline: None,
         }
     }
 
@@ -122,7 +131,42 @@ impl FocusState {
             && !keyboard_release_requested
     }
 
+    /// Take the keyboard back after the GTK toolbar released it without handing
+    /// it on (Hyprland moves focus only on the next pointer motion): acquire
+    /// the main layer the way startup does, but only for a short window.
+    pub(in crate::backend::wayland) fn begin_keyboard_reclaim(&mut self, now: Instant) {
+        self.main_layer_focus_phase = MainLayerFocusPhase::Acquiring;
+        self.keyboard_reclaim_deadline = Some(now + KEYBOARD_RECLAIM_WINDOW);
+    }
+
+    /// Give up a reclaim whose window passed without a keyboard enter.
+    /// Returns true when the overlay stopped asking for Exclusive.
+    pub(in crate::backend::wayland) fn expire_keyboard_reclaim(&mut self, now: Instant) -> bool {
+        let Some(deadline) = self.keyboard_reclaim_deadline else {
+            return false;
+        };
+        if now < deadline {
+            return false;
+        }
+
+        self.keyboard_reclaim_deadline = None;
+        if self.main_layer_focus_phase != MainLayerFocusPhase::Acquiring {
+            return false;
+        }
+        self.main_layer_focus_phase = MainLayerFocusPhase::Acquired;
+        true
+    }
+
+    pub(in crate::backend::wayland) fn keyboard_reclaim_timeout(
+        &self,
+        now: Instant,
+    ) -> Option<Duration> {
+        self.keyboard_reclaim_deadline
+            .map(|deadline| deadline.saturating_duration_since(now))
+    }
+
     pub(in crate::backend::wayland) fn complete_main_layer_acquisition(&mut self) -> bool {
+        self.keyboard_reclaim_deadline = None;
         if self.main_layer_focus_phase == MainLayerFocusPhase::Acquired {
             return false;
         }
@@ -246,6 +290,21 @@ impl WaylandState {
         self.focus.complete_main_layer_acquisition()
     }
 
+    /// The GTK toolbar dropped keyboard focus (a focused slider spent Escape
+    /// on releasing it). Claim it for the overlay right away, unless the
+    /// overlay already has it or deliberately passes keys through.
+    pub(in crate::backend::wayland) fn reclaim_keyboard_after_toolbar_release(
+        &mut self,
+        now: Instant,
+    ) -> bool {
+        if self.focus.keyboard_focused() || self.overlay_keyboard_passthrough_requested() {
+            return false;
+        }
+
+        self.focus.begin_keyboard_reclaim(now);
+        true
+    }
+
     /// Retire every keyboard-owned transient when focus is lost.
     pub(in crate::backend::wayland) fn teardown_keyboard_focus(&mut self) {
         self.focus.keyboard_left();
@@ -261,6 +320,44 @@ impl WaylandState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A reclaim asks for Exclusive until the keyboard enters; the enter
+    /// settles it and clears the deadline, so nothing expires later.
+    #[test]
+    fn keyboard_reclaim_is_settled_by_the_keyboard_enter() {
+        let now = Instant::now();
+        let mut focus = FocusState::new(None);
+        focus.complete_main_layer_acquisition();
+
+        focus.begin_keyboard_reclaim(now);
+        assert!(focus.main_layer_acquiring());
+        assert_eq!(
+            focus.keyboard_reclaim_timeout(now),
+            Some(KEYBOARD_RECLAIM_WINDOW)
+        );
+
+        assert!(focus.complete_main_layer_acquisition());
+        assert!(!focus.main_layer_acquiring());
+        assert_eq!(focus.keyboard_reclaim_timeout(now), None);
+        assert!(!focus.expire_keyboard_reclaim(now + KEYBOARD_RECLAIM_WINDOW));
+    }
+
+    /// Without an enter the reclaim gives up at its deadline, so the overlay
+    /// stops asking for Exclusive and the GTK bars take clicks again.
+    #[test]
+    fn keyboard_reclaim_without_an_enter_gives_up_at_its_deadline() {
+        let now = Instant::now();
+        let mut focus = FocusState::new(None);
+        focus.complete_main_layer_acquisition();
+        focus.begin_keyboard_reclaim(now);
+
+        assert!(!focus.expire_keyboard_reclaim(now + Duration::from_millis(100)));
+        assert!(focus.main_layer_acquiring());
+
+        assert!(focus.expire_keyboard_reclaim(now + KEYBOARD_RECLAIM_WINDOW));
+        assert!(!focus.main_layer_acquiring());
+        assert_eq!(focus.keyboard_reclaim_timeout(now), None);
+    }
 
     #[test]
     fn focus_exit_window_expires_at_its_deadline() {

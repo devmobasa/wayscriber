@@ -113,6 +113,7 @@ impl InputState {
             ContextMenuKind::Canvas => self.canvas_menu_entries(),
             ContextMenuKind::Shape => self.shape_menu_entries(shape_ids, hovered_shape_id),
             ContextMenuKind::Zoom => self.zoom_menu_entries(with_header),
+            ContextMenuKind::Arrange => self.arrange_menu_entries(with_header),
             ContextMenuKind::Pages => self.pages_menu_entries(with_header),
             ContextMenuKind::Boards => self.boards_menu_entries(with_header),
             ContextMenuKind::Page => self.page_context_menu_entries(),

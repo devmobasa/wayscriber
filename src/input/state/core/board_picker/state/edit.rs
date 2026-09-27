@@ -195,7 +195,9 @@ impl InputState {
         if self.board_picker_is_quick() {
             "Switch board".to_string()
         } else {
-            format!("Boards ({}/{})", board_count, max_count)
+            // "5 of 9 max" reads as capacity; a bare "5/9" read like the status
+            // bar's "1/5" (current board of the total).
+            format!("Boards ({board_count} of {max_count} max)")
         }
     }
 

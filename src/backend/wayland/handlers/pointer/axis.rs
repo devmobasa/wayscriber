@@ -113,6 +113,13 @@ fn try_handle_spotlight_axis(
     true
 }
 
+/// Ctrl+wheel zooms at the pointer, as in most canvas apps; Ctrl+Alt+wheel is
+/// the older binding and keeps working. Ctrl+Shift+wheel stays the font-size
+/// gesture, and a plain wheel still sets the stroke width.
+fn wheel_zooms(ctrl: bool, shift: bool, alt: bool) -> bool {
+    ctrl && (alt || !shift)
+}
+
 impl WaylandState {
     pub(super) fn handle_pointer_axis(
         &mut self,
@@ -125,7 +132,7 @@ impl WaylandState {
         self.handle_pointer_axis_inner(event, routed, vertical, source);
         // A finished scroll leaves no half notch waiting on a meter.
         if stopped {
-            self.toolbar_chrome.meter_wheel_mut().reset();
+            self.toolbar_chrome.reset_wheels();
         }
         finalize_spotlight_wheel_if_axis_stopped(
             &mut self.input_state,
@@ -214,19 +221,21 @@ impl WaylandState {
             // surface, including toolbar popovers left open beneath them. A
             // top-strip wheel without a scrollable popover is also consumed.
             AxisSurfaceRoute::Consumed => {
-                self.toolbar_chrome.meter_wheel_mut().reset();
+                self.toolbar_chrome.reset_wheels();
                 return;
             }
             // Meters receive raw frames, including tiny vertical travel and
             // horizontal-only frames that preserve a pending vertical notch.
             // Canvas/Session/Settings popovers use the shared direction gate.
             AxisSurfaceRoute::ScrollTopPopover => {
-                if !self.step_style_meter_by_wheel(&event.surface, event.position, vertical) {
+                if !self.step_style_meter_by_wheel(&event.surface, event.position, vertical)
+                    && !self.step_style_slider_by_wheel(&event.surface, event.position, vertical)
+                {
                     self.scroll_top_popover_by_wheel(scroll_direction);
                 }
                 return;
             }
-            AxisSurfaceRoute::Canvas => self.toolbar_chrome.meter_wheel_mut().reset(),
+            AxisSurfaceRoute::Canvas => self.toolbar_chrome.reset_wheels(),
         }
         // Everything below this line acts on the canvas or the active tool.
         // A surface covering the canvas has to stop here even when it has
@@ -238,11 +247,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.modifiers.ctrl && self.input_state.modifiers.alt {
-            if scroll_direction != 0 {
-                let zoom_in = scroll_direction < 0;
-                self.handle_zoom_scroll(zoom_in, event.position.0, event.position.1);
-            }
+        if self.try_handle_zoom_wheel(scroll_direction, event.position) {
             return;
         }
 
@@ -284,6 +289,23 @@ impl WaylandState {
             }
             std::cmp::Ordering::Equal => {}
         }
+    }
+
+    /// Ctrl+wheel zoom at the pointer. Returns true when the wheel was a zoom
+    /// gesture, including one consumed mid-stroke: Ctrl is also a drag-tool
+    /// modifier, and a stroke in progress keeps its view.
+    fn try_handle_zoom_wheel(&mut self, scroll_direction: i32, position: (f64, f64)) -> bool {
+        let modifiers = self.input_state.modifiers;
+        if !wheel_zooms(modifiers.ctrl, modifiers.shift, modifiers.alt) {
+            return false;
+        }
+
+        if scroll_direction != 0
+            && matches!(self.input_state.state, crate::input::DrawingState::Idle)
+        {
+            self.handle_zoom_scroll(scroll_direction < 0, position.0, position.1);
+        }
+        true
     }
 
     fn try_handle_help_axis(&mut self, scroll_direction: i32) -> bool {
@@ -419,6 +441,23 @@ mod tests {
     use crate::draw::{Frame, Shape};
     use crate::input::state::{BoardPickerFocus, test_support::make_test_input_state};
     use std::time::Duration;
+
+    #[test]
+    fn ctrl_wheel_zooms_but_ctrl_shift_wheel_keeps_font_size() {
+        assert!(wheel_zooms(true, false, false), "Ctrl+wheel");
+        assert!(wheel_zooms(true, false, true), "Ctrl+Alt+wheel");
+        assert!(wheel_zooms(true, true, true), "Ctrl+Alt+Shift+wheel");
+        assert!(
+            !wheel_zooms(true, true, false),
+            "Ctrl+Shift+wheel is font size"
+        );
+        assert!(
+            !wheel_zooms(false, false, false),
+            "a plain wheel sets width"
+        );
+        assert!(!wheel_zooms(false, true, false), "Shift+wheel is font size");
+        assert!(!wheel_zooms(false, false, true));
+    }
 
     fn update_picker_layout(input_state: &mut InputState) {
         let surface =

@@ -13,7 +13,6 @@ pub(crate) enum RoutingOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConsumedBy {
     EscapeDismissalGuard,
-    Tour,
     CommandPalette,
     HelpOverlay,
     RadialMenu,

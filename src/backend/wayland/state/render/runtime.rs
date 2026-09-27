@@ -19,10 +19,11 @@ pub(super) enum UiEffect {
     ContextSubmenu,
     RecognitionChip,
     OnboardingCard,
+    StatusTooltip,
 }
 
 impl UiEffect {
-    const COUNT: usize = 15;
+    const COUNT: usize = 16;
 
     const fn index(self) -> usize {
         self as usize
@@ -314,6 +315,7 @@ mod tests {
             UiEffect::ContextSubmenu,
             UiEffect::RecognitionChip,
             UiEffect::OnboardingCard,
+            UiEffect::StatusTooltip,
         ];
         let mut history = UiDamageHistory::default();
 

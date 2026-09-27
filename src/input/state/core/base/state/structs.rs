@@ -76,6 +76,9 @@ pub struct InputState {
     pub(in crate::input::state) spotlight_wheel: crate::input::state::SpotlightWheelGesture,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
+    /// Where zoom actions centre while an action runs for a control away from
+    /// the pointer; `None` centres them on the pointer.
+    pub(crate) zoom_action_anchor: Option<crate::input::state::ZoomAnchor>,
     /// Click highlight animation state
     pub(crate) click_highlight: ClickHighlightState,
     /// Finished laser strokes and their fade clock; never part of a frame.
@@ -108,8 +111,6 @@ pub struct InputState {
         crate::input::state::core::RegionSelectUiState,
     /// Runtime preset values, active selection, and transient feedback.
     pub(crate) preset_slots: crate::input::state::core::PresetSlots,
-    /// Lifecycle and navigation state for the guided tour.
-    pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
     /// The transient chip naming what Shape Pen just recognized.

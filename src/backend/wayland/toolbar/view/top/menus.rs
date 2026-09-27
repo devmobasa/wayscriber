@@ -933,7 +933,10 @@ fn push_canvas_delay_slider(
     nodes.push(WidgetNode::new(
         id,
         (0.0, *y, CANVAS_MENU_CONTENT_W, CANVAS_SLIDER_H),
-        WidgetKind::Slider { t },
+        WidgetKind::Slider {
+            t,
+            spec: model::ToolbarSliderSpec::DELAY_SECONDS,
+        },
         Some(Interaction {
             event,
             kind,

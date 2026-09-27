@@ -65,9 +65,6 @@ fn route_key_event_inner(
         state.clear_pending_sequence();
     }
 
-    if let Some(outcome) = adapters::handle_tour_key(state, key) {
-        return outcome;
-    }
     if let Some(outcome) = adapters::handle_command_palette_key(state, resources, key) {
         return outcome;
     }

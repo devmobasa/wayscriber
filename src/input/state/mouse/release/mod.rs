@@ -112,9 +112,19 @@ impl InputState {
         let state = std::mem::replace(&mut self.state, DrawingState::Idle);
         match state {
             DrawingState::MovingSelection {
-                snapshots, moved, ..
+                grab,
+                snapshots,
+                moved,
+                ..
             } => {
-                selection::finish_moving_selection(self, measurer, snapshots, moved);
+                selection::finish_moving_selection(
+                    self,
+                    measurer,
+                    grab,
+                    (canvas_x, canvas_y),
+                    snapshots,
+                    moved,
+                );
             }
             DrawingState::Selecting {
                 start_x,

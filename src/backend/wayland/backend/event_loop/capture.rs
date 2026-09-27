@@ -170,7 +170,7 @@ pub(super) fn handle_pending_actions(
                 state.show_spotlight_magnifier_feedback_if_unavailable();
             }
             InputEffect::OutputFocus(action) => state.handle_output_focus_action(qh, action),
-            InputEffect::Zoom(action) => state.handle_zoom_action(action),
+            InputEffect::Zoom(request) => state.handle_zoom_action(request),
             effect @ (InputEffect::ToolbarPersistence(_)
             | InputEffect::TextCopy(_)
             | InputEffect::TextPaste(_)
@@ -228,6 +228,7 @@ fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) 
         PendingBackendAction::ClearSavedToolState => {
             state.handle_clear_saved_tool_state_action();
         }
+        PendingBackendAction::ReplayFirstRunTour => state.replay_first_run_tour(),
     }
 }
 

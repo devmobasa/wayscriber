@@ -52,53 +52,6 @@ fn a_context_menu_keeps_the_board_picker_open() {
     );
 }
 
-/// The tour consumes every key and covers the overlay, so a surface opened
-/// underneath it would get no input at all. A toolbar click during the tour
-/// reaches these openers, so every one of them has to end the tour.
-#[test]
-fn every_opener_ends_the_tour() {
-    for (name, open) in [
-        (
-            "help",
-            (|state: &mut crate::input::InputState| state.toggle_help_overlay())
-                as fn(&mut crate::input::InputState),
-        ),
-        ("board picker", |state| {
-            state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default())
-        }),
-        ("palette", |state| state.toggle_command_palette()),
-        ("color picker", |state| state.open_color_picker_popup()),
-        ("radial", |state| state.toggle_radial_menu(100.0, 100.0)),
-    ] {
-        let mut state = create_test_input_state();
-        state.start_tour();
-        assert!(state.tour.active);
-
-        open(&mut state);
-
-        assert!(!state.tour.active, "opening the {name} must end the tour");
-    }
-}
-
-/// The tour hides pinned toolbar chrome and `end_tour` is what restores it,
-/// so an opener that ends the tour must route through it rather than clearing
-/// the flag — the palette's old shortcut left the toolbars hidden.
-#[test]
-fn an_opener_that_ends_the_tour_restores_pinned_chrome() {
-    let mut state = create_test_input_state();
-    state.set_toolbar_top_pinned(true);
-    state.start_tour();
-    state.test_set_toolbar_visibility_state(false, false, state.toolbar_top_pinned());
-
-    state.toggle_command_palette();
-
-    assert!(!state.tour.active);
-    assert!(
-        state.toolbar_visible(),
-        "ending the tour must restore pinned toolbar chrome"
-    );
-}
-
 /// The registry invariant: after opening any surface, no other surface it
 /// excludes is still open. Exercised pairwise over every surface a bare
 /// fixture can open.

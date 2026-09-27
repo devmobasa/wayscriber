@@ -122,6 +122,7 @@ impl WaylandState {
         state.first_run_completed = true;
         state.active_step = None;
         state.quick_access_requires_toolbar = false;
+        state.finish_first_run_replay();
         self.save_onboarding_state();
         self.input_state.push_toast(
             ToastPriority::Info,
@@ -139,15 +140,50 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
-    /// Whether first-run guidance keeps the top strip on screen, so the
-    /// toolbar the tour introduces never fades out from under a new user.
-    pub(in crate::backend::wayland) fn first_run_holds_toolbar(&self) -> bool {
+    /// Replay Tour: run the first-run cards again from the first step, but
+    /// only where the first card can actually be seen (see [`replay_start`]).
+    pub(in crate::backend::wayland) fn replay_first_run_tour(&mut self) {
+        match replay_start(
+            self.input_state.presenter_mode_active(),
+            self.zoom.is_engaged(),
+        ) {
+            ReplayStart::Refuse(message) => {
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "onboarding.first_run",
+                    Toast::info(message),
+                );
+                return;
+            }
+            ReplayStart::ExitZoomFirst => self.exit_zoom(),
+            ReplayStart::Now => {}
+        }
+
+        self.preferences
+            .onboarding_mut()
+            .state_mut()
+            .begin_first_run_replay();
+        self.save_onboarding_state();
+        self.mark_first_run_card_dirty();
+    }
+
+    /// Whether the first-run cards may run: automatically while onboarding
+    /// hints are on and can be saved, or whenever the user replays the tour
+    /// on purpose (the documented escape hatch when hints are off).
+    pub(super) fn first_run_guidance_allowed(&self) -> bool {
         let onboarding = self.preferences.onboarding();
 
         super::automatic_onboarding_allowed(
             self.config.ui.show_onboarding_hints,
             onboarding.persistence_available(),
-        ) && first_run_holds_toolbar(onboarding.state())
+        ) || onboarding.state().first_run_replay_active()
+    }
+
+    /// Whether first-run guidance keeps the top strip on screen, so the
+    /// toolbar the tour introduces never fades out from under a new user.
+    pub(in crate::backend::wayland) fn first_run_holds_toolbar(&self) -> bool {
+        self.first_run_guidance_allowed()
+            && first_run_holds_toolbar(self.preferences.onboarding().state())
     }
 
     /// Whether this frame paints the first-run card, without building its copy.
@@ -160,10 +196,8 @@ impl WaylandState {
     }
 
     pub(super) fn first_run_onboarding_card_visible(&self) -> bool {
-        if !super::automatic_onboarding_allowed(
-            self.config.ui.show_onboarding_hints,
-            self.preferences.onboarding().persistence_available(),
-        ) || !self.surface.is_configured()
+        if !self.first_run_guidance_allowed()
+            || !self.surface.is_configured()
             || self.suppression.suppressed()
         {
             return false;
@@ -174,7 +208,6 @@ impl WaylandState {
             self.input_state.help_overlay.is_visible(),
             self.input_state.is_radial_menu_open(),
             self.input_state.is_context_menu_open(),
-            self.input_state.tour.is_active(),
             self.zoom.is_engaged(),
         )
     }
@@ -277,6 +310,7 @@ pub(super) fn advance_first_run_steps(
             state.quick_access_requires_toolbar = false;
             advance.changed = true;
         }
+        advance.changed |= state.finish_first_run_replay();
         return advance;
     }
     if state.active_step.is_none() {
@@ -336,6 +370,7 @@ pub(super) fn advance_first_run_steps(
                 state.first_run_skipped = false;
                 state.active_step = None;
                 state.quick_access_requires_toolbar = false;
+                state.finish_first_run_replay();
                 advance.changed = true;
                 advance.completed = true;
                 break;
@@ -495,6 +530,30 @@ pub(super) fn first_run_skip_allowed(first_run_active: bool, card_visible: bool)
     first_run_active && card_visible
 }
 
+/// How a Replay Tour request starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReplayStart {
+    Now,
+    /// Zoom hides the cards; it is a view, so leave it and start.
+    ExitZoomFirst,
+    /// Presenter mode hides the cards on purpose; keep it and say why the
+    /// replay did not start, rather than resetting progress out of sight.
+    Refuse(&'static str),
+}
+
+/// The cards stay hidden in presenter mode and while zoomed, so a replay
+/// started there would reset and save progress with no card or Skip control
+/// on screen.
+pub(super) fn replay_start(presenter_mode: bool, zoom_engaged: bool) -> ReplayStart {
+    if presenter_mode {
+        ReplayStart::Refuse("Leave presenter mode to replay the tour.")
+    } else if zoom_engaged {
+        ReplayStart::ExitZoomFirst
+    } else {
+        ReplayStart::Now
+    }
+}
+
 /// The strip stays up while the first-run tour runs and for the rest of the
 /// first session, including the moments after "Tour complete".
 pub(super) fn first_run_holds_toolbar(state: &OnboardingState) -> bool {
@@ -507,7 +566,6 @@ pub(super) fn first_run_card_hidden_by_ui_state(
     show_help: bool,
     radial_menu_open: bool,
     context_menu_open: bool,
-    tour_active: bool,
     zoom_engaged: bool,
 ) -> bool {
     presenter_mode
@@ -515,6 +573,5 @@ pub(super) fn first_run_card_hidden_by_ui_state(
         || show_help
         || radial_menu_open
         || context_menu_open
-        || tour_active
         || zoom_engaged
 }

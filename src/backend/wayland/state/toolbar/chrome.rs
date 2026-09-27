@@ -200,6 +200,7 @@ pub(in crate::backend::wayland) struct ToolbarChrome {
     focus_active: bool,
     inline: InlineTopStrip,
     meter_wheel: super::meter_wheel::MeterWheel,
+    slider_wheel: super::meter_wheel::MeterWheel<crate::ui::toolbar::model::StylePillSlider>,
 }
 
 impl ToolbarChrome {
@@ -218,6 +219,7 @@ impl ToolbarChrome {
             focus_active: false,
             inline: InlineTopStrip::default(),
             meter_wheel: super::meter_wheel::MeterWheel::default(),
+            slider_wheel: super::meter_wheel::MeterWheel::default(),
         }
     }
 
@@ -230,6 +232,25 @@ impl ToolbarChrome {
         &mut self,
     ) -> &mut super::meter_wheel::MeterWheel {
         &mut self.meter_wheel
+    }
+
+    /// Partial wheel travel over a style-pill slider or its numeral.
+    pub(in crate::backend::wayland) fn slider_wheel(
+        &self,
+    ) -> &super::meter_wheel::MeterWheel<crate::ui::toolbar::model::StylePillSlider> {
+        &self.slider_wheel
+    }
+
+    pub(in crate::backend::wayland) fn slider_wheel_mut(
+        &mut self,
+    ) -> &mut super::meter_wheel::MeterWheel<crate::ui::toolbar::model::StylePillSlider> {
+        &mut self.slider_wheel
+    }
+
+    /// Drops partial travel over every style-pill control.
+    pub(in crate::backend::wayland) fn reset_wheels(&mut self) {
+        self.meter_wheel.reset();
+        self.slider_wheel.reset();
     }
 
     pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {

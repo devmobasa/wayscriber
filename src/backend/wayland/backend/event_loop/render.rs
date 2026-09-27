@@ -125,7 +125,7 @@ pub(super) fn maybe_render(
                 );
                 if chrome_hover_before != chrome_hover_after && state.focus.pointer_focused() {
                     // Layout can move under a stationary pointer (for example,
-                    // Fit removes the zoom-chip Lock button). The render pass
+                    // Reset removes the zoom-chip Lock button). The render pass
                     // reclassifies hover; publish the matching Wayland cursor
                     // now instead of waiting for another motion event. Pointer
                     // focus is required so a leave-triggered redraw cannot

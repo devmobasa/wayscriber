@@ -186,11 +186,16 @@ pub enum GtkToolbarFeedback {
         alt: bool,
         logo: bool,
     },
-    /// A focused toolbar widget spent an Escape on its own dismissal, such as
+    /// A focused toolbar widget kept an Escape for its own dismissal, such as
     /// a slider releasing keyboard focus. The overlay never saw the press, so
     /// this arms its Escape guard: a second Escape right behind it does not
     /// exit.
     EscapeDismissed,
+    /// A slider gave up the toolbar's keyboard focus without handing it on
+    /// (Escape outside a drag and outside a popover). The overlay takes the
+    /// keyboard back at once instead of leaving keys unrouted until the
+    /// pointer moves. Sent only when the release actually happened.
+    KeyboardReleased,
     /// Pointer entered/left the GTK top strip. GTK runs on its own Wayland
     /// connection, so the backend cannot observe this hover itself; it holds
     /// the top-strip idle fade.

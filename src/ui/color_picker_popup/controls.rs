@@ -293,7 +293,7 @@ pub(super) fn draw_action_tooltip(
     screen_width: f64,
     screen_height: f64,
 ) {
-    let Some((x, y, width, height)) = action_tooltip_geometry(
+    let Some(rect) = action_tooltip_geometry(
         engine,
         text,
         anchor_x,
@@ -303,44 +303,8 @@ pub(super) fn draw_action_tooltip(
     ) else {
         return;
     };
-    let style = action_tooltip_text_style();
 
-    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_SHADOW);
-    draw_rounded_rect(
-        ctx,
-        x + TOOLTIP_SHADOW_OFFSET,
-        y + TOOLTIP_SHADOW_OFFSET,
-        width,
-        height,
-        RADIUS_SM,
-    );
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_BACKGROUND);
-    draw_rounded_rect(ctx, x, y, width, height, RADIUS_SM);
-    let _ = ctx.fill_preserve();
-    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_BORDER);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-
-    constants::set_color(ctx, TEXT_PRIMARY);
-    engine.draw_baseline(
-        ctx,
-        style,
-        text,
-        x + TOOLTIP_PADDING_X,
-        y + TOOLTIP_PADDING_Y + style.size,
-        None,
-    );
-}
-
-fn action_tooltip_text_style() -> UiTextStyle<'static> {
-    UiTextStyle {
-        family: toolbar_theme::FONT_FAMILY_DEFAULT,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: toolbar_theme::FONT_SIZE_TOOLTIP,
-    }
+    crate::ui::tooltip::draw_tooltip(engine, ctx, text, rect);
 }
 
 pub(super) fn action_tooltip_geometry(
@@ -351,10 +315,7 @@ pub(super) fn action_tooltip_geometry(
     screen_width: f64,
     screen_height: f64,
 ) -> Option<(f64, f64, f64, f64)> {
-    let style = action_tooltip_text_style();
-    let extents = engine.measure(style, text, None)?;
-    let width = extents.width() + TOOLTIP_PADDING_X * 2.0;
-    let height = style.size + TOOLTIP_PADDING_Y * 2.0;
+    let (width, height) = crate::ui::tooltip::tooltip_size(engine, text)?;
     let max_x = (screen_width - width - TOOLTIP_SCREEN_MARGIN).max(TOOLTIP_SCREEN_MARGIN);
     let x = (anchor_x + TOOLTIP_POINTER_OFFSET).clamp(TOOLTIP_SCREEN_MARGIN, max_x);
     let above_y = anchor_y - height - TOOLTIP_POINTER_OFFSET;

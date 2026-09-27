@@ -29,7 +29,7 @@ mod status;
 mod text_highlight;
 pub mod theme;
 mod toasts;
-mod tour;
+mod tooltip;
 
 pub(crate) use arrow_bend_handle::render_arrow_bend_handle;
 pub use board_picker::render_board_picker;
@@ -96,6 +96,7 @@ pub(crate) use region_capture_picker::{
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
 pub(crate) use spotlight_control::render_spotlight_magnification_control;
+pub(crate) use status::StatusHudTooltip;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,
@@ -117,8 +118,7 @@ pub(crate) use toasts::{
     preset_toast_geometry_with_engine, render_preset_toast_with_engine,
     render_ui_toast_with_engine, ui_toast_geometry_with_engine,
 };
-pub use tour::render_tour;
-pub(crate) use tour::render_tour_with_engine;
+pub(crate) use tooltip::draw_tooltip;
 
 #[cfg(test)]
 #[path = "ui/tests/theme_compatibility.rs"]

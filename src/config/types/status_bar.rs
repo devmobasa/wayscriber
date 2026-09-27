@@ -99,11 +99,13 @@ impl Default for StatusBarStyle {
 }
 
 fn default_status_font_size() -> f64 {
-    21.0 // 50% larger than previous 14.0
+    // Readable without being the heaviest text on screen; 21px bold outweighed
+    // every other piece of chrome.
+    15.0
 }
 
 fn default_status_padding() -> f64 {
-    15.0 // 50% larger than previous 10.0
+    11.0
 }
 
 fn default_status_bg_color() -> [f64; 4] {

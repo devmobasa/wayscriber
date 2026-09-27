@@ -547,6 +547,26 @@ mod tests {
 
     /// An action with no `[keybindings]` field cannot be rebound and has no row
     /// to open, so both affordances say so and change nothing.
+    /// Replay Tour runs the first-run cards again, which live in the backend's
+    /// onboarding store, so the action hands the replay to the backend.
+    #[test]
+    fn replay_tour_asks_the_backend_to_replay_the_first_run_cards() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
+        let mut state = make_state();
+
+        state.handle_action_with_resources(resources, Action::ReplayTour);
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::ReplayFirstRunTour)
+        );
+    }
+
     #[test]
     fn a_runtime_only_action_is_refused_by_both_shortcut_affordances() {
         let mut state = make_state();
@@ -1217,6 +1237,42 @@ mod tests {
         assert_eq!(
             state.command_palette.recent.first().copied(),
             Some(crate::config::keybindings::Action::ToggleStatusBar)
+        );
+    }
+
+    /// The palette sits in the middle of the screen, away from what the user
+    /// wants magnified, so a zoom it runs centres the screen, not the pointer.
+    #[test]
+    fn return_key_runs_palette_zoom_around_the_screen_centre() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette.query = "zoom in".to_string();
+        let selected = state.selected_command().expect("selected command");
+        assert_eq!(selected.action, crate::config::keybindings::Action::ZoomIn);
+
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
+
+        assert_eq!(
+            state.take_pending_zoom_request(),
+            Some(crate::input::ZoomRequest {
+                action: crate::input::ZoomAction::In,
+                anchor: crate::input::ZoomAnchor::ScreenCenter,
+            })
+        );
+        assert_eq!(
+            state.zoom_action_anchor, None,
+            "the anchor is scoped to the run"
         );
     }
 

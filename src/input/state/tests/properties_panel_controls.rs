@@ -185,6 +185,28 @@ fn stepping_thickness_lands_on_whole_pixels() {
     assert_eq!(rect_of(&state, id).2, 3.0);
 }
 
+/// A fractional width steps to the next whole pixel in the step's direction:
+/// 30.8 goes up to 31 and down to 30, never skipping to 32 or 29.
+#[test]
+fn stepping_a_fractional_thickness_never_skips_a_whole_pixel() {
+    let measurer = TextMeasurer::default();
+
+    for (key, expected) in [(Key::Right, 31.0), (Key::Left, 30.0)] {
+        let mut state = create_test_input_state();
+        let id = add_rect(&mut state, PALETTE_RED, false);
+        if let Shape::Rect { thick, .. } =
+            &mut state.boards.active_frame_mut().shape_mut(id).unwrap().shape
+        {
+            *thick = 30.8;
+        }
+        open(&mut state, vec![id]);
+        state.set_properties_panel_focus(Some(row(&state, "Thickness")));
+
+        assert!(state.handle_properties_panel_key_with_measurer(&measurer, key));
+        assert_eq!(rect_of(&state, id).2, expected, "{key:?} from 30.8");
+    }
+}
+
 #[test]
 fn stepper_buttons_step_a_number_down_and_up() {
     let mut state = create_test_input_state();

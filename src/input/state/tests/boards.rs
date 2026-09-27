@@ -187,6 +187,7 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
     let snapshots = state.capture_movable_selection_snapshots();
     assert!(state.apply_translation_to_selection_with(&test_text_measurer, 25, 35));
     state.state = DrawingState::MovingSelection {
+        grab: crate::input::state::SelectionGrab::new(shape_id, 25, 35),
         last_x: 25,
         last_y: 35,
         snapshots,

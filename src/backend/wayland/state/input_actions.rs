@@ -50,6 +50,18 @@ impl WaylandState {
         });
     }
 
+    /// Dispatch an action for a control away from the pointer; a zoom it
+    /// requests centres on `anchor`.
+    pub(in crate::backend::wayland) fn dispatch_input_action_anchored(
+        &mut self,
+        action: Action,
+        anchor: crate::input::state::ZoomAnchor,
+    ) {
+        self.apply_input_update(|input_state, resources| {
+            input_state.handle_action_anchored(resources, action, anchor)
+        });
+    }
+
     fn apply_input_update(&mut self, update: impl FnOnce(&mut InputState, InputTextResources<'_>)) {
         #[cfg(feature = "tablet-input")]
         let prev_thickness = self.input_state.style.current_thickness;
@@ -84,7 +96,7 @@ impl WaylandState {
             .drain_input_effects(InputEffectDrain::Immediate)
         {
             match effect {
-                InputEffect::Zoom(action) => self.handle_zoom_action(action),
+                InputEffect::Zoom(request) => self.handle_zoom_action(request),
                 InputEffect::Preset(action) => self.handle_preset_action(action),
                 InputEffect::QuickColor(edit) => self.handle_quick_color_edit(edit),
                 InputEffect::CopyHex(color) => self.handle_copy_hex_color(color),

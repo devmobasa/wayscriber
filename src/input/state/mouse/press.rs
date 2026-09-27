@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::super::core::{IdleHandle, MenuCommand};
 use super::super::{
-    ContextMenuKind, DrawingState, InputState,
+    ContextMenuKind, DrawingState, InputState, SelectionGrab,
     interaction::{CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press},
 };
 
@@ -534,7 +534,6 @@ impl InputState {
             }
         }
 
-        self.text_editing.set_last_click(None);
         if selection_click {
             if let Some(hit_id) = hit_id {
                 if !self.selected_shape_ids().contains(&hit_id) {
@@ -545,18 +544,22 @@ impl InputState {
                     }
                 }
 
+                // The click tracker is left alone: the release reports this
+                // press as a click, so a second one opens the shape. A locked
+                // selection has nothing to move but still takes the clicks,
+                // since Properties is where it can be unlocked.
                 let snapshots = self.capture_movable_selection_snapshots();
-                if !snapshots.is_empty() {
-                    self.begin_pointer_drag(button, color);
-                    self.state = DrawingState::MovingSelection {
-                        last_x: x,
-                        last_y: y,
-                        snapshots,
-                        moved: false,
-                    };
-                    return;
-                }
+                self.begin_pointer_drag(button, color);
+                self.state = DrawingState::MovingSelection {
+                    grab: SelectionGrab::new(hit_id, x, y),
+                    last_x: x,
+                    last_y: y,
+                    snapshots,
+                    moved: false,
+                };
+                return;
             } else {
+                self.text_editing.set_last_click(None);
                 self.begin_pointer_drag(button, color);
                 self.state = DrawingState::Selecting {
                     start_x: x,
@@ -570,6 +573,7 @@ impl InputState {
             }
         }
 
+        self.text_editing.set_last_click(None);
         match tool.press_behavior() {
             ToolPressBehavior::Selection | ToolPressBehavior::HighlightNoop => {}
             ToolPressBehavior::StartFreeformPolygon => {

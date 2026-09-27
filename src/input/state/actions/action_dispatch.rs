@@ -14,4 +14,18 @@ impl InputState {
     ) {
         let _ = interaction::route_action_with_resources(self, resources, action);
     }
+
+    /// Handle an action for a control that sits away from the pointer, such as
+    /// the zoom chip or a command palette row: a zoom it requests centres on
+    /// `anchor` instead of on the control under the pointer.
+    pub(crate) fn handle_action_anchored(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        action: Action,
+        anchor: crate::input::state::ZoomAnchor,
+    ) {
+        let previous = self.zoom_action_anchor.replace(anchor);
+        self.handle_action_with_resources(resources, action);
+        self.zoom_action_anchor = previous;
+    }
 }

@@ -1,5 +1,5 @@
 use crate::config::Action;
-use crate::input::{InputState, ZoomAction};
+use crate::input::{InputState, ZoomAction, ZoomAnchor};
 
 impl InputState {
     pub(super) fn apply_toolbar_undo_with_resources(
@@ -109,27 +109,27 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_zoom_in(&mut self) -> bool {
-        self.request_zoom_action(ZoomAction::In);
+        self.request_zoom_action_at(ZoomAction::In, ZoomAnchor::ScreenCenter);
         true
     }
 
     pub(super) fn apply_toolbar_zoom_out(&mut self) -> bool {
-        self.request_zoom_action(ZoomAction::Out);
+        self.request_zoom_action_at(ZoomAction::Out, ZoomAnchor::ScreenCenter);
         true
     }
 
     pub(super) fn apply_toolbar_reset_zoom(&mut self) -> bool {
-        self.request_zoom_action(ZoomAction::Reset);
+        self.request_zoom_action_at(ZoomAction::Reset, ZoomAnchor::ScreenCenter);
         true
     }
 
     pub(super) fn apply_toolbar_toggle_zoom_lock(&mut self) -> bool {
-        self.request_zoom_action(ZoomAction::ToggleLock);
+        self.request_zoom_action_at(ZoomAction::ToggleLock, ZoomAnchor::ScreenCenter);
         true
     }
 
     pub(super) fn apply_toolbar_refresh_zoom_capture(&mut self) -> bool {
-        self.request_zoom_action(ZoomAction::RefreshCapture);
+        self.request_zoom_action_at(ZoomAction::RefreshCapture, ZoomAnchor::ScreenCenter);
         true
     }
 }

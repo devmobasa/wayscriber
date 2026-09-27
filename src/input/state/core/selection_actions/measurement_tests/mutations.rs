@@ -168,6 +168,7 @@ fn explicit_cancellation_restores_decorated_move_bounds_and_hits() {
             Some(id)
         );
         state.state = crate::input::DrawingState::MovingSelection {
+            grab: crate::input::state::SelectionGrab::new(id, probe.0, probe.1 + 300),
             last_x: probe.0,
             last_y: probe.1 + 300,
             snapshots,

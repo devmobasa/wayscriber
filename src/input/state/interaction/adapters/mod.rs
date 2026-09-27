@@ -15,7 +15,6 @@ pub(crate) use keyboard::{
     handle_help_overlay_key, handle_idle_selection_cancel_key, handle_pending_delete_cancel_key,
     handle_precision_entry_key, handle_properties_panel_key, handle_radial_menu_key,
     handle_return_edit_selected_text_key, handle_text_input_key, handle_top_menu_key,
-    handle_tour_key,
 };
 pub(crate) use pointer::{
     close_properties_panel_before_tool_routing, finish_pointer_interaction,

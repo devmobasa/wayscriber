@@ -242,9 +242,6 @@ impl WaylandState {
         screen_x: i32,
         screen_y: i32,
     ) -> Option<TouchTarget> {
-        if self.input_state.tour.is_active() {
-            return Some(TouchTarget::Foreign);
-        }
         if self.input_state.help_overlay.is_visible() {
             self.input_state.note_help_overlay_press(
                 HelpOverlayPressSource::Touch,
@@ -428,9 +425,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.help_overlay.is_visible()
-            || self.input_state.command_palette.is_open()
-            || self.input_state.tour.is_active()
+        if self.input_state.help_overlay.is_visible() || self.input_state.command_palette.is_open()
         {
             return;
         }
@@ -507,7 +502,7 @@ impl WaylandState {
             self.pointer.clear_chrome_press();
             return true;
         }
-        if !self.input_state.command_palette.is_open() && !self.input_state.tour.is_active() {
+        if !self.input_state.command_palette.is_open() {
             return false;
         }
         self.pointer.clear_chrome_press();

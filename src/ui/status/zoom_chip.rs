@@ -1,6 +1,6 @@
 //! Interactive bottom-right zoom chip (M8 Part 2).
 //!
-//! A persistent, interactive `[−]  NN%  [+]  Fit` control anchored to the
+//! A persistent, interactive `[−]  NN%  [+]  Reset` control anchored to the
 //! bottom-right corner. In the default pill layout zoom is otherwise
 //! keyboard-only; this chip surfaces the live zoom percentage and lets the
 //! user step the zoom by clicking. It is a builtin Cairo overlay modelled on
@@ -11,7 +11,7 @@
 //! The zoom-out/in marks are drawn as bold vector +/- strokes (not circled
 //! glyphs), sized to the `NN%` digits and using the same adaptive chip color.
 //! Buttons dispatch through the shared zoom action path:
-//! minus = ZoomOut, plus = ZoomIn, `Fit` = ResetZoom (back to 100%), and — only
+//! minus = ZoomOut, plus = ZoomIn, `Reset` = ResetZoom (back to 100%), and — only
 //! while zoom is active — a compact `Lock` toggle = ToggleZoomLock. The `NN%`
 //! readout is a passive display (it consumes clicks but triggers nothing), so
 //! no drag ever starts on the canvas beneath the chip.
@@ -59,7 +59,9 @@ const ZOOM_CHIP_GLYPH_ARM_CAP_FRACTION: f64 = 0.575;
 /// digit cap height (lands them on the digits' optical middle).
 const ZOOM_CHIP_GLYPH_CENTER_CAP_FRACTION: f64 = 0.5;
 /// Reset-to-100% button label.
-const ZOOM_FIT_LABEL: &str = "Fit";
+const ZOOM_RESET_LABEL: &str = "Reset";
+/// Opacity of a button that does nothing right now: zoom-out and Reset at 100%.
+const ZOOM_CHIP_DISABLED_ALPHA: f64 = 0.35;
 /// Zoom-lock toggle label (shown only while zoom is active).
 const ZOOM_LOCK_LABEL: &str = "Lock";
 
@@ -75,8 +77,8 @@ pub enum ZoomChipButtonKind {
     Out,
     /// Bold vector plus mark — dispatches ZoomIn.
     In,
-    /// `Fit` — dispatches ResetZoom (back to 100%).
-    Fit,
+    /// `Reset` — dispatches ResetZoom (back to 100%).
+    Reset,
     /// `Lock` — dispatches ToggleZoomLock (present only while zoomed).
     Lock,
 }
@@ -170,6 +172,9 @@ pub struct ZoomChipLayout {
     pub(crate) buttons: Vec<ZoomChipButton>,
     /// Whether zoom is currently locked (tints the `Lock` button on-state).
     pub(crate) lock_active: bool,
+    /// Whether the view is zoomed. At 100% there is nothing to zoom out of or
+    /// reset, so those two buttons are drawn dimmed and ignore clicks.
+    pub(crate) zoom_active: bool,
     /// (x, y, w, h) footprint for damage tracking.
     pub(crate) bounds: (f64, f64, f64, f64),
     /// Screen size this layout was computed for.
@@ -183,6 +188,13 @@ impl ZoomChipLayout {
             && x <= self.pill_x + self.pill_width
             && y >= self.pill_y
             && y <= self.pill_y + self.pill_height
+    }
+
+    /// Whether `kind` can act right now. At 100% zoom-out and Reset have
+    /// nothing to do; they stay in place (so the other buttons never move)
+    /// but read and behave as disabled.
+    pub(crate) fn button_enabled(&self, kind: ZoomChipButtonKind) -> bool {
+        self.zoom_active || !matches!(kind, ZoomChipButtonKind::Out | ZoomChipButtonKind::Reset)
     }
 
     pub(crate) fn button_at(&self, x: f64, y: f64) -> Option<ZoomChipButtonKind> {
@@ -276,14 +288,17 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
     let pct = (input_state.zoom_scale() * 100.0).round() as i32;
     let lock_active = input_state.zoom_locked();
 
-    // Piece order: [Lock]  [−]  NN%  [+]  Fit. The Out/In marks are vector
+    // Piece order: [Lock]  [−]  NN%  [+]  Reset. The Out/In marks are vector
     // strokes (empty text), so they carry no glyph. The Lock toggle only makes
     // sense while zoomed, so it grows to the left of the stable zoom buttons.
     let mut specs: Vec<(String, Option<ZoomChipButtonKind>)> = vec![
         (String::new(), Some(ZoomChipButtonKind::Out)),
         (format!("{pct}%"), None),
         (String::new(), Some(ZoomChipButtonKind::In)),
-        (ZOOM_FIT_LABEL.to_string(), Some(ZoomChipButtonKind::Fit)),
+        (
+            ZOOM_RESET_LABEL.to_string(),
+            Some(ZoomChipButtonKind::Reset),
+        ),
     ];
     if input_state.zoom_active() {
         specs.insert(
@@ -321,9 +336,12 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
 
     // Shared ascent/descent so every run sits on one baseline. The vector +/-
     // marks are sized to the digit cap (not the font line box) and drawn
-    // separately, so they never set the line metrics.
-    let mut ascent = 0.0_f64;
-    let mut descent = 0.0_f64;
+    // separately, so they never set the line metrics. The Lock label counts
+    // even while it is hidden, so the pill keeps one height and no button
+    // shifts vertically when Lock appears.
+    let lock_extents = engine.measure(text_style, ZOOM_LOCK_LABEL, None)?;
+    let mut ascent = -lock_extents.y_bearing();
+    let mut descent = lock_extents.height() + lock_extents.y_bearing();
     for piece in &pieces {
         if is_glyph_icon(piece.kind) {
             continue;
@@ -417,6 +435,7 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
         glyph_metrics,
         buttons,
         lock_active,
+        zoom_active: input_state.zoom_active(),
         bounds: (pill_x, pill_y, pill_width, pill_height),
         screen_width,
         screen_height,
@@ -644,6 +663,12 @@ pub(crate) fn render_zoom_chip_with_resources(
 
     let m = layout.glyph_metrics;
     for run in &layout.runs {
+        // A button with nothing to do (zoom-out and Reset at 100%) keeps its
+        // place but is dimmed, so the live controls read at a glance.
+        let a = match run.button {
+            Some(kind) if !layout.button_enabled(kind) => a * ZOOM_CHIP_DISABLED_ALPHA,
+            _ => a,
+        };
         match run.button {
             // The zoom-out/in marks are bold vector +/- strokes in the shared
             // chip text color, sized to sit on the digits' optical middle.
@@ -764,7 +789,7 @@ mod tests {
         for kind in [
             ZoomChipButtonKind::Out,
             ZoomChipButtonKind::In,
-            ZoomChipButtonKind::Fit,
+            ZoomChipButtonKind::Reset,
         ] {
             assert!(at_rest.buttons.iter().any(|b| b.kind == kind));
         }

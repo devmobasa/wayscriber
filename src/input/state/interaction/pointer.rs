@@ -170,7 +170,11 @@ pub(crate) fn route_pointer_release(
                 let screen = points.screen();
                 let (_, action) = state.check_zoom_chip_click(kind, screen.x(), screen.y());
                 if let Some(action) = action {
-                    state.handle_action_with_resources(resources, action);
+                    state.handle_action_anchored(
+                        resources,
+                        action,
+                        crate::input::state::ZoomAnchor::ScreenCenter,
+                    );
                 }
             }
             state.needs_redraw = true;

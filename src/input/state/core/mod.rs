@@ -56,7 +56,6 @@ mod text_placement;
 mod tool_controls;
 mod toolbar;
 mod top_menu;
-mod tour;
 pub(crate) mod utility;
 mod view;
 mod zoom_chip;
@@ -72,8 +71,9 @@ pub use base::{
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
-    SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome,
-    UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
+    SelectionGrab, SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority,
+    ToastPushOutcome, UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction, ZoomAnchor,
+    ZoomRequest,
 };
 pub(crate) use base::{
     BoardPickerClickState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
@@ -146,7 +146,6 @@ pub(crate) use selection::LocalSelectionContext;
 pub(crate) use style::DrawingStyle;
 pub(crate) use text_editing::TextEditing;
 pub use tool_controls::PrecisionEntryState;
-pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;
 pub(crate) use utility::SequenceMatch;
 pub(crate) use utility::default_step_marker_size;

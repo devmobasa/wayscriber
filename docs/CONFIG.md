@@ -931,8 +931,9 @@ reduced_motion = "auto"
 # Show the status bar and its configured contents
 show_status_bar = true
 
-# Allow clicking status bar segments to open their related controls;
-# set false for a display-only status bar whose clicks pass through
+# Allow clicking status bar segments to open their related controls (resting
+# the pointer on one shows what it does); set false for a display-only status
+# bar whose clicks pass through
 status_bar_interactive = true
 
 # Status-bar contents. Each item can be hidden independently. Visible items
@@ -997,7 +998,7 @@ show_capabilities_warning = true
 
 # Show automatic first-run guidance, discovery tips, and shortcut coaching.
 # Automatic tips can also be acknowledged individually, and stop after three
-# appearances. The guided tour remains available manually when this is false.
+# appearances. Replay Tour still runs the first-run cards on request when this is false.
 show_onboarding_hints = true
 
 # Show rectangle and ellipse preview dimensions in logical board pixels, and
@@ -1031,8 +1032,8 @@ radial_menu_mouse_binding = "middle"
 
 # Status bar styling
 [ui.status_bar_style]
-font_size = 21.0
-padding = 15.0
+font_size = 15.0
+padding = 11.0
 bg_color = [0.0, 0.0, 0.0, 0.85]     # Semi-transparent black [R, G, B, A]
 text_color = [1.0, 1.0, 1.0, 1.0]    # White
 dot_radius = 6.0
@@ -1124,7 +1125,7 @@ enabled = true
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle
-- Status bar font: 21px
+- Status bar font: 15px
 - Help overlay font: 14px (the body size of the help rows; secondary text never drops below 12px)
 - Semi-transparent dark status bar; opaque help panel, both with muted borders
 
@@ -1487,10 +1488,11 @@ top_controls = [
 - **Settings**: Settings is always reachable from the top-strip overflow popover.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the Canvas popover's Step section.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
+- **Style pill sliders**: the thickness slider gives half its track to 1–10 px, with faint ticks at 5, 10, and 20 px, and lands on whole pixels. Scroll over any style-pill slider, or over the thickness or text-size number beside it, to step it; click the number to type a value.
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
-- **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Discovery and coaching tips offer **Got it** (permanently acknowledge that tip) and **Tip settings…** (acknowledge it, then open the Configurator at this setting); the toolbar-hidden recovery tip keeps **Show** as its primary control and offers the same settings route. Using the board picker, bottom-right zoom controls, or Canvas popover also acknowledges the matching tip. Clicking the message body dismisses a tip only for the current run; an unattended tip stops after three appearances. Set this option to `false` to disable all automatic tutorials on later overlay launches; the running overlay does not live-reload this Configurator change. The guided tour remains available manually, and capability, safety, and configuration warnings are unaffected. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series. If onboarding progress cannot be saved, automatic guidance is disabled for that run and an actionable persistence warning is shown.
+- **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Discovery and coaching tips offer **Got it** (permanently acknowledge that tip) and **Tip settings…** (acknowledge it, then open the Configurator at this setting); the toolbar-hidden recovery tip keeps **Show** as its primary control and offers the same settings route. Using the board picker, bottom-right zoom controls, or Canvas popover also acknowledges the matching tip. Clicking the message body dismisses a tip only for the current run; an unattended tip stops after three appearances. Set this option to `false` to disable all automatic tutorials on later overlay launches; the running overlay does not live-reload this Configurator change. **Replay Tour** (command palette, or the help overlay's footer) still runs the first-run cards on request, and capability, safety, and configuration warnings are unaffected. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series. If onboarding progress cannot be saved, automatic guidance is disabled for that run and an actionable persistence warning is shown.
 - **Shape size readout**: `show_shape_size_readout` controls the live rectangle and ellipse preview dimensions, measured in logical board pixels. With Shape Pen it names the shape that release will commit, such as "Triangle 120 × 90" or "Line 140", and stays hidden while the stroke is still ink. Ellipse values match the diameter that will be committed, so an odd drag span rounds down to the nearest even diameter. It defaults to `true` and is separate from `capture.region.show_size_readout`, which describes a region-capture selection.
 - **Capability warnings**: `show_capabilities_warning` independently controls compositor limitation warnings; disabling tutorials does not hide safety, configuration, or capability diagnostics.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
@@ -1594,7 +1596,8 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 - <kbd>Ctrl+Shift+Left/Right</kbd>: Previous/next board
 - <kbd>Ctrl+Shift+N</kbd>: New board
 - <kbd>Ctrl+Shift+Delete</kbd>: Delete board
-- <kbd>Ctrl+Shift+B</kbd>: Board picker (inline rename/color)
+- <kbd>Ctrl+Shift+B</kbd>: Board picker (inline rename/color); also **Board Picker…** in the
+  canvas context menu's **Boards** submenu
 - Aliases (configurable): <kbd>Ctrl+W</kbd> = whiteboard, <kbd>Ctrl+B</kbd> = blackboard, <kbd>Ctrl+Shift+T</kbd> = transparent
 
 **Board Picker:**

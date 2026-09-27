@@ -95,21 +95,68 @@ impl WaylandState {
         true
     }
 
-    /// Drops partial wheel travel once the pointer is off the meter it
-    /// belongs to, so a later visit starts from zero. Only looks up the
-    /// pointer's target while a partial level is actually pending.
+    /// Steps the style-pill slider under the pointer, over its track or its
+    /// numeral: one slider step per wheel notch, travel away from the user
+    /// raising it. Partial notches accumulate like the meters'. Returns true
+    /// when the wheel landed on a slider or numeral, so it is consumed there.
+    pub(in crate::backend::wayland) fn step_style_slider_by_wheel(
+        &mut self,
+        surface: &wl_surface::WlSurface,
+        position: (f64, f64),
+        vertical: AxisScroll,
+    ) -> bool {
+        let snapshot = self.toolbar_snapshot();
+        let Some(slider) = self.slider_at(surface, position) else {
+            self.toolbar_chrome.slider_wheel_mut().reset();
+            return false;
+        };
+
+        let steps = self.toolbar_chrome.slider_wheel_mut().levels(
+            slider,
+            vertical.value120,
+            vertical.discrete,
+            vertical.absolute,
+        );
+        // Positive Wayland axis values scroll down; the value rises when the
+        // user scrolls up.
+        if steps != 0 {
+            let event = slider.wheel_event(&snapshot, -steps);
+            self.handle_toolbar_event(event, None, None);
+        }
+        true
+    }
+
+    /// Drops partial wheel travel once the pointer is off the meter or slider
+    /// it belongs to, so a later visit starts from zero. Only looks up the
+    /// pointer's target while a partial step is actually pending.
     pub(in crate::backend::wayland) fn forget_meter_wheel_off_meter(
         &mut self,
         surface: &wl_surface::WlSurface,
         position: (f64, f64),
     ) {
-        if !self.toolbar_chrome.meter_wheel().is_pending() {
-            return;
+        if self.toolbar_chrome.meter_wheel().is_pending() {
+            let snapshot = self.toolbar_snapshot();
+            let setting = self.meter_setting_at(surface, position, &snapshot);
+            self.toolbar_chrome.meter_wheel_mut().keep_only(setting);
         }
+        if self.toolbar_chrome.slider_wheel().is_pending() {
+            let slider = self.slider_at(surface, position);
+            self.toolbar_chrome.slider_wheel_mut().keep_only(slider);
+        }
+    }
 
-        let snapshot = self.toolbar_snapshot();
-        let setting = self.meter_setting_at(surface, position, &snapshot);
-        self.toolbar_chrome.meter_wheel_mut().keep_only(setting);
+    /// The style-pill slider whose track or numeral is under the pointer.
+    fn slider_at(
+        &self,
+        surface: &wl_surface::WlSurface,
+        position: (f64, f64),
+    ) -> Option<crate::ui::toolbar::model::StylePillSlider> {
+        self.toolbar
+            .top_hit_at(surface, position)
+            .or_else(|| self.inline_toolbar_hit_at(position))
+            .and_then(|(intent, _)| {
+                crate::ui::toolbar::model::StylePillSlider::for_wheel(&intent.0)
+            })
     }
 
     /// The meter setting whose bar is under the pointer, on the toolbar

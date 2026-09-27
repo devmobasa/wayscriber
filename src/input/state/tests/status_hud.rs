@@ -577,15 +577,11 @@ fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
     input.close_color_picker_popup(false);
     assert!(input.status_hud_contains(x, y));
 
-    // Command palette and tour (belt-and-braces: the backend intercepts
-    // these earlier for pointer/touch, but direct routing paths do not).
+    // Command palette (belt-and-braces: the backend intercepts it earlier
+    // for pointer/touch, but direct routing paths do not).
     input.command_palette.open();
     assert!(!input.status_hud_contains(x, y));
     input.command_palette.close();
-
-    input.tour.active = true;
-    assert!(!input.status_hud_contains(x, y));
-    input.tour.active = false;
     assert!(input.status_hud_contains(x, y));
 }
 

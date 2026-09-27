@@ -1,4 +1,5 @@
 use super::*;
+use crate::input::{ZoomAnchor, ZoomRequest};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn sync_input_zoom_state(&mut self) {
@@ -58,9 +59,9 @@ impl WaylandState {
         self.input_state.modal_owns_text_input() || self.input_state.toolbar_top_menu().is_open()
     }
 
-    pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, action: ZoomAction) {
-        let (sx, sy) = self.zoom_keyboard_anchor();
-        match action {
+    pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, request: ZoomRequest) {
+        let (sx, sy) = self.zoom_anchor_point(request.anchor);
+        match request.action {
             ZoomAction::In => {
                 self.apply_zoom_factor(Self::ZOOM_STEP_KEY, sx, sy, true);
             }
@@ -93,16 +94,12 @@ impl WaylandState {
         }
     }
 
-    fn zoom_keyboard_anchor(&self) -> (f64, f64) {
-        zoom_action_anchor(
+    fn zoom_anchor_point(&self, anchor: ZoomAnchor) -> (f64, f64) {
+        resolve_zoom_anchor(
+            anchor,
             self.focus
                 .pointer_focused()
                 .then_some(self.pointer.position()),
-            crate::ui::zoom_chip_geometry(
-                &self.input_state,
-                self.surface.width(),
-                self.surface.height(),
-            ),
             self.surface.width(),
             self.surface.height(),
         )
@@ -246,46 +243,47 @@ fn zoom_suppression_keyboard_policy(use_fallback: bool) -> OverlaySuppressionKey
     }
 }
 
-/// Chip clicks and unfocused keyboard actions zoom around the screen center.
-fn zoom_action_anchor(
+/// The screen point a zoom step centres on. A pointer anchor falls back to
+/// the screen centre when the pointer is not on the overlay.
+fn resolve_zoom_anchor(
+    anchor: ZoomAnchor,
     pointer: Option<(i32, i32)>,
-    chip: Option<(f64, f64, f64, f64)>,
     width: u32,
     height: u32,
 ) -> (f64, f64) {
-    if let Some((sx, sy)) = pointer {
-        let point = (sx as f64, sy as f64);
-        let on_chip = chip.is_some_and(|(x, y, w, h)| {
-            point.0 >= x && point.0 <= x + w && point.1 >= y && point.1 <= y + h
-        });
-        if !on_chip {
-            return point;
-        }
-    }
+    let center = (width as f64 * 0.5, height as f64 * 0.5);
 
-    (width as f64 * 0.5, height as f64 * 0.5)
+    match anchor {
+        ZoomAnchor::Pointer => pointer.map_or(center, |(x, y)| (x as f64, y as f64)),
+        ZoomAnchor::ScreenCenter => center,
+        ZoomAnchor::At(x, y) => (x as f64, y as f64),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Shortcuts zoom at the pointer; the chip, toolbar, and palette sit away
+    /// from what the user looks at and zoom the centre; a context menu zooms
+    /// where it was opened.
     #[test]
-    fn zoom_chip_anchor_is_center_and_canvas_anchor_remains_pointer() {
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        input.update_zoom_chip_layout(&crate::config::StatusBarStyle::default(), 1920, 1080);
-        let chip = crate::ui::zoom_chip_geometry(&input, 1920, 1080).unwrap();
-        let pointer = (
-            (chip.0 + chip.2 / 2.0) as i32,
-            (chip.1 + chip.3 / 2.0) as i32,
+    fn zoom_anchors_resolve_to_pointer_centre_or_menu_origin() {
+        assert_eq!(
+            resolve_zoom_anchor(ZoomAnchor::Pointer, Some((300, 200)), 1920, 1080),
+            (300.0, 200.0)
         );
         assert_eq!(
-            zoom_action_anchor(Some(pointer), Some(chip), 1920, 1080),
+            resolve_zoom_anchor(ZoomAnchor::Pointer, None, 1920, 1080),
             (960.0, 540.0)
         );
         assert_eq!(
-            zoom_action_anchor(Some((300, 200)), Some(chip), 1920, 1080),
-            (300.0, 200.0)
+            resolve_zoom_anchor(ZoomAnchor::ScreenCenter, Some((1850, 1050)), 1920, 1080),
+            (960.0, 540.0)
+        );
+        assert_eq!(
+            resolve_zoom_anchor(ZoomAnchor::At(12, 34), Some((1850, 1050)), 1920, 1080),
+            (12.0, 34.0)
         );
     }
 
