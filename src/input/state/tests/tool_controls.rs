@@ -428,6 +428,21 @@ fn nudge_thickness_for_active_tool_clamps_pen_thickness() {
     assert_eq!(state.style.current_thickness, 50.0);
 }
 
+/// Wheel, keyboard, and radial nudges share the whole-pixel step, so a
+/// fractional tool width moves to its neighbour instead of skipping one.
+#[test]
+fn nudging_a_fractional_tool_thickness_lands_on_the_adjacent_whole_pixel() {
+    let mut state = create_test_input_state();
+
+    assert!(state.set_thickness(30.8));
+    assert!(state.nudge_thickness_for_active_tool(1.0));
+    assert_eq!(state.style.current_thickness, 31.0);
+
+    assert!(state.set_thickness(30.8));
+    assert!(state.nudge_thickness_for_active_tool(-1.0));
+    assert_eq!(state.style.current_thickness, 30.0);
+}
+
 #[test]
 fn tool_color_and_thickness_are_independent_between_pen_and_marker() {
     let mut state = create_test_input_state();
