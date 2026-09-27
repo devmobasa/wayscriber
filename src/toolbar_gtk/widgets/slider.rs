@@ -240,18 +240,49 @@ fn update_accessible_value(area: &gtk4::DrawingArea, value: f64, format: fn(f64)
     ]);
 }
 
-fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> Option<f64> {
+/// How a navigation key moves a focused slider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SliderStep {
+    Down,
+    Up,
+    PageDown,
+    PageUp,
+    Min,
+    Max,
+}
+
+/// The keys a focused slider owns, keypad variants included. The key relay
+/// reads this same map, so the keys it leaves to a slider are exactly the
+/// keys the slider acts on.
+fn slider_step_for_key(key: gtk4::gdk::Key) -> Option<SliderStep> {
     use gtk4::gdk::Key;
-    let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
-    let value = match key {
-        Key::Left | Key::Down => value - step,
-        Key::Right | Key::Up => value + step,
-        Key::Page_Down => value - 10.0 * step,
-        Key::Page_Up => value + 10.0 * step,
-        Key::Home => spec.min,
-        Key::End => spec.max,
+
+    Some(match key {
+        Key::Left | Key::Down | Key::KP_Left | Key::KP_Down => SliderStep::Down,
+        Key::Right | Key::Up | Key::KP_Right | Key::KP_Up => SliderStep::Up,
+        Key::Page_Down | Key::KP_Page_Down => SliderStep::PageDown,
+        Key::Page_Up | Key::KP_Page_Up => SliderStep::PageUp,
+        Key::Home | Key::KP_Home => SliderStep::Min,
+        Key::End | Key::KP_End => SliderStep::Max,
         _ => return None,
+    })
+}
+
+pub(super) fn is_slider_navigation_key(key: gtk4::gdk::Key) -> bool {
+    slider_step_for_key(key).is_some()
+}
+
+fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> Option<f64> {
+    let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
+    let value = match slider_step_for_key(key)? {
+        SliderStep::Down => value - step,
+        SliderStep::Up => value + step,
+        SliderStep::PageDown => value - 10.0 * step,
+        SliderStep::PageUp => value + 10.0 * step,
+        SliderStep::Min => spec.min,
+        SliderStep::Max => spec.max,
     };
+
     Some(spec.normalize_value(value))
 }
 
@@ -374,7 +405,10 @@ pub(super) fn assert_focused_slider_escape_stays_local() {
     assert!(!handled, "Escape goes on to the focused slider");
     assert_eq!(
         rx.try_recv(),
-        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed)
+        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed {
+            released_keyboard: true
+        }),
+        "a bar slider drops the toolbar keyboard, so the overlay takes it back"
     );
     assert!(
         rx.try_recv().is_err(),
@@ -386,6 +420,29 @@ pub(super) fn assert_focused_slider_escape_stays_local() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn keypad_navigation_keys_move_the_slider_like_the_main_block() {
+        use gtk4::gdk::Key;
+        let spec = ToolbarSliderSpec::THICKNESS;
+
+        for (main, keypad) in [
+            (Key::Left, Key::KP_Left),
+            (Key::Right, Key::KP_Right),
+            (Key::Page_Up, Key::KP_Page_Up),
+            (Key::Page_Down, Key::KP_Page_Down),
+            (Key::Home, Key::KP_Home),
+            (Key::End, Key::KP_End),
+        ] {
+            assert_eq!(
+                keyboard_value(spec, 10.0, keypad),
+                keyboard_value(spec, 10.0, main),
+                "{keypad:?} matches {main:?}"
+            );
+            assert!(is_slider_navigation_key(keypad));
+        }
+        assert!(!is_slider_navigation_key(Key::Escape));
+    }
+
     #[test]
     fn keyboard_uses_shared_snapping_and_clamps_endpoints() {
         use gtk4::gdk::Key;

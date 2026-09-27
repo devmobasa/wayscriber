@@ -234,6 +234,7 @@ fn advance_post_dispatch_state(
     if break_on_requested_exit(state) {
         return true;
     }
+    state.focus.expire_keyboard_reclaim(Instant::now());
     state.sync_overlay_interactivity();
     state.apply_onboarding_hints();
     persist_post_dispatch_state(state);
@@ -283,7 +284,10 @@ fn event_loop_timeout(
         state.input_state.laser_ink_wake_after(now),
     );
     let autosave_timeout = session_save::autosave_timeout(state, now);
-    let focus_exit_timeout = state.focus.exit_timeout(now);
+    let focus_exit_timeout = min_timeout(
+        state.focus.exit_timeout(now),
+        state.focus.keyboard_reclaim_timeout(now),
+    );
     let base_timeout = if should_block {
         min_timeout(autosave_timeout, focus_exit_timeout)
     } else if !vsync_enabled && state.input_state.needs_redraw {
