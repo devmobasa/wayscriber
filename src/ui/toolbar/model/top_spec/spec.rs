@@ -30,7 +30,9 @@ pub(crate) struct TopStripPlan {
 }
 
 impl TopStripPlan {
-    pub(crate) const MAX_QUICK_COLORS: usize = 8;
+    /// Room for the whole built-in palette (11 colors); a longer custom
+    /// palette keeps the rest in the color picker, as a narrow strip does.
+    pub(crate) const MAX_QUICK_COLORS: usize = 12;
 
     pub(crate) fn unconstrained() -> Self {
         Self {

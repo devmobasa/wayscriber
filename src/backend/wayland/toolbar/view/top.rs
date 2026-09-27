@@ -58,7 +58,7 @@ const TOP_COMPACT_ISLAND_PAD: f64 = crate::ui::theme::toolbar::COMPACT_ISLAND_PA
 pub(crate) use model::TopStripPlan;
 
 /// Degrade the strip until it fits the viewport: quick swatches shrink
-/// 8→6→4→0 first, then droppable items move into the overflow menu.
+/// 12→8→6→4→0 first, then droppable items move into the overflow menu.
 pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopStripPlan {
     let mut plan = TopStripPlan::unconstrained();
     if snapshot.top_minimized || snapshot.top_micro_active() {
@@ -77,7 +77,7 @@ pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopS
     if fits(&plan) {
         return plan;
     }
-    for count in [6, 4, 0] {
+    for count in [8, 6, 4, 0] {
         plan.swatch_count = count;
         if fits(&plan) {
             return plan;

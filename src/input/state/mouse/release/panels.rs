@@ -235,12 +235,7 @@ pub(super) fn handle_properties_panel_release(
     if state.properties_panel_layout().is_none() {
         return true;
     }
-    if let Some(index) = state.properties_panel_index_at(x, y) {
-        state.set_properties_panel_focus(Some(index));
-        state.activate_properties_panel_entry_with(measurer);
-    } else {
-        state.close_properties_panel();
-    }
+    state.release_properties_panel_at_with(measurer, x, y);
     state.needs_redraw = true;
     true
 }

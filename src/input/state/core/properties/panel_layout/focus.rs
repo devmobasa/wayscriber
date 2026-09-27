@@ -4,6 +4,7 @@ impl InputState {
     pub fn set_properties_panel_focus(&mut self, focus: Option<usize>) {
         if let Some(panel) = self.properties.panel.as_mut() {
             panel.keyboard_focus = focus;
+            panel.focus_visible = focus.is_some();
         }
     }
 
@@ -13,7 +14,7 @@ impl InputState {
         self.properties
             .panel
             .as_ref()
-            .and_then(|panel| panel.keyboard_focus.or(panel.hover_index))
+            .and_then(|panel| panel.keyboard_focus.or(panel.hover_index()))
     }
 
     pub(crate) fn focus_next_properties_entry(&mut self) -> bool {
@@ -115,6 +116,7 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::types::PropertiesPanelHit;
     use super::*;
     use crate::config::KeybindingsConfig;
     use crate::draw::Shape;
@@ -148,7 +150,7 @@ mod tests {
         let mut state = make_state();
         open_rect_panel(&mut state);
         let panel = state.properties.panel.as_mut().expect("panel");
-        panel.hover_index = Some(1);
+        panel.hover = Some(PropertiesPanelHit::Row(1));
         panel.keyboard_focus = Some(0);
 
         assert_eq!(state.current_properties_focus_or_hover(), Some(0));
@@ -193,7 +195,7 @@ mod tests {
         let mut state = make_state();
         open_rect_panel(&mut state);
         let panel = state.properties.panel.as_mut().expect("panel");
-        panel.hover_index = Some(0);
+        panel.hover = Some(PropertiesPanelHit::Row(0));
         panel.keyboard_focus = None;
         panel.entries[1].disabled = true;
 

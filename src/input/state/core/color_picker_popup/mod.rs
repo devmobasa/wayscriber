@@ -96,6 +96,10 @@ pub enum ColorPickerTarget {
     QuickColor(usize),
     /// The paper color draft of the board picker's appearance sheet.
     BoardPaper,
+    /// The selected shapes, opened from the properties panel. Nothing is
+    /// previewed live: OK recolors the selection in one undoable edit and
+    /// Cancel leaves it untouched.
+    Selection,
 }
 
 impl ColorPickerTarget {
@@ -103,7 +107,9 @@ impl ColorPickerTarget {
     pub fn slot(self) -> Option<usize> {
         match self {
             ColorPickerTarget::QuickColor(index) => Some(index),
-            ColorPickerTarget::Tool | ColorPickerTarget::BoardPaper => None,
+            ColorPickerTarget::Tool
+            | ColorPickerTarget::BoardPaper
+            | ColorPickerTarget::Selection => None,
         }
     }
 

@@ -52,14 +52,17 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
     state.set_toolbar_use_icons(true);
     let mut snapshot = snapshot_from_state(&state);
 
-    // Unconstrained: presets shown, the pill's eight swatches available,
+    // Unconstrained: presets shown, the pill's full swatch row available,
     // nothing dropped into the overflow.
     let full = crate::backend::wayland::toolbar::view::top::plan_top_strip(
         &crate::ui_text::UiTextEngine::default(),
         &snapshot,
     );
     assert!(!full.drop_presets);
-    assert_eq!(full.swatch_count, 8);
+    assert_eq!(
+        full.swatch_count,
+        crate::ui::toolbar::model::TopStripPlan::MAX_QUICK_COLORS
+    );
     assert!(full.dropped_tools.is_empty() && full.dropped_utilities.is_empty());
     let full_width = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0;
 

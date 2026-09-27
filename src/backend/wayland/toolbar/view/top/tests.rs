@@ -1171,12 +1171,14 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
             label: "Color".to_string(),
             value: "Red".to_string(),
             kind: crate::input::SelectionPropertyKind::Color,
+            state: crate::input::SelectionPropertyKind::Color.unknown_value(),
             disabled: false,
         },
         crate::input::SelectionPropertyEntry {
             label: "Thickness".to_string(),
             value: "3.0px".to_string(),
             kind: crate::input::SelectionPropertyKind::Thickness,
+            state: crate::input::SelectionPropertyKind::Thickness.unknown_value(),
             disabled: false,
         },
     ];

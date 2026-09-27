@@ -124,7 +124,12 @@ pub use menus::{
     ContextSubmenu, MenuCommand, SubmenuSide,
 };
 pub use menus::{SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY};
-pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
+pub(crate) use properties::metrics as properties_panel_metrics;
+pub use properties::{
+    PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
+    PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry,
+    SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
+};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,
     RadialMenuPanel, RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice,

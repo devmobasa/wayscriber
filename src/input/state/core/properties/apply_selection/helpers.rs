@@ -11,7 +11,7 @@ pub(in crate::input::state::core) struct SelectionApplyResult {
 }
 
 impl InputState {
-    pub(super) fn selection_primary_color(&self) -> Option<Color> {
+    pub(crate) fn selection_primary_color(&self) -> Option<Color> {
         let frame = self.boards.active_frame();
         for id in self.selected_shape_ids() {
             let Some(drawn) = frame.shape(*id) else {

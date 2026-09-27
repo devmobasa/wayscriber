@@ -139,6 +139,7 @@ fn selection_property_entry(
         label: label.to_string(),
         value: value.to_string(),
         kind,
+        state: kind.unknown_value(),
         disabled,
     }
 }

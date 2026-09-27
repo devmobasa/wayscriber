@@ -13,6 +13,11 @@ pub(crate) use core::{
     DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
+pub(crate) use core::{
+    PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
+    PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry, ShapePropertiesPanel,
+    properties_panel_metrics,
+};
 pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
 pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};
 pub(crate) use text_resources::InputTextResources;
@@ -50,11 +55,11 @@ pub use core::{
     RadialSegmentId, RadialSlice, RadialSliceKind, RegionInputSource, RegionPurposeTag,
     RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
     SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY, ScreenCaptureSource, SelectionAxis, SelectionHandle,
-    SelectionPolicy, SelectionPropertyEntry, SelectionPropertyKind, ShellMode, SubmenuSide,
-    TextInputMode, Toast, ToastPriority, ToastPushOutcome, TourStep, UI_TOAST_DURATION_MS,
-    UiToastKind, UiVisibility, ZoomAction, color_picker_rgb_to_hsv, compass_slice,
-    font_picker_layout, font_picker_rows, size_ring_angle_for_value, size_ring_value_for_angle,
-    slice_parent, sub_ring_child_count, sub_ring_children,
+    SelectionPolicy, SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue,
+    ShellMode, SubmenuSide, TextInputMode, Toast, ToastPriority, ToastPushOutcome, TourStep,
+    UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction, color_picker_rgb_to_hsv,
+    compass_slice, font_picker_layout, font_picker_rows, size_ring_angle_for_value,
+    size_ring_value_for_angle, slice_parent, sub_ring_child_count, sub_ring_children,
 };
 #[allow(unused_imports)]
 pub(crate) use core::{

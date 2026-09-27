@@ -288,7 +288,7 @@ impl StylePillSpec {
             // swatches (the color chip stays either way). Hiding the item
             // hides the swatch row.
             if toolbar_item_visible(snapshot, ids::TOP_GROUP_QUICK_COLORS) {
-                // Swatches follow the strip's width-degradation plan (8→6→4→0)
+                // Swatches follow the strip's width-degradation plan (12→8→6→4→0)
                 // so the pill narrows with the islands above it.
                 let count = snapshot
                     .quick_colors

@@ -68,12 +68,18 @@ mod tests {
     fn panel() -> ShapePropertiesPanel {
         ShapePropertiesPanel {
             title: "Properties".into(),
+            subtitle: None,
+            details: None,
+            lock: crate::input::state::PropertiesPanelLock::Unlocked,
             anchor: (10.0, 20.0),
             anchor_rect: None,
-            lines: Vec::new(),
             entries: Vec::new(),
-            hover_index: None,
+            swatches: Vec::new(),
+            preview_color: None,
+            hover: None,
+            pressed: None,
             keyboard_focus: None,
+            focus_visible: false,
             multiple_selection: false,
         }
     }
