@@ -239,6 +239,24 @@ impl TopBar {
                     );
                     let sender = self.feedback.clone();
                     let event = control.click_event(snapshot);
+                    // The wheel over the numeral steps its value, as over the
+                    // track; the model says which slider the numeral belongs to.
+                    if let Some(slider) = model::StylePillSlider::for_wheel(&event) {
+                        let scroll = gtk4::EventControllerScroll::new(
+                            gtk4::EventControllerScrollFlags::VERTICAL
+                                | gtk4::EventControllerScrollFlags::DISCRETE,
+                        );
+                        let scroll_sender = self.feedback.clone();
+                        scroll.connect_scroll(move |_, _, dy| {
+                            // Positive dy scrolls down; the value rises on up.
+                            let steps = (dy.round() as i32).saturating_neg();
+                            if let Some(event) = slider.nudge_event(steps).filter(|_| steps != 0) {
+                                send_event(&scroll_sender, event);
+                            }
+                            gtk4::glib::Propagation::Stop
+                        });
+                        button.add_controller(scroll);
+                    }
                     button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });

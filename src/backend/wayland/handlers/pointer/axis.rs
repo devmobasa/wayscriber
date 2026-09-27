@@ -132,7 +132,7 @@ impl WaylandState {
         self.handle_pointer_axis_inner(event, routed, vertical, source);
         // A finished scroll leaves no half notch waiting on a meter.
         if stopped {
-            self.toolbar_chrome.meter_wheel_mut().reset();
+            self.toolbar_chrome.reset_wheels();
         }
         finalize_spotlight_wheel_if_axis_stopped(
             &mut self.input_state,
@@ -221,19 +221,21 @@ impl WaylandState {
             // surface, including toolbar popovers left open beneath them. A
             // top-strip wheel without a scrollable popover is also consumed.
             AxisSurfaceRoute::Consumed => {
-                self.toolbar_chrome.meter_wheel_mut().reset();
+                self.toolbar_chrome.reset_wheels();
                 return;
             }
             // Meters receive raw frames, including tiny vertical travel and
             // horizontal-only frames that preserve a pending vertical notch.
             // Canvas/Session/Settings popovers use the shared direction gate.
             AxisSurfaceRoute::ScrollTopPopover => {
-                if !self.step_style_meter_by_wheel(&event.surface, event.position, vertical) {
+                if !self.step_style_meter_by_wheel(&event.surface, event.position, vertical)
+                    && !self.step_style_slider_by_wheel(&event.surface, event.position, vertical)
+                {
                     self.scroll_top_popover_by_wheel(scroll_direction);
                 }
                 return;
             }
-            AxisSurfaceRoute::Canvas => self.toolbar_chrome.meter_wheel_mut().reset(),
+            AxisSurfaceRoute::Canvas => self.toolbar_chrome.reset_wheels(),
         }
         // Everything below this line acts on the canvas or the active tool.
         // A surface covering the canvas has to stop here even when it has

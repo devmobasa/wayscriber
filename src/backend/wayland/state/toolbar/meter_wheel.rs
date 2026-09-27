@@ -1,6 +1,6 @@
-//! Wheel steps for the built-in style pill's level meters.
+//! Wheel steps for the built-in style pill's level meters and sliders.
 //!
-//! One meter level per wheel notch. A high-resolution wheel reports a notch as
+//! One meter level (or slider step) per wheel notch. A high-resolution wheel reports a notch as
 //! several `value120` frames and a touchpad as a stream of continuous deltas,
 //! so neither frame alone is a notch: partial amounts accumulate here, per
 //! meter, until they add up to whole levels. The GTK meters get the same
@@ -24,26 +24,33 @@ enum WheelUnit {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct PartialScroll {
-    setting: StrokeSetting,
+struct PartialScroll<K> {
+    setting: K,
     unit: WheelUnit,
     amount: f64,
 }
 
-/// Partial wheel travel over one meter, waiting to make a whole level.
-#[derive(Debug, Default)]
-pub(in crate::backend::wayland) struct MeterWheel {
-    partial: Option<PartialScroll>,
+/// Partial wheel travel over one control, waiting to make a whole level.
+/// `K` names the control: a meter's setting, or a style-pill slider.
+#[derive(Debug)]
+pub(in crate::backend::wayland) struct MeterWheel<K = StrokeSetting> {
+    partial: Option<PartialScroll<K>>,
 }
 
-impl MeterWheel {
+impl<K> Default for MeterWheel<K> {
+    fn default() -> Self {
+        Self { partial: None }
+    }
+}
+
+impl<K: Copy + PartialEq> MeterWheel<K> {
     /// Folds one vertical axis frame over the meter for `setting` into whole
     /// levels, in Wayland's sign (positive scrolls down). A frame carrying
     /// `value120` or continuous travel may complete zero, one, or several
     /// levels; a legacy discrete frame is its own count of notches.
     pub(in crate::backend::wayland) fn levels(
         &mut self,
-        setting: StrokeSetting,
+        setting: K,
         value120: i32,
         discrete: i32,
         absolute: f64,
@@ -83,19 +90,13 @@ impl MeterWheel {
 
     /// Keeps partial travel only while the pointer stays on the meter it was
     /// gathered over; `None` (off every meter) or another meter drops it.
-    pub(in crate::backend::wayland) fn keep_only(&mut self, setting: Option<StrokeSetting>) {
+    pub(in crate::backend::wayland) fn keep_only(&mut self, setting: Option<K>) {
         if self.partial.map(|partial| partial.setting) != setting {
             self.partial = None;
         }
     }
 
-    fn accumulate(
-        &mut self,
-        setting: StrokeSetting,
-        unit: WheelUnit,
-        delta: f64,
-        per_level: f64,
-    ) -> i32 {
+    fn accumulate(&mut self, setting: K, unit: WheelUnit, delta: f64, per_level: f64) -> i32 {
         let previous = self
             .partial
             .filter(|partial| partial.setting == setting && partial.unit == unit)

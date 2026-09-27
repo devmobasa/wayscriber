@@ -484,6 +484,9 @@ pub mod toolbar {
     pub const COLOR_TRACK_BACKGROUND: Rgba = (0.5, 0.5, 0.6, 0.6);
     /// Slider knob (accent at reduced alpha)
     pub const COLOR_TRACK_KNOB: Rgba = rgba(ACCENT_RGB, 0.9);
+    /// Reference ticks on a slider track: faint enough to read as marks on
+    /// both the grey track and its accent fill.
+    pub const COLOR_TRACK_TICK: Rgba = (1.0, 1.0, 1.0, 0.45);
     /// Empty level-meter bar under the pointer: the track, brightened so the
     /// bar reads as the click target.
     pub const COLOR_METER_TRACK_HOVER: Rgba = (0.5, 0.5, 0.6, 0.9);

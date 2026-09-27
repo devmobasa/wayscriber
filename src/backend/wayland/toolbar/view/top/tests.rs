@@ -844,7 +844,7 @@ fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
         .expect("pill thickness slider");
     let spec = model::ToolbarSliderSpec::THICKNESS;
     match slider.kind {
-        WidgetKind::Slider { t } => {
+        WidgetKind::Slider { t, .. } => {
             assert!((t - spec.t_from_value(snapshot.thickness)).abs() < 1e-9);
         }
         ref other => panic!("slider kind, got {other:?}"),

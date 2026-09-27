@@ -335,14 +335,15 @@ fn paint_node(
         WidgetKind::SmoothingPreview { level } => {
             crate::toolbar_icons::draw_smoothing_preview(ctx, node.rect, *level);
         }
-        WidgetKind::Slider { t } => {
+        WidgetKind::Slider { t, spec } => {
             // Track and knob: a rounded track with the accent knob riding the
-            // inset travel.
+            // inset travel, and the spec's reference ticks between them.
             let track_h = (h * 0.5).min(8.0);
             let track_y = y + (h - track_h) / 2.0;
             set_color(ctx, COLOR_TRACK_BACKGROUND);
             draw_round_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
             let _ = ctx.fill();
+            crate::toolbar_icons::draw_slider_ticks(ctx, node.rect, spec.tick_positions());
             draw_slider_knob(ctx, node.rect, *t);
         }
         WidgetKind::OpacitySlider { t, paint } => {

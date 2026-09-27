@@ -168,7 +168,7 @@ fn assert_builtin_style_pill_control_kind(
             );
             assert_eq!(*selected, control.active(snapshot), "{name}: {id}");
         }
-        (model::StylePillRole::Slider, W::Slider { t }) => {
+        (model::StylePillRole::Slider, W::Slider { t, .. }) => {
             assert_builtin_style_pill_slider(name, snapshot, *t, None, id, control);
         }
         (model::StylePillRole::Slider, W::OpacitySlider { t, paint }) => {

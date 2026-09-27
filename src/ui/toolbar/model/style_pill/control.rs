@@ -316,12 +316,15 @@ impl StylePillControl {
                     .and_then(|action| snapshot.binding_hints.binding_for_action(action));
                 Some(format_quick_color_tooltip(&entry.label, binding))
             }
-            Self::ThicknessValue => Some(
-                ToolContext::from_snapshot(snapshot)
-                    .thickness_label
-                    .to_string(),
-            ),
-            Self::FontSizeValue => Some("Text size".to_string()),
+            // The numeral looks like a label, so its tooltip says it takes a
+            // typed value and the wheel.
+            Self::ThicknessValue => Some(format!(
+                "{} \u{2014} click to type, scroll to adjust",
+                ToolContext::from_snapshot(snapshot).thickness_label
+            )),
+            Self::FontSizeValue => {
+                Some("Text size \u{2014} click to type, scroll to adjust".to_string())
+            }
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Some("Magnification; Freeze first when using a transparent board.".to_string())
             }

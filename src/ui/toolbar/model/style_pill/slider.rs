@@ -37,6 +37,55 @@ impl StylePillSlider {
         }
     }
 
+    /// The slider a wheel over a style-pill hit steps: its track, or the
+    /// numeral beside it, which opens precise entry on click.
+    pub(crate) fn for_wheel(event: &ToolbarEvent) -> Option<Self> {
+        use crate::ui::toolbar::PrecisionEntryTarget;
+
+        match event {
+            ToolbarEvent::SetThickness(_)
+            | ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::Thickness) => {
+                Some(Self::Thickness)
+            }
+            ToolbarEvent::SetMarkerOpacity(_) => Some(Self::Opacity),
+            ToolbarEvent::SetSpotlightMagnification(_) => Some(Self::SpotlightMagnification),
+            ToolbarEvent::SetFontSize(_)
+            | ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::FontSize) => {
+                Some(Self::FontSize)
+            }
+            _ => None,
+        }
+    }
+
+    /// A relative step by `steps` spec steps, for sliders the input side
+    /// steps itself: thickness follows the active tool (eraser size included)
+    /// and lands on whole pixels, text size clamps to its range.
+    pub(crate) fn nudge_event(self, steps: i32) -> Option<ToolbarEvent> {
+        let steps = f64::from(steps);
+
+        match self {
+            Self::Thickness => Some(ToolbarEvent::NudgeThickness(
+                steps * ToolbarSliderSpec::THICKNESS.step.unwrap_or(1.0),
+            )),
+            Self::FontSize => Some(ToolbarEvent::NudgeFontSize(
+                steps * ToolbarSliderSpec::FONT_SIZE.step.unwrap_or(1.0),
+            )),
+            Self::Opacity | Self::SpotlightMagnification => None,
+        }
+    }
+
+    /// The event a wheel stepping `steps` spec steps (positive raises the
+    /// value) applies, from the value in `snapshot`.
+    pub(crate) fn wheel_event(self, snapshot: &ToolbarSnapshot, steps: i32) -> ToolbarEvent {
+        if let Some(event) = self.nudge_event(steps) {
+            return event;
+        }
+
+        let (spec, value) = self.value(snapshot);
+        let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
+        self.event(spec.normalize_value(value + step * f64::from(steps)))
+    }
+
     pub(crate) fn event(self, value: f64) -> ToolbarEvent {
         match self {
             Self::Thickness => ToolbarEvent::SetThickness(value),
@@ -103,6 +152,50 @@ mod tests {
         snapshot.color = color;
         snapshot.marker_opacity = marker_opacity;
         snapshot
+    }
+
+    /// A wheel over a slider's track or its numeral steps that slider:
+    /// thickness and text size relatively (so eraser size and whole pixels
+    /// follow the input side), opacity from the snapshot's value.
+    #[test]
+    fn a_wheel_over_a_track_or_numeral_steps_that_slider() {
+        use crate::ui::toolbar::PrecisionEntryTarget;
+
+        let thickness = StylePillSlider::for_wheel(&ToolbarEvent::SetThickness(12.0));
+        let numeral = StylePillSlider::for_wheel(&ToolbarEvent::OpenPrecisionEntry(
+            PrecisionEntryTarget::Thickness,
+        ));
+        assert_eq!(thickness, Some(StylePillSlider::Thickness));
+        assert_eq!(numeral, Some(StylePillSlider::Thickness));
+        assert_eq!(
+            StylePillSlider::for_wheel(&ToolbarEvent::OpenPrecisionEntry(
+                PrecisionEntryTarget::FontSize
+            )),
+            Some(StylePillSlider::FontSize)
+        );
+        assert_eq!(StylePillSlider::for_wheel(&ToolbarEvent::Undo), None);
+
+        let snapshot = snapshot(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            0.4,
+        );
+        assert_eq!(
+            StylePillSlider::Thickness.wheel_event(&snapshot, -2),
+            ToolbarEvent::NudgeThickness(-2.0)
+        );
+        assert_eq!(
+            StylePillSlider::FontSize.wheel_event(&snapshot, 1),
+            ToolbarEvent::NudgeFontSize(2.0)
+        );
+        match StylePillSlider::Opacity.wheel_event(&snapshot, 1) {
+            ToolbarEvent::SetMarkerOpacity(value) => assert!((value - 0.45).abs() < 1e-9),
+            other => panic!("unexpected {other:?}"),
+        }
     }
 
     /// The previews show the alpha the stroke will actually get: a 20% color

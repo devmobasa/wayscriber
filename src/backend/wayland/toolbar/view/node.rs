@@ -181,8 +181,12 @@ pub enum WidgetKind {
     HitArea,
     /// Horizontal slider track with a round knob at normalized position
     /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
-    /// (`HitKind::DragSet*`); the paint only shows the current value.
-    Slider { t: f64 },
+    /// (`HitKind::DragSet*`); the paint only shows the current value, plus
+    /// the spec's reference ticks.
+    Slider {
+        t: f64,
+        spec: crate::ui::toolbar::model::ToolbarSliderSpec,
+    },
     /// The marker opacity slider: a [`WidgetKind::Slider`] whose track fades
     /// from clear to solid in the stroke color (`paint.alpha_stops`).
     OpacitySlider {

@@ -169,8 +169,7 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             ToolbarSliderSpec {
                 min,
                 max,
-                step: ToolbarSliderSpec::THICKNESS.step,
-                snap_to_step: ToolbarSliderSpec::THICKNESS.snap_to_step,
+                ..ToolbarSliderSpec::THICKNESS
             },
             hit,
             x,
@@ -180,8 +179,7 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             ToolbarSliderSpec {
                 min,
                 max,
-                step: ToolbarSliderSpec::MARKER_OPACITY.step,
-                snap_to_step: ToolbarSliderSpec::MARKER_OPACITY.snap_to_step,
+                ..ToolbarSliderSpec::MARKER_OPACITY
             },
             hit,
             x,
@@ -535,9 +533,18 @@ mod tests {
         let (press, start_drag) = intent_for_hit(&hit, 200.0, 10.0).expect("press intent");
         let drag = drag_intent_for_hit(&hit, 200.0, 10.0).expect("drag intent");
 
+        // The thickness track is curved, so its midpoint is not the linear
+        // midpoint of 10-20; press and drag both follow the spec's curve.
+        let midpoint = ToolbarSliderSpec {
+            min: 10.0,
+            max: 20.0,
+            ..ToolbarSliderSpec::THICKNESS
+        }
+        .value_from_t(0.5);
         assert!(start_drag);
-        assert_set_thickness(press.0, 15.0);
-        assert_set_thickness(drag.0, 15.0);
+        assert!(midpoint < 15.0, "the curve favours the low end: {midpoint}");
+        assert_set_thickness(press.0, midpoint);
+        assert_set_thickness(drag.0, midpoint);
     }
 
     /// The only two phase-sensitive kinds, pinned so the shared mapper cannot

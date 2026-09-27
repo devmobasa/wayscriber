@@ -1487,6 +1487,7 @@ top_controls = [
 - **Settings**: Settings is always reachable from the top-strip overflow popover.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the Canvas popover's Step section.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
+- **Style pill sliders**: the thickness slider gives half its track to 1–10 px, with faint ticks at 5, 10, and 20 px, and lands on whole pixels. Scroll over any style-pill slider, or over the thickness or text-size number beside it, to step it; click the number to type a value.
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.

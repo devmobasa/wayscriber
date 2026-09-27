@@ -94,6 +94,11 @@ impl SliderRow {
                 rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
                 set_color(ctx, COLOR_TRACK_FILL);
                 let _ = ctx.fill();
+                crate::toolbar_icons::draw_slider_ticks(
+                    ctx,
+                    (0.0, 0.0, w, h),
+                    draw_state.spec.tick_positions(),
+                );
             }
             // Knob
             let knob_r = (h / 2.0).min(7.0);
@@ -156,6 +161,7 @@ impl SliderRow {
         let key_state = state.clone();
         let key_area = area.clone();
         let key_label = value_label.clone();
+        let key_change = change.clone();
         key.connect_key_pressed(move |_, key, _, _| {
             if key == gtk4::gdk::Key::Escape {
                 if !key_state.dragging.get() {
@@ -179,12 +185,38 @@ impl SliderRow {
                 key_label.set_text(&format(value));
                 update_accessible_value(&key_area, value, format);
                 key_area.queue_draw();
-                change(value);
+                key_change(value);
             }
             gtk4::glib::Propagation::Stop
         });
         area.add_controller(key);
         area.connect_has_focus_notify(|area| area.queue_draw());
+
+        // One step per wheel notch, like the arrow keys; GTK's discrete
+        // controller folds high-resolution and touchpad travel into notches.
+        let scroll = gtk4::EventControllerScroll::new(
+            gtk4::EventControllerScrollFlags::VERTICAL | gtk4::EventControllerScrollFlags::DISCRETE,
+        );
+        let scroll_state = state.clone();
+        let scroll_area = area.clone();
+        let scroll_label = value_label.clone();
+        let scroll_change = change.clone();
+        scroll.connect_scroll(move |_, _, dy| {
+            if scroll_state.dragging.get() {
+                return gtk4::glib::Propagation::Stop;
+            }
+            let Some(value) = wheel_value(scroll_state.spec, scroll_state.value.get(), dy) else {
+                return gtk4::glib::Propagation::Stop;
+            };
+
+            scroll_state.value.set(value);
+            scroll_label.set_text(&format(value));
+            update_accessible_value(&scroll_area, value, format);
+            scroll_area.queue_draw();
+            scroll_change(value);
+            gtk4::glib::Propagation::Stop
+        });
+        area.add_controller(scroll);
 
         root.append(&area);
         root.append(&value_label);
@@ -270,6 +302,18 @@ fn slider_step_for_key(key: gtk4::gdk::Key) -> Option<SliderStep> {
 
 pub(super) fn is_slider_navigation_key(key: gtk4::gdk::Key) -> bool {
     slider_step_for_key(key).is_some()
+}
+
+/// The value one wheel movement of `dy` notches reaches (positive `dy`
+/// scrolls down and lowers it), or `None` for travel under half a notch.
+fn wheel_value(spec: ToolbarSliderSpec, value: f64, dy: f64) -> Option<f64> {
+    let notches = -dy.round();
+    if notches == 0.0 {
+        return None;
+    }
+
+    let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
+    Some(spec.normalize_value(value + notches * step))
 }
 
 fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> Option<f64> {
@@ -420,6 +464,20 @@ pub(super) fn assert_focused_slider_escape_stays_local() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_wheel_notch_steps_the_slider_one_step_and_up_raises_it() {
+        let spec = ToolbarSliderSpec::THICKNESS;
+
+        assert_eq!(wheel_value(spec, 10.0, -1.0), Some(11.0));
+        assert_eq!(wheel_value(spec, 10.0, 2.0), Some(8.0));
+        assert_eq!(wheel_value(spec, 50.0, -1.0), Some(50.0));
+        assert_eq!(wheel_value(spec, 10.0, 0.2), None);
+        assert_eq!(
+            wheel_value(ToolbarSliderSpec::MARKER_OPACITY, 0.4, -1.0).map(|v| (v * 100.0).round()),
+            Some(45.0)
+        );
+    }
+
     #[test]
     fn keypad_navigation_keys_move_the_slider_like_the_main_block() {
         use gtk4::gdk::Key;
