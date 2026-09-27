@@ -28,20 +28,17 @@ fn first_run_skip_requires_active_onboarding_and_visible_card() {
 #[test]
 fn first_run_card_hides_for_each_modal_state() {
     let modal_cases = [
-        (true, false, false, false, false, false, false), // presenter
-        (false, true, false, false, false, false, false), // palette
-        (false, false, true, false, false, false, false), // help
-        (false, false, false, true, false, false, false), // radial
-        (false, false, false, false, true, false, false), // context menu
-        (false, false, false, false, false, true, false), // tour
-        (false, false, false, false, false, false, true), // zoom
+        (true, false, false, false, false, false), // presenter
+        (false, true, false, false, false, false), // palette
+        (false, false, true, false, false, false), // help
+        (false, false, false, true, false, false), // radial
+        (false, false, false, false, true, false), // context menu
+        (false, false, false, false, false, true), // zoom
     ];
 
     for case in modal_cases {
         assert!(
-            first_run_card_hidden_by_ui_state(
-                case.0, case.1, case.2, case.3, case.4, case.5, case.6
-            ),
+            first_run_card_hidden_by_ui_state(case.0, case.1, case.2, case.3, case.4, case.5),
             "expected modal case to hide onboarding card"
         );
     }
@@ -50,7 +47,7 @@ fn first_run_card_hides_for_each_modal_state() {
 #[test]
 fn first_run_card_remains_visible_without_modal_states() {
     assert!(!first_run_card_hidden_by_ui_state(
-        false, false, false, false, false, false, false
+        false, false, false, false, false, false
     ));
 }
 
@@ -630,4 +627,67 @@ fn first_run_holds_the_toolbar_through_the_tour_and_first_session() {
         !first_run_holds_toolbar(&state),
         "a skipped tour holds nothing"
     );
+}
+
+/// A replay on a profile that already answered the background prompt runs
+/// the cards again and ends after "Find anything", giving the saved usage
+/// back as it completes.
+#[test]
+fn a_replay_runs_the_cards_again_and_restores_usage_on_completion() {
+    let environment = tour_environment();
+    let mut state = OnboardingState {
+        first_run_completed: true,
+        first_run_background_mode_prompted: true,
+        used_radial_menu: true,
+        used_context_menu_right_click: true,
+        used_help_overlay: true,
+        used_command_palette: true,
+        ..OnboardingState::default()
+    };
+    state.begin_first_run_replay();
+
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(state.active_step, Some(FirstRunStep::DrawUndo));
+    state.first_stroke_done = true;
+    state.first_undo_done = true;
+    state.first_run_toolbar_exit_seen = true;
+    state.first_color_done = true;
+    state.first_thickness_done = true;
+    advance_first_run_steps(&mut state, environment);
+    assert_eq!(
+        state.active_step,
+        Some(FirstRunStep::QuickAccess),
+        "cleared usage makes quick access teach again"
+    );
+
+    state.used_radial_menu = true;
+    state.used_context_menu_right_click = true;
+    state.used_help_overlay = true;
+    state.used_command_palette = true;
+    let advance = advance_first_run_steps(&mut state, environment);
+
+    assert!(advance.completed);
+    assert!(state.first_run_completed);
+    assert_eq!(state.first_run_replay_saved_usage, None);
+}
+
+/// Skipping a replay (the card's Skip tour, which marks the tour finished)
+/// gives the saved usage back on the next step-machine pass.
+#[test]
+fn a_skipped_replay_gives_the_saved_usage_back() {
+    let mut state = OnboardingState {
+        first_run_completed: true,
+        first_run_background_mode_prompted: true,
+        used_help_overlay: true,
+        ..OnboardingState::default()
+    };
+    state.begin_first_run_replay();
+    state.first_run_skipped = true;
+    state.first_run_completed = true;
+
+    let advance = advance_first_run_steps(&mut state, tour_environment());
+
+    assert!(advance.changed);
+    assert!(state.used_help_overlay);
+    assert_eq!(state.first_run_replay_saved_usage, None);
 }

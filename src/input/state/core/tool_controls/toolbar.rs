@@ -168,10 +168,6 @@ impl InputState {
         self.toolbar.top_menu()
     }
 
-    pub(crate) fn toolbar_rebind_click_label(&self) -> Option<&'static str> {
-        self.toolbar.rebind_modifier().click_label()
-    }
-
     /// How the style pill shows pen smoothing and Shape Pen sensitivity.
     pub(crate) fn toolbar_stroke_controls(&self) -> crate::config::ToolbarStrokeControls {
         self.toolbar.stroke_controls()
@@ -190,10 +186,6 @@ impl InputState {
 
     pub(crate) fn hide_toolbar_visibility(&mut self) {
         self.toolbar.hide();
-    }
-
-    pub(crate) fn show_toolbar_visibility(&mut self) {
-        self.toolbar.show();
     }
 
     pub(crate) fn set_toolbar_top_pinned(&mut self, pinned: bool) {
@@ -426,14 +418,6 @@ impl InputState {
     ) {
         self.toolbar
             .override_customization_for_test(items_open, group, status_bar_contents_open);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_set_toolbar_rebind_modifier(
-        &mut self,
-        modifier: crate::config::ToolbarRebindModifier,
-    ) {
-        self.toolbar.override_rebind_modifier_for_test(modifier);
     }
 
     #[cfg(test)]

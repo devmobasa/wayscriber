@@ -466,13 +466,6 @@ impl WaylandState {
             width,
             height,
         );
-        crate::ui::render_tour_with_engine(
-            self.render.ui_text(),
-            ctx,
-            &self.input_state,
-            width,
-            height,
-        );
     }
 
     /// The scan band while recognition runs, then the outcome card. The card

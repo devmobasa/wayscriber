@@ -29,7 +29,6 @@ mod status;
 mod text_highlight;
 pub mod theme;
 mod toasts;
-mod tour;
 
 pub(crate) use arrow_bend_handle::render_arrow_bend_handle;
 pub use board_picker::render_board_picker;
@@ -117,8 +116,6 @@ pub(crate) use toasts::{
     preset_toast_geometry_with_engine, render_preset_toast_with_engine,
     render_ui_toast_with_engine, ui_toast_geometry_with_engine,
 };
-pub use tour::render_tour;
-pub(crate) use tour::render_tour_with_engine;
 
 #[cfg(test)]
 #[path = "ui/tests/theme_compatibility.rs"]

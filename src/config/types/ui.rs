@@ -118,7 +118,7 @@ pub struct UiConfig {
     pub show_capabilities_warning: bool,
 
     /// Show automatic first-run guidance, discovery tips, and shortcut coaching.
-    /// The guided tour remains available manually when this is disabled.
+    /// Replay Tour still runs the first-run cards on request when this is disabled.
     #[serde(default = "default_show_onboarding_hints")]
     pub show_onboarding_hints: bool,
 

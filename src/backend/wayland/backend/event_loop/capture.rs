@@ -228,6 +228,7 @@ fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) 
         PendingBackendAction::ClearSavedToolState => {
             state.handle_clear_saved_tool_state_action();
         }
+        PendingBackendAction::ReplayFirstRunTour => state.replay_first_run_tour(),
     }
 }
 

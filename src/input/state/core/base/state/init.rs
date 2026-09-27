@@ -90,7 +90,6 @@ impl InputState {
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,
             preset_slots: Default::default(),
-            tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
             recognition_feedback: Default::default(),
             restore_notice: None,

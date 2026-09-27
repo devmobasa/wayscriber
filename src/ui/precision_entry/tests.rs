@@ -1,10 +1,7 @@
 use super::*;
-use crate::draw::TextMeasurer;
-use crate::input::state::InputTextResources;
 use crate::ui::onboarding_card::{
     OnboardingCard, OnboardingChecklistItem, render_onboarding_card_with_engine,
 };
-use crate::ui::tour::render_tour_with_engine;
 
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
     let mut surface =
@@ -32,7 +29,6 @@ fn assert_owner_parity(
 #[test]
 fn retained_overlay_owner_matches_fresh_across_density_and_visible_state_changes() {
     let engine = UiTextEngine::default();
-    let measurer = TextMeasurer::default();
     let mut state = crate::input::state::test_support::make_test_input_state();
     let mut card = OnboardingCard {
         eyebrow: "你好 Καλημέρα onboarding".into(),
@@ -60,21 +56,5 @@ fn retained_overlay_owner_matches_fresh_across_density_and_visible_state_changes
             render_onboarding_card_with_engine(engine, ctx, 420, 360, &card, None);
         });
         assert!(before != after, "checklist completion must remain visible");
-        state.start_tour_with_resources(InputTextResources {
-            measurer: &measurer,
-            ui_engine: &engine,
-        });
-        let first = assert_owner_parity(&engine, density, |engine, ctx| {
-            render_tour_with_engine(engine, ctx, &state, 420, 360)
-        });
-        state.tour_next();
-        let next = assert_owner_parity(&engine, density, |engine, ctx| {
-            render_tour_with_engine(engine, ctx, &state, 420, 360)
-        });
-        assert!(
-            first != next,
-            "tour navigation must update the painted step"
-        );
-        state.end_tour();
     }
 }

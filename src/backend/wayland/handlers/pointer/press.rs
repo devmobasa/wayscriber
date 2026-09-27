@@ -223,9 +223,6 @@ impl WaylandState {
         button: u32,
         help_press_source: HelpOverlayPressSource,
     ) -> bool {
-        if self.input_state.tour.is_active() {
-            return true;
-        }
         // Help is modal: remember the target so release can require the same row.
         if self.input_state.help_overlay.is_visible() {
             match routed.screen {

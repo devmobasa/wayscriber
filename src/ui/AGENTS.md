@@ -5,7 +5,7 @@
 - The sibling root `src/ui.rs` is governed by `src/AGENTS.md`.
 
 ## Architecture
-- Owns Cairo-rendered overlay UI pieces: status, help overlay, command palette, context menu, board picker, properties panel, radial menu, onboarding card, color picker popup, toasts, tour UI, and primitives.
+- Owns Cairo-rendered overlay UI pieces: status, help overlay, command palette, context menu, board picker, properties panel, radial menu, onboarding card, color picker popup, toasts, and primitives.
 - `toolbar/` owns input-side toolbar model/snapshot/apply plumbing, distinct from runtime backend toolbar rendering.
 - `render_context.rs` defines the borrowed `UiRenderCtx` and `UiRenderCaches` owner for help layouts and radial surfaces. The runtime owns these resources; help hit geometry and text measurement are separate concerns.
 

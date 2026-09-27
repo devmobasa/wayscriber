@@ -186,6 +186,52 @@ pub struct OnboardingState {
     /// stored here because they must remain visible until resolved.
     #[serde(default)]
     pub acknowledged_startup_notices: Vec<String>,
+    /// Lifetime usage a Replay Tour run cleared so its cards teach again;
+    /// `Some` while a replay is in progress (see [`ReplaySavedUsage`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_run_replay_saved_usage: Option<ReplaySavedUsage>,
+}
+
+/// The lifetime usage flags a first-run replay clears so its quick-access and
+/// find-anything cards run again. They also keep later tips quiet, so the
+/// replay saves them here and gives them back when it completes or is
+/// skipped: lifetime usage never goes backwards.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplaySavedUsage {
+    #[serde(default)]
+    pub used_radial_menu: bool,
+    #[serde(default)]
+    pub used_context_menu_right_click: bool,
+    #[serde(default)]
+    pub used_context_menu_keyboard: bool,
+    #[serde(default)]
+    pub used_help_overlay: bool,
+    #[serde(default)]
+    pub used_command_palette: bool,
+}
+
+impl ReplaySavedUsage {
+    fn from_state(state: &OnboardingState) -> Self {
+        Self {
+            used_radial_menu: state.used_radial_menu,
+            used_context_menu_right_click: state.used_context_menu_right_click,
+            used_context_menu_keyboard: state.used_context_menu_keyboard,
+            used_help_overlay: state.used_help_overlay,
+            used_command_palette: state.used_command_palette,
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            used_radial_menu: self.used_radial_menu || other.used_radial_menu,
+            used_context_menu_right_click: self.used_context_menu_right_click
+                || other.used_context_menu_right_click,
+            used_context_menu_keyboard: self.used_context_menu_keyboard
+                || other.used_context_menu_keyboard,
+            used_help_overlay: self.used_help_overlay || other.used_help_overlay,
+            used_command_palette: self.used_command_palette || other.used_command_palette,
+        }
+    }
 }
 
 impl Default for OnboardingState {
@@ -238,6 +284,7 @@ impl Default for OnboardingState {
             hint_canvas_popover_shown: false,
             hint_canvas_popover_count: 0,
             acknowledged_startup_notices: Vec::new(),
+            first_run_replay_saved_usage: None,
         }
     }
 }
@@ -245,6 +292,54 @@ impl Default for OnboardingState {
 impl OnboardingState {
     pub fn first_run_active(&self) -> bool {
         !self.first_run_completed && !self.first_run_skipped
+    }
+
+    /// Whether the user is replaying the first-run cards on purpose.
+    pub fn first_run_replay_active(&self) -> bool {
+        self.first_run_replay_saved_usage.is_some() && self.first_run_active()
+    }
+
+    /// Runs the first-run cards again from the first step. Their checklist
+    /// starts empty; the usage flags the quick-access and find-anything cards
+    /// wait on are saved and cleared. The background-mode answer is kept, so
+    /// a profile that already answered it ends the replay one card early.
+    pub fn begin_first_run_replay(&mut self) {
+        let current = ReplaySavedUsage::from_state(self);
+        let saved = self
+            .first_run_replay_saved_usage
+            .map_or(current, |saved| saved.union(current));
+
+        self.first_run_replay_saved_usage = Some(saved);
+        self.first_run_completed = false;
+        self.first_run_skipped = false;
+        self.active_step = Some(FirstRunStep::FIRST);
+        self.first_stroke_done = false;
+        self.first_undo_done = false;
+        self.first_run_toolbar_exit_seen = false;
+        self.first_color_done = false;
+        self.first_thickness_done = false;
+        self.quick_access_requires_toolbar = false;
+        self.used_radial_menu = false;
+        self.used_context_menu_right_click = false;
+        self.used_context_menu_keyboard = false;
+        self.used_help_overlay = false;
+        self.used_command_palette = false;
+    }
+
+    /// Gives a replay's saved usage back once it completes or is skipped.
+    /// Returns true when a replay was in progress.
+    pub fn finish_first_run_replay(&mut self) -> bool {
+        let Some(saved) = self.first_run_replay_saved_usage.take() else {
+            return false;
+        };
+
+        let merged = saved.union(ReplaySavedUsage::from_state(self));
+        self.used_radial_menu = merged.used_radial_menu;
+        self.used_context_menu_right_click = merged.used_context_menu_right_click;
+        self.used_context_menu_keyboard = merged.used_context_menu_keyboard;
+        self.used_help_overlay = merged.used_help_overlay;
+        self.used_command_palette = merged.used_command_palette;
+        true
     }
 }
 
@@ -714,6 +809,7 @@ fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore
         hint_canvas_popover_shown: true,
         hint_canvas_popover_count: DEFERRED_HINT_REPEAT_MAX,
         acknowledged_startup_notices: Vec::new(),
+        first_run_replay_saved_usage: None,
     };
     let mut store = OnboardingStore {
         state,

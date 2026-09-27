@@ -1,8 +1,8 @@
 use crate::config::{
     ResolvedToolbarItems, ToolbarConfig, ToolbarItemId, ToolbarItemOrderGroup,
     ToolbarItemVisibilitySetting, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, ToolbarSectionFlag, ToolbarSectionVisibility, ToolbarStrokeControls,
-    TopDisplayMode, fold_legacy_section_flags, resolve_section_visibility, set_section_visibility,
+    ToolbarSectionFlag, ToolbarSectionVisibility, ToolbarStrokeControls, TopDisplayMode,
+    fold_legacy_section_flags, resolve_section_visibility, set_section_visibility,
 };
 use crate::input::state::TopMenuState;
 use crate::ui::toolbar::ToolbarItemCustomizeGroup;
@@ -52,7 +52,6 @@ pub(in crate::input::state) struct ToolbarInteraction {
     customize_items_group: Option<ToolbarItemCustomizeGroup>,
     status_bar_contents_open: bool,
     settings_details_open: bool,
-    rebind_modifier: ToolbarRebindModifier,
     stroke_controls: ToolbarStrokeControls,
     top_menu: TopMenuState,
     top_popover_scroll: f64,
@@ -105,7 +104,6 @@ impl Default for ToolbarInteraction {
             customize_items_group: None,
             status_bar_contents_open: false,
             settings_details_open: false,
-            rebind_modifier: ToolbarRebindModifier::default(),
             stroke_controls: ToolbarStrokeControls::default(),
             top_menu: TopMenuState::Closed,
             top_popover_scroll: 0.0,
@@ -147,7 +145,6 @@ impl ToolbarInteraction {
             customize_items_group: None,
             status_bar_contents_open: false,
             settings_details_open: false,
-            rebind_modifier: config.rebind_modifier,
             stroke_controls: config.stroke_controls,
             top_menu: TopMenuState::Closed,
             top_popover_scroll: 0.0,
@@ -240,10 +237,6 @@ impl ToolbarInteraction {
         changed
     }
 
-    pub(in crate::input::state) const fn rebind_modifier(&self) -> ToolbarRebindModifier {
-        self.rebind_modifier
-    }
-
     pub(in crate::input::state) const fn stroke_controls(&self) -> ToolbarStrokeControls {
         self.stroke_controls
     }
@@ -283,11 +276,6 @@ impl ToolbarInteraction {
     pub(in crate::input::state) fn hide(&mut self) {
         self.visible = false;
         self.top_visible = false;
-    }
-
-    pub(in crate::input::state) fn show(&mut self) {
-        self.visible = true;
-        self.top_visible = true;
     }
 
     pub(in crate::input::state) fn derive_visibility_from_pins(&mut self) {
@@ -634,14 +622,6 @@ impl ToolbarInteraction {
     }
 
     #[cfg(test)]
-    pub(in crate::input::state) fn override_rebind_modifier_for_test(
-        &mut self,
-        modifier: ToolbarRebindModifier,
-    ) {
-        self.rebind_modifier = modifier;
-    }
-
-    #[cfg(test)]
     pub(in crate::input::state) fn override_stroke_controls_for_test(
         &mut self,
         style: ToolbarStrokeControls,
@@ -768,19 +748,6 @@ mod tests {
         assert_eq!(toolbar.top_menu(), TopMenuState::CanvasPopover);
         assert!(toolbar.set_top_menu_open(TopMenuState::SettingsPopover, true));
         assert_eq!(toolbar.top_menu(), TopMenuState::SettingsPopover);
-    }
-
-    #[test]
-    fn showing_transient_visibility_does_not_change_the_persisted_pin() {
-        let mut toolbar = ToolbarInteraction::default();
-        toolbar.set_top_pinned(false);
-        toolbar.hide();
-
-        toolbar.show();
-
-        assert!(toolbar.visible());
-        assert!(toolbar.top_visible());
-        assert!(!toolbar.top_pinned());
     }
 
     #[test]

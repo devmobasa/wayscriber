@@ -151,13 +151,13 @@ impl WaylandState {
     }
 }
 
-/// Keep the toolbar visible throughout the replayable tour and while first-run
-/// guidance holds it, without changing the idle-fade preference.
+/// Keep the toolbar visible while first-run guidance holds it, without
+/// changing the idle-fade preference.
 fn top_strip_idle_fade_enabled(
     input: &crate::input::state::InputState,
     first_run_holds_toolbar: bool,
 ) -> bool {
-    input.ui_visibility.idle_fade && !first_run_holds_toolbar && input.current_tour_step().is_none()
+    input.ui_visibility.idle_fade && !first_run_holds_toolbar
 }
 
 /// True while any top-strip-anchored menu or popover is open. Open menus
@@ -189,35 +189,14 @@ mod tests {
         fade.update(&inputs, now + std::time::Duration::from_secs(10))
     }
 
-    #[test]
-    fn tour_pauses_idle_fade_without_changing_the_preference() {
-        let mut input = make_test_input_state();
-        input.ui_visibility.idle_fade = true;
-
-        input.start_tour();
-        assert!(!top_strip_idle_fade_enabled(&input, false));
-        input.tour_next();
-        input.tour_next();
-        assert!(!top_strip_idle_fade_enabled(&input, false));
-        assert_eq!(
-            idle_opacity(top_strip_idle_fade_enabled(&input, false)),
-            1.0
-        );
-
-        input.end_tour();
-        assert!(top_strip_idle_fade_enabled(&input, false));
-        assert!(input.ui_visibility.idle_fade);
-    }
-
-    /// The first-run cards are not the replayable tour: while first-run
-    /// guidance holds the toolbar, the strip stays fully visible however
-    /// long the user reads a card, and the preference is left alone.
+    /// While first-run guidance holds the toolbar, the strip stays fully
+    /// visible however long the user reads a card, and the preference is
+    /// left alone.
     #[test]
     fn first_run_guidance_holds_the_strip_through_idle() {
         let mut input = make_test_input_state();
         input.ui_visibility.idle_fade = true;
 
-        assert!(input.current_tour_step().is_none());
         assert!(!top_strip_idle_fade_enabled(&input, true));
         assert_eq!(idle_opacity(top_strip_idle_fade_enabled(&input, true)), 1.0);
 

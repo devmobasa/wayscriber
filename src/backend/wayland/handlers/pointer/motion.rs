@@ -238,10 +238,6 @@ impl WaylandState {
             self.update_pointer_cursor(false, conn);
             return;
         }
-        if self.input_state.tour.is_active() {
-            self.update_pointer_cursor(false, conn);
-            return;
-        }
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
         let idle = matches!(self.input_state.state, crate::input::DrawingState::Idle);
         self.update_onboarding_card_hover(idle.then_some((sx, sy)));

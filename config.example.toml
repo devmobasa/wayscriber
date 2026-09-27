@@ -485,7 +485,7 @@ help_overlay_context_filter = true
 show_capabilities_warning = true
 
 # Show automatic first-run guidance, discovery tips, and shortcut coaching.
-# The guided tour remains available manually when this is false.
+# Replay Tour still runs the first-run cards on request when this is false.
 show_onboarding_hints = true
 
 # Show rectangle and ellipse preview dimensions in logical board pixels, and

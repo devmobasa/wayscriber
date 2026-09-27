@@ -61,7 +61,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             "Show automatic guidance and tips",
-            "Controls first-run guidance, discovery tips, and shortcut coaching. The guided tour remains available manually.",
+            "Controls first-run guidance, discovery tips, and shortcut coaching. Replay Tour still runs the first-run cards on request.",
             |app| app.draft.ui_show_onboarding_hints,
             |value| Message::ToggleChanged(ToggleField::UiShowOnboardingHints, value),
         )

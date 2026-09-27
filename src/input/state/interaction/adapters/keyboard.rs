@@ -10,11 +10,6 @@ use crate::input::state::actions::key_press::bindings::{
 };
 use crate::input::state::{DrawingState, InputState};
 
-pub(crate) fn handle_tour_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.tour.is_active() && state.handle_tour_key(key))
-        .then_some(RoutingOutcome::Consumed(ConsumedBy::Tour))
-}
-
 pub(crate) fn handle_command_palette_key(
     state: &mut InputState,
     resources: crate::input::state::InputTextResources<'_>,

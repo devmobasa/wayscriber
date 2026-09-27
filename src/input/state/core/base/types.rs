@@ -494,6 +494,8 @@ pub enum PendingBackendAction {
     DesktopOpen(crate::desktop_open::DesktopOpenRequest),
     HelperLaunch(HelperLaunchRequest),
     ClearSavedToolState,
+    /// Replay Tour: run the first-run cards again from the first step.
+    ReplayFirstRunTour,
 }
 
 /// Durable toolbar chrome changes awaiting their runtime-ui.toml write.

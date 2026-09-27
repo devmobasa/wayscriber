@@ -234,9 +234,9 @@ impl InputState {
     /// popup, board picker, properties panel, and context menu all draw over
     /// the pill and handle their own presses later in the routing chain, so
     /// a HUD hit here would eclipse them (e.g. radial-ring clicks over the
-    /// pill re-firing as chip activations). The command palette and tour are
-    /// already intercepted earlier in the backend chain; they are included
-    /// as belt-and-braces for paths that route presses directly.
+    /// pill re-firing as chip activations). The command palette is already
+    /// intercepted earlier in the backend chain; it is included as
+    /// belt-and-braces for paths that route presses directly.
     ///
     /// Shared with the bottom-right zoom chip: the same overlays render above
     /// both bottom-anchored interactive chrome surfaces.
@@ -247,7 +247,6 @@ impl InputState {
             || self.is_properties_panel_open()
             || self.is_context_menu_open()
             || self.command_palette.is_open()
-            || self.tour.is_active()
     }
 
     /// True when the interactive status HUD pill is under (x, y): the press

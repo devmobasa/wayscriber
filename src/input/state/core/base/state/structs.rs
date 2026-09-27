@@ -111,8 +111,6 @@ pub struct InputState {
         crate::input::state::core::RegionSelectUiState,
     /// Runtime preset values, active selection, and transient feedback.
     pub(crate) preset_slots: crate::input::state::core::PresetSlots,
-    /// Lifecycle and navigation state for the guided tour.
-    pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
     /// The transient chip naming what Shape Pen just recognized.

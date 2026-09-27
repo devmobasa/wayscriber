@@ -547,6 +547,26 @@ mod tests {
 
     /// An action with no `[keybindings]` field cannot be rebound and has no row
     /// to open, so both affordances say so and change nothing.
+    /// Replay Tour runs the first-run cards again, which live in the backend's
+    /// onboarding store, so the action hands the replay to the backend.
+    #[test]
+    fn replay_tour_asks_the_backend_to_replay_the_first_run_cards() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
+        let mut state = make_state();
+
+        state.handle_action_with_resources(resources, Action::ReplayTour);
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::ReplayFirstRunTour)
+        );
+    }
+
     #[test]
     fn a_runtime_only_action_is_refused_by_both_shortcut_affordances() {
         let mut state = make_state();
