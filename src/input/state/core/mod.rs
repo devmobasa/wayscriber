@@ -126,9 +126,9 @@ pub use menus::{
 pub use menus::{SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY};
 pub(crate) use properties::metrics as properties_panel_metrics;
 pub use properties::{
-    PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
-    PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry,
-    SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
+    PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
+    PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
+    SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
 };
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,

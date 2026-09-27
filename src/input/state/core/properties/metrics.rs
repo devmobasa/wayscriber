@@ -74,6 +74,18 @@ pub(crate) const LOCK_SIZE: f64 = 26.0;
 /// The lock button's inset from the panel's top-right corner.
 pub(crate) const LOCK_INSET: f64 = 8.0;
 
+/// The actions area: a divider, the ordering row, and the Duplicate/Delete
+/// row under it.
+pub(crate) const ACTIONS_TOP_GAP: f64 = 12.0;
+pub(crate) const ACTION_BUTTON_HEIGHT: f64 = 28.0;
+pub(crate) const ACTION_ROW_GAP: f64 = 8.0;
+pub(crate) const ACTION_BUTTON_GAP: f64 = 6.0;
+pub(crate) const ACTIONS_BOTTOM: f64 = 6.0;
+pub(crate) const ACTIONS_HEIGHT: f64 =
+    ACTIONS_TOP_GAP + ACTION_BUTTON_HEIGHT * 2.0 + ACTION_ROW_GAP + ACTIONS_BOTTOM;
+/// The "Order" label's column, where both rows of buttons start.
+pub(crate) const ACTIONS_LABEL_WIDTH: f64 = 60.0;
+
 pub(crate) const FOOTER_HEIGHT: f64 = 30.0;
 /// Height of the empty-state line when the selection has no properties.
 pub(crate) const EMPTY_HEIGHT: f64 = 30.0;

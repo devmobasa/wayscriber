@@ -77,12 +77,53 @@ pub enum PropertiesPanelLock {
     Locked,
 }
 
+/// A button in the panel's actions area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelAction {
+    ToBack,
+    Backward,
+    Forward,
+    ToFront,
+    Duplicate,
+    Delete,
+}
+
+impl PanelAction {
+    /// The ordering buttons, bottom of the stack to top.
+    pub const ORDER: [Self; 4] = [Self::ToBack, Self::Backward, Self::Forward, Self::ToFront];
+    /// The buttons under them.
+    pub const EDIT: [Self; 2] = [Self::Duplicate, Self::Delete];
+}
+
+/// Which actions can do anything for the current selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PanelActions {
+    /// Some selected shape has an unselected one above it.
+    pub can_raise: bool,
+    /// Some selected shape has an unselected one below it.
+    pub can_lower: bool,
+    /// Some selected shape is unlocked, so duplicating or deleting has
+    /// something to work on.
+    pub can_edit: bool,
+}
+
+impl PanelActions {
+    pub fn enabled(&self, action: PanelAction) -> bool {
+        match action {
+            PanelAction::ToBack | PanelAction::Backward => self.can_lower,
+            PanelAction::Forward | PanelAction::ToFront => self.can_raise,
+            PanelAction::Duplicate | PanelAction::Delete => self.can_edit,
+        }
+    }
+}
+
 /// The part of the properties panel under the pointer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PropertiesPanelHit {
     /// The title, which carries the shape details as a tooltip.
     Title,
     Lock,
+    Action(PanelAction),
     /// A row away from its controls.
     Row(usize),
     Swatch {
@@ -108,7 +149,7 @@ impl PropertiesPanelHit {
     /// The row this part belongs to; `None` for the header.
     pub fn row(self) -> Option<usize> {
         match self {
-            Self::Title | Self::Lock => None,
+            Self::Title | Self::Lock | Self::Action(_) => None,
             Self::Row(row)
             | Self::Swatch { row, .. }
             | Self::MoreColors(row)
@@ -220,6 +261,8 @@ pub struct PropertiesPanelLayout {
     pub lock: PanelRect,
     pub divider_y: f64,
     pub rows_top: f64,
+    /// Top of the actions area (ordering, Duplicate, Delete), under the rows.
+    pub actions_top: f64,
     /// Top of the keyboard hint strip; `None` when the panel has no rows.
     pub footer_top: Option<f64>,
     /// Width of the readout between a stepper's − and + buttons.
@@ -251,6 +294,7 @@ pub struct ShapePropertiesPanel {
     pub anchor_rect: Option<Rect>,
     pub entries: Vec<SelectionPropertyEntry>,
     pub swatches: Vec<PropertiesPanelSwatch>,
+    pub actions: PanelActions,
     /// The selection's shared color, for the thickness preview stroke.
     pub preview_color: Option<Color>,
     pub hover: Option<PropertiesPanelHit>,

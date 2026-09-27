@@ -14,9 +14,9 @@ pub(crate) use core::{
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use core::{
-    PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
-    PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry, ShapePropertiesPanel,
-    properties_panel_metrics,
+    PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
+    PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
+    ShapePropertiesPanel, properties_panel_metrics,
 };
 pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
 pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};

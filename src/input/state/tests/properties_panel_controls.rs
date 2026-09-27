@@ -629,3 +629,94 @@ fn stepping_a_marker_skips_the_opacity_variant_it_cannot_take() {
         other => panic!("expected marker, got {other:?}"),
     }
 }
+
+fn stack_order(state: &InputState) -> Vec<ShapeId> {
+    state
+        .boards
+        .active_frame()
+        .shapes
+        .iter()
+        .map(|shape| shape.id)
+        .collect()
+}
+
+#[test]
+fn order_buttons_move_the_shape_and_dim_at_the_ends_of_the_stack() {
+    use crate::input::state::PanelAction;
+
+    let mut state = create_test_input_state();
+    let bottom = add_rect(&mut state, PALETTE_RED, false);
+    let middle = add_rect(&mut state, PALETTE_GREEN, false);
+    let top = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![bottom]);
+    let to_back = point(&state, PropertiesPanelHit::Action(PanelAction::ToBack));
+    assert_eq!(
+        state.properties_panel_active_hit_at(to_back.0, to_back.1),
+        None,
+        "the bottom shape cannot go lower"
+    );
+
+    click(&mut state, PropertiesPanelHit::Action(PanelAction::Forward));
+    assert_eq!(stack_order(&state), vec![middle, bottom, top]);
+    click(&mut state, PropertiesPanelHit::Action(PanelAction::ToFront));
+    assert_eq!(stack_order(&state), vec![middle, top, bottom]);
+
+    let panel = state.properties_panel().expect("panel stays open");
+    assert!(!panel.actions.enabled(PanelAction::ToFront));
+    assert!(panel.actions.enabled(PanelAction::Backward));
+    assert!(
+        panel
+            .subtitle
+            .as_deref()
+            .unwrap()
+            .starts_with("Layer 3 of 3"),
+        "the header follows the move"
+    );
+}
+
+#[test]
+fn duplicate_keeps_the_panel_on_the_copy_and_delete_closes_it() {
+    use crate::input::state::PanelAction;
+
+    let mut state = create_test_input_state();
+    let original = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![original]);
+
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::Duplicate),
+    );
+    assert_eq!(state.boards.active_frame().shapes.len(), 2);
+    let copy = state.selected_shape_ids().to_vec();
+    assert_eq!(copy.len(), 1);
+    assert_ne!(copy[0], original);
+    assert!(state.is_properties_panel_open());
+
+    click(&mut state, PropertiesPanelHit::Action(PanelAction::Delete));
+    assert_eq!(stack_order(&state), vec![original]);
+    lay_out(&mut state);
+    assert!(
+        !state.is_properties_panel_open(),
+        "nothing selected is left to show"
+    );
+}
+
+#[test]
+fn a_locked_selection_can_be_reordered_but_not_duplicated_or_deleted() {
+    use crate::input::state::PanelAction;
+
+    let mut state = create_test_input_state();
+    let locked = add_rect(&mut state, PALETTE_RED, false);
+    let _above = add_rect(&mut state, PALETTE_GREEN, false);
+    let index = state.boards.active_frame().find_index(locked).unwrap();
+    state.boards.active_frame_mut().shapes[index].locked = true;
+    open(&mut state, vec![locked]);
+
+    let actions = state.properties_panel().unwrap().actions;
+    assert!(!actions.enabled(PanelAction::Duplicate));
+    assert!(!actions.enabled(PanelAction::Delete));
+    assert!(actions.enabled(PanelAction::Forward));
+    let delete = point(&state, PropertiesPanelHit::Action(PanelAction::Delete));
+    click_at(&mut state, delete, delete);
+    assert_eq!(state.boards.active_frame().shapes.len(), 2);
+}

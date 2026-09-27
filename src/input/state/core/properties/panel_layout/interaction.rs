@@ -22,6 +22,11 @@ impl InputState {
     ) -> Option<PropertiesPanelHit> {
         let hit = self.properties_panel_hit_at(x, y)?;
         let panel = self.properties.panel.as_ref()?;
+        if let PropertiesPanelHit::Action(action) = hit
+            && !panel.actions.enabled(action)
+        {
+            return None;
+        }
         match hit.row() {
             Some(row) if panel.entries.get(row).is_none_or(|entry| entry.disabled) => None,
             _ => Some(hit),

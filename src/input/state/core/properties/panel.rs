@@ -2,8 +2,8 @@ use super::super::base::InputState;
 use super::metrics::MAX_SWATCHES;
 use super::panel_layout::selection_panel_anchor;
 use super::types::{
-    PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch, SelectionPropertyEntry,
-    SelectionPropertyValue, ShapePropertiesPanel,
+    PanelActions, PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch,
+    SelectionPropertyEntry, SelectionPropertyValue, ShapePropertiesPanel,
 };
 use super::utils::format_timestamp;
 use crate::draw::{Color, TextMeasurer};
@@ -23,6 +23,7 @@ struct PanelContents {
     anchor_rect: Option<Rect>,
     entries: Vec<SelectionPropertyEntry>,
     swatches: Vec<PropertiesPanelSwatch>,
+    actions: PanelActions,
     preview_color: Option<Color>,
     multiple_selection: bool,
 }
@@ -98,6 +99,7 @@ impl InputState {
             anchor_rect: contents.anchor_rect,
             entries: contents.entries,
             swatches: contents.swatches,
+            actions: contents.actions,
             preview_color: contents.preview_color,
             hover: None,
             pressed: None,
@@ -128,6 +130,7 @@ impl InputState {
         panel.anchor_rect = contents.anchor_rect;
         panel.entries = contents.entries;
         panel.swatches = contents.swatches;
+        panel.actions = contents.actions;
         panel.preview_color = contents.preview_color;
         panel.multiple_selection = contents.multiple_selection;
 
@@ -241,6 +244,12 @@ impl InputState {
             )
         };
 
+        let actions = PanelActions {
+            can_raise: self.selection_can_step(true),
+            can_lower: self.selection_can_step(false),
+            can_edit: lock != PropertiesPanelLock::Locked,
+        };
+
         Some(PanelContents {
             title,
             subtitle,
@@ -250,6 +259,7 @@ impl InputState {
             anchor_rect,
             entries,
             swatches,
+            actions,
             preview_color,
             multiple_selection: ids.len() > 1,
         })

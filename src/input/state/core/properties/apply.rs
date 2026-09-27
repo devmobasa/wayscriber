@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use super::types::{
-    PropertiesPanelHit, PropertiesPanelLock, SelectionPropertyEntry, SelectionPropertyKind,
-    SelectionPropertyValue,
+    PanelAction, PropertiesPanelHit, PropertiesPanelLock, SelectionPropertyEntry,
+    SelectionPropertyKind, SelectionPropertyValue,
 };
 use crate::draw::{ArrowStyle, Color, Shape, TextMeasurer};
 
@@ -17,12 +17,17 @@ impl InputState {
         if hit == PropertiesPanelHit::Lock {
             return self.toggle_properties_panel_lock_with(measurer);
         }
+        if let PropertiesPanelHit::Action(action) = hit {
+            return self.run_properties_panel_action_with(measurer, action);
+        }
         let Some(entry) = hit.row().and_then(|row| self.enabled_properties_entry(row)) else {
             return false;
         };
 
         let changed = match hit {
-            PropertiesPanelHit::Title | PropertiesPanelHit::Lock => false,
+            PropertiesPanelHit::Title
+            | PropertiesPanelHit::Lock
+            | PropertiesPanelHit::Action(_) => false,
             PropertiesPanelHit::Swatch { index, .. } => {
                 let Some(color) = self
                     .properties
@@ -129,6 +134,46 @@ impl InputState {
         // drag before it records its own undo entry.
         self.finish_active_arrow_bend();
         self.apply_selection_arrow_style_value(measurer, style)
+    }
+
+    /// Runs an actions-area button through the same selection edits as the
+    /// context menu and the keyboard. A delete empties the selection, and the
+    /// refresh then closes the panel with nothing left to show.
+    fn run_properties_panel_action_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        action: PanelAction,
+    ) -> bool {
+        let enabled = self
+            .properties
+            .panel
+            .as_ref()
+            .is_some_and(|panel| panel.actions.enabled(action));
+        if !enabled {
+            return false;
+        }
+
+        let changed = match action {
+            PanelAction::ToBack => self.move_selection_to_back_with(measurer),
+            PanelAction::Backward => self.move_selection_backward_with(measurer),
+            PanelAction::Forward => self.move_selection_forward_with(measurer),
+            PanelAction::ToFront => self.move_selection_to_front_with(measurer),
+            PanelAction::Duplicate => {
+                // Duplicating selects the copies, and any selection change
+                // closes the panel; reopen it on the copies it was asked for.
+                let duplicated = self.duplicate_selection_with(measurer);
+                if duplicated && !self.is_properties_panel_open() {
+                    let _ = self.show_properties_panel_with(measurer);
+                }
+                duplicated
+            }
+            PanelAction::Delete => self.delete_selection_with(measurer),
+        };
+
+        if changed && self.is_properties_panel_open() {
+            self.refresh_properties_panel_with(measurer);
+        }
+        changed
     }
 
     /// Locks every selected shape, or unlocks them all once every one is

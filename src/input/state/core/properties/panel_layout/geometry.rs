@@ -3,13 +3,14 @@
 //! is clickable exactly where it is drawn.
 
 use super::super::metrics::{
+    ACTION_BUTTON_GAP, ACTION_BUTTON_HEIGHT, ACTION_ROW_GAP, ACTIONS_LABEL_WIDTH, ACTIONS_TOP_GAP,
     BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING, PREVIEW_GAP,
     PREVIEW_HEIGHT, PREVIEW_WIDTH, ROW_HEIGHT, ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD,
     STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP, STYLE_BUTTON_HEIGHT, SWATCH_GAP,
     SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE, SWITCH_HEIGHT, SWITCH_WIDTH, TITLE_FONT,
 };
 use super::super::types::{
-    PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
+    PanelAction, PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
     PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyKind,
     SelectionPropertyValue, ShapePropertiesPanel,
 };
@@ -150,6 +151,34 @@ impl PropertiesPanelLayout {
     fn rows_visible_at(&self, y: f64) -> bool {
         self.scroll
             .is_none_or(|scroll| y >= self.rows_top && y < scroll.viewport_bottom)
+    }
+
+    /// The actions area's buttons: the four ordering buttons in one row and
+    /// Duplicate and Delete under them, both starting after the "Order"
+    /// label's column and spanning the full content width.
+    pub fn action_buttons(&self) -> Vec<(PanelAction, PanelRect)> {
+        let left = self.content_x() + ACTIONS_LABEL_WIDTH;
+        let width = self.content_right() - left;
+        let row = |top: f64, actions: &[PanelAction]| {
+            let count = actions.len() as f64;
+            let button = (width - ACTION_BUTTON_GAP * (count - 1.0)) / count;
+            actions
+                .iter()
+                .enumerate()
+                .map(|(index, action)| {
+                    let x = left + index as f64 * (button + ACTION_BUTTON_GAP);
+                    (
+                        *action,
+                        PanelRect::new(x, top, button, ACTION_BUTTON_HEIGHT),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let order_top = self.actions_top + ACTIONS_TOP_GAP;
+        let edit_top = order_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
+        let mut buttons = row(order_top, &PanelAction::ORDER);
+        buttons.extend(row(edit_top, &PanelAction::EDIT));
+        buttons
     }
 
     /// Left edge of the content of `column`.
@@ -319,6 +348,13 @@ impl PropertiesPanelLayout {
         if self.title_rect().contains(x, y) {
             return Some(PropertiesPanelHit::Title);
         }
+        if y >= self.actions_top {
+            return self
+                .action_buttons()
+                .into_iter()
+                .find(|(_, rect)| rect.contains(x, y))
+                .map(|(action, _)| PropertiesPanelHit::Action(action));
+        }
         // Rows scrolled out of the viewport are clipped, so they take no clicks.
         if !self.rows_visible_at(y) {
             return None;
@@ -391,6 +427,13 @@ impl PropertiesPanelLayout {
         match hit {
             PropertiesPanelHit::Title => return Some(self.title_rect()),
             PropertiesPanelHit::Lock => return Some(self.lock),
+            PropertiesPanelHit::Action(action) => {
+                return self
+                    .action_buttons()
+                    .into_iter()
+                    .find(|(candidate, _)| *candidate == action)
+                    .map(|(_, rect)| rect);
+            }
             _ => {}
         }
         let row = self.rows(panel).into_iter().nth(hit.row()?)?;
@@ -485,6 +528,13 @@ impl ShapePropertiesPanel {
                 self.swatches.get(index).map(|swatch| swatch.label.clone())
             }
             PropertiesPanelHit::MoreColors(_) => Some("More colors…".to_string()),
+            PropertiesPanelHit::Action(action) => match action {
+                PanelAction::ToBack => Some("Send to back".to_string()),
+                PanelAction::Backward => Some("Send backward".to_string()),
+                PanelAction::Forward => Some("Bring forward".to_string()),
+                PanelAction::ToFront => Some("Bring to front".to_string()),
+                PanelAction::Duplicate | PanelAction::Delete => None,
+            },
             _ => None,
         }
     }

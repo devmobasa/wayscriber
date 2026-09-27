@@ -26,7 +26,10 @@ use crate::ui::theme::overlay::{
 use crate::ui::theme::{Rgba, set_color, with_alpha};
 use crate::ui_text::UiTextEngine;
 
+mod actions;
 mod controls;
+
+use actions::draw_actions;
 
 use controls::{
     ControlState, draw_arrow_head_segments, draw_arrow_styles, draw_lock, draw_stepper,
@@ -161,6 +164,8 @@ pub(crate) fn render_properties_panel_with_engine(
             draw_scrollbar(ctx, layout, scroll);
         }
     }
+
+    draw_actions(engine, ctx, panel, layout);
 
     if let Some(footer_top) = layout.footer_top {
         draw_footer(engine, ctx, layout, footer_top);

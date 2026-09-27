@@ -1,4 +1,4 @@
-use super::super::metrics::{FOOTER_HEIGHT, PADDING_BOTTOM};
+use super::super::metrics::{ACTIONS_HEIGHT, FOOTER_HEIGHT, PADDING_BOTTOM};
 use super::super::types::{
     PanelRect, PropertiesPanelHit, PropertiesRowControl, PropertiesRowGeometry,
 };
@@ -155,8 +155,9 @@ fn rows_stack_from_the_divider_to_the_footer() {
         );
         top = row.rect.bottom();
     }
+    assert_eq!(layout.actions_top, top, "the actions sit under the rows");
     let footer_top = layout.footer_top.expect("footer");
-    assert_eq!(footer_top, top);
+    assert_eq!(footer_top, top + ACTIONS_HEIGHT);
     assert_eq!(
         layout.origin_y + layout.height,
         (footer_top + FOOTER_HEIGHT + PADDING_BOTTOM).ceil()
@@ -354,7 +355,13 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         spotlight(&mut state),
     ];
     open_panel(ids, &mut state);
+    lay_out(&mut state, (SCREEN.0, 2000));
     let single = *state.properties_panel_layout().expect("layout");
+    assert_eq!(
+        single.column_budget,
+        f64::INFINITY,
+        "one column on a tall screen"
+    );
 
     lay_out(&mut state, (SCREEN.0, 480));
 
@@ -442,15 +449,17 @@ fn when_columns_would_leave_the_screen_the_rows_scroll_instead() {
     let first = assert_visible_rows_reachable(&state, (480.0, 360.0));
     assert!(first.contains(&0));
 
-    // A row clipped out of the viewport takes no clicks.
+    // A row clipped out of the viewport takes no clicks; what is drawn
+    // there (the actions, or nothing) does.
     let hidden = rows(&state)
         .into_iter()
         .find(|row| row.rect.y >= layout.rows_viewport().bottom())
         .expect("a row below the viewport");
     let (hx, hy) = hidden.rect.center();
-    assert_eq!(
-        layout.hit_at(state.properties_panel().unwrap(), hx, hy),
-        None
+    let hit = layout.hit_at(state.properties_panel().unwrap(), hx, hy);
+    assert!(
+        hit.and_then(PropertiesPanelHit::row).is_none(),
+        "{hit:?} reached a clipped row"
     );
 
     // The wheel scrolls rather than stepping a row, down to the last row.

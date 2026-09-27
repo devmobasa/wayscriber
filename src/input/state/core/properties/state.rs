@@ -75,6 +75,11 @@ mod tests {
             anchor_rect: None,
             entries: Vec::new(),
             swatches: Vec::new(),
+            actions: super::super::types::PanelActions {
+                can_raise: false,
+                can_lower: false,
+                can_edit: false,
+            },
             preview_color: None,
             hover: None,
             pressed: None,
