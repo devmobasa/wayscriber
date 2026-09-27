@@ -86,7 +86,7 @@ impl WaylandState {
             || input.toolbar_top_minimized()
             || input.toolbar_top_display_mode() == crate::config::TopDisplayMode::Micro;
         let menus_open = top_menus_open(input);
-        let idle_fade_enabled = input.ui_visibility.idle_fade;
+        let idle_fade_enabled = top_strip_idle_fade_enabled(input);
         let on_strip = self.toolbar_chrome.strip_engaged() || self.toolbar.top_pointer_present();
         // The reveal zone costs a layout pass, so only measure it when
         // nothing else already decides the outcome.
@@ -151,6 +151,11 @@ impl WaylandState {
     }
 }
 
+/// Keep the toolbar visible throughout the tour without changing its preference.
+fn top_strip_idle_fade_enabled(input: &crate::input::state::InputState) -> bool {
+    input.ui_visibility.idle_fade && input.current_tour_step().is_none()
+}
+
 /// True while any top-strip-anchored menu or popover is open. Open menus
 /// hold the idle fade: the strip (and the popover hosted on its surface)
 /// must stay visible while one is up, even with the pointer away.
@@ -160,9 +165,37 @@ fn top_menus_open(input: &crate::input::state::InputState) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{StripRevealKey, top_menus_open};
+    use super::{StripRevealKey, top_menus_open, top_strip_idle_fade_enabled};
     use crate::input::Tool;
     use crate::input::state::{TopMenuState, test_support::make_test_input_state};
+
+    #[test]
+    fn tour_pauses_idle_fade_without_changing_the_preference() {
+        let mut input = make_test_input_state();
+        input.ui_visibility.idle_fade = true;
+        input.start_tour();
+        assert!(!top_strip_idle_fade_enabled(&input));
+        input.tour_next();
+        input.tour_next();
+        assert!(!top_strip_idle_fade_enabled(&input));
+        let now = std::time::Instant::now();
+        let mut fade = crate::ui::toolbar::snapshot::fade::TopStripFade::new();
+        let inputs = crate::ui::toolbar::snapshot::fade::TopStripFadeInputs {
+            idle_for: std::time::Duration::from_secs(10),
+            pointer_near: false,
+            menus_open: false,
+            reduced_chrome: false,
+            idle_fade_enabled: top_strip_idle_fade_enabled(&input),
+        };
+        fade.update(&inputs, now);
+        assert_eq!(
+            fade.update(&inputs, now + std::time::Duration::from_secs(10)),
+            1.0
+        );
+        input.end_tour();
+        assert!(top_strip_idle_fade_enabled(&input));
+        assert!(input.ui_visibility.idle_fade);
+    }
 
     /// Every top-strip menu — including the Canvas popover and the
     /// Session/Settings popovers the overflow anchors — holds the idle fade
