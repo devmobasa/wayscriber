@@ -39,7 +39,7 @@ pub(super) fn draw_actions(
     let label_style = text_style(BODY_FONT, FontWeight::Normal);
     let order_top = layout.actions_top + ACTIONS_TOP_GAP;
     let preset_top = order_top + (ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP) * 2.0;
-    for (label, top) in [("Order", order_top), ("Preset", preset_top)] {
+    for (label, top) in [("Order", order_top), ("Presets", preset_top)] {
         engine.draw_baseline(
             ctx,
             label_style,
@@ -117,8 +117,8 @@ fn draw_preset_chip(
         .layout(ctx, style, &number, None)
         .ink_extents()
         .x_advance();
-    let dot = 4.5;
-    let gap = 4.0;
+    let dot = 5.0;
+    let gap = 6.0;
     let (cx, cy) = rect.center();
     let left = cx - (dot * 2.0 + gap + number_width) / 2.0;
 

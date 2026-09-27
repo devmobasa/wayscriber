@@ -7,7 +7,7 @@ use crate::draw::{ArrowStyle, Shape, ShapeId, TextMeasurer};
 use crate::input::state::InputState;
 use crate::ui_text::UiTextEngine;
 
-const SCREEN: (u32, u32) = (800, 600);
+const SCREEN: (u32, u32) = (800, 900);
 
 fn arrow(state: &mut InputState) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Arrow {

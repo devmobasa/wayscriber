@@ -149,9 +149,11 @@ impl PropertiesPanelLayout {
             .is_none_or(|scroll| y >= self.rows_top && y < scroll.viewport_bottom)
     }
 
-    /// The actions area's buttons: the four ordering buttons, Duplicate and
-    /// Delete under them, and the preset slots with Save at the end, every
-    /// row starting after the label column and spanning the content width.
+    /// The actions area's buttons: the four ordering buttons, and Duplicate
+    /// and Delete under them, both after the label column; then Save at the
+    /// end of the presets' label line, and the preset slots under it across
+    /// the full content width, which gives each chip room for its dot and
+    /// number.
     pub fn action_buttons(&self) -> Vec<(PanelAction, PanelRect)> {
         let left = self.content_x() + ACTIONS_LABEL_WIDTH;
         let width = self.content_right() - left;
@@ -175,23 +177,27 @@ impl PropertiesPanelLayout {
         let mut buttons = row(order_top, &PanelAction::ORDER);
         buttons.extend(row(edit_top, &PanelAction::EDIT));
 
-        let preset_top = edit_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
-        let save = PanelRect::new(
-            self.content_right() - PRESET_SAVE_WIDTH,
-            preset_top,
-            PRESET_SAVE_WIDTH,
-            ACTION_BUTTON_HEIGHT,
-        );
+        let preset_label_top = edit_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
+        let chips_top = preset_label_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
         let slots = self.preset_slots.max(1) as f64;
-        let chip = (save.x - ACTION_BUTTON_GAP - left - ACTION_BUTTON_GAP * (slots - 1.0)) / slots;
+        let chip =
+            (self.content_right() - self.content_x() - ACTION_BUTTON_GAP * (slots - 1.0)) / slots;
         buttons.extend((0..self.preset_slots).map(|index| {
-            let x = left + index as f64 * (chip + ACTION_BUTTON_GAP);
+            let x = self.content_x() + index as f64 * (chip + ACTION_BUTTON_GAP);
             (
                 PanelAction::Preset(index + 1),
-                PanelRect::new(x, preset_top, chip, ACTION_BUTTON_HEIGHT),
+                PanelRect::new(x, chips_top, chip, ACTION_BUTTON_HEIGHT),
             )
         }));
-        buttons.push((PanelAction::SavePreset, save));
+        buttons.push((
+            PanelAction::SavePreset,
+            PanelRect::new(
+                self.content_right() - PRESET_SAVE_WIDTH,
+                preset_label_top,
+                PRESET_SAVE_WIDTH,
+                ACTION_BUTTON_HEIGHT,
+            ),
+        ));
         buttons
     }
 
