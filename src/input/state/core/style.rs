@@ -483,6 +483,7 @@ impl DrawingStyle {
             eraser_mode: Some(self.eraser_mode),
             marker_opacity: Some(self.marker_opacity),
             fill_enabled: Some(self.fill_enabled),
+            fill_color: None,
             font_size: Some(self.current_font_size),
             text_background_enabled: Some(self.text_background_enabled),
             arrow_length: Some(self.arrow_length),

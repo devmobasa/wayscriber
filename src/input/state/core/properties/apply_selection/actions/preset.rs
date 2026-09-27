@@ -36,9 +36,22 @@ fn apply_preset_style(shape: &mut Shape, preset: &ToolPresetConfig) -> bool {
     }
 
     match shape {
-        Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } | Shape::Polygon { fill, .. } => {
+        Shape::Rect {
+            fill, fill_color, ..
+        }
+        | Shape::Ellipse {
+            fill, fill_color, ..
+        }
+        | Shape::Polygon {
+            fill, fill_color, ..
+        } => {
+            // A preset with a fill setting carries the whole fill: its own
+            // color, or none, which fills with the border color the preset
+            // just set.
             if let Some(enabled) = preset.fill_enabled {
                 changed |= replace(fill, enabled);
+                let preset_fill = preset.fill_color.as_ref().map(ColorSpec::to_color);
+                changed |= replace(fill_color, preset_fill);
             }
         }
         Shape::Text {
@@ -96,6 +109,7 @@ fn preset_from_shape(shape: &Shape) -> Option<ToolPresetConfig> {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
@@ -109,15 +123,25 @@ fn preset_from_shape(shape: &Shape) -> Option<ToolPresetConfig> {
         Shape::Freehand { color, thick, .. } => (Tool::Pen, *color, *thick),
         Shape::Line { color, thick, .. } => (Tool::Line, *color, *thick),
         Shape::Rect {
-            color, thick, fill, ..
+            color,
+            thick,
+            fill,
+            fill_color,
+            ..
         } => {
             preset.fill_enabled = Some(*fill);
+            preset.fill_color = fill_color.map(ColorSpec::from);
             (Tool::Rect, *color, *thick)
         }
         Shape::Ellipse {
-            color, thick, fill, ..
+            color,
+            thick,
+            fill,
+            fill_color,
+            ..
         } => {
             preset.fill_enabled = Some(*fill);
+            preset.fill_color = fill_color.map(ColorSpec::from);
             (Tool::Ellipse, *color, *thick)
         }
         Shape::Polygon {
@@ -125,9 +149,11 @@ fn preset_from_shape(shape: &Shape) -> Option<ToolPresetConfig> {
             color,
             thick,
             fill,
+            fill_color,
             ..
         } => {
             preset.fill_enabled = Some(*fill);
+            preset.fill_color = fill_color.map(ColorSpec::from);
             let tool = match kind {
                 PolygonKind::Triangle => Tool::Triangle,
                 PolygonKind::Parallelogram => Tool::Parallelogram,

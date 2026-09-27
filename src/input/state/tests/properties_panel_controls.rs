@@ -1213,3 +1213,70 @@ fn undo_mid_drag_first_lands_the_drag() {
     state.handle_action_with_resources(resources, Action::Redo);
     assert_eq!(rect_of(&state, id).2, 50.0);
 }
+
+#[test]
+fn a_preset_saved_from_a_separately_filled_shape_brings_its_fill_along() {
+    use crate::input::state::PanelAction;
+
+    let mut state = create_test_input_state();
+    let empty_slot = state
+        .preset_slots
+        .presets()
+        .iter()
+        .position(Option::is_none)
+        .expect("an empty slot")
+        + 1;
+    let source = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 100,
+        y: 100,
+        w: 60,
+        h: 40,
+        fill: true,
+        fill_color: Some(PALETTE_GREEN),
+        color: PALETTE_RED,
+        thick: 3.0,
+    });
+    open(&mut state, vec![source]);
+    let slot = PropertiesPanelHit::Action(PanelAction::Preset(empty_slot));
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::SavePreset),
+    );
+    click(&mut state, slot);
+
+    let target = add_styled_rect(&mut state, crate::domain::color::PALETTE_BLUE, 5.0, true);
+    open(&mut state, vec![target]);
+    click(&mut state, slot);
+
+    assert_eq!(rect_of(&state, target).0, PALETTE_RED, "the border");
+    assert_eq!(
+        fill_of(&state, target),
+        (true, Some(PALETTE_GREEN)),
+        "the fill"
+    );
+
+    // A preset whose fill follows its border resets a separate fill.
+    let plain_slot = state
+        .preset_slots
+        .presets()
+        .iter()
+        .position(Option::is_none)
+        .expect("another empty slot")
+        + 1;
+    let plain = add_styled_rect(&mut state, PALETTE_RED, 3.0, true);
+    open(&mut state, vec![plain]);
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::SavePreset),
+    );
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::Preset(plain_slot)),
+    );
+    open(&mut state, vec![target]);
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::Preset(plain_slot)),
+    );
+    assert_eq!(fill_of(&state, target), (true, None));
+}

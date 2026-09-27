@@ -61,6 +61,7 @@ fn preset(name: &str) -> ToolPresetConfig {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
@@ -833,4 +834,31 @@ fn an_edit_that_waits_for_the_lock_reapplies_onto_the_retargeted_file() {
         ORIGINAL,
         "and the file the path used to name keeps every byte"
     );
+}
+
+/// A preset saved from a shape filled with its own color keeps that fill
+/// through the file, and one without leaves no trace of the field.
+#[test]
+fn a_preset_keeps_its_fill_color_through_the_config_file() {
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let path = temp.path().join("config.toml");
+    fs::write(&path, ORIGINAL).expect("seed config");
+    let mut filled = preset("Filled");
+    filled.tool = crate::input::Tool::Rect;
+    filled.fill_enabled = Some(true);
+    filled.fill_color = Some(ColorSpec::from(Color {
+        r: 0.0,
+        g: 0.8,
+        b: 0.4,
+        a: 1.0,
+    }));
+
+    persist_preset_slot_at(&path, 1, Some(&filled)).expect("write filled preset");
+    persist_preset_slot_at(&path, 2, Some(&preset("Plain"))).expect("write plain preset");
+
+    let written = fs::read_to_string(&path).expect("readable");
+    assert_eq!(written.matches("fill_color").count(), 1, "{written}");
+    let loaded: super::super::Config = toml::from_str(&written).expect("parse");
+    assert_eq!(loaded.presets.get_slot(1), Some(&filled));
+    assert_eq!(loaded.presets.get_slot(2), Some(&preset("Plain")));
 }

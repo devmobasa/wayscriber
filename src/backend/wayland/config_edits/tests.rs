@@ -39,6 +39,7 @@ fn preset(name: &str) -> Box<crate::config::ToolPresetConfig> {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
