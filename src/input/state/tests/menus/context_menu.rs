@@ -606,6 +606,34 @@ fn pages_menu_shows_window_indicators_around_active_page() {
 }
 
 #[test]
+fn boards_menu_offers_the_board_picker_between_the_list_and_the_commands() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+
+    let entries = state.context_menu_entries();
+    let picker = entries
+        .iter()
+        .position(|entry| entry.label == "Board Picker\u{2026}")
+        .expect("board picker row");
+    let entry = &entries[picker];
+    assert_eq!(entry.command, Some(MenuCommand::OpenBoardPicker));
+    assert!(!entry.disabled);
+    assert!(entry.shortcut.is_some(), "the row names its shortcut");
+    assert!(entry.separator_before, "it starts the command group");
+    assert!(
+        entries[picker - 1].label.starts_with("  "),
+        "the board list ends right above it"
+    );
+    assert_eq!(entries[picker + 1].label, "Previous Board");
+
+    let new_board = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::BoardNew))
+        .expect("new board row");
+    assert!(new_board.separator_before, "management is its own group");
+}
+
+#[test]
 fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() {
     let mut state = create_test_input_state();
     state.switch_board_slot(8);
@@ -615,10 +643,12 @@ fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() 
     let overflow_entries = state
         .context_menu_entries()
         .into_iter()
-        .filter(|entry| entry.command == Some(MenuCommand::OpenBoardPicker))
+        .filter(|entry| {
+            entry.command == Some(MenuCommand::OpenBoardPicker)
+                && entry.label.contains("open picker")
+        })
         .collect::<Vec<_>>();
     assert_eq!(overflow_entries.len(), 1);
-    assert!(overflow_entries[0].label.contains("open picker"));
 
     state.switch_board(BOARD_ID_TRANSPARENT);
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);

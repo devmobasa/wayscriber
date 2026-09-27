@@ -1596,7 +1596,8 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 - <kbd>Ctrl+Shift+Left/Right</kbd>: Previous/next board
 - <kbd>Ctrl+Shift+N</kbd>: New board
 - <kbd>Ctrl+Shift+Delete</kbd>: Delete board
-- <kbd>Ctrl+Shift+B</kbd>: Board picker (inline rename/color)
+- <kbd>Ctrl+Shift+B</kbd>: Board picker (inline rename/color); also **Board Picker…** in the
+  canvas context menu's **Boards** submenu
 - Aliases (configurable): <kbd>Ctrl+W</kbd> = whiteboard, <kbd>Ctrl+B</kbd> = blackboard, <kbd>Ctrl+Shift+T</kbd> = transparent
 
 **Board Picker:**

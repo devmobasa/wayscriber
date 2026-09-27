@@ -82,6 +82,17 @@ impl InputState {
             ));
         }
 
+        // Every board and its pages, past what this short list can hold.
+        entries.push(
+            ContextMenuEntry::new(
+                "Board Picker…",
+                self.shortcut_for_action(Action::BoardPicker),
+                false,
+                Some(MenuCommand::OpenBoardPicker),
+            )
+            .with_separator(),
+        );
+
         // Navigation
         entries.push(ContextMenuEntry::new(
             "Previous Board",
@@ -97,12 +108,15 @@ impl InputState {
         ));
 
         // Management
-        entries.push(ContextMenuEntry::new(
-            "New Board",
-            self.shortcut_for_action(Action::BoardNew),
-            false,
-            Some(MenuCommand::BoardNew),
-        ));
+        entries.push(
+            ContextMenuEntry::new(
+                "New Board",
+                self.shortcut_for_action(Action::BoardNew),
+                false,
+                Some(MenuCommand::BoardNew),
+            )
+            .with_separator(),
+        );
         entries.push(ContextMenuEntry::new(
             "Duplicate Board",
             self.shortcut_for_action(Action::BoardDuplicate),
