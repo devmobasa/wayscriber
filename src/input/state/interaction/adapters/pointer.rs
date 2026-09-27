@@ -92,12 +92,13 @@ pub(crate) fn handle_board_picker_press(
 
 pub(crate) fn handle_properties_panel_press(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let screen = points.screen();
     state
-        .handle_properties_panel_press(button, screen.x(), screen.y())
+        .handle_properties_panel_press_with_measurer(measurer, button, screen.x(), screen.y())
         .then_some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }
 
@@ -452,6 +453,7 @@ pub(crate) fn handle_board_picker_motion(
 
 pub(crate) fn handle_properties_panel_motion(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     if !state.is_properties_panel_open() {
@@ -459,7 +461,7 @@ pub(crate) fn handle_properties_panel_motion(
     }
     if state.properties_panel_layout().is_some() {
         let screen = points.screen();
-        state.update_properties_panel_hover_from_pointer(screen.x(), screen.y());
+        state.move_properties_panel_pointer_with(measurer, screen.x(), screen.y());
     }
     Some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }

@@ -2231,6 +2231,7 @@ fn save_snapshot_preserves_multiple_pages() {
         w: 8,
         h: 8,
         fill: false,
+        fill_color: None,
         color: Color {
             r: 0.0,
             g: 0.0,

@@ -90,6 +90,7 @@ impl Shape {
                 w,
                 h,
                 fill,
+                fill_color,
                 color,
                 thick,
             } => {
@@ -102,6 +103,7 @@ impl Shape {
                     w: nw.max(1),
                     h: nh.max(1),
                     fill: *fill,
+                    fill_color: *fill_color,
                     color: *color,
                     thick: *thick,
                 }
@@ -112,6 +114,7 @@ impl Shape {
                 rx,
                 ry,
                 fill,
+                fill_color,
                 color,
                 thick,
             } => {
@@ -124,6 +127,7 @@ impl Shape {
                     rx: nrx.max(1),
                     ry: nry.max(1),
                     fill: *fill,
+                    fill_color: *fill_color,
                     color: *color,
                     thick: *thick,
                 }
@@ -210,6 +214,7 @@ impl Shape {
                 kind,
                 points,
                 fill,
+                fill_color,
                 color,
                 thick,
             } => {
@@ -218,6 +223,7 @@ impl Shape {
                     kind: *kind,
                     points: scaled_points,
                     fill: *fill,
+                    fill_color: *fill_color,
                     color: *color,
                     thick: *thick,
                 }

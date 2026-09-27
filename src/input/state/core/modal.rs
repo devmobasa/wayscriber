@@ -254,6 +254,14 @@ impl InputState {
                 .any(|surface| surface.blocks_canvas_key_repeat() && self.modal_is_open(surface))
     }
 
+    /// Whether a canvas press would only close an open popup. The properties
+    /// panel and the context menu both spend the first press outside them on
+    /// dismissing themselves, so while one is open the canvas draws nothing
+    /// and a tool's cursor preview would promise a stroke that never comes.
+    pub(crate) fn canvas_press_dismisses_popup(&self) -> bool {
+        self.is_properties_panel_open() || self.is_context_menu_open()
+    }
+
     /// Whether an open surface claims the wheel, so an axis frame must not
     /// fall through to the canvas tool behind it.
     ///
@@ -384,6 +392,7 @@ mod wheel_tests {
                 w: 10,
                 h: 10,
                 fill: false,
+                fill_color: None,
                 color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
                 thick: 2.0,
             });
@@ -392,6 +401,33 @@ mod wheel_tests {
 
         assert!(state.is_properties_panel_open());
         assert!(!state.modal_owns_wheel());
+    }
+
+    #[test]
+    fn a_popup_a_canvas_click_would_only_dismiss_hides_the_tool_preview() {
+        let measurer = crate::draw::TextMeasurer::default();
+        let mut state = make_test_input_state();
+        assert!(!state.canvas_press_dismisses_popup());
+        let id = state
+            .boards
+            .active_frame_mut()
+            .add_shape(crate::draw::Shape::Rect {
+                x: 0,
+                y: 0,
+                w: 10,
+                h: 10,
+                fill: false,
+                fill_color: None,
+                color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+                thick: 2.0,
+            });
+        state.set_selection(vec![id]);
+
+        assert!(state.show_properties_panel_with(&measurer));
+        assert!(state.canvas_press_dismisses_popup());
+
+        state.close_properties_panel();
+        assert!(!state.canvas_press_dismisses_popup());
     }
 }
 

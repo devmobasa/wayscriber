@@ -21,6 +21,7 @@ fn duplicate_selection_via_action_creates_offset_shape() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -65,6 +66,7 @@ fn copy_paste_selection_centers_shape_at_pointer() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -124,6 +126,7 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -167,6 +170,7 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -182,6 +186,7 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
         w: 90,
         h: 70,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -220,6 +225,7 @@ fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -288,6 +294,7 @@ fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -332,6 +339,7 @@ fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -369,6 +377,7 @@ fn published_selection_allows_local_fallback_until_superseded() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -417,6 +426,7 @@ fn fallback_generation_rejects_newer_local_copy() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -460,6 +470,7 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -479,6 +490,7 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
         w: 90,
         h: 70,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -514,6 +526,7 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -535,6 +548,7 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
         w: 90,
         h: 70,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -570,6 +584,7 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -616,6 +631,7 @@ fn request_generation_supersede_ignores_newer_local_copy() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -635,6 +651,7 @@ fn request_generation_supersede_ignores_newer_local_copy() {
         w: 90,
         h: 70,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -671,6 +688,7 @@ fn failed_local_fast_path_rejects_newer_generation() {
         w: 100,
         h: 80,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -703,6 +721,7 @@ fn failed_local_fast_path_rejects_newer_generation() {
         w: 90,
         h: 70,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -750,6 +769,7 @@ fn duplicate_selection_skips_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -759,6 +779,7 @@ fn duplicate_selection_skips_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -787,6 +808,7 @@ fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -815,6 +837,7 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
         w: 30,
         h: 40,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -846,6 +869,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
         w: 30,
         h: 40,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -870,6 +894,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -879,6 +904,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

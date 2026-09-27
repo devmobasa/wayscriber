@@ -653,6 +653,7 @@ impl WaylandState {
         self.input_state.ui_visibility.show_tool_preview
             && self.has_cursor_focus()
             && !self.cursor_blocked_by_toolbar()
+            && !self.input_state.canvas_press_dismisses_popup()
             && matches!(
                 self.input_state.state,
                 DrawingState::Idle | DrawingState::PendingTextClick { .. }

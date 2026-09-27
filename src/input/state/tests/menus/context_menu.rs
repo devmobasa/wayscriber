@@ -52,6 +52,7 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -61,6 +62,7 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -103,6 +105,7 @@ fn shape_menu_includes_reset_canvas_position_on_solid_boards() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -133,6 +136,7 @@ fn select_this_shape_command_focuses_single_shape() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -142,6 +146,7 @@ fn select_this_shape_command_focuses_single_shape() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -174,6 +179,7 @@ fn properties_command_opens_panel() {
             w: 40,
             h: 30,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 1.0,
                 g: 0.0,
@@ -412,6 +418,7 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -421,6 +428,7 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -689,6 +697,7 @@ fn keyboard_shape_menu_anchor_tracks_panned_board_view_offset() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -904,6 +913,7 @@ fn undo_and_redo_rows_follow_history_and_run_it() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: 2.0,
     });
@@ -968,6 +978,7 @@ fn shape_menu_also_ends_with_exit() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: 2.0,
     });
@@ -1037,4 +1048,51 @@ fn open_board_picker_command_closes_context_menu_and_opens_picker() {
 
     assert!(!state.is_context_menu_open());
     assert!(state.is_board_picker_open());
+}
+
+#[test]
+fn shape_menu_orders_by_steps_and_dims_the_way_the_shape_cannot_go() {
+    let mut state = create_test_input_state();
+    let rect = |x| Shape::Rect {
+        x,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        fill_color: None,
+        color: Color::new(1.0, 0.0, 0.0, 1.0),
+        thick: 2.0,
+    };
+    let bottom = state.boards.active_frame_mut().add_shape(rect(0));
+    let _top = state.boards.active_frame_mut().add_shape(rect(20));
+    state.set_selection(vec![bottom]);
+    state.open_context_menu((0, 0), vec![bottom], ContextMenuKind::Shape, Some(bottom));
+
+    let entries = state.context_menu_entries();
+    let disabled = |label: &str| {
+        entries
+            .iter()
+            .find(|entry| entry.label == label)
+            .unwrap_or_else(|| panic!("{label} entry"))
+            .disabled
+    };
+    let labels: Vec<_> = entries.iter().map(|entry| entry.label.as_str()).collect();
+    let front = labels
+        .iter()
+        .position(|label| *label == "Move to Front")
+        .unwrap();
+    assert_eq!(
+        &labels[front..front + 4],
+        [
+            "Move to Front",
+            "Move Forward",
+            "Move Backward",
+            "Move to Back"
+        ]
+    );
+    assert!(!disabled("Move to Front") && !disabled("Move Forward"));
+    assert!(
+        disabled("Move Backward") && disabled("Move to Back"),
+        "the bottom shape cannot go lower"
+    );
 }

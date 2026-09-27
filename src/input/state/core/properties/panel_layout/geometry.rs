@@ -3,13 +3,15 @@
 //! is clickable exactly where it is drawn.
 
 use super::super::metrics::{
-    BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING, PREVIEW_GAP,
-    PREVIEW_HEIGHT, PREVIEW_WIDTH, ROW_HEIGHT, ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD,
-    STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP, STYLE_BUTTON_HEIGHT, SWATCH_GAP,
-    SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE, SWITCH_HEIGHT, SWITCH_WIDTH, TITLE_FONT,
+    ACTION_BUTTON_GAP, ACTION_BUTTON_HEIGHT, ACTION_ROW_GAP, ACTIONS_LABEL_WIDTH, ACTIONS_TOP_GAP,
+    BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING,
+    PRESET_SAVE_WIDTH, ROW_HEIGHT, ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD, SLIDER_HIT_HEIGHT,
+    SLIDER_THUMB_RADIUS, SLIDER_VALUE_GAP, STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP,
+    STYLE_BUTTON_HEIGHT, SWATCH_GAP, SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE,
+    SWITCH_HEIGHT, SWITCH_WIDTH, TITLE_FONT,
 };
 use super::super::types::{
-    PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
+    PanelAction, PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
     PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyKind,
     SelectionPropertyValue, ShapePropertiesPanel,
 };
@@ -27,22 +29,38 @@ enum RowShape {
 
 fn row_shape(entry: &SelectionPropertyEntry) -> RowShape {
     match entry.state {
-        SelectionPropertyValue::Color(_) | SelectionPropertyValue::ArrowStyle(_) => RowShape::Block,
-        SelectionPropertyValue::Number(_)
+        SelectionPropertyValue::Color(_)
+        | SelectionPropertyValue::Fill(_)
+        | SelectionPropertyValue::ArrowStyle(_) => RowShape::Block,
+        SelectionPropertyValue::Level(_)
+        | SelectionPropertyValue::Number(_)
         | SelectionPropertyValue::PressureVaries
         | SelectionPropertyValue::Toggle(_)
         | SelectionPropertyValue::ArrowHead(_) => RowShape::Inline,
     }
 }
 
-/// Lines the swatch grid needs for `swatches` plus its "more colors" button.
-fn swatch_lines(swatches: usize) -> usize {
-    (swatches + 1).div_ceil(SWATCH_ITEMS_PER_LINE)
+/// Whether a swatch row leads with a "no fill" cell: the fill row does.
+fn leads_with_no_fill(entry: &SelectionPropertyEntry) -> bool {
+    matches!(entry.state, SelectionPropertyValue::Fill(_))
 }
 
-/// Width of the swatch grid's widest line.
-pub(in crate::input::state::core::properties) fn swatch_grid_width(swatches: usize) -> f64 {
-    let items = (swatches + 1).min(SWATCH_ITEMS_PER_LINE) as f64;
+/// Cells in a swatch row: its swatches, the trailing "more colors" button,
+/// and the fill row's leading "no fill".
+pub(in crate::input::state::core::properties) fn swatch_cells(
+    entry: &SelectionPropertyEntry,
+    swatches: usize,
+) -> usize {
+    swatches + 1 + usize::from(leads_with_no_fill(entry))
+}
+
+fn swatch_lines(cells: usize) -> usize {
+    cells.div_ceil(SWATCH_ITEMS_PER_LINE)
+}
+
+/// Width of a swatch grid's widest line.
+pub(in crate::input::state::core::properties) fn swatch_grid_width(cells: usize) -> f64 {
+    let items = cells.min(SWATCH_ITEMS_PER_LINE) as f64;
     items * SWATCH_SIZE + (items - 1.0) * SWATCH_GAP
 }
 
@@ -51,8 +69,8 @@ pub(in crate::input::state::core::properties) fn row_height(
     swatches: usize,
 ) -> f64 {
     let control_height = match entry.state {
-        SelectionPropertyValue::Color(_) => {
-            let lines = swatch_lines(swatches) as f64;
+        SelectionPropertyValue::Color(_) | SelectionPropertyValue::Fill(_) => {
+            let lines = swatch_lines(swatch_cells(entry, swatches)) as f64;
             lines * SWATCH_SIZE + (lines - 1.0) * SWATCH_LINE_GAP
         }
         SelectionPropertyValue::ArrowStyle(_) => STYLE_BUTTON_HEIGHT,
@@ -108,14 +126,6 @@ pub(in crate::input::state::core::properties) fn balanced_column_budget(
     high
 }
 
-/// Whether a stepper row draws a stroke at its current thickness.
-pub(in crate::input::state::core::properties) fn shows_thickness_preview(
-    entry: &SelectionPropertyEntry,
-) -> bool {
-    entry.kind == SelectionPropertyKind::Thickness
-        && matches!(entry.state, SelectionPropertyValue::Number(Some(_)))
-}
-
 impl PropertiesPanelLayout {
     pub fn rect(&self) -> PanelRect {
         PanelRect::new(self.origin_x, self.origin_y, self.width, self.height)
@@ -150,6 +160,58 @@ impl PropertiesPanelLayout {
     fn rows_visible_at(&self, y: f64) -> bool {
         self.scroll
             .is_none_or(|scroll| y >= self.rows_top && y < scroll.viewport_bottom)
+    }
+
+    /// The actions area's buttons: the four ordering buttons, and Duplicate
+    /// and Delete under them, both after the label column; then Save at the
+    /// end of the presets' label line, and the preset slots under it across
+    /// the full content width, which gives each chip room for its dot and
+    /// number.
+    pub fn action_buttons(&self) -> Vec<(PanelAction, PanelRect)> {
+        let left = self.content_x() + ACTIONS_LABEL_WIDTH;
+        let width = self.content_right() - left;
+        let row = |top: f64, actions: &[PanelAction]| {
+            let count = actions.len() as f64;
+            let button = (width - ACTION_BUTTON_GAP * (count - 1.0)) / count;
+            actions
+                .iter()
+                .enumerate()
+                .map(|(index, action)| {
+                    let x = left + index as f64 * (button + ACTION_BUTTON_GAP);
+                    (
+                        *action,
+                        PanelRect::new(x, top, button, ACTION_BUTTON_HEIGHT),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let order_top = self.actions_top + ACTIONS_TOP_GAP;
+        let edit_top = order_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
+        let mut buttons = row(order_top, &PanelAction::ORDER);
+        buttons.extend(row(edit_top, &PanelAction::EDIT));
+
+        let preset_label_top = edit_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
+        let chips_top = preset_label_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
+        let slots = self.preset_slots.max(1) as f64;
+        let chip =
+            (self.content_right() - self.content_x() - ACTION_BUTTON_GAP * (slots - 1.0)) / slots;
+        buttons.extend((0..self.preset_slots).map(|index| {
+            let x = self.content_x() + index as f64 * (chip + ACTION_BUTTON_GAP);
+            (
+                PanelAction::Preset(index + 1),
+                PanelRect::new(x, chips_top, chip, ACTION_BUTTON_HEIGHT),
+            )
+        }));
+        buttons.push((
+            PanelAction::SavePreset,
+            PanelRect::new(
+                self.content_right() - PRESET_SAVE_WIDTH,
+                preset_label_top,
+                PRESET_SAVE_WIDTH,
+                ACTION_BUTTON_HEIGHT,
+            ),
+        ));
+        buttons
     }
 
     /// Left edge of the content of `column`.
@@ -208,7 +270,7 @@ impl PropertiesPanelLayout {
                 SelectionPropertyValue::ArrowStyle(_) => {
                     self.arrow_style_buttons(left, control_top)
                 }
-                _ => swatch_grid(left, control_top, swatches),
+                _ => swatch_grid(left, control_top, swatches, leads_with_no_fill(entry)),
             };
             return PropertiesRowGeometry {
                 index,
@@ -254,6 +316,24 @@ impl PropertiesPanelLayout {
                 );
                 PropertiesRowControl::ArrowHead { well, start, end }
             }
+            SelectionPropertyValue::Level(_) => {
+                let value = PanelRect::new(
+                    right - self.slider_value_width,
+                    center_y - SLIDER_HIT_HEIGHT / 2.0,
+                    self.slider_value_width,
+                    SLIDER_HIT_HEIGHT,
+                );
+                let track_x = left + self.label_column;
+                PropertiesRowControl::Slider {
+                    track: PanelRect::new(
+                        track_x,
+                        center_y - SLIDER_HIT_HEIGHT / 2.0,
+                        (value.x - SLIDER_VALUE_GAP - track_x).max(SLIDER_THUMB_RADIUS * 2.0),
+                        SLIDER_HIT_HEIGHT,
+                    ),
+                    value,
+                }
+            }
             _ => {
                 let total = STEP_BUTTON_WIDTH * 2.0 + self.stepper_value_width;
                 let x = right - total;
@@ -262,20 +342,7 @@ impl PropertiesPanelLayout {
                 let value =
                     PanelRect::new(down.right(), y, self.stepper_value_width, STEPPER_HEIGHT);
                 let up = PanelRect::new(value.right(), y, STEP_BUTTON_WIDTH, STEPPER_HEIGHT);
-                let preview = shows_thickness_preview(entry).then(|| {
-                    PanelRect::new(
-                        x - PREVIEW_GAP - PREVIEW_WIDTH,
-                        center_y - PREVIEW_HEIGHT / 2.0,
-                        PREVIEW_WIDTH,
-                        PREVIEW_HEIGHT,
-                    )
-                });
-                PropertiesRowControl::Stepper {
-                    down,
-                    value,
-                    up,
-                    preview,
-                }
+                PropertiesRowControl::Stepper { down, value, up }
             }
         };
 
@@ -319,6 +386,13 @@ impl PropertiesPanelLayout {
         if self.title_rect().contains(x, y) {
             return Some(PropertiesPanelHit::Title);
         }
+        if y >= self.actions_top {
+            return self
+                .action_buttons()
+                .into_iter()
+                .find(|(_, rect)| rect.contains(x, y))
+                .map(|(action, _)| PropertiesPanelHit::Action(action));
+        }
         // Rows scrolled out of the viewport are clipped, so they take no clicks.
         if !self.rows_visible_at(y) {
             return None;
@@ -330,9 +404,15 @@ impl PropertiesPanelLayout {
             .find(|row| row.rect.contains(x, y))?;
         let index = row.index;
         let hit = match &row.control {
-            PropertiesRowControl::Swatches { swatches, more } => {
-                if more.contains(x, y) {
+            PropertiesRowControl::Swatches {
+                swatches,
+                none,
+                more,
+            } => {
+                if more.is_some_and(|more| more.contains(x, y)) {
                     Some(PropertiesPanelHit::MoreColors(index))
+                } else if none.is_some_and(|none| none.contains(x, y)) {
+                    Some(PropertiesPanelHit::NoFill(index))
                 } else {
                     swatches
                         .iter()
@@ -343,6 +423,9 @@ impl PropertiesPanelLayout {
                         })
                 }
             }
+            PropertiesRowControl::Slider { track, .. } => track
+                .contains(x, y)
+                .then_some(PropertiesPanelHit::Slider(index)),
             PropertiesRowControl::Stepper { down, up, .. } => {
                 if down.contains(x, y) {
                     Some(PropertiesPanelHit::StepDown(index))
@@ -391,6 +474,13 @@ impl PropertiesPanelLayout {
         match hit {
             PropertiesPanelHit::Title => return Some(self.title_rect()),
             PropertiesPanelHit::Lock => return Some(self.lock),
+            PropertiesPanelHit::Action(action) => {
+                return self
+                    .action_buttons()
+                    .into_iter()
+                    .find(|(candidate, _)| *candidate == action)
+                    .map(|(_, rect)| rect);
+            }
             _ => {}
         }
         let row = self.rows(panel).into_iter().nth(hit.row()?)?;
@@ -401,8 +491,10 @@ impl PropertiesPanelLayout {
                 PropertiesRowControl::Swatches { swatches, .. },
             ) => *swatches.get(index)?,
             (PropertiesPanelHit::MoreColors(_), PropertiesRowControl::Swatches { more, .. }) => {
-                more
+                more?
             }
+            (PropertiesPanelHit::NoFill(_), PropertiesRowControl::Swatches { none, .. }) => none?,
+            (PropertiesPanelHit::Slider(_), PropertiesRowControl::Slider { track, .. }) => track,
             (PropertiesPanelHit::StepDown(_), PropertiesRowControl::Stepper { down, .. }) => down,
             (PropertiesPanelHit::StepUp(_), PropertiesRowControl::Stepper { up, .. }) => up,
             (PropertiesPanelHit::Toggle(_), PropertiesRowControl::Toggle { switch }) => switch,
@@ -429,7 +521,9 @@ impl PropertiesPanelLayout {
     }
 }
 
-fn swatch_grid(x: f64, top: f64, swatches: usize) -> PropertiesRowControl {
+/// A swatch row's cells: an optional leading "no fill", the swatches, and a
+/// trailing "more colors" button that opens the full color picker.
+fn swatch_grid(x: f64, top: f64, swatches: usize, no_fill: bool) -> PropertiesRowControl {
     let cell = |item: usize| {
         let line = item / SWATCH_ITEMS_PER_LINE;
         let column = item % SWATCH_ITEMS_PER_LINE;
@@ -440,9 +534,11 @@ fn swatch_grid(x: f64, top: f64, swatches: usize) -> PropertiesRowControl {
             SWATCH_SIZE,
         )
     };
+    let first = usize::from(no_fill);
     PropertiesRowControl::Swatches {
-        swatches: (0..swatches).map(cell).collect(),
-        more: cell(swatches),
+        swatches: (first..first + swatches).map(cell).collect(),
+        none: no_fill.then(|| cell(0)),
+        more: Some(cell(first + swatches)),
     }
 }
 
@@ -461,7 +557,9 @@ impl ShapePropertiesPanel {
     /// The swatch holding the row's single color, which gets the selection
     /// ring. `None` for a mixed, locked, or custom color.
     pub fn current_swatch(&self, entry: &SelectionPropertyEntry) -> Option<usize> {
-        let SelectionPropertyValue::Color(Some(color)) = entry.state else {
+        let (SelectionPropertyValue::Color(Some(color))
+        | SelectionPropertyValue::Fill(Some(Some(color)))) = entry.state
+        else {
             return None;
         };
         palette_position(self.swatches.iter().map(|swatch| swatch.color), color)
@@ -484,7 +582,40 @@ impl ShapePropertiesPanel {
             PropertiesPanelHit::Swatch { index, .. } => {
                 self.swatches.get(index).map(|swatch| swatch.label.clone())
             }
-            PropertiesPanelHit::MoreColors(_) => Some("More colors…".to_string()),
+            PropertiesPanelHit::MoreColors(row) => Some(
+                match self.entries.get(row).map(|entry| entry.kind) {
+                    Some(SelectionPropertyKind::Fill) => "More fill colors…",
+                    _ => "More colors…",
+                }
+                .to_string(),
+            ),
+            PropertiesPanelHit::NoFill(_) => Some("No fill".to_string()),
+            PropertiesPanelHit::Action(action) => match action {
+                PanelAction::ToBack => Some("Send to back".to_string()),
+                PanelAction::Backward => Some("Send backward".to_string()),
+                PanelAction::Forward => Some("Bring forward".to_string()),
+                PanelAction::ToFront => Some("Bring to front".to_string()),
+                PanelAction::Duplicate | PanelAction::Delete => None,
+                PanelAction::SavePreset => Some(
+                    if self.preset_save_mode {
+                        "Pick a slot to save into"
+                    } else {
+                        "Save the selection's style as a preset"
+                    }
+                    .to_string(),
+                ),
+                PanelAction::Preset(slot) => Some(if self.preset_save_mode {
+                    format!("Save to preset {slot}")
+                } else {
+                    match self.actions.presets.get(slot - 1) {
+                        Some(Some(preset)) => match &preset.name {
+                            Some(name) => format!("Apply preset {slot}: {name}"),
+                            None => format!("Apply preset {slot}"),
+                        },
+                        _ => format!("Preset {slot} is empty"),
+                    }
+                }),
+            },
             _ => None,
         }
     }

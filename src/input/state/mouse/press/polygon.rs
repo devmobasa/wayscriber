@@ -134,6 +134,7 @@ impl InputState {
             kind: PolygonKind::Freeform,
             points,
             fill,
+            fill_color: None,
             color,
             thick,
         };

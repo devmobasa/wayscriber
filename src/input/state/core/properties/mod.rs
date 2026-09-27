@@ -4,14 +4,16 @@ mod entries;
 pub(crate) mod metrics;
 mod panel;
 mod panel_layout;
+mod slider;
 mod state;
 mod summary;
 mod types;
 mod utils;
 
+pub(crate) use apply_selection::RecolorOpacity;
 pub use state::PropertiesPanelState;
 pub use types::{
-    PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
-    PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry,
-    SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
+    LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
+    PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
+    SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
 };

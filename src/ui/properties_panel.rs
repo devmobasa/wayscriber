@@ -26,11 +26,14 @@ use crate::ui::theme::overlay::{
 use crate::ui::theme::{Rgba, set_color, with_alpha};
 use crate::ui_text::UiTextEngine;
 
+mod actions;
 mod controls;
 
+use actions::draw_actions;
+
 use controls::{
-    ControlState, draw_arrow_head_segments, draw_arrow_styles, draw_lock, draw_stepper,
-    draw_swatches, draw_switch,
+    ControlState, SwatchExtras, draw_arrow_head_segments, draw_arrow_styles, draw_lock,
+    draw_slider, draw_stepper, draw_swatches, draw_switch,
 };
 
 /// Wash behind the hovered row: a quieter `BG_HOVER`, so the control under
@@ -162,6 +165,8 @@ pub(crate) fn render_properties_panel_with_engine(
         }
     }
 
+    draw_actions(engine, ctx, panel, layout);
+
     if let Some(footer_top) = layout.footer_top {
         draw_footer(engine, ctx, layout, footer_top);
     }
@@ -232,10 +237,19 @@ fn draw_row(
 
     let state = ControlState { enabled, hover };
     match &row.control {
-        PropertiesRowControl::Swatches { swatches, more } => {
+        PropertiesRowControl::Swatches {
+            swatches,
+            none,
+            more,
+        } => {
             draw_value_right(engine, ctx, row, entry, enabled);
+            let extras = SwatchExtras {
+                none: *none,
+                none_selected: entry.state == SelectionPropertyValue::Fill(Some(None)),
+                more: *more,
+            };
             let current = panel.current_swatch(entry);
-            draw_swatches(ctx, &panel.swatches, swatches, *more, current, state);
+            draw_swatches(ctx, &panel.swatches, swatches, extras, current, state);
         }
         PropertiesRowControl::ArrowStyles { buttons } => {
             draw_value_right(engine, ctx, row, entry, enabled);
@@ -245,25 +259,33 @@ fn draw_row(
             };
             draw_arrow_styles(engine, ctx, buttons, current, state);
         }
-        PropertiesRowControl::Stepper {
-            down,
-            value,
-            up,
-            preview,
-        } => {
-            let thickness = match entry.state {
-                SelectionPropertyValue::Number(value) => value,
-                _ => None,
-            };
+        PropertiesRowControl::Stepper { down, value, up } => {
             draw_stepper(
                 engine,
                 ctx,
                 (*down, *value, *up),
                 entry.stepper_text(),
-                preview.zip(thickness),
-                panel.preview_color,
                 state,
             );
+        }
+        PropertiesRowControl::Slider { track, value } => {
+            let level = match entry.state {
+                SelectionPropertyValue::Level(level) => level,
+                _ => None,
+            };
+            if let Some(range) = entry.kind.level_range() {
+                draw_slider(
+                    engine,
+                    ctx,
+                    *track,
+                    *value,
+                    &entry.value,
+                    level,
+                    range,
+                    panel.preview_color,
+                    state,
+                );
+            }
         }
         PropertiesRowControl::Toggle { switch } => {
             let on = match entry.state {

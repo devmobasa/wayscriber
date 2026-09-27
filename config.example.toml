@@ -1356,6 +1356,9 @@ size = 3.0
 # Optional overrides
 marker_opacity = 0.32
 fill_enabled = false
+# Optional fill color, when a fill differs from `color` (written when a
+# preset is saved from a shape filled with its own color)
+# fill_color = "blue"
 font_size = 32.0
 text_background_enabled = false
 arrow_length = 20.0

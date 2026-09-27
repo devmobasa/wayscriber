@@ -3,19 +3,20 @@ use cairo::FontWeight;
 
 use super::super::super::base::InputState;
 use super::super::metrics::{
-    BODY_FONT, COLUMN_GAP, COLUMN_SPACING, EMPTY_HEIGHT, FOOTER_HEIGHT, HEADER_GAP, LOCK_INSET,
-    LOCK_SIZE, MIN_WIDTH, PADDING_BOTTOM, PADDING_TOP, PADDING_X, PREVIEW_GAP, PREVIEW_WIDTH,
-    ROW_HEIGHT, ROWS_GAP, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SEGMENT_PAD, SEGMENT_TEXT_PADDING,
-    STEP_BUTTON_WIDTH, STEPPER_MIN_VALUE_WIDTH, STEPPER_VALUE_PADDING, STYLE_BUTTON_GAP,
-    STYLE_BUTTON_MIN_WIDTH, SUBTITLE_FONT, SUBTITLE_STEP, SWITCH_VALUE_GAP, SWITCH_WIDTH,
-    TITLE_FONT, TOOLTIP_FONT, TOOLTIP_GAP, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y, VALUE_FONT,
-    text_style,
+    ACTIONS_HEIGHT, BODY_FONT, COLUMN_GAP, COLUMN_SPACING, EMPTY_HEIGHT, FOOTER_HEIGHT, HEADER_GAP,
+    LOCK_INSET, LOCK_SIZE, MIN_WIDTH, PADDING_BOTTOM, PADDING_TOP, PADDING_X, ROW_HEIGHT, ROWS_GAP,
+    SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SEGMENT_PAD, SEGMENT_TEXT_PADDING, SLIDER_MIN_TRACK,
+    SLIDER_VALUE_GAP, STEP_BUTTON_WIDTH, STEPPER_MIN_VALUE_WIDTH, STEPPER_VALUE_PADDING,
+    STYLE_BUTTON_GAP, STYLE_BUTTON_MIN_WIDTH, SUBTITLE_FONT, SUBTITLE_STEP, SWITCH_VALUE_GAP,
+    SWITCH_WIDTH, TITLE_FONT, TOOLTIP_FONT, TOOLTIP_GAP, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y,
+    VALUE_FONT, text_style,
 };
 use super::super::types::{
-    PanelRect, PanelScroll, PropertiesPanelLayout, SelectionPropertyValue, ShapePropertiesPanel,
+    PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, SelectionPropertyValue,
+    ShapePropertiesPanel,
 };
 use super::geometry::{
-    balanced_column_budget, column_slots, row_height, shows_thickness_preview, swatch_grid_width,
+    balanced_column_budget, column_slots, row_height, swatch_cells, swatch_grid_width,
 };
 use super::{PANEL_ANCHOR_GAP, PANEL_MARGIN};
 use crate::draw::ArrowStyle;
@@ -28,7 +29,13 @@ struct Measured {
     content_width: f64,
     stepper_value_width: f64,
     head_segment_width: f64,
+    label_column: f64,
+    slider_value_width: f64,
 }
+
+/// Values a slider readout must have room for, whatever it shows now, so the
+/// track keeps its length while a drag changes the readout.
+const SLIDER_READOUT_SAMPLES: [&str; 4] = ["50.0px", "100%", "Mixed", "Locked"];
 
 fn measure_panel(
     engine: &UiTextEngine,
@@ -50,6 +57,10 @@ fn measure_panel(
     let mut label_width: f64 = 0.0;
     let mut stepper_text_width: f64 = 0.0;
     let mut toggle_value_width: f64 = 0.0;
+    let mut slider_text_width: f64 = SLIDER_READOUT_SAMPLES
+        .into_iter()
+        .map(|text| width(VALUE_FONT, FontWeight::Normal, text))
+        .fold(0.0, f64::max);
     for entry in &panel.entries {
         label_width = label_width.max(width(BODY_FONT, FontWeight::Normal, &entry.label));
         match entry.state {
@@ -64,9 +75,15 @@ fn measure_panel(
                 toggle_value_width =
                     toggle_value_width.max(width(VALUE_FONT, FontWeight::Normal, &entry.value));
             }
+            SelectionPropertyValue::Level(_) => {
+                slider_text_width =
+                    slider_text_width.max(width(VALUE_FONT, FontWeight::Normal, &entry.value));
+            }
             _ => {}
         }
     }
+    let label_column = (label_width + COLUMN_GAP).ceil();
+    let slider_value_width = slider_text_width.ceil();
     let head_text_width = ["Start", "End"]
         .into_iter()
         .map(|text| width(VALUE_FONT, FontWeight::Normal, text))
@@ -93,22 +110,17 @@ fn measure_panel(
         .max(empty_width);
     for entry in &panel.entries {
         let row_width = match entry.state {
-            SelectionPropertyValue::Color(_) => {
-                label_width.max(swatch_grid_width(panel.swatches.len()))
+            SelectionPropertyValue::Color(_) | SelectionPropertyValue::Fill(_) => {
+                label_width.max(swatch_grid_width(swatch_cells(entry, panel.swatches.len())))
             }
             SelectionPropertyValue::ArrowStyle(_) => {
                 let count = ArrowStyle::ALL.len() as f64;
                 label_width.max(STYLE_BUTTON_MIN_WIDTH * count + STYLE_BUTTON_GAP * (count - 1.0))
             }
-            SelectionPropertyValue::Number(_) => {
-                let preview = if shows_thickness_preview(entry) {
-                    PREVIEW_WIDTH + PREVIEW_GAP
-                } else {
-                    0.0
-                };
-                label_width + COLUMN_GAP + preview + STEP_BUTTON_WIDTH * 2.0 + stepper_value_width
+            SelectionPropertyValue::Level(_) => {
+                label_column + SLIDER_MIN_TRACK + SLIDER_VALUE_GAP + slider_value_width
             }
-            SelectionPropertyValue::PressureVaries => {
+            SelectionPropertyValue::Number(_) | SelectionPropertyValue::PressureVaries => {
                 label_width + COLUMN_GAP + STEP_BUTTON_WIDTH * 2.0 + stepper_value_width
             }
             SelectionPropertyValue::Toggle(_) => {
@@ -126,6 +138,8 @@ fn measure_panel(
         content_width,
         stepper_value_width,
         head_segment_width,
+        label_column,
+        slider_value_width,
     }
 }
 
@@ -218,7 +232,7 @@ impl InputState {
         } else {
             0.0
         };
-        let panel_height = (rows_top + fit.height + tail + PADDING_BOTTOM).ceil();
+        let panel_height = (rows_top + fit.height + ACTIONS_HEIGHT + tail + PADDING_BOTTOM).ceil();
 
         let screen_w = screen_width as f64;
         let screen_h = screen_height as f64;
@@ -250,9 +264,13 @@ impl InputState {
             ),
             divider_y: origin_y + divider,
             rows_top: origin_y + rows_top,
-            footer_top: has_footer.then_some(origin_y + rows_top + fit.height),
+            actions_top: origin_y + rows_top + fit.height,
+            preset_slots: panel.actions.presets.len(),
+            footer_top: has_footer.then_some(origin_y + rows_top + fit.height + ACTIONS_HEIGHT),
             stepper_value_width: measured.stepper_value_width,
             head_segment_width: measured.head_segment_width,
+            label_column: measured.label_column,
+            slider_value_width: measured.slider_value_width,
             column_width,
             column_budget: fit.budget,
             scroll: scroll.map(|(offset, max_offset)| PanelScroll {
@@ -333,7 +351,7 @@ impl InputState {
         let x = (center_x - width / 2.0).clamp(PANEL_MARGIN, max_x);
         let below = anchor.bottom() + TOOLTIP_GAP;
         let above = anchor.y - TOOLTIP_GAP - height;
-        let header = hit.row().is_none();
+        let header = matches!(hit, PropertiesPanelHit::Title | PropertiesPanelHit::Lock);
         let fits_below = below + height <= screen_h - PANEL_MARGIN;
         let fits_above = above >= PANEL_MARGIN;
         let y = if (header && fits_above) || !fits_below {
@@ -357,7 +375,8 @@ struct RowFit {
     scrolled_content: Option<f64>,
 }
 
-/// Fits the rows under a header of `rows_top` onto the screen. In order: one
+/// Fits the rows, between a header of `rows_top` and the fixed actions area,
+/// onto the screen. In order: one
 /// column with the keyboard hints; one without them; as few even columns as
 /// fit both the height and the width; and, when no arrangement fits, one
 /// column scrolling inside the panel. Only the last gives up the wheel for
@@ -386,10 +405,10 @@ fn fit_rows(
         scrolled_content: None,
     };
 
-    if rows_top + total + FOOTER_HEIGHT + PADDING_BOTTOM <= available_h {
+    if rows_top + total + ACTIONS_HEIGHT + FOOTER_HEIGHT + PADDING_BOTTOM <= available_h {
         return single(true);
     }
-    let band = available_h - rows_top - PADDING_BOTTOM;
+    let band = available_h - rows_top - ACTIONS_HEIGHT - PADDING_BOTTOM;
     if total <= band {
         return single(false);
     }

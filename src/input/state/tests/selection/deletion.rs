@@ -75,6 +75,7 @@ fn clear_all_skips_locked_shapes() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -84,6 +85,7 @@ fn clear_all_skips_locked_shapes() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -113,6 +115,7 @@ fn clear_all_returns_false_when_all_locked() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

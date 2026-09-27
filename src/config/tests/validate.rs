@@ -526,6 +526,7 @@ fn validate_clamps_preset_fields() {
         eraser_mode: None,
         marker_opacity: Some(1.2),
         fill_enabled: None,
+        fill_color: None,
         font_size: Some(2.0),
         text_background_enabled: None,
         arrow_length: Some(100.0),

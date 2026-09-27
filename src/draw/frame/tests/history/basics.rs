@@ -8,6 +8,7 @@ fn rect_at(x: i32) -> Shape {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: BLACK,
         thick: 2.0,
     }
@@ -118,6 +119,7 @@ fn adding_new_shape_clears_redo_stack() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: BLACK,
         thick: 2.0,
     };
@@ -140,6 +142,7 @@ fn adding_new_shape_clears_redo_stack() {
         w: 15,
         h: 15,
         fill: false,
+        fill_color: None,
         color: BLACK,
         thick: 2.0,
     };

@@ -377,6 +377,7 @@ fn fit_rectangle(
             w: bounds.width.round() as i32,
             h: bounds.height.round() as i32,
             fill: false,
+            fill_color: None,
             color,
             thick,
         },

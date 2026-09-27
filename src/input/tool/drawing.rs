@@ -243,6 +243,7 @@ impl Tool {
                     w,
                     h,
                     fill: snapshot.fill_enabled,
+                    fill_color: None,
                     color: snapshot.color,
                     thick: snapshot.size,
                 })
@@ -260,6 +261,7 @@ impl Tool {
                     rx,
                     ry,
                     fill: snapshot.fill_enabled,
+                    fill_color: None,
                     color: snapshot.color,
                     thick: snapshot.size,
                 }
@@ -438,6 +440,7 @@ impl Tool {
                     w,
                     h,
                     fill: snapshot.fill_enabled,
+                    fill_color: None,
                     color: snapshot.color,
                     thick: snapshot.size,
                 })
@@ -455,6 +458,7 @@ impl Tool {
                     rx,
                     ry,
                     fill: snapshot.fill_enabled,
+                    fill_color: None,
                     color: snapshot.color,
                     thick: snapshot.size,
                 })

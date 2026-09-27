@@ -85,6 +85,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,

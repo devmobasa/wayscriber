@@ -466,6 +466,7 @@ mod tests {
             w: 5,
             h: 5,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 1.0,
                 g: 0.0,

@@ -1,4 +1,4 @@
-use super::super::metrics::{FOOTER_HEIGHT, PADDING_BOTTOM};
+use super::super::metrics::{ACTIONS_HEIGHT, FOOTER_HEIGHT, PADDING_BOTTOM};
 use super::super::types::{
     PanelRect, PropertiesPanelHit, PropertiesRowControl, PropertiesRowGeometry,
 };
@@ -7,7 +7,7 @@ use crate::draw::{ArrowStyle, Shape, ShapeId, TextMeasurer};
 use crate::input::state::InputState;
 use crate::ui_text::UiTextEngine;
 
-const SCREEN: (u32, u32) = (800, 600);
+const SCREEN: (u32, u32) = (800, 900);
 
 fn arrow(state: &mut InputState) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Arrow {
@@ -84,7 +84,11 @@ fn inside(outer: PanelRect, inner: PanelRect) -> bool {
 fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelHit)> {
     let index = row.index;
     match &row.control {
-        PropertiesRowControl::Swatches { swatches, more } => swatches
+        PropertiesRowControl::Swatches {
+            swatches,
+            none,
+            more,
+        } => swatches
             .iter()
             .enumerate()
             .map(|(swatch, rect)| {
@@ -96,7 +100,8 @@ fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelH
                     },
                 )
             })
-            .chain([(*more, PropertiesPanelHit::MoreColors(index))])
+            .chain(none.map(|rect| (rect, PropertiesPanelHit::NoFill(index))))
+            .chain(more.map(|rect| (rect, PropertiesPanelHit::MoreColors(index))))
             .collect(),
         PropertiesRowControl::Stepper { down, up, .. } => vec![
             (*down, PropertiesPanelHit::StepDown(index)),
@@ -104,6 +109,9 @@ fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelH
         ],
         PropertiesRowControl::Toggle { switch } => {
             vec![(*switch, PropertiesPanelHit::Toggle(index))]
+        }
+        PropertiesRowControl::Slider { track, .. } => {
+            vec![(*track, PropertiesPanelHit::Slider(index))]
         }
         PropertiesRowControl::ArrowHead { start, end, .. } => vec![
             (
@@ -155,8 +163,9 @@ fn rows_stack_from_the_divider_to_the_footer() {
         );
         top = row.rect.bottom();
     }
+    assert_eq!(layout.actions_top, top, "the actions sit under the rows");
     let footer_top = layout.footer_top.expect("footer");
-    assert_eq!(footer_top, top);
+    assert_eq!(footer_top, top + ACTIONS_HEIGHT);
     assert_eq!(
         layout.origin_y + layout.height,
         (footer_top + FOOTER_HEIGHT + PADDING_BOTTOM).ceil()
@@ -174,6 +183,7 @@ fn every_control_is_hit_where_it_is_drawn_and_stays_in_its_row() {
         w: 40,
         h: 40,
         fill: false,
+        fill_color: None,
         color: PALETTE_RED,
         thick: 2.0,
     });
@@ -344,6 +354,7 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         w: 40,
         h: 40,
         fill: false,
+        fill_color: None,
         color: PALETTE_RED,
         thick: 2.0,
     });
@@ -354,9 +365,17 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         spotlight(&mut state),
     ];
     open_panel(ids, &mut state);
+    lay_out(&mut state, (SCREEN.0, 2000));
     let single = *state.properties_panel_layout().expect("layout");
+    assert_eq!(
+        single.column_budget,
+        f64::INFINITY,
+        "one column on a tall screen"
+    );
 
-    lay_out(&mut state, (SCREEN.0, 480));
+    // Wide enough for as many columns as the rows need at this height.
+    let wide = 1400;
+    lay_out(&mut state, (wide, 480));
 
     let layout = *state.properties_panel_layout().expect("layout");
     let rows = rows(&state);
@@ -364,7 +383,7 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         rows.iter().map(|row| row.content_x.to_bits()).collect();
     assert!(columns.len() > 1, "the rows spread over columns");
     assert!(layout.width > single.width);
-    assert!(layout.origin_x + layout.width <= SCREEN.0 as f64 - 12.0 + 1e-9);
+    assert!(layout.origin_x + layout.width <= f64::from(wide) - 12.0 + 1e-9);
     assert_all_reachable(&state, 480.0);
     let heights: Vec<f64> = columns
         .iter()
@@ -391,6 +410,7 @@ fn four_kinds(state: &mut InputState) -> Vec<ShapeId> {
         w: 40,
         h: 40,
         fill: false,
+        fill_color: None,
         color: PALETTE_RED,
         thick: 2.0,
     });
@@ -442,15 +462,17 @@ fn when_columns_would_leave_the_screen_the_rows_scroll_instead() {
     let first = assert_visible_rows_reachable(&state, (480.0, 360.0));
     assert!(first.contains(&0));
 
-    // A row clipped out of the viewport takes no clicks.
+    // A row clipped out of the viewport takes no clicks; what is drawn
+    // there (the actions, or nothing) does.
     let hidden = rows(&state)
         .into_iter()
         .find(|row| row.rect.y >= layout.rows_viewport().bottom())
         .expect("a row below the viewport");
     let (hx, hy) = hidden.rect.center();
-    assert_eq!(
-        layout.hit_at(state.properties_panel().unwrap(), hx, hy),
-        None
+    let hit = layout.hit_at(state.properties_panel().unwrap(), hx, hy);
+    assert!(
+        hit.and_then(PropertiesPanelHit::row).is_none(),
+        "{hit:?} reached a clipped row"
     );
 
     // The wheel scrolls rather than stepping a row, down to the last row.
@@ -512,7 +534,7 @@ fn scrolling_after_a_click_moves_hover_off_the_control_that_scrolled_away() {
 
     // A click remembers the row quietly, and the pointer rests on the swatch.
     state.update_pointer_position(x, y);
-    assert!(state.press_properties_panel_at(x, y));
+    assert!(state.press_properties_panel_at_with(&measurer, x, y));
     state.release_properties_panel_at_with(&measurer, x, y);
     lay_out(&mut state, screen);
     state.update_properties_panel_hover_from_pointer(x, y);

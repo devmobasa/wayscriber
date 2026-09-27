@@ -28,6 +28,9 @@ impl InputState {
         measurer: &TextMeasurer,
         step: impl FnOnce(&mut Frame) -> Option<UndoAction>,
     ) -> bool {
+        // A live slider drag holds snapshots from before it began; it has to
+        // land as its own entry before history moves past it.
+        self.finish_properties_slider_drag_with(measurer);
         let selection_chrome = self.selection_chrome_bounds_with(measurer);
         let Some(action) = step(self.boards.active_frame_mut()) else {
             return false;
@@ -132,6 +135,7 @@ mod tests {
             w: 10,
             h: 12,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 0.2,
                 g: 0.4,

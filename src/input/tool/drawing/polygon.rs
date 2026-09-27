@@ -60,6 +60,7 @@ fn finish_polygon(
             kind: template.kind(snapshot.regular_sides),
             points,
             fill: snapshot.fill_enabled,
+            fill_color: None,
             color: snapshot.color,
             thick: snapshot.size,
         },
@@ -81,6 +82,7 @@ fn provisional_polygon(
         kind: template.kind(snapshot.regular_sides),
         points,
         fill: snapshot.fill_enabled,
+        fill_color: None,
         color: snapshot.color,
         thick: snapshot.size,
     })

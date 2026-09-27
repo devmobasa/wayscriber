@@ -1,7 +1,8 @@
 use super::super::base::InputState;
+use super::RecolorOpacity;
 use super::types::{
-    PropertiesPanelHit, PropertiesPanelLock, SelectionPropertyEntry, SelectionPropertyKind,
-    SelectionPropertyValue,
+    PanelAction, PropertiesPanelHit, PropertiesPanelLock, SelectionPropertyEntry,
+    SelectionPropertyKind, SelectionPropertyValue,
 };
 use crate::draw::{ArrowStyle, Color, Shape, TextMeasurer};
 
@@ -14,15 +15,24 @@ impl InputState {
         measurer: &TextMeasurer,
         hit: PropertiesPanelHit,
     ) -> bool {
+        // Locking, ordering, presets: none may record history under a drag.
+        self.finish_properties_slider_drag_with(measurer);
         if hit == PropertiesPanelHit::Lock {
             return self.toggle_properties_panel_lock_with(measurer);
+        }
+        if let PropertiesPanelHit::Action(action) = hit {
+            return self.run_properties_panel_action_with(measurer, action);
         }
         let Some(entry) = hit.row().and_then(|row| self.enabled_properties_entry(row)) else {
             return false;
         };
 
         let changed = match hit {
-            PropertiesPanelHit::Title | PropertiesPanelHit::Lock => false,
+            // A slider acts on the press and the drag, not on the click.
+            PropertiesPanelHit::Title
+            | PropertiesPanelHit::Lock
+            | PropertiesPanelHit::Action(_)
+            | PropertiesPanelHit::Slider(_) => false,
             PropertiesPanelHit::Swatch { index, .. } => {
                 let Some(color) = self
                     .properties
@@ -33,10 +43,21 @@ impl InputState {
                 else {
                     return false;
                 };
-                self.set_selection_color_from_panel(measurer, color)
+                match entry.kind {
+                    SelectionPropertyKind::Fill => {
+                        self.set_selection_fill_from_panel(measurer, Some(color))
+                    }
+                    _ => self.set_selection_color_from_panel(measurer, color),
+                }
             }
+            PropertiesPanelHit::NoFill(_) => self.set_selection_fill_from_panel(measurer, None),
             PropertiesPanelHit::MoreColors(_) => {
-                return self.open_color_picker_popup_for_selection_with_measurer(measurer);
+                return match entry.kind {
+                    SelectionPropertyKind::Fill => {
+                        self.open_color_picker_popup_for_selection_fill_with_measurer(measurer)
+                    }
+                    _ => self.open_color_picker_popup_for_selection_with_measurer(measurer),
+                };
             }
             PropertiesPanelHit::StepDown(_) => {
                 self.dispatch_selection_property(measurer, entry.kind, -1)
@@ -113,11 +134,23 @@ impl InputState {
         // Picking the color the selection already has is a no-op, not a
         // "No changes applied" toast. A swatch with the same hue still
         // changes a shape of another opacity.
-        if !self.selection_recolor_changes(color) {
+        if !self.selection_recolor_changes(color, RecolorOpacity::Swatch) {
             return false;
         }
         self.finish_active_arrow_bend();
         self.apply_selection_color_value_with(measurer, color)
+    }
+
+    fn set_selection_fill_from_panel(
+        &mut self,
+        measurer: &TextMeasurer,
+        paint: Option<Color>,
+    ) -> bool {
+        if !self.selection_fill_paint_changes(paint, RecolorOpacity::Swatch) {
+            return false;
+        }
+        self.finish_active_arrow_bend();
+        self.apply_selection_fill_paint_with(measurer, paint, RecolorOpacity::Swatch)
     }
 
     fn set_selection_arrow_style_from_panel(
@@ -129,6 +162,70 @@ impl InputState {
         // drag before it records its own undo entry.
         self.finish_active_arrow_bend();
         self.apply_selection_arrow_style_value(measurer, style)
+    }
+
+    /// Runs an actions-area button through the same selection edits as the
+    /// context menu and the keyboard. A delete empties the selection, and the
+    /// refresh then closes the panel with nothing left to show.
+    fn run_properties_panel_action_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        action: PanelAction,
+    ) -> bool {
+        let enabled = self
+            .properties
+            .panel
+            .as_ref()
+            .is_some_and(|panel| panel.action_enabled(action));
+        if !enabled {
+            return false;
+        }
+
+        let changed = match action {
+            PanelAction::ToBack => self.move_selection_to_back_with(measurer),
+            PanelAction::Backward => self.move_selection_backward_with(measurer),
+            PanelAction::Forward => self.move_selection_forward_with(measurer),
+            PanelAction::ToFront => self.move_selection_to_front_with(measurer),
+            PanelAction::Duplicate => {
+                // Duplicating selects the copies, and any selection change
+                // closes the panel; reopen it on the copies it was asked for.
+                let duplicated = self.duplicate_selection_with(measurer);
+                if duplicated && !self.is_properties_panel_open() {
+                    let _ = self.show_properties_panel_with(measurer);
+                }
+                duplicated
+            }
+            PanelAction::Delete => self.delete_selection_with(measurer),
+            PanelAction::SavePreset => {
+                if let Some(panel) = self.properties.panel.as_mut() {
+                    panel.preset_save_mode = !panel.preset_save_mode;
+                }
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                return true;
+            }
+            PanelAction::Preset(slot) => {
+                let saving = self
+                    .properties
+                    .panel
+                    .as_ref()
+                    .is_some_and(|panel| panel.preset_save_mode);
+                if saving {
+                    if let Some(panel) = self.properties.panel.as_mut() {
+                        panel.preset_save_mode = false;
+                    }
+                    self.selection_preset_source()
+                        .is_some_and(|preset| self.store_preset(slot, preset))
+                } else {
+                    self.apply_preset_to_selection_with(measurer, slot)
+                }
+            }
+        };
+
+        if changed && self.is_properties_panel_open() {
+            self.refresh_properties_panel_with(measurer);
+        }
+        changed
     }
 
     /// Locks every selected shape, or unlocks them all once every one is
@@ -275,6 +372,9 @@ impl InputState {
             SelectionPropertyKind::Color => self.apply_selection_color(measurer, direction),
             SelectionPropertyKind::Thickness => {
                 self.apply_selection_thickness(measurer, direction_or_default(direction))
+            }
+            SelectionPropertyKind::Opacity => {
+                self.apply_selection_opacity(measurer, direction_or_default(direction))
             }
             SelectionPropertyKind::Fill => self.apply_selection_fill(measurer, direction),
             SelectionPropertyKind::FontSize => {

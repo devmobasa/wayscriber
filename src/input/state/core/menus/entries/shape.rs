@@ -52,19 +52,34 @@ impl InputState {
             false,
             Some(MenuCommand::Duplicate),
         ));
+        // Dimmed when the selection is already as far that way as it goes.
+        let can_raise = self.selection_can_step(true);
+        let can_lower = self.selection_can_step(false);
         entries.push(
             ContextMenuEntry::new(
                 "Move to Front",
                 self.shortcut_for_action(Action::MoveSelectionToFront),
-                false,
+                !can_raise,
                 Some(MenuCommand::MoveToFront),
             )
             .with_separator(),
         );
         entries.push(ContextMenuEntry::new(
+            "Move Forward",
+            None::<String>,
+            !can_raise,
+            Some(MenuCommand::MoveForward),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Move Backward",
+            None::<String>,
+            !can_lower,
+            Some(MenuCommand::MoveBackward),
+        ));
+        entries.push(ContextMenuEntry::new(
             "Move to Back",
             self.shortcut_for_action(Action::MoveSelectionToBack),
-            false,
+            !can_lower,
             Some(MenuCommand::MoveToBack),
         ));
         entries.push(ContextMenuEntry::new(

@@ -238,6 +238,12 @@ pub enum Shape {
         h: i32,
         /// Whether to fill the rectangle
         fill: bool,
+        /// Fill paint while `fill` is on. `None` fills with the border color,
+        /// as every fill did before fills had their own color; it is only
+        /// written when set, so older sessions and newer ones read the same.
+        /// Kept while `fill` is off, so turning the fill back on restores it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fill_color: Option<Color>,
         /// Border color
         color: Color,
         /// Border thickness in pixels
@@ -255,6 +261,12 @@ pub enum Shape {
         ry: i32,
         /// Whether to fill the ellipse
         fill: bool,
+        /// Fill paint while `fill` is on. `None` fills with the border color,
+        /// as every fill did before fills had their own color; it is only
+        /// written when set, so older sessions and newer ones read the same.
+        /// Kept while `fill` is off, so turning the fill back on restores it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fill_color: Option<Color>,
         /// Border color
         color: Color,
         /// Border thickness in pixels
@@ -268,7 +280,13 @@ pub enum Shape {
         points: Vec<(i32, i32)>,
         /// Whether to fill the polygon.
         fill: bool,
-        /// Border/fill color.
+        /// Fill paint while `fill` is on. `None` fills with the border color,
+        /// as every fill did before fills had their own color; it is only
+        /// written when set, so older sessions and newer ones read the same.
+        /// Kept while `fill` is off, so turning the fill back on restores it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fill_color: Option<Color>,
+        /// Border color, and the fill's unless `fill_color` is set.
         color: Color,
         /// Border thickness in pixels.
         thick: f64,

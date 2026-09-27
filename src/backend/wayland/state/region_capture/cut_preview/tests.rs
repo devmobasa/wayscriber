@@ -907,6 +907,7 @@ fn render_source_jobs_paint_annotations_before_applying_key_cuts_on_the_worker()
                 w: 8,
                 h: 8,
                 fill: true,
+                fill_color: None,
                 color: RED,
                 thick: 1.0,
             });

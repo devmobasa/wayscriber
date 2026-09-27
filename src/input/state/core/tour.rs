@@ -97,7 +97,7 @@ impl TourStep {
             Self::DrawingBasics => "Drawing Basics",
             Self::ToolbarIntro => "Toolbar Access",
             Self::CommandPalette => "Command Palette",
-            Self::ContextMenu => "Context Menu",
+            Self::ContextMenu => "Menus & Selection",
             Self::StatusBar => "Boards & Pages",
             Self::HelpOverlay => "Help & Shortcuts",
             Self::Presets => "Quick Presets",
@@ -194,10 +194,20 @@ impl InputState {
                 );
                 lines.join("\n")
             }
-            TourStep::ContextMenu => "Right-click anywhere for quick actions.\n\
-                 Access boards, pages, and common commands.\n\
-                 Shape-specific options when clicking on shapes."
-                .to_string(),
+            TourStep::ContextMenu => {
+                let mut lines = vec![
+                    "Right-click anywhere for quick actions.".to_string(),
+                    "Access boards, pages, and common commands.".to_string(),
+                    "Shape-specific options when clicking on shapes.".to_string(),
+                    // Alt+click is a fixed mouse gesture, not a binding.
+                    "Alt+click a shape to select it without switching tools.".to_string(),
+                    "Alt+drag moves shapes, or box-selects on empty canvas.".to_string(),
+                ];
+                if let Some(key) = self.shortcut_for_action(Action::ToggleSelectionProperties) {
+                    lines.push(format!("{key} opens the selection's properties."));
+                }
+                lines.join("\n")
+            }
             TourStep::StatusBar => {
                 let board = self.ui_visibility.show_status_board_badge && self.boards.show_badge();
                 let page = self.ui_visibility.show_status_page_badge;
@@ -470,6 +480,41 @@ mod tests {
             palette.contains("configurator"),
             "palette copy: {palette:?}"
         );
+    }
+
+    #[test]
+    fn menus_step_points_out_alt_click_selection() {
+        use crate::config::{KeybindingsConfig, Shortcut};
+
+        let mut state = make_test_input_state();
+        let copy = state.tour_step_description(TourStep::ContextMenu);
+        assert!(copy.contains("Alt+click a shape"), "copy: {copy:?}");
+        assert!(copy.contains("Alt+drag"), "copy: {copy:?}");
+        let properties = state
+            .shortcut_for_action(Action::ToggleSelectionProperties)
+            .expect("properties bound");
+        assert!(copy.contains(&properties), "copy: {copy:?}");
+
+        // An unbound properties panel drops its line rather than naming a key.
+        let mut bindings = KeybindingsConfig::default()
+            .build_action_bindings()
+            .expect("default bindings");
+        bindings.insert(Action::ToggleSelectionProperties, Vec::new());
+        state.set_action_bindings(bindings);
+        let copy = state.tour_step_description(TourStep::ContextMenu);
+        assert!(copy.contains("Alt+click a shape"), "copy: {copy:?}");
+        assert!(!copy.contains("properties"), "copy: {copy:?}");
+
+        let mut bindings = KeybindingsConfig::default()
+            .build_action_bindings()
+            .expect("default bindings");
+        bindings.insert(
+            Action::ToggleSelectionProperties,
+            vec![Shortcut::parse("Ctrl+Shift+I").expect("binding")],
+        );
+        state.set_action_bindings(bindings);
+        let copy = state.tour_step_description(TourStep::ContextMenu);
+        assert!(copy.contains("Ctrl+Shift+I"), "copy: {copy:?}");
     }
 
     #[test]

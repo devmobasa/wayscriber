@@ -156,6 +156,7 @@ fn fit_content_snapshot_uses_content_bounds() {
         w: 100,
         h: 50,
         fill: true,
+        fill_color: None,
         color: RED,
         thick: 1.0,
     });

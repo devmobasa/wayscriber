@@ -113,6 +113,14 @@ impl InputState {
                 self.move_selection_to_front_with(resources.measurer);
                 self.close_context_menu();
             }
+            MenuCommand::MoveForward => {
+                self.move_selection_forward_with(resources.measurer);
+                self.close_context_menu();
+            }
+            MenuCommand::MoveBackward => {
+                self.move_selection_backward_with(resources.measurer);
+                self.close_context_menu();
+            }
             MenuCommand::MoveToBack => {
                 self.move_selection_to_back_with(resources.measurer);
                 self.close_context_menu();

@@ -762,12 +762,15 @@ size = 28.0
 ```
 
 **Required fields:** `tool`, `color`, `size`  
-**Optional fields:** `tool_settings`, `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `polygon_sides`, `show_status_bar`, `drag_tools`
+**Optional fields:** `tool_settings`, `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `fill_color`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `polygon_sides`, `show_status_bar`, `drag_tools`
 
 When `tool_settings` is present, applying the preset restores the full drawing profile for all
 tools, including StepMarker size and Eraser size, then activates `tool`. Legacy presets without
 `tool_settings` keep the old behavior and apply only `color`/`size` to the selected `tool`.
 The top-level `color` and `size` are retained for compatibility, readability, and toolbar previews.
+`fill_color` is written when a preset is saved from the properties panel off a rectangle, ellipse,
+or polygon filled with its own color; applying the preset to selected closed shapes restores that
+fill. Without it, a preset's fill takes its border color.
 
 ### `[history]` - Undo/Redo Playback
 

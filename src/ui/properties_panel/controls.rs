@@ -7,10 +7,11 @@ use cairo::FontWeight;
 
 use crate::draw::{ArrowStyle, Color};
 use crate::input::state::properties_panel_metrics::{
-    CAPTION_FONT, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, VALUE_FONT, text_style,
+    CAPTION_FONT, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SLIDER_THUMB_RADIUS, SLIDER_TRACK_HEIGHT,
+    VALUE_FONT, text_style,
 };
 use crate::input::state::{
-    PanelRect, PropertiesPanelHit, PropertiesPanelLock, PropertiesPanelSwatch,
+    LevelRange, PanelRect, PropertiesPanelHit, PropertiesPanelLock, PropertiesPanelSwatch,
 };
 use crate::toolbar_icons::draw_arrow_style_preview;
 use crate::ui::primitives::{checkerboard_behind, draw_rounded_rect};
@@ -31,6 +32,8 @@ const SWATCH_HAIRLINE: Rgba = (1.0, 1.0, 1.0, 0.18);
 const QUIET_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.16);
 /// A locked selection's padlock: the same amber the toolbar uses for "held".
 const LOCK_ACTIVE: Rgba = (0.965, 0.827, 0.176, 1.0);
+/// The stroke across the "no fill" swatch: the destructive red, as "none".
+const NO_FILL_STRIKE: Rgba = crate::ui::theme::rgba(crate::ui::theme::DESTRUCTIVE_RGB, 0.9);
 /// How much of its color a control keeps while its row is locked.
 const DISABLED_ALPHA: f64 = 0.35;
 const GLYPH_WIDTH: f64 = 1.6;
@@ -129,11 +132,29 @@ pub(super) fn draw_lock(
     let _ = ctx.stroke();
 }
 
+/// Where a swatch row's extra cells sit, and whether "no fill" is the
+/// current choice.
+#[derive(Clone, Copy)]
+pub(super) struct SwatchExtras {
+    pub(super) none: Option<PanelRect>,
+    pub(super) none_selected: bool,
+    pub(super) more: Option<PanelRect>,
+}
+
+fn selection_ring(ctx: &cairo::Context, rect: PanelRect, state: ControlState) {
+    let (cx, cy) = rect.center();
+    ctx.new_path();
+    ctx.arc(cx, cy, rect.width / 2.0 + 3.5, 0.0, TAU);
+    set_color(ctx, state.fade(ACCENT_BRIGHT));
+    ctx.set_line_width(2.0);
+    let _ = ctx.stroke();
+}
+
 pub(super) fn draw_swatches(
     ctx: &cairo::Context,
     swatches: &[PropertiesPanelSwatch],
     rects: &[PanelRect],
-    more: PanelRect,
+    extras: SwatchExtras,
     current: Option<usize>,
     state: ControlState,
 ) {
@@ -162,14 +183,44 @@ pub(super) fn draw_swatches(
         let _ = ctx.stroke();
 
         if current == Some(index) {
-            ctx.new_path();
-            ctx.arc(cx, cy, rect.width / 2.0 + 3.5, 0.0, TAU);
-            set_color(ctx, state.fade(ACCENT_BRIGHT));
-            ctx.set_line_width(2.0);
-            let _ = ctx.stroke();
+            selection_ring(ctx, *rect, state);
         }
     }
 
+    if let Some(none) = extras.none {
+        draw_no_fill(ctx, none, extras.none_selected, state);
+    }
+    if let Some(more) = extras.more {
+        draw_more_colors(ctx, more, state);
+    }
+}
+
+/// "No fill": an empty circle struck through, as a crossed-out swatch.
+fn draw_no_fill(ctx: &cairo::Context, rect: PanelRect, selected: bool, state: ControlState) {
+    let hovered = state.hovers(|hit| matches!(hit, PropertiesPanelHit::NoFill(_)));
+    let (cx, cy) = rect.center();
+    let radius = rect.width / 2.0 - 0.5;
+    ctx.new_path();
+    ctx.arc(cx, cy, radius, 0.0, TAU);
+    set_color(
+        ctx,
+        state.fade(if hovered {
+            ACCENT_BRIGHT
+        } else {
+            QUIET_OUTLINE
+        }),
+    );
+    ctx.set_line_width(1.5);
+    let _ = ctx.stroke();
+    let reach = radius * std::f64::consts::FRAC_1_SQRT_2;
+    set_color(ctx, state.fade(NO_FILL_STRIKE));
+    round_line(ctx, (cx - reach, cy + reach), (cx + reach, cy - reach));
+    if selected {
+        selection_ring(ctx, rect, state);
+    }
+}
+
+fn draw_more_colors(ctx: &cairo::Context, more: PanelRect, state: ControlState) {
     let hovered = state.hovers(|hit| matches!(hit, PropertiesPanelHit::MoreColors(_)));
     let (cx, cy) = more.center();
     let outline = if hovered {
@@ -196,22 +247,8 @@ pub(super) fn draw_stepper(
     ctx: &cairo::Context,
     (down, value, up): (PanelRect, PanelRect, PanelRect),
     text: &str,
-    preview: Option<(PanelRect, f64)>,
-    preview_color: Option<Color>,
     state: ControlState,
 ) {
-    if let Some((rect, thickness)) = preview {
-        let (_, cy) = rect.center();
-        let width = thickness.clamp(1.0, rect.height);
-        let color = preview_color.map_or(TEXT_SECONDARY, |color| rgba(Color { a: 1.0, ..color }));
-        set_color(ctx, state.fade(color));
-        ctx.set_line_width(width);
-        ctx.set_line_cap(cairo::LineCap::Round);
-        ctx.move_to(rect.x + width / 2.0, cy);
-        ctx.line_to(rect.right() - width / 2.0, cy);
-        let _ = ctx.stroke();
-    }
-
     let well = PanelRect::new(down.x, down.y, up.right() - down.x, down.height);
     set_color(ctx, BG_HOVER_WASH);
     draw_rounded_rect(ctx, well.x, well.y, well.width, well.height, RADIUS_STD);
@@ -258,6 +295,90 @@ pub(super) fn draw_stepper(
         },
     );
     layout.show_at_baseline(ctx, cx - extents.x_advance() / 2.0, cy + VALUE_FONT * 0.35);
+}
+
+/// A slider: a track filled up to the thumb in the selection's color, and
+/// the readout to its right. A mixed value draws no fill and no thumb; the
+/// readout says "Mixed", and a drag sets every shape alike.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn draw_slider(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    track: PanelRect,
+    readout: PanelRect,
+    text: &str,
+    value: Option<f64>,
+    range: LevelRange,
+    fill: Option<Color>,
+    state: ControlState,
+) {
+    let (_, cy) = track.center();
+    let left = track.x + SLIDER_THUMB_RADIUS;
+    let right = track.right() - SLIDER_THUMB_RADIUS;
+    let half = SLIDER_TRACK_HEIGHT / 2.0;
+    set_color(ctx, state.fade(SWITCH_TRACK_OFF));
+    draw_rounded_rect(
+        ctx,
+        left - half,
+        cy - half,
+        right - left + SLIDER_TRACK_HEIGHT,
+        SLIDER_TRACK_HEIGHT,
+        half,
+    );
+    let _ = ctx.fill();
+
+    if let Some(value) = value {
+        let thumb = range.thumb_x(track, value);
+        let fill = fill.map_or(ACCENT_PRIMARY, |color| rgba(Color { a: 1.0, ..color }));
+        set_color(ctx, state.fade(fill));
+        draw_rounded_rect(
+            ctx,
+            left - half,
+            cy - half,
+            thumb - left + SLIDER_TRACK_HEIGHT,
+            SLIDER_TRACK_HEIGHT,
+            half,
+        );
+        let _ = ctx.fill();
+
+        let hovered = state.hovers(|hit| matches!(hit, PropertiesPanelHit::Slider(_)));
+        ctx.new_path();
+        ctx.arc(thumb, cy, SLIDER_THUMB_RADIUS, 0.0, TAU);
+        set_color(ctx, state.fade(TEXT_WHITE));
+        let _ = ctx.fill_preserve();
+        set_color(
+            ctx,
+            state.fade(if hovered {
+                ACCENT_BRIGHT
+            } else {
+                with_alpha(ACCENT_PRIMARY, 0.6)
+            }),
+        );
+        ctx.set_line_width(if hovered { 3.0 } else { 2.0 });
+        let _ = ctx.stroke();
+    }
+
+    let style = text_style(VALUE_FONT, FontWeight::Normal);
+    let width = engine
+        .layout(ctx, style, text, None)
+        .ink_extents()
+        .x_advance();
+    set_color(
+        ctx,
+        if state.enabled {
+            TEXT_PRIMARY
+        } else {
+            TEXT_DISABLED
+        },
+    );
+    engine.draw_baseline(
+        ctx,
+        style,
+        text,
+        readout.right() - width,
+        readout.center().1 + VALUE_FONT * 0.35,
+        None,
+    );
 }
 
 pub(super) fn draw_switch(

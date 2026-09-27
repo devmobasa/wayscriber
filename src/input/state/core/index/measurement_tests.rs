@@ -175,6 +175,7 @@ fn explicit_point_targeting_keeps_fill_interiors_out_of_stroke_erasing() {
         w: 100,
         h: 100,
         fill: true,
+        fill_color: None,
         color: RED,
         thick: 2.0,
     });

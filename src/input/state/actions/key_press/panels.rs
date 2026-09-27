@@ -413,6 +413,9 @@ impl InputState {
         measurer: &crate::draw::TextMeasurer,
         key: Key,
     ) -> bool {
+        // A key pressed mid-drag ends the drag first, so what it changes is
+        // its own undo entry after the drag's rather than under it.
+        self.finish_properties_slider_drag_with(measurer);
         let adjust_step = if self.modifiers.shift {
             PROPERTIES_PANEL_COARSE_STEP
         } else {
@@ -420,7 +423,9 @@ impl InputState {
         };
         match key {
             Key::Escape => {
-                self.close_properties_panel();
+                if !self.cancel_properties_preset_save() {
+                    self.close_properties_panel();
+                }
                 true
             }
             Key::Up => self.focus_previous_properties_entry(),

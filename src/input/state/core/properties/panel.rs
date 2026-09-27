@@ -2,8 +2,8 @@ use super::super::base::InputState;
 use super::metrics::MAX_SWATCHES;
 use super::panel_layout::selection_panel_anchor;
 use super::types::{
-    PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch, SelectionPropertyEntry,
-    SelectionPropertyValue, ShapePropertiesPanel,
+    PanelActions, PanelPreset, PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch,
+    SelectionPropertyEntry, SelectionPropertyValue, ShapePropertiesPanel,
 };
 use super::utils::format_timestamp;
 use crate::draw::{Color, TextMeasurer};
@@ -23,6 +23,7 @@ struct PanelContents {
     anchor_rect: Option<Rect>,
     entries: Vec<SelectionPropertyEntry>,
     swatches: Vec<PropertiesPanelSwatch>,
+    actions: PanelActions,
     preview_color: Option<Color>,
     multiple_selection: bool,
 }
@@ -54,6 +55,12 @@ impl InputState {
     }
 
     pub fn close_properties_panel(&mut self) {
+        // A drag cut short by the panel closing keeps what it previewed, as
+        // one undo entry, rather than leaving the shapes changed off the
+        // record.
+        if self.is_properties_slider_dragging() {
+            self.finish_properties_slider_drag_with(&TextMeasurer::default());
+        }
         if self.properties.close() {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -98,12 +105,14 @@ impl InputState {
             anchor_rect: contents.anchor_rect,
             entries: contents.entries,
             swatches: contents.swatches,
+            actions: contents.actions,
             preview_color: contents.preview_color,
             hover: None,
             pressed: None,
             keyboard_focus: None,
             focus_visible: false,
             scroll: 0.0,
+            preset_save_mode: false,
             multiple_selection: contents.multiple_selection,
         });
         true
@@ -128,6 +137,7 @@ impl InputState {
         panel.anchor_rect = contents.anchor_rect;
         panel.entries = contents.entries;
         panel.swatches = contents.swatches;
+        panel.actions = contents.actions;
         panel.preview_color = contents.preview_color;
         panel.multiple_selection = contents.multiple_selection;
 
@@ -241,6 +251,25 @@ impl InputState {
             )
         };
 
+        let actions = PanelActions {
+            can_raise: self.selection_can_step(true),
+            can_lower: self.selection_can_step(false),
+            can_edit: lock != PropertiesPanelLock::Locked,
+            can_save_preset: self.selection_preset_source().is_some(),
+            presets: self
+                .preset_slots
+                .presets()
+                .iter()
+                .take(self.preset_slots.slot_count())
+                .map(|preset| {
+                    preset.as_ref().map(|preset| PanelPreset {
+                        color: preset.preview_color(),
+                        name: preset.name.clone(),
+                    })
+                })
+                .collect(),
+        };
+
         Some(PanelContents {
             title,
             subtitle,
@@ -250,6 +279,7 @@ impl InputState {
             anchor_rect,
             entries,
             swatches,
+            actions,
             preview_color,
             multiple_selection: ids.len() > 1,
         })
@@ -278,6 +308,7 @@ mod tests {
             w,
             h,
             fill: false,
+            fill_color: None,
             color: state.style.current_color,
             thick: state.style.current_thickness,
         })
@@ -410,6 +441,7 @@ mod tests {
             rx: 10,
             ry: 10,
             fill: false,
+            fill_color: None,
             color: state.style.current_color,
             thick: state.style.current_thickness,
         });

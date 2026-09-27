@@ -18,6 +18,7 @@ pub(super) fn snap_closed_shape(shape: Shape, grid: BoardGrid) -> Shape {
                 w,
                 h,
                 fill,
+                fill_color,
                 color,
                 thick,
             },
@@ -30,6 +31,7 @@ pub(super) fn snap_closed_shape(shape: Shape, grid: BoardGrid) -> Shape {
                 w,
                 h,
                 fill,
+                fill_color,
                 color,
                 thick,
             }
@@ -42,6 +44,7 @@ pub(super) fn snap_closed_shape(shape: Shape, grid: BoardGrid) -> Shape {
                 rx,
                 ry,
                 fill,
+                fill_color,
                 color,
                 thick,
             },
@@ -54,6 +57,7 @@ pub(super) fn snap_closed_shape(shape: Shape, grid: BoardGrid) -> Shape {
                 rx: width / 2,
                 ry: height / 2,
                 fill,
+                fill_color,
                 color,
                 thick,
             }
@@ -64,6 +68,7 @@ pub(super) fn snap_closed_shape(shape: Shape, grid: BoardGrid) -> Shape {
                 kind,
                 points,
                 fill,
+                fill_color,
                 color,
                 thick,
             },
@@ -89,6 +94,7 @@ pub(super) fn snap_closed_shape(shape: Shape, grid: BoardGrid) -> Shape {
                 kind,
                 points,
                 fill,
+                fill_color,
                 color,
                 thick,
             }

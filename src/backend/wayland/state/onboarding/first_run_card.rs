@@ -66,7 +66,10 @@ impl WaylandState {
             FirstRunStep::QuickAccess => OnboardingCard {
                 eyebrow,
                 title: "Quick access at cursor".to_string(),
-                body: "Open quick actions near the pointer.".to_string(),
+                // Alt+click is a fixed mouse gesture, not a binding.
+                body: "Open quick actions near the pointer. Alt+click a shape to select it \
+                       without switching tools."
+                    .to_string(),
                 items: self.quick_access_checklist_items(state),
                 buttons: vec![skip_tour_button()],
                 footer: String::new(),

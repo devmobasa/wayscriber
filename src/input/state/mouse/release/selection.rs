@@ -150,6 +150,7 @@ mod tests {
                     w: 20,
                     h: 20,
                     fill: false,
+                    fill_color: None,
                     color: crate::draw::WHITE,
                     thick: 2.0,
                 })

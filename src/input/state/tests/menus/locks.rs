@@ -43,6 +43,7 @@ fn shape_menu_disables_delete_when_all_locked() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -52,6 +53,7 @@ fn shape_menu_disables_delete_when_all_locked() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -88,6 +90,7 @@ fn shape_menu_allows_delete_when_mixed_lock_state() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -97,6 +100,7 @@ fn shape_menu_allows_delete_when_mixed_lock_state() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

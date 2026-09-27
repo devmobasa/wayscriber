@@ -1,39 +1,46 @@
 use crate::draw::TextMeasurer;
 use crate::draw::{Color, Shape};
 use crate::input::state::core::base::InputState;
+use crate::input::state::core::properties::apply_selection::constants::{
+    MAX_MARKER_OPACITY, MIN_OPACITY, OPACITY_STEP,
+};
 use crate::input::state::core::properties::utils::{cycle_index, palette_position, palette_step};
 use crate::input::state::{Toast, ToastPriority};
 
+/// How a recolor treats each shape's opacity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecolorOpacity {
+    /// A swatch or color key picks the hue. Opacity has its own control, so
+    /// each shape keeps its own, unless the swatch itself is translucent:
+    /// then its opacity is part of the choice.
+    Swatch,
+    /// The color picker's OK sets exactly the color shown, opacity included.
+    Exact,
+}
+
 /// The color `shape` has now and the one a recolor to `target` gives it, or
-/// `None` for a shape without a color. A marker keeps its own opacity, which
-/// is what makes it a highlighter; every other shape takes `target` whole,
-/// opacity included.
-fn recolored(shape: &Shape, target: Color) -> Option<(Color, Color)> {
-    let current = match shape {
-        Shape::Freehand { color, .. }
-        | Shape::FreehandPressure { color, .. }
-        | Shape::Line { color, .. }
-        | Shape::Rect { color, .. }
-        | Shape::Ellipse { color, .. }
-        | Shape::Polygon { color, .. }
-        | Shape::Arrow { color, .. }
-        | Shape::MarkerStroke { color, .. }
-        | Shape::Text { color, .. }
-        | Shape::StepMarker { color, .. } => *color,
-        Shape::StickyNote { background, .. } => *background,
-        _ => return None,
-    };
-    let next = match shape {
-        Shape::MarkerStroke { .. } => Color {
+/// `None` for a shape without a color. A marker keeps its own opacity either
+/// way, which is what makes it a highlighter.
+pub(super) fn recolored(
+    shape: &Shape,
+    target: Color,
+    opacity: RecolorOpacity,
+) -> Option<(Color, Color)> {
+    let current = *shape_color_ref(shape)?;
+    let keep_opacity = matches!(shape, Shape::MarkerStroke { .. })
+        || (opacity == RecolorOpacity::Swatch && target.a >= 1.0);
+    let next = if keep_opacity {
+        Color {
             a: current.a,
             ..target
-        },
-        _ => target,
+        }
+    } else {
+        target
     };
     Some((current, next))
 }
 
-fn shape_color_mut(shape: &mut Shape) -> Option<&mut Color> {
+fn shape_color_ref(shape: &Shape) -> Option<&Color> {
     match shape {
         Shape::Freehand { color, .. }
         | Shape::FreehandPressure { color, .. }
@@ -50,17 +57,91 @@ fn shape_color_mut(shape: &mut Shape) -> Option<&mut Color> {
     }
 }
 
+pub(super) fn shape_color_mut(shape: &mut Shape) -> Option<&mut Color> {
+    match shape {
+        Shape::Freehand { color, .. }
+        | Shape::FreehandPressure { color, .. }
+        | Shape::Line { color, .. }
+        | Shape::Rect { color, .. }
+        | Shape::Ellipse { color, .. }
+        | Shape::Polygon { color, .. }
+        | Shape::Arrow { color, .. }
+        | Shape::MarkerStroke { color, .. }
+        | Shape::Text { color, .. }
+        | Shape::StepMarker { color, .. } => Some(color),
+        Shape::StickyNote { background, .. } => Some(background),
+        _ => None,
+    }
+}
+
+/// The opacity range a shape may take: a marker stays translucent, as the
+/// marker tool keeps it.
+fn opacity_range(shape: &Shape) -> (f64, f64) {
+    match shape {
+        Shape::MarkerStroke { .. } => (MIN_OPACITY, MAX_MARKER_OPACITY),
+        _ => (MIN_OPACITY, 1.0),
+    }
+}
+
+pub(super) fn has_color(shape: &Shape) -> bool {
+    shape_color_ref(shape).is_some()
+}
+
+/// Sets a shape's opacity to `value`, clamped to its range.
+pub(super) fn set_opacity_to(shape: &mut Shape, value: f64) -> Option<bool> {
+    set_opacity(shape, |_| value)
+}
+
+/// Sets a shape's opacity, clamped to its range: whether it changed, or
+/// `None` for a shape without a color.
+fn set_opacity(shape: &mut Shape, opacity: impl FnOnce(f64) -> f64) -> Option<bool> {
+    let (min, max) = opacity_range(shape);
+    let color = shape_color_mut(shape)?;
+    let next = opacity(color.a).clamp(min, max);
+    let mut changed = (next - color.a).abs() > f64::EPSILON;
+    color.a = next;
+    // One opacity per shape: a fill with its own color follows the border.
+    if let Shape::Rect {
+        fill_color: Some(fill),
+        ..
+    }
+    | Shape::Ellipse {
+        fill_color: Some(fill),
+        ..
+    }
+    | Shape::Polygon {
+        fill_color: Some(fill),
+        ..
+    } = shape
+    {
+        changed |= (next - fill.a).abs() > f64::EPSILON;
+        fill.a = next;
+    }
+    Some(changed)
+}
+
 impl InputState {
+    /// Recolors the selection from a swatch, a color key, or the eyedropper:
+    /// see [`RecolorOpacity::Swatch`].
     pub(crate) fn apply_selection_color_value_with(
         &mut self,
         measurer: &TextMeasurer,
         target: Color,
     ) -> bool {
+        self.recolor_selection_with(measurer, target, RecolorOpacity::Swatch)
+    }
+
+    pub(crate) fn recolor_selection_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        target: Color,
+        opacity: RecolorOpacity,
+    ) -> bool {
         let result = self.apply_selection_change_with(
             measurer,
-            |shape| recolored(shape, target).is_some(),
+            |shape| recolored(shape, target, opacity).is_some(),
             |shape| {
-                let Some((current, next)) = recolored(shape, target) else {
+                let Some((current, next)) = recolored(shape, target, opacity) else {
                     return false;
                 };
                 if current == next {
@@ -78,16 +159,38 @@ impl InputState {
     }
 
     /// Whether recoloring the selection to `target` would change any shape it
-    /// may edit, opacity included. Surfaces that set a color directly ask
-    /// this first, so picking the color a selection already has is quiet.
-    pub(crate) fn selection_recolor_changes(&self, target: Color) -> bool {
+    /// may edit. Surfaces that set a color directly ask this first, so picking
+    /// the color a selection already has is quiet.
+    pub(crate) fn selection_recolor_changes(&self, target: Color, opacity: RecolorOpacity) -> bool {
         let frame = self.boards.active_frame();
         self.selected_shape_ids()
             .iter()
             .filter_map(|id| frame.shape(*id))
             .filter(|drawn| !drawn.locked)
-            .filter_map(|drawn| recolored(&drawn.shape, target))
+            .filter_map(|drawn| recolored(&drawn.shape, target, opacity))
             .any(|(current, next)| current != next)
+    }
+
+    /// Steps every editable selected shape's opacity by `direction` steps of
+    /// 5%, on the 5% grid, within its range.
+    pub(in crate::input::state::core::properties) fn apply_selection_opacity(
+        &mut self,
+        measurer: &TextMeasurer,
+        direction: i32,
+    ) -> bool {
+        let steps = f64::from(direction);
+        let result = self.apply_selection_change_with(
+            measurer,
+            |shape| shape_color_ref(shape).is_some(),
+            |shape| {
+                set_opacity(shape, |alpha| {
+                    ((alpha / OPACITY_STEP).round() + steps) * OPACITY_STEP
+                })
+                .unwrap_or(false)
+            },
+        );
+
+        self.report_selection_apply_result(result, "opacity")
     }
 
     /// Steps the selection's color through the quick-color palette, the same
@@ -121,7 +224,7 @@ impl InputState {
         // nothing, and stopping there would pin every later step to it.
         let mut next = first;
         for _ in 0..palette.len() {
-            if self.selection_recolor_changes(palette[next]) {
+            if self.selection_recolor_changes(palette[next], RecolorOpacity::Swatch) {
                 break;
             }
             next = cycle_index(next, palette.len(), offset);
@@ -195,6 +298,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color,
             thick: 2.0,
         })
