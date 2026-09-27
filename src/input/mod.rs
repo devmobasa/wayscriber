@@ -26,7 +26,8 @@ pub use state::{
     HelpOverlayCursorHint, HelpOverlayReleaseOutcome, InputHudActiveSource, InputHudEntry,
     InputHudEntryKind, InputHudSettings, InputState, OutputFocusAction, RegionInputSource,
     RegionPurposeTag, RegionSelectUiState, SelectionHandle, SelectionPropertyEntry,
-    SelectionPropertyKind, SelectionPropertyValue, TextInputMode, ZoomAction,
+    SelectionPropertyKind, SelectionPropertyValue, TextInputMode, ZoomAction, ZoomAnchor,
+    ZoomRequest,
 };
 #[allow(unused_imports)]
 pub(crate) use state::{DrawingStyle, IdleHandle};

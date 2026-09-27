@@ -444,6 +444,13 @@ mod coach_tests {
 
         assert!(state.apply_toolbar_event(ToolbarEvent::ZoomIn));
 
+        assert_eq!(
+            state
+                .take_pending_zoom_request()
+                .map(|request| request.anchor),
+            Some(crate::input::ZoomAnchor::ScreenCenter),
+            "a toolbar zoom centres the screen, not the toolbar button"
+        );
         assert!(state.pending_onboarding_usage.used_zoom_control);
         assert_eq!(
             state.pending_onboarding_usage.shortcut_slow_path_action,

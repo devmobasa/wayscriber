@@ -415,7 +415,14 @@ fn tablet_path_press_release_dispatches_zoom_action() {
     // event loop to drain.
     input.on_mouse_release_with_canvas(MouseButton::Left, x, y, x, y);
     assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
-    assert_eq!(input.take_pending_zoom_action(), Some(ZoomAction::In));
+    assert_eq!(
+        input.take_pending_zoom_request(),
+        Some(crate::input::ZoomRequest {
+            action: ZoomAction::In,
+            anchor: crate::input::ZoomAnchor::ScreenCenter,
+        }),
+        "the chip sits in a corner, so its zoom centres the screen"
+    );
 }
 
 #[test]

@@ -1220,6 +1220,42 @@ mod tests {
         );
     }
 
+    /// The palette sits in the middle of the screen, away from what the user
+    /// wants magnified, so a zoom it runs centres the screen, not the pointer.
+    #[test]
+    fn return_key_runs_palette_zoom_around_the_screen_centre() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette.query = "zoom in".to_string();
+        let selected = state.selected_command().expect("selected command");
+        assert_eq!(selected.action, crate::config::keybindings::Action::ZoomIn);
+
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
+
+        assert_eq!(
+            state.take_pending_zoom_request(),
+            Some(crate::input::ZoomRequest {
+                action: crate::input::ZoomAction::In,
+                anchor: crate::input::ZoomAnchor::ScreenCenter,
+            })
+        );
+        assert_eq!(
+            state.zoom_action_anchor, None,
+            "the anchor is scoped to the run"
+        );
+    }
+
     #[test]
     fn return_key_sets_pending_canvas_export_backend_action() {
         let route_measurer = crate::draw::TextMeasurer::default();

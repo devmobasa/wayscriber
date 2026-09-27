@@ -17,6 +17,7 @@ pub use types::{
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
     SelectionHandle, ShellMode, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    ZoomAnchor, ZoomRequest,
 };
 pub(crate) use types::{
     BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest,

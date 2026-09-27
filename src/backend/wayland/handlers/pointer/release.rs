@@ -213,7 +213,10 @@ impl WaylandState {
                 .input_state
                 .check_zoom_chip_click(kind, screen_x, screen_y);
             if let Some(action) = action {
-                self.dispatch_input_action(action);
+                self.dispatch_input_action_anchored(
+                    action,
+                    crate::input::state::ZoomAnchor::ScreenCenter,
+                );
             }
         }
         pressed.is_pending()

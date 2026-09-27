@@ -94,6 +94,7 @@ impl InputState {
             let anchor = self.keyboard_canvas_menu_anchor();
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas, None);
+            self.context_menu.anchored_in_corner = true;
             self.pointer.clear_menu_hover_recalc();
             self.set_context_menu_focus(None);
             self.focus_first_context_menu_entry();

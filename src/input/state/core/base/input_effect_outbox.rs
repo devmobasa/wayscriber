@@ -1,7 +1,7 @@
 use super::{
     ClipboardPasteRequest, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PresetAction, QuickColorEdit,
-    TextClipboardRequest, TextPasteTarget, ZoomAction,
+    TextClipboardRequest, TextPasteTarget, ZoomRequest,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardRuntimeUiAction;
@@ -20,7 +20,7 @@ pub(crate) enum InputEffect {
     ToolbarPersistence(PendingToolbarPersistence),
     KeybindingEdit(KeybindingEditRequest),
     OutputFocus(OutputFocusAction),
-    Zoom(ZoomAction),
+    Zoom(ZoomRequest),
     CopyHex(Color),
     PasteHex(HexPasteTarget),
     TextCopy(TextClipboardRequest),

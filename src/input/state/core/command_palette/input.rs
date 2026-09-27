@@ -173,7 +173,11 @@ impl InputState {
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     self.record_command_palette_action(command.action);
-                    self.handle_action_with_resources(resources, command.action);
+                    self.handle_action_anchored(
+                        resources,
+                        command.action,
+                        crate::input::state::ZoomAnchor::ScreenCenter,
+                    );
                 }
                 true
             }
@@ -442,7 +446,11 @@ impl InputState {
                 Toast::info(command.label).duration_ms(self.command_palette_toast_duration_ms()),
             );
 
-            self.handle_action_with_resources(resources, command.action);
+            self.handle_action_anchored(
+                resources,
+                command.action,
+                crate::input::state::ZoomAnchor::ScreenCenter,
+            );
             return true;
         }
 

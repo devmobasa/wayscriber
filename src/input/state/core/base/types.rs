@@ -252,6 +252,26 @@ pub enum ZoomAction {
     RefreshCapture,
 }
 
+/// Where a requested zoom step is centred.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoomAnchor {
+    /// The pointer, or the screen centre when the pointer is elsewhere: a
+    /// shortcut zooms where the user is looking.
+    Pointer,
+    /// The screen centre, for controls that sit away from what the user is
+    /// looking at: the zoom chip, the toolbar, and the command palette.
+    ScreenCenter,
+    /// A screen point, such as where a context menu was opened.
+    At(i32, i32),
+}
+
+/// A zoom action and the point it is centred on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoomRequest {
+    pub action: ZoomAction,
+    pub anchor: ZoomAnchor,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFocusAction {
     Next,

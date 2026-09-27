@@ -19,6 +19,18 @@ impl InputState {
         }
     }
 
+    /// Zoom from the menu centres where the menu was opened. A canvas menu
+    /// opened from the keyboard sits in a corner, so that one centres the
+    /// screen instead.
+    fn context_menu_zoom_anchor(&self) -> crate::input::ZoomAnchor {
+        match self.context_menu.state {
+            ContextMenuState::Open { anchor, .. } if !self.context_menu.anchored_in_corner => {
+                crate::input::ZoomAnchor::At(anchor.0, anchor.1)
+            }
+            _ => crate::input::ZoomAnchor::ScreenCenter,
+        }
+    }
+
     fn context_menu_paste_anchor(&self) -> PasteAnchor {
         if let ContextMenuState::Open { anchor, .. } = self.context_menu.state {
             let (x, y) = self.canvas_coords_for_screen(anchor.0, anchor.1);
@@ -160,19 +172,23 @@ impl InputState {
                 self.open_menu_for_command(&command);
             }
             MenuCommand::ZoomIn => {
-                self.request_zoom_action(crate::input::ZoomAction::In);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::In, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ZoomOut => {
-                self.request_zoom_action(crate::input::ZoomAction::Out);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::Out, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ResetZoom => {
-                self.request_zoom_action(crate::input::ZoomAction::Reset);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::Reset, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ToggleZoomLock => {
-                self.request_zoom_action(crate::input::ZoomAction::ToggleLock);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::ToggleLock, anchor);
                 self.close_context_menu();
             }
             MenuCommand::Undo => self.close_menu_and_run(resources, Action::Undo),

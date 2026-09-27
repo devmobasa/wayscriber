@@ -397,6 +397,42 @@ fn zoom_in_command_queues_zoom_action_and_closes_menu() {
     assert!(!state.is_context_menu_open());
 }
 
+/// Zoom from the menu centres where the user right-clicked, not on the menu
+/// row the pointer rests on when the command runs.
+#[test]
+fn context_menu_zoom_centres_on_the_right_click_origin() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Zoom, None);
+
+    state.execute_menu_command(MenuCommand::ZoomIn);
+
+    assert_eq!(
+        state.take_pending_zoom_request(),
+        Some(crate::input::ZoomRequest {
+            action: ZoomAction::In,
+            anchor: crate::input::ZoomAnchor::At(12, 34),
+        })
+    );
+}
+
+/// A canvas menu opened from the keyboard sits in a corner, which is not a
+/// point the user chose, so its zoom centres the screen.
+#[test]
+fn keyboard_opened_canvas_menu_zooms_the_screen_centre() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+    assert!(state.is_context_menu_open());
+
+    state.execute_menu_command(MenuCommand::ZoomIn);
+
+    assert_eq!(
+        state
+            .take_pending_zoom_request()
+            .map(|request| request.anchor),
+        Some(crate::input::ZoomAnchor::ScreenCenter)
+    );
+}
+
 #[test]
 fn context_menu_open_radial_command_opens_radial_and_closes_context_menu() {
     let mut state = create_test_input_state();
