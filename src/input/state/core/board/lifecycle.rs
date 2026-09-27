@@ -13,6 +13,9 @@ impl InputState {
         self.mark_session_dirty();
         // The chip points at a shape on the surface that was just replaced.
         self.clear_recognition_chip();
+        // Shape ids are page-local, so a click on the old surface must not
+        // pair with one on the new surface into a double-click.
+        self.text_editing.set_last_click(None);
         self.retract_restore_notice_if_context_changed();
     }
 

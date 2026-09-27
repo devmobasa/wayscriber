@@ -470,6 +470,7 @@ mod tests {
             ),
             (
                 DrawingState::MovingSelection {
+                    grab: crate::input::state::SelectionGrab::new(0, 0, 0),
                     last_x: 0,
                     last_y: 0,
                     snapshots: Vec::new(),

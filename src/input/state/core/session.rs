@@ -237,6 +237,7 @@ mod tests {
                 thick: 2.0,
             },
             DrawingState::MovingSelection {
+                grab: crate::input::state::SelectionGrab::new(0, 10, 20),
                 last_x: 10,
                 last_y: 20,
                 snapshots: Vec::new(),

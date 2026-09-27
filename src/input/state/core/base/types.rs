@@ -22,6 +22,43 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use std::{ops::Range, sync::Arc};
 
+/// The press that started a selection move.
+///
+/// A press whose pointer stays within `SELECTION_DRAG_THRESHOLD` of where it
+/// landed is a click on `shape_id`, and two clicks in a row open that shape.
+/// Whether the selection actually moved does not decide it: a locked shape or
+/// a canvas edge can stop the move while the pointer travels on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectionGrab {
+    /// The shape the press landed on.
+    pub shape_id: ShapeId,
+    /// Where the press landed, in canvas coordinates.
+    pub x: i32,
+    pub y: i32,
+    /// Set once the pointer leaves the click radius; the gesture stays a drag
+    /// even if the pointer comes back.
+    pub dragged: bool,
+}
+
+impl SelectionGrab {
+    pub fn new(shape_id: ShapeId, x: i32, y: i32) -> Self {
+        Self {
+            shape_id,
+            x,
+            y,
+            dragged: false,
+        }
+    }
+
+    /// Records the pointer at `(x, y)` and returns whether the gesture is now
+    /// a drag.
+    pub(crate) fn track(&mut self, x: i32, y: i32) -> bool {
+        let threshold = crate::input::state::mouse::SELECTION_DRAG_THRESHOLD;
+        self.dragged |= (x - self.x).abs() >= threshold || (y - self.y).abs() >= threshold;
+        self.dragged
+    }
+}
+
 /// Current drawing mode state machine.
 ///
 /// Tracks whether the user is idle, actively drawing a shape, or entering text.
@@ -86,6 +123,8 @@ pub enum DrawingState {
     },
     /// Selection move mode - user is dragging selected shapes
     MovingSelection {
+        /// The press that started the move, which tells a click from a drag.
+        grab: SelectionGrab,
         /// Last pointer X coordinate applied
         last_x: i32,
         /// Last pointer Y coordinate applied
