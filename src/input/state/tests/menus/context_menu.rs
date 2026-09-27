@@ -44,7 +44,7 @@ fn context_menu_respects_enable_flag() {
 }
 
 #[test]
-fn shape_menu_includes_select_this_entry_whenever_hovered() {
+fn shape_menu_offers_select_this_only_when_it_narrows_the_selection() {
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -88,11 +88,46 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
 
     let entries_single = state.context_menu_entries();
     assert!(
-        entries_single
+        !entries_single
             .iter()
             .any(|entry| entry.label == "Select This Shape"),
-        "Expected Select This Shape entry even for single selection"
+        "the clicked shape is already the whole selection, so the row would do nothing"
     );
+}
+
+/// A right-click on a shape leads with what it is usually for: the shape's
+/// editor, then Properties. The four stacking moves share one Arrange row, and
+/// Delete sits in its own group just above Exit, never under the pointer.
+#[test]
+fn shape_menu_leads_with_editing_and_keeps_delete_away_from_the_top() {
+    let mut state = create_test_input_state();
+    let text = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 60,
+        text: "Hello".to_string(),
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
+        wrap_width: None,
+    });
+    state.set_selection(vec![text]);
+    state.open_context_menu((0, 0), vec![text], ContextMenuKind::Shape, Some(text));
+
+    let entries = state.context_menu_entries();
+    let labels: Vec<_> = entries.iter().map(|entry| entry.label.as_str()).collect();
+
+    assert_eq!(&labels[..2], ["Edit Text", "Properties\u{2026}"]);
+    let arrange = entries
+        .iter()
+        .find(|entry| entry.label == "Arrange")
+        .expect("arrange row");
+    assert_eq!(arrange.submenu, Some(ContextMenuKind::Arrange));
+    assert!(!labels.contains(&"Move to Front"));
+
+    let delete = labels.iter().position(|label| *label == "Delete").unwrap();
+    assert_eq!(delete, labels.len() - 2, "Delete sits just above Exit");
+    assert!(entries[delete].separator_before);
 }
 
 #[test]
@@ -1102,7 +1137,7 @@ fn shape_menu_orders_by_steps_and_dims_the_way_the_shape_cannot_go() {
     let bottom = state.boards.active_frame_mut().add_shape(rect(0));
     let _top = state.boards.active_frame_mut().add_shape(rect(20));
     state.set_selection(vec![bottom]);
-    state.open_context_menu((0, 0), vec![bottom], ContextMenuKind::Shape, Some(bottom));
+    state.open_context_menu((0, 0), vec![bottom], ContextMenuKind::Arrange, None);
 
     let entries = state.context_menu_entries();
     let disabled = |label: &str| {
