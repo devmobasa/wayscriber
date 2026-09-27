@@ -4,15 +4,16 @@
 
 use super::super::metrics::{
     ACTION_BUTTON_GAP, ACTION_BUTTON_HEIGHT, ACTION_ROW_GAP, ACTIONS_LABEL_WIDTH, ACTIONS_TOP_GAP,
-    BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING, PREVIEW_GAP,
-    PREVIEW_HEIGHT, PREVIEW_WIDTH, ROW_HEIGHT, ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD,
-    STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP, STYLE_BUTTON_HEIGHT, SWATCH_GAP,
-    SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE, SWITCH_HEIGHT, SWITCH_WIDTH, TITLE_FONT,
+    BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING, ROW_HEIGHT,
+    ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD, SLIDER_HIT_HEIGHT, SLIDER_THUMB_RADIUS,
+    SLIDER_VALUE_GAP, STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP, STYLE_BUTTON_HEIGHT,
+    SWATCH_GAP, SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE, SWITCH_HEIGHT, SWITCH_WIDTH,
+    TITLE_FONT,
 };
 use super::super::types::{
     PanelAction, PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
-    PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyKind,
-    SelectionPropertyValue, ShapePropertiesPanel,
+    PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyValue,
+    ShapePropertiesPanel,
 };
 use super::super::utils::palette_position;
 use crate::draw::ArrowStyle;
@@ -29,7 +30,8 @@ enum RowShape {
 fn row_shape(entry: &SelectionPropertyEntry) -> RowShape {
     match entry.state {
         SelectionPropertyValue::Color(_) | SelectionPropertyValue::ArrowStyle(_) => RowShape::Block,
-        SelectionPropertyValue::Number(_)
+        SelectionPropertyValue::Level(_)
+        | SelectionPropertyValue::Number(_)
         | SelectionPropertyValue::PressureVaries
         | SelectionPropertyValue::Toggle(_)
         | SelectionPropertyValue::ArrowHead(_) => RowShape::Inline,
@@ -107,14 +109,6 @@ pub(in crate::input::state::core::properties) fn balanced_column_budget(
         }
     }
     high
-}
-
-/// Whether a stepper row draws a stroke at its current thickness.
-pub(in crate::input::state::core::properties) fn shows_thickness_preview(
-    entry: &SelectionPropertyEntry,
-) -> bool {
-    entry.kind == SelectionPropertyKind::Thickness
-        && matches!(entry.state, SelectionPropertyValue::Number(Some(_)))
 }
 
 impl PropertiesPanelLayout {
@@ -283,6 +277,24 @@ impl PropertiesPanelLayout {
                 );
                 PropertiesRowControl::ArrowHead { well, start, end }
             }
+            SelectionPropertyValue::Level(_) => {
+                let value = PanelRect::new(
+                    right - self.slider_value_width,
+                    center_y - SLIDER_HIT_HEIGHT / 2.0,
+                    self.slider_value_width,
+                    SLIDER_HIT_HEIGHT,
+                );
+                let track_x = left + self.label_column;
+                PropertiesRowControl::Slider {
+                    track: PanelRect::new(
+                        track_x,
+                        center_y - SLIDER_HIT_HEIGHT / 2.0,
+                        (value.x - SLIDER_VALUE_GAP - track_x).max(SLIDER_THUMB_RADIUS * 2.0),
+                        SLIDER_HIT_HEIGHT,
+                    ),
+                    value,
+                }
+            }
             _ => {
                 let total = STEP_BUTTON_WIDTH * 2.0 + self.stepper_value_width;
                 let x = right - total;
@@ -291,20 +303,7 @@ impl PropertiesPanelLayout {
                 let value =
                     PanelRect::new(down.right(), y, self.stepper_value_width, STEPPER_HEIGHT);
                 let up = PanelRect::new(value.right(), y, STEP_BUTTON_WIDTH, STEPPER_HEIGHT);
-                let preview = shows_thickness_preview(entry).then(|| {
-                    PanelRect::new(
-                        x - PREVIEW_GAP - PREVIEW_WIDTH,
-                        center_y - PREVIEW_HEIGHT / 2.0,
-                        PREVIEW_WIDTH,
-                        PREVIEW_HEIGHT,
-                    )
-                });
-                PropertiesRowControl::Stepper {
-                    down,
-                    value,
-                    up,
-                    preview,
-                }
+                PropertiesRowControl::Stepper { down, value, up }
             }
         };
 
@@ -379,6 +378,9 @@ impl PropertiesPanelLayout {
                         })
                 }
             }
+            PropertiesRowControl::Slider { track, .. } => track
+                .contains(x, y)
+                .then_some(PropertiesPanelHit::Slider(index)),
             PropertiesRowControl::Stepper { down, up, .. } => {
                 if down.contains(x, y) {
                     Some(PropertiesPanelHit::StepDown(index))
@@ -446,6 +448,7 @@ impl PropertiesPanelLayout {
             (PropertiesPanelHit::MoreColors(_), PropertiesRowControl::Swatches { more, .. }) => {
                 more
             }
+            (PropertiesPanelHit::Slider(_), PropertiesRowControl::Slider { track, .. }) => track,
             (PropertiesPanelHit::StepDown(_), PropertiesRowControl::Stepper { down, .. }) => down,
             (PropertiesPanelHit::StepUp(_), PropertiesRowControl::Stepper { up, .. }) => up,
             (PropertiesPanelHit::Toggle(_), PropertiesRowControl::Toggle { switch }) => switch,

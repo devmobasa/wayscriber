@@ -105,6 +105,9 @@ fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelH
         PropertiesRowControl::Toggle { switch } => {
             vec![(*switch, PropertiesPanelHit::Toggle(index))]
         }
+        PropertiesRowControl::Slider { track, .. } => {
+            vec![(*track, PropertiesPanelHit::Slider(index))]
+        }
         PropertiesRowControl::ArrowHead { start, end, .. } => vec![
             (
                 *start,
@@ -521,7 +524,7 @@ fn scrolling_after_a_click_moves_hover_off_the_control_that_scrolled_away() {
 
     // A click remembers the row quietly, and the pointer rests on the swatch.
     state.update_pointer_position(x, y);
-    assert!(state.press_properties_panel_at(x, y));
+    assert!(state.press_properties_panel_at_with(&measurer, x, y));
     state.release_properties_panel_at_with(&measurer, x, y);
     lay_out(&mut state, screen);
     state.update_properties_panel_hover_from_pointer(x, y);

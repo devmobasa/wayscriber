@@ -178,8 +178,24 @@ impl InputState {
         true
     }
 
+    #[cfg(test)]
     pub(in crate::input::state) fn handle_properties_panel_press(
         &mut self,
+        button: MouseButton,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        self.handle_properties_panel_press_with_measurer(
+            &crate::draw::TextMeasurer::default(),
+            button,
+            x,
+            y,
+        )
+    }
+
+    pub(in crate::input::state) fn handle_properties_panel_press_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
         button: MouseButton,
         x: i32,
         y: i32,
@@ -193,7 +209,7 @@ impl InputState {
         }
         match button {
             MouseButton::Left => {
-                if !self.press_properties_panel_at(x, y) {
+                if !self.press_properties_panel_at_with(measurer, x, y) {
                     self.close_properties_panel();
                 }
             }

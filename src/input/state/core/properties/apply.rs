@@ -1,4 +1,5 @@
 use super::super::base::InputState;
+use super::RecolorOpacity;
 use super::types::{
     PanelAction, PropertiesPanelHit, PropertiesPanelLock, SelectionPropertyEntry,
     SelectionPropertyKind, SelectionPropertyValue,
@@ -25,9 +26,11 @@ impl InputState {
         };
 
         let changed = match hit {
+            // A slider acts on the press and the drag, not on the click.
             PropertiesPanelHit::Title
             | PropertiesPanelHit::Lock
-            | PropertiesPanelHit::Action(_) => false,
+            | PropertiesPanelHit::Action(_)
+            | PropertiesPanelHit::Slider(_) => false,
             PropertiesPanelHit::Swatch { index, .. } => {
                 let Some(color) = self
                     .properties
@@ -118,7 +121,7 @@ impl InputState {
         // Picking the color the selection already has is a no-op, not a
         // "No changes applied" toast. A swatch with the same hue still
         // changes a shape of another opacity.
-        if !self.selection_recolor_changes(color) {
+        if !self.selection_recolor_changes(color, RecolorOpacity::Swatch) {
             return false;
         }
         self.finish_active_arrow_bend();
@@ -320,6 +323,9 @@ impl InputState {
             SelectionPropertyKind::Color => self.apply_selection_color(measurer, direction),
             SelectionPropertyKind::Thickness => {
                 self.apply_selection_thickness(measurer, direction_or_default(direction))
+            }
+            SelectionPropertyKind::Opacity => {
+                self.apply_selection_opacity(measurer, direction_or_default(direction))
             }
             SelectionPropertyKind::Fill => self.apply_selection_fill(measurer, direction),
             SelectionPropertyKind::FontSize => {

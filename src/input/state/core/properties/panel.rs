@@ -55,6 +55,12 @@ impl InputState {
     }
 
     pub fn close_properties_panel(&mut self) {
+        // A drag cut short by the panel closing keeps what it previewed, as
+        // one undo entry, rather than leaving the shapes changed off the
+        // record.
+        if self.is_properties_slider_dragging() {
+            self.finish_properties_slider_drag_with(&TextMeasurer::default());
+        }
         if self.properties.close() {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;

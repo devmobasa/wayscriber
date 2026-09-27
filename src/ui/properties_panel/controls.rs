@@ -7,10 +7,11 @@ use cairo::FontWeight;
 
 use crate::draw::{ArrowStyle, Color};
 use crate::input::state::properties_panel_metrics::{
-    CAPTION_FONT, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, VALUE_FONT, text_style,
+    CAPTION_FONT, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SLIDER_THUMB_RADIUS, SLIDER_TRACK_HEIGHT,
+    VALUE_FONT, text_style,
 };
 use crate::input::state::{
-    PanelRect, PropertiesPanelHit, PropertiesPanelLock, PropertiesPanelSwatch,
+    LevelRange, PanelRect, PropertiesPanelHit, PropertiesPanelLock, PropertiesPanelSwatch,
 };
 use crate::toolbar_icons::draw_arrow_style_preview;
 use crate::ui::primitives::{checkerboard_behind, draw_rounded_rect};
@@ -196,22 +197,8 @@ pub(super) fn draw_stepper(
     ctx: &cairo::Context,
     (down, value, up): (PanelRect, PanelRect, PanelRect),
     text: &str,
-    preview: Option<(PanelRect, f64)>,
-    preview_color: Option<Color>,
     state: ControlState,
 ) {
-    if let Some((rect, thickness)) = preview {
-        let (_, cy) = rect.center();
-        let width = thickness.clamp(1.0, rect.height);
-        let color = preview_color.map_or(TEXT_SECONDARY, |color| rgba(Color { a: 1.0, ..color }));
-        set_color(ctx, state.fade(color));
-        ctx.set_line_width(width);
-        ctx.set_line_cap(cairo::LineCap::Round);
-        ctx.move_to(rect.x + width / 2.0, cy);
-        ctx.line_to(rect.right() - width / 2.0, cy);
-        let _ = ctx.stroke();
-    }
-
     let well = PanelRect::new(down.x, down.y, up.right() - down.x, down.height);
     set_color(ctx, BG_HOVER_WASH);
     draw_rounded_rect(ctx, well.x, well.y, well.width, well.height, RADIUS_STD);
@@ -258,6 +245,90 @@ pub(super) fn draw_stepper(
         },
     );
     layout.show_at_baseline(ctx, cx - extents.x_advance() / 2.0, cy + VALUE_FONT * 0.35);
+}
+
+/// A slider: a track filled up to the thumb in the selection's color, and
+/// the readout to its right. A mixed value draws no fill and no thumb; the
+/// readout says "Mixed", and a drag sets every shape alike.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn draw_slider(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    track: PanelRect,
+    readout: PanelRect,
+    text: &str,
+    value: Option<f64>,
+    range: LevelRange,
+    fill: Option<Color>,
+    state: ControlState,
+) {
+    let (_, cy) = track.center();
+    let left = track.x + SLIDER_THUMB_RADIUS;
+    let right = track.right() - SLIDER_THUMB_RADIUS;
+    let half = SLIDER_TRACK_HEIGHT / 2.0;
+    set_color(ctx, state.fade(SWITCH_TRACK_OFF));
+    draw_rounded_rect(
+        ctx,
+        left - half,
+        cy - half,
+        right - left + SLIDER_TRACK_HEIGHT,
+        SLIDER_TRACK_HEIGHT,
+        half,
+    );
+    let _ = ctx.fill();
+
+    if let Some(value) = value {
+        let thumb = range.thumb_x(track, value);
+        let fill = fill.map_or(ACCENT_PRIMARY, |color| rgba(Color { a: 1.0, ..color }));
+        set_color(ctx, state.fade(fill));
+        draw_rounded_rect(
+            ctx,
+            left - half,
+            cy - half,
+            thumb - left + SLIDER_TRACK_HEIGHT,
+            SLIDER_TRACK_HEIGHT,
+            half,
+        );
+        let _ = ctx.fill();
+
+        let hovered = state.hovers(|hit| matches!(hit, PropertiesPanelHit::Slider(_)));
+        ctx.new_path();
+        ctx.arc(thumb, cy, SLIDER_THUMB_RADIUS, 0.0, TAU);
+        set_color(ctx, state.fade(TEXT_WHITE));
+        let _ = ctx.fill_preserve();
+        set_color(
+            ctx,
+            state.fade(if hovered {
+                ACCENT_BRIGHT
+            } else {
+                with_alpha(ACCENT_PRIMARY, 0.6)
+            }),
+        );
+        ctx.set_line_width(if hovered { 3.0 } else { 2.0 });
+        let _ = ctx.stroke();
+    }
+
+    let style = text_style(VALUE_FONT, FontWeight::Normal);
+    let width = engine
+        .layout(ctx, style, text, None)
+        .ink_extents()
+        .x_advance();
+    set_color(
+        ctx,
+        if state.enabled {
+            TEXT_PRIMARY
+        } else {
+            TEXT_DISABLED
+        },
+    );
+    engine.draw_baseline(
+        ctx,
+        style,
+        text,
+        readout.right() - width,
+        readout.center().1 + VALUE_FONT * 0.35,
+        None,
+    );
 }
 
 pub(super) fn draw_switch(

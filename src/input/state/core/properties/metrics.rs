@@ -51,9 +51,14 @@ pub(crate) const STEP_BUTTON_WIDTH: f64 = 24.0;
 pub(crate) const STEPPER_HEIGHT: f64 = 24.0;
 pub(crate) const STEPPER_MIN_VALUE_WIDTH: f64 = 52.0;
 pub(crate) const STEPPER_VALUE_PADDING: f64 = 16.0;
-pub(crate) const PREVIEW_WIDTH: f64 = 26.0;
-pub(crate) const PREVIEW_HEIGHT: f64 = 12.0;
-pub(crate) const PREVIEW_GAP: f64 = 8.0;
+
+/// A slider row: its track's hit band, the drawn track inside it, the thumb,
+/// the narrowest track a panel allows, and the gap before the readout.
+pub(crate) const SLIDER_HIT_HEIGHT: f64 = 24.0;
+pub(crate) const SLIDER_TRACK_HEIGHT: f64 = 4.0;
+pub(crate) const SLIDER_THUMB_RADIUS: f64 = 7.0;
+pub(crate) const SLIDER_MIN_TRACK: f64 = 96.0;
+pub(crate) const SLIDER_VALUE_GAP: f64 = 10.0;
 
 pub(crate) const SWITCH_WIDTH: f64 = 34.0;
 pub(crate) const SWITCH_HEIGHT: f64 = 20.0;

@@ -206,6 +206,7 @@ pub(crate) const fn selection_kind_slug(kind: SelectionPropertyKind) -> &'static
     match kind {
         SelectionPropertyKind::Color => "color",
         SelectionPropertyKind::Thickness => "thickness",
+        SelectionPropertyKind::Opacity => "opacity",
         SelectionPropertyKind::Fill => "fill",
         SelectionPropertyKind::FontSize => "font-size",
         SelectionPropertyKind::ArrowHead => "arrow-head",
@@ -227,6 +228,7 @@ pub(crate) const fn selection_control_for_kind(kind: SelectionPropertyKind) -> S
         | SelectionPropertyKind::ArrowStyle
         | SelectionPropertyKind::TextBackground => StylePillControl::SelectionCycle(kind),
         SelectionPropertyKind::Thickness
+        | SelectionPropertyKind::Opacity
         | SelectionPropertyKind::FontSize
         | SelectionPropertyKind::ArrowLength
         | SelectionPropertyKind::ArrowAngle
@@ -267,9 +269,12 @@ impl StylePillSpec {
         }
 
         if state == StylePillState::Selection {
+            // Opacity stays in the properties panel: the strip is short of
+            // width, and a selection's opacity is not a mid-demo adjustment.
             let mut controls: Vec<_> = snapshot
                 .selection_properties
                 .iter()
+                .filter(|entry| entry.kind != SelectionPropertyKind::Opacity)
                 .map(|entry| selection_control_for_kind(entry.kind))
                 .collect();
             if snapshot.selection_has_text && !plan.drop_style_extras {

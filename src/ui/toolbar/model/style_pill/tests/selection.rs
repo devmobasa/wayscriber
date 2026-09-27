@@ -258,3 +258,22 @@ fn allocation_free_queries_match_the_materialized_spec() {
         );
     }
 }
+
+#[test]
+fn opacity_stays_in_the_properties_panel_and_off_the_pill() {
+    let mut snapshot = selection_snapshot();
+    snapshot.selection_properties.push(selection_entry(
+        "Opacity",
+        "100%",
+        SelectionPropertyKind::Opacity,
+        false,
+    ));
+
+    let spec = StylePillSpec::build(&snapshot, &TopStripPlan::unconstrained());
+
+    assert!(spec.controls().iter().all(|control| !matches!(
+        control,
+        StylePillControl::SelectionStepper(SelectionPropertyKind::Opacity)
+            | StylePillControl::SelectionCycle(SelectionPropertyKind::Opacity)
+    )));
+}

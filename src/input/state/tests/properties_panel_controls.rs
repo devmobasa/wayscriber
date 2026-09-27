@@ -158,36 +158,43 @@ fn clicking_the_swatch_the_selection_already_has_is_a_quiet_no_op() {
     assert!(!state.has_active_toast(), "and no \"No changes\" toast");
 }
 
-#[test]
-fn stepper_buttons_step_thickness_down_and_up() {
-    let mut state = create_test_input_state();
-    let id = add_rect(&mut state, PALETTE_RED, false);
-    open(&mut state, vec![id]);
-    let thickness = row(&state, "Thickness");
+fn arrow_length_of(state: &InputState, id: ShapeId) -> f64 {
+    match &state.boards.active_frame().shape(id).expect("arrow").shape {
+        Shape::Arrow { arrow_length, .. } => *arrow_length,
+        other => panic!("expected arrow, got {other:?}"),
+    }
+}
 
-    click(&mut state, PropertiesPanelHit::StepUp(thickness));
-    assert_eq!(rect_of(&state, id).2, 4.0);
-    click(&mut state, PropertiesPanelHit::StepDown(thickness));
-    click(&mut state, PropertiesPanelHit::StepDown(thickness));
-    assert_eq!(rect_of(&state, id).2, 2.0);
+#[test]
+fn stepper_buttons_step_a_number_down_and_up() {
+    let mut state = create_test_input_state();
+    let id = add_arrow(&mut state, ArrowStyle::Standard, true);
+    open(&mut state, vec![id]);
+    let length = row(&state, "Arrow length");
+
+    click(&mut state, PropertiesPanelHit::StepUp(length));
+    assert_eq!(arrow_length_of(&state, id), 26.0);
+    click(&mut state, PropertiesPanelHit::StepDown(length));
+    click(&mut state, PropertiesPanelHit::StepDown(length));
+    assert_eq!(arrow_length_of(&state, id), 22.0);
     assert_eq!(
-        state.properties_panel().unwrap().entries[thickness].value,
-        "2.0px"
+        state.properties_panel().unwrap().entries[length].value,
+        "22px"
     );
 }
 
 #[test]
 fn a_press_that_leaves_its_control_before_the_release_changes_nothing() {
     let mut state = create_test_input_state();
-    let id = add_rect(&mut state, PALETTE_RED, false);
+    let id = add_arrow(&mut state, ArrowStyle::Standard, true);
     open(&mut state, vec![id]);
-    let thickness = row(&state, "Thickness");
-    let up = point(&state, PropertiesPanelHit::StepUp(thickness));
-    let down = point(&state, PropertiesPanelHit::StepDown(thickness));
+    let length = row(&state, "Arrow length");
+    let up = point(&state, PropertiesPanelHit::StepUp(length));
+    let down = point(&state, PropertiesPanelHit::StepDown(length));
 
     click_at(&mut state, up, down);
 
-    assert_eq!(rect_of(&state, id).2, 3.0);
+    assert_eq!(arrow_length_of(&state, id), 24.0);
     assert!(state.is_properties_panel_open());
 }
 
@@ -292,7 +299,7 @@ fn the_lock_button_locks_the_selection_and_its_rows_go_inert() {
     let id = add_rect(&mut state, PALETTE_RED, false);
     open(&mut state, vec![id]);
     let thickness = row(&state, "Thickness");
-    let up = point(&state, PropertiesPanelHit::StepUp(thickness));
+    let up = point(&state, PropertiesPanelHit::Slider(thickness));
 
     click(&mut state, PropertiesPanelHit::Lock);
 
@@ -354,18 +361,18 @@ fn wheel_over_a_row_steps_it_and_the_rest_of_the_panel_swallows_it() {
 fn a_click_focuses_its_row_quietly_while_arrow_keys_show_the_ring() {
     let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
-    let id = add_rect(&mut state, PALETTE_RED, false);
+    let id = add_arrow(&mut state, ArrowStyle::Standard, true);
     open(&mut state, vec![id]);
-    let thickness = row(&state, "Thickness");
+    let length = row(&state, "Arrow length");
 
-    click(&mut state, PropertiesPanelHit::StepUp(thickness));
+    click(&mut state, PropertiesPanelHit::StepUp(length));
     let panel = state.properties_panel().unwrap();
-    assert_eq!(panel.keyboard_focus, Some(thickness));
+    assert_eq!(panel.keyboard_focus, Some(length));
     assert!(!panel.focus_visible, "a click draws no focus ring");
 
     // The arrow keys continue on the clicked row.
     assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Right));
-    assert_eq!(rect_of(&state, id).2, 5.0);
+    assert_eq!(arrow_length_of(&state, id), 28.0);
 
     assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Down));
     assert!(state.properties_panel().unwrap().focus_visible);
@@ -460,7 +467,7 @@ fn ok_on_a_mixed_selection_applies_even_the_color_it_opened_on() {
 }
 
 #[test]
-fn a_same_hue_swatch_still_changes_a_shape_of_another_opacity() {
+fn an_opaque_swatch_changes_the_hue_and_keeps_the_shapes_opacity() {
     let mut state = create_test_input_state();
     let faint_red = Color {
         a: 0.25,
@@ -469,14 +476,18 @@ fn a_same_hue_swatch_still_changes_a_shape_of_another_opacity() {
     let id = add_rect(&mut state, faint_red, false);
     open(&mut state, vec![id]);
     let color_row = row(&state, "Color");
-    let red = state
-        .properties_panel()
-        .unwrap()
-        .swatches
-        .iter()
-        .position(|swatch| swatch.color == PALETTE_RED)
-        .expect("red swatch");
+    let swatch = |state: &InputState, color: Color| {
+        state
+            .properties_panel()
+            .unwrap()
+            .swatches
+            .iter()
+            .position(|swatch| swatch.color == color)
+            .expect("swatch")
+    };
+    let depth = undo_depth(&state);
 
+    let red = swatch(&state, PALETTE_RED);
     click(
         &mut state,
         PropertiesPanelHit::Swatch {
@@ -484,8 +495,25 @@ fn a_same_hue_swatch_still_changes_a_shape_of_another_opacity() {
             index: red,
         },
     );
+    assert_eq!(rect_of(&state, id).0, faint_red, "same hue: nothing to do");
+    assert_eq!(undo_depth(&state), depth);
 
-    assert_eq!(rect_of(&state, id).0, PALETTE_RED, "now opaque");
+    let green = swatch(&state, PALETTE_GREEN);
+    click(
+        &mut state,
+        PropertiesPanelHit::Swatch {
+            row: color_row,
+            index: green,
+        },
+    );
+    assert_eq!(
+        rect_of(&state, id).0,
+        Color {
+            a: 0.25,
+            ..PALETTE_GREEN
+        },
+        "the new hue at the shape's own opacity"
+    );
 }
 
 #[test]
@@ -578,21 +606,17 @@ fn stepping_the_color_tells_opacity_variants_of_one_hue_apart() {
         seen.push(rect_of(&state, id).0);
     }
 
+    // The translucent swatch sets its opacity; the opaque ones after it
+    // change the hue and keep that opacity, which the Opacity row owns.
+    let faint = |color: Color| Color { a: 0.4, ..color };
     assert_eq!(
         seen,
-        vec![
-            Color {
-                a: 0.4,
-                ..PALETTE_RED
-            },
-            PALETTE_GREEN,
-            PALETTE_RED
-        ]
+        vec![faint(PALETTE_RED), faint(PALETTE_GREEN), faint(PALETTE_RED)]
     );
     let panel = state.properties_panel().unwrap();
     let color_row = row(&state, "Color");
-    assert_eq!(panel.entries[color_row].value, "Red");
-    assert_eq!(panel.current_swatch(&panel.entries[color_row]), Some(0));
+    assert_eq!(panel.entries[color_row].value, "Faint red");
+    assert_eq!(panel.current_swatch(&panel.entries[color_row]), Some(1));
 }
 
 #[test]
@@ -719,4 +743,151 @@ fn a_locked_selection_can_be_reordered_but_not_duplicated_or_deleted() {
     let delete = point(&state, PropertiesPanelHit::Action(PanelAction::Delete));
     click_at(&mut state, delete, delete);
     assert_eq!(state.boards.active_frame().shapes.len(), 2);
+}
+
+#[test]
+fn the_opacity_row_steps_by_five_percent_and_a_marker_stays_translucent() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    let rect = add_rect(&mut state, PALETTE_RED, false);
+    let marker = state
+        .boards
+        .active_frame_mut()
+        .add_shape(Shape::MarkerStroke {
+            points: vec![(100, 100), (200, 120)],
+            color: Color {
+                a: 0.85,
+                ..PALETTE_RED
+            },
+            thick: 12.0,
+        });
+    open(&mut state, vec![rect, marker]);
+    let opacity = row(&state, "Opacity");
+    assert_eq!(
+        state.properties_panel().unwrap().entries[opacity].value,
+        "Mixed"
+    );
+    state.set_properties_panel_focus(Some(opacity));
+
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Right));
+    let marker_alpha =
+        |state: &InputState| match &state.boards.active_frame().shape(marker).unwrap().shape {
+            Shape::MarkerStroke { color, .. } => color.a,
+            other => panic!("expected marker, got {other:?}"),
+        };
+    assert_eq!(rect_of(&state, rect).0.a, 1.0, "already at the top");
+    assert!(
+        (marker_alpha(&state) - 0.9).abs() < 1e-9,
+        "a marker tops out at 90%"
+    );
+
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Left));
+    assert!((rect_of(&state, rect).0.a - 0.95).abs() < 1e-9);
+    assert!((marker_alpha(&state) - 0.85).abs() < 1e-9);
+}
+
+#[test]
+fn dragging_the_thickness_slider_follows_the_pointer_and_undoes_in_one_step() {
+    let measurer = TextMeasurer::default();
+    let engine = crate::ui_text::UiTextEngine::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &engine,
+    };
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let thickness = row(&state, "Thickness");
+    let track = state
+        .properties_panel_layout()
+        .unwrap()
+        .hit_rect(
+            state.properties_panel().unwrap(),
+            PropertiesPanelHit::Slider(thickness),
+        )
+        .expect("track");
+    let y = track.center().1 as i32;
+    let depth = undo_depth(&state);
+
+    assert!(state.handle_properties_panel_press_with_measurer(
+        &measurer,
+        MouseButton::Left,
+        track.right() as i32 - 1,
+        y
+    ));
+    assert_eq!(
+        rect_of(&state, id).2,
+        50.0,
+        "the value jumps to the pointer"
+    );
+    lay_out(&mut state);
+    state.move_properties_panel_pointer_with(&measurer, track.x as i32 - 40, y);
+    assert_eq!(
+        rect_of(&state, id).2,
+        1.0,
+        "a drag past the end stays at it"
+    );
+    assert_eq!(undo_depth(&state), depth, "nothing recorded mid-drag");
+    lay_out(&mut state);
+    state.move_properties_panel_pointer_with(&measurer, track.center().0 as i32, y);
+    let middle = rect_of(&state, id).2;
+    assert!(middle > 20.0 && middle < 30.0, "{middle}");
+    assert_eq!(
+        state.properties_panel().unwrap().entries[thickness].value,
+        format!("{middle:.1}px"),
+        "the readout follows the drag"
+    );
+
+    state.release_properties_panel_at_with(&measurer, track.center().0 as i32, y);
+    assert_eq!(undo_depth(&state), depth + 1, "the whole drag is one entry");
+    state.handle_action_with_resources(resources, Action::Undo);
+    assert_eq!(rect_of(&state, id).2, 3.0);
+}
+
+#[test]
+fn closing_the_panel_mid_drag_keeps_the_value_as_one_undo_step() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let opacity = row(&state, "Opacity");
+    let track = state
+        .properties_panel_layout()
+        .unwrap()
+        .hit_rect(
+            state.properties_panel().unwrap(),
+            PropertiesPanelHit::Slider(opacity),
+        )
+        .expect("track");
+    let depth = undo_depth(&state);
+
+    assert!(state.handle_properties_panel_press_with_measurer(
+        &measurer,
+        MouseButton::Left,
+        track.x as i32,
+        track.center().1 as i32
+    ));
+    state.close_properties_panel();
+
+    assert!((rect_of(&state, id).0.a - 0.05).abs() < 1e-9);
+    assert_eq!(undo_depth(&state), depth + 1);
+    assert!(!state.is_properties_slider_dragging());
+}
+
+#[test]
+fn the_picker_sets_opacity_exactly() {
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let color_row = row(&state, "Color");
+    click(&mut state, PropertiesPanelHit::MoreColors(color_row));
+    let half_green = Color {
+        a: 0.5,
+        ..PALETTE_GREEN
+    };
+
+    state.color_picker_popup_set_color(half_green);
+    state.apply_color_picker_popup();
+
+    assert_eq!(rect_of(&state, id).0, half_green);
 }

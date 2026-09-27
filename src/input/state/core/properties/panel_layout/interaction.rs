@@ -76,14 +76,39 @@ impl InputState {
         self.update_properties_panel_hover_from_pointer_internal(x, y, true);
     }
 
+    /// Pointer motion over an open panel: a slider drag follows it, and
+    /// otherwise the hover does.
+    pub(crate) fn move_properties_panel_pointer_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+    ) {
+        if self.is_properties_slider_dragging() {
+            self.drag_properties_slider_with(measurer, x);
+        } else {
+            self.update_properties_panel_hover_from_pointer(x, y);
+        }
+    }
+
     /// A primary press at `(x, y)`. Returns false when it landed off the
     /// panel. The pressed part is remembered for the release, and its row
     /// takes (quiet) keyboard focus so arrow keys continue from the click.
-    pub(crate) fn press_properties_panel_at(&mut self, x: i32, y: i32) -> bool {
+    pub(crate) fn press_properties_panel_at_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> bool {
         if !self.properties_panel_contains(x, y) {
             return false;
         }
         let hit = self.properties_panel_active_hit_at(x, y);
+        // A slider acts on the press itself: the value jumps to the pointer
+        // and follows it until the release.
+        if let Some(PropertiesPanelHit::Slider(row)) = hit {
+            let _ = self.begin_properties_slider_drag_with(measurer, row, x);
+        }
         if let Some(panel) = self.properties.panel.as_mut() {
             panel.pressed = hit;
             if let Some(row) = hit.and_then(PropertiesPanelHit::row) {
@@ -108,6 +133,10 @@ impl InputState {
             .panel
             .as_mut()
             .and_then(|panel| panel.pressed.take());
+        if self.is_properties_slider_dragging() {
+            self.finish_properties_slider_drag_with(measurer);
+            return;
+        }
         match pressed {
             Some(hit) => {
                 if self.properties_panel_active_hit_at(x, y) == Some(hit) {

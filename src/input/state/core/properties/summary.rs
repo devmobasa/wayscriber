@@ -81,6 +81,15 @@ pub(super) fn shape_color(shape: &Shape) -> Option<Color> {
     }
 }
 
+/// The opacity a shape is drawn at: its color's alpha, a marker's own
+/// translucency included.
+pub(super) fn shape_opacity(shape: &Shape) -> Option<f64> {
+    match shape {
+        Shape::MarkerStroke { color, .. } => Some(color.a),
+        _ => shape_color(shape).map(|color| color.a),
+    }
+}
+
 pub(super) fn shape_thickness(shape: &Shape) -> Option<f64> {
     match shape {
         Shape::Freehand { thick, .. }

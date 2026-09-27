@@ -14,7 +14,7 @@ pub(crate) use core::{
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use core::{
-    PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
+    LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
     PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
     ShapePropertiesPanel, properties_panel_metrics,
 };

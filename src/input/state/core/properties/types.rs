@@ -1,3 +1,4 @@
+use super::metrics::SLIDER_THUMB_RADIUS;
 use crate::draw::{ArrowStyle, Color};
 use crate::util::Rect;
 
@@ -5,6 +6,7 @@ use crate::util::Rect;
 pub enum SelectionPropertyKind {
     Color,
     Thickness,
+    Opacity,
     Fill,
     FontSize,
     ArrowHead,
@@ -15,7 +17,61 @@ pub enum SelectionPropertyKind {
     SpotlightMagnification,
 }
 
+/// A slider's range and the grid its values snap to.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LevelRange {
+    pub min: f64,
+    pub max: f64,
+    pub step: f64,
+}
+
+impl LevelRange {
+    /// Where `value` sits along the range, from 0.0 to 1.0.
+    pub fn fraction(&self, value: f64) -> f64 {
+        ((value - self.min) / (self.max - self.min)).clamp(0.0, 1.0)
+    }
+
+    /// The value at `fraction` along the range, on the step grid.
+    pub fn value_at(&self, fraction: f64) -> f64 {
+        let raw = self.min + fraction.clamp(0.0, 1.0) * (self.max - self.min);
+        (self.min + ((raw - self.min) / self.step).round() * self.step).clamp(self.min, self.max)
+    }
+
+    /// The value with the pointer at `x` on a slider `track`: the thumb's
+    /// center follows the pointer, and the ends of travel sit a thumb's
+    /// radius in.
+    pub fn value_at_x(&self, track: PanelRect, x: f64) -> f64 {
+        self.value_at((x - track.x - SLIDER_THUMB_RADIUS) / slider_travel(track))
+    }
+
+    /// Where the thumb centers on `track` for `value`.
+    pub fn thumb_x(&self, track: PanelRect, value: f64) -> f64 {
+        track.x + SLIDER_THUMB_RADIUS + self.fraction(value) * slider_travel(track)
+    }
+}
+
+fn slider_travel(track: PanelRect) -> f64 {
+    (track.width - SLIDER_THUMB_RADIUS * 2.0).max(1.0)
+}
+
 impl SelectionPropertyKind {
+    /// The slider range of a property set on a slider.
+    pub fn level_range(self) -> Option<LevelRange> {
+        match self {
+            Self::Thickness => Some(LevelRange {
+                min: crate::domain::MIN_STROKE_THICKNESS,
+                max: crate::domain::MAX_STROKE_THICKNESS,
+                step: 1.0,
+            }),
+            Self::Opacity => Some(LevelRange {
+                min: 0.05,
+                max: 1.0,
+                step: 0.05,
+            }),
+            _ => None,
+        }
+    }
+
     /// The kind's value with nothing known about it, for fixtures that only
     /// care about an entry's text.
     #[cfg(test)]
@@ -25,8 +81,8 @@ impl SelectionPropertyKind {
             Self::Fill | Self::TextBackground => SelectionPropertyValue::Toggle(None),
             Self::ArrowHead => SelectionPropertyValue::ArrowHead(None),
             Self::ArrowStyle => SelectionPropertyValue::ArrowStyle(None),
-            Self::Thickness
-            | Self::FontSize
+            Self::Thickness | Self::Opacity => SelectionPropertyValue::Level(None),
+            Self::FontSize
             | Self::ArrowLength
             | Self::ArrowAngle
             | Self::SpotlightMagnification => SelectionPropertyValue::Number(None),
@@ -43,6 +99,8 @@ impl SelectionPropertyKind {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SelectionPropertyValue {
     Color(Option<Color>),
+    /// A value set on a slider as well as stepped: thickness and opacity.
+    Level(Option<f64>),
     Number(Option<f64>),
     /// A pressure stroke stores a width per point, so it has no one number.
     PressureVaries,
@@ -132,6 +190,8 @@ pub enum PropertiesPanelHit {
     },
     /// The swatch row's trailing button that opens the full color picker.
     MoreColors(usize),
+    /// A slider's track, which follows the pointer while pressed.
+    Slider(usize),
     StepDown(usize),
     StepUp(usize),
     Toggle(usize),
@@ -153,6 +213,7 @@ impl PropertiesPanelHit {
             Self::Row(row)
             | Self::Swatch { row, .. }
             | Self::MoreColors(row)
+            | Self::Slider(row)
             | Self::StepDown(row)
             | Self::StepUp(row)
             | Self::Toggle(row)
@@ -209,8 +270,12 @@ pub enum PropertiesRowControl {
         down: PanelRect,
         value: PanelRect,
         up: PanelRect,
-        /// A short stroke drawn at the current thickness.
-        preview: Option<PanelRect>,
+    },
+    Slider {
+        /// The track's hit area; the track itself runs along its middle.
+        track: PanelRect,
+        /// The readout to the track's right.
+        value: PanelRect,
     },
     Toggle {
         switch: PanelRect,
@@ -267,6 +332,11 @@ pub struct PropertiesPanelLayout {
     pub footer_top: Option<f64>,
     /// Width of the readout between a stepper's − and + buttons.
     pub stepper_value_width: f64,
+    /// Where controls beside their label may start, past the widest label.
+    pub label_column: f64,
+    /// Width of a slider's readout: room for its widest value, so the
+    /// track does not shift under the pointer while its value changes.
+    pub slider_value_width: f64,
     /// Width of each half of the arrow-head Start/End control.
     pub head_segment_width: f64,
     /// Content width of one column of rows.
@@ -295,7 +365,7 @@ pub struct ShapePropertiesPanel {
     pub entries: Vec<SelectionPropertyEntry>,
     pub swatches: Vec<PropertiesPanelSwatch>,
     pub actions: PanelActions,
-    /// The selection's shared color, for the thickness preview stroke.
+    /// The selection's shared color, which fills its sliders' tracks.
     pub preview_color: Option<Color>,
     pub hover: Option<PropertiesPanelHit>,
     /// The part a pointer press landed on; a release activates it only there.

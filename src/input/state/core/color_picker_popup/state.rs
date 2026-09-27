@@ -12,6 +12,7 @@ use super::{
     PickerDrag, color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
 };
 use crate::input::state::core::modal::ModalSurface;
+use crate::input::state::core::properties::RecolorOpacity;
 
 /// Paper has no alpha, so every color the paper target takes is opaque.
 fn opaque(color: Color) -> Color {
@@ -343,10 +344,10 @@ impl InputState {
         // was only the first shape's, so a selection whose shapes disagree in
         // hue or opacity still takes an accepted color that matches it.
         if let Some((_, ColorPickerTarget::Selection, _, color)) = applied_color
-            && self.selection_recolor_changes(color)
+            && self.selection_recolor_changes(color, RecolorOpacity::Exact)
         {
             self.finish_active_arrow_bend();
-            if self.apply_selection_color_value_with(measurer, color) {
+            if self.recolor_selection_with(measurer, color, RecolorOpacity::Exact) {
                 self.note_recent_color(color);
             }
         }

@@ -126,7 +126,7 @@ pub use menus::{
 pub use menus::{SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY};
 pub(crate) use properties::metrics as properties_panel_metrics;
 pub use properties::{
-    PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
+    LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
     PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
     SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
 };

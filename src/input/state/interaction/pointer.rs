@@ -49,7 +49,9 @@ pub(crate) fn route_pointer_press(
     if let Some(outcome) = adapters::handle_board_picker_press(state, event.button(), points) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_properties_panel_press(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_properties_panel_press(state, resources.measurer, event.button(), points)
+    {
         return outcome;
     }
     if event.button() == MouseButton::Left
@@ -109,7 +111,7 @@ pub(crate) fn route_pointer_motion(
     if let Some(outcome) = adapters::handle_board_picker_motion(state, points) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_properties_panel_motion(state, points) {
+    if let Some(outcome) = adapters::handle_properties_panel_motion(state, measurer, points) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_active_motion(state, measurer, points) {

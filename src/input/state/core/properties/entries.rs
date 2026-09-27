@@ -1,8 +1,8 @@
 use super::super::base::InputState;
 use super::summary::{
     PropertySummary, shape_arrow_angle, shape_arrow_head, shape_arrow_length, shape_arrow_style,
-    shape_color, shape_fill, shape_font_size, shape_spotlight_magnification, shape_text_background,
-    shape_thickness, summarize_property,
+    shape_color, shape_fill, shape_font_size, shape_opacity, shape_spotlight_magnification,
+    shape_text_background, shape_thickness, summarize_property,
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue};
 use super::utils::{approx_eq, color_label, color_rgba_eq};
@@ -91,7 +91,7 @@ impl InputState {
                 SelectionPropertyKind::Thickness,
                 &thickness_summary,
                 |v| format!("{v:.1}px"),
-                SelectionPropertyValue::Number,
+                SelectionPropertyValue::Level,
             ));
         } else {
             let mut any_pressure = false;
@@ -133,6 +133,17 @@ impl InputState {
                     disabled: !pressure_editable,
                 });
             }
+        }
+
+        let opacity_summary = summarize_property(frame, ids, shape_opacity, approx_eq);
+        if opacity_summary.applicable {
+            entries.push(entry(
+                "Opacity",
+                SelectionPropertyKind::Opacity,
+                &opacity_summary,
+                |v| format!("{:.0}%", v * 100.0),
+                SelectionPropertyValue::Level,
+            ));
         }
 
         let fill_summary = summarize_property(frame, ids, shape_fill, |a, b| a == b);
@@ -442,7 +453,7 @@ mod tests {
 
         assert_eq!(
             entry(&entries, "Thickness").state,
-            SelectionPropertyValue::Number(Some(3.0))
+            SelectionPropertyValue::Level(Some(3.0))
         );
         assert_eq!(
             entry(&entries, "Arrow head").state,
@@ -481,7 +492,7 @@ mod tests {
         let entries = state.build_selection_property_entries(&[first, second]);
         assert_eq!(
             entry(&entries, "Thickness").state,
-            SelectionPropertyValue::Number(None)
+            SelectionPropertyValue::Level(None)
         );
         assert!(entry(&entries, "Thickness").disabled);
     }
