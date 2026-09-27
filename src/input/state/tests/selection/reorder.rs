@@ -109,3 +109,53 @@ fn a_step_is_one_undo_entry_that_undoes_and_redoes() {
     state.handle_action_with_resources(resources, Action::Redo);
     assert_eq!(order(&state), after);
 }
+
+/// The definition the fast check has to match: some selected shape has an
+/// unselected one above (forward) or below (backward) it.
+fn can_step_by_definition(state: &InputState, forward: bool) -> bool {
+    let selected = state.selected_shape_ids();
+    let shapes = &state.boards.active_frame().shapes;
+    let is_selected = |index: usize| selected.contains(&shapes[index].id);
+    (0..shapes.len()).any(|index| {
+        is_selected(index)
+            && if forward {
+                (index + 1..shapes.len()).any(|above| !is_selected(above))
+            } else {
+                (0..index).any(|below| !is_selected(below))
+            }
+    })
+}
+
+#[test]
+fn step_availability_matches_its_definition_for_every_selection() {
+    let (mut state, ids) = stack(6);
+    for mask in 0u32..(1 << ids.len()) {
+        let selection: Vec<ShapeId> = ids
+            .iter()
+            .enumerate()
+            .filter(|(bit, _)| mask & (1 << bit) != 0)
+            .map(|(_, id)| *id)
+            .collect();
+        state.set_selection(selection);
+        for forward in [true, false] {
+            assert_eq!(
+                state.selection_can_step(forward),
+                can_step_by_definition(&state, forward),
+                "mask {mask:06b}, forward {forward}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_whole_board_selected_has_nowhere_to_step() {
+    let (mut state, ids) = stack(4_000);
+    state.set_selection(ids.clone());
+
+    assert!(!state.selection_can_step(true));
+    assert!(!state.selection_can_step(false));
+
+    state.set_selection(ids[1..].to_vec());
+    assert!(!state.selection_can_step(true));
+    assert!(state.selection_can_step(false));
+}
