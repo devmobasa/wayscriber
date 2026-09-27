@@ -276,9 +276,9 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
     let pct = (input_state.zoom_scale() * 100.0).round() as i32;
     let lock_active = input_state.zoom_locked();
 
-    // Piece order: [−]  NN%  [+]  Fit  [Lock]. The Out/In marks are vector
+    // Piece order: [Lock]  [−]  NN%  [+]  Fit. The Out/In marks are vector
     // strokes (empty text), so they carry no glyph. The Lock toggle only makes
-    // sense while zoomed, so it is appended only then.
+    // sense while zoomed, so it grows to the left of the stable zoom buttons.
     let mut specs: Vec<(String, Option<ZoomChipButtonKind>)> = vec![
         (String::new(), Some(ZoomChipButtonKind::Out)),
         (format!("{pct}%"), None),
@@ -286,7 +286,10 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
         (ZOOM_FIT_LABEL.to_string(), Some(ZoomChipButtonKind::Fit)),
     ];
     if input_state.zoom_active() {
-        specs.push((ZOOM_LOCK_LABEL.to_string(), Some(ZoomChipButtonKind::Lock)));
+        specs.insert(
+            0,
+            (ZOOM_LOCK_LABEL.to_string(), Some(ZoomChipButtonKind::Lock)),
+        );
     }
 
     // Cap height of the `NN%` readout (the only `kind == None` piece), used to
@@ -302,6 +305,9 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
         }
         let advance = if is_glyph_icon(kind) {
             zoom_glyph_advance(style.font_size)
+        } else if kind.is_none() {
+            // A fixed percentage slot keeps the minus button stationary too.
+            engine.measure(text_style, "1000%", None)?.x_advance()
         } else {
             extents.x_advance()
         };
