@@ -3,15 +3,17 @@
 
 use cairo::FontWeight;
 
+use crate::draw::Color;
 use crate::input::state::properties_panel_metrics::{
-    ACTION_BUTTON_HEIGHT, ACTIONS_TOP_GAP, BODY_FONT, VALUE_FONT, text_style,
+    ACTION_BUTTON_HEIGHT, ACTION_ROW_GAP, ACTIONS_TOP_GAP, BODY_FONT, VALUE_FONT, text_style,
 };
 use crate::input::state::{
     PanelAction, PanelRect, PropertiesPanelHit, PropertiesPanelLayout, ShapePropertiesPanel,
 };
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::overlay::{
-    BG_HOVER, BG_HOVER_WASH, DIVIDER_LIGHT, RADIUS_STD, TEXT_DISABLED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT_BRIGHT, ACCENT_PRIMARY, BG_HOVER, BG_HOVER_WASH, DIVIDER_LIGHT, RADIUS_STD,
+    TEXT_DISABLED, TEXT_PRIMARY, TEXT_SECONDARY,
 };
 use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba, set_color, with_alpha};
 use crate::ui_text::UiTextEngine;
@@ -34,35 +36,114 @@ pub(super) fn draw_actions(
     let _ = ctx.stroke();
 
     set_color(ctx, TEXT_PRIMARY);
-    engine.draw_baseline(
-        ctx,
-        text_style(BODY_FONT, FontWeight::Normal),
-        "Order",
-        layout.content_x(),
-        layout.actions_top + ACTIONS_TOP_GAP + ACTION_BUTTON_HEIGHT / 2.0 + BODY_FONT * 0.35,
-        None,
-    );
+    let label_style = text_style(BODY_FONT, FontWeight::Normal);
+    let order_top = layout.actions_top + ACTIONS_TOP_GAP;
+    let preset_top = order_top + (ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP) * 2.0;
+    for (label, top) in [("Order", order_top), ("Preset", preset_top)] {
+        engine.draw_baseline(
+            ctx,
+            label_style,
+            label,
+            layout.content_x(),
+            top + ACTION_BUTTON_HEIGHT / 2.0 + BODY_FONT * 0.35,
+            None,
+        );
+    }
 
     for (action, rect) in layout.action_buttons() {
-        let enabled = panel.actions.enabled(action);
+        let enabled = panel.action_enabled(action);
         let hovered = enabled && panel.hover == Some(PropertiesPanelHit::Action(action));
-        set_color(ctx, if hovered { BG_HOVER } else { BG_HOVER_WASH });
+        let armed = action == PanelAction::SavePreset && panel.preset_save_mode;
+        set_color(
+            ctx,
+            if armed {
+                ACCENT_PRIMARY
+            } else if hovered {
+                BG_HOVER
+            } else {
+                BG_HOVER_WASH
+            },
+        );
         draw_rounded_rect(ctx, rect.x, rect.y, rect.width, rect.height, RADIUS_STD);
         let _ = ctx.fill();
+        if panel.preset_save_mode && matches!(action, PanelAction::Preset(_)) {
+            // Saving is armed: the slots are what to click next.
+            set_color(ctx, with_alpha(ACCENT_BRIGHT, 0.7));
+            ctx.set_line_width(1.0);
+            draw_rounded_rect(
+                ctx,
+                rect.x + 0.5,
+                rect.y + 0.5,
+                rect.width - 1.0,
+                rect.height - 1.0,
+                RADIUS_STD,
+            );
+            let _ = ctx.stroke();
+        }
 
         let ink = match (enabled, action) {
             (false, _) => TEXT_DISABLED,
             (true, PanelAction::Delete) => DELETE_TEXT,
-            (true, _) if hovered => TEXT_PRIMARY,
+            (true, _) if hovered || armed => TEXT_PRIMARY,
             (true, _) => TEXT_SECONDARY,
         };
         set_color(ctx, ink);
         match action {
             PanelAction::Duplicate => draw_label(engine, ctx, rect, "Duplicate"),
             PanelAction::Delete => draw_label(engine, ctx, rect, "Delete"),
+            PanelAction::SavePreset => draw_label(engine, ctx, rect, "Save"),
+            PanelAction::Preset(slot) => {
+                let preset = panel.actions.presets.get(slot - 1).and_then(Option::as_ref);
+                draw_preset_chip(engine, ctx, rect, slot, preset.map(|p| p.color), ink);
+            }
             order => draw_order_glyph(ctx, rect, order),
         }
     }
+}
+
+/// A preset slot: its number beside a dot of the preset's color, or an
+/// empty ring for a slot with nothing saved.
+fn draw_preset_chip(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    rect: PanelRect,
+    slot: usize,
+    color: Option<Color>,
+    ink: Rgba,
+) {
+    let style = text_style(VALUE_FONT, FontWeight::Normal);
+    let number = slot.to_string();
+    let number_width = engine
+        .layout(ctx, style, &number, None)
+        .ink_extents()
+        .x_advance();
+    let dot = 4.5;
+    let gap = 4.0;
+    let (cx, cy) = rect.center();
+    let left = cx - (dot * 2.0 + gap + number_width) / 2.0;
+
+    ctx.new_path();
+    ctx.arc(left + dot, cy, dot, 0.0, std::f64::consts::TAU);
+    match color {
+        Some(color) => {
+            set_color(ctx, (color.r, color.g, color.b, color.a.max(0.35)));
+            let _ = ctx.fill();
+        }
+        None => {
+            set_color(ctx, ink);
+            ctx.set_line_width(1.0);
+            let _ = ctx.stroke();
+        }
+    }
+    set_color(ctx, ink);
+    engine.draw_baseline(
+        ctx,
+        style,
+        &number,
+        left + dot * 2.0 + gap,
+        cy + VALUE_FONT * 0.35,
+        None,
+    );
 }
 
 fn draw_label(engine: &UiTextEngine, ctx: &cairo::Context, rect: PanelRect, label: &str) {

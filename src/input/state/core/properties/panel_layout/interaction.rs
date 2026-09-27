@@ -23,7 +23,7 @@ impl InputState {
         let hit = self.properties_panel_hit_at(x, y)?;
         let panel = self.properties.panel.as_ref()?;
         if let PropertiesPanelHit::Action(action) = hit
-            && !panel.actions.enabled(action)
+            && !panel.action_enabled(action)
         {
             return None;
         }
@@ -198,6 +198,21 @@ impl InputState {
             scroll.offset = offset;
         }
         self.properties.request_hover_recalc();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Disarms saving into a preset slot. Returns false when it was not
+    /// armed, so Escape can fall through to closing the panel.
+    pub(crate) fn cancel_properties_preset_save(&mut self) -> bool {
+        let Some(panel) = self.properties.panel.as_mut() else {
+            return false;
+        };
+        if !panel.preset_save_mode {
+            return false;
+        }
+        panel.preset_save_mode = false;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true

@@ -789,8 +789,8 @@ fn order_buttons_move_the_shape_and_dim_at_the_ends_of_the_stack() {
     assert_eq!(stack_order(&state), vec![middle, top, bottom]);
 
     let panel = state.properties_panel().expect("panel stays open");
-    assert!(!panel.actions.enabled(PanelAction::ToFront));
-    assert!(panel.actions.enabled(PanelAction::Backward));
+    assert!(!panel.action_enabled(PanelAction::ToFront));
+    assert!(panel.action_enabled(PanelAction::Backward));
     assert!(
         panel
             .subtitle
@@ -839,10 +839,10 @@ fn a_locked_selection_can_be_reordered_but_not_duplicated_or_deleted() {
     state.boards.active_frame_mut().shapes[index].locked = true;
     open(&mut state, vec![locked]);
 
-    let actions = state.properties_panel().unwrap().actions;
-    assert!(!actions.enabled(PanelAction::Duplicate));
-    assert!(!actions.enabled(PanelAction::Delete));
-    assert!(actions.enabled(PanelAction::Forward));
+    let panel = state.properties_panel().unwrap();
+    assert!(!panel.action_enabled(PanelAction::Duplicate));
+    assert!(!panel.action_enabled(PanelAction::Delete));
+    assert!(panel.action_enabled(PanelAction::Forward));
     let delete = point(&state, PropertiesPanelHit::Action(PanelAction::Delete));
     click_at(&mut state, delete, delete);
     assert_eq!(state.boards.active_frame().shapes.len(), 2);
@@ -993,4 +993,122 @@ fn the_picker_sets_opacity_exactly() {
     state.apply_color_picker_popup();
 
     assert_eq!(rect_of(&state, id).0, half_green);
+}
+
+fn add_styled_rect(state: &mut InputState, color: Color, thick: f64, fill: bool) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 100,
+        y: 100,
+        w: 60,
+        h: 40,
+        fill,
+        fill_color: None,
+        color,
+        thick,
+    })
+}
+
+#[test]
+fn a_selection_saves_its_style_into_a_preset_slot_and_another_takes_it_on() {
+    use crate::input::state::PanelAction;
+
+    let mut state = create_test_input_state();
+    let empty_slot = state
+        .preset_slots
+        .presets()
+        .iter()
+        .position(Option::is_none)
+        .expect("an empty slot")
+        + 1;
+    let source = add_styled_rect(&mut state, PALETTE_GREEN, 8.0, true);
+    open(&mut state, vec![source]);
+    let slot = PropertiesPanelHit::Action(PanelAction::Preset(empty_slot));
+    let (x, y) = point(&state, slot);
+    assert_eq!(
+        state.properties_panel_active_hit_at(x, y),
+        None,
+        "an empty slot has nothing to apply"
+    );
+
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::SavePreset),
+    );
+    assert!(state.properties_panel().unwrap().preset_save_mode);
+    assert_eq!(
+        state.properties_panel().unwrap().tooltip(slot),
+        Some(format!("Save to preset {empty_slot}"))
+    );
+    click(&mut state, slot);
+
+    assert!(!state.properties_panel().unwrap().preset_save_mode);
+    let saved = state.preset_slots.preset(empty_slot).expect("saved preset");
+    assert_eq!(saved.tool, Tool::Rect);
+    assert_eq!(saved.preview_color(), PALETTE_GREEN);
+    assert_eq!(saved.size, 8.0);
+    assert_eq!(saved.fill_enabled, Some(true));
+    assert!(matches!(
+        state.take_pending_preset_action(),
+        Some(crate::input::state::PresetAction::Save { slot, .. }) if slot == empty_slot
+    ));
+
+    let tool_before = state.active_tool();
+    let target = add_styled_rect(&mut state, PALETTE_RED, 3.0, false);
+    open(&mut state, vec![target]);
+    let depth = undo_depth(&state);
+    click(&mut state, slot);
+
+    assert_eq!(rect_of(&state, target), (PALETTE_GREEN, true, 8.0));
+    assert_eq!(
+        undo_depth(&state),
+        depth + 1,
+        "one undo entry for the whole style"
+    );
+    assert_eq!(state.active_tool(), tool_before, "the tool stays as it was");
+}
+
+#[test]
+fn escape_disarms_saving_before_it_closes_the_panel() {
+    use crate::input::state::PanelAction;
+
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    click(
+        &mut state,
+        PropertiesPanelHit::Action(PanelAction::SavePreset),
+    );
+
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Escape));
+    assert!(state.is_properties_panel_open());
+    assert!(!state.properties_panel().unwrap().preset_save_mode);
+
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Escape));
+    assert!(!state.is_properties_panel_open());
+}
+
+#[test]
+fn a_shape_no_tool_draws_cannot_be_saved_as_a_preset() {
+    use crate::input::state::PanelAction;
+
+    let mut state = create_test_input_state();
+    let note = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 100,
+        y: 100,
+        text: "Note".into(),
+        color: PALETTE_RED,
+        size: 18.0,
+        font_descriptor: Default::default(),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    open(&mut state, vec![note]);
+
+    assert!(
+        !state
+            .properties_panel()
+            .unwrap()
+            .action_enabled(PanelAction::SavePreset)
+    );
 }

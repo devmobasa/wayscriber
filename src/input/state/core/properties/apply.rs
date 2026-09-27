@@ -169,7 +169,7 @@ impl InputState {
             .properties
             .panel
             .as_ref()
-            .is_some_and(|panel| panel.actions.enabled(action));
+            .is_some_and(|panel| panel.action_enabled(action));
         if !enabled {
             return false;
         }
@@ -189,6 +189,30 @@ impl InputState {
                 duplicated
             }
             PanelAction::Delete => self.delete_selection_with(measurer),
+            PanelAction::SavePreset => {
+                if let Some(panel) = self.properties.panel.as_mut() {
+                    panel.preset_save_mode = !panel.preset_save_mode;
+                }
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                return true;
+            }
+            PanelAction::Preset(slot) => {
+                let saving = self
+                    .properties
+                    .panel
+                    .as_ref()
+                    .is_some_and(|panel| panel.preset_save_mode);
+                if saving {
+                    if let Some(panel) = self.properties.panel.as_mut() {
+                        panel.preset_save_mode = false;
+                    }
+                    self.selection_preset_source()
+                        .is_some_and(|preset| self.store_preset(slot, preset))
+                } else {
+                    self.apply_preset_to_selection_with(measurer, slot)
+                }
+            }
         };
 
         if changed && self.is_properties_panel_open() {

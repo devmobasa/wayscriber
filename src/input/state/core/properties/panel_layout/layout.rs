@@ -263,6 +263,7 @@ impl InputState {
             divider_y: origin_y + divider,
             rows_top: origin_y + rows_top,
             actions_top: origin_y + rows_top + fit.height,
+            preset_slots: panel.actions.presets.len(),
             footer_top: has_footer.then_some(origin_y + rows_top + fit.height + ACTIONS_HEIGHT),
             stepper_value_width: measured.stepper_value_width,
             head_segment_width: measured.head_segment_width,

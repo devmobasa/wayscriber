@@ -1,6 +1,7 @@
 mod arrow;
 mod color;
 mod fill;
+mod preset;
 mod spotlight;
 mod stroke;
 mod text;

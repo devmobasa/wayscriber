@@ -373,7 +373,9 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         "one column on a tall screen"
     );
 
-    lay_out(&mut state, (SCREEN.0, 480));
+    // Wide enough for as many columns as the rows need at this height.
+    let wide = 1400;
+    lay_out(&mut state, (wide, 480));
 
     let layout = *state.properties_panel_layout().expect("layout");
     let rows = rows(&state);
@@ -381,7 +383,7 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         rows.iter().map(|row| row.content_x.to_bits()).collect();
     assert!(columns.len() > 1, "the rows spread over columns");
     assert!(layout.width > single.width);
-    assert!(layout.origin_x + layout.width <= SCREEN.0 as f64 - 12.0 + 1e-9);
+    assert!(layout.origin_x + layout.width <= f64::from(wide) - 12.0 + 1e-9);
     assert_all_reachable(&state, 480.0);
     let heights: Vec<f64> = columns
         .iter()

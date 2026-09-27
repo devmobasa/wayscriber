@@ -2,7 +2,7 @@ use super::super::base::InputState;
 use super::metrics::MAX_SWATCHES;
 use super::panel_layout::selection_panel_anchor;
 use super::types::{
-    PanelActions, PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch,
+    PanelActions, PanelPreset, PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch,
     SelectionPropertyEntry, SelectionPropertyValue, ShapePropertiesPanel,
 };
 use super::utils::format_timestamp;
@@ -112,6 +112,7 @@ impl InputState {
             keyboard_focus: None,
             focus_visible: false,
             scroll: 0.0,
+            preset_save_mode: false,
             multiple_selection: contents.multiple_selection,
         });
         true
@@ -254,6 +255,19 @@ impl InputState {
             can_raise: self.selection_can_step(true),
             can_lower: self.selection_can_step(false),
             can_edit: lock != PropertiesPanelLock::Locked,
+            can_save_preset: self.selection_preset_source().is_some(),
+            presets: self
+                .preset_slots
+                .presets()
+                .iter()
+                .take(self.preset_slots.slot_count())
+                .map(|preset| {
+                    preset.as_ref().map(|preset| PanelPreset {
+                        color: preset.preview_color(),
+                        name: preset.name.clone(),
+                    })
+                })
+                .collect(),
         };
 
         Some(PanelContents {

@@ -21,7 +21,11 @@ pub(crate) enum RecolorOpacity {
 /// The color `shape` has now and the one a recolor to `target` gives it, or
 /// `None` for a shape without a color. A marker keeps its own opacity either
 /// way, which is what makes it a highlighter.
-fn recolored(shape: &Shape, target: Color, opacity: RecolorOpacity) -> Option<(Color, Color)> {
+pub(super) fn recolored(
+    shape: &Shape,
+    target: Color,
+    opacity: RecolorOpacity,
+) -> Option<(Color, Color)> {
     let current = *shape_color_ref(shape)?;
     let keep_opacity = matches!(shape, Shape::MarkerStroke { .. })
         || (opacity == RecolorOpacity::Swatch && target.a >= 1.0);
@@ -53,7 +57,7 @@ fn shape_color_ref(shape: &Shape) -> Option<&Color> {
     }
 }
 
-fn shape_color_mut(shape: &mut Shape) -> Option<&mut Color> {
+pub(super) fn shape_color_mut(shape: &mut Shape) -> Option<&mut Color> {
     match shape {
         Shape::Freehand { color, .. }
         | Shape::FreehandPressure { color, .. }

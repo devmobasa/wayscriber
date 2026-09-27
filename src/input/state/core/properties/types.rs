@@ -147,6 +147,11 @@ pub enum PanelAction {
     ToFront,
     Duplicate,
     Delete,
+    /// A preset slot, numbered from 1: applies it, or saves into it while
+    /// saving is armed.
+    Preset(usize),
+    /// Arms saving the selection's style into the next preset slot clicked.
+    SavePreset,
 }
 
 impl PanelAction {
@@ -156,26 +161,28 @@ impl PanelAction {
     pub const EDIT: [Self; 2] = [Self::Duplicate, Self::Delete];
 }
 
+/// One tool preset slot, as the panel's preset chips show it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelPreset {
+    pub color: Color,
+    pub name: Option<String>,
+}
+
 /// Which actions can do anything for the current selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PanelActions {
     /// Some selected shape has an unselected one above it.
     pub can_raise: bool,
     /// Some selected shape has an unselected one below it.
     pub can_lower: bool,
-    /// Some selected shape is unlocked, so duplicating or deleting has
-    /// something to work on.
+    /// Some selected shape is unlocked, so duplicating, deleting, or applying
+    /// a preset has something to work on.
     pub can_edit: bool,
-}
-
-impl PanelActions {
-    pub fn enabled(&self, action: PanelAction) -> bool {
-        match action {
-            PanelAction::ToBack | PanelAction::Backward => self.can_lower,
-            PanelAction::Forward | PanelAction::ToFront => self.can_raise,
-            PanelAction::Duplicate | PanelAction::Delete => self.can_edit,
-        }
-    }
+    /// Some editable selected shape is one a tool draws, so its style can be
+    /// saved as a preset.
+    pub can_save_preset: bool,
+    /// The preset slots, in order; `None` for an empty one.
+    pub presets: Vec<Option<PanelPreset>>,
 }
 
 /// The part of the properties panel under the pointer.
@@ -335,8 +342,11 @@ pub struct PropertiesPanelLayout {
     pub lock: PanelRect,
     pub divider_y: f64,
     pub rows_top: f64,
-    /// Top of the actions area (ordering, Duplicate, Delete), under the rows.
+    /// Top of the actions area (ordering, Duplicate, Delete, presets), under
+    /// the rows.
     pub actions_top: f64,
+    /// How many preset slots the preset row shows.
+    pub preset_slots: usize,
     /// Top of the keyboard hint strip; `None` when the panel has no rows.
     pub footer_top: Option<f64>,
     /// Width of the readout between a stepper's − and + buttons.
@@ -385,10 +395,35 @@ pub struct ShapePropertiesPanel {
     pub focus_visible: bool,
     /// How far the rows are scrolled, when they overflow a short screen.
     pub scroll: f64,
+    /// Whether the next preset chip clicked saves into that slot rather than
+    /// applying it.
+    pub preset_save_mode: bool,
     pub multiple_selection: bool,
 }
 
 impl ShapePropertiesPanel {
+    /// Whether the actions-area button `action` would do anything now.
+    pub fn action_enabled(&self, action: PanelAction) -> bool {
+        let actions = &self.actions;
+        match action {
+            PanelAction::ToBack | PanelAction::Backward => actions.can_lower,
+            PanelAction::Forward | PanelAction::ToFront => actions.can_raise,
+            PanelAction::Duplicate | PanelAction::Delete => actions.can_edit,
+            PanelAction::SavePreset => actions.can_save_preset,
+            PanelAction::Preset(slot) => {
+                if self.preset_save_mode {
+                    actions.can_save_preset
+                } else {
+                    actions.can_edit
+                        && actions
+                            .presets
+                            .get(slot.wrapping_sub(1))
+                            .is_some_and(Option::is_some)
+                }
+            }
+        }
+    }
+
     /// The row under the pointer, if any.
     pub fn hover_index(&self) -> Option<usize> {
         self.hover.and_then(PropertiesPanelHit::row)

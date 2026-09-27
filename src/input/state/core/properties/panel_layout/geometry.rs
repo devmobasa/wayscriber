@@ -4,11 +4,11 @@
 
 use super::super::metrics::{
     ACTION_BUTTON_GAP, ACTION_BUTTON_HEIGHT, ACTION_ROW_GAP, ACTIONS_LABEL_WIDTH, ACTIONS_TOP_GAP,
-    BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING, ROW_HEIGHT,
-    ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD, SLIDER_HIT_HEIGHT, SLIDER_THUMB_RADIUS,
-    SLIDER_VALUE_GAP, STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP, STYLE_BUTTON_HEIGHT,
-    SWATCH_GAP, SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE, SWITCH_HEIGHT, SWITCH_WIDTH,
-    TITLE_FONT,
+    BLOCK_BOTTOM, BLOCK_GAP, BLOCK_LABEL_LINE, BLOCK_TOP, BODY_FONT, COLUMN_SPACING,
+    PRESET_SAVE_WIDTH, ROW_HEIGHT, ROW_INSET, SEGMENT_HEIGHT, SEGMENT_PAD, SLIDER_HIT_HEIGHT,
+    SLIDER_THUMB_RADIUS, SLIDER_VALUE_GAP, STEP_BUTTON_WIDTH, STEPPER_HEIGHT, STYLE_BUTTON_GAP,
+    STYLE_BUTTON_HEIGHT, SWATCH_GAP, SWATCH_ITEMS_PER_LINE, SWATCH_LINE_GAP, SWATCH_SIZE,
+    SWITCH_HEIGHT, SWITCH_WIDTH, TITLE_FONT,
 };
 use super::super::types::{
     PanelAction, PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
@@ -149,9 +149,9 @@ impl PropertiesPanelLayout {
             .is_none_or(|scroll| y >= self.rows_top && y < scroll.viewport_bottom)
     }
 
-    /// The actions area's buttons: the four ordering buttons in one row and
-    /// Duplicate and Delete under them, both starting after the "Order"
-    /// label's column and spanning the full content width.
+    /// The actions area's buttons: the four ordering buttons, Duplicate and
+    /// Delete under them, and the preset slots with Save at the end, every
+    /// row starting after the label column and spanning the content width.
     pub fn action_buttons(&self) -> Vec<(PanelAction, PanelRect)> {
         let left = self.content_x() + ACTIONS_LABEL_WIDTH;
         let width = self.content_right() - left;
@@ -174,6 +174,24 @@ impl PropertiesPanelLayout {
         let edit_top = order_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
         let mut buttons = row(order_top, &PanelAction::ORDER);
         buttons.extend(row(edit_top, &PanelAction::EDIT));
+
+        let preset_top = edit_top + ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP;
+        let save = PanelRect::new(
+            self.content_right() - PRESET_SAVE_WIDTH,
+            preset_top,
+            PRESET_SAVE_WIDTH,
+            ACTION_BUTTON_HEIGHT,
+        );
+        let slots = self.preset_slots.max(1) as f64;
+        let chip = (save.x - ACTION_BUTTON_GAP - left - ACTION_BUTTON_GAP * (slots - 1.0)) / slots;
+        buttons.extend((0..self.preset_slots).map(|index| {
+            let x = left + index as f64 * (chip + ACTION_BUTTON_GAP);
+            (
+                PanelAction::Preset(index + 1),
+                PanelRect::new(x, preset_top, chip, ACTION_BUTTON_HEIGHT),
+            )
+        }));
+        buttons.push((PanelAction::SavePreset, save));
         buttons
     }
 
@@ -569,6 +587,25 @@ impl ShapePropertiesPanel {
                 PanelAction::Forward => Some("Bring forward".to_string()),
                 PanelAction::ToFront => Some("Bring to front".to_string()),
                 PanelAction::Duplicate | PanelAction::Delete => None,
+                PanelAction::SavePreset => Some(
+                    if self.preset_save_mode {
+                        "Pick a slot to save into"
+                    } else {
+                        "Save the selection's style as a preset"
+                    }
+                    .to_string(),
+                ),
+                PanelAction::Preset(slot) => Some(if self.preset_save_mode {
+                    format!("Save to preset {slot}")
+                } else {
+                    match self.actions.presets.get(slot - 1) {
+                        Some(Some(preset)) => match &preset.name {
+                            Some(name) => format!("Apply preset {slot}: {name}"),
+                            None => format!("Apply preset {slot}"),
+                        },
+                        _ => format!("Preset {slot} is empty"),
+                    }
+                }),
             },
             _ => None,
         }

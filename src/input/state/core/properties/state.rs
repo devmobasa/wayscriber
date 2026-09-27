@@ -80,6 +80,8 @@ mod tests {
                 can_raise: false,
                 can_lower: false,
                 can_edit: false,
+                can_save_preset: false,
+                presets: Vec::new(),
             },
             preview_color: None,
             hover: None,
@@ -87,6 +89,7 @@ mod tests {
             keyboard_focus: None,
             focus_visible: false,
             scroll: 0.0,
+            preset_save_mode: false,
             multiple_selection: false,
         }
     }

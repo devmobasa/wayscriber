@@ -114,6 +114,12 @@ impl InputState {
 
     pub fn save_preset(&mut self, slot: usize) -> bool {
         let preset = self.capture_current_preset();
+        self.store_preset(slot, preset)
+    }
+
+    /// Stores `preset` in `slot` and hands it to the backend to persist.
+    /// Returns false when the slot already holds exactly this preset.
+    pub(crate) fn store_preset(&mut self, slot: usize, preset: ToolPresetConfig) -> bool {
         let Some(preset) = self.preset_slots.save(slot, preset) else {
             return false;
         };

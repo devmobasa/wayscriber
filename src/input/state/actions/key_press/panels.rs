@@ -420,7 +420,9 @@ impl InputState {
         };
         match key {
             Key::Escape => {
-                self.close_properties_panel();
+                if !self.cancel_properties_preset_save() {
+                    self.close_properties_panel();
+                }
                 true
             }
             Key::Up => self.focus_previous_properties_entry(),
