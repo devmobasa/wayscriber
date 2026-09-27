@@ -100,6 +100,13 @@ impl InputState {
         self.zoom_chip.clear_layout();
     }
 
+    /// Whether a chip button can act right now (see
+    /// [`crate::ui::ZoomChipLayout::button_enabled`]).
+    fn zoom_chip_button_enabled(&self, kind: ZoomChipButtonKind) -> bool {
+        self.zoom_chip_layout()
+            .is_some_and(|layout| layout.button_enabled(kind))
+    }
+
     /// Update the hovered chip button from idle pointer motion (same
     /// contract as `update_status_hud_hover_from_pointer`: click gates +
     /// idle pointer, redraw on transitions only).
@@ -108,6 +115,7 @@ impl InputState {
             && self.zoom_chip_contains(x, y)
         {
             self.zoom_chip_button_at(x, y)
+                .filter(|kind| self.zoom_chip_button_enabled(*kind))
         } else {
             None
         };
@@ -218,10 +226,15 @@ impl InputState {
         if self.zoom_chip_button_at(x, y) != Some(pressed) {
             return (true, None);
         }
+        // A dimmed button (zoom-out or Reset at 100%) is consumed with no
+        // action, so it neither zooms nor nudges the shortcut coach.
+        if !self.zoom_chip_button_enabled(pressed) {
+            return (true, None);
+        }
         let action = match pressed {
             ZoomChipButtonKind::Out => Action::ZoomOut,
             ZoomChipButtonKind::In => Action::ZoomIn,
-            ZoomChipButtonKind::Fit => Action::ResetZoom,
+            ZoomChipButtonKind::Reset => Action::ResetZoom,
             ZoomChipButtonKind::Lock => Action::ToggleZoomLock,
         };
         // Shortcut-coach slow-path signal: activating a zoom action from the
