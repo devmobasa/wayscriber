@@ -446,6 +446,16 @@ impl WaylandState {
                 self.onboarding_card.hovered(),
             )
         });
+        let painted_card = card_layout.as_ref().and_then(|card| {
+            super::ui_effect_damage::effect_rect(
+                (card.x, card.y, card.width, card.height),
+                width,
+                height,
+            )
+        });
+        self.render
+            .ui_damage_mut()
+            .record_painted(super::UiEffect::OnboardingCard, painted_card);
         self.onboarding_card.set_layout(card_layout);
         let palette_view = crate::ui::CommandPaletteView::prepare(&self.input_state, width, height);
         crate::ui::paint_command_palette(

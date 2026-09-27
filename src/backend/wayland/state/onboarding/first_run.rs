@@ -150,6 +150,15 @@ impl WaylandState {
         ) && first_run_holds_toolbar(onboarding.state())
     }
 
+    /// Whether this frame paints the first-run card, without building its copy.
+    pub(in crate::backend::wayland) fn first_run_card_shown(&self) -> bool {
+        let state = self.preferences.onboarding().state();
+
+        state.first_run_active()
+            && state.active_step.is_some()
+            && self.first_run_onboarding_card_visible()
+    }
+
     pub(super) fn first_run_onboarding_card_visible(&self) -> bool {
         if !super::automatic_onboarding_allowed(
             self.config.ui.show_onboarding_hints,

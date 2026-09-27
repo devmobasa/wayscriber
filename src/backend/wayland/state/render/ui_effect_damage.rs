@@ -318,6 +318,21 @@ impl WaylandState {
             &mut regions,
         );
 
+        // The first-run card hides under menus, pickers, and zoom and returns
+        // when they close. Step changes repaint the whole surface and hover
+        // repaints the card itself, so it needs damage only where it appears
+        // or disappears: repaint it when it comes back, clear it when it goes.
+        let onboarding_card_rect = flags
+            .active(UiEffect::OnboardingCard)
+            .then(|| self.onboarding_card.last_painted())
+            .flatten()
+            .and_then(|bounds| effect_rect(bounds, width, height));
+        self.render.ui_damage_mut().roll_on_change(
+            UiEffect::OnboardingCard,
+            onboarding_card_rect,
+            &mut regions,
+        );
+
         // The scan overlay spans its region and, once settled, the outcome card
         // beside it. Both move only when the phase changes, so the previous
         // union is re-emitted to clear the sweep it leaves behind.

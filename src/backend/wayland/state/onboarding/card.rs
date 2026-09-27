@@ -18,6 +18,9 @@ use crate::ui::{OnboardingCardAction, OnboardingCardLayout, OnboardingCardPress}
 #[derive(Debug, Default)]
 pub(in crate::backend::wayland) struct OnboardingCardChrome {
     layout: Option<OnboardingCardLayout>,
+    /// Where the card was last painted. Kept while the card is hidden, so the
+    /// frame that shows it again can damage that footprint before painting.
+    last_painted: Option<(f64, f64, f64, f64)>,
     hovered: Option<OnboardingCardAction>,
     #[cfg(feature = "tablet-input")]
     stylus_press: Option<OnboardingCardPress>,
@@ -26,10 +29,16 @@ pub(in crate::backend::wayland) struct OnboardingCardChrome {
 impl OnboardingCardChrome {
     /// Records what the renderer painted; `None` when the card was not drawn.
     pub(in crate::backend::wayland) fn set_layout(&mut self, layout: Option<OnboardingCardLayout>) {
-        if layout.is_none() {
-            self.hovered = None;
+        match &layout {
+            Some(card) => self.last_painted = Some((card.x, card.y, card.width, card.height)),
+            None => self.hovered = None,
         }
         self.layout = layout;
+    }
+
+    /// The card's most recent painted bounds, even while it is hidden.
+    pub(in crate::backend::wayland) fn last_painted(&self) -> Option<(f64, f64, f64, f64)> {
+        self.last_painted
     }
 
     pub(in crate::backend::wayland) fn hovered(&self) -> Option<OnboardingCardAction> {
@@ -192,6 +201,18 @@ mod tests {
         assert_eq!(chrome.press_at(true, 99.0, 100.0), None);
         assert_eq!(chrome.press_at(true, 150.0, 171.0), None);
         assert_eq!(chrome.press_at(true, 20.0, 400.0), None);
+    }
+
+    /// A context menu hides the card for a frame; the footprint must survive
+    /// so the frame that shows the card again can repaint where it goes.
+    #[test]
+    fn hiding_the_card_keeps_its_last_painted_bounds() {
+        let mut chrome = chrome_with_card();
+        assert_eq!(chrome.last_painted(), Some((100.0, 50.0, 200.0, 120.0)));
+
+        chrome.set_layout(None);
+
+        assert_eq!(chrome.last_painted(), Some((100.0, 50.0, 200.0, 120.0)));
     }
 
     #[test]

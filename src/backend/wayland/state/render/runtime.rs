@@ -18,10 +18,11 @@ pub(super) enum UiEffect {
     ContextMenu,
     ContextSubmenu,
     RecognitionChip,
+    OnboardingCard,
 }
 
 impl UiEffect {
-    const COUNT: usize = 14;
+    const COUNT: usize = 15;
 
     const fn index(self) -> usize {
         self as usize
@@ -87,6 +88,28 @@ impl UiDamageHistory {
                 regions.extend(current);
             }
         }
+    }
+
+    /// Push footprints only when they change: static chrome that repaints its
+    /// own content changes needs damage only where it appears or disappears.
+    pub(super) fn roll_on_change(
+        &mut self,
+        effect: UiEffect,
+        current: Option<Rect>,
+        regions: &mut Vec<Rect>,
+    ) {
+        let previous = std::mem::replace(&mut self.prev[effect.index()], current);
+        if previous != current {
+            regions.extend(previous);
+            regions.extend(current);
+        }
+    }
+
+    /// Replace the remembered footprint with the one actually painted, without
+    /// damage. For chrome measured only while painting: the next roll then
+    /// clears or repaints exactly what is on screen, not a pre-paint guess.
+    pub(super) fn record_painted(&mut self, effect: UiEffect, painted: Option<Rect>) {
+        self.prev[effect.index()] = painted;
     }
 
     pub(super) fn roll_status_hud(
@@ -290,6 +313,7 @@ mod tests {
             UiEffect::ContextMenu,
             UiEffect::ContextSubmenu,
             UiEffect::RecognitionChip,
+            UiEffect::OnboardingCard,
         ];
         let mut history = UiDamageHistory::default();
 
@@ -301,6 +325,51 @@ mod tests {
         for (index, effect) in EFFECTS.into_iter().enumerate() {
             assert_eq!(history.previous(effect), Some(rect(index as i32 * 20)));
         }
+    }
+
+    /// The first-run card disappears while a context menu is open and must be
+    /// repainted when the menu closes, even though nothing else on the frame
+    /// touches its footprint. A card that just sits there costs no damage.
+    #[test]
+    fn onboarding_card_damage_follows_hide_and_show_only() {
+        let card = Rect::new(1296, 64, 600, 245).expect("card footprint");
+        let mut history = UiDamageHistory::default();
+        let mut frame = |shown: bool| {
+            let mut regions = Vec::new();
+            history.roll_on_change(
+                UiEffect::OnboardingCard,
+                shown.then_some(card),
+                &mut regions,
+            );
+            regions
+        };
+
+        assert_eq!(frame(true), vec![card], "first paint");
+        assert!(frame(true).is_empty(), "steady card, no damage");
+        assert_eq!(frame(false), vec![card], "context menu opens: clear it");
+        assert!(frame(false).is_empty(), "still hidden");
+        assert_eq!(frame(true), vec![card], "context menu closes: repaint it");
+        assert!(frame(true).is_empty());
+    }
+
+    /// The card is measured only while painting, so the pre-paint footprint is
+    /// the one painted last. Advancing from "Toolbar and exit" to the taller
+    /// "Color and thickness" card repaints the surface; a context menu opened
+    /// before another redraw must then clear the taller card, not the old one.
+    #[test]
+    fn hiding_the_onboarding_card_clears_the_bounds_actually_painted() {
+        let short = Rect::new(1296, 64, 600, 180).expect("toolbar-and-exit card");
+        let tall = Rect::new(1296, 64, 600, 245).expect("color-and-thickness card");
+        let mut history = UiDamageHistory::default();
+        let mut regions = Vec::new();
+        history.roll_on_change(UiEffect::OnboardingCard, Some(short), &mut regions);
+
+        history.roll_on_change(UiEffect::OnboardingCard, Some(short), &mut regions);
+        history.record_painted(UiEffect::OnboardingCard, Some(tall));
+        regions.clear();
+        history.roll_on_change(UiEffect::OnboardingCard, None, &mut regions);
+
+        assert_eq!(regions, vec![tall]);
     }
 
     #[test]
