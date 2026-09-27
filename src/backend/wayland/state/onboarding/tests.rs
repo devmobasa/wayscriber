@@ -1,8 +1,8 @@
 use super::first_run::{
-    FirstRunAdvance, FirstRunEnvironment, advance_first_run_steps, apply_persisted_usage_signals,
-    background_mode_prompt_active, color_thickness_completed, first_run_card_hidden_by_ui_state,
-    first_run_card_key_action, first_run_holds_toolbar, first_run_skip_allowed,
-    quick_access_completed,
+    FirstRunAdvance, FirstRunEnvironment, ReplayStart, advance_first_run_steps,
+    apply_persisted_usage_signals, background_mode_prompt_active, color_thickness_completed,
+    first_run_card_hidden_by_ui_state, first_run_card_key_action, first_run_holds_toolbar,
+    first_run_skip_allowed, quick_access_completed, replay_start,
 };
 use super::first_run_card::{first_run_step_eyebrow, toolbar_exit_body};
 use super::{
@@ -690,4 +690,15 @@ fn a_skipped_replay_gives_the_saved_usage_back() {
     assert!(advance.changed);
     assert!(state.used_help_overlay);
     assert_eq!(state.first_run_replay_saved_usage, None);
+}
+
+/// A replay starts only where its first card can be seen: zoom is left
+/// first, presenter mode refuses with a note instead of resetting progress
+/// out of sight.
+#[test]
+fn a_replay_starts_only_where_its_first_card_can_be_seen() {
+    assert_eq!(replay_start(false, false), ReplayStart::Now);
+    assert_eq!(replay_start(false, true), ReplayStart::ExitZoomFirst);
+    assert!(matches!(replay_start(true, false), ReplayStart::Refuse(_)));
+    assert!(matches!(replay_start(true, true), ReplayStart::Refuse(_)));
 }

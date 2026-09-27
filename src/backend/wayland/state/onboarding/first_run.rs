@@ -140,8 +140,25 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
-    /// Replay Tour: run the first-run cards again from the first step.
+    /// Replay Tour: run the first-run cards again from the first step, but
+    /// only where the first card can actually be seen (see [`replay_start`]).
     pub(in crate::backend::wayland) fn replay_first_run_tour(&mut self) {
+        match replay_start(
+            self.input_state.presenter_mode_active(),
+            self.zoom.is_engaged(),
+        ) {
+            ReplayStart::Refuse(message) => {
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "onboarding.first_run",
+                    Toast::info(message),
+                );
+                return;
+            }
+            ReplayStart::ExitZoomFirst => self.exit_zoom(),
+            ReplayStart::Now => {}
+        }
+
         self.preferences
             .onboarding_mut()
             .state_mut()
@@ -511,6 +528,30 @@ fn mark_background_mode_prompt(state: &mut OnboardingState, enabled: bool) {
 
 pub(super) fn first_run_skip_allowed(first_run_active: bool, card_visible: bool) -> bool {
     first_run_active && card_visible
+}
+
+/// How a Replay Tour request starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReplayStart {
+    Now,
+    /// Zoom hides the cards; it is a view, so leave it and start.
+    ExitZoomFirst,
+    /// Presenter mode hides the cards on purpose; keep it and say why the
+    /// replay did not start, rather than resetting progress out of sight.
+    Refuse(&'static str),
+}
+
+/// The cards stay hidden in presenter mode and while zoomed, so a replay
+/// started there would reset and save progress with no card or Skip control
+/// on screen.
+pub(super) fn replay_start(presenter_mode: bool, zoom_engaged: bool) -> ReplayStart {
+    if presenter_mode {
+        ReplayStart::Refuse("Leave presenter mode to replay the tour.")
+    } else if zoom_engaged {
+        ReplayStart::ExitZoomFirst
+    } else {
+        ReplayStart::Now
+    }
 }
 
 /// The strip stays up while the first-run tour runs and for the rest of the
