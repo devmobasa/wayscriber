@@ -312,22 +312,18 @@ fn wheel_value(spec: ToolbarSliderSpec, value: f64, dy: f64) -> Option<f64> {
         return None;
     }
 
-    let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
-    Some(spec.normalize_value(value + notches * step))
+    Some(spec.step_value(value, notches))
 }
 
 fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> Option<f64> {
-    let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
-    let value = match slider_step_for_key(key)? {
-        SliderStep::Down => value - step,
-        SliderStep::Up => value + step,
-        SliderStep::PageDown => value - 10.0 * step,
-        SliderStep::PageUp => value + 10.0 * step,
+    Some(match slider_step_for_key(key)? {
+        SliderStep::Down => spec.step_value(value, -1.0),
+        SliderStep::Up => spec.step_value(value, 1.0),
+        SliderStep::PageDown => spec.step_value(value, -10.0),
+        SliderStep::PageUp => spec.step_value(value, 10.0),
         SliderStep::Min => spec.min,
         SliderStep::Max => spec.max,
-    };
-
-    Some(spec.normalize_value(value))
+    })
 }
 
 /// Called by the isolated GTK widget test after initialization.
@@ -370,8 +366,9 @@ pub(super) fn assert_widget_contract() {
             &gtk4::gdk::ModifierType::empty(),
         ],
     );
-    assert_eq!(slider.state.value.get(), 6.0);
-    assert_eq!(changes.borrow().as_slice(), &[6.0]);
+    // An off-grid 4.5 steps up to the adjacent whole value, 5, not 6.
+    assert_eq!(slider.state.value.get(), 5.0);
+    assert_eq!(changes.borrow().as_slice(), &[5.0]);
     let window = gtk4::Window::new();
     window.set_child(Some(&slider.root));
     gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
@@ -389,11 +386,11 @@ pub(super) fn assert_widget_contract() {
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_some());
     slider.set_value(10.0);
-    assert_eq!(slider.state.value.get(), 6.0);
+    assert_eq!(slider.state.value.get(), 5.0);
     slider.state.dragging.set(false);
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_none());
-    assert_eq!(slider.state.value.get(), 6.0);
+    assert_eq!(slider.state.value.get(), 5.0);
     window.set_child(None::<&gtk4::Widget>);
     let anchor = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     window.set_child(Some(&anchor));
@@ -412,7 +409,7 @@ pub(super) fn assert_widget_contract() {
     assert_eq!(slider.state.value.get(), 6.25);
     assert_eq!(
         changes.borrow().as_slice(),
-        &[6.0],
+        &[5.0],
         "backend updates emit no user event"
     );
 }
@@ -464,6 +461,19 @@ pub(super) fn assert_focused_slider_escape_stays_local() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// The GTK wheel and arrows agree with the numeral and the canvas wheel: a
+    /// fractional width steps to its neighbour, never skipping a pixel.
+    #[test]
+    fn wheel_and_arrows_step_a_fractional_width_to_its_neighbour() {
+        use gtk4::gdk::Key;
+        let spec = ToolbarSliderSpec::THICKNESS;
+
+        assert_eq!(wheel_value(spec, 30.8, -1.0), Some(31.0));
+        assert_eq!(wheel_value(spec, 3.2, 1.0), Some(3.0));
+        assert_eq!(keyboard_value(spec, 30.8, Key::Right), Some(31.0));
+        assert_eq!(keyboard_value(spec, 30.8, Key::Left), Some(30.0));
+    }
+
     #[test]
     fn a_wheel_notch_steps_the_slider_one_step_and_up_raises_it() {
         let spec = ToolbarSliderSpec::THICKNESS;

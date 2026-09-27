@@ -203,6 +203,31 @@ impl ToolbarSliderSpec {
         (self.min + ((clamped - self.min) / step).round() * step).clamp(self.min, self.max)
     }
 
+    /// The value `steps` spec steps away (negative lowers it). A snapping
+    /// slider lands on the adjacent grid value in the step's direction, so an
+    /// off-grid 30.8 px steps up to 31 and down to 30, never skipping one.
+    pub(crate) fn step_value(self, value: f64, steps: f64) -> f64 {
+        /// Absorbs float error, so a value already on the grid counts as on it.
+        const GRID_EPSILON: f64 = 1e-9;
+
+        let step = self.step.unwrap_or((self.max - self.min) / 100.0);
+        let target = value + steps * step;
+        let Some(grid) = self
+            .step
+            .filter(|step| self.snap_to_step && step.is_finite() && *step > 0.0)
+        else {
+            return self.clamp(target);
+        };
+
+        let index = (target - self.min) / grid;
+        let index = if steps > 0.0 {
+            (index + GRID_EPSILON).floor()
+        } else {
+            (index - GRID_EPSILON).ceil()
+        };
+        self.clamp(self.min + index * grid)
+    }
+
     pub(crate) fn value_from_t(self, t: f64) -> f64 {
         let fraction = self.curve.span_fraction(t.clamp(0.0, 1.0));
 
@@ -288,6 +313,28 @@ mod tests {
         }
         assert_close(spec.t_from_value(1.0), 0.0);
         assert_close(spec.t_from_value(50.0), 1.0);
+    }
+
+    /// Wheel and arrow steps land on the next grid value in their direction:
+    /// a fractional width never skips a whole pixel, an on-grid value moves by
+    /// whole steps, and non-snapping sliders step by their step size.
+    #[test]
+    fn steps_land_on_the_adjacent_grid_value_in_their_direction() {
+        let thickness = ToolbarSliderSpec::THICKNESS;
+        assert_close(thickness.step_value(30.8, 1.0), 31.0);
+        assert_close(thickness.step_value(30.8, -1.0), 30.0);
+        assert_close(thickness.step_value(3.2, -1.0), 3.0);
+        assert_close(thickness.step_value(30.0, 1.0), 31.0);
+        assert_close(thickness.step_value(30.8, 10.0), 40.0);
+        assert_close(thickness.step_value(50.0, 1.0), 50.0);
+        assert_close(thickness.step_value(1.4, -1.0), 1.0);
+
+        let spotlight = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION;
+        assert_close(spotlight.step_value(1.3, 1.0), 1.5);
+        assert_close(spotlight.step_value(1.5, 1.0), 1.75);
+
+        let opacity = ToolbarSliderSpec::MARKER_OPACITY;
+        assert_close(opacity.step_value(0.42, 1.0), 0.47);
     }
 
     #[test]

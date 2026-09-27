@@ -82,8 +82,7 @@ impl StylePillSlider {
         }
 
         let (spec, value) = self.value(snapshot);
-        let step = spec.step.unwrap_or((spec.max - spec.min) / 100.0);
-        self.event(spec.normalize_value(value + step * f64::from(steps)))
+        self.event(spec.step_value(value, f64::from(steps)))
     }
 
     pub(crate) fn event(self, value: f64) -> ToolbarEvent {
