@@ -64,6 +64,8 @@ pub enum MenuCommand {
     Duplicate,
     SelectHoveredShape,
     MoveToFront,
+    MoveForward,
+    MoveBackward,
     MoveToBack,
     Lock,
     Unlock,

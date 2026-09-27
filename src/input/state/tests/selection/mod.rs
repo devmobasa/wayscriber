@@ -5,3 +5,4 @@ mod actions;
 mod damage;
 mod deletion;
 mod duplicate;
+mod reorder;

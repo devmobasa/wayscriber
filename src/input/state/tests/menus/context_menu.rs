@@ -1038,3 +1038,49 @@ fn open_board_picker_command_closes_context_menu_and_opens_picker() {
     assert!(!state.is_context_menu_open());
     assert!(state.is_board_picker_open());
 }
+
+#[test]
+fn shape_menu_orders_by_steps_and_dims_the_way_the_shape_cannot_go() {
+    let mut state = create_test_input_state();
+    let rect = |x| Shape::Rect {
+        x,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: Color::new(1.0, 0.0, 0.0, 1.0),
+        thick: 2.0,
+    };
+    let bottom = state.boards.active_frame_mut().add_shape(rect(0));
+    let _top = state.boards.active_frame_mut().add_shape(rect(20));
+    state.set_selection(vec![bottom]);
+    state.open_context_menu((0, 0), vec![bottom], ContextMenuKind::Shape, Some(bottom));
+
+    let entries = state.context_menu_entries();
+    let disabled = |label: &str| {
+        entries
+            .iter()
+            .find(|entry| entry.label == label)
+            .unwrap_or_else(|| panic!("{label} entry"))
+            .disabled
+    };
+    let labels: Vec<_> = entries.iter().map(|entry| entry.label.as_str()).collect();
+    let front = labels
+        .iter()
+        .position(|label| *label == "Move to Front")
+        .unwrap();
+    assert_eq!(
+        &labels[front..front + 4],
+        [
+            "Move to Front",
+            "Move Forward",
+            "Move Backward",
+            "Move to Back"
+        ]
+    );
+    assert!(!disabled("Move to Front") && !disabled("Move Forward"));
+    assert!(
+        disabled("Move Backward") && disabled("Move to Back"),
+        "the bottom shape cannot go lower"
+    );
+}
