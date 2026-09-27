@@ -295,8 +295,8 @@ pub(super) fn assert_widget_contract() {
             &gtk4::gdk::ModifierType::empty(),
         ],
     );
-    assert_eq!(slider.state.value.get(), 5.5);
-    assert_eq!(changes.borrow().as_slice(), &[5.5]);
+    assert_eq!(slider.state.value.get(), 6.0);
+    assert_eq!(changes.borrow().as_slice(), &[6.0]);
     let window = gtk4::Window::new();
     window.set_child(Some(&slider.root));
     gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
@@ -314,11 +314,11 @@ pub(super) fn assert_widget_contract() {
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_some());
     slider.set_value(10.0);
-    assert_eq!(slider.state.value.get(), 5.5);
+    assert_eq!(slider.state.value.get(), 6.0);
     slider.state.dragging.set(false);
     assert!(escape());
     assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_none());
-    assert_eq!(slider.state.value.get(), 5.5);
+    assert_eq!(slider.state.value.get(), 6.0);
     window.set_child(None::<&gtk4::Widget>);
     let anchor = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     window.set_child(Some(&anchor));
@@ -337,7 +337,7 @@ pub(super) fn assert_widget_contract() {
     assert_eq!(slider.state.value.get(), 6.25);
     assert_eq!(
         changes.borrow().as_slice(),
-        &[5.5],
+        &[6.0],
         "backend updates emit no user event"
     );
 }

@@ -162,6 +162,11 @@ fn clicking_the_swatch_the_selection_already_has_is_a_quiet_no_op() {
 fn stepper_buttons_step_thickness_down_and_up() {
     let mut state = create_test_input_state();
     let id = add_rect(&mut state, PALETTE_RED, false);
+    if let Shape::Rect { thick, .. } =
+        &mut state.boards.active_frame_mut().shape_mut(id).unwrap().shape
+    {
+        *thick = 3.2;
+    }
     open(&mut state, vec![id]);
     let thickness = row(&state, "Thickness");
 

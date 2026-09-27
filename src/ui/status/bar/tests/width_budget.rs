@@ -2,7 +2,8 @@ use super::*;
 
 #[test]
 fn configurable_core_segments_keep_fixed_order_and_split_tool_from_size() {
-    let state = make_state();
+    let mut state = make_state();
+    state.set_thickness_for_active_tool(30.8);
     let pieces = build_cluster_pieces(&state);
     let kinds: Vec<_> = pieces.iter().filter_map(|piece| piece.kind).collect();
     assert_eq!(
@@ -26,7 +27,7 @@ fn configurable_core_segments_keep_fixed_order_and_split_tool_from_size() {
         .find(|piece| piece.kind == Some(StatusHudSegmentKind::Size))
         .expect("size piece");
     assert_eq!(tool.text.as_deref(), Some("Pen"));
-    assert_eq!(size.text.as_deref(), Some("4px"));
+    assert_eq!(size.text.as_deref(), Some("31px"));
 }
 
 #[test]

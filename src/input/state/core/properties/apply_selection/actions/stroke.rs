@@ -43,7 +43,8 @@ impl InputState {
                     strength: thick, ..
                 }
                 | Shape::MarkerStroke { thick, .. } => {
-                    let next = (*thick + delta).clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+                    let next =
+                        (thick.round() + delta).clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
                     if (next - *thick).abs() > f64::EPSILON {
                         *thick = next;
                         true

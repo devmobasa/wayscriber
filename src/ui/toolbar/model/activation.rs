@@ -140,7 +140,7 @@ impl ToolbarSliderSpec {
         min: MIN_STROKE_THICKNESS,
         max: MAX_STROKE_THICKNESS,
         step: Some(1.0),
-        snap_to_step: false,
+        snap_to_step: true,
     };
 
     pub(crate) fn clamp(self, value: f64) -> f64 {
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_sliders_remain_continuous() {
+    fn thickness_slider_snaps_to_whole_pixels() {
         let slider = ToolbarSlider {
             target: ToolbarSliderTarget::Thickness,
             spec: ToolbarSliderSpec::THICKNESS,
@@ -275,11 +275,11 @@ mod tests {
         };
 
         match slider.event_for_value(2.13) {
-            ToolbarEvent::SetThickness(value) => assert_close(value, 2.13),
+            ToolbarEvent::SetThickness(value) => assert_close(value, 2.0),
             other => panic!("unexpected event: {other:?}"),
         }
         let t = ToolbarSliderSpec::THICKNESS.t_from_value(2.13);
-        assert_close(ToolbarSliderSpec::THICKNESS.value_from_t(t), 2.13);
+        assert_close(ToolbarSliderSpec::THICKNESS.value_from_t(t), 2.0);
     }
 
     #[test]
