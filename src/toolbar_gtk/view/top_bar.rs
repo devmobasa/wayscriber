@@ -467,6 +467,11 @@ impl TopBar {
         root.add_css_class("panel");
         let capture_surface = CaptureSurfaceContent::new(&root);
         window.set_child(Some(capture_surface.widget()));
+        // Mapping must not give the first focusable slider keyboard ownership.
+        // Tab navigation can still focus it explicitly afterwards.
+        window.connect_map(|window| {
+            gtk4::prelude::GtkWindowExt::set_focus(window, gtk4::Widget::NONE);
+        });
 
         // Report top-window hover to the backend: GTK runs on its own
         // Wayland connection, so this is how the backend's top-strip idle

@@ -20,7 +20,9 @@ pub(super) enum FocusedKeys {
     Nothing,
     /// A focused control that Space and Return activate, such as a checkbox.
     Activation,
-    /// A widget that owns typing and arrow keys: the hex entry and sliders.
+    /// A slider owns only its value-navigation keys.
+    Slider,
+    /// A widget that owns typing and arrow keys: the hex entry.
     /// These handle Escape themselves.
     Editing,
 }
@@ -46,6 +48,25 @@ pub(super) fn key_stays_local(
             keyval,
             Key::space | Key::KP_Space | Key::Return | Key::KP_Enter | Key::ISO_Enter
         ),
+        FocusedKeys::Slider => matches!(
+            keyval,
+            Key::Left
+                | Key::Right
+                | Key::Up
+                | Key::Down
+                | Key::Home
+                | Key::End
+                | Key::Page_Up
+                | Key::Page_Down
+                | Key::KP_Left
+                | Key::KP_Right
+                | Key::KP_Up
+                | Key::KP_Down
+                | Key::KP_Home
+                | Key::KP_End
+                | Key::KP_Page_Up
+                | Key::KP_Page_Down
+        ),
         FocusedKeys::Editing => true,
     }
 }
@@ -69,9 +90,9 @@ fn focused_keys(widget: &gtk4::Widget) -> FocusedKeys {
         return FocusedKeys::Nothing;
     };
 
-    let editing = focus.ancestor(gtk4::Entry::static_type()).is_some()
-        || focus.accessible_role() == gtk4::AccessibleRole::Slider;
-    if editing {
+    if focus.accessible_role() == gtk4::AccessibleRole::Slider {
+        FocusedKeys::Slider
+    } else if focus.ancestor(gtk4::Entry::static_type()).is_some() {
         FocusedKeys::Editing
     } else {
         FocusedKeys::Activation
@@ -156,6 +177,25 @@ mod tests {
             FocusedKeys::Activation
         ));
         assert!(!key_stays_local(Key::v, false, FocusedKeys::Activation));
+    }
+
+    #[test]
+    fn focused_slider_relays_shortcuts_but_keeps_navigation() {
+        for keyval in [Key::Escape, Key::h, Key::w, Key::space, Key::Return] {
+            assert!(!key_stays_local(keyval, false, FocusedKeys::Slider));
+        }
+        for keyval in [
+            Key::Left,
+            Key::Right,
+            Key::Up,
+            Key::Down,
+            Key::Home,
+            Key::End,
+            Key::Page_Up,
+            Key::Page_Down,
+        ] {
+            assert!(key_stays_local(keyval, false, FocusedKeys::Slider));
+        }
     }
 
     #[test]

@@ -52,6 +52,7 @@ impl SliderRow {
         let area = gtk4::DrawingArea::builder()
             .accessible_role(gtk4::AccessibleRole::Slider)
             .focusable(true)
+            .focus_on_click(false)
             .build();
         area.update_property(&[
             gtk4::accessible::Property::Label(name),
@@ -114,7 +115,6 @@ impl SliderRow {
         let begin_label = value_label.clone();
         drag.connect_drag_begin(move |gesture, x, _| {
             drag_state.dragging.set(true);
-            drag_area.grab_focus();
             // Jump the knob to the pressed position, like the built-in track.
             let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
             let t = (x / width).clamp(0.0, 1.0);
