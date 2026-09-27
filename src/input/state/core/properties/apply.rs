@@ -15,6 +15,8 @@ impl InputState {
         measurer: &TextMeasurer,
         hit: PropertiesPanelHit,
     ) -> bool {
+        // Locking, ordering, presets: none may record history under a drag.
+        self.finish_properties_slider_drag_with(measurer);
         if hit == PropertiesPanelHit::Lock {
             return self.toggle_properties_panel_lock_with(measurer);
         }

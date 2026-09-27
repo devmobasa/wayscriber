@@ -1112,3 +1112,85 @@ fn a_shape_no_tool_draws_cannot_be_saved_as_a_preset() {
             .action_enabled(PanelAction::SavePreset)
     );
 }
+
+#[test]
+fn a_key_pressed_mid_drag_lands_after_the_drag_in_history() {
+    let measurer = TextMeasurer::default();
+    let engine = crate::ui_text::UiTextEngine::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &engine,
+    };
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let thickness = row(&state, "Thickness");
+    let track = state
+        .properties_panel_layout()
+        .unwrap()
+        .hit_rect(
+            state.properties_panel().unwrap(),
+            PropertiesPanelHit::Slider(thickness),
+        )
+        .expect("track");
+    let (x, y) = (track.right() as i32 - 1, track.center().1 as i32);
+
+    assert!(state.handle_properties_panel_press_with_measurer(&measurer, MouseButton::Left, x, y));
+    assert_eq!(rect_of(&state, id).2, 50.0);
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Left));
+    assert!(
+        !state.is_properties_slider_dragging(),
+        "the key ended the drag"
+    );
+    assert_eq!(rect_of(&state, id).2, 49.0);
+    state.release_properties_panel_at_with(&measurer, x, y);
+    assert_eq!(
+        rect_of(&state, id).2,
+        49.0,
+        "the release does not jump back"
+    );
+
+    state.handle_action_with_resources(resources, Action::Undo);
+    assert_eq!(rect_of(&state, id).2, 50.0, "the key's step undoes first");
+    state.handle_action_with_resources(resources, Action::Undo);
+    assert_eq!(
+        rect_of(&state, id).2,
+        3.0,
+        "then the drag, back to the start"
+    );
+}
+
+#[test]
+fn undo_mid_drag_first_lands_the_drag() {
+    let measurer = TextMeasurer::default();
+    let engine = crate::ui_text::UiTextEngine::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &engine,
+    };
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let thickness = row(&state, "Thickness");
+    let track = state
+        .properties_panel_layout()
+        .unwrap()
+        .hit_rect(
+            state.properties_panel().unwrap(),
+            PropertiesPanelHit::Slider(thickness),
+        )
+        .expect("track");
+    assert!(state.handle_properties_panel_press_with_measurer(
+        &measurer,
+        MouseButton::Left,
+        track.right() as i32 - 1,
+        track.center().1 as i32
+    ));
+
+    state.handle_action_with_resources(resources, Action::Undo);
+
+    assert!(!state.is_properties_slider_dragging());
+    assert_eq!(rect_of(&state, id).2, 3.0, "the drag landed, then undid");
+    state.handle_action_with_resources(resources, Action::Redo);
+    assert_eq!(rect_of(&state, id).2, 50.0);
+}
