@@ -109,6 +109,21 @@ impl InputState {
         true
     }
 
+    /// Opens the popup on the selection's fill, from the properties panel's
+    /// fill row. Returns false when nothing selected can be filled.
+    pub(crate) fn open_color_picker_popup_for_selection_fill_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+    ) -> bool {
+        let Some(color) = self.selection_fill_paint_source() else {
+            return false;
+        };
+        self.discard_open_color_picker_recolor();
+        self.clear_properties_panel_pointer_state();
+        self.open_color_picker_popup_for(measurer, ColorPickerTarget::SelectionFill, color);
+        true
+    }
+
     /// Whether the open popup edits the paper sheet's color draft.
     pub fn color_picker_popup_edits_board_paper(&self) -> bool {
         self.color_picker_popup.target() == Some(ColorPickerTarget::BoardPaper)
@@ -180,7 +195,10 @@ impl InputState {
                 ModalSurface::ColorPicker,
                 ModalSurface::BoardPicker,
             );
-        } else if target == ColorPickerTarget::Selection {
+        } else if matches!(
+            target,
+            ColorPickerTarget::Selection | ColorPickerTarget::SelectionFill
+        ) {
             // Opened from the properties panel, which shows the result.
             self.close_modals_for_open_keeping(
                 ModalSurface::ColorPicker,
@@ -213,6 +231,7 @@ impl InputState {
             }
             Some(ColorPickerTarget::BoardPaper) => Cow::Borrowed("Paper Color"),
             Some(ColorPickerTarget::Selection) => Cow::Borrowed("Selection Color"),
+            Some(ColorPickerTarget::SelectionFill) => Cow::Borrowed("Fill Color"),
             Some(ColorPickerTarget::Tool) | None => Cow::Borrowed("Select Color"),
         }
     }
@@ -267,7 +286,7 @@ impl InputState {
             // Shapes change on OK only, as one undo entry; a live preview
             // would record one per drag step.
             ColorPickerPopupState::Open {
-                target: ColorPickerTarget::Selection,
+                target: ColorPickerTarget::Selection | ColorPickerTarget::SelectionFill,
                 ..
             }
             | ColorPickerPopupState::Hidden => {}
@@ -351,6 +370,14 @@ impl InputState {
                 self.note_recent_color(color);
             }
         }
+        if let Some((_, ColorPickerTarget::SelectionFill, _, color)) = applied_color
+            && self.selection_fill_paint_changes(Some(color), RecolorOpacity::Exact)
+        {
+            self.finish_active_arrow_bend();
+            if self.apply_selection_fill_paint_with(measurer, Some(color), RecolorOpacity::Exact) {
+                self.note_recent_color(color);
+            }
+        }
         if let Some((tool, target, original_color, color)) = applied_color
             && original_color != color
         {
@@ -383,7 +410,7 @@ impl InputState {
                 // whether the board changes, so nothing is dirty yet.
                 ColorPickerTarget::BoardPaper => {}
                 // Applied above, whether or not the color moved.
-                ColorPickerTarget::Selection => {}
+                ColorPickerTarget::Selection | ColorPickerTarget::SelectionFill => {}
             }
         }
         self.color_picker_popup.hide();

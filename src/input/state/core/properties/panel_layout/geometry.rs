@@ -12,8 +12,8 @@ use super::super::metrics::{
 };
 use super::super::types::{
     PanelAction, PanelRect, PropertiesPanelHit, PropertiesPanelLayout, PropertiesPanelLock,
-    PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyValue,
-    ShapePropertiesPanel,
+    PropertiesRowControl, PropertiesRowGeometry, SelectionPropertyEntry, SelectionPropertyKind,
+    SelectionPropertyValue, ShapePropertiesPanel,
 };
 use super::super::utils::palette_position;
 use crate::draw::ArrowStyle;
@@ -40,14 +40,27 @@ fn row_shape(entry: &SelectionPropertyEntry) -> RowShape {
     }
 }
 
-/// Lines the swatch grid needs for `swatches` plus its "more colors" button.
-fn swatch_lines(swatches: usize) -> usize {
-    (swatches + 1).div_ceil(SWATCH_ITEMS_PER_LINE)
+/// Whether a swatch row leads with a "no fill" cell: the fill row does.
+fn leads_with_no_fill(entry: &SelectionPropertyEntry) -> bool {
+    matches!(entry.state, SelectionPropertyValue::Fill(_))
 }
 
-/// Width of the swatch grid's widest line.
-pub(in crate::input::state::core::properties) fn swatch_grid_width(swatches: usize) -> f64 {
-    let items = (swatches + 1).min(SWATCH_ITEMS_PER_LINE) as f64;
+/// Cells in a swatch row: its swatches, the trailing "more colors" button,
+/// and the fill row's leading "no fill".
+pub(in crate::input::state::core::properties) fn swatch_cells(
+    entry: &SelectionPropertyEntry,
+    swatches: usize,
+) -> usize {
+    swatches + 1 + usize::from(leads_with_no_fill(entry))
+}
+
+fn swatch_lines(cells: usize) -> usize {
+    cells.div_ceil(SWATCH_ITEMS_PER_LINE)
+}
+
+/// Width of a swatch grid's widest line.
+pub(in crate::input::state::core::properties) fn swatch_grid_width(cells: usize) -> f64 {
+    let items = cells.min(SWATCH_ITEMS_PER_LINE) as f64;
     items * SWATCH_SIZE + (items - 1.0) * SWATCH_GAP
 }
 
@@ -57,7 +70,7 @@ pub(in crate::input::state::core::properties) fn row_height(
 ) -> f64 {
     let control_height = match entry.state {
         SelectionPropertyValue::Color(_) | SelectionPropertyValue::Fill(_) => {
-            let lines = swatch_lines(swatches) as f64;
+            let lines = swatch_lines(swatch_cells(entry, swatches)) as f64;
             lines * SWATCH_SIZE + (lines - 1.0) * SWATCH_LINE_GAP
         }
         SelectionPropertyValue::ArrowStyle(_) => STYLE_BUTTON_HEIGHT,
@@ -257,10 +270,7 @@ impl PropertiesPanelLayout {
                 SelectionPropertyValue::ArrowStyle(_) => {
                     self.arrow_style_buttons(left, control_top)
                 }
-                SelectionPropertyValue::Fill(_) => {
-                    swatch_grid(left, control_top, swatches, SwatchExtra::NoFill)
-                }
-                _ => swatch_grid(left, control_top, swatches, SwatchExtra::MoreColors),
+                _ => swatch_grid(left, control_top, swatches, leads_with_no_fill(entry)),
             };
             return PropertiesRowGeometry {
                 index,
@@ -511,16 +521,9 @@ impl PropertiesPanelLayout {
     }
 }
 
-/// The extra cell a swatch grid carries beside its colors.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum SwatchExtra {
-    /// A leading "no fill" cell, for the fill row.
-    NoFill,
-    /// A trailing "more colors" button, for the color row.
-    MoreColors,
-}
-
-fn swatch_grid(x: f64, top: f64, swatches: usize, extra: SwatchExtra) -> PropertiesRowControl {
+/// A swatch row's cells: an optional leading "no fill", the swatches, and a
+/// trailing "more colors" button that opens the full color picker.
+fn swatch_grid(x: f64, top: f64, swatches: usize, no_fill: bool) -> PropertiesRowControl {
     let cell = |item: usize| {
         let line = item / SWATCH_ITEMS_PER_LINE;
         let column = item % SWATCH_ITEMS_PER_LINE;
@@ -531,17 +534,11 @@ fn swatch_grid(x: f64, top: f64, swatches: usize, extra: SwatchExtra) -> Propert
             SWATCH_SIZE,
         )
     };
-    match extra {
-        SwatchExtra::NoFill => PropertiesRowControl::Swatches {
-            swatches: (1..=swatches).map(cell).collect(),
-            none: Some(cell(0)),
-            more: None,
-        },
-        SwatchExtra::MoreColors => PropertiesRowControl::Swatches {
-            swatches: (0..swatches).map(cell).collect(),
-            none: None,
-            more: Some(cell(swatches)),
-        },
+    let first = usize::from(no_fill);
+    PropertiesRowControl::Swatches {
+        swatches: (first..first + swatches).map(cell).collect(),
+        none: no_fill.then(|| cell(0)),
+        more: Some(cell(first + swatches)),
     }
 }
 
@@ -585,7 +582,13 @@ impl ShapePropertiesPanel {
             PropertiesPanelHit::Swatch { index, .. } => {
                 self.swatches.get(index).map(|swatch| swatch.label.clone())
             }
-            PropertiesPanelHit::MoreColors(_) => Some("More colors…".to_string()),
+            PropertiesPanelHit::MoreColors(row) => Some(
+                match self.entries.get(row).map(|entry| entry.kind) {
+                    Some(SelectionPropertyKind::Fill) => "More fill colors…",
+                    _ => "More colors…",
+                }
+                .to_string(),
+            ),
             PropertiesPanelHit::NoFill(_) => Some("No fill".to_string()),
             PropertiesPanelHit::Action(action) => match action {
                 PanelAction::ToBack => Some("Send to back".to_string()),

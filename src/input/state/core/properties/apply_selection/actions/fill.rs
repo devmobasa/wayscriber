@@ -1,3 +1,4 @@
+use super::color::RecolorOpacity;
 use crate::draw::TextMeasurer;
 use crate::draw::{Color, Shape};
 use crate::input::state::core::base::InputState;
@@ -58,16 +59,17 @@ impl InputState {
     /// opacity, the way the border's swatches keep it; a translucent one
     /// brings its own. Turning the fill off keeps the color, so turning it
     /// back on restores it.
-    pub(in crate::input::state::core::properties) fn apply_selection_fill_paint_with(
+    pub(crate) fn apply_selection_fill_paint_with(
         &mut self,
         measurer: &TextMeasurer,
         paint: Option<Color>,
+        opacity: RecolorOpacity,
     ) -> bool {
         let result = self.apply_selection_change_with(
             measurer,
-            |shape| filled(shape, paint).is_some(),
+            |shape| filled(shape, paint, opacity).is_some(),
             |shape| {
-                let Some(next) = filled(shape, paint) else {
+                let Some(next) = filled(shape, paint, opacity) else {
                     return false;
                 };
                 let Some((fill, fill_color)) = fill_fields(shape) else {
@@ -84,16 +86,48 @@ impl InputState {
         self.report_selection_apply_result(result, "fill")
     }
 
-    /// Whether filling the selection with `paint` would change any shape it
-    /// may edit, so picking the fill a selection already has is quiet.
-    pub(crate) fn selection_fill_paint_changes(&self, paint: Option<Color>) -> bool {
+    /// The fill of the first editable selected closed shape, for the color
+    /// picker to open on; `None` when no closed shape can be filled.
+    pub(crate) fn selection_fill_paint_source(&self) -> Option<Color> {
         let frame = self.boards.active_frame();
         self.selected_shape_ids()
             .iter()
             .filter_map(|id| frame.shape(*id))
             .filter(|drawn| !drawn.locked)
-            .filter_map(|drawn| filled(&drawn.shape, paint).zip(fill_state(&drawn.shape)))
+            .find_map(|drawn| fill_paint(&drawn.shape))
+    }
+
+    /// Whether filling the selection with `paint` would change any shape it
+    /// may edit, so picking the fill a selection already has is quiet.
+    pub(crate) fn selection_fill_paint_changes(
+        &self,
+        paint: Option<Color>,
+        opacity: RecolorOpacity,
+    ) -> bool {
+        let frame = self.boards.active_frame();
+        self.selected_shape_ids()
+            .iter()
+            .filter_map(|id| frame.shape(*id))
+            .filter(|drawn| !drawn.locked)
+            .filter_map(|drawn| filled(&drawn.shape, paint, opacity).zip(fill_state(&drawn.shape)))
             .any(|(next, current)| next != current)
+    }
+}
+
+/// The fill a closed shape shows, or would show once filled: its own fill
+/// color, or its border's.
+fn fill_paint(shape: &Shape) -> Option<Color> {
+    match shape {
+        Shape::Rect {
+            fill_color, color, ..
+        }
+        | Shape::Ellipse {
+            fill_color, color, ..
+        }
+        | Shape::Polygon {
+            fill_color, color, ..
+        } => Some(fill_color.unwrap_or(*color)),
+        _ => None,
     }
 }
 
@@ -115,7 +149,11 @@ fn fill_state(shape: &Shape) -> Option<(bool, Option<Color>)> {
 
 /// The `(fill, fill_color)` a fill with `paint` leaves on `shape`, or `None`
 /// for a shape that has no fill.
-fn filled(shape: &Shape, paint: Option<Color>) -> Option<(bool, Option<Color>)> {
+fn filled(
+    shape: &Shape,
+    paint: Option<Color>,
+    opacity: RecolorOpacity,
+) -> Option<(bool, Option<Color>)> {
     let (current_fill_color, border) = match shape {
         Shape::Rect {
             fill_color, color, ..
@@ -131,7 +169,11 @@ fn filled(shape: &Shape, paint: Option<Color>) -> Option<(bool, Option<Color>)> 
     Some(match paint {
         None => (false, current_fill_color),
         Some(swatch) => {
-            let alpha = if swatch.a >= 1.0 { border.a } else { swatch.a };
+            let alpha = if opacity == RecolorOpacity::Swatch && swatch.a >= 1.0 {
+                border.a
+            } else {
+                swatch.a
+            };
             (true, Some(Color { a: alpha, ..swatch }))
         }
     })

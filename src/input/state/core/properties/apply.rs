@@ -52,7 +52,12 @@ impl InputState {
             }
             PropertiesPanelHit::NoFill(_) => self.set_selection_fill_from_panel(measurer, None),
             PropertiesPanelHit::MoreColors(_) => {
-                return self.open_color_picker_popup_for_selection_with_measurer(measurer);
+                return match entry.kind {
+                    SelectionPropertyKind::Fill => {
+                        self.open_color_picker_popup_for_selection_fill_with_measurer(measurer)
+                    }
+                    _ => self.open_color_picker_popup_for_selection_with_measurer(measurer),
+                };
             }
             PropertiesPanelHit::StepDown(_) => {
                 self.dispatch_selection_property(measurer, entry.kind, -1)
@@ -141,11 +146,11 @@ impl InputState {
         measurer: &TextMeasurer,
         paint: Option<Color>,
     ) -> bool {
-        if !self.selection_fill_paint_changes(paint) {
+        if !self.selection_fill_paint_changes(paint, RecolorOpacity::Swatch) {
             return false;
         }
         self.finish_active_arrow_bend();
-        self.apply_selection_fill_paint_with(measurer, paint)
+        self.apply_selection_fill_paint_with(measurer, paint, RecolorOpacity::Swatch)
     }
 
     fn set_selection_arrow_style_from_panel(

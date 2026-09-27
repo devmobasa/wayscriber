@@ -573,6 +573,79 @@ fn cancelling_the_selection_picker_leaves_the_shapes_alone() {
 }
 
 #[test]
+fn more_fill_colors_opens_a_fill_picker_and_ok_fills_with_exactly_that_color() {
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let fill = row(&state, "Fill");
+    let translucent = Color {
+        r: 0.2,
+        g: 0.4,
+        b: 0.6,
+        a: 0.4,
+    };
+    assert_eq!(
+        state
+            .properties_panel()
+            .unwrap()
+            .tooltip(PropertiesPanelHit::MoreColors(fill)),
+        Some("More fill colors…".to_string())
+    );
+
+    click(&mut state, PropertiesPanelHit::MoreColors(fill));
+
+    assert!(state.is_color_picker_popup_open());
+    assert!(
+        state.is_properties_panel_open(),
+        "the panel stays open under the picker"
+    );
+    assert_eq!(state.color_picker_popup_title(), "Fill Color");
+    assert_eq!(
+        state.color_picker_popup_current_color(),
+        Some(PALETTE_RED),
+        "an unfilled shape would fill with its border color"
+    );
+
+    state.color_picker_popup_set_color(translucent);
+    assert_eq!(
+        fill_of(&state, id),
+        (false, None),
+        "nothing changes before OK"
+    );
+    let depth = undo_depth(&state);
+    state.apply_color_picker_popup();
+
+    assert!(!state.is_color_picker_popup_open());
+    assert_eq!(
+        fill_of(&state, id),
+        (true, Some(translucent)),
+        "the picker's opacity is the fill's own"
+    );
+    assert_eq!(
+        rect_of(&state, id).0,
+        PALETTE_RED,
+        "the border keeps its color"
+    );
+    assert_eq!(undo_depth(&state), depth + 1);
+    assert_eq!(state.recent_colors().first(), Some(&translucent));
+}
+
+#[test]
+fn cancelling_the_fill_picker_leaves_the_fill_alone() {
+    let mut state = create_test_input_state();
+    let id = add_rect(&mut state, PALETTE_RED, false);
+    open(&mut state, vec![id]);
+    let fill = row(&state, "Fill");
+    click(&mut state, PropertiesPanelHit::MoreColors(fill));
+
+    state.color_picker_popup_set_color(PALETTE_GREEN);
+    state.close_color_picker_popup(true);
+
+    assert_eq!(fill_of(&state, id), (false, None));
+    assert!(state.is_properties_panel_open());
+}
+
+#[test]
 fn ok_on_a_mixed_selection_applies_even_the_color_it_opened_on() {
     let mut state = create_test_input_state();
     let red = add_rect(&mut state, PALETTE_RED, false);

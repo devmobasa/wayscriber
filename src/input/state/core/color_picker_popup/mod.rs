@@ -100,6 +100,9 @@ pub enum ColorPickerTarget {
     /// previewed live: OK recolors the selection in one undoable edit and
     /// Cancel leaves it untouched.
     Selection,
+    /// The selected closed shapes' fill, opened from the properties panel's
+    /// fill row. Like `Selection`, OK fills them in one undoable edit.
+    SelectionFill,
 }
 
 impl ColorPickerTarget {
@@ -109,7 +112,8 @@ impl ColorPickerTarget {
             ColorPickerTarget::QuickColor(index) => Some(index),
             ColorPickerTarget::Tool
             | ColorPickerTarget::BoardPaper
-            | ColorPickerTarget::Selection => None,
+            | ColorPickerTarget::Selection
+            | ColorPickerTarget::SelectionFill => None,
         }
     }
 

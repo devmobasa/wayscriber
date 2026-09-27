@@ -15,7 +15,9 @@ use super::super::types::{
     PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, SelectionPropertyValue,
     ShapePropertiesPanel,
 };
-use super::geometry::{balanced_column_budget, column_slots, row_height, swatch_grid_width};
+use super::geometry::{
+    balanced_column_budget, column_slots, row_height, swatch_cells, swatch_grid_width,
+};
 use super::{PANEL_ANCHOR_GAP, PANEL_MARGIN};
 use crate::draw::ArrowStyle;
 use crate::ui_text::UiTextEngine;
@@ -109,7 +111,7 @@ fn measure_panel(
     for entry in &panel.entries {
         let row_width = match entry.state {
             SelectionPropertyValue::Color(_) | SelectionPropertyValue::Fill(_) => {
-                label_width.max(swatch_grid_width(panel.swatches.len()))
+                label_width.max(swatch_grid_width(swatch_cells(entry, panel.swatches.len())))
             }
             SelectionPropertyValue::ArrowStyle(_) => {
                 let count = ArrowStyle::ALL.len() as f64;
