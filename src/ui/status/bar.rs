@@ -180,6 +180,73 @@ impl StatusHudLayout {
             .find(|segment| segment.contains(x, y))
             .map(|segment| segment.kind)
     }
+
+    /// Where the tooltip for `kind` goes: above its segment when the bar sits
+    /// in the lower half of the screen, below it otherwise, kept on screen.
+    pub(crate) fn tooltip_for(
+        &self,
+        engine: &crate::ui_text::UiTextEngine,
+        kind: StatusHudSegmentKind,
+    ) -> Option<StatusHudTooltip> {
+        let segment = self.segments.iter().find(|segment| segment.kind == kind)?;
+        let text = kind.tooltip();
+        let (width, height) = crate::ui::tooltip::tooltip_size(engine, text)?;
+        let screen_width = f64::from(self.screen_width);
+        let screen_height = f64::from(self.screen_height);
+
+        let max_x = (screen_width - width - STATUS_TOOLTIP_MARGIN).max(STATUS_TOOLTIP_MARGIN);
+        let x = segment.x.clamp(STATUS_TOOLTIP_MARGIN, max_x);
+        let y = if self.pill_y + self.pill_height / 2.0 > screen_height / 2.0 {
+            self.pill_y - STATUS_TOOLTIP_GAP - height
+        } else {
+            self.pill_y + self.pill_height + STATUS_TOOLTIP_GAP
+        };
+        let max_y = (screen_height - height - STATUS_TOOLTIP_MARGIN).max(STATUS_TOOLTIP_MARGIN);
+
+        Some(StatusHudTooltip {
+            text,
+            rect: (x, y.clamp(STATUS_TOOLTIP_MARGIN, max_y), width, height),
+        })
+    }
+}
+
+/// Gap between the status pill and a segment's tooltip.
+const STATUS_TOOLTIP_GAP: f64 = 6.0;
+/// Closest a status tooltip comes to the screen edge.
+const STATUS_TOOLTIP_MARGIN: f64 = 6.0;
+
+/// A laid-out status-bar tooltip, cached for the frame like the bar itself.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct StatusHudTooltip {
+    pub(crate) text: &'static str,
+    pub(crate) rect: (f64, f64, f64, f64),
+}
+
+impl StatusHudTooltip {
+    /// The painted footprint, shadow included, for damage.
+    pub(crate) fn bounds(&self) -> (f64, f64, f64, f64) {
+        let (x, y, w, h) = self.rect;
+        let outset = crate::ui::tooltip::TOOLTIP_PAINT_OUTSET;
+
+        (x, y, w + outset, h + outset)
+    }
+}
+
+impl StatusHudSegmentKind {
+    /// What clicking the segment does. The segments read as plain text, so
+    /// the tooltip is what says they act.
+    pub(crate) fn tooltip(self) -> &'static str {
+        match self {
+            Self::Board => "Boards \u{2014} click to switch or add one",
+            Self::Page => "Pages \u{2014} click to switch or add one",
+            Self::Color => "Color \u{2014} click to pick another",
+            Self::Tool => "Tool \u{2014} click for the radial menu",
+            Self::Size => "Size \u{2014} click for the radial menu",
+            Self::Help => "Every shortcut and command",
+            Self::Toolbar => "Show the toolbar again",
+            Self::About => "About Wayscriber",
+        }
+    }
 }
 
 /// On-screen bounds (x, y, width, height) the status HUD occupies (pill plus

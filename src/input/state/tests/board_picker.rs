@@ -1281,7 +1281,7 @@ fn board_picker_title_and_recent_label_reflect_mode_and_recent_boards() {
     ]);
 
     input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
-    assert_eq!(input.board_picker_title(3, 8), "Boards (3/8)");
+    assert_eq!(input.board_picker_title(3, 8), "Boards (3 of 8 max)");
     assert_eq!(
         input.board_picker_recent_label(),
         Some("Recent: Blackboard, Overlay".to_string())

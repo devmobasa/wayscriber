@@ -931,8 +931,9 @@ reduced_motion = "auto"
 # Show the status bar and its configured contents
 show_status_bar = true
 
-# Allow clicking status bar segments to open their related controls;
-# set false for a display-only status bar whose clicks pass through
+# Allow clicking status bar segments to open their related controls (resting
+# the pointer on one shows what it does); set false for a display-only status
+# bar whose clicks pass through
 status_bar_interactive = true
 
 # Status-bar contents. Each item can be hidden independently. Visible items
@@ -1031,8 +1032,8 @@ radial_menu_mouse_binding = "middle"
 
 # Status bar styling
 [ui.status_bar_style]
-font_size = 21.0
-padding = 15.0
+font_size = 15.0
+padding = 11.0
 bg_color = [0.0, 0.0, 0.0, 0.85]     # Semi-transparent black [R, G, B, A]
 text_color = [1.0, 1.0, 1.0, 1.0]    # White
 dot_radius = 6.0
@@ -1124,7 +1125,7 @@ enabled = true
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle
-- Status bar font: 21px
+- Status bar font: 15px
 - Help overlay font: 14px (the body size of the help rows; secondary text never drops below 12px)
 - Semi-transparent dark status bar; opaque help panel, both with muted borders
 

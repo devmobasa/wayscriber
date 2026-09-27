@@ -321,3 +321,36 @@ fn status_hud_geometry_reads_the_cached_layout_for_matching_screens() {
     state.clear_status_hud_layout();
     assert_eq!(status_hud_geometry(&state, 1920, 1080), None);
 }
+
+/// A segment's tooltip sits above a bottom bar and below a top bar, clear of
+/// the pill, on screen, and says what the segment does.
+#[test]
+fn segment_tooltips_sit_beside_the_bar_and_say_what_it_does() {
+    let engine = UiTextEngine::default();
+    let state = make_state();
+    let style = StatusBarStyle::default();
+
+    for (position, above) in [
+        (StatusPosition::BottomLeft, true),
+        (StatusPosition::TopLeft, false),
+    ] {
+        let layout =
+            compute_status_hud_layout(&state, position, &style, 1920, 1080).expect("status layout");
+        let tooltip = layout
+            .tooltip_for(&engine, StatusHudSegmentKind::Board)
+            .expect("board tooltip");
+        let (x, y, w, h) = tooltip.rect;
+
+        assert_eq!(tooltip.text, StatusHudSegmentKind::Board.tooltip());
+        assert!(tooltip.text.contains("click"), "{}", tooltip.text);
+        assert!(x >= 0.0 && x + w <= 1920.0 && y >= 0.0 && y + h <= 1080.0);
+        if above {
+            assert!(y + h <= layout.pill_y, "{position:?}: above the pill");
+        } else {
+            assert!(
+                y >= layout.pill_y + layout.pill_height,
+                "{position:?}: below"
+            );
+        }
+    }
+}

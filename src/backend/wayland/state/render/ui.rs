@@ -180,6 +180,9 @@ impl WaylandState {
                 width,
                 height,
             );
+            if let Some(tooltip) = self.input_state.status_hud.tooltip() {
+                crate::ui::draw_tooltip(self.render.ui_text(), ctx, tooltip.text, tooltip.rect);
+            }
         }
         if !capture_picker && self.zoom_chip_visible() {
             crate::ui::render_zoom_chip_with_resources(

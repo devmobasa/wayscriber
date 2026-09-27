@@ -391,3 +391,51 @@ fn toolbar_hint_chip_appears_only_while_toolbar_hidden() {
     state.ui_visibility.show_toolbar_hint = false;
     assert!(!has_chip(&state));
 }
+
+fn segment_text(state: &InputState, kind: StatusHudSegmentKind) -> Option<String> {
+    build_cluster_pieces(state)
+        .into_iter()
+        .find(|piece| piece.kind == Some(kind))
+        .and_then(|piece| piece.text)
+}
+
+/// The size segment follows the tool: no pen width for Select or the
+/// click-highlight tool, which draw no stroke, and the text size while
+/// typing, shown once instead of again as a separate indicator.
+#[test]
+fn the_size_segment_follows_the_tool() {
+    let mut state = make_state();
+    state.set_tool_override(Some(Tool::Select));
+    assert_eq!(segment_text(&state, StatusHudSegmentKind::Size), None);
+    assert_eq!(
+        segment_text(&state, StatusHudSegmentKind::Tool).as_deref(),
+        Some("Selection")
+    );
+
+    state.set_tool_override(Some(Tool::Highlight));
+    assert_eq!(segment_text(&state, StatusHudSegmentKind::Size), None);
+    let highlight_labels = build_cluster_pieces(&state)
+        .iter()
+        .filter(|piece| {
+            piece
+                .text
+                .as_deref()
+                .is_some_and(|text| text.contains("Highlight"))
+        })
+        .count();
+    assert_eq!(highlight_labels, 1, "the tool segment names it once");
+
+    state.set_tool_override(Some(Tool::Pen));
+    state.style.current_font_size = 32.0;
+    state.state = crate::input::DrawingState::text_input(10, 10, String::new());
+    assert_eq!(
+        segment_text(&state, StatusHudSegmentKind::Size).as_deref(),
+        Some("32px")
+    );
+    assert!(
+        !build_cluster_pieces(&state)
+            .iter()
+            .any(|piece| piece.text.as_deref() == Some("Text 32px")),
+        "no second text-size indicator"
+    );
+}

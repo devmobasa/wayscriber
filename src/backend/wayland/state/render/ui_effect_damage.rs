@@ -177,6 +177,22 @@ impl WaylandState {
             .ui_damage_mut()
             .roll_status_hud(status_hud_rect, surface, &mut regions);
 
+        // A segment's tooltip follows the HUD layout it was measured from; it
+        // stays put while shown, so it needs damage only where it appears or
+        // goes away.
+        let status_tooltip_rect = if flags.active(UiEffect::StatusHud) {
+            self.input_state
+                .update_status_tooltip_with_engine(self.render.ui_text(), Instant::now())
+                .and_then(|bounds| effect_rect(bounds, width, height))
+        } else {
+            None
+        };
+        self.render.ui_damage_mut().roll_on_change(
+            UiEffect::StatusTooltip,
+            status_tooltip_rect,
+            &mut regions,
+        );
+
         // The zoom chip follows the same once-per-frame layout refresh as the
         // status HUD, so damage geometry, rendering, and pointer hit-testing
         // all read the same cache for the frame; the appear → move → disappear

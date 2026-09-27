@@ -416,8 +416,9 @@ reduced_motion = "auto"
 # Show the status bar and its configured contents
 show_status_bar = true
 
-# Allow clicking status bar segments to open their related controls;
-# set false for a display-only status bar whose clicks pass through
+# Allow clicking status bar segments to open their related controls (resting
+# the pointer on one shows what it does); set false for a display-only status
+# bar whose clicks pass through
 status_bar_interactive = true
 
 # Status-bar contents. Each item can be hidden independently. Visible items
@@ -750,10 +751,10 @@ top_controls = [
 
 [ui.status_bar_style]
 # Font size for status bar text
-font_size = 21.0
+font_size = 15.0
 
 # Padding around status bar text
-padding = 15.0
+padding = 11.0
 
 # Background color [R, G, B, A] (0.0-1.0 range)
 # Default: semi-transparent black (85% opaque for visibility)
