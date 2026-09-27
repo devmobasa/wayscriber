@@ -342,6 +342,47 @@ pub(super) fn assert_widget_contract() {
     );
 }
 
+/// Escape on a Tab-focused slider must release the slider, not reach the
+/// overlay, where no open menu would route it to Exit. The relay leaves the
+/// press to the slider and only tells the overlay, which arms its guard.
+#[cfg(test)]
+pub(super) fn assert_focused_slider_escape_stays_local() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let slider = SliderRow::new(
+        1.0,
+        "Thickness",
+        ToolbarSliderSpec::THICKNESS,
+        4.0,
+        |value| format!("{value} px"),
+        |_| {},
+    );
+    let window = gtk4::Window::new();
+    window.set_child(Some(&slider.root));
+    super::install_key_relay(&window, &super::FeedbackSender::new(tx));
+    let relay = super::key_relay_controller(&window).expect("the window relays keys");
+    gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
+
+    let handled = relay.emit_by_name::<bool>(
+        "key-pressed",
+        &[
+            &gtk4::gdk::Key::Escape,
+            &0u32,
+            &gtk4::gdk::ModifierType::empty(),
+        ],
+    );
+
+    assert!(!handled, "Escape goes on to the focused slider");
+    assert_eq!(
+        rx.try_recv(),
+        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed)
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "no key is relayed, so the overlay routes no Exit"
+    );
+    window.set_child(None::<&gtk4::Widget>);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

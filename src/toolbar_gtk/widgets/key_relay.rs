@@ -20,7 +20,8 @@ pub(super) enum FocusedKeys {
     Nothing,
     /// A focused control that Space and Return activate, such as a checkbox.
     Activation,
-    /// A slider owns only its value-navigation keys.
+    /// A slider owns its value-navigation keys, and Escape, which releases
+    /// its focus (or closes the popover hosting it) instead of exiting.
     Slider,
     /// A widget that owns typing and arrow keys: the hex entry.
     /// Escape is relayed so dismissal shares the overlay's exit guard.
@@ -66,9 +67,17 @@ pub(super) fn key_stays_local(
                 | Key::KP_End
                 | Key::KP_Page_Up
                 | Key::KP_Page_Down
+                | Key::Escape
         ),
         FocusedKeys::Editing => keyval != Key::Escape,
     }
+}
+
+/// Whether this press is an Escape the focused widget spends on its own
+/// dismissal. The overlay still has to hear about it, so a second Escape
+/// right behind it does not exit.
+pub(super) fn escape_dismisses_locally(keyval: gtk4::gdk::Key, focus: FocusedKeys) -> bool {
+    focus == FocusedKeys::Slider && keyval == gtk4::gdk::Key::Escape
 }
 
 pub(super) fn forwarded_key_feedback(
@@ -120,6 +129,9 @@ pub(in crate::toolbar_gtk) fn install_key_relay(
             .widget()
             .map_or(FocusedKeys::Nothing, |widget| focused_keys(&widget));
         if key_stays_local(keyval, is_modifier, focus) {
+            if escape_dismisses_locally(keyval, focus) {
+                let _ = feedback.send(GtkToolbarFeedback::EscapeDismissed);
+            }
             return gtk4::glib::Propagation::Proceed;
         }
 
@@ -181,7 +193,7 @@ mod tests {
 
     #[test]
     fn focused_slider_relays_shortcuts_but_keeps_navigation() {
-        for keyval in [Key::Escape, Key::h, Key::w, Key::space, Key::Return] {
+        for keyval in [Key::h, Key::w, Key::space, Key::Return] {
             assert!(!key_stays_local(keyval, false, FocusedKeys::Slider));
         }
         for keyval in [
@@ -195,6 +207,24 @@ mod tests {
             Key::Page_Down,
         ] {
             assert!(key_stays_local(keyval, false, FocusedKeys::Slider));
+        }
+    }
+
+    /// Escape on a Tab-focused slider releases the slider's focus instead of
+    /// reaching the overlay, where no open menu would turn it into Exit. The
+    /// overlay is still told, so its guard swallows a second Escape.
+    #[test]
+    fn escape_on_a_focused_slider_dismisses_locally_and_arms_the_guard() {
+        assert!(key_stays_local(Key::Escape, false, FocusedKeys::Slider));
+        assert!(escape_dismisses_locally(Key::Escape, FocusedKeys::Slider));
+
+        assert!(!escape_dismisses_locally(Key::Left, FocusedKeys::Slider));
+        for focus in [
+            FocusedKeys::Nothing,
+            FocusedKeys::Activation,
+            FocusedKeys::Editing,
+        ] {
+            assert!(!escape_dismisses_locally(Key::Escape, focus));
         }
     }
 
