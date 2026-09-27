@@ -1,7 +1,8 @@
 use super::first_run::{
     FirstRunAdvance, FirstRunEnvironment, advance_first_run_steps, apply_persisted_usage_signals,
     background_mode_prompt_active, color_thickness_completed, first_run_card_hidden_by_ui_state,
-    first_run_card_key_action, first_run_skip_allowed, quick_access_completed,
+    first_run_card_key_action, first_run_holds_toolbar, first_run_skip_allowed,
+    quick_access_completed,
 };
 use super::first_run_card::{first_run_step_eyebrow, toolbar_exit_body};
 use super::{
@@ -596,4 +597,37 @@ fn a_finished_tour_clears_any_leftover_step() {
     assert!(advance.changed && !advance.completed);
     assert_eq!(state.active_step, None);
     assert!(!state.quick_access_requires_toolbar);
+}
+
+#[test]
+fn first_run_holds_the_toolbar_through_the_tour_and_first_session() {
+    let mut state = OnboardingState {
+        sessions_seen: 1,
+        ..OnboardingState::default()
+    };
+    assert!(first_run_holds_toolbar(&state), "tour running");
+
+    state.first_run_completed = true;
+    assert!(
+        first_run_holds_toolbar(&state),
+        "tour complete, still the first session"
+    );
+
+    state.sessions_seen = 2;
+    assert!(
+        !first_run_holds_toolbar(&state),
+        "later sessions fade as configured"
+    );
+
+    state.first_run_completed = false;
+    assert!(
+        first_run_holds_toolbar(&state),
+        "an unfinished tour resumes in a later session"
+    );
+
+    state.first_run_skipped = true;
+    assert!(
+        !first_run_holds_toolbar(&state),
+        "a skipped tour holds nothing"
+    );
 }
