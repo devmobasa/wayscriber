@@ -5,6 +5,7 @@ use crate::draw::{
     Shape, ShapeId,
 };
 use crate::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV};
+use crate::input::state::SelectionGrab;
 use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, DrawingState, EraserMode, Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -1237,6 +1238,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
     let snapshots = input.capture_movable_selection_snapshots();
     assert!(input.apply_translation_to_selection_with(&test_text_measurer, 100, 0));
     input.state = DrawingState::MovingSelection {
+        grab: SelectionGrab::new(shape_id, 100, 0),
         last_x: 100,
         last_y: 0,
         snapshots,
@@ -1394,6 +1396,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
     let snapshots = input.capture_movable_selection_snapshots();
     assert!(input.apply_translation_to_selection_with(&test_text_measurer, 100, 0));
     input.state = DrawingState::MovingSelection {
+        grab: SelectionGrab::new(shape_id, 100, 0),
         last_x: 100,
         last_y: 0,
         snapshots,
@@ -1447,6 +1450,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: input.style.current_color,
         thick: input.style.current_thickness,
     });
@@ -1462,6 +1466,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
             .contains(&shape_id)
     );
     input.state = DrawingState::MovingSelection {
+        grab: SelectionGrab::new(shape_id, 200, 0),
         last_x: 200,
         last_y: 0,
         snapshots,

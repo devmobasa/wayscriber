@@ -16,6 +16,7 @@ fn select_all_action_selects_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -25,6 +26,7 @@ fn select_all_action_selects_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -45,6 +47,7 @@ fn escape_clears_selection_before_exit() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -64,6 +67,7 @@ fn select_tool_drag_selects_shapes_in_rect() {
         w: 8,
         h: 8,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -73,6 +77,7 @@ fn select_tool_drag_selects_shapes_in_rect() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

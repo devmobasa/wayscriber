@@ -40,6 +40,34 @@ impl InputState {
         }
     }
 
+    /// Paste, enabled only when something is known to be pasteable.
+    pub(super) fn paste_entry(&self) -> ContextMenuEntry {
+        ContextMenuEntry::new(
+            "Paste",
+            self.shortcut_for_action(Action::PasteSelection),
+            !self.paste_available(),
+            Some(MenuCommand::Paste),
+        )
+    }
+
+    /// The last row of the canvas and shape menus, in a group of its own:
+    /// the mouse-only way out. A daemon-owned overlay hides instead of
+    /// exiting, and the label says which.
+    pub(super) fn exit_entry(&self) -> ContextMenuEntry {
+        let label = if self.context_menu.exit_hides_overlay {
+            "Hide Overlay"
+        } else {
+            "Exit"
+        };
+        ContextMenuEntry::new(
+            label,
+            self.shortcut_for_action(Action::Exit),
+            false,
+            Some(MenuCommand::Exit),
+        )
+        .with_separator()
+    }
+
     /// Returns the entries to render for the currently open context menu.
     pub fn context_menu_entries(&self) -> Vec<ContextMenuEntry> {
         match &self.context_menu.state {
@@ -85,6 +113,7 @@ impl InputState {
             ContextMenuKind::Canvas => self.canvas_menu_entries(),
             ContextMenuKind::Shape => self.shape_menu_entries(shape_ids, hovered_shape_id),
             ContextMenuKind::Zoom => self.zoom_menu_entries(with_header),
+            ContextMenuKind::Arrange => self.arrange_menu_entries(with_header),
             ContextMenuKind::Pages => self.pages_menu_entries(with_header),
             ContextMenuKind::Boards => self.boards_menu_entries(with_header),
             ContextMenuKind::Page => self.page_context_menu_entries(),

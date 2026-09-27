@@ -89,6 +89,24 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_label_left(
     layout.show_at_baseline(ctx, x, ty);
 }
 
+/// Left-aligned, vertically centered label in an explicit color. `slot` is the
+/// row's `(x, y, height)`.
+pub(in crate::backend::wayland::toolbar::render) fn draw_label_left_color(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
+    slot: (f64, f64, f64),
+    text: &str,
+    color: (f64, f64, f64, f64),
+) {
+    let (x, y, h) = slot;
+    let layout = engine.layout(ctx, style, text, None);
+    let ext = layout.ink_extents();
+    let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
+    set_color(ctx, color);
+    layout.show_at_baseline(ctx, x, ty);
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_label_left_wrapped(
     engine: &UiTextEngine,

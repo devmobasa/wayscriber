@@ -20,8 +20,26 @@ pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 use feedback::{ToolbarPinChange, pin_durability};
 use session::populate_session_snapshot;
 
+/// Whether the daemon spawned this overlay. Its exit then only hides the
+/// overlay: the daemon keeps running and shows it again on the next toggle.
+/// The daemon marks its overlay children with the child-generation variable
+/// (`daemon::overlay::spawn`), which never changes during a run.
+fn overlay_is_daemon_child() -> bool {
+    static DAEMON_CHILD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DAEMON_CHILD
+        .get_or_init(|| std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some())
+}
+
 fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
+}
+
+/// Toolbar events the shared dispatch drops: anything under the command
+/// palette, and a click landing right after the minimized tab (or micro chip)
+/// restored the strip, whose controls now sit under the pointer. Both
+/// frontends deliver clicks through this one path.
+fn toolbar_event_dropped(input_state: &InputState, now: std::time::Instant) -> bool {
+    toolbar_event_blocked_by_modal(input_state) || input_state.toolbar_restore_guard_blocks(now)
 }
 
 fn finalize_pointer_gestures_before_toolbar_dispatch(
@@ -102,6 +120,7 @@ impl WaylandState {
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_available_height = self.top_popover_available_height(&snapshot);
         snapshot.top_fade = self.toolbar_chrome.fade().value();
+        snapshot.exit_hides_overlay = overlay_is_daemon_child();
         snapshot
     }
 
@@ -176,8 +195,9 @@ impl WaylandState {
         qh: Option<&QueueHandle<Self>>,
     ) {
         // GTK toolbar feedback bypasses the built-in pointer modal gate, so
-        // enforce the same rule in the shared event path as well.
-        if toolbar_event_blocked_by_modal(&self.input_state) {
+        // enforce the same rule in the shared event path as well. The same
+        // path drops the second click of a double-click on the restore tab.
+        if toolbar_event_dropped(&self.input_state, std::time::Instant::now()) {
             return;
         }
         // A toolbar interaction replaces the modal sampler. Do this before
@@ -371,6 +391,9 @@ impl WaylandState {
             TopMenuState::CanvasPopover => ToolbarPopover::Canvas,
             TopMenuState::SessionPopover => ToolbarPopover::Session,
             TopMenuState::SettingsPopover => ToolbarPopover::Settings,
+            TopMenuState::LayoutMenu => ToolbarPopover::LayoutMenu,
+            TopMenuState::PenFeelPanel => ToolbarPopover::PenFeel,
+            TopMenuState::ArrowStyleMenu => ToolbarPopover::ArrowStyleMenu,
         };
         if !event_dismisses_popover(event, open_popover) {
             return;

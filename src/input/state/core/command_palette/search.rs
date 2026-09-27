@@ -1,11 +1,10 @@
 use super::super::base::InputState;
+use super::empty_query::{EmptyQueryGroups, empty_query_commands, empty_query_groups};
 use super::{CommandEntry, CommandPaletteState, command_palette_entries};
 use crate::config::action_meta::{ActionCategory, ActionMeta};
 use crate::config::keybindings::canonical_key_names;
 use crate::domain::Action;
 use crate::input::state::core::search::fuzzy_score;
-/// Group label shown above recent commands when the query is empty.
-pub(crate) const COMMAND_PALETTE_RECENT_HEADER: &str = "Recent";
 
 struct CommandMatch {
     command: &'static CommandEntry,
@@ -71,6 +70,9 @@ impl CommandPaletteState {
         labels: &impl Fn(Action) -> Vec<String>,
     ) -> Vec<&'static CommandEntry> {
         let query = normalize_query(&self.query);
+        if query.is_empty() {
+            return empty_query_commands(&self.recent);
+        }
         let tokens = query_tokens(&query);
 
         let mut results: Vec<CommandMatch> = command_palette_entries()
@@ -94,10 +96,11 @@ impl CommandPaletteState {
     ///
     /// Header rule (recorded for M6): fuzzy ranking always wins — headers are
     /// only inserted between existing runs, never by reordering. With an
-    /// empty query the list is grouped by construction ("Recent" block, then
-    /// registry-ordered categories), so headers always show. With a query,
-    /// headers show only when every category present forms exactly one
-    /// contiguous run in score order; any interleaving renders flat.
+    /// empty query the list is grouped by construction ("Recent", "Common",
+    /// registry-ordered categories, then the exit/destructive block), so
+    /// headers always show. With a query, headers show only when every
+    /// category present forms exactly one contiguous run in score order; any
+    /// interleaving renders flat.
     pub(super) fn rows(
         &self,
         revision: u64,
@@ -105,16 +108,10 @@ impl CommandPaletteState {
         capacity: usize,
     ) -> Vec<CommandPaletteListRow> {
         let filtered = self.filtered_commands(revision, labels);
-        let query_empty = normalize_query(&self.query).is_empty();
-        let recent_len = if query_empty {
-            filtered
-                .iter()
-                .take_while(|command| self.recent.contains(&command.action))
-                .count()
-        } else {
-            0
-        };
-        let mut rows = build_command_palette_rows(&filtered, query_empty, recent_len);
+        let groups = normalize_query(&self.query)
+            .is_empty()
+            .then(|| empty_query_groups(&filtered, &self.recent));
+        let mut rows = build_command_palette_rows(&filtered, groups);
         // A heading must never occupy the sole clickable row.
         if capacity <= 1 {
             rows.retain(|row| row.command_index().is_some());
@@ -130,10 +127,6 @@ impl CommandPaletteState {
         labels: &impl Fn(Action) -> Vec<String>,
     ) -> Option<i32> {
         let recent_bonus = self.recent_bonus(command.action);
-        if query.is_empty() {
-            return Some(recent_bonus);
-        }
-
         let shortcuts = shortcut_search_text(&labels(command.action));
         let mut score = 0;
 
@@ -230,13 +223,12 @@ impl InputState {
 
 fn build_command_palette_rows(
     filtered: &[&'static CommandEntry],
-    query_empty: bool,
-    recent_len: usize,
+    empty_query: Option<EmptyQueryGroups>,
 ) -> Vec<CommandPaletteListRow> {
     if filtered.is_empty() {
         return Vec::new();
     }
-    let with_headers = query_empty || category_runs_are_unique(filtered);
+    let with_headers = empty_query.is_some() || category_runs_are_unique(filtered);
     if !with_headers {
         return filtered
             .iter()
@@ -251,11 +243,9 @@ fn build_command_palette_rows(
     let mut rows = Vec::with_capacity(filtered.len() + 8);
     let mut last_header: Option<&'static str> = None;
     for (command_index, command) in filtered.iter().enumerate() {
-        let header = if command_index < recent_len {
-            COMMAND_PALETTE_RECENT_HEADER
-        } else {
-            action_category_display_name(command.category)
-        };
+        let header = empty_query
+            .and_then(|groups| groups.header(command_index, command.action))
+            .unwrap_or_else(|| action_category_display_name(command.category));
         if last_header != Some(header) {
             rows.push(CommandPaletteListRow::Header(header));
             last_header = Some(header);
@@ -506,9 +496,9 @@ mod cache_tests {
         // Recents bias the ranking, so promoting one has to invalidate.
         state.command_palette.query = String::new();
         let before = state.filtered_commands().first().map(|entry| entry.action);
-        state.set_command_palette_recents(vec![Action::ClearCanvas]);
+        state.set_command_palette_recents(vec![Action::TogglePresenterMode]);
         let after = state.filtered_commands().first().map(|entry| entry.action);
-        assert_eq!(after, Some(Action::ClearCanvas));
+        assert_eq!(after, Some(Action::TogglePresenterMode));
         assert_ne!(before, after, "a new recent must re-rank");
 
         // Shortcut labels are scored, so replacing the keymap must invalidate.

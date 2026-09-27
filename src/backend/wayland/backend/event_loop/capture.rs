@@ -170,7 +170,7 @@ pub(super) fn handle_pending_actions(
                 state.show_spotlight_magnifier_feedback_if_unavailable();
             }
             InputEffect::OutputFocus(action) => state.handle_output_focus_action(qh, action),
-            InputEffect::Zoom(action) => state.handle_zoom_action(action),
+            InputEffect::Zoom(request) => state.handle_zoom_action(request),
             effect @ (InputEffect::ToolbarPersistence(_)
             | InputEffect::TextCopy(_)
             | InputEffect::TextPaste(_)
@@ -228,6 +228,7 @@ fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) 
         PendingBackendAction::ClearSavedToolState => {
             state.handle_clear_saved_tool_state_action();
         }
+        PendingBackendAction::ReplayFirstRunTour => state.replay_first_run_tour(),
     }
 }
 
@@ -461,6 +462,7 @@ fn handle_capture_results(state: &mut WaylandState) {
 
             if result.copied_to_clipboard {
                 info!("{} copied to clipboard", result.operation.saved_log_label());
+                state.input_state.note_capture_image_on_clipboard();
                 message_parts.push("Copied to clipboard".to_string());
             }
 
@@ -565,18 +567,9 @@ fn handle_capture_results(state: &mut WaylandState) {
                     message_parts.join(" - ")
                 };
 
-                let open_folder_binding = state
-                    .config
-                    .keybindings
-                    .capture
-                    .open_capture_folder
-                    .first()
-                    .map(|binding| binding.as_str());
-                state.input_state.set_capture_feedback(
-                    result.saved_path.as_deref(),
-                    result.copied_to_clipboard,
-                    open_folder_binding,
-                );
+                state
+                    .input_state
+                    .set_capture_feedback(result.saved_path.as_deref(), result.copied_to_clipboard);
 
                 notification::send_notification_async(
                     &state.tokio_handle,

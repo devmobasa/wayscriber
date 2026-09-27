@@ -51,7 +51,7 @@ impl WaylandState {
         }
 
         // Block pointer input when modal overlays are active
-        if self.input_state.command_palette.is_open() || self.input_state.tour.is_active() {
+        if self.input_state.command_palette.is_open() {
             // For command palette, press handles the click - release is a no-op
             self.pointer.clear_chrome_press();
             return;
@@ -183,6 +183,10 @@ impl WaylandState {
         screen_x: i32,
         screen_y: i32,
     ) -> bool {
+        if let Some(press) = self.pointer.take_onboarding_card_press() {
+            self.release_onboarding_card_press(press, f64::from(screen_x), f64::from(screen_y));
+            return true;
+        }
         if let Some(pressed) = self.pointer.take_toast_press() {
             let (hit, action) = self
                 .input_state
@@ -209,7 +213,10 @@ impl WaylandState {
                 .input_state
                 .check_zoom_chip_click(kind, screen_x, screen_y);
             if let Some(action) = action {
-                self.dispatch_input_action(action);
+                self.dispatch_input_action_anchored(
+                    action,
+                    crate::input::state::ZoomAnchor::ScreenCenter,
+                );
             }
         }
         pressed.is_pending()
@@ -335,6 +342,9 @@ impl WaylandState {
                     self.input_state.close_help_overlay();
                 }
                 self.input_state.needs_redraw = true;
+            }
+            HelpOverlayReleaseOutcome::ToggleUnbound => {
+                self.input_state.toggle_help_overlay_unbound();
             }
             HelpOverlayReleaseOutcome::Dismiss => {
                 self.input_state.close_help_overlay();

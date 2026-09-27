@@ -1,17 +1,58 @@
+use std::time::Instant;
+
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{Shape, ShapeId};
-use crate::input::InputState;
+use crate::input::{InputState, state::SelectionGrab};
 
-use super::super::SELECTION_DRAG_THRESHOLD;
+use super::super::{SELECTION_DRAG_THRESHOLD, TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
+/// Ends a selection press released at `release`. A press that stayed within
+/// the click radius was a click on the grabbed shape, and the second click in
+/// a row opens it: text and sticky notes for editing, anything else in the
+/// properties panel.
 pub(super) fn finish_moving_selection(
     state: &mut InputState,
     measurer: &crate::draw::TextMeasurer,
+    mut grab: SelectionGrab,
+    release: (i32, i32),
     snapshots: Vec<(ShapeId, ShapeSnapshot)>,
     moved: bool,
 ) {
     if moved {
         state.push_translation_undo(measurer, snapshots);
+    }
+
+    if grab.track(release.0, release.1) {
+        state.text_editing.set_last_click(None);
+    } else if state.text_editing.register_click(
+        grab.shape_id,
+        grab.x,
+        grab.y,
+        Instant::now(),
+        TEXT_DOUBLE_CLICK_MS,
+        TEXT_DOUBLE_CLICK_DISTANCE,
+    ) {
+        open_double_clicked_shape(state, measurer, grab.shape_id);
+    }
+
+    // The handles stay hidden while the selection is held, so returning to
+    // idle shows them again even when nothing moved.
+    state.mark_selection_chrome_dirty_with(measurer);
+    state.needs_redraw = true;
+}
+
+/// Shift keeps the rest of the selection, so its shared properties open
+/// together; otherwise the double-click narrows the selection to the shape.
+fn open_double_clicked_shape(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    shape_id: ShapeId,
+) {
+    if !state.modifiers.shift {
+        state.set_selection_with(measurer, vec![shape_id]);
+    }
+    if !state.edit_selected_text_with(measurer) {
+        let _ = state.show_properties_panel_with(measurer);
     }
 }
 
@@ -24,15 +65,15 @@ pub(super) fn finish_selection_drag(
     end_y: i32,
     additive: bool,
 ) {
+    // The rubber band is erased on every release, whatever it selected.
     state.clear_provisional_dirty();
+    state.needs_redraw = true;
+
     let dx = (end_x - start_x).abs();
     let dy = (end_y - start_y).abs();
     if dx < SELECTION_DRAG_THRESHOLD && dy < SELECTION_DRAG_THRESHOLD {
         if !additive {
-            let bounds = state.selection_bounding_box_with(measurer, state.selected_shape_ids());
-            state.clear_selection();
-            state.mark_selection_dirty_region(bounds);
-            state.needs_redraw = true;
+            state.clear_selection_with(measurer);
         }
         return;
     }
@@ -40,11 +81,10 @@ pub(super) fn finish_selection_drag(
     if let Some(rect) = InputState::selection_rect_from_points(start_x, start_y, end_x, end_y) {
         let ids = state.shape_ids_in_rect_with(measurer, rect);
         if additive {
-            state.extend_selection(ids);
+            state.extend_selection_with(measurer, ids);
         } else {
-            state.set_selection(ids);
+            state.set_selection_with(measurer, ids);
         }
-        state.needs_redraw = true;
     }
 }
 
@@ -146,6 +186,7 @@ mod tests {
                     w: 20,
                     h: 20,
                     fill: false,
+                    fill_color: None,
                     color: crate::draw::WHITE,
                     thick: 2.0,
                 })

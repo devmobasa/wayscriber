@@ -118,24 +118,50 @@ fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
 }
 
 #[test]
-fn zoom_chip_reclassifies_hover_after_fit_removes_the_lock_button() {
+fn zoom_chip_drops_reset_hover_when_reset_has_nothing_left_to_do() {
     let mut input = create_test_input_state();
     input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     update_chip_layout(&mut input, 1280, 720);
-    let (x, y) = button_center(&input, ZoomChipButtonKind::Fit);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::Reset);
 
     input.on_mouse_motion_with_canvas(x, y, x, y);
-    assert_eq!(input.zoom_chip.hover, Some(ZoomChipButtonKind::Fit));
+    assert_eq!(input.zoom_chip.hover, Some(ZoomChipButtonKind::Reset));
 
-    // Fit returns to 100%, removing Lock and shrinking the right-anchored
-    // layout while the physical pointer remains stationary.
+    // Reset returns to 100% while the physical pointer stays on it. Reset
+    // keeps its place but is disabled now, so the highlight goes away.
     input.set_zoom_status(false, false, 1.0, (0.0, 0.0));
     update_chip_layout(&mut input, 1280, 720);
-    let button_now_under_pointer = input.zoom_chip_button_at(x, y);
-    assert_ne!(button_now_under_pointer, Some(ZoomChipButtonKind::Fit));
     assert_eq!(
-        input.zoom_chip.hover, button_now_under_pointer,
-        "hover must follow the rebuilt geometry, not the old button identity"
+        input.zoom_chip_button_at(x, y),
+        Some(ZoomChipButtonKind::Reset)
+    );
+    assert_eq!(input.zoom_chip.hover, None);
+}
+
+/// At 100% there is nothing to zoom out of or reset: those two buttons are
+/// consumed without an action, get no hover, and do not nudge the coach,
+/// while zoom-in still works.
+#[test]
+fn zoom_out_and_reset_do_nothing_at_one_hundred_percent() {
+    let mut input = create_test_input_state();
+    update_chip_layout(&mut input, 1280, 720);
+
+    for kind in [ZoomChipButtonKind::Out, ZoomChipButtonKind::Reset] {
+        let (x, y) = button_center(&input, kind);
+        input.on_mouse_motion_with_canvas(x, y, x, y);
+        assert_eq!(input.zoom_chip.hover, None, "{kind:?} shows no hover");
+
+        assert_eq!(input.check_zoom_chip_click(kind, x, y), (true, None));
+    }
+    assert_eq!(
+        input.pending_onboarding_usage.shortcut_slow_path_action,
+        None
+    );
+
+    let (x, y) = button_center(&input, ZoomChipButtonKind::In);
+    assert_eq!(
+        input.check_zoom_chip_click(ZoomChipButtonKind::In, x, y),
+        (true, Some(Action::ZoomIn))
     );
 }
 
@@ -204,6 +230,7 @@ fn zoom_chip_press_reports_hit_without_side_effect() {
 #[test]
 fn zoom_chip_click_out_returns_zoom_out() {
     let mut input = create_test_input_state();
+    input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     update_chip_layout(&mut input, 1280, 720);
     let (x, y) = button_center(&input, ZoomChipButtonKind::Out);
 
@@ -225,14 +252,14 @@ fn zoom_chip_click_in_returns_zoom_in() {
 }
 
 #[test]
-fn zoom_chip_click_fit_returns_reset_zoom() {
+fn zoom_chip_click_reset_returns_reset_zoom() {
     let mut input = create_test_input_state();
+    input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     update_chip_layout(&mut input, 1280, 720);
-    let (x, y) = button_center(&input, ZoomChipButtonKind::Fit);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::Reset);
 
-    let (hit, action) = input.check_zoom_chip_click(ZoomChipButtonKind::Fit, x, y);
+    let (hit, action) = input.check_zoom_chip_click(ZoomChipButtonKind::Reset, x, y);
     assert!(hit);
-    // "Fit" resets back to 100% — there is no separate fit action.
     assert_eq!(action, Some(Action::ResetZoom));
 }
 
@@ -415,7 +442,14 @@ fn tablet_path_press_release_dispatches_zoom_action() {
     // event loop to drain.
     input.on_mouse_release_with_canvas(MouseButton::Left, x, y, x, y);
     assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
-    assert_eq!(input.take_pending_zoom_action(), Some(ZoomAction::In));
+    assert_eq!(
+        input.take_pending_zoom_request(),
+        Some(crate::input::ZoomRequest {
+            action: ZoomAction::In,
+            anchor: crate::input::ZoomAnchor::ScreenCenter,
+        }),
+        "the chip sits in a corner, so its zoom centres the screen"
+    );
 }
 
 #[test]
@@ -542,4 +576,23 @@ fn passive_chip_release_does_not_finish_in_flight_interaction() {
     );
     assert_eq!(input.boards.active_frame().shapes.len(), 0);
     assert_eq!(input.take_pending_zoom_action(), None);
+}
+
+#[test]
+fn zoom_chip_buttons_stay_put_when_zoom_and_lock_change() {
+    let mut input = create_test_input_state();
+    update_chip_layout(&mut input, 1920, 1080);
+    let kinds = [
+        ZoomChipButtonKind::Out,
+        ZoomChipButtonKind::In,
+        ZoomChipButtonKind::Reset,
+    ];
+    let centers = kinds.map(|kind| button_center(&input, kind));
+    for scale in [1.25, 2.0, 10.0, 1.0] {
+        input.set_zoom_status(scale != 1.0, false, scale, (0.0, 0.0));
+        update_chip_layout(&mut input, 1920, 1080);
+        for (kind, center) in kinds.into_iter().zip(centers) {
+            assert_eq!(button_center(&input, kind), center, "{kind:?} at {scale}");
+        }
+    }
 }

@@ -21,7 +21,7 @@ impl TopToolbarNode {
 
 /// The detached pill islands of the top strip, in reading order: tools
 /// (drag grip through annotations), presets (saved tool+color slots),
-/// history (undo/redo/overflow), chrome (layout cycle/About/pin/minimize).
+/// history (undo/redo/capture/overflow), chrome (layout menu/About/pin/minimize/exit).
 /// Both frontends and
 /// the contract tests derive island membership from this one accessor; the
 /// `Ord` derive fixes the reading order the strip walk relies on.
@@ -87,9 +87,14 @@ pub(crate) enum TopToolbarControl {
     /// leaves the overlay, since About is a normal window and the overlay
     /// renders above those.
     About,
-    /// Chrome-island entry cycling the layout preset Simple → Regular →
-    /// Advanced → Simple. A cycle rather than a toggle, so it never reads
-    /// as active; the icon shows the current mode.
+    /// Chrome-island entry closing the overlay (the Exit action), so a
+    /// mouse-only user can always leave. Under the daemon it hides the
+    /// overlay instead, and its label says so.
+    Exit,
+    /// Chrome-island entry opening the layout-preset menu (Simple / Regular /
+    /// Advanced). A menu rather than a cycle: the strip's width changes with
+    /// the preset, so a cycling button moved out from under the pointer. The
+    /// icon shows the current mode.
     LayoutMode,
     HighlightRing,
     /// Overflow menu entry opening the Canvas popover (boards, pages, zoom,
@@ -128,6 +133,7 @@ impl TopToolbarControl {
             Self::Overflow => ids::TOP_CHROME_OVERFLOW,
             Self::Minimize => ids::TOP_CHROME_CLOSE,
             Self::About => ids::TOP_CHROME_ABOUT,
+            Self::Exit => ids::TOP_CHROME_EXIT,
             Self::LayoutMode => ids::TOP_CHROME_LAYOUT,
             Self::HighlightRing => ids::TOP_UTILITY_HIGHLIGHT_RING,
         };
@@ -166,7 +172,8 @@ impl TopToolbarControl {
             }
             Self::Minimize => ToolbarEvent::SetTopMinimized(true),
             Self::About => ToolbarEvent::OpenAbout,
-            Self::LayoutMode => ToolbarEvent::SetToolbarLayoutMode(snapshot.layout_mode.next()),
+            Self::Exit => ToolbarEvent::ExitOverlay,
+            Self::LayoutMode => ToolbarEvent::ToggleLayoutMenu(!snapshot.layout_menu_open),
             Self::HighlightRing => {
                 ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled)
             }
@@ -190,9 +197,11 @@ impl TopToolbarControl {
             Self::Tool(tool) => {
                 snapshot.active_tool == tool || snapshot.tool_override == Some(tool)
             }
+            // The picker stands in for the active tool only while that tool
+            // lives inside it; a tool with its own strip button keeps the one
+            // highlight.
             Self::ShapePicker => {
-                snapshot.shape_picker_open
-                    || current_shape_tool(snapshot.active_tool, snapshot.tool_override).is_some()
+                snapshot.shape_picker_open || active_tool_in_shape_picker(snapshot)
             }
             Self::Utility(TopToolbarUtility::Text) => snapshot.text_active,
             Self::Utility(TopToolbarUtility::StickyNote) => snapshot.note_active,
@@ -205,6 +214,7 @@ impl TopToolbarControl {
             Self::CanvasMenu => snapshot.canvas_popover_open,
             Self::SessionMenu => snapshot.session_popover_open,
             Self::SettingsMenu => snapshot.settings_popover_open,
+            Self::LayoutMode => snapshot.layout_menu_open,
             Self::HighlightRing => snapshot.highlight_tool_ring_enabled,
             _ => false,
         }
@@ -224,10 +234,10 @@ impl TopToolbarControl {
             | Self::SessionMenu
             | Self::SettingsMenu
             | Self::HighlightRing => TopToolbarControlRole::Toggle,
-            // The chrome island (layout cycle, About, pin, minimize) renders
+            // The chrome island (layout menu, About, pin, minimize) renders
             // quieter than the content islands; both frontends key that
             // styling off this role.
-            Self::Pin | Self::Minimize | Self::About | Self::LayoutMode => {
+            Self::Pin | Self::Minimize | Self::About | Self::LayoutMode | Self::Exit => {
                 TopToolbarControlRole::Chrome
             }
             _ => TopToolbarControlRole::Button,
@@ -240,6 +250,7 @@ impl TopToolbarControl {
         match self {
             Self::Undo
             | Self::Redo
+            | Self::Utility(TopToolbarUtility::Screenshot)
             | Self::Overflow
             | Self::ClearCanvas
             | Self::CanvasMenu
@@ -249,6 +260,7 @@ impl TopToolbarControl {
             | Self::Minimize
             | Self::About
             | Self::LayoutMode
+            | Self::Exit
             | Self::Restore
             | Self::MicroChip => TopToolbarIsland::Chrome,
             Self::Preset(_) => TopToolbarIsland::Presets,
@@ -275,7 +287,7 @@ impl TopToolbarControl {
             Self::Redo => TopToolbarIcon::Redo,
             Self::Pin if snapshot.top_pinned => TopToolbarIcon::Pin,
             Self::Pin => TopToolbarIcon::Unpin,
-            // The glyph shows the CURRENT mode; the click advances to the next.
+            // The glyph shows the CURRENT mode; the click opens the menu.
             Self::LayoutMode => TopToolbarIcon::for_layout_mode(snapshot.layout_mode),
             Self::Overflow => TopToolbarIcon::Overflow,
             Self::CanvasMenu => TopToolbarIcon::Canvas,
@@ -283,6 +295,7 @@ impl TopToolbarControl {
             Self::SettingsMenu => TopToolbarIcon::Settings,
             Self::Minimize => TopToolbarIcon::Minimize,
             Self::About => TopToolbarIcon::About,
+            Self::Exit => TopToolbarIcon::Exit,
             // Filled preset slots carry the saved tool's glyph (the renderers
             // draw it neutral and show the preset color as a corner swatch);
             // empty slots have no glyph.
@@ -304,7 +317,8 @@ impl TopToolbarControl {
 
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
-            Self::Restore => Cow::Borrowed("Show toolbar"),
+            // The tab's visible caption; screen readers get the full phrase.
+            Self::Restore => Cow::Borrowed("Tools"),
             Self::MicroChip => Cow::Borrowed("Show full toolbar"),
             Self::DragHandle => Cow::Borrowed("Drag toolbar"),
             Self::Tool(tool) => Cow::Borrowed(tool_label(tool)),
@@ -324,7 +338,9 @@ impl TopToolbarControl {
             Self::SettingsMenu => Cow::Borrowed("Settings..."),
             Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
             Self::About => Cow::Borrowed(action_short_label(Action::OpenAbout)),
-            Self::LayoutMode => Cow::Borrowed("Cycle toolbar layout"),
+            Self::Exit if snapshot.exit_hides_overlay => Cow::Borrowed("Hide overlay"),
+            Self::Exit => Cow::Borrowed(action_short_label(Action::Exit)),
+            Self::LayoutMode => Cow::Borrowed("Toolbar layout"),
             Self::HighlightRing => Cow::Borrowed("Ring"),
         }
     }
@@ -341,6 +357,7 @@ impl TopToolbarControl {
             Self::SessionMenu => Cow::Borrowed("Session menu"),
             Self::SettingsMenu => Cow::Borrowed("Settings menu"),
             Self::About => Cow::Borrowed(action_label(Action::OpenAbout)),
+            Self::Restore => Cow::Borrowed("Show toolbar"),
             _ => self.label(snapshot),
         }
     }
@@ -357,14 +374,18 @@ impl TopToolbarControl {
                 "Pinned: opens at startup (click to disable)".to_string()
             }
             Self::Pin => "Pin: click to open at startup".to_string(),
-            // Current mode first, then where the click lands, so hovering
-            // reads the cycle without pressing it.
-            Self::LayoutMode => match snapshot.layout_mode {
-                ToolbarLayoutMode::Simple => "Layout: Simple (click for Regular)".to_string(),
-                ToolbarLayoutMode::Regular => "Layout: Regular (click for Advanced)".to_string(),
-                ToolbarLayoutMode::Advanced => "Layout: Advanced (click for Simple)".to_string(),
-            },
+            // Current mode first, so hovering reads the preset without
+            // opening the menu.
+            Self::LayoutMode => format!(
+                "Layout: {} (click to choose)",
+                layout_mode_label(snapshot.layout_mode)
+            ),
             Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
+            // The key text comes from the configured Exit binding.
+            Self::Exit => format_binding_label(
+                &self.label(snapshot),
+                snapshot.binding_hints.binding_for_action(Action::Exit),
+            ),
             Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
             Self::CanvasMenu => "Canvas: boards, pages, zoom, history, steps".to_string(),
             Self::SessionMenu => "Session: open, save, recent files".to_string(),

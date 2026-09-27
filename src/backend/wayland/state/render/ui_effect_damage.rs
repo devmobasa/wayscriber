@@ -177,6 +177,22 @@ impl WaylandState {
             .ui_damage_mut()
             .roll_status_hud(status_hud_rect, surface, &mut regions);
 
+        // A segment's tooltip follows the HUD layout it was measured from; it
+        // stays put while shown, so it needs damage only where it appears or
+        // goes away.
+        let status_tooltip_rect = if flags.active(UiEffect::StatusHud) {
+            self.input_state
+                .update_status_tooltip_with_engine(self.render.ui_text(), Instant::now())
+                .and_then(|bounds| effect_rect(bounds, width, height))
+        } else {
+            None
+        };
+        self.render.ui_damage_mut().roll_on_change(
+            UiEffect::StatusTooltip,
+            status_tooltip_rect,
+            &mut regions,
+        );
+
         // The zoom chip follows the same once-per-frame layout refresh as the
         // status HUD, so damage geometry, rendering, and pointer hit-testing
         // all read the same cache for the frame; the appear → move → disappear
@@ -305,6 +321,34 @@ impl WaylandState {
             &mut regions,
         );
 
+        // The recognition chip holds still and fades, so each frame repaints
+        // only its own footprint, and the frame after it expires clears it.
+        let recognition_chip_rect = flags
+            .active(UiEffect::RecognitionChip)
+            .then(|| self.recognition_chip_visual(width, height))
+            .flatten()
+            .and_then(|chip| effect_rect(chip.bounds, width, height));
+        self.render.ui_damage_mut().roll(
+            UiEffect::RecognitionChip,
+            recognition_chip_rect,
+            &mut regions,
+        );
+
+        // The first-run card hides under menus, pickers, and zoom and returns
+        // when they close. Step changes repaint the whole surface and hover
+        // repaints the card itself, so it needs damage only where it appears
+        // or disappears: repaint it when it comes back, clear it when it goes.
+        let onboarding_card_rect = flags
+            .active(UiEffect::OnboardingCard)
+            .then(|| self.onboarding_card.last_painted())
+            .flatten()
+            .and_then(|bounds| effect_rect(bounds, width, height));
+        self.render.ui_damage_mut().roll_on_change(
+            UiEffect::OnboardingCard,
+            onboarding_card_rect,
+            &mut regions,
+        );
+
         // The scan overlay spans its region and, once settled, the outcome card
         // beside it. Both move only when the phase changes, so the previous
         // union is re-emitted to clear the sweep it leaves behind.
@@ -430,6 +474,35 @@ mod tests {
         damage.clear();
         push_effect_damage(&mut damage, second, None);
         assert_eq!(damage, vec![second.expect("disappeared")]);
+    }
+
+    #[test]
+    fn recognition_chip_damage_stays_on_its_own_footprint_until_it_expires() {
+        let chip = crate::ui::recognition_chip_layout(
+            &crate::ui_text::UiTextEngine::default(),
+            "Circle · Ctrl+Z keeps ink",
+            (300.0, 100.0, 200.0, 150.0),
+            0.5,
+            800,
+            600,
+        )
+        .and_then(|chip| effect_rect(chip.bounds, 800, 600))
+        .expect("chip footprint");
+        let mut history = super::super::runtime::UiDamageHistory::default();
+
+        for _fade_frame in 0..3 {
+            let mut damage = Vec::new();
+            history.roll(UiEffect::RecognitionChip, Some(chip), &mut damage);
+            assert_eq!(damage, vec![chip]);
+        }
+        let mut cleanup = Vec::new();
+        history.roll(UiEffect::RecognitionChip, None, &mut cleanup);
+
+        assert_eq!(cleanup, vec![chip], "the expiry frame clears the chip");
+        assert!(
+            chip.width < 400 && chip.height < 40,
+            "a small chip: {chip:?}"
+        );
     }
 
     #[test]

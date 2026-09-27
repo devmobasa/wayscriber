@@ -39,6 +39,12 @@ pub struct ContextMenuPanel {
     pub(in crate::input::state) hover_open_suppressed: Option<usize>,
     /// An outside left press dismissed the menu but still owns its release.
     dismissal_release_pending: bool,
+    /// A background daemon owns this overlay, so the last row hides it
+    /// instead of exiting.
+    pub(in crate::input::state) exit_hides_overlay: bool,
+    /// The menu was opened from the keyboard into a screen corner, so its
+    /// anchor is not a point the user picked (zoom centres the screen).
+    pub(in crate::input::state) anchored_in_corner: bool,
 }
 
 impl ContextMenuPanel {
@@ -99,6 +105,7 @@ impl ContextMenuPanel {
         self.clear_layout();
         self.page_target = None;
         self.board_target = None;
+        self.anchored_in_corner = false;
         self.reset_hover_timing();
         self.state = ContextMenuState::Open {
             anchor,
@@ -148,6 +155,8 @@ impl Default for ContextMenuPanel {
             pending_hover: None,
             hover_open_suppressed: None,
             dismissal_release_pending: false,
+            exit_hides_overlay: false,
+            anchored_in_corner: false,
         }
     }
 }

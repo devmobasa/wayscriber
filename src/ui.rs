@@ -18,6 +18,7 @@ mod precision_entry;
 mod primitives;
 mod properties_panel;
 mod radial_menu;
+mod recognition_chip;
 mod render_context;
 pub(crate) use render_context::{UiRenderCaches, UiRenderCtx};
 mod region_action_bar;
@@ -28,7 +29,7 @@ mod status;
 mod text_highlight;
 pub mod theme;
 mod toasts;
-mod tour;
+mod tooltip;
 
 pub(crate) use arrow_bend_handle::render_arrow_bend_handle;
 pub use board_picker::render_board_picker;
@@ -64,17 +65,27 @@ pub(crate) use measure_badge::{
 pub(crate) use ocr_scan::{
     ocr_scan_geometry, render_ocr_scan_result, render_ocr_scan_still, render_ocr_scan_sweep,
 };
-pub(crate) use onboarding_card::render_onboarding_card_with_engine;
-pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
+#[cfg(test)]
+pub(crate) use onboarding_card::OnboardingCardButtonHit;
+pub use onboarding_card::{
+    OnboardingCard, OnboardingCardAction, OnboardingCardButton, OnboardingChecklistItem,
+    render_onboarding_card,
+};
+pub(crate) use onboarding_card::{
+    OnboardingCardLayout, OnboardingCardPress, render_onboarding_card_with_engine,
+};
 pub use precision_entry::render_precision_entry_popup;
 pub(crate) use precision_entry::render_precision_entry_popup_with_engine;
 /// Shared measured-text trimming, also used by the standalone about dialog.
 pub(crate) use primitives::ellipsize_to_fit_with_engine;
-pub(crate) use primitives::{checkerboard_behind, draw_pill};
+pub(crate) use primitives::{checkerboard_behind, draw_pill, draw_rounded_rect};
 pub use properties_panel::render_properties_panel;
 pub(crate) use properties_panel::render_properties_panel_with_engine;
 pub use radial_menu::render_radial_menu;
 pub(crate) use radial_menu::render_radial_menu_with_context;
+pub(crate) use recognition_chip::{
+    RecognitionChipVisual, recognition_chip_layout, render_recognition_chip,
+};
 pub(crate) use region_action_bar::{
     RegionAction, RegionActionAvailability, RegionActionBar, RegionCutStatus,
 };
@@ -85,6 +96,7 @@ pub(crate) use region_capture_picker::{
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
 pub(crate) use spotlight_control::render_spotlight_magnification_control;
+pub(crate) use status::StatusHudTooltip;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,
@@ -106,8 +118,7 @@ pub(crate) use toasts::{
     preset_toast_geometry_with_engine, render_preset_toast_with_engine,
     render_ui_toast_with_engine, ui_toast_geometry_with_engine,
 };
-pub use tour::render_tour;
-pub(crate) use tour::render_tour_with_engine;
+pub(crate) use tooltip::draw_tooltip;
 
 #[cfg(test)]
 #[path = "ui/tests/theme_compatibility.rs"]

@@ -404,6 +404,7 @@ mod canvas_index_owner_tests {
                 color: Color::new(0.0, 0.0, 0.0, 1.0),
                 thick: 2.0,
                 fill: false,
+                fill_color: None,
             });
         }
         frame

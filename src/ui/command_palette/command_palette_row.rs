@@ -57,6 +57,7 @@ pub(super) fn render_command_row(
     inner_width: f64,
     item_y: f64,
     is_selected: bool,
+    show_row_actions: bool,
 ) {
     if is_selected {
         draw_rounded_rect(
@@ -162,7 +163,10 @@ pub(super) fn render_command_row(
         max_desc_width,
         desc_alpha,
     );
-    if configurable {
+    // Space stays reserved on every row so hovering never shifts the text,
+    // but the controls draw only where they apply: an edit/unbind/reset trio
+    // on every row read as "delete" beside Clear Canvas.
+    if configurable && show_row_actions {
         render_command_row_actions(theme, ctx, inner_x + inner_width, item_y, is_selected);
     }
 }

@@ -10,6 +10,7 @@ mod board_grid;
 mod context;
 mod highlight;
 mod image;
+mod laser;
 mod pressure_strokes;
 mod primitives;
 mod selection;
@@ -24,6 +25,7 @@ pub use blur::{BlurRectParams, render_blur_rect};
 pub use board_grid::{BoardPaper, board_paper_device_scale};
 pub use context::{RenderCaches, RenderCtx};
 pub use highlight::render_click_highlight;
+pub(crate) use laser::{LaserStyle, render_laser_stroke};
 #[allow(unused_imports)]
 pub use pressure_strokes::render_freehand_pressure_borrowed;
 pub(crate) use pressure_strokes::render_freehand_pressure_preview_borrowed;

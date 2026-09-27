@@ -81,6 +81,15 @@ pub(super) fn shape_color(shape: &Shape) -> Option<Color> {
     }
 }
 
+/// The opacity a shape is drawn at: its color's alpha, a marker's own
+/// translucency included.
+pub(super) fn shape_opacity(shape: &Shape) -> Option<f64> {
+    match shape {
+        Shape::MarkerStroke { color, .. } => Some(color.a),
+        _ => shape_color(shape).map(|color| color.a),
+    }
+}
+
 pub(super) fn shape_thickness(shape: &Shape) -> Option<f64> {
     match shape {
         Shape::Freehand { thick, .. }
@@ -97,11 +106,28 @@ pub(super) fn shape_thickness(shape: &Shape) -> Option<f64> {
     }
 }
 
-pub(super) fn shape_fill(shape: &Shape) -> Option<bool> {
+/// What a closed shape is filled with: `None` for no fill, or the fill's
+/// own color, which falls back to the border's.
+pub(super) fn shape_fill_paint(shape: &Shape) -> Option<Option<Color>> {
     match shape {
-        Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } | Shape::Polygon { fill, .. } => {
-            Some(*fill)
+        Shape::Rect {
+            fill,
+            fill_color,
+            color,
+            ..
         }
+        | Shape::Ellipse {
+            fill,
+            fill_color,
+            color,
+            ..
+        }
+        | Shape::Polygon {
+            fill,
+            fill_color,
+            color,
+            ..
+        } => Some(fill.then(|| fill_color.unwrap_or(*color))),
         _ => None,
     }
 }
@@ -170,6 +196,7 @@ mod tests {
             w: 10,
             h: 10,
             fill,
+            fill_color: None,
             color,
             thick,
         }
@@ -194,7 +221,7 @@ mod tests {
             wrap_width: None,
         });
 
-        let summary = summarize_property(&frame, &[text_id], shape_fill, |a, b| a == b);
+        let summary = summarize_property(&frame, &[text_id], shape_fill_paint, |a, b| a == b);
 
         assert!(!summary.applicable);
         assert!(!summary.editable);

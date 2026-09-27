@@ -71,7 +71,16 @@ pub fn render_selection_halo_with_measurer(
             fill,
             ..
         } => {
-            render_rect(ctx, *x, *y, *w, *h, *fill, glow, thick + outline_width);
+            render_rect(
+                ctx,
+                *x,
+                *y,
+                *w,
+                *h,
+                fill.then_some(glow),
+                glow,
+                thick + outline_width,
+            );
         }
         Shape::Ellipse {
             cx,
@@ -82,7 +91,16 @@ pub fn render_selection_halo_with_measurer(
             thick,
             ..
         } => {
-            render_ellipse(ctx, *cx, *cy, *rx, *ry, *fill, glow, thick + outline_width);
+            render_ellipse(
+                ctx,
+                *cx,
+                *cy,
+                *rx,
+                *ry,
+                fill.then_some(glow),
+                glow,
+                thick + outline_width,
+            );
         }
         Shape::Spotlight { cx, cy, rx, ry, .. } => {
             // The spotlight itself paints nothing, so the halo is the only way to
@@ -101,7 +119,7 @@ pub fn render_selection_halo_with_measurer(
             );
         }
         Shape::Polygon { points, thick, .. } => {
-            render_polygon(ctx, points, false, glow, thick + outline_width);
+            render_polygon(ctx, points, None, glow, thick + outline_width);
         }
         Shape::Arrow {
             x1,

@@ -104,6 +104,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_select_highlight_tool")]
     pub select_highlight_tool: Vec<String>,
 
+    #[serde(default = "default_select_laser_tool")]
+    pub select_laser_tool: Vec<String>,
+
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
 
@@ -156,6 +159,7 @@ impl Default for ToolKeybindingsConfig {
             select_blur_tool: default_select_blur_tool(),
             select_spotlight_tool: default_select_spotlight_tool(),
             select_highlight_tool: default_select_highlight_tool(),
+            select_laser_tool: default_select_laser_tool(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
             increase_font_size: default_increase_font_size(),
             decrease_font_size: default_decrease_font_size(),

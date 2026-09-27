@@ -361,7 +361,12 @@ impl ToolbarDrag {
         match feedback {
             GtkToolbarFeedback::CaptureSuppressionReady { .. }
             | GtkToolbarFeedback::CaptureSuppressionFailed { .. }
-            | GtkToolbarFeedback::TopHover { .. } => false,
+            | GtkToolbarFeedback::TopHover { .. }
+            | GtkToolbarFeedback::EscapeDismissed
+            | GtkToolbarFeedback::KeyboardReleased
+            // Key routing owns its own modal policy: a key typed at the
+            // toolbar while the command palette is up belongs to the palette.
+            | GtkToolbarFeedback::Key { .. } => false,
             GtkToolbarFeedback::Event { .. } | GtkToolbarFeedback::PointerShortcut { .. } => {
                 modal_engaged
             }

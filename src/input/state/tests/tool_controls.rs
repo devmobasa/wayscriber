@@ -334,7 +334,14 @@ fn toolbar_context_matches_tool_profiles_for_each_tool() {
             context.show_marker_opacity, show_marker_opacity,
             "{tool:?} marker opacity"
         );
-        assert!(!context.show_font_controls, "{tool:?} font controls");
+        // Only the step marker draws text among these: its number uses the
+        // font's family and weight, sized by the marker's own slider.
+        assert_eq!(
+            context.show_font_controls,
+            tool == Tool::StepMarker,
+            "{tool:?} font controls"
+        );
+        assert!(!context.show_font_size, "{tool:?} text size");
     }
 }
 
@@ -419,6 +426,21 @@ fn nudge_thickness_for_active_tool_clamps_pen_thickness() {
 
     assert!(state.nudge_thickness_for_active_tool(10.0));
     assert_eq!(state.style.current_thickness, 50.0);
+}
+
+/// Wheel, keyboard, and radial nudges share the whole-pixel step, so a
+/// fractional tool width moves to its neighbour instead of skipping one.
+#[test]
+fn nudging_a_fractional_tool_thickness_lands_on_the_adjacent_whole_pixel() {
+    let mut state = create_test_input_state();
+
+    assert!(state.set_thickness(30.8));
+    assert!(state.nudge_thickness_for_active_tool(1.0));
+    assert_eq!(state.style.current_thickness, 31.0);
+
+    assert!(state.set_thickness(30.8));
+    assert!(state.nudge_thickness_for_active_tool(-1.0));
+    assert_eq!(state.style.current_thickness, 30.0);
 }
 
 #[test]
@@ -1927,6 +1949,7 @@ fn apply_full_preset_restores_all_tool_settings() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
@@ -1977,6 +2000,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
@@ -1996,6 +2020,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
@@ -2043,6 +2068,7 @@ fn legacy_preset_changes_only_selected_tool_settings() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,
@@ -2081,6 +2107,7 @@ fn legacy_step_marker_preset_uses_font_derived_size() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: Some(48.0),
         text_background_enabled: None,
         arrow_length: None,
@@ -2118,6 +2145,7 @@ fn full_step_marker_preset_uses_captured_profile_size() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: Some(48.0),
         text_background_enabled: None,
         arrow_length: None,
@@ -2380,6 +2408,7 @@ fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: 2.0,
     });

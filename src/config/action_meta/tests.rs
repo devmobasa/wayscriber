@@ -48,6 +48,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::SelectArrowTool,
     Action::SelectBlurTool,
     Action::ToggleHighlightTool,
+    Action::SelectLaserTool,
     Action::SelectMarkerTool,
     Action::SelectStepMarkerTool,
     Action::SelectEraserTool,
@@ -100,6 +101,8 @@ const HELP_ACTIONS: &[Action] = &[
 ];
 
 const TOOLBAR_ACTIONS: &[Action] = &[
+    // The chrome island's Exit button names its keys in the tooltip.
+    Action::Exit,
     Action::SelectPenTool,
     Action::SelectLiveShapeTool,
     Action::SelectLineTool,
@@ -111,6 +114,7 @@ const TOOLBAR_ACTIONS: &[Action] = &[
     Action::SelectMarkerTool,
     Action::SelectStepMarkerTool,
     Action::SelectHighlightTool,
+    Action::SelectLaserTool,
     Action::SelectEraserTool,
     Action::EnterTextMode,
     Action::EnterStickyNoteMode,
@@ -175,6 +179,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::SelectArrowTool,
     Action::SelectBlurTool,
     Action::SelectHighlightTool,
+    Action::SelectLaserTool,
     Action::SelectMarkerTool,
     Action::SelectStepMarkerTool,
     Action::SelectEraserTool,
@@ -516,7 +521,8 @@ fn interactive_region_capture_metadata_matches_its_public_surfaces() {
     assert_eq!(meta.category, ActionCategory::Capture);
     assert!(meta.in_command_palette);
     assert!(meta.in_help);
-    assert!(!meta.in_toolbar);
+    // The toolbar's capture button runs it and names its keys.
+    assert!(meta.in_toolbar);
 }
 
 #[test]

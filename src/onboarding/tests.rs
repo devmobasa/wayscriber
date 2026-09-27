@@ -352,7 +352,7 @@ coach_hint_count = 1
 
     let store = OnboardingStore::load_from_path(path.clone());
     assert_eq!(store.state().version, ONBOARDING_VERSION);
-    assert_eq!(ONBOARDING_VERSION, 6);
+    assert_eq!(ONBOARDING_VERSION, 7);
     assert!(store.state().first_run_completed);
     assert!(store.state().hint_status_bar_shown);
     assert_eq!(
@@ -424,4 +424,186 @@ fn coach_bookkeeping_reconciles_capped_count_to_learned_flag() {
     let store = OnboardingStore::load_from_path(path);
     assert!(store.state().coach_hint_shown);
     assert_eq!(store.state().coach_hint_count, DEFERRED_HINT_REPEAT_MAX);
+}
+
+/// Writes `seed` as the onboarding file and loads it through migration.
+fn load_seed(
+    seed: &str,
+) -> (
+    OnboardingStore,
+    std::path::PathBuf,
+    crate::test_temp::TempDir,
+) {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    fs::create_dir_all(path.parent().expect("parent")).expect("create onboarding dir");
+    fs::write(&path, seed).expect("write seed");
+    (OnboardingStore::load_from_path(path.clone()), path, tmp)
+}
+
+#[test]
+fn a_fresh_tour_starts_by_drawing_not_by_background_mode() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path);
+
+    store.begin_session(true).expect("session state persists");
+
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+    assert!(!store.state().first_run_background_mode_prompted);
+}
+
+#[test]
+fn a_v6_tour_waiting_on_background_mode_restarts_at_draw_and_undo() {
+    // Before v7 the background prompt was step one, so this user had just
+    // started. The prompt stays unanswered and now comes last.
+    let (mut store, path, _tmp) =
+        load_seed("version = 6\nactive_step = \"background_mode_setup\"\nsessions_seen = 1\n");
+
+    assert_eq!(store.state().version, ONBOARDING_VERSION);
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+    assert!(!store.state().first_run_background_mode_prompted);
+    store.begin_session(true).expect("session state persists");
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+
+    let persisted = fs::read_to_string(path).expect("read migrated state");
+    assert!(
+        persisted.contains("active_step = \"draw_undo\""),
+        "{persisted}"
+    );
+}
+
+#[test]
+fn a_v7_tour_at_background_mode_is_on_its_last_step() {
+    let seed = format!(
+        "version = {ONBOARDING_VERSION}\nactive_step = \"background_mode_setup\"\nused_help_overlay = true\nused_command_palette = true\n"
+    );
+    let (store, _path, _tmp) = load_seed(&seed);
+
+    assert_eq!(
+        store.state().active_step,
+        Some(FirstRunStep::BackgroundModeSetup)
+    );
+}
+
+#[test]
+fn a_mid_tour_v6_profile_keeps_its_step_and_its_background_answer() {
+    let (store, _path, _tmp) = load_seed(
+        "version = 6\nactive_step = \"color_thickness\"\nfirst_run_background_mode_prompted = true\nfirst_stroke_done = true\nfirst_undo_done = true\n",
+    );
+
+    assert_eq!(
+        store.state().active_step,
+        Some(FirstRunStep::ColorThickness)
+    );
+    assert!(store.state().first_run_background_mode_prompted);
+    assert!(store.state().first_run_active());
+}
+
+#[test]
+fn the_retired_wait_draw_step_resumes_at_draw_and_undo() {
+    let (store, _path, _tmp) = load_seed(
+        "version = 6\nactive_step = \"wait_draw\"\nfirst_run_background_mode_prompted = true\n",
+    );
+
+    assert_eq!(store.state().active_step, Some(FirstRunStep::DrawUndo));
+}
+
+#[test]
+fn completed_and_skipped_v6_profiles_never_see_the_new_tour() {
+    for seed in [
+        "version = 6\nfirst_run_completed = true\nfirst_run_background_mode_prompted = true\n",
+        "version = 6\nfirst_run_skipped = true\n",
+    ] {
+        let (mut store, _path, _tmp) = load_seed(seed);
+        store.begin_session(true).expect("session state persists");
+
+        assert!(store.state().first_run_completed, "{seed}");
+        assert!(!store.state().first_run_active(), "{seed}");
+        assert_eq!(store.state().active_step, None, "{seed}");
+    }
+}
+
+fn completed_profile_with_usage() -> OnboardingState {
+    OnboardingState {
+        first_run_completed: true,
+        first_run_background_mode_prompted: true,
+        first_run_toolbar_exit_seen: true,
+        first_stroke_done: true,
+        first_undo_done: true,
+        first_color_done: true,
+        first_thickness_done: true,
+        used_radial_menu: true,
+        used_help_overlay: true,
+        used_command_palette: true,
+        ..OnboardingState::default()
+    }
+}
+
+/// Replay Tour restarts the cards with an empty checklist, and clears the
+/// usage the quick-access and find-anything cards wait on after saving it.
+#[test]
+fn a_replay_restarts_the_cards_and_saves_the_usage_it_clears() {
+    let mut state = completed_profile_with_usage();
+
+    state.begin_first_run_replay();
+
+    assert!(state.first_run_replay_active());
+    assert_eq!(state.active_step, Some(FirstRunStep::FIRST));
+    assert!(!state.first_stroke_done && !state.first_undo_done);
+    assert!(!state.first_run_toolbar_exit_seen);
+    assert!(!state.first_color_done && !state.first_thickness_done);
+    assert!(!state.used_radial_menu && !state.used_help_overlay && !state.used_command_palette);
+    assert!(
+        state.first_run_background_mode_prompted,
+        "the background-mode answer is kept"
+    );
+    assert_eq!(
+        state.first_run_replay_saved_usage,
+        Some(ReplaySavedUsage {
+            used_radial_menu: true,
+            used_help_overlay: true,
+            used_command_palette: true,
+            ..ReplaySavedUsage::default()
+        })
+    );
+}
+
+/// Lifetime usage never goes backwards: finishing a replay gives back what
+/// it saved and keeps what the replay itself used; starting a second replay
+/// mid-way keeps the first one's saved usage.
+#[test]
+fn finishing_a_replay_restores_saved_usage_without_losing_new_usage() {
+    let mut state = completed_profile_with_usage();
+    state.begin_first_run_replay();
+    state.used_context_menu_right_click = true;
+    state.begin_first_run_replay();
+
+    assert!(state.finish_first_run_replay());
+
+    assert!(state.used_radial_menu && state.used_help_overlay && state.used_command_palette);
+    assert!(state.used_context_menu_right_click);
+    assert_eq!(state.first_run_replay_saved_usage, None);
+    assert!(!state.finish_first_run_replay(), "only once");
+}
+
+#[test]
+fn replay_progress_survives_a_restart_and_is_omitted_when_idle() {
+    let mut state = completed_profile_with_usage();
+    assert!(
+        !toml::to_string(&state)
+            .expect("serialize")
+            .contains("first_run_replay_saved_usage"),
+        "no replay, no table"
+    );
+
+    state.begin_first_run_replay();
+    let saved = toml::to_string(&state).expect("serialize");
+    let restored: OnboardingState = toml::from_str(&saved).expect("parse");
+
+    assert_eq!(
+        restored.first_run_replay_saved_usage,
+        state.first_run_replay_saved_usage
+    );
+    assert!(restored.first_run_replay_active());
 }

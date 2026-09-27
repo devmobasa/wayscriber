@@ -12,7 +12,7 @@ pub(crate) enum RoutingOutcome {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConsumedBy {
-    Tour,
+    EscapeDismissalGuard,
     CommandPalette,
     HelpOverlay,
     RadialMenu,
@@ -51,8 +51,8 @@ pub(crate) enum CancelTarget {
     PendingBoardDelete,
     PendingPageDelete,
     Selection,
-    /// The top strip's Canvas/Session/Settings popover (Escape dismissal).
-    TopPopover,
+    /// An open top-strip menu or popover (Escape dismissal).
+    TopMenu,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +64,6 @@ pub(crate) enum InteractionSideEffect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerSideEffect {
     IdleEraserHover,
-    RightClickSuppressedByZoom,
     RightClickContextMenuDisabled,
 }
 

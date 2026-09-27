@@ -1,5 +1,6 @@
 //! Command palette for fuzzy action search.
 
+mod empty_query;
 mod input;
 mod layout;
 mod registry;
@@ -546,6 +547,26 @@ mod tests {
 
     /// An action with no `[keybindings]` field cannot be rebound and has no row
     /// to open, so both affordances say so and change nothing.
+    /// Replay Tour runs the first-run cards again, which live in the backend's
+    /// onboarding store, so the action hands the replay to the backend.
+    #[test]
+    fn replay_tour_asks_the_backend_to_replay_the_first_run_cards() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
+        let mut state = make_state();
+
+        state.handle_action_with_resources(resources, Action::ReplayTour);
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::ReplayFirstRunTour)
+        );
+    }
+
     #[test]
     fn a_runtime_only_action_is_refused_by_both_shortcut_affordances() {
         let mut state = make_state();
@@ -712,6 +733,65 @@ mod tests {
             results[1].action,
             crate::config::keybindings::Action::CaptureFileFull
         );
+    }
+
+    #[test]
+    fn opening_the_palette_never_preselects_exit_or_a_destructive_command() {
+        let mut state = make_state();
+        state.set_command_palette_recents(vec![Action::Exit, Action::ClearCanvas]);
+        state.toggle_command_palette();
+
+        let selected = state.selected_command().expect("a preselected command");
+        assert_eq!(selected.action, Action::Undo);
+        let results = state.filtered_commands();
+        assert!(
+            results
+                .last()
+                .is_some_and(|entry| empty_query::command_is_exit_or_destructive(entry.action))
+        );
+        let exit = results
+            .iter()
+            .position(|entry| entry.action == Action::Exit)
+            .expect("exit is still listed");
+        assert!(exit > results.len() / 2, "exit waits near the end");
+
+        // Typing still finds it first.
+        state.command_palette.set_query("exit");
+        assert_eq!(
+            state.selected_command().map(|entry| entry.action),
+            Some(Action::Exit)
+        );
+    }
+
+    #[test]
+    fn hidden_row_controls_cannot_be_clicked() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.update_pointer_position(0, 0);
+        let rows = state.command_palette_rows();
+        let geometry = state.command_palette_geometry_for_rows(1920, 1000, &rows);
+        let second = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| row.command_index().is_some())
+            .nth(1)
+            .map(|(display, _)| display)
+            .expect("two command rows");
+        let stride =
+            layout::COMMAND_PALETTE_ROW_ACTION_SIZE + layout::COMMAND_PALETTE_ROW_ACTION_GAP;
+        let actions_left = geometry.inner_x + geometry.inner_width
+            - stride * layout::COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+        let x = (geometry.x + actions_left + 2.0).round() as i32;
+        let y = (geometry.y
+            + geometry.items_top
+            + second as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+            + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+
+        // A tap that arrives with no hover (touch) on an unselected row runs
+        // the command instead of editing a shortcut nobody could see.
+        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
+        assert_eq!(state.keybinding_capture_action(), None);
+        assert!(!state.command_palette.open);
     }
 
     #[test]
@@ -1157,6 +1237,42 @@ mod tests {
         assert_eq!(
             state.command_palette.recent.first().copied(),
             Some(crate::config::keybindings::Action::ToggleStatusBar)
+        );
+    }
+
+    /// The palette sits in the middle of the screen, away from what the user
+    /// wants magnified, so a zoom it runs centres the screen, not the pointer.
+    #[test]
+    fn return_key_runs_palette_zoom_around_the_screen_centre() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette.query = "zoom in".to_string();
+        let selected = state.selected_command().expect("selected command");
+        assert_eq!(selected.action, crate::config::keybindings::Action::ZoomIn);
+
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
+
+        assert_eq!(
+            state.take_pending_zoom_request(),
+            Some(crate::input::ZoomRequest {
+                action: crate::input::ZoomAction::In,
+                anchor: crate::input::ZoomAnchor::ScreenCenter,
+            })
+        );
+        assert_eq!(
+            state.zoom_action_anchor, None,
+            "the anchor is scoped to the run"
         );
     }
 

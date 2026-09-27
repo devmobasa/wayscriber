@@ -19,6 +19,18 @@ impl InputState {
         }
     }
 
+    /// Zoom from the menu centres where the menu was opened. A canvas menu
+    /// opened from the keyboard sits in a corner, so that one centres the
+    /// screen instead.
+    fn context_menu_zoom_anchor(&self) -> crate::input::ZoomAnchor {
+        match self.context_menu.state {
+            ContextMenuState::Open { anchor, .. } if !self.context_menu.anchored_in_corner => {
+                crate::input::ZoomAnchor::At(anchor.0, anchor.1)
+            }
+            _ => crate::input::ZoomAnchor::ScreenCenter,
+        }
+    }
+
     fn context_menu_paste_anchor(&self) -> PasteAnchor {
         if let ContextMenuState::Open { anchor, .. } = self.context_menu.state {
             let (x, y) = self.canvas_coords_for_screen(anchor.0, anchor.1);
@@ -51,36 +63,23 @@ impl InputState {
 
     fn select_hovered_context_menu_shape_with(&mut self, measurer: &crate::draw::TextMeasurer) {
         if let Some(hovered_shape) = self.hovered_context_menu_shape() {
-            let previous_ids = self.selected_shape_ids().to_vec();
-            let previous_bounds = {
-                let frame = self.boards.active_frame();
-                previous_ids
-                    .iter()
-                    .filter_map(|id| {
-                        frame
-                            .shape(*id)
-                            .and_then(|shape| shape.bounding_box_with(measurer))
-                    })
-                    .collect::<Vec<_>>()
-            };
-
-            self.set_selection(vec![hovered_shape]);
-
-            for bounds in previous_bounds {
-                self.mark_selection_dirty_region(Some(bounds));
-            }
-            let hovered_bounds = {
-                let frame = self.boards.active_frame();
-                frame
-                    .shape(hovered_shape)
-                    .and_then(|shape| shape.bounding_box_with(measurer))
-            };
-            self.mark_selection_dirty_region(hovered_bounds);
-
+            self.set_selection_with(measurer, vec![hovered_shape]);
             self.close_context_menu();
         } else {
             self.close_context_menu();
         }
+    }
+
+    /// Closes the menu, then runs `action`. Closing first keeps the menu from
+    /// painting over what the action shows, and keeps Exit from spending
+    /// itself on cancelling the menu.
+    fn close_menu_and_run(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        action: Action,
+    ) {
+        self.close_context_menu();
+        self.handle_action_with_resources(resources, action);
     }
 
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
@@ -126,6 +125,14 @@ impl InputState {
                 self.move_selection_to_front_with(resources.measurer);
                 self.close_context_menu();
             }
+            MenuCommand::MoveForward => {
+                self.move_selection_forward_with(resources.measurer);
+                self.close_context_menu();
+            }
+            MenuCommand::MoveBackward => {
+                self.move_selection_backward_with(resources.measurer);
+                self.close_context_menu();
+            }
             MenuCommand::MoveToBack => {
                 self.move_selection_to_back_with(resources.measurer);
                 self.close_context_menu();
@@ -165,17 +172,31 @@ impl InputState {
                 self.open_menu_for_command(&command);
             }
             MenuCommand::ZoomIn => {
-                self.request_zoom_action(crate::input::ZoomAction::In);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::In, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ZoomOut => {
-                self.request_zoom_action(crate::input::ZoomAction::Out);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::Out, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ResetZoom => {
-                self.request_zoom_action(crate::input::ZoomAction::Reset);
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::Reset, anchor);
                 self.close_context_menu();
             }
+            MenuCommand::ToggleZoomLock => {
+                let anchor = self.context_menu_zoom_anchor();
+                self.request_zoom_action_at(crate::input::ZoomAction::ToggleLock, anchor);
+                self.close_context_menu();
+            }
+            MenuCommand::Undo => self.close_menu_and_run(resources, Action::Undo),
+            MenuCommand::Redo => self.close_menu_and_run(resources, Action::Redo),
+            MenuCommand::CaptureRegion => {
+                self.close_menu_and_run(resources, Action::CaptureRegionInteractive);
+            }
+            MenuCommand::Exit => self.close_menu_and_run(resources, Action::Exit),
             MenuCommand::ToggleHighlightTool => {
                 // Through the action, not the primitive: the action is what
                 // queues the durable click-highlight change, and the other

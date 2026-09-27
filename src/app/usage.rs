@@ -121,12 +121,12 @@ fn log_canvas_controls(bindings: &HashMap<Action, Vec<Shortcut>>) {
         action_binding_label(bindings, Action::ClearCanvas)
     );
     log::info!(
-        "  - {}: {} or scroll down",
+        "  - {}: {} or scroll up",
         action_display_label(Action::IncreaseThickness),
         action_binding_label(bindings, Action::IncreaseThickness)
     );
     log::info!(
-        "  - {}: {} or scroll up",
+        "  - {}: {} or scroll down",
         action_display_label(Action::DecreaseThickness),
         action_binding_label(bindings, Action::DecreaseThickness)
     );
@@ -136,7 +136,7 @@ fn log_canvas_controls(bindings: &HashMap<Action, Vec<Shortcut>>) {
         action_binding_label(bindings, Action::ToggleFrozenMode)
     );
     log::info!(
-        "  - {} / {}: {} / {} (Ctrl+Alt + scroll)",
+        "  - {} / {}: {} / {} (Ctrl + scroll)",
         action_display_label(Action::ZoomIn),
         action_display_label(Action::ZoomOut),
         action_binding_label(bindings, Action::ZoomIn),

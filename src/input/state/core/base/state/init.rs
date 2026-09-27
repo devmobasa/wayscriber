@@ -74,7 +74,9 @@ impl InputState {
             dirty_tracker: DirtyTracker::new(),
             spotlight_wheel: Default::default(),
             pending_onboarding_usage: PendingOnboardingUsage::default(),
+            zoom_action_anchor: None,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
+            laser: crate::input::state::laser::LaserInk::new(Default::default()),
             input_hud: InputHudState::new(InputHudSettings::default()),
             selection_interaction: SelectionInteraction::default(),
             context_menu: Default::default(),
@@ -88,8 +90,9 @@ impl InputState {
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,
             preset_slots: Default::default(),
-            tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
+            recognition_feedback: Default::default(),
+            restore_notice: None,
         };
 
         if state.click_highlight.uses_pen_color() {

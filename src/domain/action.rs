@@ -68,6 +68,7 @@ pub enum Action {
     SelectBlurTool,
     SelectSpotlightTool,
     SelectHighlightTool,
+    SelectLaserTool,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetArrowLabelCounter,

@@ -59,6 +59,7 @@ fn paste_preflight_skips_stale_target_page_generation() {
         w: 3,
         h: 4,
         fill: false,
+        fill_color: None,
         color: Color {
             r: 1.0,
             g: 0.0,

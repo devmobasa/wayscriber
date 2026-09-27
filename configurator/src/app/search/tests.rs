@@ -117,6 +117,8 @@ fn exact_drawing_default_labels_match_defaults_section() {
         "eraser size px",
         "shape pen sensitivity",
         "shape recognition",
+        "name recognized shape pen shapes",
+        "recognition feedback",
         "enable text background",
         "enable text halo",
     ] {
@@ -129,6 +131,22 @@ fn exact_drawing_default_labels_match_defaults_section() {
         assert!(
             drawing.area_matches(SearchArea::DrawingDefaults),
             "query should show Drawing Defaults: {query}",
+        );
+    }
+}
+
+#[test]
+fn laser_searches_reveal_the_laser_pointer_section() {
+    for query in ["laser", "pointer", "presenter", "fading ink", "fade out ms"] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let drawing = summary.tab(TabId::Drawing).expect("drawing match");
+
+        assert!(
+            drawing.area_matches(SearchArea::DrawingLaser),
+            "query should show the laser pointer section: {query}",
         );
     }
 }
@@ -415,6 +433,30 @@ fn toolbar_type_and_memory_guidance_expose_toolbar_settings() {
         assert!(
             ui.ui_tabs().contains(&UiTabId::Toolbar),
             "toolbar type should be discoverable by {query}"
+        );
+    }
+}
+
+#[test]
+fn stroke_controls_terms_expose_the_toolbar_settings_tab() {
+    for query in [
+        "stroke controls",
+        "pen feel",
+        "stepper",
+        "meters",
+        "smoothing",
+        "sensitivity",
+    ] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let ui = summary.tab(TabId::Ui).expect("UI match");
+
+        assert!(
+            ui.ui_tabs().contains(&UiTabId::Toolbar),
+            "{query} should expose Toolbar settings: {:?}",
+            ui.ui_tabs()
         );
     }
 }

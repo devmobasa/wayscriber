@@ -34,6 +34,7 @@ fn board_grid_png_erasers_restore_pattern_and_snapshot_is_independent() {
                 w: 20,
                 h: 20,
                 fill: true,
+                fill_color: None,
                 color: RED,
                 thick: 1.0,
             });
@@ -142,6 +143,7 @@ fn board_grid_pdf_stays_vector_without_erasers_and_leaves_margins_plain() {
             w: 8,
             h: 8,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });

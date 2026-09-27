@@ -165,6 +165,7 @@ mod tests {
             w: 3,
             h: 2,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });

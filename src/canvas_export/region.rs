@@ -355,6 +355,7 @@ mod tests {
             w: 1,
             h: 1,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });
@@ -364,6 +365,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });
@@ -392,6 +394,7 @@ mod tests {
             w: 1,
             h: 1,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });
@@ -550,6 +553,7 @@ mod tests {
             w: 4,
             h: 4,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });
@@ -654,6 +658,7 @@ mod tests {
             w: 1,
             h: 1,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });
@@ -690,6 +695,7 @@ mod tests {
             w: 8,
             h: 1,
             fill: true,
+            fill_color: None,
             color: RED,
             thick: 1.0,
         });

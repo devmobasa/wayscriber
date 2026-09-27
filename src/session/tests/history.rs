@@ -169,6 +169,7 @@ fn clear_all_can_be_undone_after_restore() {
             w: 5,
             h: 5,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 1.0,
                 g: 1.0,

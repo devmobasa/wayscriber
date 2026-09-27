@@ -298,6 +298,29 @@ fn board_segment_label(input_state: &InputState, max_name_chars: Option<usize>) 
     }
 }
 
+/// Whether the user is placing or typing text, where the size that matters is
+/// the text size.
+fn typing_text(input_state: &InputState) -> bool {
+    matches!(
+        input_state.state,
+        DrawingState::TextInput { .. } | DrawingState::PendingTextClick { .. }
+    )
+}
+
+/// The size segment's label: the text size while typing, the stroke width of
+/// a drawing tool, and nothing for the tools that draw no stroke (Select and
+/// the click-highlight tool), whose pen width would mean nothing there.
+fn status_size_label(input_state: &InputState, tool: Tool) -> Option<String> {
+    if typing_text(input_state) {
+        return Some(format!("{:.0}px", input_state.style.current_font_size));
+    }
+
+    match tool {
+        Tool::Select | Tool::Highlight => None,
+        _ => Some(format!("{:.0}px", input_state.status_size_for_tool(tool))),
+    }
+}
+
 /// Build the single-line segment pieces in display order.
 pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
     let mut pieces = Vec::new();
@@ -334,19 +357,20 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
             false,
         ));
     }
-    if input_state.ui_visibility.show_status_size {
+    if input_state.ui_visibility.show_status_size
+        && let Some(label) = status_size_label(input_state, tool)
+    {
         pieces.push(StatusHudPiece::text(
-            format!("{}px", input_state.size_for_active_tool() as i32),
+            label,
             Some(StatusHudSegmentKind::Size),
             false,
         ));
     }
 
     if input_state.ui_visibility.show_status_context_indicators {
-        if matches!(
-            input_state.state,
-            DrawingState::TextInput { .. } | DrawingState::PendingTextClick { .. }
-        ) {
+        // The size segment already shows the text size while typing; the
+        // indicator only stands in for it when that segment is hidden.
+        if typing_text(input_state) && !input_state.ui_visibility.show_status_size {
             pieces.push(StatusHudPiece::text(
                 format!("Text {}px", input_state.style.current_font_size as i32),
                 None,
@@ -360,7 +384,8 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
                 true,
             ));
         }
-        if input_state.highlight_tool_active() {
+        // The tool segment already names the highlight tool.
+        if input_state.highlight_tool_active() && !input_state.ui_visibility.show_status_tool {
             pieces.push(StatusHudPiece::text(
                 action_display_label(Action::SelectHighlightTool).to_string(),
                 None,
@@ -422,9 +447,7 @@ pub(super) fn build_prefix_text(
     measurer: &crate::draw::TextMeasurer,
 ) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
-    if input_state.ui_visibility.show_active_output_badge
-        && let Some(label) = input_state.active_output_label()
-    {
+    if let Some(label) = input_state.status_output_label() {
         let label = crate::util::truncate_with_ellipsis(label, 28);
         parts.push(format!("Output: {label}"));
     }

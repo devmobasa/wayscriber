@@ -34,6 +34,8 @@ pub(crate) enum ToolMotionBehavior {
 pub(crate) enum ToolMotionSizeSource {
     ToolSize,
     EraserSize,
+    /// The `[laser]` core width, which no tool slot stores.
+    LaserWidth,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +55,8 @@ pub(crate) enum ToolDrawingBehavior {
     Spotlight,
     StepMarker,
     Eraser,
+    /// Fading pointer ink that is never committed to the frame.
+    Laser,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,7 +87,7 @@ const fn profile(
     }
 }
 
-const DESCRIPTORS: [ToolDescriptor; 18] = [
+const DESCRIPTORS: [ToolDescriptor; 19] = [
     ToolDescriptor {
         tool: Tool::Select,
         short_label: "Select",
@@ -383,6 +387,29 @@ const DESCRIPTORS: [ToolDescriptor; 18] = [
         drawing: ToolDrawingBehavior::None,
     },
     ToolDescriptor {
+        tool: Tool::Laser,
+        short_label: "Laser",
+        display_label: "Laser Pointer Tool",
+        action: Some(Action::SelectLaserTool),
+        profile: profile(
+            // Laser ink takes its color and width from `[laser]`, not from a
+            // tool slot, so it has no style controls. The pen slot is named
+            // only because every descriptor needs one; nothing reads it.
+            ToolSettingsSlot::Pen,
+            ToolSizeSource::DrawingThickness,
+            ToolControlGroup::None,
+            false,
+            "",
+        ),
+        press: ToolPressBehavior::StartDrawing {
+            request_blur_capture: false,
+        },
+        motion: ToolMotionBehavior::AccumulatePath {
+            size_source: ToolMotionSizeSource::LaserWidth,
+        },
+        drawing: ToolDrawingBehavior::Laser,
+    },
+    ToolDescriptor {
         tool: Tool::StepMarker,
         short_label: "Steps",
         display_label: "Step Marker Tool",
@@ -423,7 +450,7 @@ const DESCRIPTORS: [ToolDescriptor; 18] = [
 ];
 
 impl Tool {
-    pub(crate) const ALL: [Self; 18] = [
+    pub(crate) const ALL: [Self; 19] = [
         Self::Select,
         Self::Pen,
         Self::LiveShape,
@@ -440,6 +467,7 @@ impl Tool {
         Self::Spotlight,
         Self::Marker,
         Self::Highlight,
+        Self::Laser,
         Self::StepMarker,
         Self::Eraser,
     ];
@@ -462,8 +490,9 @@ impl Tool {
             Self::Spotlight => &DESCRIPTORS[13],
             Self::Marker => &DESCRIPTORS[14],
             Self::Highlight => &DESCRIPTORS[15],
-            Self::StepMarker => &DESCRIPTORS[16],
-            Self::Eraser => &DESCRIPTORS[17],
+            Self::Laser => &DESCRIPTORS[16],
+            Self::StepMarker => &DESCRIPTORS[17],
+            Self::Eraser => &DESCRIPTORS[18],
         }
     }
 

@@ -3,23 +3,30 @@ pub(in crate::input::state) mod caret_edit;
 mod panels;
 mod text_input;
 
+use crate::input::Modifiers;
 use crate::input::events::Key;
 
-use super::super::{DrawingState, InputState, interaction};
+use super::super::{InputState, interaction};
 
 impl InputState {
+    pub(crate) fn note_escape_dismissal(&mut self, now: std::time::Instant) {
+        self.keymap.note_escape_dismissal(now);
+    }
+
+    pub(crate) fn suppress_escape_after_dismissal(&self, now: std::time::Instant) -> bool {
+        self.keymap.suppress_escape_after_dismissal(now)
+    }
+
     pub(in crate::input::state) fn handle_modifier_key_press(&mut self, key: Key) -> bool {
-        match key {
-            Key::Shift => self.modifiers.shift = true,
-            Key::Ctrl => self.modifiers.ctrl = true,
-            Key::Alt => self.modifiers.alt = true,
-            Key::Super => self.modifiers.logo = true,
-            Key::Tab => self.modifiers.tab = true,
+        let press: fn(&mut Modifiers) = match key {
+            Key::Shift => |modifiers| modifiers.shift = true,
+            Key::Ctrl => |modifiers| modifiers.ctrl = true,
+            Key::Alt => |modifiers| modifiers.alt = true,
+            Key::Super => |modifiers| modifiers.logo = true,
+            Key::Tab => |modifiers| modifiers.tab = true,
             _ => return false,
-        }
-        if matches!(self.state, DrawingState::Idle) {
-            self.sync_current_settings_from_active_tool();
-        }
+        };
+        self.update_modifiers(press);
         true
     }
 

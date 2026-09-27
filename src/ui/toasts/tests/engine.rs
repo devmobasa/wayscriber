@@ -92,3 +92,28 @@ fn explicit_toast_action_layout_handoff_preserves_release_target() {
         (true, Some(ToastCommand::Dispatch(Action::ToggleHelp)))
     );
 }
+
+#[test]
+fn capture_toast_fits_its_message_and_both_buttons_on_a_1080p_output() {
+    let engine = UiTextEngine::default();
+    let mut state = crate::input::state::test_support::make_test_input_state();
+    state.set_capture_feedback(
+        Some(std::path::Path::new(
+            "/very/long/absolute/path/Pictures/Wayscriber/screenshot_2026-09-25_213231.png",
+        )),
+        true,
+    );
+
+    let layout = ui_toast_layout(&engine, &state, 1920, 1080).expect("capture toast layout");
+
+    assert_eq!(
+        layout.message, "Saved screenshot_2026-09-25_213231.png · Copied to clipboard",
+        "the whole message fits without ellipsis"
+    );
+    assert!(layout.action_bounds.iter().all(Option::is_some));
+    assert!(
+        layout.bounds.2 < 1920.0 * 0.6,
+        "the toast stays compact: {}",
+        layout.bounds.2
+    );
+}

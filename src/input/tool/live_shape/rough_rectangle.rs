@@ -74,6 +74,7 @@ pub(super) fn fit_rough_rectangle(
             w: (right - left).round() as i32,
             h: (bottom - top).round() as i32,
             fill: false,
+            fill_color: None,
             color,
             thick,
         },

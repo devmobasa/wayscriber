@@ -16,7 +16,6 @@ use crate::input::state::InputState;
 /// keyboard router's precedence order (earlier gets first refusal of a key).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ModalSurface {
-    Tour,
     CommandPalette,
     HelpOverlay,
     RadialMenu,
@@ -29,8 +28,7 @@ pub(crate) enum ModalSurface {
 }
 
 impl ModalSurface {
-    pub(crate) const ALL: [ModalSurface; 10] = [
-        ModalSurface::Tour,
+    pub(crate) const ALL: [ModalSurface; 9] = [
         ModalSurface::CommandPalette,
         ModalSurface::HelpOverlay,
         ModalSurface::RadialMenu,
@@ -44,11 +42,6 @@ impl ModalSurface {
 
     /// Whether opening `self` leaves an open `other` in place. Exclusion is
     /// the default; every entry here is a deliberate pairing.
-    ///
-    /// The tour is deliberately *not* an exception: it consumes every key
-    /// (`tour.rs` swallows the unmatched arm) and covers the overlay, so a
-    /// surface opened underneath it — a toolbar click during the tour reaches
-    /// the openers — would receive neither keyboard nor pointer input.
     fn keeps_open(self, other: ModalSurface) -> bool {
         match (self, other) {
             // The board picker's page rows have their own context menus, so a
@@ -85,9 +78,31 @@ impl ModalSurface {
     ///
     /// The properties panel is deliberately out. It docks beside the canvas
     /// rather than over it, and the canvas stays drawable underneath — so the
-    /// wheel still means what it means everywhere else.
+    /// wheel still means what it means everywhere else. A tick over the panel
+    /// itself steps the row under the pointer; the axis handler routes that
+    /// before it gets here.
     fn owns_wheel(self) -> bool {
         !matches!(self, ModalSurface::PropertiesPanel)
+    }
+
+    /// Whether this surface takes the user's full attention, so the toolbar
+    /// chrome steps aside while it is open.
+    ///
+    /// The GTK and layer-shell toolbars are separate surfaces stacked above
+    /// the overlay, so a centered, dimmed modal drawn on the overlay would
+    /// otherwise sit underneath them (help's title ended up behind the style
+    /// pill). Surfaces anchored at the pointer or beside the toolbar — the
+    /// context and radial menus, the precision entry, the docked properties
+    /// panel — keep the bars.
+    fn hides_toolbar_chrome(self) -> bool {
+        matches!(
+            self,
+            ModalSurface::CommandPalette
+                | ModalSurface::HelpOverlay
+                | ModalSurface::BoardPicker
+                | ModalSurface::FontPicker
+                | ModalSurface::ColorPicker
+        )
     }
 }
 
@@ -95,7 +110,6 @@ impl InputState {
     /// Whether the surface is open right now.
     pub(crate) fn modal_is_open(&self, surface: ModalSurface) -> bool {
         match surface {
-            ModalSurface::Tour => self.tour.is_active(),
             ModalSurface::CommandPalette => self.command_palette.is_open(),
             ModalSurface::HelpOverlay => self.help_overlay.visible,
             ModalSurface::RadialMenu => self.is_radial_menu_open(),
@@ -128,11 +142,6 @@ impl InputState {
     /// drops them.
     pub(crate) fn close_modal(&mut self, surface: ModalSurface) {
         match surface {
-            // Through end_tour, not a bare flag clear: the tour hides pinned
-            // toolbar chrome and end_tour is what restores it. The palette's
-            // old shortcut cleared the flag directly and left the toolbars
-            // hidden.
-            ModalSurface::Tour => self.end_tour(),
             ModalSurface::CommandPalette => {
                 self.command_palette.close();
                 self.clear_command_palette_repeat();
@@ -193,8 +202,7 @@ impl InputState {
     /// had drifted: the font picker and the precise-entry popup were both
     /// missing, so a selector opened over one of them hid it and left it to
     /// reappear when the selector closed. Going through the registry also means
-    /// each surface is dismissed by its own closer — the tour used to be a bare
-    /// flag clear here, which left the toolbar chrome it hides still hidden.
+    /// each surface is dismissed by its own closer.
     pub(crate) fn prepare_for_screen_modal_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.cancel_active_interaction_with(measurer);
         for surface in ModalSurface::ALL {
@@ -231,6 +239,14 @@ impl InputState {
                 .any(|surface| surface.blocks_canvas_key_repeat() && self.modal_is_open(surface))
     }
 
+    /// Whether a canvas press would only close an open popup. The properties
+    /// panel and the context menu both spend the first press outside them on
+    /// dismissing themselves, so while one is open the canvas draws nothing
+    /// and a tool's cursor preview would promise a stroke that never comes.
+    pub(crate) fn canvas_press_dismisses_popup(&self) -> bool {
+        self.is_properties_panel_open() || self.is_context_menu_open()
+    }
+
     /// Whether an open surface claims the wheel, so an axis frame must not
     /// fall through to the canvas tool behind it.
     ///
@@ -246,6 +262,21 @@ impl InputState {
             || ModalSurface::ALL
                 .into_iter()
                 .any(|surface| surface.owns_wheel() && self.modal_is_open(surface))
+    }
+
+    /// Whether an open full-attention modal wants the toolbar chrome hidden.
+    ///
+    /// Derived, never stored: the backend hides the bars while this holds and
+    /// shows them again afterwards, and the toolbar preferences (pin,
+    /// minimize, position, open popovers) are never written, so closing the
+    /// modal brings the bars back exactly as they were.
+    pub(crate) fn modal_hides_toolbar_chrome(&self) -> bool {
+        // The shortcut-capture prompt belongs to the palette even when the
+        // palette itself has closed behind it.
+        self.command_palette_is_engaged()
+            || ModalSurface::ALL
+                .into_iter()
+                .any(|surface| surface.hides_toolbar_chrome() && self.modal_is_open(surface))
     }
 
     /// Whether either screen-region modal — the eyedropper or the generalized
@@ -346,6 +377,7 @@ mod wheel_tests {
                 w: 10,
                 h: 10,
                 fill: false,
+                fill_color: None,
                 color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
                 thick: 2.0,
             });
@@ -354,5 +386,103 @@ mod wheel_tests {
 
         assert!(state.is_properties_panel_open());
         assert!(!state.modal_owns_wheel());
+    }
+
+    #[test]
+    fn a_popup_a_canvas_click_would_only_dismiss_hides_the_tool_preview() {
+        let measurer = crate::draw::TextMeasurer::default();
+        let mut state = make_test_input_state();
+        assert!(!state.canvas_press_dismisses_popup());
+        let id = state
+            .boards
+            .active_frame_mut()
+            .add_shape(crate::draw::Shape::Rect {
+                x: 0,
+                y: 0,
+                w: 10,
+                h: 10,
+                fill: false,
+                fill_color: None,
+                color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+                thick: 2.0,
+            });
+        state.set_selection(vec![id]);
+
+        assert!(state.show_properties_panel_with(&measurer));
+        assert!(state.canvas_press_dismisses_popup());
+
+        state.close_properties_panel();
+        assert!(!state.canvas_press_dismisses_popup());
+    }
+}
+
+#[cfg(test)]
+mod toolbar_chrome_tests {
+    use crate::draw::TextMeasurer;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn full_attention_modals_hide_the_toolbar_without_touching_its_preferences() {
+        let measurer = TextMeasurer::default();
+        let mut state = make_test_input_state();
+        let before = (
+            state.toolbar_top_visible(),
+            state.toolbar_top_pinned(),
+            state.toolbar_top_minimized(),
+            state.toolbar_top_menu(),
+        );
+        assert!(!state.modal_hides_toolbar_chrome(), "nothing is open");
+
+        state.toggle_command_palette();
+        assert!(state.modal_hides_toolbar_chrome(), "command palette");
+        state.toggle_command_palette();
+
+        state.toggle_help_overlay();
+        assert!(state.modal_hides_toolbar_chrome(), "help overlay");
+        state.toggle_help_overlay();
+
+        state.open_board_picker_with_measurer(&measurer);
+        assert!(state.modal_hides_toolbar_chrome(), "board picker");
+        state.close_board_picker();
+
+        state.open_font_picker();
+        assert!(state.modal_hides_toolbar_chrome(), "font picker");
+        state.close_font_picker();
+
+        state.open_color_picker_popup();
+        assert!(state.modal_hides_toolbar_chrome(), "colour picker");
+        state.close_color_picker_popup(false);
+
+        assert!(!state.modal_hides_toolbar_chrome(), "every modal closed");
+        assert_eq!(
+            (
+                state.toolbar_top_visible(),
+                state.toolbar_top_pinned(),
+                state.toolbar_top_minimized(),
+                state.toolbar_top_menu(),
+            ),
+            before,
+            "the bars come back exactly as they were"
+        );
+    }
+
+    #[test]
+    fn pointer_anchored_surfaces_and_the_tour_keep_the_toolbar() {
+        let mut state = make_test_input_state();
+
+        state.open_context_menu(
+            (40, 40),
+            Vec::new(),
+            crate::input::state::ContextMenuKind::Canvas,
+            None,
+        );
+        assert!(state.is_context_menu_open());
+        assert!(!state.modal_hides_toolbar_chrome(), "context menu");
+        state.close_context_menu();
+
+        state.open_radial_menu(40.0, 40.0);
+        assert!(state.is_radial_menu_open());
+        assert!(!state.modal_hides_toolbar_chrome(), "radial menu");
+        state.close_radial_menu();
     }
 }

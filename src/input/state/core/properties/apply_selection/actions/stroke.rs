@@ -43,7 +43,7 @@ impl InputState {
                     strength: thick, ..
                 }
                 | Shape::MarkerStroke { thick, .. } => {
-                    let next = (*thick + delta).clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+                    let next = crate::domain::step_stroke_thickness(*thick, delta);
                     if (next - *thick).abs() > f64::EPSILON {
                         *thick = next;
                         true
@@ -88,5 +88,27 @@ impl InputState {
         );
 
         self.report_selection_apply_result(result, "thickness")
+    }
+}
+
+/// Sets a stroke's width to `target`: whether it changed, or `None` for a
+/// shape without one.
+pub(super) fn set_thickness(shape: &mut Shape, target: f64) -> Option<bool> {
+    match shape {
+        Shape::Freehand { thick, .. }
+        | Shape::Line { thick, .. }
+        | Shape::Rect { thick, .. }
+        | Shape::Ellipse { thick, .. }
+        | Shape::Polygon { thick, .. }
+        | Shape::Arrow { thick, .. }
+        | Shape::BlurRect {
+            strength: thick, ..
+        }
+        | Shape::MarkerStroke { thick, .. } => {
+            let changed = (*thick - target).abs() > f64::EPSILON;
+            *thick = target;
+            Some(changed)
+        }
+        _ => None,
     }
 }

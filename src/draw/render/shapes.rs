@@ -121,10 +121,12 @@ pub(super) fn render_shape_with_cache(
             w,
             h,
             fill,
+            fill_color,
             color,
             thick,
         } => {
-            render_rect(ctx, *x, *y, *w, *h, *fill, *color, *thick);
+            let paint = fill.then(|| fill_color.unwrap_or(*color));
+            render_rect(ctx, *x, *y, *w, *h, paint, *color, *thick);
         }
         Shape::Ellipse {
             cx,
@@ -132,19 +134,23 @@ pub(super) fn render_shape_with_cache(
             rx,
             ry,
             fill,
+            fill_color,
             color,
             thick,
         } => {
-            render_ellipse(ctx, *cx, *cy, *rx, *ry, *fill, *color, *thick);
+            let paint = fill.then(|| fill_color.unwrap_or(*color));
+            render_ellipse(ctx, *cx, *cy, *rx, *ry, paint, *color, *thick);
         }
         Shape::Polygon {
             points,
             fill,
+            fill_color,
             color,
             thick,
             ..
         } => {
-            render_polygon(ctx, points, *fill, *color, *thick);
+            let paint = fill.then(|| fill_color.unwrap_or(*color));
+            render_polygon(ctx, points, paint, *color, *thick);
         }
         Shape::Arrow {
             x1,

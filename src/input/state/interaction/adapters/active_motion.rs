@@ -94,10 +94,21 @@ pub(crate) fn handle_active_motion(
         ));
     }
 
-    if let DrawingState::MovingSelection { last_x, last_y, .. } = &state.state {
+    if let DrawingState::MovingSelection {
+        grab,
+        last_x,
+        last_y,
+        ..
+    } = &mut state.state
+    {
+        // The selection holds still until the pointer leaves the click
+        // radius, so neither a click nor either half of a double-click nudges
+        // it; past the radius it catches up and follows the pointer exactly.
+        let dragging = grab.track(canvas.x(), canvas.y());
         let dx = canvas.x() - *last_x;
         let dy = canvas.y() - *last_y;
-        if (dx != 0 || dy != 0)
+        if dragging
+            && (dx != 0 || dy != 0)
             && state.apply_translation_to_selection_with(measurer, dx, dy)
             && let DrawingState::MovingSelection {
                 last_x,
@@ -242,5 +253,8 @@ fn motion_sample_size(state: &InputState, tool: Tool) -> Option<f64> {
         ToolMotionBehavior::AccumulatePath {
             size_source: ToolMotionSizeSource::EraserSize,
         } => Some(state.style.eraser_size),
+        ToolMotionBehavior::AccumulatePath {
+            size_source: ToolMotionSizeSource::LaserWidth,
+        } => Some(state.laser_style().width),
     }
 }

@@ -53,6 +53,7 @@ pub(super) fn fit_triangle(
                 .map(|(x, y)| (x.round() as i32, y.round() as i32))
                 .to_vec(),
             fill: false,
+            fill_color: None,
             color,
             thick,
         },

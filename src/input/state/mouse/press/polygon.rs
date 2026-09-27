@@ -18,7 +18,7 @@ impl InputState {
         self.sync_current_settings_for_tool(Tool::FreeformPolygon);
         let color = self.color_for_tool(Tool::FreeformPolygon);
         let thick = self.thickness_for_tool(Tool::FreeformPolygon);
-        self.clear_selection();
+        self.clear_selection_with(measurer);
         self.selection_interaction
             .record_polygon_click(x, y, Instant::now());
         self.state = DrawingState::BuildingPolygon {
@@ -134,6 +134,7 @@ impl InputState {
             kind: PolygonKind::Freeform,
             points,
             fill,
+            fill_color: None,
             color,
             thick,
         };

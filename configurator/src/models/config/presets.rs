@@ -6,7 +6,7 @@ use super::super::fields::{
 use super::super::util::format_float;
 use super::parse::{parse_optional_f64, parse_required_f64};
 use wayscriber::config::{
-    Config, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig,
+    ColorSpec, Config, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig,
     PresetToolStatesConfig, ToolPresetConfig,
 };
 use wayscriber::domain::Tool;
@@ -22,6 +22,9 @@ pub struct PresetSlotDraft {
     pub eraser_mode: PresetEraserModeOption,
     pub marker_opacity: String,
     pub fill_enabled: OverrideOption,
+    /// Carried through unedited: set when a preset is saved from a shape
+    /// filled with its own color, so editing the slot here keeps it.
+    pub fill_color: Option<ColorSpec>,
     pub font_size: String,
     pub text_background_enabled: OverrideOption,
     pub arrow_length: String,
@@ -46,6 +49,7 @@ impl PresetSlotDraft {
                 eraser_mode: PresetEraserModeOption::from_option(preset.eraser_mode),
                 marker_opacity: preset.marker_opacity.map(format_float).unwrap_or_default(),
                 fill_enabled: OverrideOption::from_option(preset.fill_enabled),
+                fill_color: preset.fill_color.clone(),
                 font_size: preset.font_size.map(format_float).unwrap_or_default(),
                 text_background_enabled: OverrideOption::from_option(
                     preset.text_background_enabled,
@@ -77,6 +81,7 @@ impl PresetSlotDraft {
             eraser_mode: PresetEraserModeOption::Default,
             marker_opacity: String::new(),
             fill_enabled: OverrideOption::Default,
+            fill_color: None,
             font_size: String::new(),
             text_background_enabled: OverrideOption::Default,
             arrow_length: String::new(),
@@ -174,6 +179,7 @@ impl PresetSlotDraft {
             eraser_mode: self.eraser_mode.to_option(),
             marker_opacity,
             fill_enabled: self.fill_enabled.to_option(),
+            fill_color: self.fill_color.clone(),
             font_size,
             text_background_enabled: self.text_background_enabled.to_option(),
             arrow_length,

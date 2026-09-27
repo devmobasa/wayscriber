@@ -13,7 +13,7 @@ use crate::ui::primitives::{
     checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, ellipsize_to_fit_with_engine,
     text_extents_for_with_engine,
 };
-use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
+use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
@@ -57,11 +57,8 @@ const BUTTON_SECONDARY_BORDER: Rgba = (0.4, 0.4, 0.45, 0.8);
 const BUTTON_SECONDARY_BORDER_HOVER: Rgba = (0.5, 0.5, 0.55, 0.9);
 /// White glow behind hovered secondary buttons.
 const BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.1);
-const TOOLTIP_PADDING_X: f64 = 8.0;
-const TOOLTIP_PADDING_Y: f64 = 5.0;
 const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
 const TOOLTIP_SCREEN_MARGIN: f64 = 6.0;
-const TOOLTIP_SHADOW_OFFSET: f64 = 2.0;
 /// Left inset of the title, mirrored on the right as its trim margin.
 const TITLE_INSET: f64 = 20.0;
 
@@ -120,8 +117,8 @@ pub(crate) fn color_picker_popup_visual_geometry_with_engine(
             (
                 x,
                 y,
-                width + TOOLTIP_SHADOW_OFFSET,
-                height + TOOLTIP_SHADOW_OFFSET,
+                width + crate::ui::tooltip::TOOLTIP_PAINT_OUTSET,
+                height + crate::ui::tooltip::TOOLTIP_PAINT_OUTSET,
             ),
         );
     }

@@ -295,6 +295,14 @@ impl WaylandState {
         {
             return Some(hint.icon());
         }
+        if matches!(self.input_state.state, DrawingState::Idle)
+            && let Some(press) = self.onboarding_card_press_at(f64::from(mx), f64::from(my))
+        {
+            return Some(match press.action() {
+                Some(_) => CursorIcon::Pointer,
+                None => CursorIcon::Default,
+            });
+        }
         None
     }
 
@@ -462,6 +470,7 @@ mod tests {
             ),
             (
                 DrawingState::MovingSelection {
+                    grab: crate::input::state::SelectionGrab::new(0, 0, 0),
                     last_x: 0,
                     last_y: 0,
                     snapshots: Vec::new(),

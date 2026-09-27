@@ -183,6 +183,7 @@ define_action_binding_accessors! {
     SelectBlurTool => tools.select_blur_tool,
     SelectSpotlightTool => tools.select_spotlight_tool,
     SelectHighlightTool => tools.select_highlight_tool,
+    SelectLaserTool => tools.select_laser_tool,
     ToggleHighlightTool => tools.toggle_highlight_tool,
     IncreaseFontSize => tools.increase_font_size,
     DecreaseFontSize => tools.decrease_font_size,

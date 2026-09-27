@@ -72,7 +72,9 @@ pub(crate) fn draw_segmented_text(
     for (text, color) in segments {
         ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
         let extents = engine.draw_baseline(ctx, style, text, cursor_x, baseline, None);
-        cursor_x += extents.width();
+        // Advance, not ink width: segments such as "   •   " carry spacing
+        // that the ink box drops, which let the next segment overlap.
+        cursor_x += extents.x_advance();
     }
 }
 

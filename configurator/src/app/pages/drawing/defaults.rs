@@ -72,6 +72,12 @@ pub(super) fn build(page: &mut PageBuilder) {
             |app| app.draft.drawing_shape_recognition_grid_snap,
             |value| Message::ToggleChanged(ToggleField::DrawingShapeRecognitionGridSnap, value),
         )
+        .switch_row(
+            "Name recognized Shape Pen shapes",
+            "A brief chip beside each recognized shape names it and the undo shortcut that keeps the ink",
+            |app| app.draft.drawing_shape_recognition_feedback,
+            |value| Message::ToggleChanged(ToggleField::DrawingShapeRecognitionFeedback, value),
+        )
         .entry_row_validated(
             "Undo stack limit",
             |app| app.draft.drawing_undo_stack_limit.clone(),

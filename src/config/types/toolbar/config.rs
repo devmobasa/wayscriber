@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, TopDisplayMode, ZoomChipDisplay,
+    ToolbarRebindModifier, ToolbarStrokeControls, TopDisplayMode, ZoomChipDisplay,
 };
 
 /// Toolbar visibility and pinning configuration.
@@ -93,7 +93,8 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_step_section")]
     pub show_step_section: bool,
 
-    /// Keep text controls visible even when text is not active
+    /// Keep text controls visible on every tool when `context_aware_ui` is off.
+    /// Context-aware UI shows them only for tools that draw text.
     #[serde(default = "default_show_text_controls")]
     pub show_text_controls: bool,
 
@@ -113,7 +114,8 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_preset_toasts")]
     pub show_preset_toasts: bool,
 
-    /// Dim the top strip after a few seconds without drawing
+    /// Hide the top strip after a few seconds unused; it reappears when the
+    /// pointer comes near it
     #[serde(default = "default_idle_fade")]
     pub idle_fade: bool,
 
@@ -136,6 +138,11 @@ pub struct ToolbarConfig {
     /// Modifier chord used to edit a clicked control's keyboard shortcut.
     #[serde(default)]
     pub rebind_modifier: ToolbarRebindModifier,
+
+    /// How the style pill shows pen smoothing and Shape Pen sensitivity
+    /// ("panel", "meter", "stepper")
+    #[serde(default)]
+    pub stroke_controls: ToolbarStrokeControls,
 }
 
 impl Default for ToolbarConfig {
@@ -171,6 +178,7 @@ impl Default for ToolbarConfig {
             top_offset_y: 0.0,
             force_inline: false,
             rebind_modifier: ToolbarRebindModifier::default(),
+            stroke_controls: ToolbarStrokeControls::default(),
         }
     }
 }

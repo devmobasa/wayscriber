@@ -242,6 +242,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
             thick: 2.0,
         });

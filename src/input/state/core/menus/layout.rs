@@ -5,9 +5,13 @@ use super::types::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuLayout, ContextMenuLevel, ContextMenuState,
     SubmenuSide,
 };
+use crate::ui::theme::overlay::{NAV_HINT_MENU, NAV_HINT_MENU_SUBMENUS, NAV_HINT_SUBMENU};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 const FONT_SIZE: f64 = 14.0;
+/// The key-hint footer sits inside the menu box, at a readable size.
+const FOOTER_FONT_SIZE: f64 = 12.0;
+const FOOTER_HEIGHT: f64 = 26.0;
 const ROW_HEIGHT: f64 = 24.0;
 const PADDING_X: f64 = 12.0;
 const PADDING_Y: f64 = 8.0;
@@ -27,6 +31,14 @@ impl InputState {
     /// Returns the cached layout of the open submenu, if any.
     pub fn context_submenu_layout(&self) -> Option<&ContextMenuLayout> {
         self.context_menu.submenu_layout()
+    }
+
+    /// The key hint the open menu's footer shows.
+    pub fn context_menu_footer_hint(&self) -> &'static str {
+        context_menu_footer_hint(
+            &self.context_menu_entries(),
+            self.context_submenu_is_active(),
+        )
     }
 
     /// The side submenus open on for the current layout. Arrows on parent
@@ -64,7 +76,9 @@ impl InputState {
             return;
         };
         let anchor = *anchor;
-        let Some(mut root) = measure_menu(engine, &self.context_menu_entries()) else {
+        let entries = self.context_menu_entries();
+        let footer_hints = context_menu_footer_hints(&entries);
+        let Some(mut root) = measure_menu(engine, &entries, footer_hints) else {
             self.context_menu.clear_layout();
             return;
         };
@@ -90,7 +104,7 @@ impl InputState {
         let pane = self.context_submenu().and_then(|submenu| {
             Some((
                 submenu,
-                measure_menu(engine, &self.context_submenu_entries())?,
+                measure_menu(engine, &self.context_submenu_entries(), &[])?,
             ))
         });
         // Without an open pane, predict the side from one as wide as the menu
@@ -181,22 +195,49 @@ impl InputState {
     }
 }
 
-/// Sizes a menu for its entries, placed at the origin.
-fn measure_menu(engine: &UiTextEngine, entries: &[ContextMenuEntry]) -> Option<ContextMenuLayout> {
+/// Every key hint a root menu with these entries can show in its footer.
+/// The box is sized for the widest, so opening a submenu never resizes it.
+fn context_menu_footer_hints(entries: &[ContextMenuEntry]) -> &'static [&'static str] {
+    if entries.iter().any(|entry| entry.submenu.is_some()) {
+        &[NAV_HINT_MENU_SUBMENUS, NAV_HINT_SUBMENU]
+    } else {
+        &[NAV_HINT_MENU]
+    }
+}
+
+/// The key hint a root menu's footer shows right now.
+fn context_menu_footer_hint(entries: &[ContextMenuEntry], submenu_active: bool) -> &'static str {
+    if submenu_active {
+        NAV_HINT_SUBMENU
+    } else if entries.iter().any(|entry| entry.submenu.is_some()) {
+        NAV_HINT_MENU_SUBMENUS
+    } else {
+        NAV_HINT_MENU
+    }
+}
+
+/// Sizes a menu for its entries, placed at the origin. A root menu passes the
+/// footer hints it may show; a submenu passes none and gets no footer.
+fn measure_menu(
+    engine: &UiTextEngine,
+    entries: &[ContextMenuEntry],
+    footer_hints: &[&str],
+) -> Option<ContextMenuLayout> {
     if entries.is_empty() {
         return None;
     }
-    let text_style = UiTextStyle {
+    let style = |size| UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: FONT_SIZE,
+        size,
     };
-    let text_width = |text: &str| {
+    let measured_width = |size, text: &str| {
         engine
-            .measure(text_style, text, None)
+            .measure(style(size), text, None)
             .map_or(0.0, |extents| extents.width())
     };
+    let text_width = |text: &str| measured_width(FONT_SIZE, text);
     let label_width = entries
         .iter()
         .map(|entry| text_width(&entry.label))
@@ -207,13 +248,26 @@ fn measure_menu(engine: &UiTextEngine, entries: &[ContextMenuEntry]) -> Option<C
         .map(text_width)
         .fold(0.0, f64::max);
 
+    let footer_width = footer_hints
+        .iter()
+        .map(|hint| measured_width(FOOTER_FONT_SIZE, hint))
+        .fold(0.0, f64::max);
+    let footer_height = if footer_hints.is_empty() {
+        0.0
+    } else {
+        FOOTER_HEIGHT
+    };
+    let rows_width = label_width + GAP_BETWEEN_COLUMNS + shortcut_width + ARROW_WIDTH;
+
     Some(ContextMenuLayout {
         origin_x: 0.0,
         origin_y: 0.0,
-        width: PADDING_X * 2.0 + label_width + GAP_BETWEEN_COLUMNS + shortcut_width + ARROW_WIDTH,
-        height: PADDING_Y * 2.0 + ROW_HEIGHT * entries.len() as f64,
+        width: PADDING_X * 2.0 + rows_width.max(footer_width),
+        height: PADDING_Y * 2.0 + ROW_HEIGHT * entries.len() as f64 + footer_height,
         row_height: ROW_HEIGHT,
         font_size: FONT_SIZE,
+        footer_height,
+        footer_font_size: FOOTER_FONT_SIZE,
         padding_x: PADDING_X,
         padding_y: PADDING_Y,
         shortcut_width,
@@ -223,7 +277,7 @@ fn measure_menu(engine: &UiTextEngine, entries: &[ContextMenuEntry]) -> Option<C
 
 /// The number of rows a menu was measured for.
 fn row_count(layout: &ContextMenuLayout) -> f64 {
-    ((layout.height - layout.padding_y * 2.0) / layout.row_height).round()
+    ((layout.height - layout.padding_y * 2.0 - layout.footer_height) / layout.row_height).round()
 }
 
 /// Submenus open to the right, or to the left when the output edge is in the

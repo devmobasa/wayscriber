@@ -57,6 +57,43 @@ impl HitRegion {
     pub fn contains(&self, x: f64, y: f64) -> bool {
         rect_contains_with_min_target(self.rect, x, y)
     }
+
+    /// Whether (x, y) lands on the drawn rect itself, before any minimum-size
+    /// inflation.
+    pub fn contains_drawn(&self, x: f64, y: f64) -> bool {
+        let (rx, ry, rw, rh) = self.rect;
+        x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
+    }
+}
+
+/// First result of `probe` for a pointer at (x, y), preferring regions whose
+/// drawn rect holds the point over regions reached only through their inflated
+/// minimum target.
+///
+/// Inflation widens a narrow control into its neighbours. Level-meter bars
+/// abut, so a 14px bar grew 5px over the bar beside it, and topmost-first
+/// resolution let a press painted on one bar activate the next. A visible
+/// target now wins; inflation still widens a small control where nothing is
+/// drawn. Within each pass the regions keep their topmost-first order.
+pub fn find_hit<'a, T>(
+    hits: &'a [HitRegion],
+    x: f64,
+    y: f64,
+    probe: impl Fn(&'a HitRegion) -> Option<T>,
+) -> Option<T> {
+    hits.iter()
+        .filter(|hit| hit.contains_drawn(x, y))
+        .find_map(&probe)
+        .or_else(|| hits.iter().find_map(&probe))
+}
+
+/// Index of the region a pointer at (x, y) resolves to, with the same
+/// drawn-rect preference as [`find_hit`]. Hover, tooltips, and cursor hints
+/// use it so they always name the control a press would activate.
+pub fn resolve_hit_index(hits: &[HitRegion], x: f64, y: f64) -> Option<usize> {
+    hits.iter()
+        .position(|hit| hit.contains_drawn(x, y))
+        .or_else(|| hits.iter().position(|hit| hit.contains(x, y)))
 }
 
 /// Clip a hit region to visible surface content. Small clipped targets are
@@ -132,8 +169,7 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             ToolbarSliderSpec {
                 min,
                 max,
-                step: ToolbarSliderSpec::THICKNESS.step,
-                snap_to_step: ToolbarSliderSpec::THICKNESS.snap_to_step,
+                ..ToolbarSliderSpec::THICKNESS
             },
             hit,
             x,
@@ -143,8 +179,7 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             ToolbarSliderSpec {
                 min,
                 max,
-                step: ToolbarSliderSpec::MARKER_OPACITY.step,
-                snap_to_step: ToolbarSliderSpec::MARKER_OPACITY.snap_to_step,
+                ..ToolbarSliderSpec::MARKER_OPACITY
             },
             hit,
             x,
@@ -367,6 +402,39 @@ mod tests {
         }
     }
 
+    fn click_at(rect: (f64, f64, f64, f64), level: u8) -> HitRegion {
+        HitRegion {
+            rect,
+            ..click(ToolbarEvent::SetPenSmoothing(level))
+        }
+    }
+
+    #[test]
+    fn a_drawn_neighbour_wins_over_an_inflated_overlap() {
+        // Two abutting 14px bars, topmost-first like a surface's regions. The
+        // second bar's 24px target reaches 5px into the first.
+        let hits = [
+            click_at((14.0, 0.0, 14.0, 24.0), 2),
+            click_at((0.0, 0.0, 14.0, 24.0), 1),
+        ];
+
+        let pressed = |x: f64| {
+            find_hit(&hits, x, 12.0, |hit| intent_for_hit(hit, x, 12.0))
+                .map(|(intent, _)| intent.into_event())
+        };
+        assert_eq!(pressed(11.0), Some(ToolbarEvent::SetPenSmoothing(1)));
+        assert_eq!(pressed(16.0), Some(ToolbarEvent::SetPenSmoothing(2)));
+        assert_eq!(resolve_hit_index(&hits, 11.0, 12.0), Some(1));
+    }
+
+    #[test]
+    fn inflation_still_widens_a_lone_small_target() {
+        let hits = [click_at((10.0, 0.0, 14.0, 24.0), 1)];
+
+        assert_eq!(resolve_hit_index(&hits, 6.0, 12.0), Some(0));
+        assert!(find_hit(&hits, 6.0, 12.0, |hit| intent_for_hit(hit, 6.0, 12.0)).is_some());
+    }
+
     fn thickness_slider() -> HitRegion {
         HitRegion {
             focus_id: None,
@@ -465,9 +533,18 @@ mod tests {
         let (press, start_drag) = intent_for_hit(&hit, 200.0, 10.0).expect("press intent");
         let drag = drag_intent_for_hit(&hit, 200.0, 10.0).expect("drag intent");
 
+        // The thickness track is curved, so its midpoint is not the linear
+        // midpoint of 10-20; press and drag both follow the spec's curve.
+        let midpoint = ToolbarSliderSpec {
+            min: 10.0,
+            max: 20.0,
+            ..ToolbarSliderSpec::THICKNESS
+        }
+        .value_from_t(0.5);
         assert!(start_drag);
-        assert_set_thickness(press.0, 15.0);
-        assert_set_thickness(drag.0, 15.0);
+        assert!(midpoint < 15.0, "the curve favours the low end: {midpoint}");
+        assert_set_thickness(press.0, midpoint);
+        assert_set_thickness(drag.0, midpoint);
     }
 
     /// The only two phase-sensitive kinds, pinned so the shared mapper cannot

@@ -100,6 +100,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color: state.style.current_color,
             thick: 2.0,
         });

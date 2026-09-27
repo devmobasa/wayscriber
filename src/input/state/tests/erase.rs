@@ -169,6 +169,7 @@ fn erase_stroke_hits_various_shapes() {
                 w: 40,
                 h: 20,
                 fill: false,
+                fill_color: None,
                 color: Color {
                     r: 0.0,
                     g: 0.0,
@@ -186,6 +187,7 @@ fn erase_stroke_hits_various_shapes() {
                 rx: 20,
                 ry: 10,
                 fill: false,
+                fill_color: None,
                 color: Color {
                     r: 0.0,
                     g: 0.0,
@@ -335,6 +337,7 @@ fn spatial_grid_large_tolerance_finds_distant_shapes() {
             w: 10,
             h: 10,
             fill: true,
+            fill_color: None,
             color: Color {
                 r: 0.0,
                 g: 0.0,

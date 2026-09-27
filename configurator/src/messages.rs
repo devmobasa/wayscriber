@@ -16,7 +16,8 @@ use crate::models::{
     SessionCatalogItem, SessionCompressionOption, SessionStorageModeOption, ShortcutManagerFilter,
     ShortcutManagerSort, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
     ToolbarBackendOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, UiTabId, UiThemeOption, ZoomChipDisplayOption,
+    ToolbarRebindModifierOption, ToolbarStrokeControlsOption, UiTabId, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -135,6 +136,7 @@ pub enum Message {
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
     ToolbarZoomChipDisplayChanged(ZoomChipDisplayOption),
     ToolbarRebindModifierChanged(ToolbarRebindModifierOption),
+    ToolbarStrokeControlsChanged(ToolbarStrokeControlsOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideChanged(ToolbarOverrideField, OverrideOption),
     ToolbarItemVisibilityChanged(ToolbarItemId, bool),

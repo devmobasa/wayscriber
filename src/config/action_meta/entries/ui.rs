@@ -327,7 +327,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         ReplayTour,
         "Replay Tour",
         None,
-        "Start the guided tour again",
+        "Run the first-run tour cards again",
         UI,
         true,
         false,

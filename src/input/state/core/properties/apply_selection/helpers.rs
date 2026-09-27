@@ -11,7 +11,7 @@ pub(in crate::input::state::core) struct SelectionApplyResult {
 }
 
 impl InputState {
-    pub(super) fn selection_primary_color(&self) -> Option<Color> {
+    pub(crate) fn selection_primary_color(&self) -> Option<Color> {
         let frame = self.boards.active_frame();
         for id in self.selected_shape_ids() {
             let Some(drawn) = frame.shape(*id) else {
@@ -65,6 +65,11 @@ impl InputState {
         A: FnMut(&Shape) -> bool,
         F: FnMut(&mut Shape) -> bool,
     {
+        // Every selection edit comes through here. A slider drag still in
+        // progress holds snapshots from before it began, so it commits first:
+        // committing after this edit's entry would record its "before" on top
+        // of it, and undoing would walk back through a state never shown.
+        self.finish_properties_slider_drag_with(measurer);
         let ids = self.selected_shape_ids().to_vec();
         let (changed, locked, applicable, effects) =
             crate::input::state::core::editing::CanvasEdit::apply_selection(

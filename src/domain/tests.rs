@@ -119,6 +119,7 @@ fn action_serialization_matches_established_contract() {
         (Action::SelectBlurTool, "select_blur_tool"),
         (Action::SelectSpotlightTool, "select_spotlight_tool"),
         (Action::SelectHighlightTool, "select_highlight_tool"),
+        (Action::SelectLaserTool, "select_laser_tool"),
         (Action::IncreaseFontSize, "increase_font_size"),
         (Action::DecreaseFontSize, "decrease_font_size"),
         (Action::ResetArrowLabelCounter, "reset_arrow_label_counter"),
@@ -273,6 +274,7 @@ fn tool_serialization_matches_established_contract() {
         (Tool::Blur, "blur"),
         (Tool::Marker, "marker"),
         (Tool::Highlight, "highlight"),
+        (Tool::Laser, "laser"),
         (Tool::StepMarker, "step-marker"),
         (Tool::Eraser, "eraser"),
     ]);
@@ -292,6 +294,7 @@ fn tool_serialization_matches_established_contract() {
         (DragTool::Blur, "blur"),
         (DragTool::Marker, "marker"),
         (DragTool::Highlight, "highlight"),
+        (DragTool::Laser, "laser"),
         (DragTool::StepMarker, "step-marker"),
         (DragTool::Eraser, "eraser"),
     ]);
@@ -310,6 +313,7 @@ fn tool_serialization_matches_established_contract() {
         (DragBindableTool::Blur, "blur"),
         (DragBindableTool::Marker, "marker"),
         (DragBindableTool::Highlight, "highlight"),
+        (DragBindableTool::Laser, "laser"),
         (DragBindableTool::StepMarker, "step-marker"),
         (DragBindableTool::Eraser, "eraser"),
     ]);

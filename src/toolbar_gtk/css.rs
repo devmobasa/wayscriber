@@ -34,9 +34,23 @@ window.wayscriber-toolbar {{
     padding: {pad_std}px {pad_panel_h}px;
 }}
 
-/* Minimized restore tabs hug the button, like the builtin 64x24 tab. */
+/* Minimized restore tabs hug the button, like the builtin tab. */
 .wayscriber-toolbar .panel.minimized {{
     padding: 0;
+}}
+/* The restore tab is raised and outlined so it stands out over busy
+   content, mirroring the builtin RestoreTab body. */
+.wayscriber-toolbar button.restore-tab {{
+    background-color: {button_hover};
+    border: {hairline}px solid {label_hint};
+    border-radius: {radius_panel}px;
+}}
+.wayscriber-toolbar button.restore-tab:hover {{
+    background-color: {pin_hover};
+    border-color: {text_primary};
+}}
+.wayscriber-toolbar label.restore-tab-label {{
+    font-weight: {weight_bold};
 }}
 
 /* Top-strip islands: detached pills sharing the panel treatment. The
@@ -131,6 +145,21 @@ window.wayscriber-toolbar {{
     background-color: {close_hover};
 }}
 
+/* Preset slots: an empty slot's number is muted until hovered, and a filled
+   slot keeps its number as a corner caption (the builtin paints both the same
+   way in `render/paint.rs`). */
+.wayscriber-toolbar button.preset.empty {{
+    color: {label_hint};
+}}
+.wayscriber-toolbar button.preset.empty:hover {{
+    color: {text_primary};
+}}
+.wayscriber-toolbar label.preset-number {{
+    color: {label_hint};
+    font-size: {font_swatch_key}px;
+    font-weight: {weight_bold};
+}}
+
 /* Swatch buttons paint their fill in a DrawingArea; the button itself
    stays transparent so only the drawn swatch shows. */
 .wayscriber-toolbar button.swatch {{
@@ -179,6 +208,52 @@ window.wayscriber-toolbar {{
 .wayscriber-toolbar label.hint {{
     color: {label_hint};
     font-size: {font_small}px;
+}}
+/* Style-pill level meters and tool steppers: a caption naming the setting,
+   then (meters) one transparent button per level holding a slim bar,
+   accent-filled up to the current level (the builtin draws them in
+   `view/top/meter.rs` and `view/top/stepper.rs`). The bar keeps the slider
+   track's height and color so the two read alike. The Pen feel panel names
+   its sections with the same caption style. */
+.wayscriber-toolbar label.meter-caption,
+.wayscriber-toolbar label.stepper-caption {{
+    color: {label_hint};
+    font-size: {font_tooltip}px;
+}}
+/* The Pen feel panel's level name, right of its section name (the builtin
+   draws it bold at the caption size in `view/top/pen_feel.rs`). */
+.wayscriber-toolbar label.pen-feel-value {{
+    color: {text_primary};
+    font-size: {font_tooltip}px;
+    font-weight: {weight_bold};
+}}
+.wayscriber-toolbar button.meter-bar {{
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+}}
+.wayscriber-toolbar button.meter-bar box.meter-fill {{
+    background-color: {track};
+    border-radius: {meter_bar_radius}px;
+    min-height: {meter_bar_h}px;
+}}
+.wayscriber-toolbar button.meter-bar:hover box.meter-fill {{
+    background-color: {track_hover};
+}}
+.wayscriber-toolbar button.meter-bar.filled box.meter-fill {{
+    background-color: {accent};
+}}
+.wayscriber-toolbar button.meter-bar:disabled box.meter-fill {{
+    opacity: 0.35;
+}}
+/* Stepper readout in the primary foreground at the weight of the numeral
+   buttons beside it (the builtin draws it in `view/top/stepper.rs`). */
+.wayscriber-toolbar label.stepper-value {{
+    color: {text_primary};
+    font-weight: {weight_semibold};
 }}
 .wayscriber-toolbar label.shortcut-badge {{
     color: {badge_text};
@@ -332,6 +407,10 @@ tooltip.{capture_transparent_class} {{
         field_bg = v.field_bg,
         field_border = v.field_border,
         scrollbar_slider = v.scrollbar_slider,
+        track = v.track,
+        track_hover = v.track_hover,
+        meter_bar_h = crate::ui::theme::css::scaled_px(8.0, scale),
+        meter_bar_radius = crate::ui::theme::css::scaled_px(4.0, scale),
         capture_transparent_class = CAPTURE_TRANSPARENT_CLASS,
         radius_panel = v.radius_panel,
         radius_button = v.radius_button,
@@ -426,6 +505,14 @@ mod tests {
             ),
             ("COLOR_TOOLTIP_BORDER", rgba_css(t::COLOR_TOOLTIP_BORDER)),
             ("COLOR_DIVIDER", rgba_css(t::COLOR_DIVIDER)),
+            (
+                "COLOR_TRACK_BACKGROUND",
+                rgba_css(t::COLOR_TRACK_BACKGROUND),
+            ),
+            (
+                "COLOR_METER_TRACK_HOVER",
+                rgba_css(t::COLOR_METER_TRACK_HOVER),
+            ),
             // Routed through rgba_css_compact (two-decimal alpha; these were
             // hand-written literals before M1).
             (

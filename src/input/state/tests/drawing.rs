@@ -500,6 +500,7 @@ fn alt_click_selects_filled_polygon_interior() {
         kind: crate::draw::PolygonKind::Triangle,
         points: vec![(10, 10), (40, 10), (25, 40)],
         fill: true,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

@@ -1,6 +1,6 @@
 use super::base::{DrawingState, InputState};
 use super::history_limits::HistoryMode;
-use crate::draw::TextMeasurer;
+use crate::draw::{Frame, TextMeasurer};
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
 use std::time::Instant;
@@ -248,14 +248,10 @@ impl InputState {
         let Some(mode) = self.history_limits.due_mode(now) else {
             return false;
         };
-        let action = match mode {
-            HistoryMode::Undo => self.boards.active_frame_mut().undo_last(),
-            HistoryMode::Redo => self.boards.active_frame_mut().redo_last(),
+        let did_step = match mode {
+            HistoryMode::Undo => self.step_history_with(measurer, Frame::undo_last),
+            HistoryMode::Redo => self.step_history_with(measurer, Frame::redo_last),
         };
-        let did_step = action.is_some();
-        if let Some(action) = action {
-            self.apply_action_side_effects_with(measurer, &action);
-        }
         self.history_limits.finish_due_step(now, did_step);
         if self.history_limits.has_pending() {
             self.needs_redraw = true;

@@ -263,12 +263,19 @@ fn advance_post_dispatch_state(
     if state.input_state.ocr_scan_due(Instant::now()) {
         state.input_state.needs_redraw = true;
     }
+    if state.input_state.laser_ink_due(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
+    if state.input_state.status_tooltip_due(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
     state.input_state.tick_radial_menu_paint(Instant::now());
     state.input_state.tick_context_menu_hover(Instant::now());
     capture::handle_pending_actions(state, qh);
     if break_on_requested_exit(state) {
         return true;
     }
+    state.focus.expire_keyboard_reclaim(Instant::now());
     state.sync_overlay_interactivity();
     state.apply_onboarding_hints();
     persist_post_dispatch_state(state);
@@ -316,15 +323,24 @@ fn event_loop_timeout(
     let animation_timeout = min_timeout(
         min_timeout(
             min_timeout(
-                state.ui_animation.timeout(now),
-                state.top_strip_fade_timeout(now),
+                min_timeout(
+                    state.ui_animation.timeout(now),
+                    state.top_strip_fade_timeout(now),
+                ),
+                state.inline_toolbar_tooltip_timeout(now),
             ),
-            state.inline_toolbar_tooltip_timeout(now),
+            state.input_state.ocr_scan_wake_after(now),
         ),
-        state.input_state.ocr_scan_wake_after(now),
+        min_timeout(
+            state.input_state.laser_ink_wake_after(now),
+            state.input_state.status_hud.tooltip_wake_after(now),
+        ),
     );
     let autosave_timeout = session_save::autosave_timeout(state, now);
-    let focus_exit_timeout = state.focus.exit_timeout(now);
+    let focus_exit_timeout = min_timeout(
+        state.focus.exit_timeout(now),
+        state.focus.keyboard_reclaim_timeout(now),
+    );
     let base_timeout = match render_wait {
         RenderWait::Blocked => min_timeout(autosave_timeout, focus_exit_timeout),
         RenderWait::FrameCap(frame_cap_timeout) => {

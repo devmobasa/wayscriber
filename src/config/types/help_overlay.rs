@@ -69,7 +69,9 @@ fn default_help_padding() -> f64 {
 }
 
 fn default_help_bg_color() -> [f64; 4] {
-    [0.09, 0.1, 0.13, 0.92]
+    // Opaque so the shortcut rows never pick up the canvas behind the panel;
+    // the full-screen dim scrim around it stays translucent.
+    [0.09, 0.1, 0.13, 1.0]
 }
 
 fn default_help_border_color() -> [f64; 4] {

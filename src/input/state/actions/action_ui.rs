@@ -115,9 +115,7 @@ impl InputState {
                 true
             }
             Action::OpenContextMenu => {
-                if !self.zoom_active() {
-                    self.toggle_context_menu_via_keyboard_with(resources.measurer);
-                }
+                self.toggle_context_menu_via_keyboard_with(resources.measurer);
                 true
             }
             Action::ToggleSelectionProperties => {
@@ -167,7 +165,7 @@ impl InputState {
                 true
             }
             Action::ReplayTour => {
-                self.start_tour_replay_with_resources(resources);
+                self.set_pending_backend_action(PendingBackendAction::ReplayFirstRunTour);
                 true
             }
             Action::ToggleCommandPalette => {

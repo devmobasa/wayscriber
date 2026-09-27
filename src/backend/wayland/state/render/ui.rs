@@ -24,6 +24,7 @@ impl WaylandState {
     fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
         if !render_ui {
             self.input_state.clear_context_menu_layout();
+            self.onboarding_card.set_layout(None);
             return;
         }
         let capture_picker = self.capture_picker_chrome_suppressed();
@@ -33,9 +34,14 @@ impl WaylandState {
         self.render_cursor_chrome(ctx, width, height, capture_picker);
         self.render_mode_badges(ctx, width, height, capture_picker);
         self.render_status_surfaces(ctx, width, height, capture_picker);
+        // Inline bars stand in for the layer-shell toolbar surfaces, but every
+        // popup and modal below must paint above them.
+        self.render_inline_toolbar_chrome(ctx, capture_picker);
+        // Below the pickers: the color picker the panel opens has to cover it.
+        self.render_properties_panel(ctx, width, height, capture_picker);
         self.render_help_and_pickers(ctx, width, height, capture_picker);
         self.render_radial_menu_and_feedback(ctx, width, height, capture_picker);
-        self.render_properties_and_context(ctx, width, height, capture_picker);
+        self.render_context_menu(ctx, capture_picker);
         self.render_inline_and_modal_ui(ctx, width, height, capture_picker);
     }
 
@@ -173,6 +179,9 @@ impl WaylandState {
                 width,
                 height,
             );
+            if let Some(tooltip) = self.input_state.status_hud.tooltip() {
+                crate::ui::draw_tooltip(self.render.ui_text(), ctx, tooltip.text, tooltip.rect);
+            }
         }
         if !capture_picker && self.zoom_chip_visible() {
             crate::ui::render_zoom_chip_with_resources(
@@ -230,6 +239,7 @@ impl WaylandState {
                     self.input_state.help_overlay.query(),
                     self.input_state.help_overlay.scroll(),
                     self.input_state.help_overlay.is_quick_mode(),
+                    self.input_state.help_overlay.shows_unbound(),
                 )
             };
             self.input_state.help_overlay.install_render_result(result);
@@ -326,6 +336,9 @@ impl WaylandState {
         } else {
             self.input_state.clear_radial_menu_layout();
         }
+        if !capture_picker {
+            self.render_recognition_chip(ctx, width, height);
+        }
         let toast_geometry = crate::ui::render_ui_toast_with_engine(
             self.render.ui_text(),
             ctx,
@@ -349,33 +362,27 @@ impl WaylandState {
         crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
     }
 
-    fn render_properties_and_context(
+    fn render_properties_panel(
         &mut self,
         ctx: &cairo::Context,
         width: u32,
         height: u32,
         capture_picker: bool,
     ) {
-        // Board and page menus open on top of the board picker, so the picker
-        // must not hide this pass. It never shares the screen with the
-        // properties panel.
-        if capture_picker || self.zoom.active {
-            self.input_state.clear_context_menu_layout();
+        // Laid out in screen space from a zoom-aware anchor, so it draws over
+        // a zoomed view too.
+        if capture_picker || !self.input_state.is_properties_panel_open() {
             self.input_state.clear_properties_panel_layout();
             return;
         }
-        if self.input_state.is_properties_panel_open() {
-            self.input_state
-                .update_properties_panel_layout_with_resources(
-                    self.render.ui_text(),
-                    self.render.text_measurer(),
-                    ctx,
-                    width,
-                    height,
-                );
-        } else {
-            self.input_state.clear_properties_panel_layout();
-        }
+        self.input_state
+            .update_properties_panel_layout_with_resources(
+                self.render.ui_text(),
+                self.render.text_measurer(),
+                ctx,
+                width,
+                height,
+            );
         crate::ui::render_properties_panel_with_engine(
             self.render.ui_text(),
             ctx,
@@ -383,11 +390,35 @@ impl WaylandState {
             width,
             height,
         );
+    }
+
+    fn render_context_menu(&mut self, ctx: &cairo::Context, capture_picker: bool) {
+        // Board and page menus open on top of the board picker, so the picker
+        // must not hide this pass.
+        if capture_picker {
+            self.input_state.clear_context_menu_layout();
+            return;
+        }
         // An open menu was already laid out along with this frame's damage.
         if !self.input_state.is_context_menu_open() {
             self.input_state.clear_context_menu_layout();
         }
         crate::ui::render_context_menu_with_engine(self.render.ui_text(), ctx, &self.input_state);
+    }
+
+    fn render_inline_toolbar_chrome(&mut self, ctx: &cairo::Context, capture_picker: bool) {
+        if capture_picker
+            || self.toolbar_chrome_suppressed()
+            || !self.toolbar.is_visible()
+            || !self.inline_toolbars_render_active()
+        {
+            return;
+        }
+        let snapshot = self.toolbar_snapshot();
+        if self.toolbar.update_snapshot(&snapshot) {
+            self.toolbar.mark_dirty();
+        }
+        self.render_inline_toolbars(ctx, &snapshot);
     }
 
     fn render_inline_and_modal_ui(
@@ -397,13 +428,6 @@ impl WaylandState {
         height: u32,
         capture_picker: bool,
     ) {
-        if !capture_picker && self.toolbar.is_visible() && self.inline_toolbars_render_active() {
-            let snapshot = self.toolbar_snapshot();
-            if self.toolbar.update_snapshot(&snapshot) {
-                self.toolbar.mark_dirty();
-            }
-            self.render_inline_toolbars(ctx, &snapshot);
-        }
         if self.input_state.region_state().purpose()
             == Some(crate::input::state::RegionPurposeTag::Measure)
         {
@@ -411,30 +435,36 @@ impl WaylandState {
         }
         self.render_ocr_scan(ctx, width, height);
         if capture_picker {
+            self.onboarding_card.set_layout(None);
             return;
         }
-        if let Some(card) = self.first_run_onboarding_card() {
+        let card_layout = self.first_run_onboarding_card().map(|card| {
             crate::ui::render_onboarding_card_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
                 height,
                 &card,
-            );
-        }
+                self.onboarding_card.hovered(),
+            )
+        });
+        let painted_card = card_layout.as_ref().and_then(|card| {
+            super::ui_effect_damage::effect_rect(
+                (card.x, card.y, card.width, card.height),
+                width,
+                height,
+            )
+        });
+        self.render
+            .ui_damage_mut()
+            .record_painted(super::UiEffect::OnboardingCard, painted_card);
+        self.onboarding_card.set_layout(card_layout);
         let palette_view = crate::ui::CommandPaletteView::prepare(&self.input_state, width, height);
         crate::ui::paint_command_palette(
             self.render.theme(),
             self.render.ui_text(),
             ctx,
             &palette_view,
-            width,
-            height,
-        );
-        crate::ui::render_tour_with_engine(
-            self.render.ui_text(),
-            ctx,
-            &self.input_state,
             width,
             height,
         );
@@ -618,6 +648,7 @@ impl WaylandState {
         self.input_state.ui_visibility.show_tool_preview
             && self.has_cursor_focus()
             && !self.cursor_blocked_by_toolbar()
+            && !self.input_state.canvas_press_dismisses_popup()
             && matches!(
                 self.input_state.state,
                 DrawingState::Idle | DrawingState::PendingTextClick { .. }

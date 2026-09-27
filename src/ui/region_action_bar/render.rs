@@ -1,7 +1,7 @@
 use super::controls::{draw_action, draw_toggle};
 use super::layout::{RegionActionBar, RegionActionRect, STATUS_ROW_HEIGHT};
 use super::model::{RegionAction, RegionActionBarVisual, RegionCutStatus};
-use super::{TOGGLE_FONT_SIZE, status_label_style};
+use super::{STATUS_FONT_SIZE, status_label_style};
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::{self, Rgba, overlay};
 use crate::ui_text::UiTextEngine;
@@ -139,7 +139,7 @@ fn draw_status(
     let Some(row) = bar.status_bounds() else {
         return;
     };
-    let font_size = (TOGGLE_FONT_SIZE * (row.height / STATUS_ROW_HEIGHT).min(1.0)).max(0.0);
+    let font_size = (STATUS_FONT_SIZE * (row.height / STATUS_ROW_HEIGHT).min(1.0)).max(0.0);
     if font_size < 1.0 {
         return;
     }

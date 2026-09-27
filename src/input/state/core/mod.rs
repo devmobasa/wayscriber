@@ -19,6 +19,7 @@ mod index;
 mod input_hud_controls;
 pub(crate) mod key_repeat;
 mod keymap;
+mod laser_controls;
 mod menus;
 pub(crate) mod modal;
 mod modes;
@@ -26,6 +27,7 @@ mod pointer;
 mod presets;
 mod properties;
 pub(crate) mod radial_menu;
+mod recognition_chip;
 mod region_select;
 mod search;
 mod selection;
@@ -37,6 +39,7 @@ pub(in crate::input::state) use keymap::Keymap;
 pub(in crate::input::state) use modes::ChromeModes;
 pub(in crate::input::state) use pointer::PointerTracking;
 pub(crate) use presets::PresetSlots;
+pub(in crate::input::state) use recognition_chip::RecognitionFeedback;
 pub(crate) use selection_actions::{IdleHandle, SpotlightMagnificationTrack};
 pub(in crate::input::state) use session_flags::SessionFlags;
 pub(in crate::input::state) use toolbar::{ToolbarInteraction, ToolbarVisibility};
@@ -49,10 +52,10 @@ mod status_hud;
 mod style;
 mod text_editing;
 mod text_font;
+mod text_placement;
 mod tool_controls;
 mod toolbar;
 mod top_menu;
-mod tour;
 pub(crate) mod utility;
 mod view;
 mod zoom_chip;
@@ -68,8 +71,9 @@ pub use base::{
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
-    SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome,
-    UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
+    SelectionGrab, SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority,
+    ToastPushOutcome, UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction, ZoomAnchor,
+    ZoomRequest,
 };
 pub(crate) use base::{
     BoardPickerClickState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
@@ -120,7 +124,12 @@ pub use menus::{
     ContextSubmenu, MenuCommand, SubmenuSide,
 };
 pub use menus::{SUBMENU_AIM_GRACE, SUBMENU_HOVER_DELAY};
-pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
+pub(crate) use properties::metrics as properties_panel_metrics;
+pub use properties::{
+    LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
+    PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
+    SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue, ShapePropertiesPanel,
+};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,
     RadialMenuPanel, RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice,
@@ -137,7 +146,6 @@ pub(crate) use selection::LocalSelectionContext;
 pub(crate) use style::DrawingStyle;
 pub(crate) use text_editing::TextEditing;
 pub use tool_controls::PrecisionEntryState;
-pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;
 pub(crate) use utility::SequenceMatch;
 pub(crate) use utility::default_step_marker_size;

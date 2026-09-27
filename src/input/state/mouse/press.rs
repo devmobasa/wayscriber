@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::super::core::{IdleHandle, MenuCommand};
 use super::super::{
-    ContextMenuKind, DrawingState, InputState,
+    ContextMenuKind, DrawingState, InputState, SelectionGrab,
     interaction::{CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press},
 };
 
@@ -56,9 +56,6 @@ impl InputState {
         if self.try_cancel_active_interaction_with(measurer) {
             return;
         }
-        if self.zoom_active() {
-            return;
-        }
         if !self.context_menu_enabled() {
             return;
         }
@@ -67,9 +64,9 @@ impl InputState {
         let mut focus_edit = false;
         if let Some(id) = hit_shape {
             if self.modifiers.shift {
-                self.extend_selection([id]);
+                self.extend_selection_with(measurer, [id]);
             } else if !self.selected_shape_ids().contains(&id) {
-                self.set_selection(vec![id]);
+                self.set_selection_with(measurer, vec![id]);
             }
             let selection = self.selected_shape_ids().to_vec();
             focus_edit = selection.len() == 1
@@ -88,7 +85,7 @@ impl InputState {
                 hit_shape,
             );
         } else {
-            self.clear_selection();
+            self.clear_selection_with(measurer);
             self.open_context_menu(
                 (screen_x, screen_y),
                 Vec::new(),
@@ -179,7 +176,18 @@ impl InputState {
                 crate::config::PresenterToolBehavior::ForceHighlightLocked
             )
         {
-            return Some(Tool::Highlight);
+            // Locked presenting still allows the laser, which leaves nothing
+            // behind: picked for the left button, or bound to this button.
+            let presenter_tool = if button == MouseButton::Left {
+                self.tool_override()
+            } else {
+                configured_tool
+            };
+            return Some(
+                presenter_tool
+                    .filter(|tool| *tool == Tool::Laser)
+                    .unwrap_or(Tool::Highlight),
+            );
         }
 
         if button == MouseButton::Left
@@ -526,29 +534,32 @@ impl InputState {
             }
         }
 
-        self.text_editing.set_last_click(None);
         if selection_click {
             if let Some(hit_id) = hit_id {
                 if !self.selected_shape_ids().contains(&hit_id) {
                     if self.modifiers.shift {
-                        self.extend_selection([hit_id]);
+                        self.extend_selection_with(measurer, [hit_id]);
                     } else {
-                        self.set_selection(vec![hit_id]);
+                        self.set_selection_with(measurer, vec![hit_id]);
                     }
                 }
 
+                // The click tracker is left alone: the release reports this
+                // press as a click, so a second one opens the shape. A locked
+                // selection has nothing to move but still takes the clicks,
+                // since Properties is where it can be unlocked.
                 let snapshots = self.capture_movable_selection_snapshots();
-                if !snapshots.is_empty() {
-                    self.begin_pointer_drag(button, color);
-                    self.state = DrawingState::MovingSelection {
-                        last_x: x,
-                        last_y: y,
-                        snapshots,
-                        moved: false,
-                    };
-                    return;
-                }
+                self.begin_pointer_drag(button, color);
+                self.state = DrawingState::MovingSelection {
+                    grab: SelectionGrab::new(hit_id, x, y),
+                    last_x: x,
+                    last_y: y,
+                    snapshots,
+                    moved: false,
+                };
+                return;
             } else {
+                self.text_editing.set_last_click(None);
                 self.begin_pointer_drag(button, color);
                 self.state = DrawingState::Selecting {
                     start_x: x,
@@ -562,6 +573,7 @@ impl InputState {
             }
         }
 
+        self.text_editing.set_last_click(None);
         match tool.press_behavior() {
             ToolPressBehavior::Selection | ToolPressBehavior::HighlightNoop => {}
             ToolPressBehavior::StartFreeformPolygon => {

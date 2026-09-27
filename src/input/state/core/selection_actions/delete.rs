@@ -38,6 +38,9 @@ impl InputState {
             return false;
         }
 
+        // Measured before the shapes go: the chrome of a deleted text shape
+        // reaches past the shape to its resize handle.
+        let selection_chrome = self.selection_chrome_bounds_with(measurer);
         let effects = crate::input::state::core::editing::CanvasEdit::delete(
             self.boards.active_frame_mut(),
             id_set,
@@ -48,7 +51,8 @@ impl InputState {
             return false;
         }
 
-        self.clear_selection();
+        self.mark_selection_dirty_region(selection_chrome);
+        self.clear_selection_with(measurer);
         true
     }
 

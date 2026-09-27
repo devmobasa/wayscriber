@@ -200,6 +200,7 @@ fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
         eraser_mode: None,
         marker_opacity: None,
         fill_enabled: None,
+        fill_color: None,
         font_size: None,
         text_background_enabled: None,
         arrow_length: None,

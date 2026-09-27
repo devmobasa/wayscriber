@@ -62,6 +62,7 @@ const PREFERRED_ORDER: &[KeybindingField] = &[
     KeybindingField::CycleBlurStyle,
     KeybindingField::CycleArrowStyle,
     KeybindingField::SelectHighlightTool,
+    KeybindingField::SelectLaserTool,
     KeybindingField::IncreaseFontSize,
     KeybindingField::DecreaseFontSize,
     KeybindingField::ToggleWhiteboard,

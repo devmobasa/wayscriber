@@ -73,6 +73,20 @@ pub(crate) fn build_section_sets(
     }
 }
 
+/// Drop rows that only document an unbound action. A section left with no
+/// rows and no badges disappears. Search skips this filter, so typing still
+/// finds actions that have no binding.
+pub(crate) fn hide_unbound_rows(sections: &[Section]) -> Vec<Section> {
+    sections
+        .iter()
+        .filter_map(|section| {
+            let mut section = section.clone();
+            section.rows.retain(|row| !row.is_unbound());
+            (!section.rows.is_empty() || !section.badges.is_empty()).then_some(section)
+        })
+        .collect()
+}
+
 pub(crate) fn filter_sections_for_search(
     all_sections: Vec<Section>,
     search_lower: &str,

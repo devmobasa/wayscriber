@@ -7,6 +7,7 @@ pub struct PropertiesPanelState {
     pub(in crate::input::state) layout: Option<PropertiesPanelLayout>,
     pub(super) pending_hover_recalc: bool,
     pub(super) needs_refresh: bool,
+    pub(super) slider_drag: Option<super::slider::SliderDrag>,
 }
 
 impl PropertiesPanelState {
@@ -68,12 +69,27 @@ mod tests {
     fn panel() -> ShapePropertiesPanel {
         ShapePropertiesPanel {
             title: "Properties".into(),
+            subtitle: None,
+            details: None,
+            lock: crate::input::state::PropertiesPanelLock::Unlocked,
             anchor: (10.0, 20.0),
             anchor_rect: None,
-            lines: Vec::new(),
             entries: Vec::new(),
-            hover_index: None,
+            swatches: Vec::new(),
+            actions: super::super::types::PanelActions {
+                can_raise: false,
+                can_lower: false,
+                can_edit: false,
+                can_save_preset: false,
+                presets: Vec::new(),
+            },
+            preview_color: None,
+            hover: None,
+            pressed: None,
             keyboard_focus: None,
+            focus_visible: false,
+            scroll: 0.0,
+            preset_save_mode: false,
             multiple_selection: false,
         }
     }

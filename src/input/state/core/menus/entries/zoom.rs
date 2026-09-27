@@ -37,12 +37,29 @@ impl InputState {
             !zoom_active,
             Some(MenuCommand::ZoomOut),
         ));
+        // Resetting to 100% leaves zoom, so while zoomed the row says so.
         entries.push(ContextMenuEntry::new(
-            "Reset Zoom",
+            if zoom_active {
+                "Exit Zoom"
+            } else {
+                "Reset Zoom"
+            },
             self.shortcut_for_action(Action::ResetZoom),
             !zoom_active,
             Some(MenuCommand::ResetZoom),
         ));
+        if zoom_active {
+            entries.push(ContextMenuEntry::new(
+                if self.zoom_locked() {
+                    "Unlock View"
+                } else {
+                    "Lock View"
+                },
+                self.shortcut_for_action(Action::ToggleZoomLock),
+                false,
+                Some(MenuCommand::ToggleZoomLock),
+            ));
+        }
 
         entries
     }

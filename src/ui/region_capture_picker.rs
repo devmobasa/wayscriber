@@ -25,7 +25,9 @@ use legend::picker_legend_text;
 use readout::{READOUT_FONT_SIZE, draw_readout_panel};
 use selection::{draw_crosshair, draw_scrim, draw_selection_frame, draw_window_target_frames};
 
-const PANEL_FILL: (f64, f64, f64, f64) = (12.0 / 255.0, 12.0 / 255.0, 15.0 / 255.0, 0.92);
+/// Readout and legend panel fill. Opaque: the frozen screen behind the
+/// scrim is often busy text, and it must not bleed into the readout labels.
+const PANEL_FILL: (f64, f64, f64, f64) = (12.0 / 255.0, 12.0 / 255.0, 15.0 / 255.0, 1.0);
 const PANEL_RADIUS: f64 = 6.0;
 
 pub(crate) fn render_region_capture_loupe(

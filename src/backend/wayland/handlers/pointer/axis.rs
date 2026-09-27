@@ -39,12 +39,11 @@ fn axis_surface_route(
     input_state: &InputState,
     over_toolbar: bool,
     over_top_toolbar: bool,
-    scroll_direction: i32,
 ) -> AxisSurfaceRoute {
     if input_state.screen_modal_is_active() {
         AxisSurfaceRoute::Consumed
     } else if over_toolbar {
-        if scroll_direction != 0 && over_top_toolbar {
+        if over_top_toolbar {
             AxisSurfaceRoute::ScrollTopPopover
         } else {
             AxisSurfaceRoute::Consumed
@@ -114,6 +113,13 @@ fn try_handle_spotlight_axis(
     true
 }
 
+/// Ctrl+wheel zooms at the pointer, as in most canvas apps; Ctrl+Alt+wheel is
+/// the older binding and keeps working. Ctrl+Shift+wheel stays the font-size
+/// gesture, and a plain wheel still sets the stroke width.
+fn wheel_zooms(ctrl: bool, shift: bool, alt: bool) -> bool {
+    ctrl && (alt || !shift)
+}
+
 impl WaylandState {
     pub(super) fn handle_pointer_axis(
         &mut self,
@@ -124,6 +130,10 @@ impl WaylandState {
     ) {
         let stopped = vertical.stop;
         self.handle_pointer_axis_inner(event, routed, vertical, source);
+        // A finished scroll leaves no half notch waiting on a meter.
+        if stopped {
+            self.toolbar_chrome.reset_wheels();
+        }
         finalize_spotlight_wheel_if_axis_stopped(
             &mut self.input_state,
             self.spotlight.wheel_idle_deadline_mut(),
@@ -191,26 +201,41 @@ impl WaylandState {
         ) {
             return;
         }
+        if routed.surface == InputSurface::Canvas
+            && !self.toolbar_chrome.pointer_over_toolbar()
+            && try_handle_properties_panel_axis(
+                &mut self.input_state,
+                self.render.text_measurer(),
+                event.position,
+                scroll_direction,
+            )
+        {
+            return;
+        }
         let over_toolbar =
             routed.surface == InputSurface::Toolbar || self.toolbar_chrome.pointer_over_toolbar();
         let over_top_toolbar =
             over_toolbar && self.wheel_over_top_toolbar(&event.surface, event.position);
-        match axis_surface_route(
-            &self.input_state,
-            over_toolbar,
-            over_top_toolbar,
-            scroll_direction,
-        ) {
+        match axis_surface_route(&self.input_state, over_toolbar, over_top_toolbar) {
             // Screen selectors own pointer input across every Wayscriber
             // surface, including toolbar popovers left open beneath them. A
             // top-strip wheel without a scrollable popover is also consumed.
-            AxisSurfaceRoute::Consumed => return,
-            // Canvas/Session/Settings popovers scroll their capped viewport.
-            AxisSurfaceRoute::ScrollTopPopover => {
-                self.scroll_top_popover_by_wheel(scroll_direction);
+            AxisSurfaceRoute::Consumed => {
+                self.toolbar_chrome.reset_wheels();
                 return;
             }
-            AxisSurfaceRoute::Canvas => {}
+            // Meters receive raw frames, including tiny vertical travel and
+            // horizontal-only frames that preserve a pending vertical notch.
+            // Canvas/Session/Settings popovers use the shared direction gate.
+            AxisSurfaceRoute::ScrollTopPopover => {
+                if !self.step_style_meter_by_wheel(&event.surface, event.position, vertical)
+                    && !self.step_style_slider_by_wheel(&event.surface, event.position, vertical)
+                {
+                    self.scroll_top_popover_by_wheel(scroll_direction);
+                }
+                return;
+            }
+            AxisSurfaceRoute::Canvas => self.toolbar_chrome.reset_wheels(),
         }
         // Everything below this line acts on the canvas or the active tool.
         // A surface covering the canvas has to stop here even when it has
@@ -222,11 +247,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.modifiers.ctrl && self.input_state.modifiers.alt {
-            if scroll_direction != 0 {
-                let zoom_in = scroll_direction < 0;
-                self.handle_zoom_scroll(zoom_in, event.position.0, event.position.1);
-            }
+        if self.try_handle_zoom_wheel(scroll_direction, event.position) {
             return;
         }
 
@@ -268,6 +289,23 @@ impl WaylandState {
             }
             std::cmp::Ordering::Equal => {}
         }
+    }
+
+    /// Ctrl+wheel zoom at the pointer. Returns true when the wheel was a zoom
+    /// gesture, including one consumed mid-stroke: Ctrl is also a drag-tool
+    /// modifier, and a stroke in progress keeps its view.
+    fn try_handle_zoom_wheel(&mut self, scroll_direction: i32, position: (f64, f64)) -> bool {
+        let modifiers = self.input_state.modifiers;
+        if !wheel_zooms(modifiers.ctrl, modifiers.shift, modifiers.alt) {
+            return false;
+        }
+
+        if scroll_direction != 0
+            && matches!(self.input_state.state, crate::input::DrawingState::Idle)
+        {
+            self.handle_zoom_scroll(scroll_direction < 0, position.0, position.1);
+        }
+        true
     }
 
     fn try_handle_help_axis(&mut self, scroll_direction: i32) -> bool {
@@ -378,6 +416,24 @@ fn try_handle_board_picker_page_panel_axis(
     true
 }
 
+/// A wheel tick over the properties panel steps the row under it, and one
+/// anywhere else on the panel is swallowed rather than resizing the tool
+/// behind it. A surface covering the panel (the color picker it opened) keeps
+/// the tick.
+fn try_handle_properties_panel_axis(
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    position: (f64, f64),
+    scroll_direction: i32,
+) -> bool {
+    if scroll_direction == 0 || input_state.modal_owns_wheel() {
+        return false;
+    }
+    let x = position.0.round() as i32;
+    let y = position.1.round() as i32;
+    input_state.properties_panel_wheel_with(measurer, x, y, scroll_direction)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,6 +441,23 @@ mod tests {
     use crate::draw::{Frame, Shape};
     use crate::input::state::{BoardPickerFocus, test_support::make_test_input_state};
     use std::time::Duration;
+
+    #[test]
+    fn ctrl_wheel_zooms_but_ctrl_shift_wheel_keeps_font_size() {
+        assert!(wheel_zooms(true, false, false), "Ctrl+wheel");
+        assert!(wheel_zooms(true, false, true), "Ctrl+Alt+wheel");
+        assert!(wheel_zooms(true, true, true), "Ctrl+Alt+Shift+wheel");
+        assert!(
+            !wheel_zooms(true, true, false),
+            "Ctrl+Shift+wheel is font size"
+        );
+        assert!(
+            !wheel_zooms(false, false, false),
+            "a plain wheel sets width"
+        );
+        assert!(!wheel_zooms(false, true, false), "Shift+wheel is font size");
+        assert!(!wheel_zooms(false, false, true));
+    }
 
     fn update_picker_layout(input_state: &mut InputState) {
         let surface =
@@ -498,13 +571,13 @@ mod tests {
         input_state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
 
         assert_eq!(
-            axis_surface_route(&input_state, true, true, 1),
+            axis_surface_route(&input_state, true, true),
             AxisSurfaceRoute::Consumed
         );
 
         input_state.cancel_eyedropper();
         assert_eq!(
-            axis_surface_route(&input_state, true, true, 1),
+            axis_surface_route(&input_state, true, true),
             AxisSurfaceRoute::ScrollTopPopover,
             "without the selector the same wheel reaches the toolbar popover"
         );
@@ -548,6 +621,17 @@ mod tests {
             position,
             1
         ));
+    }
+
+    #[test]
+    fn zero_direction_frames_keep_the_top_toolbar_scroll_route() {
+        let input_state = make_test_input_state();
+
+        assert_eq!(
+            axis_surface_route(&input_state, true, true),
+            AxisSurfaceRoute::ScrollTopPopover,
+            "tiny vertical and horizontal-only frames must reach the meter without clearing its remainder"
+        );
     }
 
     #[test]

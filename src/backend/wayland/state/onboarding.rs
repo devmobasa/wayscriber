@@ -6,7 +6,11 @@ use std::time::{Duration, Instant};
 
 use super::*;
 
+mod card;
 mod first_run;
+mod first_run_card;
+
+pub(in crate::backend::wayland) use card::OnboardingCardChrome;
 
 /// Slow-path threshold: this many shortcut-bound command-palette runs of the
 /// same action before the coach offers the keyboard shortcut.
@@ -149,6 +153,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_toast_command(&mut self, command: ToastCommand) {
         match command {
             ToastCommand::Dispatch(action) => self.dispatch_input_action(action),
+            ToastCommand::CopyLastCapturePath => self.copy_last_capture_path(),
             ToastCommand::AcknowledgeTip { tip, then } => {
                 let outcome = acknowledge_tip_command(
                     self.preferences.onboarding_mut().acknowledge_tip(tip),
@@ -171,6 +176,16 @@ impl WaylandState {
             self.config.ui.show_onboarding_hints,
             self.preferences.onboarding().persistence_available(),
         ) {
+            // A replay the user asked for still advances with hints off; the
+            // coach and contextual tips stay quiet.
+            if self
+                .preferences
+                .onboarding()
+                .state()
+                .first_run_replay_active()
+            {
+                self.apply_first_run_progress();
+            }
             return;
         }
         // Capture the coach's slow-path signal before apply_first_run_progress
@@ -217,7 +232,6 @@ impl WaylandState {
         if self.input_state.presenter_mode_active()
             || self.input_state.help_overlay.is_visible()
             || self.input_state.command_palette.is_open()
-            || self.input_state.tour.is_active()
         {
             return;
         }
@@ -282,7 +296,6 @@ impl WaylandState {
         if self.input_state.presenter_mode_active()
             || self.input_state.help_overlay.is_visible()
             || self.input_state.command_palette.is_open()
-            || self.input_state.tour.is_active()
         {
             return;
         }

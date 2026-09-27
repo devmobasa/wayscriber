@@ -159,6 +159,10 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     // Seed the palette's recent-commands history from its persisted store.
     let palette_recents_store = crate::palette_recents::PaletteRecentsStore::load();
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
+    // Only a daemon-launched overlay child carries its generation.
+    input_state.set_context_menu_exit_hides_overlay(
+        std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some(),
+    );
     let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
 
     apply_initial_mode(backend, &config, &mut input_state, &text_measurer);

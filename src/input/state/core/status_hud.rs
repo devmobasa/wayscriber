@@ -31,6 +31,15 @@ impl InputState {
         self.ui_visibility.show_status_bar && self.status_hud.is_effectively_visible()
     }
 
+    /// Output name for the status bar. With a single output the name adds
+    /// nothing, so it shows only while two or more outputs are connected,
+    /// unless `active_output_badge_always` asks for it anyway.
+    pub(crate) fn status_output_label(&self) -> Option<&str> {
+        let visible = self.ui_visibility.show_active_output_badge
+            && (self.output_count() >= 2 || self.ui_visibility.show_active_output_badge_always);
+        visible.then(|| self.active_output_label()).flatten()
+    }
+
     pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
         match item {
             StatusBarItem::ActiveOutput => self.ui_visibility.show_active_output_badge,
@@ -198,6 +207,31 @@ impl InputState {
         }
     }
 
+    /// Lays out the hovered segment's tooltip for this frame once the hover
+    /// delay has passed, and returns its painted bounds for damage. Called
+    /// once per frame after the HUD layout, so damage and paint agree.
+    pub(crate) fn update_status_tooltip_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        now: std::time::Instant,
+    ) -> Option<(f64, f64, f64, f64)> {
+        let tooltip = self
+            .status_hud
+            .tooltip_segment(now)
+            .zip(self.status_hud.layout.as_ref())
+            .and_then(|(kind, layout)| layout.tooltip_for(engine, kind));
+        let bounds = tooltip.as_ref().map(crate::ui::StatusHudTooltip::bounds);
+
+        self.status_hud.set_tooltip(tooltip);
+        bounds
+    }
+
+    /// Whether a hovered segment's tooltip just became due, so the next frame
+    /// must paint it.
+    pub(crate) fn status_tooltip_due(&self, now: std::time::Instant) -> bool {
+        self.status_hud.tooltip().is_none() && self.status_hud.tooltip_segment(now).is_some()
+    }
+
     /// Update the hovered HUD segment from idle pointer motion. Hover
     /// exists only under the exact gates a click would pass (interactive,
     /// visible, not overlay-eclipsed) and only while the pointer is idle —
@@ -225,9 +259,9 @@ impl InputState {
     /// popup, board picker, properties panel, and context menu all draw over
     /// the pill and handle their own presses later in the routing chain, so
     /// a HUD hit here would eclipse them (e.g. radial-ring clicks over the
-    /// pill re-firing as chip activations). The command palette and tour are
-    /// already intercepted earlier in the backend chain; they are included
-    /// as belt-and-braces for paths that route presses directly.
+    /// pill re-firing as chip activations). The command palette is already
+    /// intercepted earlier in the backend chain; it is included as
+    /// belt-and-braces for paths that route presses directly.
     ///
     /// Shared with the bottom-right zoom chip: the same overlays render above
     /// both bottom-anchored interactive chrome surfaces.
@@ -238,7 +272,6 @@ impl InputState {
             || self.is_properties_panel_open()
             || self.is_context_menu_open()
             || self.command_palette.is_open()
-            || self.tour.is_active()
     }
 
     /// True when the interactive status HUD pill is under (x, y): the press

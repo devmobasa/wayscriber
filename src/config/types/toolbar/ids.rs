@@ -5,11 +5,13 @@ pub const TOP_CHROME_LAYOUT: ToolbarItemId = ToolbarItemId::from_known("top.chro
 pub const TOP_CHROME_ABOUT: ToolbarItemId = ToolbarItemId::from_known("top.chrome.about");
 pub const TOP_CHROME_PIN: ToolbarItemId = ToolbarItemId::from_known("top.chrome.pin");
 pub const TOP_CHROME_CLOSE: ToolbarItemId = ToolbarItemId::from_known("top.chrome.close");
+pub const TOP_CHROME_EXIT: ToolbarItemId = ToolbarItemId::from_known("top.chrome.exit");
 
 pub const TOP_TOOL_SELECT: ToolbarItemId = ToolbarItemId::from_known("top.tool.select");
 pub const TOP_TOOL_PEN: ToolbarItemId = ToolbarItemId::from_known("top.tool.pen");
 pub const TOP_TOOL_LIVE_SHAPE: ToolbarItemId = ToolbarItemId::from_known("top.tool.live-shape");
 pub const TOP_TOOL_MARKER: ToolbarItemId = ToolbarItemId::from_known("top.tool.marker");
+pub const TOP_TOOL_LASER: ToolbarItemId = ToolbarItemId::from_known("top.tool.laser");
 pub const TOP_TOOL_STEP_MARKER: ToolbarItemId = ToolbarItemId::from_known("top.tool.step-marker");
 pub const TOP_TOOL_ERASER: ToolbarItemId = ToolbarItemId::from_known("top.tool.eraser");
 pub const TOP_TOOL_LINE: ToolbarItemId = ToolbarItemId::from_known("top.tool.line");

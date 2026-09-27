@@ -196,10 +196,6 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.tour.is_active() {
-            return;
-        }
-
         // Help owns stylus tip input just as it owns mouse and touch input.
         // Record the press target but do not begin a canvas interaction.
         if self.input_state.help_overlay.is_visible() {
@@ -211,6 +207,16 @@ impl WaylandState {
                 x.round() as i32,
                 y.round() as i32,
             );
+            return;
+        }
+
+        // The onboarding card owns a pen tap on it just as it owns a click:
+        // no stroke starts, so none can tick off its "Draw a stroke" step.
+        let (x, y) = self.current_stylus_position();
+        if let Some(press) = self.onboarding_card_press_at(x, y) {
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
+            self.onboarding_card.set_stylus_press(press);
             return;
         }
 
@@ -260,6 +266,18 @@ impl WaylandState {
 
     fn commit_stylus_up(&mut self) {
         if !self.tablet.on_overlay {
+            return;
+        }
+
+        if let Some(press) = self.onboarding_card.take_stylus_press() {
+            // The tap never became a contact, so there is no stroke to end
+            // and no pressure thickness to commit.
+            self.tablet.tip_down = false;
+            self.tablet.pressure_thickness = None;
+            self.tablet.peak_thickness = None;
+            let (x, y) = self.current_stylus_position();
+            self.release_onboarding_card_press(press, x, y);
+            self.input_state.needs_redraw = true;
             return;
         }
 
@@ -342,15 +360,11 @@ mod tests {
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
-    fn help_and_tour_block_stylus_barrel_actions() {
+    fn help_blocks_stylus_barrel_actions() {
         let mut state = make_test_input_state();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
 
         state.toggle_help_overlay();
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-
-        state.toggle_help_overlay();
-        state.start_tour();
         assert!(modal_blocks_stylus_barrel_actions(&state));
     }
 

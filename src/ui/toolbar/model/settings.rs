@@ -23,6 +23,7 @@ use helpers::{
 pub(crate) struct ToolbarSettingsModel {
     toggles: Vec<ToolbarSettingsToggle>,
     notices: Vec<ToolbarSettingsNotice>,
+    details: Option<ToolbarSettingsDetails>,
     buttons: Vec<ToolbarSettingsButton>,
     groups: Vec<ToolbarSettingsCustomizeGroup>,
     item_overrides: Vec<ToolbarSettingsItemOverride>,
@@ -63,7 +64,7 @@ impl ToolbarSettingsModel {
                     "Text controls",
                     snapshot.show_text_controls,
                     ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
-                    "Text: font size/family.",
+                    "Font size/family on every tool while Adapt to tool is off.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsStatusBar,
@@ -88,10 +89,10 @@ impl ToolbarSettingsModel {
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsIdleFade,
-                    "Dim toolbar when idle",
+                    "Hide toolbar when idle",
                     snapshot.idle_fade,
                     ToolbarEvent::ToggleIdleFade(!snapshot.idle_fade),
-                    "Fade the top bar to 55% after a few seconds without drawing. Turn off to keep it fully visible.",
+                    "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsInputHud,
@@ -170,11 +171,21 @@ impl ToolbarSettingsModel {
             toggles.clear();
         }
 
-        let notices = if customizing || status_bar_contents {
+        let all_notices = if customizing || status_bar_contents {
             Vec::new()
         } else {
             runtime_persistence_notices(snapshot)
         };
+        // Where the changes are stored is developer detail: it waits behind
+        // a collapsed disclosure instead of greeting every visit.
+        let details = all_notices
+            .iter()
+            .any(|notice| notice.detail)
+            .then(|| ToolbarSettingsDetails::new(snapshot.settings_details_open));
+        let notices: Vec<_> = all_notices
+            .into_iter()
+            .filter(|notice| !notice.detail || snapshot.settings_details_open)
+            .collect();
         let buttons = if customizing {
             customize_buttons(snapshot)
         } else if status_bar_contents {
@@ -210,6 +221,7 @@ impl ToolbarSettingsModel {
         .then_some(Self {
             toggles,
             notices,
+            details,
             buttons,
             groups,
             item_overrides,
@@ -251,8 +263,15 @@ impl ToolbarSettingsModel {
         &self.buttons
     }
 
+    /// The notices to show now. Detail notices appear only while the
+    /// disclosure is expanded.
     pub(crate) fn notices(&self) -> &[ToolbarSettingsNotice] {
         &self.notices
+    }
+
+    /// The "Details" disclosure toggle, present when there is detail to show.
+    pub(crate) fn details(&self) -> Option<&ToolbarSettingsDetails> {
+        self.details.as_ref()
     }
 
     pub(crate) fn groups(&self) -> &[ToolbarSettingsCustomizeGroup] {
@@ -478,6 +497,32 @@ pub(crate) struct ToolbarSettingsButton {
 pub(crate) struct ToolbarSettingsNotice {
     pub(crate) text: Cow<'static, str>,
     pub(crate) severity: ToolbarSettingsNoticeSeverity,
+    /// Shown only while the "Details" disclosure is expanded.
+    pub(crate) detail: bool,
+}
+
+/// The Settings popover's "Details" disclosure toggle.
+#[derive(Debug, Clone)]
+pub(crate) struct ToolbarSettingsDetails {
+    pub(crate) open: bool,
+    pub(crate) label: &'static str,
+    pub(crate) event: ToolbarEvent,
+    pub(crate) tooltip: ToolbarTooltip,
+}
+
+impl ToolbarSettingsDetails {
+    fn new(open: bool) -> Self {
+        Self {
+            open,
+            label: if open { "Hide details" } else { "Details" },
+            event: ToolbarEvent::SetSettingsDetailsOpen(!open),
+            tooltip: ToolbarTooltip::text(if open {
+                "Hide where toolbar changes are saved"
+            } else {
+                "Show where toolbar changes are saved"
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -498,12 +543,10 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
             "Runtime preference persistence is unavailable",
             ToolbarSettingsNoticeSeverity::Error,
         ),
-        Mode::Missing => (
-            "Runtime preferences use configured defaults",
-            ToolbarSettingsNoticeSeverity::Info,
-        ),
-        Mode::Supported => (
-            "Runtime preferences are saved separately",
+        // Healthy: nothing saved yet, or changes being saved. Either way the
+        // user only needs to know their toolbar changes stick.
+        Mode::Missing | Mode::Supported => (
+            "Toolbar changes are saved automatically",
             ToolbarSettingsNoticeSeverity::Info,
         ),
         Mode::UnsupportedReadOnly { .. } => (
@@ -536,20 +579,26 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         ),
     };
     let mut notices = Vec::new();
-    push_notice(&mut notices, summary, severity);
+    push_notice(&mut notices, summary, severity, false);
     if let Some(detail) = &runtime.detail {
-        push_notice(&mut notices, detail, severity);
+        push_notice(&mut notices, detail, severity, false);
     }
+    // The file path is for troubleshooting, so it waits behind "Details".
     push_notice(
         &mut notices,
-        &format!("Runtime state: {}", runtime.path.display()),
+        &format!(
+            "Saved separately from config.toml, in {}",
+            runtime.path.display()
+        ),
         ToolbarSettingsNoticeSeverity::Info,
+        true,
     );
     for path in &runtime.recovery_artifacts {
         push_notice(
             &mut notices,
             &format!("Preserved recovery file: {}", path.display()),
             ToolbarSettingsNoticeSeverity::Warning,
+            false,
         );
     }
     notices
@@ -559,10 +608,12 @@ fn push_notice(
     notices: &mut Vec<ToolbarSettingsNotice>,
     text: &str,
     severity: ToolbarSettingsNoticeSeverity,
+    detail: bool,
 ) {
     notices.push(ToolbarSettingsNotice {
         text: Cow::Owned(text.to_string()),
         severity,
+        detail,
     });
 }
 

@@ -169,6 +169,8 @@ pub(super) struct WaylandState {
     pub(super) render: render::RenderRuntime,
     pub(super) suppression: core::overlay::OverlaySuppressionState,
     shortcut_coach: onboarding::ShortcutCoachSession,
+    /// Painted geometry and stylus press of the first-run onboarding card.
+    pub(super) onboarding_card: onboarding::OnboardingCardChrome,
     /// Keyboard, pointer, activation, and focus-loss lifecycle.
     pub(super) focus: focus::FocusState,
     /// Per-buffer damage tracking for correct incremental rendering.

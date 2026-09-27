@@ -10,6 +10,7 @@ fn add_rect(state: &mut InputState, x: i32, y: i32, w: i32, h: i32) -> crate::dr
         w,
         h,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     })
@@ -35,18 +36,20 @@ fn show_properties_panel_for_single_shape_reports_type_layer_and_lock_state() {
     assert!(state.show_properties_panel_with(&route_measurer));
 
     let panel = state.properties_panel().expect("properties panel");
-    assert_eq!(panel.title, "Shape Properties");
+    assert_eq!(panel.title, "Rectangle");
     assert!(!panel.multiple_selection);
+    let subtitle = panel.subtitle.as_deref().expect("subtitle");
+    assert!(subtitle.starts_with("Layer 1 of 1 · "), "{subtitle}");
     assert!(
         panel
-            .lines
-            .iter()
-            .any(|line| line == &format!("Shape ID: {shape_id}"))
+            .details
+            .as_deref()
+            .is_some_and(|details| details.starts_with(&format!("Shape ID {shape_id}")))
     );
-    assert!(panel.lines.iter().any(|line| line == "Type: Rectangle"));
-    assert!(panel.lines.iter().any(|line| line == "Layer: 1 of 1"));
-    assert!(panel.lines.iter().any(|line| line == "Locked: No"));
-    assert!(panel.lines.iter().any(|line| line.starts_with("Bounds: ")));
+    assert_eq!(
+        panel.lock,
+        crate::input::state::PropertiesPanelLock::Unlocked
+    );
 }
 
 #[test]
@@ -66,11 +69,14 @@ fn show_properties_panel_for_multi_selection_includes_locked_count_and_summary()
     assert!(state.show_properties_panel_with(&route_measurer));
 
     let panel = state.properties_panel().expect("properties panel");
-    assert_eq!(panel.title, "Selection Properties");
+    assert_eq!(panel.title, "2 shapes");
     assert!(panel.multiple_selection);
-    assert!(panel.lines.iter().any(|line| line == "Shapes selected: 2"));
-    assert!(panel.lines.iter().any(|line| line == "Locked: 1/2"));
-    assert!(panel.lines.iter().any(|line| line.starts_with("Bounds: ")));
+    let subtitle = panel.subtitle.as_deref().expect("subtitle");
+    assert!(subtitle.ends_with(" px · 1 of 2 locked"), "{subtitle}");
+    assert_eq!(
+        panel.lock,
+        crate::input::state::PropertiesPanelLock::Partial
+    );
 }
 
 #[test]
@@ -250,9 +256,10 @@ fn activate_fill_entry_toggles_rectangle_fill_and_refreshes_panel_value() {
         Shape::Rect { fill, .. } => assert!(*fill),
         other => panic!("expected rect, got {other:?}"),
     }
+    // With no fill color of its own, the fill takes the border's.
     assert_eq!(
-        state.properties_panel().expect("panel").entries[fill_index].value,
-        "On"
+        state.properties_panel().expect("panel").entries[fill_index].state,
+        SelectionPropertyValue::Fill(Some(Some(state.style.current_color)))
     );
 }
 

@@ -94,6 +94,7 @@ impl InputState {
             let anchor = self.keyboard_canvas_menu_anchor();
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas, None);
+            self.context_menu.anchored_in_corner = true;
             self.pointer.clear_menu_hover_recalc();
             self.set_context_menu_focus(None);
             self.focus_first_context_menu_entry();
@@ -140,6 +141,12 @@ impl InputState {
         } else {
             self.pointer.screen()
         }
+    }
+
+    /// A background daemon owns this overlay: Exit hides it rather than
+    /// ending anything, and the menu says so.
+    pub(crate) fn set_context_menu_exit_hides_overlay(&mut self, hides: bool) {
+        self.context_menu.exit_hides_overlay = hides;
     }
 
     pub fn set_context_menu_enabled(&mut self, enabled: bool) {

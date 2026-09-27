@@ -46,6 +46,13 @@ pub struct ToolPresetConfig {
     #[serde(default)]
     pub fill_enabled: Option<bool>,
 
+    /// Optional fill color, for a fill that differs from `color`. Set when a
+    /// preset is saved from a shape filled with its own color; applying the
+    /// preset to selected closed shapes restores it. Absent, a fill takes the
+    /// border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_color: Option<ColorSpec>,
+
     /// Optional font size override.
     #[serde(default)]
     pub font_size: Option<f64>,

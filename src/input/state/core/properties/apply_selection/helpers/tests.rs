@@ -26,6 +26,7 @@ fn add_rect(
         w: 30,
         h: 40,
         fill,
+        fill_color: None,
         color,
         thick: 2.0,
     });

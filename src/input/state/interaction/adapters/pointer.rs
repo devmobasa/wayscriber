@@ -92,12 +92,13 @@ pub(crate) fn handle_board_picker_press(
 
 pub(crate) fn handle_properties_panel_press(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let screen = points.screen();
     state
-        .handle_properties_panel_press(button, screen.x(), screen.y())
+        .handle_properties_panel_press_with_measurer(measurer, button, screen.x(), screen.y())
         .then_some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }
 
@@ -273,11 +274,6 @@ pub(crate) fn handle_right_press(
     {
         return RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(kind));
     }
-    if state.zoom_active() {
-        return RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
-            PointerSideEffect::RightClickSuppressedByZoom,
-        ));
-    }
     if !state.context_menu_enabled() {
         return RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
             PointerSideEffect::RightClickContextMenuDisabled,
@@ -317,9 +313,9 @@ fn open_context_menu_from_right_click(
     let mut focus_edit = false;
     if let Some(id) = hit_shape {
         if state.modifiers.shift {
-            state.extend_selection([id]);
+            state.extend_selection_with(measurer, [id]);
         } else if !state.selected_shape_ids().contains(&id) {
-            state.set_selection(vec![id]);
+            state.set_selection_with(measurer, vec![id]);
         }
         let selection = state.selected_shape_ids().to_vec();
         focus_edit = selection.len() == 1
@@ -336,7 +332,7 @@ fn open_context_menu_from_right_click(
             hit_shape,
         );
     } else {
-        state.clear_selection();
+        state.clear_selection_with(measurer);
         state.open_context_menu(
             (screen_x, screen_y),
             Vec::new(),
@@ -457,6 +453,7 @@ pub(crate) fn handle_board_picker_motion(
 
 pub(crate) fn handle_properties_panel_motion(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     if !state.is_properties_panel_open() {
@@ -464,7 +461,7 @@ pub(crate) fn handle_properties_panel_motion(
     }
     if state.properties_panel_layout().is_some() {
         let screen = points.screen();
-        state.update_properties_panel_hover_from_pointer(screen.x(), screen.y());
+        state.move_properties_panel_pointer_with(measurer, screen.x(), screen.y());
     }
     Some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }

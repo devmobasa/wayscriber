@@ -3,7 +3,8 @@ use relm4::ComponentSender;
 use crate::messages::Message;
 use crate::models::{
     OverrideOption, TabId, TextField, ToggleField, ToolbarBackendOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, ToolbarRebindModifierOption, ZoomChipDisplayOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
+    ZoomChipDisplayOption,
 };
 
 use super::super::super::state::ConfiguratorApp;
@@ -22,6 +23,8 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     });
     let (override_modes, override_mode_labels) =
         options(ToolbarLayoutModeOption::list(), |value| value.label());
+    let (stroke_styles, stroke_style_labels) =
+        options(ToolbarStrokeControlsOption::list(), |value| value.label());
 
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
@@ -41,7 +44,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     page.group("Layout")
         .combo_row(
             "Layout mode",
-            "",
+            "Simple: core pens. Regular: adds Shape Pen, Line, Arrow, presets. Advanced: shapes inline, multi-step undo.",
             layout_modes,
             layout_labels,
             |app| app.draft.ui_toolbar_layout_mode,
@@ -69,6 +72,14 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |app| app.draft.ui_toolbar_rebind_modifier,
             Message::ToolbarRebindModifierChanged,
         )
+        .combo_row(
+            "Stroke controls",
+            "How the style pill shows pen smoothing and Shape Pen sensitivity. Panel: one Pen feel button opening meters with a live smoothing preview. Meters or Steppers: inline controls.",
+            stroke_styles,
+            stroke_style_labels,
+            |app| app.draft.ui_toolbar_stroke_controls,
+            Message::ToolbarStrokeControlsChanged,
+        )
         .switch_row(
             "Configured default: pin top toolbar",
             "",
@@ -82,8 +93,8 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |value| Message::ToggleChanged(ToggleField::UiToolbarUseIcons, value),
         )
         .switch_row(
-            "Dim toolbar when idle",
-            "Fade the top bar to 55% after a few seconds without drawing. Turn off to keep it fully visible.",
+            "Hide toolbar when idle",
+            "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
             |app| app.draft.ui_toolbar_idle_fade,
             |value| Message::ToggleChanged(ToggleField::UiToolbarIdleFade, value),
         );
@@ -139,7 +150,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             "Always show text controls",
-            "",
+            "Applies while the toolbar's Adapt to tool setting is off; otherwise font controls follow tools that draw text.",
             |app| app.draft.ui_toolbar_show_text_controls,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowTextControls, value),
         )

@@ -1,7 +1,7 @@
 use crate::config::{
     ResolvedToolbarItems, ToolbarConfig, ToolbarItemId, ToolbarItemOrderGroup,
     ToolbarItemVisibilitySetting, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, ToolbarSectionFlag, ToolbarSectionVisibility, TopDisplayMode,
+    ToolbarSectionFlag, ToolbarSectionVisibility, ToolbarStrokeControls, TopDisplayMode,
     fold_legacy_section_flags, resolve_section_visibility, set_section_visibility,
 };
 use crate::input::state::TopMenuState;
@@ -51,11 +51,38 @@ pub(in crate::input::state) struct ToolbarInteraction {
     customize_items_open: bool,
     customize_items_group: Option<ToolbarItemCustomizeGroup>,
     status_bar_contents_open: bool,
-    rebind_modifier: ToolbarRebindModifier,
+    settings_details_open: bool,
+    stroke_controls: ToolbarStrokeControls,
     top_menu: TopMenuState,
     top_popover_scroll: f64,
     top_minimized: bool,
     top_display_mode: TopDisplayMode,
+    restore_guard: RestoreClickGuard,
+}
+
+/// Swallows toolbar clicks for a moment after the minimized tab (or the
+/// micro chip) restores the strip.
+///
+/// The restored strip's first controls sit where the tab was, so the second
+/// click of a double-click on the tab used to select a tool. The window is a
+/// typical double-click interval: long enough to absorb that click, short
+/// enough that a deliberate next click still works.
+#[derive(Debug, Default, Clone, Copy)]
+pub(in crate::input::state) struct RestoreClickGuard {
+    until: Option<std::time::Instant>,
+}
+
+impl RestoreClickGuard {
+    pub(in crate::input::state) const WINDOW: std::time::Duration =
+        std::time::Duration::from_millis(450);
+
+    fn arm(&mut self, now: std::time::Instant) {
+        self.until = Some(now + Self::WINDOW);
+    }
+
+    fn blocks(&self, now: std::time::Instant) -> bool {
+        self.until.is_some_and(|until| now < until)
+    }
 }
 
 impl Default for ToolbarInteraction {
@@ -76,11 +103,13 @@ impl Default for ToolbarInteraction {
             customize_items_open: false,
             customize_items_group: None,
             status_bar_contents_open: false,
-            rebind_modifier: ToolbarRebindModifier::default(),
+            settings_details_open: false,
+            stroke_controls: ToolbarStrokeControls::default(),
             top_menu: TopMenuState::Closed,
             top_popover_scroll: 0.0,
             top_minimized: false,
             top_display_mode: TopDisplayMode::Full,
+            restore_guard: RestoreClickGuard::default(),
         }
     }
 }
@@ -115,12 +144,23 @@ impl ToolbarInteraction {
             customize_items_open: false,
             customize_items_group: None,
             status_bar_contents_open: false,
-            rebind_modifier: config.rebind_modifier,
+            settings_details_open: false,
+            stroke_controls: config.stroke_controls,
             top_menu: TopMenuState::Closed,
             top_popover_scroll: 0.0,
             top_minimized: config.top_minimized,
             top_display_mode,
+            restore_guard: RestoreClickGuard::default(),
         }
+    }
+
+    /// Start the post-restore click guard (see [`RestoreClickGuard`]).
+    pub(in crate::input::state) fn arm_restore_guard(&mut self, now: std::time::Instant) {
+        self.restore_guard.arm(now);
+    }
+
+    pub(in crate::input::state) fn restore_guard_blocks(&self, now: std::time::Instant) -> bool {
+        self.restore_guard.blocks(now)
     }
 
     #[cfg(test)]
@@ -187,8 +227,18 @@ impl ToolbarInteraction {
         self.status_bar_contents_open
     }
 
-    pub(in crate::input::state) const fn rebind_modifier(&self) -> ToolbarRebindModifier {
-        self.rebind_modifier
+    pub(in crate::input::state) const fn settings_details_open(&self) -> bool {
+        self.settings_details_open
+    }
+
+    pub(in crate::input::state) fn set_settings_details_open(&mut self, open: bool) -> bool {
+        let changed = self.settings_details_open != open;
+        self.settings_details_open = open;
+        changed
+    }
+
+    pub(in crate::input::state) const fn stroke_controls(&self) -> ToolbarStrokeControls {
+        self.stroke_controls
     }
 
     pub(in crate::input::state) const fn top_menu(&self) -> TopMenuState {
@@ -226,11 +276,6 @@ impl ToolbarInteraction {
     pub(in crate::input::state) fn hide(&mut self) {
         self.visible = false;
         self.top_visible = false;
-    }
-
-    pub(in crate::input::state) fn show(&mut self) {
-        self.visible = true;
-        self.top_visible = true;
     }
 
     pub(in crate::input::state) fn derive_visibility_from_pins(&mut self) {
@@ -577,11 +622,11 @@ impl ToolbarInteraction {
     }
 
     #[cfg(test)]
-    pub(in crate::input::state) fn override_rebind_modifier_for_test(
+    pub(in crate::input::state) fn override_stroke_controls_for_test(
         &mut self,
-        modifier: ToolbarRebindModifier,
+        style: ToolbarStrokeControls,
     ) {
-        self.rebind_modifier = modifier;
+        self.stroke_controls = style;
     }
 }
 
@@ -703,19 +748,6 @@ mod tests {
         assert_eq!(toolbar.top_menu(), TopMenuState::CanvasPopover);
         assert!(toolbar.set_top_menu_open(TopMenuState::SettingsPopover, true));
         assert_eq!(toolbar.top_menu(), TopMenuState::SettingsPopover);
-    }
-
-    #[test]
-    fn showing_transient_visibility_does_not_change_the_persisted_pin() {
-        let mut toolbar = ToolbarInteraction::default();
-        toolbar.set_top_pinned(false);
-        toolbar.hide();
-
-        toolbar.show();
-
-        assert!(toolbar.visible());
-        assert!(toolbar.top_visible());
-        assert!(!toolbar.top_pinned());
     }
 
     #[test]

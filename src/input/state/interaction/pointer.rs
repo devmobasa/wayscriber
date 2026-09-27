@@ -49,7 +49,9 @@ pub(crate) fn route_pointer_press(
     if let Some(outcome) = adapters::handle_board_picker_press(state, event.button(), points) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_properties_panel_press(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_properties_panel_press(state, resources.measurer, event.button(), points)
+    {
         return outcome;
     }
     if event.button() == MouseButton::Left
@@ -109,7 +111,7 @@ pub(crate) fn route_pointer_motion(
     if let Some(outcome) = adapters::handle_board_picker_motion(state, points) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_properties_panel_motion(state, points) {
+    if let Some(outcome) = adapters::handle_properties_panel_motion(state, measurer, points) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_active_motion(state, measurer, points) {
@@ -168,7 +170,11 @@ pub(crate) fn route_pointer_release(
                 let screen = points.screen();
                 let (_, action) = state.check_zoom_chip_click(kind, screen.x(), screen.y());
                 if let Some(action) = action {
-                    state.handle_action_with_resources(resources, action);
+                    state.handle_action_anchored(
+                        resources,
+                        action,
+                        crate::input::state::ZoomAnchor::ScreenCenter,
+                    );
                 }
             }
             state.needs_redraw = true;

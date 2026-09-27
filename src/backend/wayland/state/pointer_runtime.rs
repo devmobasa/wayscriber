@@ -11,7 +11,7 @@ use wayland_protocols::wp::{
 
 use crate::{
     input::state::{RegionInputSource, ToastPress},
-    ui::ZoomChipPress,
+    ui::{OnboardingCardPress, ZoomChipPress},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -143,17 +143,22 @@ struct PendingChromePress {
     toast: Option<ToastPress>,
     status_hud: bool,
     zoom_chip: ZoomChipPress,
+    onboarding_card: Option<OnboardingCardPress>,
 }
 
 impl PendingChromePress {
     fn occupied(&self) -> bool {
-        self.toast.is_some() || self.status_hud || self.zoom_chip.is_pending()
+        self.toast.is_some()
+            || self.status_hud
+            || self.zoom_chip.is_pending()
+            || self.onboarding_card.is_some()
     }
 
     fn clear(&mut self) {
         self.toast = None;
         self.status_hud = false;
         self.zoom_chip = ZoomChipPress::None;
+        self.onboarding_card = None;
     }
 
     fn arm_toast(&mut self, press: ToastPress) -> bool {
@@ -190,6 +195,18 @@ impl PendingChromePress {
 
     fn take_zoom_chip(&mut self) -> ZoomChipPress {
         std::mem::replace(&mut self.zoom_chip, ZoomChipPress::None)
+    }
+
+    fn arm_onboarding_card(&mut self, press: OnboardingCardPress) -> bool {
+        if self.occupied() {
+            return false;
+        }
+        self.onboarding_card = Some(press);
+        true
+    }
+
+    fn take_onboarding_card(&mut self) -> Option<OnboardingCardPress> {
+        self.onboarding_card.take()
     }
 }
 
@@ -464,6 +481,19 @@ impl PointerRuntime {
         self.chrome_press.take_zoom_chip()
     }
 
+    pub(in crate::backend::wayland) fn arm_onboarding_card_press(
+        &mut self,
+        press: OnboardingCardPress,
+    ) -> bool {
+        self.chrome_press.arm_onboarding_card(press)
+    }
+
+    pub(in crate::backend::wayland) fn take_onboarding_card_press(
+        &mut self,
+    ) -> Option<OnboardingCardPress> {
+        self.chrome_press.take_onboarding_card()
+    }
+
     pub(in crate::backend::wayland) fn suppress_release(&mut self, source: RegionInputSource) {
         self.release_suppression.arm(source);
     }
@@ -502,7 +532,7 @@ mod tests {
     use super::{PendingChromePress, PointerRuntime, TouchState, TouchTarget};
     use crate::{
         input::state::{RegionInputSource, ToastPress},
-        ui::ZoomChipPress,
+        ui::{OnboardingCardPress, ZoomChipPress},
     };
     use smithay_client_toolkit::seat::pointer::CursorIcon;
 
@@ -558,6 +588,23 @@ mod tests {
         assert!(!press.arm_zoom_chip(ZoomChipPress::Passive));
         assert_eq!(press.take_toast(), Some(toast));
         assert_eq!(press.take_toast(), None);
+    }
+
+    #[test]
+    fn an_onboarding_card_press_is_owned_until_its_release_takes_it() {
+        let mut runtime = PointerRuntime::new();
+
+        assert!(runtime.arm_onboarding_card_press(OnboardingCardPress::Body));
+        assert!(!runtime.arm_toast_press(ToastPress::body(7)));
+        assert_eq!(
+            runtime.take_onboarding_card_press(),
+            Some(OnboardingCardPress::Body)
+        );
+        assert_eq!(runtime.take_onboarding_card_press(), None);
+
+        assert!(runtime.arm_onboarding_card_press(OnboardingCardPress::Body));
+        runtime.clear_chrome_press();
+        assert_eq!(runtime.take_onboarding_card_press(), None);
     }
 
     #[test]

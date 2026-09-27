@@ -103,12 +103,47 @@ pub(crate) enum ToolbarSliderTarget {
     CustomRedoDelay,
 }
 
+/// How a slider's track position maps to its value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum SliderCurve {
+    Linear,
+    /// `value = min + span * t^exponent`. An exponent above 1 gives the low
+    /// end of the range more of the track.
+    Power(f64),
+}
+
+impl SliderCurve {
+    /// Fraction of the value span at track position `t`.
+    fn span_fraction(self, t: f64) -> f64 {
+        match self {
+            Self::Linear => t,
+            Self::Power(exponent) => t.powf(exponent),
+        }
+    }
+
+    /// Track position for a fraction of the value span.
+    fn track_position(self, fraction: f64) -> f64 {
+        match self {
+            Self::Linear => fraction,
+            Self::Power(exponent) => fraction.powf(exponent.recip()),
+        }
+    }
+}
+
+/// Stroke widths people use most sit at the low end, so half the thickness
+/// track covers 1-10 px: the exponent is `log2(49 / 9)`, so that
+/// `1 + 49 * 0.5^exponent = 10`.
+const THICKNESS_CURVE_EXPONENT: f64 = 2.444_784_842_672_896;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ToolbarSliderSpec {
     pub(crate) min: f64,
     pub(crate) max: f64,
     pub(crate) step: Option<f64>,
     pub(crate) snap_to_step: bool,
+    pub(crate) curve: SliderCurve,
+    /// Values marked with a faint tick on the track.
+    pub(crate) ticks: &'static [f64],
 }
 
 impl ToolbarSliderSpec {
@@ -117,30 +152,40 @@ impl ToolbarSliderSpec {
         max: 72.0,
         step: Some(2.0),
         snap_to_step: false,
+        curve: SliderCurve::Linear,
+        ticks: &[],
     };
     pub(crate) const DELAY_SECONDS: Self = Self {
         min: 0.05,
         max: 5.0,
         step: None,
         snap_to_step: false,
+        curve: SliderCurve::Linear,
+        ticks: &[],
     };
     pub(crate) const MARKER_OPACITY: Self = Self {
         min: 0.05,
         max: 0.9,
         step: Some(0.05),
         snap_to_step: false,
+        curve: SliderCurve::Linear,
+        ticks: &[],
     };
     pub(crate) const SPOTLIGHT_MAGNIFICATION: Self = Self {
         min: crate::draw::MIN_SPOTLIGHT_MAGNIFICATION,
         max: crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
         step: Some(crate::draw::SPOTLIGHT_MAGNIFICATION_STEP),
         snap_to_step: true,
+        curve: SliderCurve::Linear,
+        ticks: &[],
     };
     pub(crate) const THICKNESS: Self = Self {
         min: MIN_STROKE_THICKNESS,
         max: MAX_STROKE_THICKNESS,
         step: Some(1.0),
-        snap_to_step: false,
+        snap_to_step: true,
+        curve: SliderCurve::Power(THICKNESS_CURVE_EXPONENT),
+        ticks: &[5.0, 10.0, 20.0],
     };
 
     pub(crate) fn clamp(self, value: f64) -> f64 {
@@ -158,8 +203,35 @@ impl ToolbarSliderSpec {
         (self.min + ((clamped - self.min) / step).round() * step).clamp(self.min, self.max)
     }
 
+    /// The value `steps` spec steps away (negative lowers it). A snapping
+    /// slider lands on the adjacent grid value in the step's direction, so an
+    /// off-grid 30.8 px steps up to 31 and down to 30, never skipping one.
+    pub(crate) fn step_value(self, value: f64, steps: f64) -> f64 {
+        /// Absorbs float error, so a value already on the grid counts as on it.
+        const GRID_EPSILON: f64 = 1e-9;
+
+        let step = self.step.unwrap_or((self.max - self.min) / 100.0);
+        let target = value + steps * step;
+        let Some(grid) = self
+            .step
+            .filter(|step| self.snap_to_step && step.is_finite() && *step > 0.0)
+        else {
+            return self.clamp(target);
+        };
+
+        let index = (target - self.min) / grid;
+        let index = if steps > 0.0 {
+            (index + GRID_EPSILON).floor()
+        } else {
+            (index - GRID_EPSILON).ceil()
+        };
+        self.clamp(self.min + index * grid)
+    }
+
     pub(crate) fn value_from_t(self, t: f64) -> f64 {
-        self.normalize_value(self.min + t.clamp(0.0, 1.0) * self.span())
+        let fraction = self.curve.span_fraction(t.clamp(0.0, 1.0));
+
+        self.normalize_value(self.min + fraction * self.span())
     }
 
     pub(crate) fn t_from_value(self, value: f64) -> f64 {
@@ -167,7 +239,16 @@ impl ToolbarSliderSpec {
         if span <= f64::EPSILON {
             return 0.0;
         }
-        ((self.clamp(value) - self.min) / span).clamp(0.0, 1.0)
+
+        let fraction = ((self.clamp(value) - self.min) / span).clamp(0.0, 1.0);
+        self.curve.track_position(fraction).clamp(0.0, 1.0)
+    }
+
+    /// Track positions of the spec's ticks, in `[0, 1]`.
+    pub(crate) fn tick_positions(self) -> impl Iterator<Item = f64> {
+        self.ticks
+            .iter()
+            .map(move |value| self.t_from_value(*value))
     }
 
     pub(crate) fn t_from_pointer_x(pointer_x: f64, hit_x: f64, hit_w: f64) -> f64 {
@@ -215,6 +296,66 @@ mod tests {
         );
     }
 
+    /// Half the thickness track covers the widths people use most, 1-10 px,
+    /// and every whole width round-trips through the curve to itself.
+    #[test]
+    fn thickness_track_gives_the_small_widths_half_its_length() {
+        let spec = ToolbarSliderSpec::THICKNESS;
+
+        assert_close(spec.value_from_t(0.5), 10.0);
+        assert!(
+            spec.t_from_value(5.0) > 0.3,
+            "5 px is a third of the way in"
+        );
+        for width in 1..=50 {
+            let width = f64::from(width);
+            assert_close(spec.value_from_t(spec.t_from_value(width)), width);
+        }
+        assert_close(spec.t_from_value(1.0), 0.0);
+        assert_close(spec.t_from_value(50.0), 1.0);
+    }
+
+    /// Wheel and arrow steps land on the next grid value in their direction:
+    /// a fractional width never skips a whole pixel, an on-grid value moves by
+    /// whole steps, and non-snapping sliders step by their step size.
+    #[test]
+    fn steps_land_on_the_adjacent_grid_value_in_their_direction() {
+        let thickness = ToolbarSliderSpec::THICKNESS;
+        assert_close(thickness.step_value(30.8, 1.0), 31.0);
+        assert_close(thickness.step_value(30.8, -1.0), 30.0);
+        assert_close(thickness.step_value(3.2, -1.0), 3.0);
+        assert_close(thickness.step_value(30.0, 1.0), 31.0);
+        assert_close(thickness.step_value(30.8, 10.0), 40.0);
+        assert_close(thickness.step_value(50.0, 1.0), 50.0);
+        assert_close(thickness.step_value(1.4, -1.0), 1.0);
+
+        let spotlight = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION;
+        assert_close(spotlight.step_value(1.3, 1.0), 1.5);
+        assert_close(spotlight.step_value(1.5, 1.0), 1.75);
+
+        let opacity = ToolbarSliderSpec::MARKER_OPACITY;
+        assert_close(opacity.step_value(0.42, 1.0), 0.47);
+    }
+
+    #[test]
+    fn only_the_thickness_track_is_curved_and_ticked() {
+        let ticks: Vec<f64> = ToolbarSliderSpec::THICKNESS.tick_positions().collect();
+
+        assert_eq!(ticks.len(), 3);
+        assert_close(ticks[1], 0.5);
+        assert!(ticks.windows(2).all(|pair| pair[0] < pair[1]));
+        for spec in [
+            ToolbarSliderSpec::FONT_SIZE,
+            ToolbarSliderSpec::MARKER_OPACITY,
+            ToolbarSliderSpec::DELAY_SECONDS,
+            ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION,
+        ] {
+            assert_eq!(spec.curve, SliderCurve::Linear);
+            assert_eq!(spec.tick_positions().count(), 0);
+            assert_close(spec.t_from_value((spec.min + spec.max) / 2.0), 0.5);
+        }
+    }
+
     #[test]
     fn slider_spec_maps_values_to_normalized_positions() {
         let spec = ToolbarSliderSpec {
@@ -222,6 +363,8 @@ mod tests {
             max: 20.0,
             step: None,
             snap_to_step: false,
+            curve: SliderCurve::Linear,
+            ticks: &[],
         };
 
         assert_close(spec.t_from_value(10.0), 0.0);
@@ -238,6 +381,8 @@ mod tests {
             max: 20.0,
             step: None,
             snap_to_step: false,
+            curve: SliderCurve::Linear,
+            ticks: &[],
         };
 
         assert_close(spec.value_from_t(0.0), 10.0);
@@ -267,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_sliders_remain_continuous() {
+    fn thickness_slider_snaps_to_whole_pixels() {
         let slider = ToolbarSlider {
             target: ToolbarSliderTarget::Thickness,
             spec: ToolbarSliderSpec::THICKNESS,
@@ -275,11 +420,11 @@ mod tests {
         };
 
         match slider.event_for_value(2.13) {
-            ToolbarEvent::SetThickness(value) => assert_close(value, 2.13),
+            ToolbarEvent::SetThickness(value) => assert_close(value, 2.0),
             other => panic!("unexpected event: {other:?}"),
         }
         let t = ToolbarSliderSpec::THICKNESS.t_from_value(2.13);
-        assert_close(ToolbarSliderSpec::THICKNESS.value_from_t(t), 2.13);
+        assert_close(ToolbarSliderSpec::THICKNESS.value_from_t(t), 2.0);
     }
 
     #[test]
@@ -289,6 +434,8 @@ mod tests {
             max: 20.0,
             step: None,
             snap_to_step: false,
+            curve: SliderCurve::Linear,
+            ticks: &[],
         };
 
         assert_close(spec.value_from_pointer_x(100.0, 100.0, 200.0), 10.0);
@@ -305,6 +452,8 @@ mod tests {
             max: 20.0,
             step: None,
             snap_to_step: false,
+            curve: SliderCurve::Linear,
+            ticks: &[],
         };
 
         assert_close(spec.knob_center_x(100.0, 200.0, 8.0, 10.0), 108.0);
@@ -336,6 +485,8 @@ mod tests {
                 max: 20.0,
                 step: None,
                 snap_to_step: false,
+                curve: SliderCurve::Linear,
+                ticks: &[],
             },
             value: 10.0,
         };

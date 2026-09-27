@@ -33,35 +33,46 @@ pub(crate) use event_policy::{
     short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
-pub(crate) use header::layout_mode_control;
+pub(crate) use header::{
+    LAYOUT_MENU_PAD, LAYOUT_MENU_ROW_GAP, LAYOUT_MENU_ROW_H, LAYOUT_MENU_ROW_W, LayoutMenuEntry,
+    layout_menu_entries, layout_mode_control, layout_mode_label,
+};
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
 pub(crate) use settings::{
-    ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsNotice,
+    ToolbarSettingsButton, ToolbarSettingsDetails, ToolbarSettingsModel, ToolbarSettingsNotice,
     ToolbarSettingsNoticeSeverity, ToolbarSettingsToggle,
 };
 #[allow(unused_imports)]
 pub(crate) use style_pill::{
-    StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSlider,
-    StylePillSpec, StylePillState,
+    ARROW_STYLE_CHIP_GLYPH_H, ARROW_STYLE_CHIP_GLYPH_W, ARROW_STYLE_CHIP_W, ARROW_STYLE_MENU_INSET,
+    ARROW_STYLE_MENU_PAD, ARROW_STYLE_MENU_PREVIEW_H, ARROW_STYLE_MENU_PREVIEW_W,
+    ARROW_STYLE_MENU_ROW_GAP, ARROW_STYLE_MENU_ROW_H, ARROW_STYLE_MENU_ROW_W, ArrowStyleMenuEntry,
+    OpacityPaint, PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H, PEN_FEEL_HINT_H,
+    PEN_FEEL_PAD, PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE,
+    PEN_FEEL_TITLE_H, PenFeelSection, StrokeSetting, StylePillControl, StylePillCounter,
+    StylePillMeter, StylePillMeterSegment, StylePillRole, StylePillSegment, StylePillSlider,
+    StylePillSpec, StylePillState, arrow_style_chip_label, arrow_style_menu_entries,
+    arrow_style_menu_size, pen_feel_id, pen_feel_panel_size, pen_feel_sections, pen_feel_settings,
 };
 #[allow(unused_imports)]
 pub(crate) use tools::{
-    SemanticToolIcon, TopToolGroup, TopUtilityButton, current_shape_tool, default_drag_hint,
-    default_polygon_tool, default_shape_tool, is_fill_tool, is_polygon_tool, polygon_tools,
-    semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_id_for_tool,
-    toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
-    top_highlight_visible, top_ocr_visible, top_screenshot_visible, top_shape_picker_visible,
-    top_sticky_note_visible, top_text_visible, top_tool_buttons, top_tool_group,
-    visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
-    visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
+    SemanticToolIcon, TopToolGroup, TopUtilityButton, active_tool_in_shape_picker,
+    current_shape_tool, default_drag_hint, default_polygon_tool, default_shape_tool, is_fill_tool,
+    is_polygon_tool, polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible,
+    toolbar_item_id_for_tool, toolbar_item_visible, top_clear_canvas_visible, top_fill_visible,
+    top_highlight_ring_visible, top_highlight_visible, top_ocr_visible, top_screenshot_visible,
+    top_shape_picker_visible, top_sticky_note_visible, top_text_visible, top_tool_buttons,
+    top_tool_group, visible_shape_picker_max_row_len, visible_shape_picker_row_count,
+    visible_shape_picker_rows, visible_tool_count, visible_top_tool_buttons,
+    visible_top_utility_buttons,
 };
 #[allow(unused_imports)]
 pub(crate) use top_spec::{
-    TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole, TopToolbarDivider,
-    TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec, TopToolbarUtility,
-    action_tooltip, micro_ring_width, preset_slot,
+    RESTORE_TAB_SIZE, TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole,
+    TopToolbarDivider, TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec,
+    TopToolbarUtility, action_tooltip, micro_ring_width, preset_slot,
 };
 
 #[cfg(test)]
@@ -261,12 +272,12 @@ mod tests {
     fn factory_visibility_reset_button_tracks_only_eligible_tri_state_differences() {
         let mut snapshot = snapshot();
         snapshot.resolved_toolbar_items = ToolbarItemsConfig::default().resolved();
-        assert!(snapshot.toolbar_item_hidden(ids::TOP_UTILITY_SCREENSHOT));
+        assert!(!snapshot.toolbar_item_hidden(ids::TOP_UTILITY_SCREENSHOT));
         assert!(!has_visibility_reset_button(&snapshot));
 
-        let mut showing_screenshot = ToolbarItemsConfig::default();
-        showing_screenshot.set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
-        snapshot.resolved_toolbar_items = showing_screenshot.resolved();
+        let mut hiding_screenshot = ToolbarItemsConfig::default();
+        hiding_screenshot.set_hidden(ids::TOP_UTILITY_SCREENSHOT, true);
+        snapshot.resolved_toolbar_items = hiding_screenshot.resolved();
         assert!(has_visibility_reset_button(&snapshot));
 
         let mut hidden_pen = ToolbarItemsConfig::default();
@@ -321,7 +332,7 @@ mod tests {
         .resolved();
 
         assert_eq!(
-            visible_top_tool_buttons(false, &snapshot)
+            visible_top_tool_buttons(ToolbarLayoutMode::Regular, &snapshot)
                 .take(2)
                 .collect::<Vec<_>>(),
             vec![Tool::Marker, Tool::Pen]
@@ -384,6 +395,9 @@ mod tests {
     #[test]
     fn runtime_persistence_controls_follow_status_and_preserve_complete_paths() {
         let mut snapshot = snapshot();
+        // Paths live behind the "Details" disclosure; expanded, they stay
+        // complete.
+        snapshot.settings_details_open = true;
         let runtime_path = std::path::PathBuf::from(
             "/a/very/long/runtime/state/location/whose/complete/path/must/remain/visible/runtime-ui.toml",
         );

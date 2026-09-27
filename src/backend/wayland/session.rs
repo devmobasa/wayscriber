@@ -56,6 +56,7 @@ pub struct SessionState {
     notified_visible_only: bool,
     protected_session_paths: HashSet<PathBuf>,
     notified_expanded_load_paths: HashSet<PathBuf>,
+    launch_restore_notice_settled: bool,
 }
 
 impl SessionState {
@@ -83,6 +84,7 @@ impl SessionState {
             notified_visible_only: false,
             protected_session_paths: HashSet::new(),
             notified_expanded_load_paths: HashSet::new(),
+            launch_restore_notice_settled: false,
         }
     }
 
@@ -112,6 +114,16 @@ impl SessionState {
 
     pub fn has_loaded_board_data(&self) -> bool {
         self.loaded_board_data
+    }
+
+    /// Whether this launch is done with its restored-ink notice: it was shown,
+    /// or the loads that make up startup finished without restoring ink.
+    pub(in crate::backend::wayland) fn launch_restore_notice_settled(&self) -> bool {
+        self.launch_restore_notice_settled
+    }
+
+    pub(in crate::backend::wayland) fn settle_launch_restore_notice(&mut self) {
+        self.launch_restore_notice_settled = true;
     }
 
     pub fn is_dirty(&self) -> bool {

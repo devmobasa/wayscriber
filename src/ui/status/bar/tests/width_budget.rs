@@ -2,7 +2,8 @@ use super::*;
 
 #[test]
 fn configurable_core_segments_keep_fixed_order_and_split_tool_from_size() {
-    let state = make_state();
+    let mut state = make_state();
+    state.set_thickness_for_active_tool(30.8);
     let pieces = build_cluster_pieces(&state);
     let kinds: Vec<_> = pieces.iter().filter_map(|piece| piece.kind).collect();
     assert_eq!(
@@ -14,7 +15,6 @@ fn configurable_core_segments_keep_fixed_order_and_split_tool_from_size() {
             StatusHudSegmentKind::Tool,
             StatusHudSegmentKind::Size,
             StatusHudSegmentKind::Help,
-            StatusHudSegmentKind::About,
         ]
     );
 
@@ -27,7 +27,7 @@ fn configurable_core_segments_keep_fixed_order_and_split_tool_from_size() {
         .find(|piece| piece.kind == Some(StatusHudSegmentKind::Size))
         .expect("size piece");
     assert_eq!(tool.text.as_deref(), Some("Pen"));
-    assert_eq!(size.text.as_deref(), Some("4px"));
+    assert_eq!(size.text.as_deref(), Some("31px"));
 }
 
 #[test]
@@ -44,6 +44,8 @@ fn each_core_content_flag_removes_only_its_segment() {
 
     for (item, kind) in cases {
         let mut state = make_state();
+        // About is opt-in; enable it so its flag has a segment to remove.
+        state.ui_visibility.show_status_about = true;
         assert!(state.set_status_bar_item_visible_with_resources(
             &UiTextEngine::default(),
             &crate::draw::TextMeasurer::default(),
@@ -71,12 +73,14 @@ fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
     let mut state = make_state();
     state.ui_visibility.show_active_output_badge = true;
     assert!(state.set_active_output_label(Some("DP-3".to_string())));
+    assert!(state.set_output_count(2));
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 20,
         w: 30,
         h: 40,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -107,6 +111,60 @@ fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
         build_prefix_text(&state, &crate::draw::TextMeasurer::default()),
         None
     );
+}
+
+#[test]
+fn output_item_needs_two_outputs_unless_always_is_set() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut state = make_state();
+    state.ui_visibility.show_active_output_badge = true;
+    assert!(state.set_active_output_label(Some("WAYLAND-1".to_string())));
+
+    assert!(state.set_output_count(1));
+    assert_eq!(
+        build_prefix_text(&state, &measurer),
+        None,
+        "one output: the name is noise"
+    );
+
+    assert!(state.set_output_count(2));
+    assert_eq!(
+        build_prefix_text(&state, &measurer).as_deref(),
+        Some("Output: WAYLAND-1")
+    );
+
+    assert!(state.set_output_count(1));
+    state.ui_visibility.show_active_output_badge_always = true;
+    assert_eq!(
+        build_prefix_text(&state, &measurer).as_deref(),
+        Some("Output: WAYLAND-1"),
+        "active_output_badge_always keeps it with one output"
+    );
+
+    state.ui_visibility.show_active_output_badge = false;
+    assert_eq!(
+        build_prefix_text(&state, &measurer),
+        None,
+        "an explicit off still wins"
+    );
+}
+
+#[test]
+fn about_chip_is_opt_in_and_sits_last_when_enabled() {
+    let mut state = make_state();
+    assert!(!state.ui_visibility.show_status_about);
+    assert!(
+        build_cluster_pieces(&state)
+            .iter()
+            .all(|piece| piece.kind != Some(StatusHudSegmentKind::About))
+    );
+
+    state.ui_visibility.show_status_about = true;
+    let last = build_cluster_pieces(&state)
+        .into_iter()
+        .filter_map(|piece| piece.kind)
+        .next_back();
+    assert_eq!(last, Some(StatusHudSegmentKind::About));
 }
 
 #[test]
@@ -332,4 +390,52 @@ fn toolbar_hint_chip_appears_only_while_toolbar_hidden() {
     // setups out entirely.
     state.ui_visibility.show_toolbar_hint = false;
     assert!(!has_chip(&state));
+}
+
+fn segment_text(state: &InputState, kind: StatusHudSegmentKind) -> Option<String> {
+    build_cluster_pieces(state)
+        .into_iter()
+        .find(|piece| piece.kind == Some(kind))
+        .and_then(|piece| piece.text)
+}
+
+/// The size segment follows the tool: no pen width for Select or the
+/// click-highlight tool, which draw no stroke, and the text size while
+/// typing, shown once instead of again as a separate indicator.
+#[test]
+fn the_size_segment_follows_the_tool() {
+    let mut state = make_state();
+    state.set_tool_override(Some(Tool::Select));
+    assert_eq!(segment_text(&state, StatusHudSegmentKind::Size), None);
+    assert_eq!(
+        segment_text(&state, StatusHudSegmentKind::Tool).as_deref(),
+        Some("Selection")
+    );
+
+    state.set_tool_override(Some(Tool::Highlight));
+    assert_eq!(segment_text(&state, StatusHudSegmentKind::Size), None);
+    let highlight_labels = build_cluster_pieces(&state)
+        .iter()
+        .filter(|piece| {
+            piece
+                .text
+                .as_deref()
+                .is_some_and(|text| text.contains("Highlight"))
+        })
+        .count();
+    assert_eq!(highlight_labels, 1, "the tool segment names it once");
+
+    state.set_tool_override(Some(Tool::Pen));
+    state.style.current_font_size = 32.0;
+    state.state = crate::input::DrawingState::text_input(10, 10, String::new());
+    assert_eq!(
+        segment_text(&state, StatusHudSegmentKind::Size).as_deref(),
+        Some("32px")
+    );
+    assert!(
+        !build_cluster_pieces(&state)
+            .iter()
+            .any(|piece| piece.text.as_deref() == Some("Text 32px")),
+        "no second text-size indicator"
+    );
 }

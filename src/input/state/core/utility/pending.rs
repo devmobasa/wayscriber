@@ -2,7 +2,7 @@ use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputEffect, InputEffectDrain, InputEffectKind,
     InputState, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PresetAction, QuickColorEdit,
-    ZoomAction,
+    ZoomAction, ZoomAnchor, ZoomRequest,
 };
 use super::super::base::{TextClipboardRequest, TextPasteTarget};
 use crate::draw::Color;
@@ -161,15 +161,29 @@ impl InputState {
 
     /// Stores a user-requested zoom action for retrieval by the backend and
     /// records that the zoom controls have been used for onboarding guidance.
+    /// It centres on the pointer, unless the action is running for a control
+    /// that set another anchor (see [`Self::handle_action_anchored`]).
     pub(crate) fn request_zoom_action(&mut self, action: ZoomAction) {
+        let anchor = self.zoom_action_anchor.unwrap_or(ZoomAnchor::Pointer);
+        self.request_zoom_action_at(action, anchor);
+    }
+
+    /// Stores a zoom action centred on `anchor`.
+    pub(crate) fn request_zoom_action_at(&mut self, action: ZoomAction, anchor: ZoomAnchor) {
         self.pending_onboarding_usage.used_zoom_control = true;
-        self.emit_input_effect(InputEffect::Zoom(action));
+        self.emit_input_effect(InputEffect::Zoom(ZoomRequest { action, anchor }));
     }
 
     /// Takes and clears any pending zoom action.
     pub fn take_pending_zoom_action(&mut self) -> Option<ZoomAction> {
+        self.take_pending_zoom_request()
+            .map(|request| request.action)
+    }
+
+    /// Takes and clears any pending zoom request, anchor included.
+    pub fn take_pending_zoom_request(&mut self) -> Option<ZoomRequest> {
         match self.input_effects.drain_one(InputEffectKind::Zoom) {
-            Some(InputEffect::Zoom(action)) => Some(action),
+            Some(InputEffect::Zoom(request)) => Some(request),
             _ => None,
         }
     }
@@ -483,7 +497,10 @@ mod tests {
                     user_requested: true
                 },
                 InputEffect::Backend(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
-                InputEffect::Zoom(ZoomAction::Reset),
+                InputEffect::Zoom(ZoomRequest {
+                    action: ZoomAction::Reset,
+                    ..
+                }),
             ]
         ));
         assert!(matches!(

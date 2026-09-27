@@ -8,23 +8,36 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const ONBOARDING_VERSION: u32 = 6;
+const ONBOARDING_VERSION: u32 = 7;
 const STARTUP_NOTICE_ACKNOWLEDGEMENT_MAX: usize = 32;
 pub(crate) const DRAWER_HINT_MAX: u32 = 2;
 pub(crate) const DEFERRED_HINT_REPEAT_MAX: u32 = 3;
 const ONBOARDING_FILE: &str = "onboarding.toml";
 const ONBOARDING_DIR: &str = "wayscriber";
 
+/// First-run tour steps. Since v7 the tour runs value first: draw and undo,
+/// the toolbar and the way out, color and thickness, quick access, finding
+/// commands, and background mode last. Variants are persisted by name, so
+/// retired ones stay for old files and are migrated forward on load.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FirstRunStep {
+    /// Final step since v7; the first step before it.
     BackgroundModeSetup,
+    /// Retired in v7: drawing is taught together with undo.
     WaitDraw,
     DrawUndo,
+    ToolbarExit,
     ColorThickness,
     QuickAccess,
+    /// Retired radial-flick teaching step.
     RadialFlick,
     Reference,
+}
+
+impl FirstRunStep {
+    /// Where a fresh tour starts.
+    pub const FIRST: Self = Self::DrawUndo;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +75,9 @@ pub struct OnboardingState {
     /// Whether background mode setup was completed from first-run prompt
     #[serde(default)]
     pub first_run_background_mode_enabled: bool,
+    /// Whether the toolbar-and-exit step was acknowledged
+    #[serde(default)]
+    pub first_run_toolbar_exit_seen: bool,
     /// Whether quick-access step requires revealing hidden toolbars
     #[serde(default)]
     pub quick_access_requires_toolbar: bool,
@@ -170,6 +186,52 @@ pub struct OnboardingState {
     /// stored here because they must remain visible until resolved.
     #[serde(default)]
     pub acknowledged_startup_notices: Vec<String>,
+    /// Lifetime usage a Replay Tour run cleared so its cards teach again;
+    /// `Some` while a replay is in progress (see [`ReplaySavedUsage`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_run_replay_saved_usage: Option<ReplaySavedUsage>,
+}
+
+/// The lifetime usage flags a first-run replay clears so its quick-access and
+/// find-anything cards run again. They also keep later tips quiet, so the
+/// replay saves them here and gives them back when it completes or is
+/// skipped: lifetime usage never goes backwards.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplaySavedUsage {
+    #[serde(default)]
+    pub used_radial_menu: bool,
+    #[serde(default)]
+    pub used_context_menu_right_click: bool,
+    #[serde(default)]
+    pub used_context_menu_keyboard: bool,
+    #[serde(default)]
+    pub used_help_overlay: bool,
+    #[serde(default)]
+    pub used_command_palette: bool,
+}
+
+impl ReplaySavedUsage {
+    fn from_state(state: &OnboardingState) -> Self {
+        Self {
+            used_radial_menu: state.used_radial_menu,
+            used_context_menu_right_click: state.used_context_menu_right_click,
+            used_context_menu_keyboard: state.used_context_menu_keyboard,
+            used_help_overlay: state.used_help_overlay,
+            used_command_palette: state.used_command_palette,
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            used_radial_menu: self.used_radial_menu || other.used_radial_menu,
+            used_context_menu_right_click: self.used_context_menu_right_click
+                || other.used_context_menu_right_click,
+            used_context_menu_keyboard: self.used_context_menu_keyboard
+                || other.used_context_menu_keyboard,
+            used_help_overlay: self.used_help_overlay || other.used_help_overlay,
+            used_command_palette: self.used_command_palette || other.used_command_palette,
+        }
+    }
 }
 
 impl Default for OnboardingState {
@@ -187,6 +249,7 @@ impl Default for OnboardingState {
             active_step: None,
             first_run_background_mode_prompted: false,
             first_run_background_mode_enabled: false,
+            first_run_toolbar_exit_seen: false,
             quick_access_requires_toolbar: false,
             quick_access_radial_preview_shown: false,
             quick_access_context_preview_shown: false,
@@ -221,6 +284,7 @@ impl Default for OnboardingState {
             hint_canvas_popover_shown: false,
             hint_canvas_popover_count: 0,
             acknowledged_startup_notices: Vec::new(),
+            first_run_replay_saved_usage: None,
         }
     }
 }
@@ -228,6 +292,54 @@ impl Default for OnboardingState {
 impl OnboardingState {
     pub fn first_run_active(&self) -> bool {
         !self.first_run_completed && !self.first_run_skipped
+    }
+
+    /// Whether the user is replaying the first-run cards on purpose.
+    pub fn first_run_replay_active(&self) -> bool {
+        self.first_run_replay_saved_usage.is_some() && self.first_run_active()
+    }
+
+    /// Runs the first-run cards again from the first step. Their checklist
+    /// starts empty; the usage flags the quick-access and find-anything cards
+    /// wait on are saved and cleared. The background-mode answer is kept, so
+    /// a profile that already answered it ends the replay one card early.
+    pub fn begin_first_run_replay(&mut self) {
+        let current = ReplaySavedUsage::from_state(self);
+        let saved = self
+            .first_run_replay_saved_usage
+            .map_or(current, |saved| saved.union(current));
+
+        self.first_run_replay_saved_usage = Some(saved);
+        self.first_run_completed = false;
+        self.first_run_skipped = false;
+        self.active_step = Some(FirstRunStep::FIRST);
+        self.first_stroke_done = false;
+        self.first_undo_done = false;
+        self.first_run_toolbar_exit_seen = false;
+        self.first_color_done = false;
+        self.first_thickness_done = false;
+        self.quick_access_requires_toolbar = false;
+        self.used_radial_menu = false;
+        self.used_context_menu_right_click = false;
+        self.used_context_menu_keyboard = false;
+        self.used_help_overlay = false;
+        self.used_command_palette = false;
+    }
+
+    /// Gives a replay's saved usage back once it completes or is skipped.
+    /// Returns true when a replay was in progress.
+    pub fn finish_first_run_replay(&mut self) -> bool {
+        let Some(saved) = self.first_run_replay_saved_usage.take() else {
+            return false;
+        };
+
+        let merged = saved.union(ReplaySavedUsage::from_state(self));
+        self.used_radial_menu = merged.used_radial_menu;
+        self.used_context_menu_right_click = merged.used_context_menu_right_click;
+        self.used_context_menu_keyboard = merged.used_context_menu_keyboard;
+        self.used_help_overlay = merged.used_help_overlay;
+        self.used_command_palette = merged.used_command_palette;
+        true
     }
 }
 
@@ -448,9 +560,7 @@ impl OnboardingStore {
         }
 
         if automatic_guidance_enabled && !state.first_run_completed && !state.first_run_skipped {
-            state
-                .active_step
-                .get_or_insert(FirstRunStep::BackgroundModeSetup);
+            state.active_step.get_or_insert(FirstRunStep::FIRST);
         } else {
             state.active_step = None;
             state.quick_access_requires_toolbar = false;
@@ -551,10 +661,7 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
         state.active_step = None;
         needs_save = true;
     }
-    if state.active_step == Some(FirstRunStep::RadialFlick) {
-        state.active_step = Some(FirstRunStep::Reference);
-        needs_save = true;
-    }
+    needs_save |= migrate_first_run_step(state, old_version);
     if state.first_run_background_mode_enabled && !state.first_run_background_mode_prompted {
         state.first_run_background_mode_prompted = true;
         needs_save = true;
@@ -623,6 +730,22 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
     needs_save
 }
 
+/// Moves an in-progress tour off retired or reordered steps.
+fn migrate_first_run_step(state: &mut OnboardingState, old_version: u32) -> bool {
+    let migrated = match state.active_step {
+        Some(FirstRunStep::RadialFlick) => FirstRunStep::Reference,
+        Some(FirstRunStep::WaitDraw) => FirstRunStep::DrawUndo,
+        // v7 moved background mode from the first step to the last, so before
+        // v7 an active BackgroundModeSetup meant "the tour just began". Restart
+        // at the new first step; the prompt stays pending (or answered) and
+        // comes back at the end.
+        Some(FirstRunStep::BackgroundModeSetup) if old_version < 7 => FirstRunStep::FIRST,
+        _ => return false,
+    };
+    state.active_step = Some(migrated);
+    true
+}
+
 fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore {
     if path.exists() {
         let backup = backup_path(&path);
@@ -651,6 +774,7 @@ fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore
         active_step: None,
         first_run_background_mode_prompted: true,
         first_run_background_mode_enabled: false,
+        first_run_toolbar_exit_seen: true,
         quick_access_requires_toolbar: false,
         quick_access_radial_preview_shown: false,
         quick_access_context_preview_shown: false,
@@ -685,6 +809,7 @@ fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore
         hint_canvas_popover_shown: true,
         hint_canvas_popover_count: DEFERRED_HINT_REPEAT_MAX,
         acknowledged_startup_notices: Vec::new(),
+        first_run_replay_saved_usage: None,
     };
     let mut store = OnboardingStore {
         state,

@@ -33,7 +33,7 @@ pub use toggles::{PresetTextField, PresetToggleField, QuadField, TextField, Togg
 pub use tool::{DragColorOption, DragMouseButton, DragToolField, DragToolOption, ToolOption};
 pub use toolbar::{
     OverrideOption, ToolbarBackendOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ZoomChipDisplayOption,
+    ToolbarRebindModifierOption, ToolbarStrokeControlsOption, ZoomChipDisplayOption,
 };
 
 #[cfg(test)]

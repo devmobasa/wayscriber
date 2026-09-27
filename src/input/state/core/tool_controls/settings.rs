@@ -154,7 +154,7 @@ impl InputState {
                 self.presenter_mode_config().tool_behavior,
                 crate::config::PresenterToolBehavior::ForceHighlightLocked
             )
-            && tool != Some(Tool::Highlight)
+            && !matches!(tool, Some(Tool::Highlight | Tool::Laser))
         {
             return false;
         }
@@ -350,7 +350,8 @@ impl InputState {
         let changed = if tool.uses_eraser_size() {
             self.set_eraser_size_with(measurer, self.style.eraser_size + delta)
         } else {
-            self.set_thickness_with(measurer, self.thickness_for_tool(tool) + delta)
+            let next = crate::domain::step_stroke_thickness(self.thickness_for_tool(tool), delta);
+            self.set_thickness_with(measurer, next)
         };
         if changed {
             self.pending_onboarding_usage.used_thickness_change = true;

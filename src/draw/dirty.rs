@@ -162,6 +162,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 1.0,
                 g: 0.0,
@@ -177,6 +178,7 @@ mod tests {
             w: 15,
             h: 15,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 0.0,
                 g: 1.0,

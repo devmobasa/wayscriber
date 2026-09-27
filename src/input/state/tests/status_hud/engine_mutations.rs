@@ -107,7 +107,6 @@ fn assert_same_chrome(actual: &InputState, expected: &InputState) {
         actual.light_mode_drawing_active(),
         expected.light_mode_drawing_active()
     );
-    assert_eq!(actual.tour.is_active(), expected.tour.is_active());
     assert_eq!(actual.status_hud.hover, expected.status_hud.hover);
     assert_eq!(
         format!("{:?}", actual.status_hud_layout()),
@@ -162,11 +161,6 @@ fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
     explicit.toggle_focus_mode_with_resources(resources);
     legacy.toggle_focus_mode_with_resources(resources);
     assert_same_chrome(&explicit, &legacy);
-    explicit.start_tour_replay_with_resources(resources);
-    legacy.start_tour_replay();
-    assert_same_chrome(&explicit, &legacy);
-    assert!(explicit.tour.is_active());
-    assert!(!explicit.focus_mode_active());
 }
 
 #[test]

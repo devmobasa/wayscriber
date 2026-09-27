@@ -80,6 +80,7 @@ impl KeybindingsConfig {
             &self.tools.select_highlight_tool,
             Action::SelectHighlightTool,
         )?;
+        inserter.insert_all(&self.tools.select_laser_tool, Action::SelectLaserTool)?;
         inserter.insert_all(
             &self.tools.toggle_highlight_tool,
             Action::ToggleHighlightTool,

@@ -38,6 +38,7 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
     }
 
     super::slider::assert_widget_contract();
+    super::slider::assert_focused_slider_escape_stays_local();
 
     let bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     let bar_button = gtk4::Button::new();

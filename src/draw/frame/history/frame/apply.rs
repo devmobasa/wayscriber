@@ -87,12 +87,11 @@ impl Frame {
             if index == target {
                 return;
             }
+            // `target` is the index the shape ends at, as `Frame::move_shape`
+            // recorded it.
             let shape = self.shapes.remove(index);
-            let mut insert_index = target.min(self.shapes.len());
-            if index < insert_index && insert_index > 0 {
-                insert_index -= 1;
-            }
-            self.shapes.insert(insert_index, shape);
+            let target = target.min(self.shapes.len());
+            self.shapes.insert(target, shape);
             self.bump_shape_order_generation();
         }
     }

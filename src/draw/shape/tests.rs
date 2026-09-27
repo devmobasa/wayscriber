@@ -241,6 +241,7 @@ fn ellipse_bounding_box_handles_radii_and_stroke() {
         rx: 40,
         ry: 20,
         fill: false,
+        fill_color: None,
         color: WHITE,
         thick: 2.0,
     };
@@ -289,6 +290,7 @@ fn polygon_bounding_box_covers_vertices_and_stroke() {
         kind: PolygonKind::Triangle,
         points: vec![(10, 20), (30, 40), (5, 35)],
         fill: false,
+        fill_color: None,
         color: WHITE,
         thick: 6.0,
     };
@@ -306,6 +308,7 @@ fn polygon_shape_serializes_and_deserializes_with_points() {
         kind: PolygonKind::Regular { sides: 6 },
         points: vec![(10, 20), (30, 20), (40, 35), (30, 50), (10, 50), (0, 35)],
         fill: true,
+        fill_color: None,
         color: WHITE,
         thick: 4.0,
     };
@@ -318,10 +321,12 @@ fn polygon_shape_serializes_and_deserializes_with_points() {
             kind,
             points,
             fill,
+            fill_color,
             color,
             thick,
         } => {
             assert_eq!(kind, PolygonKind::Regular { sides: 6 });
+            assert_eq!(fill_color, None);
             assert_eq!(
                 points,
                 vec![(10, 20), (30, 20), (40, 35), (30, 50), (10, 50), (0, 35)]
@@ -340,6 +345,7 @@ fn invalid_polygon_has_no_bounds() {
         kind: PolygonKind::Freeform,
         points: vec![(10, 20), (10, 20), (30, 40)],
         fill: false,
+        fill_color: None,
         color: WHITE,
         thick: 6.0,
     };
@@ -630,4 +636,44 @@ fn embedded_image_clones_share_the_encoded_payload() {
     let cloned = image.clone();
 
     assert!(std::sync::Arc::ptr_eq(&image.bytes, &cloned.bytes));
+}
+
+#[test]
+fn a_fill_color_is_written_only_when_set_and_old_files_read_without_one() {
+    let old = r#"{"Rect":{"x":1,"y":2,"w":30,"h":40,"fill":true,"color":{"r":1.0,"g":0.0,"b":0.0,"a":1.0},"thick":2.0}}"#;
+    let shape: Shape = serde_json::from_str(old).expect("a rect saved before fill colors");
+    match &shape {
+        Shape::Rect {
+            fill, fill_color, ..
+        } => {
+            assert!(*fill);
+            assert_eq!(*fill_color, None);
+        }
+        other => panic!("expected rect, got {other:?}"),
+    }
+    let json = serde_json::to_string(&shape).expect("serialize");
+    assert!(
+        !json.contains("fill_color"),
+        "an unset fill color stays out: {json}"
+    );
+
+    let blue = crate::draw::Color {
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    let filled = Shape::Ellipse {
+        cx: 10,
+        cy: 10,
+        rx: 5,
+        ry: 5,
+        fill: true,
+        fill_color: Some(blue),
+        color: WHITE,
+        thick: 2.0,
+    };
+    let restored: Shape =
+        serde_json::from_str(&serde_json::to_string(&filled).expect("serialize")).expect("read");
+    assert_eq!(restored, filled);
 }

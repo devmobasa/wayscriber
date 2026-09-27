@@ -1,4 +1,5 @@
 use super::*;
+use crate::input::{ZoomAnchor, ZoomRequest};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn sync_input_zoom_state(&mut self) {
@@ -52,9 +53,15 @@ impl WaylandState {
         self.canvas_world_coords(screen_x, screen_y)
     }
 
-    pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, action: ZoomAction) {
-        let (sx, sy) = self.zoom_keyboard_anchor();
-        match action {
+    /// Open UI takes Escape and arrows before zoom so dismissal never also
+    /// exits zoom, and menu navigation never pans the canvas.
+    pub(in crate::backend::wayland) fn zoom_keys_yield_to_open_menu(&self) -> bool {
+        self.input_state.modal_owns_text_input() || self.input_state.toolbar_top_menu().is_open()
+    }
+
+    pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, request: ZoomRequest) {
+        let (sx, sy) = self.zoom_anchor_point(request.anchor);
+        match request.action {
             ZoomAction::In => {
                 self.apply_zoom_factor(Self::ZOOM_STEP_KEY, sx, sy, true);
             }
@@ -87,15 +94,15 @@ impl WaylandState {
         }
     }
 
-    fn zoom_keyboard_anchor(&self) -> (f64, f64) {
-        if self.focus.pointer_focused() {
-            let (sx, sy) = self.pointer.position();
-            (sx as f64, sy as f64)
-        } else {
-            let cx = (self.surface.width() as f64) * 0.5;
-            let cy = (self.surface.height() as f64) * 0.5;
-            (cx, cy)
-        }
+    fn zoom_anchor_point(&self, anchor: ZoomAnchor) -> (f64, f64) {
+        resolve_zoom_anchor(
+            anchor,
+            self.focus
+                .pointer_focused()
+                .then_some(self.pointer.position()),
+            self.surface.width(),
+            self.surface.height(),
+        )
     }
 
     pub(in crate::backend::wayland) fn handle_zoom_scroll(
@@ -236,9 +243,49 @@ fn zoom_suppression_keyboard_policy(use_fallback: bool) -> OverlaySuppressionKey
     }
 }
 
+/// The screen point a zoom step centres on. A pointer anchor falls back to
+/// the screen centre when the pointer is not on the overlay.
+fn resolve_zoom_anchor(
+    anchor: ZoomAnchor,
+    pointer: Option<(i32, i32)>,
+    width: u32,
+    height: u32,
+) -> (f64, f64) {
+    let center = (width as f64 * 0.5, height as f64 * 0.5);
+
+    match anchor {
+        ZoomAnchor::Pointer => pointer.map_or(center, |(x, y)| (x as f64, y as f64)),
+        ZoomAnchor::ScreenCenter => center,
+        ZoomAnchor::At(x, y) => (x as f64, y as f64),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Shortcuts zoom at the pointer; the chip, toolbar, and palette sit away
+    /// from what the user looks at and zoom the centre; a context menu zooms
+    /// where it was opened.
+    #[test]
+    fn zoom_anchors_resolve_to_pointer_centre_or_menu_origin() {
+        assert_eq!(
+            resolve_zoom_anchor(ZoomAnchor::Pointer, Some((300, 200)), 1920, 1080),
+            (300.0, 200.0)
+        );
+        assert_eq!(
+            resolve_zoom_anchor(ZoomAnchor::Pointer, None, 1920, 1080),
+            (960.0, 540.0)
+        );
+        assert_eq!(
+            resolve_zoom_anchor(ZoomAnchor::ScreenCenter, Some((1850, 1050)), 1920, 1080),
+            (960.0, 540.0)
+        );
+        assert_eq!(
+            resolve_zoom_anchor(ZoomAnchor::At(12, 34), Some((1850, 1050)), 1920, 1080),
+            (12.0, 34.0)
+        );
+    }
 
     #[test]
     fn native_zoom_retains_keyboard_but_portal_zoom_releases_it() {

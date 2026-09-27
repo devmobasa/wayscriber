@@ -93,6 +93,7 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
         crate::input::state::TopMenuState::CanvasPopover,
         crate::input::state::TopMenuState::SessionPopover,
         crate::input::state::TopMenuState::SettingsPopover,
+        crate::input::state::TopMenuState::PenFeelPanel,
     ] {
         let mut rebuilt = input_from_config(&config);
         rebuilt.test_set_toolbar_menu_state(menu, rebuilt.toolbar_top_popover_scroll());

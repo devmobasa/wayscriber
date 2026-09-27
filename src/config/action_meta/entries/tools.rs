@@ -172,6 +172,24 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectLaserTool,
+        "Laser Pointer Tool",
+        Some("Laser"),
+        "Point with glowing ink that fades away and is never saved",
+        Tools,
+        true,
+        true,
+        true,
+        &[
+            "laser",
+            "pointer",
+            "presenter",
+            "presentation",
+            "fading ink",
+            "disappearing ink",
+        ]
+    ),
+    meta!(
         ToggleHighlightTool,
         "Toggle Highlight",
         Some("Highlight"),
