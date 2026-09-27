@@ -2387,6 +2387,7 @@ fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: 2.0,
     });

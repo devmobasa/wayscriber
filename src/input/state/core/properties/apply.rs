@@ -41,8 +41,14 @@ impl InputState {
                 else {
                     return false;
                 };
-                self.set_selection_color_from_panel(measurer, color)
+                match entry.kind {
+                    SelectionPropertyKind::Fill => {
+                        self.set_selection_fill_from_panel(measurer, Some(color))
+                    }
+                    _ => self.set_selection_color_from_panel(measurer, color),
+                }
             }
+            PropertiesPanelHit::NoFill(_) => self.set_selection_fill_from_panel(measurer, None),
             PropertiesPanelHit::MoreColors(_) => {
                 return self.open_color_picker_popup_for_selection_with_measurer(measurer);
             }
@@ -126,6 +132,18 @@ impl InputState {
         }
         self.finish_active_arrow_bend();
         self.apply_selection_color_value_with(measurer, color)
+    }
+
+    fn set_selection_fill_from_panel(
+        &mut self,
+        measurer: &TextMeasurer,
+        paint: Option<Color>,
+    ) -> bool {
+        if !self.selection_fill_paint_changes(paint) {
+            return false;
+        }
+        self.finish_active_arrow_bend();
+        self.apply_selection_fill_paint_with(measurer, paint)
     }
 
     fn set_selection_arrow_style_from_panel(

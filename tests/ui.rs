@@ -178,6 +178,7 @@ fn render_shape_ellipse_does_not_connect_to_existing_current_path() {
             rx: 20,
             ry: 10,
             fill: false,
+            fill_color: None,
             color: magenta,
             thick: 6.0,
         },

@@ -222,6 +222,7 @@ fn rect() -> Shape {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: crate::draw::BLACK,
         thick: 1.0,
     }

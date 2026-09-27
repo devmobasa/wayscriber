@@ -272,6 +272,7 @@ fn page_delete_on_last_page_clears_shapes_without_removing_page() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -337,6 +338,7 @@ fn page_content_edit_does_not_stale_pending_page_delete() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

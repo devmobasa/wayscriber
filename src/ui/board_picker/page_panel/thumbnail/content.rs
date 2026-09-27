@@ -303,6 +303,7 @@ mod tests {
                 w: 40,
                 h: 20,
                 fill: true,
+                fill_color: None,
                 color: Color {
                     r: 1.0,
                     g: 1.0,

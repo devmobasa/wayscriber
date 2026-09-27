@@ -52,6 +52,7 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -61,6 +62,7 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -103,6 +105,7 @@ fn shape_menu_includes_reset_canvas_position_on_solid_boards() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -133,6 +136,7 @@ fn select_this_shape_command_focuses_single_shape() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -142,6 +146,7 @@ fn select_this_shape_command_focuses_single_shape() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -174,6 +179,7 @@ fn properties_command_opens_panel() {
             w: 40,
             h: 30,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 1.0,
                 g: 0.0,
@@ -412,6 +418,7 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -421,6 +428,7 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -689,6 +697,7 @@ fn keyboard_shape_menu_anchor_tracks_panned_board_view_offset() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -904,6 +913,7 @@ fn undo_and_redo_rows_follow_history_and_run_it() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: 2.0,
     });
@@ -968,6 +978,7 @@ fn shape_menu_also_ends_with_exit() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: 2.0,
     });
@@ -1048,6 +1059,7 @@ fn shape_menu_orders_by_steps_and_dims_the_way_the_shape_cannot_go() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: Color::new(1.0, 0.0, 0.0, 1.0),
         thick: 2.0,
     };

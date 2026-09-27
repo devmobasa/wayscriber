@@ -85,6 +85,7 @@ pub(super) fn fit_ellipse(
             rx: rx.round() as i32,
             ry: ry.round() as i32,
             fill: false,
+            fill_color: None,
             color,
             thick,
         },

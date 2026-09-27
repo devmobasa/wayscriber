@@ -20,6 +20,7 @@ fn add_filled_rect(state: &mut InputState, x: i32, y: i32) -> crate::draw::Shape
         w: 40,
         h: 40,
         fill: true,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     })

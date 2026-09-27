@@ -10,6 +10,7 @@ fn add_rect(state: &mut InputState, x: i32, y: i32, w: i32, h: i32) -> crate::dr
         w,
         h,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     })
@@ -255,9 +256,10 @@ fn activate_fill_entry_toggles_rectangle_fill_and_refreshes_panel_value() {
         Shape::Rect { fill, .. } => assert!(*fill),
         other => panic!("expected rect, got {other:?}"),
     }
+    // With no fill color of its own, the fill takes the border's.
     assert_eq!(
-        state.properties_panel().expect("panel").entries[fill_index].value,
-        "On"
+        state.properties_panel().expect("panel").entries[fill_index].state,
+        SelectionPropertyValue::Fill(Some(Some(state.style.current_color)))
     );
 }
 

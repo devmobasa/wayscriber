@@ -11,6 +11,7 @@ fn push_rect_create(state: &mut InputState, x: i32) {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color,
         thick,
     });
@@ -37,6 +38,7 @@ fn undo_all_and_redo_all_process_entire_stack() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -55,6 +57,7 @@ fn undo_all_and_redo_all_process_entire_stack() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

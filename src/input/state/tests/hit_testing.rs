@@ -32,6 +32,7 @@ fn indexed_state_with_two_overlapping_rects() -> InputState {
             w: 20,
             h: 20,
             fill: true,
+            fill_color: None,
             color,
             thick: 1.0,
         });
@@ -85,6 +86,7 @@ fn extreme_persisted_rectangle_is_selectable_through_the_spatial_index() {
         w: i32::MIN,
         h: 20,
         fill: true,
+        fill_color: None,
         color,
         thick: 1.0,
     });
@@ -94,6 +96,7 @@ fn extreme_persisted_rectangle_is_selectable_through_the_spatial_index() {
         w: 20,
         h: 20,
         fill: true,
+        fill_color: None,
         color,
         thick: 1.0,
     });
@@ -122,6 +125,7 @@ fn spatial_hit_testing_reuses_resolved_candidate_indices_without_id_rescans() {
         w: 20,
         h: 20,
         fill: true,
+        fill_color: None,
         color,
         thick: 1.0,
     });
@@ -131,6 +135,7 @@ fn spatial_hit_testing_reuses_resolved_candidate_indices_without_id_rescans() {
         w: 20,
         h: 20,
         fill: true,
+        fill_color: None,
         color,
         thick: 1.0,
     });
@@ -201,6 +206,7 @@ fn spatial_hit_testing_rebuilds_after_public_shape_id_replacement() {
         w: 20,
         h: 20,
         fill: true,
+        fill_color: None,
         color: Color {
             r: 0.0,
             g: 0.0,
@@ -222,6 +228,7 @@ fn spatial_hit_testing_rebuilds_after_public_shape_id_replacement() {
         w: 20,
         h: 20,
         fill: true,
+        fill_color: None,
         color: Color {
             r: 0.0,
             g: 0.0,
@@ -253,6 +260,7 @@ fn spatial_shape_indices_follow_insert_delete_reorder_undo_and_redo() {
             w: 20,
             h: 20,
             fill: true,
+            fill_color: None,
             color,
             thick: 1.0,
         })

@@ -53,6 +53,7 @@ fn session_roundtrip_preserves_shapes_across_frames() {
         rx: 4,
         ry: 8,
         fill: false,
+        fill_color: None,
         color: Color {
             r: 1.0,
             g: 1.0,
@@ -202,6 +203,7 @@ fn save_snapshot_skips_backup_when_disabled() {
         w: 5,
         h: 5,
         fill: false,
+        fill_color: None,
         color: Color {
             r: 0.0,
             g: 0.0,

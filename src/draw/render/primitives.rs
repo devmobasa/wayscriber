@@ -20,7 +20,18 @@ pub(super) fn render_line(
     let _ = ctx.stroke();
 }
 
-/// Render a rectangle (outline)
+/// Fill the current path with `fill`, if any, and keep the path for the
+/// outline stroke that follows.
+fn fill_path(ctx: &cairo::Context, fill: Option<Color>) {
+    if let Some(paint) = fill {
+        let _ = ctx.save();
+        ctx.set_source_rgba(paint.r, paint.g, paint.b, paint.a);
+        let _ = ctx.fill_preserve();
+        let _ = ctx.restore();
+    }
+}
+
+/// Render a rectangle outline, filled with `fill` when there is one.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_rect(
     ctx: &cairo::Context,
@@ -28,7 +39,7 @@ pub(super) fn render_rect(
     y: i32,
     w: i32,
     h: i32,
-    fill: bool,
+    fill: Option<Color>,
     color: Color,
     thick: f64,
 ) {
@@ -41,12 +52,7 @@ pub(super) fn render_rect(
     let (norm_x, norm_y, norm_w, norm_h) = util::normalize_i32_rect(x, y, w, h);
 
     ctx.rectangle(norm_x, norm_y, norm_w, norm_h);
-    if fill {
-        let _ = ctx.save();
-        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-        let _ = ctx.fill_preserve();
-        let _ = ctx.restore();
-    }
+    fill_path(ctx, fill);
     let _ = ctx.stroke();
 }
 
@@ -58,7 +64,7 @@ pub(super) fn render_ellipse(
     cy: i32,
     rx: i32,
     ry: i32,
-    fill: bool,
+    fill: Option<Color>,
     color: Color,
     thick: f64,
 ) {
@@ -74,12 +80,7 @@ pub(super) fn render_ellipse(
     ctx.scale(rx as f64, ry as f64);
     ctx.new_sub_path();
     ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * std::f64::consts::PI);
-    if fill {
-        let _ = ctx.save();
-        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-        let _ = ctx.fill_preserve();
-        ctx.restore().ok();
-    }
+    fill_path(ctx, fill);
     ctx.restore().ok();
 
     let _ = ctx.stroke();
@@ -90,7 +91,7 @@ pub(super) fn render_ellipse(
 pub(super) fn render_polygon(
     ctx: &cairo::Context,
     points: &[(i32, i32)],
-    fill: bool,
+    fill: Option<Color>,
     color: Color,
     thick: f64,
 ) {
@@ -109,9 +110,7 @@ pub(super) fn render_polygon(
         ctx.line_to(x as f64, y as f64);
     }
     ctx.close_path();
-    if fill {
-        let _ = ctx.fill_preserve();
-    }
+    fill_path(ctx, fill);
     let _ = ctx.stroke();
     let _ = ctx.restore();
 }
@@ -515,7 +514,7 @@ mod tests {
         };
 
         ctx.move_to(10.0, 90.0);
-        render_ellipse(&ctx, 80, 20, 20, 10, false, magenta, 6.0);
+        render_ellipse(&ctx, 80, 20, 20, 10, None, magenta, 6.0);
 
         drop(ctx);
         assert_eq!(
@@ -545,9 +544,49 @@ mod tests {
             i32::MIN,
             i32::MIN,
             i32::MIN,
-            true,
+            Some(color),
             color,
             1.0,
+        );
+    }
+
+    fn rgb_at(surface: &mut ImageSurface, x: i32, y: i32) -> (u8, u8, u8) {
+        let stride = surface.stride() as usize;
+        let offset = y as usize * stride + x as usize * 4;
+        let data = surface.data().unwrap();
+        // ARGB32 is stored little-endian as B, G, R, A.
+        (data[offset + 2], data[offset + 1], data[offset])
+    }
+
+    #[test]
+    fn a_fill_color_paints_the_inside_and_the_border_keeps_its_own() {
+        let (mut surface, ctx) = surface_with_context(60, 60);
+        let red = Color::new(1.0, 0.0, 0.0, 1.0);
+        let blue = Color::new(0.0, 0.0, 1.0, 1.0);
+        crate::draw::render_shape(
+            &ctx,
+            &crate::draw::Shape::Rect {
+                x: 10,
+                y: 10,
+                w: 40,
+                h: 40,
+                fill: true,
+                fill_color: Some(blue),
+                color: red,
+                thick: 4.0,
+            },
+        );
+
+        drop(ctx);
+        assert_eq!(
+            rgb_at(&mut surface, 30, 30),
+            (0, 0, 255),
+            "inside is the fill"
+        );
+        assert_eq!(
+            rgb_at(&mut surface, 10, 30),
+            (255, 0, 0),
+            "the border is red"
         );
     }
 }

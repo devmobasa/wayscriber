@@ -94,8 +94,25 @@ fn set_opacity(shape: &mut Shape, opacity: impl FnOnce(f64) -> f64) -> Option<bo
     let (min, max) = opacity_range(shape);
     let color = shape_color_mut(shape)?;
     let next = opacity(color.a).clamp(min, max);
-    let changed = (next - color.a).abs() > f64::EPSILON;
+    let mut changed = (next - color.a).abs() > f64::EPSILON;
     color.a = next;
+    // One opacity per shape: a fill with its own color follows the border.
+    if let Shape::Rect {
+        fill_color: Some(fill),
+        ..
+    }
+    | Shape::Ellipse {
+        fill_color: Some(fill),
+        ..
+    }
+    | Shape::Polygon {
+        fill_color: Some(fill),
+        ..
+    } = shape
+    {
+        changed |= (next - fill.a).abs() > f64::EPSILON;
+        fill.a = next;
+    }
     Some(changed)
 }
 
@@ -277,6 +294,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color,
             thick: 2.0,
         })

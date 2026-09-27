@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use super::summary::{
     PropertySummary, shape_arrow_angle, shape_arrow_head, shape_arrow_length, shape_arrow_style,
-    shape_color, shape_fill, shape_font_size, shape_opacity, shape_spotlight_magnification,
+    shape_color, shape_fill_paint, shape_font_size, shape_opacity, shape_spotlight_magnification,
     shape_text_background, shape_thickness, summarize_property,
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue};
@@ -146,14 +146,19 @@ impl InputState {
             ));
         }
 
-        let fill_summary = summarize_property(frame, ids, shape_fill, |a, b| a == b);
+        let fill_summary = summarize_property(frame, ids, shape_fill_paint, |a, b| match (a, b) {
+            (Some(a), Some(b)) => color_rgba_eq(a, b),
+            (a, b) => a.is_none() && b.is_none(),
+        });
         if fill_summary.applicable {
             entries.push(entry(
                 "Fill",
                 SelectionPropertyKind::Fill,
                 &fill_summary,
-                |v| if v { "On" } else { "Off" }.to_string(),
-                SelectionPropertyValue::Toggle,
+                |paint| {
+                    paint.map_or_else(|| "None".to_string(), |color| color_label(palette, color))
+                },
+                SelectionPropertyValue::Fill,
             ));
         }
 
@@ -268,6 +273,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 1.0,
                 g: 0.0,
@@ -282,6 +288,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 0.0,
                 g: 0.0,

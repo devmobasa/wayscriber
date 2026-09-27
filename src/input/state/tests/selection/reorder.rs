@@ -8,6 +8,7 @@ fn add(state: &mut InputState, x: i32) -> ShapeId {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: Color::new(1.0, 0.0, 0.0, 1.0),
         thick: 2.0,
     })

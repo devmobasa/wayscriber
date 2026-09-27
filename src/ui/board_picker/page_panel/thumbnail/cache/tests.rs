@@ -9,6 +9,7 @@ fn rect(x: i32, color: Color) -> Shape {
         w: 130,
         h: 95,
         fill: true,
+        fill_color: None,
         color,
         thick: 3.0,
     }

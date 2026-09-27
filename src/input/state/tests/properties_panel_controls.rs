@@ -26,6 +26,7 @@ fn add_rect(state: &mut InputState, color: Color, fill: bool) -> ShapeId {
         w: 60,
         h: 40,
         fill,
+        fill_color: None,
         color,
         thick: 3.0,
     })
@@ -198,23 +199,79 @@ fn a_press_that_leaves_its_control_before_the_release_changes_nothing() {
     assert!(state.is_properties_panel_open());
 }
 
+fn fill_of(state: &InputState, id: ShapeId) -> (bool, Option<Color>) {
+    match &state.boards.active_frame().shape(id).expect("rect").shape {
+        Shape::Rect {
+            fill, fill_color, ..
+        } => (*fill, *fill_color),
+        other => panic!("expected rect, got {other:?}"),
+    }
+}
+
+fn swatch_index(state: &InputState, color: Color) -> usize {
+    state
+        .properties_panel()
+        .unwrap()
+        .swatches
+        .iter()
+        .position(|swatch| swatch.color == color)
+        .expect("swatch")
+}
+
 #[test]
-fn the_switch_and_the_rest_of_its_row_both_toggle_fill() {
+fn a_fill_swatch_fills_with_its_own_color_and_no_fill_keeps_it_for_later() {
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let id = add_rect(&mut state, PALETTE_RED, false);
     open(&mut state, vec![id]);
     let fill = row(&state, "Fill");
+    assert_eq!(
+        state.properties_panel().unwrap().entries[fill].value,
+        "None"
+    );
+    let blue = swatch_index(&state, crate::domain::color::PALETTE_BLUE);
 
-    click(&mut state, PropertiesPanelHit::Toggle(fill));
-    assert!(rect_of(&state, id).1);
-    assert_eq!(state.properties_panel().unwrap().entries[fill].value, "On");
+    click(
+        &mut state,
+        PropertiesPanelHit::Swatch {
+            row: fill,
+            index: blue,
+        },
+    );
+    assert_eq!(
+        fill_of(&state, id),
+        (true, Some(crate::domain::color::PALETTE_BLUE))
+    );
+    assert_eq!(
+        rect_of(&state, id).0,
+        PALETTE_RED,
+        "the border keeps its color"
+    );
+    let panel = state.properties_panel().unwrap();
+    assert_eq!(panel.entries[fill].value, "Blue");
+    assert_eq!(panel.current_swatch(&panel.entries[fill]), Some(blue));
 
-    click(&mut state, PropertiesPanelHit::Row(fill));
-    assert!(!rect_of(&state, id).1);
+    click(&mut state, PropertiesPanelHit::NoFill(fill));
+    assert_eq!(
+        fill_of(&state, id),
+        (false, Some(crate::domain::color::PALETTE_BLUE)),
+        "no fill keeps the color for when the fill comes back"
+    );
+    assert_eq!(
+        state.properties_panel().unwrap().entries[fill].value,
+        "None"
+    );
+
+    state.set_properties_panel_focus(Some(fill));
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Return));
+    assert_eq!(
+        fill_of(&state, id),
+        (true, Some(crate::domain::color::PALETTE_BLUE))
+    );
 }
 
 #[test]
-fn a_mixed_fill_selection_turns_on_from_the_switch() {
+fn a_mixed_fill_selection_takes_one_fill_from_a_swatch() {
     let mut state = create_test_input_state();
     let filled = add_rect(&mut state, PALETTE_RED, true);
     let outlined = add_rect(&mut state, PALETTE_RED, false);
@@ -222,12 +279,58 @@ fn a_mixed_fill_selection_turns_on_from_the_switch() {
     let fill = row(&state, "Fill");
     assert_eq!(
         state.properties_panel().unwrap().entries[fill].state,
-        SelectionPropertyValue::Toggle(None)
+        SelectionPropertyValue::Fill(None)
+    );
+    let green = swatch_index(&state, PALETTE_GREEN);
+
+    click(
+        &mut state,
+        PropertiesPanelHit::Swatch {
+            row: fill,
+            index: green,
+        },
     );
 
-    click(&mut state, PropertiesPanelHit::Toggle(fill));
+    assert_eq!(fill_of(&state, filled), (true, Some(PALETTE_GREEN)));
+    assert_eq!(fill_of(&state, outlined), (true, Some(PALETTE_GREEN)));
+}
 
-    assert!(rect_of(&state, filled).1 && rect_of(&state, outlined).1);
+#[test]
+fn a_fill_shares_the_shapes_opacity() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    let half_red = Color {
+        a: 0.5,
+        ..PALETTE_RED
+    };
+    let id = add_rect(&mut state, half_red, false);
+    open(&mut state, vec![id]);
+    let fill = row(&state, "Fill");
+    let green = swatch_index(&state, PALETTE_GREEN);
+
+    click(
+        &mut state,
+        PropertiesPanelHit::Swatch {
+            row: fill,
+            index: green,
+        },
+    );
+    assert_eq!(
+        fill_of(&state, id).1,
+        Some(Color {
+            a: 0.5,
+            ..PALETTE_GREEN
+        }),
+        "an opaque swatch fills at the shape's opacity"
+    );
+
+    state.set_properties_panel_focus(Some(row(&state, "Opacity")));
+    assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Right));
+    assert!((rect_of(&state, id).0.a - 0.55).abs() < 1e-9);
+    assert!(
+        (fill_of(&state, id).1.unwrap().a - 0.55).abs() < 1e-9,
+        "the fill follows the border's opacity"
+    );
 }
 
 #[test]

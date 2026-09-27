@@ -135,6 +135,7 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
         w: 3,
         h: 2,
         fill: true,
+        fill_color: None,
         color: crate::draw::RED,
         thick: 1.0,
     });

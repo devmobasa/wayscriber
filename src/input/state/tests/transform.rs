@@ -55,6 +55,7 @@ fn resizing_selection_marks_previous_live_bounds_dirty() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -114,6 +115,7 @@ fn resizing_selection_back_to_start_restores_original_geometry() {
         w: 20,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -184,6 +186,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
         w: 20,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -225,6 +228,7 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
         w: 20,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -267,6 +271,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
         w: 20,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -307,6 +312,7 @@ fn nudge_selection_large_uses_large_step() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -339,6 +345,7 @@ fn nudge_selection_clamps_left_and_top_edges() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -370,6 +377,7 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

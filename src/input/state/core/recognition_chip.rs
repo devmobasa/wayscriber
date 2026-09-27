@@ -190,6 +190,7 @@ mod tests {
             rx,
             ry,
             fill: false,
+            fill_color: None,
             color: Color::new(1.0, 0.0, 0.0, 1.0),
             thick: 3.0,
         }

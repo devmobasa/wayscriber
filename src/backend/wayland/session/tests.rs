@@ -1447,6 +1447,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: input.style.current_color,
         thick: input.style.current_thickness,
     });

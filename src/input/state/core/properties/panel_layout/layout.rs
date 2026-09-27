@@ -108,7 +108,7 @@ fn measure_panel(
         .max(empty_width);
     for entry in &panel.entries {
         let row_width = match entry.state {
-            SelectionPropertyValue::Color(_) => {
+            SelectionPropertyValue::Color(_) | SelectionPropertyValue::Fill(_) => {
                 label_width.max(swatch_grid_width(panel.swatches.len()))
             }
             SelectionPropertyValue::ArrowStyle(_) => {

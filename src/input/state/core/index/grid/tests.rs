@@ -13,6 +13,7 @@ fn filled_rect(x: i32, y: i32, width: i32, height: i32) -> Shape {
         w: width,
         h: height,
         fill: true,
+        fill_color: None,
         color: Color {
             r: 0.0,
             g: 0.0,

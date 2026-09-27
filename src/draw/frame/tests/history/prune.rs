@@ -11,6 +11,7 @@ fn prune_history_for_removed_ids_prunes_shapes_and_actions() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: BLACK,
         thick: 1.0,
     };

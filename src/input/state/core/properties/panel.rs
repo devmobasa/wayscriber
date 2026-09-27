@@ -294,6 +294,7 @@ mod tests {
             w,
             h,
             fill: false,
+            fill_color: None,
             color: state.style.current_color,
             thick: state.style.current_thickness,
         })
@@ -426,6 +427,7 @@ mod tests {
             rx: 10,
             ry: 10,
             fill: false,
+            fill_color: None,
             color: state.style.current_color,
             thick: state.style.current_thickness,
         });

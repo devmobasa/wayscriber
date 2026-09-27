@@ -408,6 +408,7 @@ mod tests {
             w: 30,
             h: 40,
             fill: false,
+            fill_color: None,
             color: WHITE,
             thick: 2.0,
         }

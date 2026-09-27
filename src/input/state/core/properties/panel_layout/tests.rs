@@ -84,7 +84,11 @@ fn inside(outer: PanelRect, inner: PanelRect) -> bool {
 fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelHit)> {
     let index = row.index;
     match &row.control {
-        PropertiesRowControl::Swatches { swatches, more } => swatches
+        PropertiesRowControl::Swatches {
+            swatches,
+            none,
+            more,
+        } => swatches
             .iter()
             .enumerate()
             .map(|(swatch, rect)| {
@@ -96,7 +100,8 @@ fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelH
                     },
                 )
             })
-            .chain([(*more, PropertiesPanelHit::MoreColors(index))])
+            .chain(none.map(|rect| (rect, PropertiesPanelHit::NoFill(index))))
+            .chain(more.map(|rect| (rect, PropertiesPanelHit::MoreColors(index))))
             .collect(),
         PropertiesRowControl::Stepper { down, up, .. } => vec![
             (*down, PropertiesPanelHit::StepDown(index)),
@@ -178,6 +183,7 @@ fn every_control_is_hit_where_it_is_drawn_and_stays_in_its_row() {
         w: 40,
         h: 40,
         fill: false,
+        fill_color: None,
         color: PALETTE_RED,
         thick: 2.0,
     });
@@ -348,6 +354,7 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
         w: 40,
         h: 40,
         fill: false,
+        fill_color: None,
         color: PALETTE_RED,
         thick: 2.0,
     });
@@ -401,6 +408,7 @@ fn four_kinds(state: &mut InputState) -> Vec<ShapeId> {
         w: 40,
         h: 40,
         fill: false,
+        fill_color: None,
         color: PALETTE_RED,
         thick: 2.0,
     });

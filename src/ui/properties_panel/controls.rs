@@ -32,6 +32,8 @@ const SWATCH_HAIRLINE: Rgba = (1.0, 1.0, 1.0, 0.18);
 const QUIET_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.16);
 /// A locked selection's padlock: the same amber the toolbar uses for "held".
 const LOCK_ACTIVE: Rgba = (0.965, 0.827, 0.176, 1.0);
+/// The stroke across the "no fill" swatch: the destructive red, as "none".
+const NO_FILL_STRIKE: Rgba = crate::ui::theme::rgba(crate::ui::theme::DESTRUCTIVE_RGB, 0.9);
 /// How much of its color a control keeps while its row is locked.
 const DISABLED_ALPHA: f64 = 0.35;
 const GLYPH_WIDTH: f64 = 1.6;
@@ -130,11 +132,29 @@ pub(super) fn draw_lock(
     let _ = ctx.stroke();
 }
 
+/// Where a swatch row's extra cells sit, and whether "no fill" is the
+/// current choice.
+#[derive(Clone, Copy)]
+pub(super) struct SwatchExtras {
+    pub(super) none: Option<PanelRect>,
+    pub(super) none_selected: bool,
+    pub(super) more: Option<PanelRect>,
+}
+
+fn selection_ring(ctx: &cairo::Context, rect: PanelRect, state: ControlState) {
+    let (cx, cy) = rect.center();
+    ctx.new_path();
+    ctx.arc(cx, cy, rect.width / 2.0 + 3.5, 0.0, TAU);
+    set_color(ctx, state.fade(ACCENT_BRIGHT));
+    ctx.set_line_width(2.0);
+    let _ = ctx.stroke();
+}
+
 pub(super) fn draw_swatches(
     ctx: &cairo::Context,
     swatches: &[PropertiesPanelSwatch],
     rects: &[PanelRect],
-    more: PanelRect,
+    extras: SwatchExtras,
     current: Option<usize>,
     state: ControlState,
 ) {
@@ -163,14 +183,44 @@ pub(super) fn draw_swatches(
         let _ = ctx.stroke();
 
         if current == Some(index) {
-            ctx.new_path();
-            ctx.arc(cx, cy, rect.width / 2.0 + 3.5, 0.0, TAU);
-            set_color(ctx, state.fade(ACCENT_BRIGHT));
-            ctx.set_line_width(2.0);
-            let _ = ctx.stroke();
+            selection_ring(ctx, *rect, state);
         }
     }
 
+    if let Some(none) = extras.none {
+        draw_no_fill(ctx, none, extras.none_selected, state);
+    }
+    if let Some(more) = extras.more {
+        draw_more_colors(ctx, more, state);
+    }
+}
+
+/// "No fill": an empty circle struck through, as a crossed-out swatch.
+fn draw_no_fill(ctx: &cairo::Context, rect: PanelRect, selected: bool, state: ControlState) {
+    let hovered = state.hovers(|hit| matches!(hit, PropertiesPanelHit::NoFill(_)));
+    let (cx, cy) = rect.center();
+    let radius = rect.width / 2.0 - 0.5;
+    ctx.new_path();
+    ctx.arc(cx, cy, radius, 0.0, TAU);
+    set_color(
+        ctx,
+        state.fade(if hovered {
+            ACCENT_BRIGHT
+        } else {
+            QUIET_OUTLINE
+        }),
+    );
+    ctx.set_line_width(1.5);
+    let _ = ctx.stroke();
+    let reach = radius * std::f64::consts::FRAC_1_SQRT_2;
+    set_color(ctx, state.fade(NO_FILL_STRIKE));
+    round_line(ctx, (cx - reach, cy + reach), (cx + reach, cy - reach));
+    if selected {
+        selection_ring(ctx, rect, state);
+    }
+}
+
+fn draw_more_colors(ctx: &cairo::Context, more: PanelRect, state: ControlState) {
     let hovered = state.hovers(|hit| matches!(hit, PropertiesPanelHit::MoreColors(_)));
     let (cx, cy) = more.center();
     let outline = if hovered {

@@ -179,6 +179,7 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
         w: 30,
         h: 20,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });

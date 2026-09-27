@@ -199,6 +199,7 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
                 },
                 thick: 2.0,
                 fill: true,
+                fill_color: None,
             });
         }
         assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
@@ -327,6 +328,7 @@ fn each_scene_key_rebakes_without_shape_identity_changes() {
                 },
                 thick: 2.0,
                 fill: true,
+                fill_color: None,
             });
         }
         assert!(layer.ensure(&measurer, &mut caches, &scene, changed));

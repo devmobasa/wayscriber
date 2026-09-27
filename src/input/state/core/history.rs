@@ -132,6 +132,7 @@ mod tests {
             w: 10,
             h: 12,
             fill: false,
+            fill_color: None,
             color: Color {
                 r: 0.2,
                 g: 0.4,

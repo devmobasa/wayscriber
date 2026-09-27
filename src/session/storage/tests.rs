@@ -282,6 +282,7 @@ fn inspect_session_reports_counts_and_flags() {
         w: 10,
         h: 10,
         fill: false,
+        fill_color: None,
         color: Color {
             r: 1.0,
             g: 0.0,

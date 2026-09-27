@@ -78,7 +78,8 @@ impl SelectionPropertyKind {
     pub fn unknown_value(self) -> SelectionPropertyValue {
         match self {
             Self::Color => SelectionPropertyValue::Color(None),
-            Self::Fill | Self::TextBackground => SelectionPropertyValue::Toggle(None),
+            Self::Fill => SelectionPropertyValue::Fill(None),
+            Self::TextBackground => SelectionPropertyValue::Toggle(None),
             Self::ArrowHead => SelectionPropertyValue::ArrowHead(None),
             Self::ArrowStyle => SelectionPropertyValue::ArrowStyle(None),
             Self::Thickness | Self::Opacity => SelectionPropertyValue::Level(None),
@@ -105,6 +106,8 @@ pub enum SelectionPropertyValue {
     /// A pressure stroke stores a width per point, so it has no one number.
     PressureVaries,
     Toggle(Option<bool>),
+    /// A closed shape's fill paint: `Some(None)` is no fill.
+    Fill(Option<Option<Color>>),
     /// Whether the head sits at the end of the arrow (`true`) or its start.
     ArrowHead(Option<bool>),
     ArrowStyle(Option<ArrowStyle>),
@@ -190,6 +193,8 @@ pub enum PropertiesPanelHit {
     },
     /// The swatch row's trailing button that opens the full color picker.
     MoreColors(usize),
+    /// The fill row's leading "no fill" swatch.
+    NoFill(usize),
     /// A slider's track, which follows the pointer while pressed.
     Slider(usize),
     StepDown(usize),
@@ -213,6 +218,7 @@ impl PropertiesPanelHit {
             Self::Row(row)
             | Self::Swatch { row, .. }
             | Self::MoreColors(row)
+            | Self::NoFill(row)
             | Self::Slider(row)
             | Self::StepDown(row)
             | Self::StepUp(row)
@@ -264,7 +270,10 @@ impl PanelRect {
 pub enum PropertiesRowControl {
     Swatches {
         swatches: Vec<PanelRect>,
-        more: PanelRect,
+        /// The "no fill" swatch leading a fill row.
+        none: Option<PanelRect>,
+        /// The "more colors" button trailing a color row.
+        more: Option<PanelRect>,
     },
     Stepper {
         down: PanelRect,

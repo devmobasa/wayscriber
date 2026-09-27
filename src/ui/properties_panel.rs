@@ -32,8 +32,8 @@ mod controls;
 use actions::draw_actions;
 
 use controls::{
-    ControlState, draw_arrow_head_segments, draw_arrow_styles, draw_lock, draw_slider,
-    draw_stepper, draw_swatches, draw_switch,
+    ControlState, SwatchExtras, draw_arrow_head_segments, draw_arrow_styles, draw_lock,
+    draw_slider, draw_stepper, draw_swatches, draw_switch,
 };
 
 /// Wash behind the hovered row: a quieter `BG_HOVER`, so the control under
@@ -237,10 +237,19 @@ fn draw_row(
 
     let state = ControlState { enabled, hover };
     match &row.control {
-        PropertiesRowControl::Swatches { swatches, more } => {
+        PropertiesRowControl::Swatches {
+            swatches,
+            none,
+            more,
+        } => {
             draw_value_right(engine, ctx, row, entry, enabled);
+            let extras = SwatchExtras {
+                none: *none,
+                none_selected: entry.state == SelectionPropertyValue::Fill(Some(None)),
+                more: *more,
+            };
             let current = panel.current_swatch(entry);
-            draw_swatches(ctx, &panel.swatches, swatches, *more, current, state);
+            draw_swatches(ctx, &panel.swatches, swatches, extras, current, state);
         }
         PropertiesRowControl::ArrowStyles { buttons } => {
             draw_value_right(engine, ctx, row, entry, enabled);
