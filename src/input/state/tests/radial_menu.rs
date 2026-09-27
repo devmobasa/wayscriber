@@ -1105,3 +1105,36 @@ fn recent_color_segment_applies_through_the_color_path() {
     assert!(!state.is_radial_menu_open());
     assert!(colors_approx_eq(&state.style.current_color, &unique));
 }
+
+#[test]
+fn radial_menu_double_escape_does_not_exit_overlay() {
+    let mut state = create_test_input_state();
+    state.open_radial_menu(400.0, 300.0);
+    assert!(state.is_radial_menu_open());
+    state.on_key_press(Key::Escape);
+    assert!(!state.is_radial_menu_open());
+    state.on_key_press(Key::Escape);
+    assert!(!state.should_exit);
+}
+
+#[test]
+fn escape_exit_resumes_after_dismissal_guard_and_ctrl_q_is_immediate() {
+    for ctrl_q in [false, true] {
+        let mut state = create_test_input_state();
+        state.open_radial_menu(400.0, 300.0);
+        state.on_key_press(Key::Escape);
+        assert!(!state.should_exit);
+
+        if ctrl_q {
+            state.modifiers.ctrl = true;
+            state.on_key_press(Key::Char('q'));
+        } else {
+            state.note_escape_dismissal(
+                std::time::Instant::now() - std::time::Duration::from_millis(401),
+            );
+            state.on_key_press(Key::Escape);
+        }
+
+        assert!(state.should_exit);
+    }
+}

@@ -32,6 +32,32 @@ fn route_key_event(
     key: Key,
     is_repeat: bool,
 ) -> RoutingOutcome {
+    let now = Instant::now();
+    if key == Key::Escape && state.suppress_escape_after_dismissal(now) {
+        return RoutingOutcome::Consumed(ConsumedBy::EscapeDismissalGuard);
+    }
+
+    let outcome = route_key_event_inner(state, resources, key, is_repeat);
+
+    if key == Key::Escape
+        && !state.should_exit
+        && matches!(
+            outcome,
+            RoutingOutcome::Consumed(_) | RoutingOutcome::Canceled(_)
+        )
+    {
+        state.note_escape_dismissal(now);
+    }
+
+    outcome
+}
+
+fn route_key_event_inner(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    key: Key,
+    is_repeat: bool,
+) -> RoutingOutcome {
     if state.engaged_modal().is_some()
         || matches!(state.state, DrawingState::TextInput { .. })
         || state.screen_modal_is_engaged()

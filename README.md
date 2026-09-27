@@ -594,7 +594,7 @@ Once the overlay is up:
 - <kbd>Shift+F1</kbd>: quick reference
 - <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd>: command palette
 - <kbd>F11</kbd>: [configurator](#configurator-gui)
-- <kbd>Escape</kbd>: hide or exit
+- <kbd>Escape</kbd>: hide or exit. After Escape dismisses UI, further Escape presses are ignored for 400 ms.
 
 The first launch shows a short tour card: draw and undo, the toolbar and how
 to leave, color and thickness, quick-access menus, and finding commands. It

@@ -52,12 +52,10 @@ impl WaylandState {
         self.canvas_world_coords(screen_x, screen_y)
     }
 
-    /// Whether an open context menu or properties panel takes Escape and the
-    /// arrow keys ahead of zoom, which otherwise exits on Escape and pans on
-    /// the arrows. Both can open over a zoomed view, and a menu the arrows
-    /// cannot walk, or that Escape closes along with the zoom, is a trap.
+    /// Open UI takes Escape and arrows before zoom so dismissal never also
+    /// exits zoom, and menu navigation never pans the canvas.
     pub(in crate::backend::wayland) fn zoom_keys_yield_to_open_menu(&self) -> bool {
-        self.input_state.is_context_menu_open() || self.input_state.is_properties_panel_open()
+        self.input_state.modal_owns_text_input() || self.input_state.toolbar_top_menu().is_open()
     }
 
     pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, action: ZoomAction) {

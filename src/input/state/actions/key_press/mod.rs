@@ -9,6 +9,14 @@ use crate::input::events::Key;
 use super::super::{InputState, interaction};
 
 impl InputState {
+    pub(crate) fn note_escape_dismissal(&mut self, now: std::time::Instant) {
+        self.keymap.note_escape_dismissal(now);
+    }
+
+    pub(crate) fn suppress_escape_after_dismissal(&self, now: std::time::Instant) -> bool {
+        self.keymap.suppress_escape_after_dismissal(now)
+    }
+
     pub(in crate::input::state) fn handle_modifier_key_press(&mut self, key: Key) -> bool {
         let press: fn(&mut Modifiers) = match key {
             Key::Shift => |modifiers| modifiers.shift = true,

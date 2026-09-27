@@ -23,7 +23,7 @@ pub(super) enum FocusedKeys {
     /// A slider owns only its value-navigation keys.
     Slider,
     /// A widget that owns typing and arrow keys: the hex entry.
-    /// These handle Escape themselves.
+    /// Escape is relayed so dismissal shares the overlay's exit guard.
     Editing,
 }
 
@@ -67,7 +67,7 @@ pub(super) fn key_stays_local(
                 | Key::KP_Page_Up
                 | Key::KP_Page_Down
         ),
-        FocusedKeys::Editing => true,
+        FocusedKeys::Editing => keyval != Key::Escape,
     }
 }
 
@@ -199,8 +199,9 @@ mod tests {
     }
 
     #[test]
-    fn editing_widgets_keep_every_key() {
-        for keyval in [Key::Escape, Key::a, Key::Left, Key::BackSpace] {
+    fn editing_widgets_keep_typing_keys_and_relay_escape() {
+        assert!(!key_stays_local(Key::Escape, false, FocusedKeys::Editing));
+        for keyval in [Key::a, Key::Left, Key::BackSpace] {
             assert!(key_stays_local(keyval, false, FocusedKeys::Editing));
         }
     }
