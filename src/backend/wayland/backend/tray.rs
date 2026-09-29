@@ -1,6 +1,8 @@
 use super::super::state::WaylandState;
 use crate::config::Action;
-use crate::daemon::protocol_v2::{ActionClaimOutcome, ActionFinishOutcome};
+use crate::daemon::protocol_v2::{
+    ActionClaimOutcome, ActionFinishOutcome, DaemonControlProtocolMode,
+};
 use crate::tray_action::TrayAction;
 use std::time::{Duration, Instant};
 
@@ -28,7 +30,8 @@ fn defer_durable_action(
 }
 
 pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
-    let actions = crate::tray_action::take_pending_actions();
+    let actions =
+        crate::tray_action::take_pending_legacy_actions(DaemonControlProtocolMode::production());
     let mut processed = !actions.is_empty();
     for action in actions {
         apply_tray_action(state, action);
