@@ -93,60 +93,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         let json: Value = serde_json::from_slice(&output.stdout).map_err(|e| {
             CaptureError::InvalidResponse(format!("Failed to parse hyprctl output: {}", e))
         })?;
-
-        let at = json.get("at").and_then(|v| v.as_array()).ok_or_else(|| {
-            CaptureError::InvalidResponse("Missing 'at' in hyprctl output".into())
-        })?;
-        let size = json.get("size").and_then(|v| v.as_array()).ok_or_else(|| {
-            CaptureError::InvalidResponse("Missing 'size' in hyprctl output".into())
-        })?;
-
-        let (mut x, mut y) = (
-            at.first()
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?,
-            at.get(1)
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?,
-        );
-        let (mut width, mut height) = (
-            size.first()
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?,
-            size.get(1)
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[1]' value".into()))?,
-        );
-
-        if width <= 0.0 || height <= 0.0 {
-            return Err(CaptureError::InvalidResponse(
-                "Active window has non-positive dimensions".into(),
-            ));
-        }
-
-        let monitor_id = json.get("monitor").and_then(|v| v.as_i64());
-        let monitor_name = json.get("monitor").and_then(|v| v.as_str());
-
-        if let Some(scale) = hyprland_monitor_scale(monitor_id, monitor_name)?
-            && (scale - 1.0).abs() > f64::EPSILON
-        {
-            log::debug!(
-                "Applying monitor scale {:.2} to active window capture",
-                scale
-            );
-            x *= scale;
-            y *= scale;
-            width *= scale;
-            height *= scale;
-        }
-
-        let geometry = format!(
-            "{},{} {}x{}",
-            x.round() as i32,
-            y.round() as i32,
-            width.round() as u32,
-            height.round() as u32
-        );
+        let geometry = active_window_geometry(&json)?;
 
         log::debug!("Capturing active window via grim: {}", geometry);
         let arguments = grim_geometry_arguments(&geometry);
@@ -244,73 +191,71 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
     })?
 }
 
-fn hyprland_monitor_scale(
-    monitor_id: Option<i64>,
-    monitor_name: Option<&str>,
-) -> Result<Option<f64>, CaptureError> {
-    use serde_json::Value;
+/// Build the `grim -g` region for the window described by `hyprctl activewindow -j`.
+///
+/// Hyprland reports `at` and `size` in layout (logical) coordinates, the same
+/// space `grim -g` reads, so they pass through unscaled like the `slurp` path.
+fn active_window_geometry(json: &serde_json::Value) -> Result<String, CaptureError> {
+    let at = json
+        .get("at")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| CaptureError::InvalidResponse("Missing 'at' in hyprctl output".into()))?;
+    let size = json
+        .get("size")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| CaptureError::InvalidResponse("Missing 'size' in hyprctl output".into()))?;
 
-    if monitor_id.is_none() && monitor_name.is_none() {
-        return Ok(None);
+    let (x, y) = (
+        at.first()
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?,
+        at.get(1)
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?,
+    );
+    let (width, height) = (
+        size.first()
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?,
+        size.get(1)
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[1]' value".into()))?,
+    );
+
+    if width <= 0.0 || height <= 0.0 {
+        return Err(CaptureError::InvalidResponse(
+            "Active window has non-positive dimensions".into(),
+        ));
     }
 
-    let output = run_helper(
-        HelperKind::HyprctlActiveWindow,
-        "hyprctl",
-        &["monitors", "-j"],
-        Duration::from_secs(5),
-        2 * 1024 * 1024,
-    )?;
-
-    if output.timed_out || output.status != 0 {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(CaptureError::ImageError(format!(
-            "hyprctl monitors failed: {}",
-            stderr.trim()
-        )));
-    }
-
-    let monitors: Value = serde_json::from_slice(&output.stdout).map_err(|e| {
-        CaptureError::InvalidResponse(format!("Failed to parse hyprctl monitors output: {}", e))
-    })?;
-
-    let list = monitors.as_array().ok_or_else(|| {
-        CaptureError::InvalidResponse("hyprctl monitors did not return an array".into())
-    })?;
-
-    for monitor in list {
-        let id_match = monitor_id
-            .and_then(|target| {
-                monitor
-                    .get("id")
-                    .and_then(|v| v.as_i64())
-                    .map(|id| id == target)
-            })
-            .unwrap_or(false);
-        let name_match = monitor_name
-            .and_then(|target| {
-                monitor
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|name| name == target)
-            })
-            .unwrap_or(false);
-
-        if id_match || name_match {
-            if let Some(scale) = monitor.get("scale").and_then(|v| v.as_f64()) {
-                return Ok(Some(scale));
-            } else {
-                return Ok(Some(1.0));
-            }
-        }
-    }
-
-    Ok(None)
+    Ok(format!(
+        "{},{} {}x{}",
+        x.round() as i32,
+        y.round() as i32,
+        width.round() as u32,
+        height.round() as u32
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_window_geometry_keeps_layout_coordinates_on_a_scaled_monitor() {
+        // Hyprland reports `at` and `size` in layout coordinates, the same
+        // space `grim -g` reads, so a window on a scale-2 monitor is captured
+        // at its reported position and size.
+        let window = serde_json::json!({
+            "at": [100, 100],
+            "size": [800, 600],
+            "monitor": 1,
+        });
+
+        let geometry = active_window_geometry(&window).unwrap();
+
+        assert_eq!(geometry, "100,100 800x600");
+    }
 
     #[test]
     fn grim_geometry_arguments_are_explicit() {
