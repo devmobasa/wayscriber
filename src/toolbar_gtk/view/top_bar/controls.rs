@@ -13,22 +13,34 @@ use crate::ui::theme::toolbar::{
 
 use super::super::super::widgets::rounded_rect_path;
 
-pub(super) fn event_for_toggle_state(
-    control: model::TopToolbarControl,
-    next_active: bool,
-) -> ToolbarEvent {
-    match control {
-        model::TopToolbarControl::ShapePicker => ToolbarEvent::ToggleShapePicker(next_active),
-        model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight) => {
-            ToolbarEvent::ToggleAllHighlight(next_active)
+/// A top-strip control whose click sets an on/off state.
+///
+/// Each factory names its toggle when it builds the widget, and the signal
+/// handlers hold this type rather than the whole control enum, so they have
+/// no case left to reject. A panic inside a GTK signal handler cannot unwind
+/// through the C trampoline: it would abort the overlay instead of falling
+/// back to the built-in toolbar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TopToggle {
+    ShapePicker,
+    Highlight,
+    Pin,
+    Overflow,
+    LayoutMode,
+    HighlightRing,
+}
+
+impl TopToggle {
+    /// The event that turns this toggle on or off.
+    pub(super) fn event(self, next_active: bool) -> ToolbarEvent {
+        match self {
+            Self::ShapePicker => ToolbarEvent::ToggleShapePicker(next_active),
+            Self::Highlight => ToolbarEvent::ToggleAllHighlight(next_active),
+            Self::Pin => ToolbarEvent::PinTopToolbar(next_active),
+            Self::Overflow => ToolbarEvent::ToggleTopOverflow(next_active),
+            Self::LayoutMode => ToolbarEvent::ToggleLayoutMenu(next_active),
+            Self::HighlightRing => ToolbarEvent::ToggleHighlightToolRing(next_active),
         }
-        model::TopToolbarControl::Pin => ToolbarEvent::PinTopToolbar(next_active),
-        model::TopToolbarControl::Overflow => ToolbarEvent::ToggleTopOverflow(next_active),
-        model::TopToolbarControl::LayoutMode => ToolbarEvent::ToggleLayoutMenu(next_active),
-        model::TopToolbarControl::HighlightRing => {
-            ToolbarEvent::ToggleHighlightToolRing(next_active)
-        }
-        _ => unreachable!("non-toggle control in GTK toggle adapter"),
     }
 }
 
@@ -81,7 +93,7 @@ impl TopBar {
         let sender = self.feedback.clone();
         let expected = self.shapes.expected_open.clone();
         button.connect_clicked(move |_| {
-            send_event(&sender, event_for_toggle_state(control, !expected.get()));
+            send_event(&sender, TopToggle::ShapePicker.event(!expected.get()));
         });
         let handle = button.clone();
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
@@ -101,7 +113,7 @@ impl TopBar {
         let expected = self.shapes.expected_open.clone();
         popover.connect_closed(move |_| {
             if expected.get() {
-                send_event(&sender, event_for_toggle_state(control, false));
+                send_event(&sender, TopToggle::ShapePicker.event(false));
             }
         });
         let capture_surface = CaptureSurfaceContent::empty();
@@ -190,10 +202,7 @@ impl TopBar {
             let active = Rc::new(Cell::new(control.active(snapshot)));
             let click_active = active.clone();
             button.connect_clicked(move |_| {
-                send_event(
-                    &sender,
-                    event_for_toggle_state(control, !click_active.get()),
-                );
+                send_event(&sender, TopToggle::Highlight.event(!click_active.get()));
             });
             let handle = button.clone();
             self.updaters.borrow_mut().push(Box::new(move |snapshot| {
@@ -348,10 +357,7 @@ impl TopBar {
         let pinned = Rc::new(Cell::new(snapshot.top_pinned));
         let click_pinned = pinned.clone();
         button.connect_clicked(move |_| {
-            send_event(
-                &sender,
-                event_for_toggle_state(control, !click_pinned.get()),
-            );
+            send_event(&sender, TopToggle::Pin.event(!click_pinned.get()));
         });
         let handle = button.clone();
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
@@ -397,7 +403,7 @@ impl TopBar {
         let sender = self.feedback.clone();
         let expected = self.overflow.expected_open.clone();
         button.connect_clicked(move |_| {
-            send_event(&sender, event_for_toggle_state(control, !expected.get()));
+            send_event(&sender, TopToggle::Overflow.event(!expected.get()));
         });
         let handle = button.clone();
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
@@ -413,7 +419,7 @@ impl TopBar {
         let expected = self.overflow.expected_open.clone();
         popover.connect_closed(move |_| {
             if expected.get() {
-                send_event(&sender, event_for_toggle_state(control, false));
+                send_event(&sender, TopToggle::Overflow.event(false));
             }
         });
         let capture_surface = CaptureSurfaceContent::empty();
@@ -534,7 +540,7 @@ impl TopBar {
         let sender = self.feedback.clone();
         let expected = self.layout.expected_open.clone();
         button.connect_clicked(move |_| {
-            send_event(&sender, event_for_toggle_state(control, !expected.get()));
+            send_event(&sender, TopToggle::LayoutMode.event(!expected.get()));
         });
         let handle = button.clone();
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
@@ -553,7 +559,7 @@ impl TopBar {
         let expected = self.layout.expected_open.clone();
         popover.connect_closed(move |_| {
             if expected.get() {
-                send_event(&sender, event_for_toggle_state(control, false));
+                send_event(&sender, TopToggle::LayoutMode.event(false));
             }
         });
         let capture_surface = CaptureSurfaceContent::empty();

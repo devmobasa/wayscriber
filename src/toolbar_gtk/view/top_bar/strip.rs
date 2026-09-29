@@ -486,7 +486,7 @@ impl TopBar {
                 if !toggle_sync.get() {
                     send_event(
                         &sender,
-                        super::controls::event_for_toggle_state(control, check.is_active()),
+                        super::controls::TopToggle::HighlightRing.event(check.is_active()),
                     );
                 }
             });
