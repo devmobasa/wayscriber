@@ -831,6 +831,60 @@ fn operation_bound_run_terminates_descendants_that_retain_pipes() {
 }
 
 #[test]
+fn a_descendant_outside_the_helper_group_cannot_hold_the_broker_on_its_pipes() {
+    let guard = start_for_runtime().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let pid_path = temp.path().join("descendant.pid");
+    // The helper waits until the descendant has written its pid, which it
+    // does only after setsid(). Exiting sooner lets the group kill reach the
+    // descendant before it leaves the group, and then nothing holds the pipes.
+    let script = format!(
+        "setsid sh -c 'echo $$ > \"$0\"; exec sleep 30' '{path}' & \
+         while [ ! -s '{path}' ]; do sleep 0.01; done",
+        path = pid_path.display()
+    );
+
+    let started = Instant::now();
+    let result = guard.broker().run(
+        HelperKind::TestShell,
+        OsStr::new("sh"),
+        [OsStr::new("-c"), OsStr::new(&script)],
+        Vec::new(),
+        Duration::from_secs(1),
+        1024,
+    );
+    let elapsed = started.elapsed();
+    if let Some(pid) = std::fs::read_to_string(&pid_path)
+        .ok()
+        .and_then(|pid| pid.trim().parse::<libc::pid_t>().ok())
+    {
+        // SAFETY: cleanup of the descendant this test started in its own session.
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
+
+    let error = result.expect_err("output still held open must not read as complete");
+    assert!(
+        format!("{error:#}").contains("pipe is still open"),
+        "{error:#}"
+    );
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    assert!(guard.broker().is_healthy());
+    guard
+        .broker()
+        .run(
+            HelperKind::TestSleep,
+            OsStr::new("sleep"),
+            [OsStr::new("0")],
+            Vec::new(),
+            Duration::from_secs(1),
+            1024,
+        )
+        .unwrap();
+}
+
+#[test]
 fn normal_broker_shutdown_releases_successful_provider_descendant() {
     let guard = start_for_runtime().unwrap();
     let temp = crate::test_temp::tempdir().unwrap();

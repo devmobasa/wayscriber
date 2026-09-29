@@ -4,6 +4,18 @@ use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::thread;
 
 #[test]
+fn an_unusable_process_broker_ends_the_daemon_loop() {
+    let guard = crate::process_broker::start_for_runtime().unwrap();
+
+    ensure_process_broker_usable(None).unwrap();
+    ensure_process_broker_usable(Some(guard.broker())).unwrap();
+
+    guard.broker().mark_unusable_for_test();
+    let error = ensure_process_broker_usable(Some(guard.broker())).unwrap_err();
+    assert!(error.to_string().contains("no longer usable"), "{error:#}");
+}
+
+#[test]
 fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
     let wake = RuntimeWakeSource::new().unwrap();
     let deadline = BootDeadlineSource::new().unwrap();

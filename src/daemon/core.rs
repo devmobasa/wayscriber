@@ -54,6 +54,23 @@ const ACTION_ADMISSION_RETRY_DELAY: Duration = Duration::from_millis(50);
 const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 mod toggles;
 
+/// Fails once the daemon's process broker is unusable.
+///
+/// A failed exchange retires the broker for good, and without one the daemon
+/// can never start an overlay again. Staying up would keep the tray alive
+/// while every show silently backs off, so the daemon exits instead and lets
+/// the service manager's `Restart=on-failure` start a fresh one.
+fn ensure_process_broker_usable(
+    broker: Option<&crate::process_broker::ProcessBroker>,
+) -> Result<()> {
+    match broker {
+        Some(broker) if !broker.is_healthy() => Err(anyhow::anyhow!(
+            "process broker is no longer usable; exiting so the daemon can be restarted"
+        )),
+        _ => Ok(()),
+    }
+}
+
 fn finish_action_batch(failures: Vec<String>) -> Result<()> {
     if failures.is_empty() {
         Ok(())
@@ -517,6 +534,7 @@ impl Daemon {
                 }
             }
 
+            ensure_process_broker_usable(crate::process_broker::current().ok().as_ref())?;
             self.arm_v2_lifecycle_deadline()?;
             let readiness = wait_for_daemon_lifecycle(
                 daemon_wake,

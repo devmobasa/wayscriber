@@ -53,6 +53,10 @@ struct RunOptions {
     output_mode: OutputMode,
 }
 
+/// How long an unusable broker gets to act on the shutdown request before it
+/// is killed.
+const UNHEALTHY_BROKER_EXIT_GRACE: Duration = Duration::from_secs(3);
+
 /// Failure text used when a caller declines to wait for the transport.
 /// Callers match on it to offer "try again" rather than a generic failure.
 pub(crate) const BROKER_BUSY: &str = "process broker is busy running another helper";
@@ -110,10 +114,18 @@ pub(crate) fn current() -> Result<ProcessBroker> {
 
 impl Drop for ProcessBrokerGuard {
     fn drop(&mut self) {
-        self.broker.inner.healthy.store(false, Ordering::Release);
-        if signal_shutdown(self.broker.inner.shutdown.as_raw_fd()).is_err()
-            && self.broker.inner.child_pid > 0
-        {
+        let was_healthy = self.broker.inner.healthy.swap(false, Ordering::AcqRel);
+        let asked_to_stop = signal_shutdown(self.broker.inner.shutdown.as_raw_fd()).is_ok();
+        // A broker whose exchange failed may be stuck and never read the
+        // shutdown request. Waiting on it without a bound would hang the very
+        // exit that lets the service manager start a fresh daemon.
+        let must_kill = !asked_to_stop
+            || (!was_healthy
+                && !super::bootstrap::broker_exits_within(
+                    self.broker.inner.child_pid,
+                    UNHEALTHY_BROKER_EXIT_GRACE,
+                ));
+        if must_kill && self.broker.inner.child_pid > 0 {
             // SAFETY: child_pid is the broker process owned by this guard.
             unsafe {
                 libc::kill(self.broker.inner.child_pid, libc::SIGKILL);
@@ -181,7 +193,21 @@ impl ProcessBrokerGuard {
     }
 }
 
+#[cfg(test)]
 impl ProcessBroker {
+    /// Retires the transport as a failed exchange does.
+    pub(crate) fn mark_unusable_for_test(&self) {
+        self.inner.healthy.store(false, Ordering::Release);
+    }
+}
+
+impl ProcessBroker {
+    /// Whether the transport is still usable. A failed exchange leaves the
+    /// broker in an unknown state, so it is never used again after one.
+    pub(crate) fn is_healthy(&self) -> bool {
+        self.inner.healthy.load(Ordering::Acquire)
+    }
+
     fn lock_exchange(&self, wait: ExchangeWait) -> Result<MutexGuard<'_, ()>> {
         match wait {
             ExchangeWait::Queue => Ok(self

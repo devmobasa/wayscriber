@@ -11,6 +11,19 @@ use anyhow::{Context, Result, anyhow};
 use super::transport::shutdown_requested;
 use super::wire::{HelperKind, MAX_STDERR_BYTES, OutputMode, STDOUT_CAP_EXCEEDED};
 
+/// How long a helper's pipes may stay open once the helper itself is gone.
+///
+/// A descendant that left the helper's process group survives the group kill
+/// and can hold the pipes open for as long as it lives. The broker serves one
+/// request at a time, so reading them to end-of-file without a bound wedged
+/// every later request until the client's socket timeout gave up on the broker.
+const PIPE_DRAIN_GRACE: Duration = Duration::from_secs(2);
+
+/// How often a pipe thread waiting on an idle pipe checks whether to give up.
+const PIPE_POLL_INTERVAL_MS: libc::c_int = 20;
+
+const PIPE_HELD_OPEN: &str = "broker helper pipe is still open after the helper exited";
+
 pub(super) struct BoundedOutput {
     pub(super) status: ExitStatus,
     pub(super) stdout: Vec<u8>,
@@ -306,8 +319,10 @@ pub(super) fn run_bounded(
         .context("broker stderr pipe missing")?;
     let stdout_limit_reached = Arc::new(AtomicBool::new(false));
     let stderr_overflow = Arc::new(AtomicBool::new(false));
+    let abandon_pipes = Arc::new(AtomicBool::new(false));
     let stdout_reader = {
         let limit_reached = Arc::clone(&stdout_limit_reached);
+        let stdout = AbandonablePipe::new(stdout, &abandon_pipes);
         std::thread::spawn(move || match output_mode {
             OutputMode::Complete => read_capped(stdout, output_cap, &limit_reached),
             OutputMode::Prefix => read_prefix(stdout, output_cap, &limit_reached),
@@ -315,16 +330,22 @@ pub(super) fn run_bounded(
     };
     let stderr_reader = {
         let overflow = Arc::clone(&stderr_overflow);
+        let stderr = AbandonablePipe::new(stderr, &abandon_pipes);
         std::thread::spawn(move || read_capped(stderr, output_cap.min(MAX_STDERR_BYTES), &overflow))
     };
-    let stdin_writer = std::thread::spawn(move || {
-        stdin.take().and_then(|mut stdin| {
-            stdin
-                .write_all(&input)
-                .err()
-                .filter(|error| error.kind() != io::ErrorKind::BrokenPipe)
+    let stdin_writer = {
+        let stdin = stdin
+            .take()
+            .map(|stdin| AbandonablePipe::new(stdin, &abandon_pipes));
+        std::thread::spawn(move || {
+            stdin.and_then(|mut stdin| {
+                stdin
+                    .write_all(&input)
+                    .err()
+                    .filter(|error| error.kind() != io::ErrorKind::BrokenPipe)
+            })
         })
-    });
+    };
     let (status, timed_out, cancelled) = loop {
         if child_status_unreaped(child.child())?.is_some() {
             child.terminate();
@@ -344,6 +365,20 @@ pub(super) fn run_bounded(
         }
         std::thread::sleep(Duration::from_millis(5));
     };
+
+    let drain_deadline =
+        crate::daemon::protocol_v2::BootClock::now()?.checked_add(PIPE_DRAIN_GRACE)?;
+    while !(stdout_reader.is_finished()
+        && stderr_reader.is_finished()
+        && stdin_writer.is_finished())
+    {
+        if crate::daemon::protocol_v2::BootClock::now()? >= drain_deadline {
+            abandon_pipes.store(true, Ordering::Release);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
     let stdout = stdout_reader
         .join()
         .map_err(|_| anyhow!("broker stdout reader panicked"))??;
@@ -373,6 +408,67 @@ pub(super) fn run_bounded(
         timed_out,
         stdout_limit_reached,
     })
+}
+
+/// A helper pipe whose reads and writes give up once `abandon` is raised,
+/// however long the process at the other end keeps the pipe open.
+struct AbandonablePipe<P> {
+    pipe: P,
+    abandon: Arc<AtomicBool>,
+}
+
+impl<P: AsRawFd> AbandonablePipe<P> {
+    fn new(pipe: P, abandon: &Arc<AtomicBool>) -> Self {
+        Self {
+            pipe,
+            abandon: Arc::clone(abandon),
+        }
+    }
+
+    fn wait_until_ready(&self, events: libc::c_short) -> io::Result<()> {
+        let mut pollfd = libc::pollfd {
+            fd: self.pipe.as_raw_fd(),
+            events,
+            revents: 0,
+        };
+        loop {
+            if self.abandon.load(Ordering::Acquire) {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, PIPE_HELD_OPEN));
+            }
+            // SAFETY: pollfd points to one initialized entry, and the pipe
+            // stays open for as long as `self` owns it.
+            let result = unsafe { libc::poll(&mut pollfd, 1, PIPE_POLL_INTERVAL_MS) };
+            if result > 0 {
+                return Ok(());
+            }
+            if result < 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() != io::ErrorKind::Interrupted {
+                    return Err(error);
+                }
+            }
+        }
+    }
+}
+
+impl<P: Read + AsRawFd> Read for AbandonablePipe<P> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.wait_until_ready(libc::POLLIN)?;
+        self.pipe.read(buffer)
+    }
+}
+
+impl<P: Write + AsRawFd> Write for AbandonablePipe<P> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.wait_until_ready(libc::POLLOUT)?;
+        // A writable pipe has room for at least PIPE_BUF bytes, so a write of
+        // no more than that cannot block on a reader that stopped reading.
+        self.pipe.write(&buffer[..buffer.len().min(libc::PIPE_BUF)])
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.pipe.flush()
+    }
 }
 
 fn read_prefix(
