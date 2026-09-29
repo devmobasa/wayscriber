@@ -14,7 +14,7 @@
 - Recognized text must never reach application state, a log line, or a `Debug` rendering. `RecognizedText` redacts its own `Debug`; keep it that way.
 - Never invoke a shell. Tesseract takes an explicit argument vector through the process broker's `HelperKind::Tesseract` allowlist.
 - Language values arrive already validated by `config::validate_ocr_languages`; this module does not decide what is acceptable.
-- The temporary PNG is deleted on every path, including failures and panics.
+- The temporary PNG is deleted on every path, including failures and panics. It lives in the private `$XDG_RUNTIME_DIR/wayscriber` (shared `/tmp` only when that is unset), is never fsynced, and each run first removes inputs left by an overlay that died without running destructors.
 - Capacity one is deliberate: report busy rather than queueing a screen region the user has moved on from.
 
 ## Coupled Changes

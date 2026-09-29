@@ -1,10 +1,13 @@
 //! Production adapters: local Tesseract for recognition, `wl-copy` for publication.
 
-use std::ffi::OsStr;
-use std::io::Write;
-use std::path::Path;
+use std::ffi::{OsStr, OsString};
+use std::fs;
+use std::io::{ErrorKind, Write};
+use std::os::unix::fs::DirBuilderExt;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 use crate::process_broker::{HelperKind, STDOUT_CAP_EXCEEDED};
 
 use super::{
@@ -16,6 +19,8 @@ const TESSERACT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Recognized text is plain UTF-8; 4 MiB is far past any plausible screen
 /// region and keeps a runaway engine from filling memory.
 const TESSERACT_STDOUT_CAP: usize = 4 * 1024 * 1024;
+const TEMPORARY_PNG_PREFIX: &str = "wayscriber-ocr-";
+const TEMPORARY_PNG_SUFFIX: &str = ".png";
 
 pub(crate) struct TesseractRecognizer;
 
@@ -35,11 +40,67 @@ impl TextRecognizer for TesseractRecognizer {
 
 /// Run one OCR operation with a securely created PNG that cannot outlive the
 /// stack frame, including while unwinding from a panic.
+///
+/// The PNG is a copy of the screen, so it goes to the per-user runtime
+/// directory: a private tmpfs that the session clears at logout. Without one it
+/// falls back to the system temp directory.
 fn with_temporary_png<T>(
     png: &[u8],
     operation: impl FnOnce(&Path) -> Result<T, OcrFailure>,
 ) -> Result<T, OcrFailure> {
-    with_temporary_png_in(png, &std::env::temp_dir(), operation)
+    let Some(directory) = private_runtime_directory(std::env::var_os(XDG_RUNTIME_DIR_ENV)) else {
+        return with_temporary_png_in(png, &std::env::temp_dir(), operation);
+    };
+
+    remove_stale_temporary_pngs(&directory);
+    with_temporary_png_in(png, &directory, operation)
+}
+
+/// `$XDG_RUNTIME_DIR/wayscriber`, created 0700 when missing, or `None` when the
+/// session has no usable runtime directory.
+fn private_runtime_directory(runtime_dir: Option<OsString>) -> Option<PathBuf> {
+    let runtime_dir = PathBuf::from(runtime_dir?);
+    if !runtime_dir.is_absolute() {
+        return None;
+    }
+
+    let directory = runtime_dir.join("wayscriber");
+    match fs::DirBuilder::new().mode(0o700).create(&directory) {
+        Ok(()) => {}
+        Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
+        Err(err) => {
+            log::warn!(
+                "OCR runtime directory {} is unavailable: {err}",
+                directory.display()
+            );
+            return None;
+        }
+    }
+    directory.is_dir().then_some(directory)
+}
+
+/// Removes inputs left by an overlay that died without running destructors,
+/// such as through the watchdog's `exit_group`. None of them can belong to a
+/// live request: the controller runs one request at a time, and the overlay
+/// lock admits one overlay per user.
+fn remove_stale_temporary_pngs(directory: &Path) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let is_temporary_png = entry.file_name().to_str().is_some_and(|name| {
+            name.starts_with(TEMPORARY_PNG_PREFIX) && name.ends_with(TEMPORARY_PNG_SUFFIX)
+        });
+        if !is_temporary_png {
+            continue;
+        }
+        if let Err(err) = fs::remove_file(entry.path())
+            && err.kind() != ErrorKind::NotFound
+        {
+            log::warn!("Failed to remove stale OCR temporary file: {err}");
+        }
+    }
 }
 
 fn with_temporary_png_in<T>(
@@ -50,22 +111,20 @@ fn with_temporary_png_in<T>(
     // A file rather than broker stdin because the broker's input cap is 16 MiB
     // and a lossless desktop crop can exceed it. NamedTempFile's Drop removes
     // the path during unwinding; explicit close makes ordinary cleanup errors
-    // observable before the operation returns.
+    // observable before the operation returns. Tesseract reads the file through
+    // the page cache, so it is never synced to disk.
     let mut input = tempfile::Builder::new()
-        .prefix("wayscriber-ocr-")
-        .suffix(".png")
+        .prefix(TEMPORARY_PNG_PREFIX)
+        .suffix(TEMPORARY_PNG_SUFFIX)
         .tempfile_in(directory)
         .map_err(|err| {
             log::warn!("OCR temporary file creation failed: {err}");
             OcrFailure::TemporaryFileFailed
         })?;
-    input
-        .write_all(png)
-        .and_then(|()| input.as_file_mut().sync_all())
-        .map_err(|err| {
-            log::warn!("OCR temporary file write failed: {err}");
-            OcrFailure::TemporaryFileFailed
-        })?;
+    input.write_all(png).map_err(|err| {
+        log::warn!("OCR temporary file write failed: {err}");
+        OcrFailure::TemporaryFileFailed
+    })?;
 
     let output = operation(input.path());
     if let Err(err) = input.close() {
@@ -308,6 +367,49 @@ mod tests {
             classify_broker_error(&anyhow::anyhow!("runtime process broker is not active")),
             OcrFailure::EngineUnavailable
         );
+    }
+
+    #[test]
+    fn runtime_directory_is_created_private_under_an_absolute_runtime_dir() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let runtime = crate::test_temp::tempdir().unwrap();
+
+        let directory = private_runtime_directory(Some(runtime.path().into())).unwrap();
+
+        assert_eq!(directory, runtime.path().join("wayscriber"));
+        let mode = fs::metadata(&directory).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+        assert_eq!(private_runtime_directory(None), None);
+        assert_eq!(private_runtime_directory(Some(OsString::new())), None);
+        assert_eq!(private_runtime_directory(Some("relative".into())), None);
+    }
+
+    #[test]
+    fn production_input_goes_to_the_runtime_directory_after_removing_stale_inputs() {
+        let runtime = crate::test_temp::tempdir().unwrap();
+        let directory = runtime.path().join("wayscriber");
+        fs::create_dir(&directory).unwrap();
+        let stale = directory.join("wayscriber-ocr-stale.png");
+        let unrelated = directory.join("wayscriber.lock");
+        fs::write(&stale, b"screen crop").unwrap();
+        fs::write(&unrelated, b"").unwrap();
+
+        let result = crate::test_env::with_env_var(
+            XDG_RUNTIME_DIR_ENV,
+            Some(runtime.path().as_os_str()),
+            || {
+                with_temporary_png(b"png", |path| {
+                    assert_eq!(path.parent(), Some(directory.as_path()));
+                    assert_eq!(temporary_ocr_files(&directory), [path.to_path_buf()]);
+                    Ok("recognized")
+                })
+            },
+        );
+
+        assert_eq!(result.unwrap(), "recognized");
+        assert!(temporary_ocr_files(&directory).is_empty());
+        assert!(unrelated.exists());
     }
 
     #[test]
