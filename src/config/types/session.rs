@@ -5,15 +5,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionConfig {
     /// Persist drawings from transparent mode between sessions.
-    #[serde(default)]
+    #[serde(default = "default_persist_board")]
     pub persist_transparent: bool,
 
     /// Persist drawings from whiteboard mode between sessions.
-    #[serde(default)]
+    #[serde(default = "default_persist_board")]
     pub persist_whiteboard: bool,
 
     /// Persist drawings from blackboard mode between sessions.
-    #[serde(default)]
+    #[serde(default = "default_persist_board")]
     pub persist_blackboard: bool,
 
     /// Persist undo/redo history between sessions.
@@ -80,9 +80,9 @@ pub struct SessionConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            persist_transparent: true,
-            persist_whiteboard: true,
-            persist_blackboard: true,
+            persist_transparent: default_persist_board(),
+            persist_whiteboard: default_persist_board(),
+            persist_blackboard: default_persist_board(),
             persist_history: default_persist_history(),
             restore_tool_state: default_restore_tool_state(),
             autosave_enabled: default_autosave_enabled(),
@@ -176,5 +176,11 @@ fn default_session_per_output() -> bool {
 }
 
 fn default_persist_history() -> bool {
+    true
+}
+
+/// Board persistence is on unless the file turns it off: a `[session]` table
+/// that sets any other key must not stop drawings from being restored.
+fn default_persist_board() -> bool {
     true
 }

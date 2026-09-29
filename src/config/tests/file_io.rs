@@ -656,6 +656,100 @@ fn collect_value_drifts(
     }
 }
 
+/// A section the file names but leaves empty must mean "the defaults" for
+/// every key it omits. A per-field serde default that disagrees with the
+/// struct's `Default` passes every other test — the example spells each key
+/// out — yet turns a setting off the moment a user writes any other key in
+/// the same table.
+#[test]
+fn an_empty_table_resolves_to_its_section_default() {
+    // Tables whose emptiness is itself documented as a setting.
+    // - tablet.stylus_button: "Omit `action` to leave a button unbound", so
+    //   the empty table unbinds the primary button that the omitted table
+    //   binds to the tool wheel.
+    const EMPTY_MEANS_SOMETHING: &[&str] = &["tablet.stylus_button"];
+
+    let drifts = crate::test_env::with_scrubbed_desktop_env(|| {
+        let mut defaults = Config::default();
+        defaults.validate_and_clamp();
+        let defaults = toml::Value::try_from(&defaults).expect("serialize default config");
+
+        let mut paths = Vec::new();
+        collect_table_paths(&mut Vec::new(), &defaults, &mut paths);
+        assert!(
+            paths.iter().any(|path| path == &["session"]),
+            "the walk should reach [session]"
+        );
+
+        let mut drifts = Vec::new();
+        for path in paths {
+            if EMPTY_MEANS_SOMETHING.contains(&path.join(".").as_str()) {
+                continue;
+            }
+
+            let source = toml::to_string(&empty_table_at(&path)).expect("render empty table");
+            let mut parsed: Config = toml::from_str(&source)
+                .unwrap_or_else(|err| panic!("{source:?} should parse: {err}"));
+            parsed.validate_and_clamp();
+            let parsed = toml::Value::try_from(&parsed).expect("serialize parsed config");
+
+            collect_value_drifts(
+                &path.join("."),
+                value_at(&parsed, &path).expect("parsed config keeps the section"),
+                value_at(&defaults, &path).expect("walked path exists"),
+                &mut drifts,
+            );
+        }
+        drifts
+    });
+
+    assert!(
+        drifts.is_empty(),
+        "an empty table deserialized to something other than its default \
+         (\"example\" is the empty table's parse):\n{}",
+        drifts
+            .iter()
+            .map(|drift| format!("{}: {}", drift.path, drift.detail))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// Every table below the root, parents first. Arrays of tables are left out:
+/// an empty element is not a valid entry, so it has no default to compare.
+fn collect_table_paths(
+    prefix: &mut Vec<String>,
+    value: &toml::Value,
+    paths: &mut Vec<Vec<String>>,
+) {
+    let toml::Value::Table(table) = value else {
+        return;
+    };
+    for (key, child) in table {
+        if !child.is_table() {
+            continue;
+        }
+        prefix.push(key.clone());
+        paths.push(prefix.clone());
+        collect_table_paths(prefix, child, paths);
+        prefix.pop();
+    }
+}
+
+fn empty_table_at(path: &[String]) -> toml::Value {
+    path.iter()
+        .rev()
+        .fold(toml::Value::Table(toml::Table::new()), |inner, key| {
+            let mut table = toml::Table::new();
+            table.insert(key.clone(), inner);
+            toml::Value::Table(table)
+        })
+}
+
+fn value_at<'a>(value: &'a toml::Value, path: &[String]) -> Option<&'a toml::Value> {
+    path.iter().try_fold(value, |value, key| value.get(key))
+}
+
 #[test]
 fn config_example_parses_and_documents_current_user_facing_fields() {
     let example = include_str!("../../../config.example.toml");
