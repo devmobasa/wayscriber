@@ -156,8 +156,11 @@ impl InputState {
                 }
             }
             MenuCommand::ClearAll => {
-                self.clear_all();
+                // Through the toolbar's mouse clear, not the primitive: it runs
+                // the clear action, which also clears laser ink and warns about
+                // locked shapes, and it offers the same Undo toast.
                 self.close_context_menu();
+                self.toolbar_clear_with_undo_toast_with_resources(resources);
             }
             MenuCommand::ResetCanvasPosition => {
                 self.reset_active_canvas_position();
