@@ -1,7 +1,9 @@
 //! File saving functionality for screenshots.
 
 use super::types::CaptureError;
-use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::durable_io::{
+    AtomicWriteOptions, DurableIoError, OverwriteMode, PermissionPolicy, SymlinkPolicy,
+};
 use crate::paths::{expand_tilde as expand_tilde_global, home_dir, pictures_dir};
 use crate::time_utils::{format_with_template, now_local};
 use std::fs;
@@ -71,10 +73,18 @@ fn save_file_name(template: &str, format: &str) -> Result<String, CaptureError> 
 
 const UNIQUE_NAME_ATTEMPTS: u32 = 100;
 
-fn generate_file_path(
+/// Write a new file named from `template` in `directory`, never replacing one.
+///
+/// The template's name is tried first, then `-1` … `-100` suffixes. Names
+/// already on disk are skipped cheaply, and `write_new` must refuse an
+/// existing destination with [`DurableIoError::AlreadyExists`], so a name
+/// taken between that check and the write moves on to the next suffix rather
+/// than overwriting another screenshot.
+fn save_to_free_path(
     directory: &Path,
     template: &str,
     format: &str,
+    mut write_new: impl FnMut(&Path) -> Result<(), DurableIoError>,
 ) -> Result<PathBuf, CaptureError> {
     let filename = save_file_name(template, format)?;
     let base = Path::new(&filename)
@@ -91,33 +101,39 @@ fn generate_file_path(
         .ok_or_else(|| {
             CaptureError::SaveError(std::io::Error::other("unsupported screenshot file format"))
         })?;
-    let mut path = directory.join(&filename);
-    if path.parent() != Some(directory) {
+    if directory.join(&filename).parent() != Some(directory) {
         return Err(CaptureError::SaveError(std::io::Error::other(
             "filename template must expand to a single file name",
         )));
     }
-    if path.exists() {
-        for suffix in 1..=UNIQUE_NAME_ATTEMPTS {
-            let candidate = directory.join(format!("{base}-{suffix}.{extension}"));
-            if candidate.parent() != Some(directory) {
-                continue;
-            }
-            if !candidate.exists() {
-                log::info!(
-                    "Screenshot filename exists; using {} instead",
-                    candidate.display()
-                );
-                path = candidate;
-                return Ok(path);
-            }
+
+    let candidates = std::iter::once(filename.clone())
+        .chain((1..=UNIQUE_NAME_ATTEMPTS).map(|suffix| format!("{base}-{suffix}.{extension}")));
+    for candidate in candidates {
+        let path = directory.join(candidate);
+        if path.parent() != Some(directory) || fs::symlink_metadata(&path).is_ok() {
+            continue;
         }
-        log::warn!(
-            "Screenshot filename already exists; overwriting {}",
-            path.display()
-        );
+
+        match write_new(&path) {
+            Ok(()) => return Ok(path),
+            Err(DurableIoError::AlreadyExists { .. }) => {
+                log::debug!(
+                    "Screenshot filename was taken during the save; trying the next one: {}",
+                    path.display()
+                );
+            }
+            Err(err) => return Err(CaptureError::SaveError(std::io::Error::other(err))),
+        }
     }
-    Ok(path)
+
+    Err(CaptureError::SaveError(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        format!(
+            "{filename} and its {UNIQUE_NAME_ATTEMPTS} numbered alternatives already exist in {}",
+            directory.display()
+        ),
+    )))
 }
 
 /// Ensure the save directory exists, creating it if necessary.
@@ -156,28 +172,30 @@ pub fn save_screenshot(
     // Ensure directory exists
     let directory = ensure_directory_exists(&config.save_directory)?;
 
-    // Generate filename
-    let file_path = generate_file_path(&directory, &config.filename_template, &config.format)?;
-
-    log::info!(
-        "Saving screenshot to: {} ({} bytes)",
-        file_path.display(),
-        image_data.len()
-    );
-
-    // Write file
-    crate::durable_io::write_atomic(
-        &file_path,
-        image_data,
-        AtomicWriteOptions {
-            overwrite: OverwriteMode::Replace,
-            permissions: PermissionPolicy::FixedMode(0o600),
-            symlink: SymlinkPolicy::Reject,
-            sync_file: true,
-            sync_parent: true,
+    // Write under the first free file name
+    let file_path = save_to_free_path(
+        &directory,
+        &config.filename_template,
+        &config.format,
+        |path| {
+            log::info!(
+                "Saving screenshot to: {} ({} bytes)",
+                path.display(),
+                image_data.len()
+            );
+            crate::durable_io::write_atomic(
+                path,
+                image_data,
+                AtomicWriteOptions {
+                    overwrite: OverwriteMode::CreateNew,
+                    permissions: PermissionPolicy::FixedMode(0o600),
+                    symlink: SymlinkPolicy::Reject,
+                    sync_file: true,
+                    sync_parent: true,
+                },
+            )
         },
-    )
-    .map_err(|err| CaptureError::SaveError(std::io::Error::other(err)))?;
+    )?;
 
     // Verify the write
     let written_size = fs::metadata(&file_path)?.len();
@@ -252,15 +270,82 @@ mod tests {
     }
 
     #[test]
-    fn generate_file_path_stays_inside_the_save_directory() {
+    fn save_to_free_path_stays_inside_the_save_directory() {
         let temp = crate::test_temp::tempdir().unwrap();
         let directory = temp.path();
-        let path = generate_file_path(directory, "shot", "png").expect("safe name");
+        let path = save_to_free_path(directory, "shot", "png", |_| Ok(())).expect("safe name");
         assert_eq!(path.parent(), Some(directory));
         assert_eq!(
             path.file_name().and_then(|name| name.to_str()),
             Some("shot.png")
         );
-        assert!(generate_file_path(directory, "../evil", "png").is_err());
+        assert!(save_to_free_path(directory, "../evil", "png", |_| Ok(())).is_err());
+    }
+
+    #[test]
+    fn save_to_free_path_moves_on_when_a_name_is_taken_during_the_write() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let directory = temp.path();
+        let mut attempts = Vec::new();
+
+        let path = save_to_free_path(directory, "shot", "png", |path| {
+            attempts.push(path.to_path_buf());
+            if attempts.len() == 1 {
+                Err(DurableIoError::AlreadyExists {
+                    path: path.to_path_buf(),
+                })
+            } else {
+                Ok(())
+            }
+        })
+        .expect("next free name");
+
+        assert_eq!(path, directory.join("shot-1.png"));
+        assert_eq!(
+            attempts,
+            vec![directory.join("shot.png"), directory.join("shot-1.png")]
+        );
+    }
+
+    fn save_to(directory: &Path, bytes: &[u8]) -> Result<PathBuf, CaptureError> {
+        save_screenshot(
+            bytes,
+            &FileSaveConfig {
+                save_directory: directory.to_path_buf(),
+                filename_template: "shot".to_string(),
+                format: "png".to_string(),
+            },
+        )
+    }
+
+    #[test]
+    fn save_screenshot_takes_the_next_free_suffix() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let directory = temp.path().canonicalize().unwrap();
+        fs::write(directory.join("shot.png"), b"first").unwrap();
+
+        let path = save_to(&directory, b"second").expect("free suffix");
+
+        assert_eq!(path, directory.join("shot-1.png"));
+        assert_eq!(fs::read(directory.join("shot.png")).unwrap(), b"first");
+        assert_eq!(fs::read(&path).unwrap(), b"second");
+    }
+
+    #[test]
+    fn save_screenshot_fails_instead_of_overwriting_when_every_name_is_taken() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let directory = temp.path().canonicalize().unwrap();
+        fs::write(directory.join("shot.png"), b"kept").unwrap();
+        for suffix in 1..=UNIQUE_NAME_ATTEMPTS {
+            fs::write(directory.join(format!("shot-{suffix}.png")), b"kept").unwrap();
+        }
+
+        let error = save_to(&directory, b"new").expect_err("no free name");
+
+        assert!(
+            matches!(&error, CaptureError::SaveError(io) if io.kind() == std::io::ErrorKind::AlreadyExists),
+            "unexpected error: {error}"
+        );
+        assert_eq!(fs::read(directory.join("shot.png")).unwrap(), b"kept");
     }
 }
