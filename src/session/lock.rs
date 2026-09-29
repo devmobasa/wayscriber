@@ -10,6 +10,8 @@ use std::os::unix::io::AsRawFd;
 #[cfg(unix)]
 fn flock(file: &File, op: libc::c_int) -> io::Result<()> {
     let fd = file.as_raw_fd();
+    // SAFETY: `fd` stays open for the borrowed `file`, and flock takes no
+    // pointers or ownership of the descriptor.
     let result = unsafe { libc::flock(fd, op) };
     if result == 0 {
         Ok(())

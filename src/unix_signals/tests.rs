@@ -432,6 +432,26 @@ fn reset_handler_hooks(stage: u8) {
     test_hooks::DESCRIPTOR_ACCESSES.store(0, Ordering::Release);
 }
 
+#[test]
+fn self_pipe_is_close_on_exec_with_a_blocking_read_end() {
+    let (read, write) = create_pipe().unwrap();
+
+    for fd in [read.as_raw_fd(), write.as_raw_fd()] {
+        // SAFETY: F_GETFD only queries the descriptor this test owns.
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        assert_eq!(flags & libc::FD_CLOEXEC, libc::FD_CLOEXEC, "fd {fd}");
+    }
+    // SAFETY: F_GETFL only queries the descriptors this test owns.
+    let (read_status, write_status) = unsafe {
+        (
+            libc::fcntl(read.as_raw_fd(), libc::F_GETFL),
+            libc::fcntl(write.as_raw_fd(), libc::F_GETFL),
+        )
+    };
+    assert_eq!(read_status & libc::O_NONBLOCK, 0);
+    assert_eq!(write_status & libc::O_NONBLOCK, libc::O_NONBLOCK);
+}
+
 fn fd_is_open(fd: RawFd) -> bool {
     // SAFETY: F_GETFD only queries the supplied descriptor.
     (unsafe { libc::fcntl(fd, libc::F_GETFD) }) >= 0

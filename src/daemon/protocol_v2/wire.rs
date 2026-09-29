@@ -1,3 +1,4 @@
+use std::os::fd::AsFd;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -79,10 +80,15 @@ impl DaemonRuntimeRecordV2 {
         {
             bail!("daemon runtime identity belongs to a different boot or namespace");
         }
+        // The pidfd is opened first and proven live afterwards. While its
+        // process lives the pid cannot be reused, so the start ticks read in
+        // between are that process's own. Opened after the read, it could name
+        // a process that took the pid over in the meantime.
+        let pidfd = super::linux::open_pidfd(self.pid)?;
         if super::linux::process_start_ticks(self.pid)? != self.process_start_ticks {
             bail!("daemon runtime pid was reused");
         }
-        let _live_pidfd = super::linux::open_pidfd(self.pid)?;
+        super::linux::validate_pidfd(pidfd.as_fd())?;
         Ok(())
     }
 }
@@ -808,6 +814,24 @@ mod tests {
         let mut value: serde_json::Value = serde_json::from_slice(&canonical).unwrap();
         value["unknown"] = serde_json::json!(true);
         assert!(serde_json::from_value::<DaemonRuntimeRecordV2>(value).is_err());
+    }
+
+    #[test]
+    fn runtime_record_rejects_a_reused_or_dead_daemon_pid() {
+        let record = DaemonRuntimeRecordV2::current(ProtocolToken::generate().unwrap()).unwrap();
+
+        let reused = DaemonRuntimeRecordV2 {
+            process_start_ticks: record.process_start_ticks + 1,
+            ..record.clone()
+        };
+        let error = reused.validate().unwrap_err();
+        assert!(error.to_string().contains("pid was reused"), "{error:#}");
+
+        let dead = DaemonRuntimeRecordV2 {
+            pid: i32::MAX as u32,
+            ..record
+        };
+        assert!(dead.validate().is_err());
     }
 
     #[test]
