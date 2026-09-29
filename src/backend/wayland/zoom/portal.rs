@@ -98,15 +98,8 @@ impl ZoomState {
                 let layout_matches = layout_generation == self.output_layout_generation;
 
                 if output_matches && layout_matches {
-                    // Crop used the spawn-time geometry moved into the task.
-                    // A processed topology change updates `known_output_count`,
-                    // so `OutputGeometry`'s equality bumps
-                    // `output_layout_generation` and `layout_matches` drops the
-                    // result. This live-count check covers the SCTK window
-                    // where a new `wl_output` is already in `OutputState`
-                    // before `new_output` refreshes `active_geometry`. Freeze
-                    // instead revalidates the pending snapshot, because it
-                    // crops on the Wayland thread at activate.
+                    // Crop used the spawn-time geometry. SCTK may advertise
+                    // a new wl_output before its callback refreshes that snapshot.
                     if self.active_geometry.as_ref().is_some_and(|geometry| {
                         geometry.output_count_conflicts_with_live(live_output_count)
                     }) {

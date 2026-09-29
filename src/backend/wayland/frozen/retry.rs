@@ -97,7 +97,7 @@ mod tests {
     }
     async fn drain(frozen: &mut FrozenState, input: &mut crate::input::InputState) {
         for _ in 0..100 {
-            frozen.poll_portal_capture(input, Instant::now());
+            frozen.poll_portal_capture(input, Instant::now(), None);
             if !frozen.portal.is_running() {
                 return;
             }

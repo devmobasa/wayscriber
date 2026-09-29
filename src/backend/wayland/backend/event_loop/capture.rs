@@ -16,12 +16,13 @@ use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
 use crate::notification;
 
 pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
+    let live_output_count = state.live_output_count();
+
     // Apply any completed portal fallback captures without blocking.
     state
         .frozen
-        .poll_portal_capture(&mut state.input_state, now);
+        .poll_portal_capture(&mut state.input_state, now, live_output_count);
     handle_pending_frozen_image(state, now);
-    let live_output_count = state.live_output_count();
     state
         .zoom
         .poll_portal_capture(&mut state.input_state, now, live_output_count);

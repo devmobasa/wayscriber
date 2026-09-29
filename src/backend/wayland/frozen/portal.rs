@@ -75,7 +75,12 @@ impl FrozenState {
     }
 
     /// Check for completed portal capture and apply result if present.
-    pub fn poll_portal_capture(&mut self, input_state: &mut InputState, now: Instant) {
+    pub fn poll_portal_capture(
+        &mut self,
+        input_state: &mut InputState,
+        now: Instant,
+        live_output_count: Option<u32>,
+    ) {
         if !self.portal.is_running() {
             return;
         }
@@ -112,6 +117,7 @@ impl FrozenState {
                     source_geometry,
                     image,
                     input_state,
+                    live_output_count,
                 );
             }
             PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
@@ -195,6 +201,7 @@ impl FrozenState {
         source_geometry: Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
         image: Result<crate::backend::wayland::frozen::FrozenImage, CaptureError>,
         input_state: &mut InputState,
+        live_output_count: Option<u32>,
     ) {
         log::info!(
             "portal.freeze captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
@@ -202,7 +209,13 @@ impl FrozenState {
             self.output_layout_generation
         );
         let output_matches = portal_output_matches(target_output, self.active_output_id);
-        let layout_matches = layout_generation == self.output_layout_generation;
+        // SCTK can advertise a wl_output before its new_output callback
+        // refreshes geometry. Discard that snapshot before reading a crop error.
+        let topology_changed = source_geometry
+            .as_ref()
+            .is_some_and(|geometry| geometry.output_count_conflicts_with_live(live_output_count));
+        let layout_matches =
+            layout_generation == self.output_layout_generation && !topology_changed;
 
         if output_matches && layout_matches {
             match image {
@@ -294,13 +307,44 @@ mod tests {
         input: &mut InputState,
     ) -> anyhow::Result<()> {
         for _ in 0..100 {
-            frozen.poll_portal_capture(input, Instant::now());
+            frozen.poll_portal_capture(input, Instant::now(), None);
             if !frozen.portal.is_running() {
                 return Ok(());
             }
             tokio::task::yield_now().await;
         }
         anyhow::bail!("frozen portal task did not finish")
+    }
+
+    #[test]
+    fn live_topology_is_checked_before_a_crop_error() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let owner = ScreenAcquisitionOwner::Ocr;
+        let id = registry.request(owner).unwrap();
+        let geometry = crop_geometry((0, 0)).with_known_output_count(Some(1));
+        frozen.set_active_output(None, Some(1));
+        frozen.set_active_geometry(Some(geometry.clone()));
+        frozen.start_capture_for(id, owner).unwrap();
+        frozen.take_preflight_pending();
+        let generation = frozen.output_layout_generation;
+
+        frozen.apply_portal_image(
+            Some(1),
+            generation,
+            Some(geometry),
+            Err(CaptureError::ImageError("stale raster size".to_string())),
+            &mut input,
+            Some(2),
+        );
+
+        assert!(frozen.has_portal_layout_retry());
+        assert!(frozen.has_acquisition_attempt());
+        assert!(!frozen.has_pending_image());
+        assert!(frozen.take_acquisition_completion().is_none());
+        assert!(!frozen.take_capture_done());
     }
 
     #[tokio::test]
@@ -402,7 +446,7 @@ mod tests {
                 PortalTask::disconnected_for_test(now)
             });
 
-            frozen.poll_portal_capture(&mut input, now);
+            frozen.poll_portal_capture(&mut input, now, None);
 
             assert!(!frozen.is_in_progress());
             assert!(!frozen.portal.is_running());
