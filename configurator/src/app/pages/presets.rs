@@ -160,7 +160,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
             } else if draft.name.trim().is_empty() {
                 draft.tool.label().to_string()
             } else {
-                format!("{} — {}", draft.name.trim(), draft.tool.label())
+                format!("{} ({})", draft.name.trim(), draft.tool.label())
             };
             if expander.subtitle().as_str() != subtitle {
                 expander.set_subtitle(&subtitle);

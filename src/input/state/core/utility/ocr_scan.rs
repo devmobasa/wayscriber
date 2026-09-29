@@ -43,7 +43,7 @@ impl OcrScanOutcome {
             Self::Copied {
                 replaced_invalid_utf8: true,
                 ..
-            } => "Copied — some characters were unreadable",
+            } => "Copied, but some characters were unreadable",
             Self::NoTextFound => "No text found",
             Self::Failed => "Recognition failed",
         }

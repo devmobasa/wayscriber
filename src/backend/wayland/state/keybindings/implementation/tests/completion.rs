@@ -76,7 +76,7 @@ fn a_chord_claimed_on_disk_installs_nothing_and_names_the_owner() {
     assert!(!completion.saved);
     assert_eq!(
         completion.message,
-        "Shortcut not changed — config.toml now assigns Ctrl+Alt+Shift+K to Undo."
+        "Shortcut not changed: config.toml now assigns Ctrl+Alt+Shift+K to Undo."
     );
 }
 
@@ -287,7 +287,7 @@ fn an_edit_the_running_keymap_cannot_take_is_not_installed() {
     );
     assert_eq!(
         SHORTCUT_NOT_INSTALLED,
-        "Shortcut saved to config.toml, but this run kept its own — another \
+        "Shortcut saved to config.toml, but this run kept its own because another \
          edit here already uses that key (see logs).",
         "the wording must not claim the run took it"
     );
@@ -349,7 +349,7 @@ fn an_edit_the_file_already_had_and_the_run_cannot_take_must_not_claim_a_save() 
     );
     assert_eq!(
         SHORTCUT_ALREADY_CURRENT_NOT_INSTALLED,
-        "config.toml already has this shortcut, but this run kept its own — \
+        "config.toml already has this shortcut, but this run kept its own because \
          another edit here already uses that key (see logs).",
     );
     assert!(
@@ -407,7 +407,7 @@ fn an_edit_neither_the_file_nor_the_run_took_must_not_claim_a_save() {
     );
     assert_eq!(
         SHORTCUT_NOT_SAVED_OR_INSTALLED,
-        "Shortcut not changed — config.toml did not take it and another edit \
+        "Shortcut not changed: config.toml did not take it and another edit \
          here already uses that key (see logs).",
     );
     assert!(

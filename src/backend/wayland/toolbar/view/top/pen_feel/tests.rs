@@ -70,7 +70,7 @@ fn the_chip_stands_in_for_both_controls_inside_the_planned_width() {
     assert_eq!(interaction.event, ToolbarEvent::TogglePenFeelPanel(true));
     assert_eq!(
         interaction.tooltip.as_deref(),
-        Some("Smoothing: Medium \u{b7} Shape detection: Forgiving \u{2014} click to adjust")
+        Some("Smoothing: Medium \u{b7} Shape detection: Forgiving (click to adjust)")
     );
     for gone in ["top.style.pen-smoothing", "top.style.shape-sensitivity"] {
         assert!(

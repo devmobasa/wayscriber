@@ -184,7 +184,7 @@ fn preset_summary(snapshot: &ToolbarSnapshot, index: usize) -> Option<String> {
 
     let details = parts.join(", ");
     Some(match preset_name(snapshot, index) {
-        Some(name) => format!("{name} \u{2014} {details}"),
+        Some(name) => format!("{name} \u{b7} {details}"),
         None => details,
     })
 }
@@ -236,10 +236,10 @@ pub(super) fn preset_tooltip(snapshot: &ToolbarSnapshot, index: usize) -> String
             snapshot.binding_hints.apply_preset(slot),
         ),
         None => match snapshot.binding_hints.save_preset(slot) {
-            Some(binding) => format!(
-                "Preset {slot} (empty) \u{2014} click or press {binding} to save the current tool"
-            ),
-            None => format!("Preset {slot} (empty) \u{2014} click to save the current tool"),
+            Some(binding) => {
+                format!("Preset {slot} (empty): click or press {binding} to save the current tool")
+            }
+            None => format!("Preset {slot} (empty): click to save the current tool"),
         },
     }
 }

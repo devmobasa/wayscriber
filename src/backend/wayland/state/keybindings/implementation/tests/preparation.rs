@@ -36,7 +36,7 @@ fn a_taken_chord_is_refused_and_names_the_action_that_owns_it() {
             assert_eq!(existing_action, Action::SelectPenTool);
             assert_eq!(
                 shortcut_conflict_message(&binding, existing_action),
-                "Shortcut not changed — F is already assigned to Pen Tool."
+                "Shortcut not changed: F is already assigned to Pen Tool."
             );
         }
         other => panic!("expected a structured shortcut conflict, got {other:?}"),
@@ -107,7 +107,7 @@ fn one_chord_listed_twice_is_refused_without_naming_another_action() {
     match error {
         KeybindingEditError::Edit(message) => assert_eq!(
             message,
-            "Shortcut not changed — Ctrl+Alt+Shift+K is listed twice for Pen Tool."
+            "Shortcut not changed: Ctrl+Alt+Shift+K is listed twice for Pen Tool."
         ),
         other => panic!("expected a plain edit refusal, got {other:?}"),
     }
@@ -237,7 +237,7 @@ fn a_chord_an_in_flight_edit_is_giving_up_is_free_for_the_next_edit() {
     let refused = prepare(&running, replace(Action::SelectMarkerTool, "F"))
         .expect_err("with nothing queued, Pen still holds the chord");
     assert_eq!(
-        refused, "Shortcut not changed — F is already assigned to Pen Tool.",
+        refused, "Shortcut not changed: F is already assigned to Pen Tool.",
         "and that refusal is the honest one while no edit is outstanding"
     );
 
@@ -266,7 +266,7 @@ fn a_chord_an_in_flight_edit_asked_for_is_already_taken() {
     .expect_err("the queued edit has already asked for this chord");
 
     assert_eq!(
-        refused, "Shortcut not changed — Ctrl+Alt+Shift+P is already assigned to Pen Tool.",
+        refused, "Shortcut not changed: Ctrl+Alt+Shift+P is already assigned to Pen Tool.",
         "and the refusal names the action that asked for it, not a keymap holder"
     );
 }

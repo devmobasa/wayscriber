@@ -116,7 +116,7 @@ impl InvalidKeybinding {
                 let action = action_label(self.action);
                 match suggestion {
                     Some(suggestion) => format!(
-                        "{} for {action} names no key on your keyboard — did you mean {suggestion}?",
+                        "{} for {action} names no key on your keyboard. Did you mean {suggestion}?",
                         self.binding
                     ),
                     None => format!(
@@ -134,7 +134,7 @@ impl fmt::Display for InvalidKeybinding {
         match &self.problem {
             KeybindingProblem::Unparseable { error } => write!(
                 formatter,
-                "`{}` for {} could not be parsed: {error} — it is ignored for this session",
+                "`{}` for {} could not be parsed: {error}. It is ignored for this session",
                 self.binding,
                 action_label(self.action),
             ),
@@ -146,7 +146,7 @@ impl fmt::Display for InvalidKeybinding {
                     action_label(self.action),
                 )?;
                 match suggestion {
-                    Some(suggestion) => write!(formatter, " — did you mean `{suggestion}`?"),
+                    Some(suggestion) => write!(formatter, ". Did you mean `{suggestion}`?"),
                     None => Ok(()),
                 }
             }

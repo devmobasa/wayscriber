@@ -30,7 +30,7 @@ fn launch_deferred_by_busy_broker(error: &anyhow::Error) -> bool {
 
 fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'static str {
     if launch_deferred_by_busy_broker(error) {
-        "Busy with another task — try again in a moment."
+        "Busy with another task. Try again in a moment."
     } else {
         failed
     }
@@ -138,7 +138,7 @@ mod tests {
         assert!(launch_deferred_by_busy_broker(&error));
         assert_eq!(
             launch_failure_message(&error, "failed"),
-            "Busy with another task — try again in a moment."
+            "Busy with another task. Try again in a moment."
         );
     }
 

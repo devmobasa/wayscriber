@@ -273,7 +273,7 @@ fn a_chord_claimed_on_disk_since_the_edit_is_refused_without_writing() {
     );
     assert_eq!(
         shortcut_claimed_on_disk_message(&conflict.binding, conflict.claimed_by),
-        "Shortcut not changed — config.toml now assigns Ctrl+Alt+Shift+M to Undo.",
+        "Shortcut not changed: config.toml now assigns Ctrl+Alt+Shift+M to Undo.",
         "the refusal names the action that owns the chord"
     );
 }
@@ -318,7 +318,7 @@ fn an_overlapping_edit_onto_the_chord_the_first_took_is_refused_by_the_file() {
     assert!(!completion.saved);
     assert_eq!(
         completion.message,
-        "Shortcut not changed — config.toml now assigns Ctrl+Alt+Shift+X to Pen Tool.",
+        "Shortcut not changed: config.toml now assigns Ctrl+Alt+Shift+X to Pen Tool.",
         "and the refusal names the action that took it"
     );
     let after = fs::read_to_string(&path).expect("readable");

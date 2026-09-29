@@ -183,7 +183,7 @@ pub(crate) fn pen_feel_panel_size(snapshot: &ToolbarSnapshot) -> (f64, f64) {
 impl StylePillControl {
     /// The chip's tooltip: the current levels and what a click does.
     pub(crate) fn pen_feel_tooltip(snapshot: &ToolbarSnapshot) -> String {
-        format!("{} \u{2014} click to adjust", pen_feel_summary(snapshot))
+        format!("{} (click to adjust)", pen_feel_summary(snapshot))
     }
 
     /// The chip's accessible name: the title with the current levels, so a
@@ -237,7 +237,7 @@ mod tests {
         );
         assert_eq!(
             StylePillControl::pen_feel_tooltip(&snapshot_for(Tool::Pen, 0, 3)),
-            "Smoothing: Off \u{2014} click to adjust"
+            "Smoothing: Off (click to adjust)"
         );
         assert_eq!(
             StylePillControl::pen_feel_accessible_label(&snapshot_for(Tool::Marker, 6, 3)),

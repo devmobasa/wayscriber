@@ -17,7 +17,7 @@ impl InputState {
         let mut entries = Vec::new();
         let header = if let Some(name) = page_name {
             format!(
-                "{} — Page {} ({}/{})",
+                "{}: Page {} ({}/{})",
                 name, page_number, page_number, page_count
             )
         } else {

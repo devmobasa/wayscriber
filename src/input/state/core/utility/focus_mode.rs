@@ -151,7 +151,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             FOCUS_MODE_TOAST_KEY,
-            Toast::info("Focus mode — UI hidden").action(label, Action::ToggleFocusMode),
+            Toast::info("Focus mode: UI hidden").action(label, Action::ToggleFocusMode),
         );
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;

@@ -521,7 +521,7 @@ fn stroke_state_orders_chip_swatches_slider_and_numeral() {
     );
     assert_eq!(
         numeral.tooltip(&snapshot).as_deref(),
-        Some("Thickness \u{2014} click to type, scroll to adjust")
+        Some("Thickness: click to type, scroll to adjust")
     );
 }
 
@@ -652,7 +652,7 @@ fn arrow_style_chip_does_not_advertise_the_selection_aware_shortcut() {
         StylePillControl::ArrowStyleChip
             .tooltip(&snapshot)
             .as_deref(),
-        Some("Arrow style: Standard \u{2014} click to choose")
+        Some("Arrow style: Standard (click to choose)")
     );
 }
 
@@ -736,7 +736,7 @@ fn eraser_state_is_size_slider_plus_mode_segment_without_color() {
         StylePillControl::ThicknessValue
             .tooltip(&snapshot)
             .as_deref(),
-        Some("Eraser size \u{2014} click to type, scroll to adjust")
+        Some("Eraser size: click to type, scroll to adjust")
     );
 
     let segment = StylePillControl::EraserModeSegment;

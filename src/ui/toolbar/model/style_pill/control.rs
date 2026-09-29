@@ -319,11 +319,11 @@ impl StylePillControl {
             // The numeral looks like a label, so its tooltip says it takes a
             // typed value and the wheel.
             Self::ThicknessValue => Some(format!(
-                "{} \u{2014} click to type, scroll to adjust",
+                "{}: click to type, scroll to adjust",
                 ToolContext::from_snapshot(snapshot).thickness_label
             )),
             Self::FontSizeValue => {
-                Some("Text size \u{2014} click to type, scroll to adjust".to_string())
+                Some("Text size: click to type, scroll to adjust".to_string())
             }
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
                 Some("Magnification; Freeze first when using a transparent board.".to_string())
@@ -337,7 +337,7 @@ impl StylePillControl {
             // The open menu shows every style; a tooltip would only cover it.
             Self::ArrowStyleChip => (!snapshot.arrow_style_menu_open).then(|| {
                 format!(
-                    "Arrow style: {} \u{2014} click to choose",
+                    "Arrow style: {} (click to choose)",
                     snapshot.arrow_style.label()
                 )
             }),

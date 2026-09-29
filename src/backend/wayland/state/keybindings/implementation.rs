@@ -60,7 +60,7 @@ fn apply_keybinding_edit(
         }
         if let Some(first) = requested.insert(binding, binding_text.clone()) {
             return Err(KeybindingEditError::Edit(format!(
-                "Shortcut not changed — {first} is listed twice for {}.",
+                "Shortcut not changed: {first} is listed twice for {}.",
                 action_label(request.action)
             )));
         }
@@ -73,7 +73,7 @@ fn apply_keybinding_edit(
 
 fn shortcut_conflict_message(binding: &str, existing_action: Action) -> String {
     format!(
-        "Shortcut not changed — {binding} is already assigned to {}.",
+        "Shortcut not changed: {binding} is already assigned to {}.",
         action_label(existing_action)
     )
 }
@@ -105,7 +105,7 @@ fn shortcut_unchanged_message(request: &KeybindingEditRequest) -> String {
 /// What the user is told when the file, not this run's keymap, owns the chord.
 fn shortcut_claimed_on_disk_message(binding: &str, existing_action: Action) -> String {
     format!(
-        "Shortcut not changed — config.toml now assigns {binding} to {}.",
+        "Shortcut not changed: config.toml now assigns {binding} to {}.",
         action_label(existing_action)
     )
 }
@@ -125,7 +125,7 @@ const SHORTCUT_SAVE_FAILED: &str =
 /// place to look.
 const SHORTCUT_WRITE_UNVERIFIED: &str = concat!(
     "Shortcut updated for this run, but config.toml was written and does not ",
-    "read back with it — check the file (see logs)."
+    "read back with it. Check the file (see logs)."
 );
 
 /// What the user is told when the file took the edit but this run cannot.
@@ -136,7 +136,7 @@ const SHORTCUT_WRITE_UNVERIFIED: &str = concat!(
 /// the keymap it can still dispatch from, and the message points at the file,
 /// where the two now disagree.
 const SHORTCUT_NOT_INSTALLED: &str = concat!(
-    "Shortcut saved to config.toml, but this run kept its own — another edit ",
+    "Shortcut saved to config.toml, but this run kept its own because another edit ",
     "here already uses that key (see logs)."
 );
 
@@ -149,7 +149,7 @@ const SHORTCUT_NOT_INSTALLED: &str = concat!(
 /// act on is the same either way — the file and the run disagree — so that is
 /// what the wording says, without the claim.
 const SHORTCUT_ALREADY_CURRENT_NOT_INSTALLED: &str = concat!(
-    "config.toml already has this shortcut, but this run kept its own — another ",
+    "config.toml already has this shortcut, but this run kept its own because another ",
     "edit here already uses that key (see logs)."
 );
 
@@ -163,7 +163,7 @@ const SHORTCUT_ALREADY_CURRENT_NOT_INSTALLED: &str = concat!(
 /// about a disagreement between the file and the run, and this one is about
 /// there being nothing to disagree with.
 const SHORTCUT_NOT_SAVED_OR_INSTALLED: &str = concat!(
-    "Shortcut not changed — config.toml did not take it and another edit here ",
+    "Shortcut not changed: config.toml did not take it and another edit here ",
     "already uses that key (see logs)."
 );
 
