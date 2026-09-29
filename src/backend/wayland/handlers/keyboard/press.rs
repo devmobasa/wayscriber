@@ -213,8 +213,7 @@ impl WaylandState {
             && is_repeatable_key(key)
             && self.focus.keyboard_focused()
         {
-            self.key_repeat
-                .arm(key, Instant::now(), Self::KEY_REPEAT_INITIAL_DELAY);
+            self.key_repeat.arm(key, Instant::now());
         }
     }
 }
