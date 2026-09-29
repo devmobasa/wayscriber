@@ -47,12 +47,27 @@ pub(super) fn poll_capture_deadlines(
     }
 }
 
-pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
+pub(super) fn capture_timeout(
+    state: &WaylandState,
+    now: Instant,
+    last_render_time: Option<Instant>,
+) -> Option<Duration> {
     if state.frozen.has_portal_layout_retry() || state.zoom.has_portal_layout_retry() {
         return Some(Duration::ZERO);
     }
     super::min_timeout(
-        state.overlay_capture_barrier_timeout(now),
+        state.overlay_capture_barrier_timeout(
+            now,
+            if state.config.performance.enable_vsync {
+                Duration::ZERO
+            } else {
+                super::render::frame_rate_cap_timeout(
+                    state.config.performance.max_fps_no_vsync,
+                    last_render_time,
+                )
+                .unwrap_or(Duration::ZERO)
+            },
+        ),
         super::min_timeout(
             state.frozen.direct_capture_timeout(now),
             super::min_timeout(

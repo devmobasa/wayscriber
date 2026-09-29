@@ -442,6 +442,13 @@ impl SurfaceState {
         Ok(())
     }
 
+    /// A capture barrier may wake for a render only if a slot can be acquired.
+    /// Buffer releases wake Wayland dispatch; waiting on them avoids polling.
+    pub(super) fn has_available_buffer(&self, buffer_count: usize) -> bool {
+        self.slots.len() < buffer_count.max(1)
+            || self.slots.iter().any(|slot| !slot.has_active_buffers())
+    }
+
     /// Hands out a buffer for this frame, or `None` while the compositor still
     /// owns every slot.
     ///

@@ -176,14 +176,14 @@ impl OverlayCaptureBarrier {
         Some(active.reason)
     }
 
-    fn submission_timeout(&self, can_render: bool) -> Option<Duration> {
+    fn submission_timeout(&self, can_render: bool, render_delay: Duration) -> Option<Duration> {
         self.active
             .filter(|active| {
                 can_render
                     && active.gtk_paint_generation.is_none()
                     && active.main_surface_phase == MainSurfaceCapturePhase::AwaitingRender
             })
-            .map(|_| Duration::ZERO)
+            .map(|_| render_delay)
     }
 
     fn frame_timeout(&self, now: Instant) -> Option<Duration> {
@@ -234,13 +234,18 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn overlay_capture_barrier_timeout(
         &self,
         now: Instant,
+        render_delay: Duration,
     ) -> Option<Duration> {
         self.suppression
             .barrier
             .submission_timeout(
                 self.surface.is_configured()
                     && !self.surface.frame_callback_pending()
-                    && self.input_state.needs_redraw,
+                    && self.input_state.needs_redraw
+                    && self
+                        .surface
+                        .has_available_buffer(self.config.performance.buffer_count as usize),
+                render_delay,
             )
             .or_else(|| self.suppression.barrier.frame_timeout(now))
     }
@@ -535,22 +540,39 @@ mod tests {
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
 
         let retry = barrier.begin(OverlaySuppression::Frozen, true).unwrap();
-        assert_eq!(barrier.submission_timeout(true), None);
+        assert_eq!(barrier.submission_timeout(true, Duration::ZERO), None);
         assert_ne!(retry, first);
         assert!(!barrier.acknowledge_gtk_paint(first));
         barrier.mark_main_surface_frame_ready(first);
         assert_eq!(barrier.begin_main_surface_submission(), None);
         assert_eq!(barrier.take_ready(), None);
         assert!(barrier.acknowledge_gtk_paint(retry));
-        assert_eq!(barrier.submission_timeout(true), Some(Duration::ZERO));
-        assert_eq!(barrier.submission_timeout(false), None);
+        assert_eq!(
+            barrier.submission_timeout(true, Duration::ZERO),
+            Some(Duration::ZERO)
+        );
+        assert_eq!(barrier.submission_timeout(false, Duration::ZERO), None);
         assert_eq!(barrier.take_ready(), None);
         assert_eq!(barrier.begin_main_surface_submission(), Some(retry));
-        assert_eq!(barrier.submission_timeout(true), None);
+        assert_eq!(barrier.submission_timeout(true, Duration::ZERO), None);
         barrier.mark_main_surface_frame_ready(first);
         assert_eq!(barrier.take_ready(), None);
         barrier.mark_main_surface_frame_ready(retry);
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
+    }
+
+    #[test]
+    fn submission_wakeup_respects_buffer_availability_and_frame_pacing() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        barrier.begin(OverlaySuppression::Zoom, false);
+        let cap_delay = Duration::from_millis(16);
+
+        assert_eq!(barrier.submission_timeout(false, Duration::ZERO), None);
+        assert_eq!(barrier.submission_timeout(true, cap_delay), Some(cap_delay));
+        assert_eq!(
+            barrier.submission_timeout(true, Duration::ZERO),
+            Some(Duration::ZERO)
+        );
     }
 
     #[test]

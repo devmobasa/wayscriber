@@ -323,7 +323,7 @@ fn event_loop_timeout(
         state.toolbar_drag_handoff_timeout(now),
         state.input_state.command_palette_repeat_timeout(now),
         state.input_state.font_picker_repeat_timeout(now),
-        capture::capture_timeout(state, now),
+        capture::capture_timeout(state, now, last_render_time),
         interaction::interaction_timeout(state.spotlight.wheel_idle_deadline(), now),
         durable_action_retry_timeout(state, now),
         pending_backend_action_timeout,
