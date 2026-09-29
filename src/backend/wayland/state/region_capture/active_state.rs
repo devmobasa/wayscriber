@@ -303,7 +303,7 @@ impl ActiveScreenRegion {
         let image_rect = self.stored_review_rect()?;
         let display = crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(
             &source, image_rect,
-        );
+        )?;
         Some(RegionSelectionGeometry::review(
             purpose,
             image_rect,

@@ -34,7 +34,7 @@ fn capture_hover_motion_requests_a_repaint_while_armed_and_in_review() {
     let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
     let display = review_region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut review_backend = Some(review_region);
     let mut review_input = make_test_input_state();
@@ -68,7 +68,7 @@ fn review_nudge_and_move_clamp_without_resizing_and_owner_loss_keeps_review() {
     let rect = ImagePixelRect::new(70, 60, 20, 15, (100, 80)).unwrap();
     let display = region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
@@ -118,7 +118,7 @@ fn review_move_preserves_subpixel_motion_until_it_reaches_a_pixel() {
     let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
     region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     assert!(region.begin_review_move((25.0, 25.0)));
 
@@ -140,7 +140,7 @@ fn second_device_press_cannot_replace_an_in_progress_review_move() {
     let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
     let display = region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
@@ -620,7 +620,7 @@ fn pressing_a_grip_resizes_while_pressing_the_interior_still_moves() {
     let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
     let display = region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
@@ -706,7 +706,7 @@ fn a_held_grip_blocks_nudging_and_a_second_devices_press() {
     let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
     let display = region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
@@ -759,7 +759,7 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
     let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
     let display = region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
@@ -780,7 +780,11 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
     let whole = ImagePixelRect::whole(bounds).unwrap();
     let display = backend
         .as_mut()
-        .and_then(|region| region.enter_review_seed(whole).map(|seed| seed.display))
+        .and_then(|region| {
+            region
+                .enter_review_seed(whole)
+                .and_then(|seed| seed.display)
+        })
         .unwrap();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
 
@@ -868,7 +872,7 @@ fn a_grip_click_without_motion_leaves_the_rectangle_untouched_at_any_scale() {
             *purpose = RegionPurposeTag::CaptureInteractive;
         }
         let rect = ImagePixelRect::new(21, 17, 43, 31, bounds).unwrap();
-        let Some(display) = region.enter_review_seed(rect).map(|seed| seed.display) else {
+        let Some(display) = region.enter_review_seed(rect).and_then(|seed| seed.display) else {
             continue;
         };
         let mut backend = Some(region);
@@ -922,7 +926,7 @@ fn a_grip_drag_tracks_the_pointer_from_where_it_was_grabbed() {
     let rect = ImagePixelRect::new(20, 10, 40, 60, bounds).unwrap();
     let display = region
         .enter_review_seed(rect)
-        .map(|seed| seed.display)
+        .and_then(|seed| seed.display)
         .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();

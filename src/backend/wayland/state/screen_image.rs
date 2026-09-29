@@ -243,24 +243,17 @@ pub(super) fn screen_point_for_image_point(
     }
 }
 
-pub(super) fn screen_rect_for_image_rect(token: &ScreenSourceToken, rect: ImagePixelRect) -> Rect {
-    let first = screen_point_for_image_point(
-        token,
-        ImagePoint::new(f64::from(rect.x()), f64::from(rect.y())),
-    );
-    let second = screen_point_for_image_point(
-        token,
-        ImagePoint::new(
-            f64::from(rect.x() + rect.width()),
-            f64::from(rect.y() + rect.height()),
-        ),
-    );
-    let left = first.0.min(second.0).floor() as i32;
-    let top = first.1.min(second.1).floor() as i32;
-    let right = first.0.max(second.0).ceil() as i32;
-    let bottom = first.1.max(second.1).ceil() as i32;
-    Rect::from_min_max(left, top, right, bottom)
-        .expect("a non-empty image rectangle must map to a non-empty screen rectangle")
+/// Map a source-image rectangle into logical screen space.
+///
+/// Returns `None` when the token cannot place it: an empty surface, a zero or
+/// non-finite Zoom scale, or coordinates beyond `i32` collapse the rectangle,
+/// and callers then have no screen geometry for it.
+pub(super) fn screen_rect_for_image_rect(
+    token: &ScreenSourceToken,
+    rect: ImagePixelRect,
+) -> Option<Rect> {
+    // An image rectangle is a native-pixel extent at its own origin.
+    screen_rect_for_native_extent(token, (rect.x(), rect.y()), (rect.width(), rect.height()))
 }
 
 /// Map a native-pixel extent whose origin is a source-image point into logical
@@ -305,7 +298,7 @@ pub(super) fn screen_rect_for_pixel_span(
     token: &ScreenSourceToken,
     span: PixelSpan,
 ) -> Option<Rect> {
-    Some(screen_rect_for_image_rect(token, span.try_into().ok()?))
+    screen_rect_for_image_rect(token, span.try_into().ok()?)
 }
 
 /// Clip two unordered image-space points into an integer pixel rectangle.
@@ -575,7 +568,7 @@ mod tests {
                 &token,
                 ImagePixelRect::new(150, 75, 30, 15, (300, 150)).unwrap(),
             ),
-            Rect::new(0, 0, 40, 20).unwrap()
+            Rect::new(0, 0, 40, 20)
         );
 
         let span = pixel_span(
@@ -595,6 +588,47 @@ mod tests {
         )
         .unwrap();
         assert_eq!(screen_rect_for_pixel_span(&token, empty), None);
+    }
+
+    fn zoomed_token(surface: (u32, u32), zoom_scale: f64) -> ScreenSourceToken {
+        ScreenSourceToken {
+            output_id: 1,
+            output_layout_generation: 1,
+            kind: ScreenImageKind::Zoom,
+            image_generation: 1,
+            image_size: (200, 100),
+            stride: 800,
+            surface,
+            output_scale: 1,
+            output_transform: wl_output::Transform::Normal,
+            zoom_transformed: true,
+            zoom_scale,
+            zoom_view_offset: (0.0, 0.0),
+        }
+    }
+
+    #[test]
+    fn image_rects_a_degenerate_token_cannot_place_have_no_screen_geometry() {
+        let rect = ImagePixelRect::new(20, 10, 40, 20, (200, 100)).unwrap();
+        assert_eq!(
+            screen_rect_for_image_rect(&zoomed_token((100, 50), 2.0), rect),
+            Rect::new(20, 10, 40, 20)
+        );
+
+        for (surface, zoom_scale) in [
+            ((0, 50), 1.0),
+            ((100, 0), 1.0),
+            ((100, 50), 0.0),
+            ((100, 50), f64::NAN),
+            ((100, 50), f64::INFINITY),
+            ((100, 50), 1e12),
+        ] {
+            assert_eq!(
+                screen_rect_for_image_rect(&zoomed_token(surface, zoom_scale), rect),
+                None,
+                "surface {surface:?}, zoom scale {zoom_scale}"
+            );
+        }
     }
 
     #[test]

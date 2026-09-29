@@ -298,7 +298,7 @@ fn map_window_target(source: ScreenSourceToken, target: WindowTarget) -> Option<
     let image_rect = ImagePixelRect::from_points(first, second, source.image_size)?;
     Some(WindowSnapTarget {
         image_rect,
-        screen_rect: screen_rect_for_image_rect(&source, image_rect),
+        screen_rect: screen_rect_for_image_rect(&source, image_rect)?,
     })
 }
 
