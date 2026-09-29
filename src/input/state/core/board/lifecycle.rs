@@ -19,9 +19,11 @@ impl InputState {
         self.retract_restore_notice_if_context_changed();
     }
 
+    /// Shape ids are page-local, so the new board's frame reuses the ids the
+    /// selection, the context menu, and the hit cache still hold for the old
+    /// one. A board transition drops them exactly as a page change does.
     pub(super) fn finish_active_board_transition(&mut self) {
-        self.sync_canvas_pointer_to_current_transform();
-        self.mark_board_surface_changed();
+        self.finish_active_page_content_change();
     }
 
     pub(super) fn queue_board_runtime_ui_action(&mut self, action: PendingBoardRuntimeUiAction) {
