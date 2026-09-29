@@ -13,7 +13,7 @@ use crate::backend::wayland::acquisition::{
 use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
-use crate::backend::wayland::portal_capture::{crop_argb, layout_token_matches};
+use crate::backend::wayland::portal_capture::layout_token_matches;
 use crate::backend::wayland::portal_task::PortalOperation;
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
@@ -34,7 +34,7 @@ struct PendingFrozenImage {
 #[derive(Clone, Copy)]
 enum FrozenCaptureSource {
     ActiveOutput,
-    Desktop,
+    Desktop { cropped: bool },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,8 +332,19 @@ impl FrozenState {
             layout_generation: self.output_layout_generation,
             source_geometry,
             output_transform: None,
-            source: FrozenCaptureSource::Desktop,
+            source: FrozenCaptureSource::Desktop { cropped: false },
         });
+    }
+
+    pub(super) fn set_pending_portal_image(
+        &mut self,
+        image: FrozenImage,
+        target_output_id: Option<u32>,
+        source_geometry: Option<OutputGeometry>,
+    ) {
+        self.set_pending_desktop_image(image, target_output_id, source_geometry);
+        self.pending_image.as_mut().expect("image just set").source =
+            FrozenCaptureSource::Desktop { cropped: true };
     }
 
     pub fn has_pending_image(&self) -> bool {
@@ -619,7 +630,7 @@ impl FrozenState {
             }
         }
 
-        if matches!(pending.source, FrozenCaptureSource::Desktop) {
+        if let FrozenCaptureSource::Desktop { cropped } = pending.source {
             let Some(geometry) = pending
                 .source_geometry
                 .as_ref()
@@ -645,15 +656,24 @@ impl FrozenState {
                     "Freeze failed after the display changed size",
                 );
             };
-            let Some(cropped) =
-                self.crop_pending_image(image, &geometry, capture_width, capture_height)
-            else {
-                return self.reject_pending_image(
-                    input_state,
-                    "Freeze failed after the display changed size",
-                );
-            };
-            image = cropped;
+            if cropped {
+                if !geometry.accepts_transformed_pixel_size(image.width, image.height) {
+                    return self.reject_pending_image(
+                        input_state,
+                        "Freeze portal crop dimensions do not match the active output",
+                    );
+                }
+            } else {
+                let Some(cropped) =
+                    self.crop_pending_image(image, &geometry, capture_width, capture_height)
+                else {
+                    return self.reject_pending_image(
+                        input_state,
+                        "Freeze failed after the display changed size",
+                    );
+                };
+                image = cropped;
+            }
         }
 
         let Some(provenance) = provenance else {
@@ -707,29 +727,14 @@ impl FrozenState {
         target_width: u32,
         target_height: u32,
     ) -> Option<FrozenImage> {
-        if target_width == 0 || target_height == 0 {
-            return None;
-        }
-        let (origin_x, origin_y) = geometry.portal_crop_origin(image.width, image.height)?;
-        let (width, height, data) = crop_argb(
-            &image.data,
+        let cropped = crate::backend::wayland::portal_raster::crop_portal_raster(
+            image.data,
             image.width,
             image.height,
-            origin_x,
-            origin_y,
-            target_width,
-            target_height,
-        )?;
-        if width != target_width || height != target_height {
-            return None;
-        }
-        let stride = i32::try_from(target_width.checked_mul(4)?).ok()?;
-        Some(FrozenImage {
-            width: target_width,
-            height: target_height,
-            stride,
-            data,
-        })
+            geometry,
+        )
+        .ok()?;
+        ((cropped.width, cropped.height) == (target_width, target_height)).then_some(cropped)
     }
 
     /// Drop frozen image if the surface size no longer matches.
@@ -1135,6 +1140,7 @@ mod tests {
             screenshot_origin,
             screenshot_size: None,
             known_output_count: None,
+            portal_outputs: None,
         }
     }
 

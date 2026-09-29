@@ -4,6 +4,7 @@ use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
+#[cfg(test)]
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
@@ -54,16 +55,17 @@ impl FrozenState {
                         CaptureError::ImageError(format!("Decode failed: {error}"))
                     })?;
 
+                    let image = crate::backend::wayland::portal_raster::crop_portal_raster(
+                        data,
+                        width,
+                        height,
+                        &source_geometry,
+                    );
                     Ok((
                         Some(target_output_id),
                         layout_generation,
                         Some(source_geometry),
-                        FrozenImage {
-                            width,
-                            height,
-                            stride: (width * 4) as i32,
-                            data,
-                        },
+                        image,
                     ))
                 }
                 .await
@@ -104,11 +106,34 @@ impl FrozenState {
         let poll = self.portal.poll();
         match poll {
             PortalPoll::Ready(Ok((target_output, layout_generation, source_geometry, image))) => {
+                log::info!(
+                    "portal.freeze captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
+                    self.active_output_id,
+                    self.output_layout_generation
+                );
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
                 let layout_matches = layout_generation == self.output_layout_generation;
 
                 if output_matches && layout_matches {
-                    self.set_pending_desktop_image(image, target_output, source_geometry);
+                    match image {
+                        Ok(image) => {
+                            self.set_pending_portal_image(image, target_output, source_geometry)
+                        }
+                        Err(err) => {
+                            warn!("Portal frozen raster rejected: {err}");
+                            if self.has_acquisition_attempt() {
+                                self.finish_preflight_failure(err.to_string(), input_state);
+                            } else {
+                                input_state.push_toast(
+                                    ToastPriority::Critical,
+                                    "freeze",
+                                    Toast::error(err.to_string()),
+                                );
+                                input_state.set_frozen_active(false);
+                                self.capture_done = true;
+                            }
+                        }
+                    }
                 } else {
                     if !layout_matches {
                         warn!("Portal capture discarded after the output layout changed");
@@ -242,6 +267,7 @@ mod tests {
             screenshot_origin: Some(origin),
             screenshot_size: None,
             known_output_count: None,
+            portal_outputs: None,
         }
     }
 
@@ -291,7 +317,7 @@ mod tests {
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), image(0))) },
+            async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), Ok(image(0)))) },
         ));
         poll_until_finished(&mut frozen, &mut input).await?;
 
@@ -436,7 +462,7 @@ mod tests {
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, None, image(9))) },
+            async { Ok((Some(1), 0, None, Ok(image(9)))) },
         ));
 
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -458,7 +484,7 @@ mod tests {
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, None, image(9))) },
+            async move { Ok((None, layout_generation, None, Ok(image(9)))) },
         ));
         frozen.set_active_geometry(Some(crop_geometry((6, 0))));
 
@@ -482,7 +508,7 @@ mod tests {
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, None, image(0))) },
+            async move { Ok((None, layout_generation, None, Ok(image(0)))) },
         ));
         frozen.set_active_geometry(Some(geometry));
 

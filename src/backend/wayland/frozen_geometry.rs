@@ -1,6 +1,6 @@
 use wayland_client::protocol::wl_output;
 
-use crate::capture::DesktopBackdropGeometry;
+use crate::capture::{DesktopBackdropGeometry, DesktopBackdropOutputGeometry};
 
 /// Geometry and scale details for the active output, used for cropping fallback captures.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +27,8 @@ pub struct OutputGeometry {
     /// Number of live `wl_output` objects when this snapshot was taken.
     /// `None` means topology was not recorded (tests / incomplete refresh).
     pub(super) known_output_count: Option<u32>,
+    /// Complete, sorted logical/native output snapshot for uniform portal rasters.
+    pub(super) portal_outputs: Option<Vec<DesktopBackdropOutputGeometry>>,
 }
 
 impl OutputGeometry {
@@ -68,6 +70,7 @@ impl OutputGeometry {
             screenshot_origin: None,
             screenshot_size: None,
             known_output_count: None,
+            portal_outputs: None,
         })
     }
 }
@@ -444,6 +447,26 @@ impl OutputGeometry {
             self.screenshot_origin = geometry.physical_origin();
             self.screenshot_size = geometry.screenshot_size();
         }
+        self
+    }
+
+    pub(super) fn with_portal_outputs(
+        mut self,
+        outputs: Option<Vec<DesktopBackdropOutputGeometry>>,
+    ) -> Self {
+        self.portal_outputs = outputs.map(|mut outputs| {
+            outputs.sort_by_key(|output| {
+                (
+                    output.logical_x,
+                    output.logical_y,
+                    output.logical_width,
+                    output.logical_height,
+                    output.physical_width,
+                    output.physical_height,
+                )
+            });
+            outputs
+        });
         self
     }
 

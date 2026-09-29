@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::backend::wayland::portal_capture::{
-    capture_via_portal_fullscreen_bytes, crop_argb, portal_output_matches,
+    capture_via_portal_fullscreen_bytes, portal_output_matches,
 };
 use crate::backend::wayland::portal_task::{PortalPoll, PortalTask};
 use crate::capture::sources::frozen::decode_image_to_argb;
@@ -57,7 +57,7 @@ impl ZoomState {
                     let (data, width, height) = decode_image_to_argb(&bytes).map_err(|error| {
                         CaptureError::ImageError(format!("Decode failed: {error}"))
                     })?;
-                    let image = crop_portal_image(data, width, height, &geo)?;
+                    let image = crop_portal_image(data, width, height, &geo);
 
                     Ok((Some(target_output_id), layout_generation, provenance, image))
                 }
@@ -89,6 +89,11 @@ impl ZoomState {
         let poll = self.portal.poll();
         match poll {
             PortalPoll::Ready(Ok((target_output, layout_generation, provenance, image))) => {
+                log::info!(
+                    "portal.zoom captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
+                    self.active_output_id,
+                    self.output_layout_generation
+                );
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
                 let layout_matches = layout_generation == self.output_layout_generation;
 
@@ -109,6 +114,17 @@ impl ZoomState {
                         self.finish_failed_portal_task(input_state, ZoomSourceOutcome::StaleLayout);
                         return;
                     }
+                    let image = match image {
+                        Ok(image) => image,
+                        Err(err) => {
+                            warn!("Portal zoom raster rejected: {err}");
+                            self.finish_failed_portal_task(
+                                input_state,
+                                ZoomSourceOutcome::Failed(err.to_string()),
+                            );
+                            return;
+                        }
+                    };
                     self.install_image(image, provenance);
                 } else {
                     if !layout_matches {
@@ -196,51 +212,7 @@ fn crop_portal_image(
     height: u32,
     geometry: &OutputGeometry,
 ) -> Result<FrozenImage, CaptureError> {
-    let expected_len = u64::from(width)
-        .checked_mul(u64::from(height))
-        .and_then(|pixels| pixels.checked_mul(4))
-        .and_then(|bytes| usize::try_from(bytes).ok())
-        .ok_or_else(|| CaptureError::ImageError("Zoom capture is too large".to_string()))?;
-    if data.len() != expected_len {
-        return Err(CaptureError::ImageError(
-            "Zoom capture buffer length does not match its dimensions".to_string(),
-        ));
-    }
-
-    let (phys_w, phys_h) = geometry.verified_pixel_size().ok_or_else(|| {
-        CaptureError::ImageError("Zoom capture output dimensions are invalid".to_string())
-    })?;
-    let buffer_size = geometry.buffer_size();
-    if !OutputGeometry::dimensions_have_compatible_aspect((phys_w, phys_h), buffer_size) {
-        return Err(CaptureError::ImageError(
-            "Zoom capture aspect does not match the overlay surface".to_string(),
-        ));
-    }
-    let (origin_x, origin_y) = geometry.portal_crop_origin(width, height).ok_or_else(|| {
-        CaptureError::ImageError("Zoom capture does not match the active output layout".to_string())
-    })?;
-    let (cropped_w, cropped_h, cropped) =
-        crop_argb(&data, width, height, origin_x, origin_y, phys_w, phys_h).ok_or_else(|| {
-            CaptureError::ImageError("Zoom capture does not contain the active output".to_string())
-        })?;
-    if cropped_w != phys_w || cropped_h != phys_h {
-        return Err(CaptureError::ImageError(
-            "Zoom capture does not contain the active output".to_string(),
-        ));
-    }
-    let stride = i32::try_from(
-        cropped_w
-            .checked_mul(4)
-            .ok_or_else(|| CaptureError::ImageError("Zoom capture stride overflow".to_string()))?,
-    )
-    .map_err(|_| CaptureError::ImageError("Zoom capture stride is too large".to_string()))?;
-
-    Ok(FrozenImage {
-        width: cropped_w,
-        height: cropped_h,
-        stride,
-        data: cropped,
-    })
+    crate::backend::wayland::portal_raster::crop_portal_raster(data, width, height, geometry)
 }
 
 #[cfg(test)]
@@ -290,6 +262,7 @@ mod tests {
             screenshot_origin: Some(origin),
             screenshot_size: None,
             known_output_count: None,
+            portal_outputs: None,
         }
     }
 
@@ -347,6 +320,64 @@ mod tests {
     }
 
     #[test]
+    fn mixed_scale_workspace_crops_the_correct_monitor() {
+        use crate::capture::{DesktopBackdropGeometry, DesktopBackdropOutputGeometry};
+        let outputs = [
+            DesktopBackdropOutputGeometry {
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 8,
+                logical_height: 4,
+                physical_width: 8,
+                physical_height: 4,
+            },
+            DesktopBackdropOutputGeometry {
+                logical_x: 8,
+                logical_y: 0,
+                logical_width: 4,
+                logical_height: 2,
+                physical_width: 8,
+                physical_height: 4,
+            },
+        ];
+        let mut pixels = Vec::new();
+        for _y in 0..8 {
+            for x in 0..24 {
+                pixels.extend_from_slice(
+                    &if x < 16 {
+                        0xff112233_u32
+                    } else {
+                        0xffaabbcc_u32
+                    }
+                    .to_ne_bytes(),
+                );
+            }
+        }
+        for (index, color) in [(0, 0xff112233_u32), (1, 0xffaabbcc_u32)] {
+            let active = outputs[index];
+            let geometry = OutputGeometry::update_from(
+                Some((active.logical_x, active.logical_y)),
+                Some((active.logical_width as i32, active.logical_height as i32)),
+                (active.logical_width, active.logical_height),
+                if index == 0 { 1 } else { 2 },
+                wayland_client::protocol::wl_output::Transform::Normal,
+                Some((8, 4)),
+            )
+            .unwrap()
+            .with_desktop_backdrop_geometry(DesktopBackdropGeometry::from_outputs(active, &outputs))
+            .with_portal_outputs(Some(outputs.to_vec()));
+            let image =
+                crop_portal_image(pixels.clone(), 24, 8, &geometry).expect("KDE mixed-scale crop");
+            assert_eq!((image.width, image.height), (8, 4));
+            assert_eq!(
+                image.data,
+                color.to_ne_bytes().repeat(32),
+                "monitor {index}"
+            );
+        }
+    }
+
+    #[test]
     fn portal_crop_rejects_a_different_screenshot_layout() {
         let geometry = crop_geometry((0, 0)).with_desktop_backdrop_geometry(Some(
             crate::capture::DesktopBackdropGeometry {
@@ -396,7 +427,7 @@ mod tests {
         zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, provenance(1, 0), image(3))) },
+            async { Ok((Some(1), 0, provenance(1, 0), Ok(image(3)))) },
         ));
 
         poll_until_finished(&mut zoom, &mut input).await;
@@ -530,7 +561,7 @@ mod tests {
         zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, provenance(1, 0), image(9))) },
+            async { Ok((Some(1), 0, provenance(1, 0), Ok(image(9)))) },
         ));
 
         poll_until_finished(&mut zoom, &mut input).await;
@@ -571,7 +602,7 @@ mod tests {
                     Some(1),
                     layout_generation,
                     provenance(1, layout_generation),
-                    image(9),
+                    Ok(image(9)),
                 ))
             },
         ));
@@ -614,7 +645,7 @@ mod tests {
                     Some(1),
                     layout_generation,
                     provenance(1, layout_generation),
-                    image(3),
+                    Ok(image(3)),
                 ))
             },
         ));
@@ -658,7 +689,7 @@ mod tests {
                     Some(1),
                     layout_generation,
                     provenance(1, layout_generation),
-                    image(9),
+                    Ok(image(9)),
                 ))
             },
         ));

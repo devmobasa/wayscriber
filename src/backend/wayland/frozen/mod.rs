@@ -41,12 +41,14 @@ pub(in crate::backend::wayland) use image::{copy_shm_argb, validate_shm_buffer_l
 pub(in crate::backend::wayland) use state::FrozenCaptureBackend;
 pub use state::FrozenState;
 
+// Keep raster rejection beside the capture snapshot so layout validation runs
+// before interpreting a size mismatch. Portal and decode failures remain terminal.
 type PortalCaptureResult = Result<
     (
         Option<u32>,
         u64,
         Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
-        self::image::FrozenImage,
+        Result<self::image::FrozenImage, crate::capture::types::CaptureError>,
     ),
     crate::capture::types::CaptureError,
 >;
