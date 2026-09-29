@@ -186,12 +186,14 @@ Every chrome toggle in that table is a runtime override layered over the value y
 your `config.toml` still reads exactly as you wrote it and editing it there still wins: a
 configurator Save reseeds the override, and the field you changed goes back to following the file.
 
-If the graphical configurator can read the file but cannot parse its TOML or known value types, it
-opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a
-backup of the unreadable source, retains unknown keys that can be separated safely when the TOML
-structure itself was parseable, and replaces the unreadable known configuration. A transient reload
-error leaves the last good document and unsaved draft in place; its revision guard still prevents
-overwriting a changed file.
+If the file is valid TOML but some values have the wrong type or an unknown option, the graphical
+configurator reads it the way the overlay does: every setting that can be read keeps its value, and
+only the others show built-in defaults. The load status lists those settings. Saving first creates
+a backup, then replaces only those settings; the rest of the file keeps its values, comments, and
+unknown keys. If the file cannot be parsed as TOML at all, the configurator opens a clearly marked
+repair draft using built-in defaults. Saving that draft first creates a backup of the unreadable
+source and replaces the unreadable configuration. A transient reload error leaves the last good
+document and unsaved draft in place; its revision guard still prevents overwriting a changed file.
 
 ## Configuration File Location
 

@@ -974,6 +974,54 @@ fn read_config(path: &Path) -> String {
     std::fs::read_to_string(path).expect("read the saved config")
 }
 
+/// A file that is valid TOML but holds one value serde cannot map used to
+/// load as a page of defaults, and saving it stripped every authored setting.
+/// The draft now holds the file's values, the status names the one entry on
+/// defaults instead of calling the file unparseable, and Save keeps the rest.
+#[test]
+fn a_file_with_one_unreadable_value_loads_its_other_settings_and_saves_them_back() {
+    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "# mine\n[drawing]\ndefault_thickness = 7.0\n\n[keybindings]\nundo = \"Ctrl+Z\"\n",
+    )
+    .expect("write test config");
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let loaded = ConfigDocument::load_for_editing_from_path(&path)
+        .map(|(document, warning)| (Box::new(document), warning))
+        .map_err(|error| error.to_string());
+
+    let _ = app.handle_config_loaded(loaded);
+
+    assert!(matches!(app.status, StatusMessage::Warning(_)));
+    assert!(
+        status_contains(&app.status, "Some settings could not be read")
+            && status_contains(&app.status, "[keybindings]"),
+        "{:?}",
+        app.status.text()
+    );
+    assert!(!status_contains(&app.status, "could not be parsed"));
+    assert_eq!(app.draft.drawing_default_thickness, "7");
+
+    app.draft.drawing_default_thickness = "8".to_string();
+    app.refresh_dirty_flag();
+    save_draft(&mut app);
+
+    let saved = read_config(&path);
+    assert!(saved.contains("# mine"), "{saved}");
+    assert_eq!(
+        config_setting(&saved, "default_thickness").as_deref(),
+        Some("default_thickness = 8.0")
+    );
+    assert!(!saved.contains("undo"), "{saved}");
+    assert!(
+        app.document
+            .loaded()
+            .is_some_and(|document| document.section_errors().is_empty())
+    );
+}
+
 /// The whole point of the review flow: an old file that the user never
 /// migrated keeps both its shortcuts and its revision, however much else
 /// they save.

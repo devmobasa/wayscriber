@@ -1,7 +1,8 @@
 use super::ColorSpec;
 use super::action_meta::action_label;
-use super::keybindings::{Action, KeybindingAuthorship, Shortcut};
+use super::keybindings::{Action, Shortcut};
 use super::paths::primary_config_dir;
+use super::salvage::deserialize_salvaging;
 use super::types::{PRESET_SLOTS_MAX, ToolPresetConfig};
 use super::validate::ConfigValidationReport;
 use super::{Config, ConfigDocument};
@@ -172,63 +173,13 @@ impl Config {
             .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
         ensure_config_file_size(config_str.len() as u64, config_path)?;
 
-        let (mut config, section_errors) = match toml::from_str::<Self>(&config_str) {
-            Ok(config) => (config, Vec::new()),
-            // A mapping error in one entry must not cost the session the whole
-            // file: re-parse per top-level entry, keep everything that maps,
-            // and report what had to fall back to defaults. A syntax error is
-            // different — there is no parsed document to salvage from — and
-            // still fails the load.
-            Err(parse_err) => {
-                let table = toml::from_str::<toml::Table>(&config_str).with_context(|| {
-                    format!("Failed to parse config from {}", config_path.display())
-                })?;
-                Self::salvage_sections(table, &parse_err)?
-            }
-        };
-        config.keybinding_authorship = if section_errors
-            .iter()
-            .any(|entry| entry.section == "keybindings")
-        {
-            // The section is running on shipped defaults, which the file
-            // does not describe; presence in the source must not make
-            // those defaults look authored.
-            KeybindingAuthorship::default()
-        } else {
-            KeybindingAuthorship::from_toml_source(&config_str)
-        };
-        Ok((config, section_errors))
-    }
-
-    /// Rebuilds a config from a parsed document one top-level entry at a time,
-    /// dropping only the entries that fail to map.
-    ///
-    /// Every section of [`Config`] is `#[serde(default)]`, so a table holding
-    /// a single entry is a complete probe for that entry. `full_error` is the
-    /// error from the whole-file parse, kept for the (theoretically
-    /// impossible) case where every entry maps individually but the pruned
-    /// document still fails.
-    fn salvage_sections(
-        table: toml::Table,
-        full_error: &toml::de::Error,
-    ) -> Result<(Self, Vec<ConfigSectionError>)> {
-        let mut pruned = table.clone();
-        let mut section_errors = Vec::new();
-        for (key, value) in &table {
-            let mut probe = toml::Table::new();
-            probe.insert(key.clone(), value.clone());
-            if let Err(err) = probe.try_into::<Self>() {
-                section_errors.push(ConfigSectionError {
-                    section: key.clone(),
-                    error: err.message().to_string(),
-                });
-                pruned.remove(key);
-            }
-        }
-        let config = pruned
-            .try_into::<Self>()
-            .with_context(|| format!("Failed to parse config: {}", full_error.message()))?;
-        Ok((config, section_errors))
+        // A mapping error in one entry must not cost the session the whole
+        // file: the salvage keeps everything that maps and reports what had to
+        // fall back to defaults. It is the same pass the editors' document
+        // load runs, so the overlay and the configurator agree on the file.
+        let salvaged = deserialize_salvaging(&config_str, |table| table.try_into::<Self>())
+            .with_context(|| format!("Failed to parse config from {}", config_path.display()))?;
+        Ok((salvaged.config, salvaged.section_errors))
     }
 
     /// Test-only convenience for exercising the revision-guarded document
@@ -425,10 +376,10 @@ fn edit_one_config_key(
     verify: &dyn Fn(&Config) -> bool,
 ) -> Result<ConfigEditOutcome> {
     let (document, parse_failure) = ConfigDocument::load_for_editing_from_path(path)?;
-    // A repair draft is built from built-in defaults, so saving one rewrites
-    // the whole file. That is a decision the configurator asks the user to make
-    // explicitly, with the damage on screen; a single-key edit must never make
-    // it for them.
+    // Saving a repair draft replaces what the load could not use: the whole
+    // file when it is not TOML, the unreadable entries when it is. That is a
+    // decision the configurator asks the user to make explicitly, with the
+    // damage on screen; a single-key edit must never make it for them.
     if let Some(failure) = parse_failure {
         bail!(
             "{what} not saved: {} could not be parsed ({failure}). Repair it in the configurator.",

@@ -17,6 +17,7 @@ mod field_metadata;
 pub(crate) mod io;
 mod migration;
 mod paths;
+mod salvage;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;

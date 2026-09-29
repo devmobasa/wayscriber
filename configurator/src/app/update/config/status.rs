@@ -89,6 +89,29 @@ pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -
     StatusMessage::warning(message)
 }
 
+/// The load status for a file whose TOML is valid but whose values did not all
+/// map.
+///
+/// Saying the file "could not be parsed" would be wrong here and would read
+/// as a threat to the whole file: every entry that mapped is in the draft, and
+/// a save replaces only the ones listed. The file's other diagnostics follow,
+/// as for any load.
+pub(super) fn salvaged_document_status(document: &ConfigDocument) -> StatusMessage {
+    let unreadable = document
+        .section_errors()
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let message = format!(
+        "Some settings could not be read, so the draft shows their built-in defaults: {}. Saving creates a backup, then replaces only those settings with this draft; the rest of the file is kept as written.",
+        list_with_overflow(&borrowed(&unreadable), "; ")
+    );
+    match config_document_status(document, &message) {
+        StatusMessage::Success(text) => StatusMessage::warning(text),
+        status => status,
+    }
+}
+
 /// What validating the saved configuration changed in the shortcuts the user
 /// typed, or `None` when it changed nothing.
 ///

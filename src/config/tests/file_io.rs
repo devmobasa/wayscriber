@@ -115,6 +115,43 @@ fn a_bad_value_in_one_section_keeps_every_other_section() {
     });
 }
 
+/// The overlay and the editor read the same file, so they must agree on what
+/// it means: the same values, and the same entries on defaults.
+#[test]
+fn the_editor_salvages_the_same_values_the_overlay_loads() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(
+            config_dir.join("config.toml"),
+            "[ui]\ntheme = \"drak\"\n\n[drawing]\ndefault_thickness = 7.0\n\n\
+             [keybindings]\nundo = \"Ctrl+Z\"\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("the overlay load salvages");
+        let (document, warning) =
+            ConfigDocument::load_for_editing().expect("the editor load salvages");
+
+        assert!(warning.is_some());
+        let sections = |errors: &[ConfigSectionError]| {
+            errors
+                .iter()
+                .map(|error| error.section.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            sections(&loaded.section_errors),
+            sections(document.section_errors())
+        );
+        assert_eq!(
+            toml::Value::try_from(&loaded.config).unwrap(),
+            toml::Value::try_from(document.config()).unwrap()
+        );
+        assert_eq!(document.config().drawing.default_thickness, 7.0);
+    });
+}
+
 /// An unknown stroke-controls style falls back the way every enum key does:
 /// `[ui]` runs on defaults (so the style is the default panel), the error is
 /// reported, and the rest of the file still applies.
