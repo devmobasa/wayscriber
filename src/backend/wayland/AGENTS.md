@@ -9,6 +9,8 @@
 - `handlers/` translates Wayland/Smithay callbacks into state and input calls.
 - `state.rs` is the central live runtime state root; `state/` contains state helpers for boards, buffers, damage, clipboard paste, toolbar plumbing, zoom, onboarding, and export handoff.
 - `toolbar/` owns runtime toolbar layout, hit testing, rows, surfaces, rendering, and widgets.
+- `portal_raster.rs` validates complete portal desktop snapshots, crops the active logical rectangle, and resamples it to transformed native output pixels. `frozen_geometry.rs` keeps active viewport validity separate from full desktop validity.
+- `capture_preflight.rs` retains backend-specific admission and the shared, bounded portal layout settling/retry policy.
 - `clipboard/`, `frozen/`, `zoom/`, and runtime session helpers integrate external compositor, clipboard, capture, and persistence behavior.
 
 ## Invariants
