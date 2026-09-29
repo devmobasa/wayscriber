@@ -26,6 +26,7 @@ use super::control::read_daemon_toggle_response;
 #[cfg(test)]
 use super::control::{DaemonToggleCommand, DaemonToggleCommands};
 use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_listener};
+use super::overlay::{ShowOutcome, overlay_start_backoff_reason};
 use super::protocol_v2::DaemonControlProtocolMode;
 use super::protocol_v2::OverlayChildOwner;
 use super::protocol_v2::{
@@ -654,8 +655,12 @@ impl Daemon {
                 continue;
             }
 
+            // A start held back by the spawn backoff is a failed delivery: an
+            // entry left eligible would replay whenever the overlay next
+            // started, long after the click that asked for it.
             let delivery = if self.overlay_state == OverlayState::Hidden {
                 self.show_overlay()
+                    .and_then(ShowOutcome::require_shown)
                     .and_then(|()| self.signal_overlay_action_ready(action))
             } else {
                 self.signal_overlay_action_ready(action)
@@ -737,6 +742,14 @@ impl Daemon {
                     claimed.defer()?;
                     continue;
                 }
+                if self.overlay_state == OverlayState::Hidden
+                    && let Some(retry_in) = self.overlay_start_backoff()
+                {
+                    claimed.reject(&overlay_start_backoff_reason(retry_in))?;
+                    claimed.defer()?;
+                    continue;
+                }
+
                 let journal = self
                     .v2_action_journal
                     .as_ref()
@@ -757,7 +770,7 @@ impl Daemon {
 
                 self.pending_toggle_request = Some(legacy_request);
                 if was_hidden {
-                    if let Err(error) = self.show_overlay() {
+                    if let Err(error) = self.show_overlay().and_then(ShowOutcome::require_shown) {
                         let reason = format!("committed overlay start failed: {error:#}");
                         journal.abandon_command(&command_identity, &prepared, &reason)?;
                         warn!("{reason}");
@@ -796,6 +809,16 @@ impl Daemon {
             } else {
                 EffectKind::StartAndShow
             };
+            // Decided before the commit, so the caller learns that nothing
+            // happened instead of a success for a start that never ran.
+            if effect == EffectKind::StartAndShow
+                && let Some(retry_in) = self.overlay_start_backoff()
+            {
+                claimed.reject(&overlay_start_backoff_reason(retry_in))?;
+                claimed.defer()?;
+                continue;
+            }
+
             claimed.commit(effect)?;
             // Typed requests are individually authorized and must not inherit
             // the legacy desktop-shortcut duplicate suppression window.

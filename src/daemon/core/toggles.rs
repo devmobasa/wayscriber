@@ -2,6 +2,7 @@ use super::super::control::{
     DaemonToggleCommand, DaemonToggleCommands, DaemonToggleRequest,
     write_daemon_toggle_command_error, write_daemon_toggle_command_success,
 };
+use super::super::overlay::overlay_start_backoff_reason;
 use super::super::types::OverlayState;
 use super::{DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW, Daemon};
 use crate::tray_action::TrayAction;
@@ -72,9 +73,17 @@ impl Daemon {
                 return Ok(false);
             }
             let was_hidden = self.overlay_state == OverlayState::Hidden;
+            if was_hidden && let Some(retry_in) = self.overlay_start_backoff() {
+                // Queued now, the action would run whenever the overlay next
+                // starts, long after the caller was told it had happened.
+                self.pending_activation_token = None;
+                self.pending_toggle_request = None;
+                return Err(anyhow::anyhow!(overlay_start_backoff_reason(retry_in)));
+            }
+
             self.dispatch_overlay_action(action, !suppress_overlay_action_signal)?;
             if self.overlay_state == OverlayState::Hidden {
-                self.show_overlay()?;
+                self.show_overlay()?.require_shown()?;
                 return Ok(was_hidden);
             } else {
                 self.pending_activation_token = None;
