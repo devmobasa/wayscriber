@@ -161,6 +161,7 @@ pub(super) fn handle_pending_actions(
             }
             InputEffect::CopyHex(color) => state.handle_copy_hex_color(color),
             InputEffect::PasteHex(target) => state.handle_paste_hex_color(target),
+            InputEffect::Preset(action) => state.handle_preset_action(action),
             InputEffect::QuickColor(edit) => state.handle_quick_color_edit(edit),
             InputEffect::KeybindingEdit(request) => state.handle_keybinding_edit(request),
             InputEffect::Backend(action) => apply_backend_effect(state, action),
@@ -177,8 +178,7 @@ pub(super) fn handle_pending_actions(
             | InputEffect::TextCopy(_)
             | InputEffect::TextPaste(_)
             | InputEffect::SelectionClipboardPublish(_)
-            | InputEffect::ClipboardPaste(_)
-            | InputEffect::Preset(_)) => {
+            | InputEffect::ClipboardPaste(_)) => {
                 unreachable!("runtime drain returned {effect:?}")
             }
         }

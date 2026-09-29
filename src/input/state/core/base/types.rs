@@ -328,6 +328,15 @@ pub enum PresetAction {
     },
 }
 
+impl PresetAction {
+    /// The preset slot this action writes.
+    pub fn slot(&self) -> usize {
+        match self {
+            Self::Save { slot, .. } | Self::Clear { slot } => *slot,
+        }
+    }
+}
+
 /// An accepted quick-color recolor awaiting the backend's config write. The
 /// runtime palette is already updated; this carries what `config.toml` still
 /// needs (`drawing.quick_colors[index].color`).

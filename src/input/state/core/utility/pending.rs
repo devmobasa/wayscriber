@@ -575,12 +575,17 @@ mod tests {
         let mut state = make_state();
         state.emit_input_effect(InputEffect::Preset(PresetAction::Clear { slot: 1 }));
         state.emit_input_effect(InputEffect::Preset(PresetAction::Clear { slot: 2 }));
+        assert!(state.save_preset(1));
         state.emit_input_effect(InputEffect::QuickColor(QuickColorEdit {
             index: 0,
             color: BLACK,
         }));
         state.emit_input_effect(InputEffect::QuickColor(QuickColorEdit {
             index: 3,
+            color: WHITE,
+        }));
+        state.emit_input_effect(InputEffect::QuickColor(QuickColorEdit {
+            index: 0,
             color: WHITE,
         }));
         state.emit_input_effect(InputEffect::KeybindingEdit(KeybindingEditRequest {
@@ -594,24 +599,34 @@ mod tests {
 
         let effects = state.drain_input_effects(InputEffectDrain::DurableConfig);
 
-        assert_eq!(effects.len(), 4);
+        // Each preset slot and each quick color is its own config write: a
+        // later edit replaces only the pending write for the same slot.
+        assert_eq!(effects.len(), 6);
         assert!(matches!(
             effects[0],
-            InputEffect::Preset(PresetAction::Clear { slot: 2 })
+            InputEffect::Preset(PresetAction::Save { slot: 1, .. })
         ));
         assert!(matches!(
             effects[1],
-            InputEffect::QuickColor(QuickColorEdit { index: 3, color }) if color == WHITE
+            InputEffect::Preset(PresetAction::Clear { slot: 2 })
         ));
         assert!(matches!(
             effects[2],
+            InputEffect::QuickColor(QuickColorEdit { index: 0, color }) if color == WHITE
+        ));
+        assert!(matches!(
+            effects[3],
+            InputEffect::QuickColor(QuickColorEdit { index: 3, color }) if color == WHITE
+        ));
+        assert!(matches!(
+            effects[4],
             InputEffect::KeybindingEdit(KeybindingEditRequest {
                 action: Action::Undo,
                 operation: KeybindingEditOperation::Delete,
             })
         ));
         assert!(matches!(
-            effects[3],
+            effects[5],
             InputEffect::KeybindingEdit(KeybindingEditRequest {
                 action: Action::Redo,
                 operation: KeybindingEditOperation::Reset,
