@@ -2,7 +2,7 @@ use std::{fmt, path::PathBuf, sync::Arc};
 
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
-    file::FileSaveConfig,
+    file::{FileSaveConfig, no_save_directory_error},
     types::{
         CaptureDestination, CaptureError, CaptureResult, CaptureType,
         DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentDeliveryRequest,
@@ -138,22 +138,15 @@ pub(crate) async fn perform_capture(
     let mut save_error = None;
     let saved_path = match request.destination {
         CaptureDestination::FileOnly => {
-            if let Some(save_config) = request.save_config.clone() {
-                if !save_config.save_directory.as_os_str().is_empty() {
-                    Some(
-                        save_bytes(
-                            Arc::clone(&dependencies.saver),
-                            image_data.clone(),
-                            save_config,
-                        )
-                        .await?,
-                    )
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+            let save_config = required_save_config(request.save_config.clone())?;
+            Some(
+                save_bytes(
+                    Arc::clone(&dependencies.saver),
+                    image_data.clone(),
+                    save_config,
+                )
+                .await?,
+            )
         }
         CaptureDestination::ClipboardAndFile => {
             if let Some(save_config) = request.save_config.clone() {
@@ -207,6 +200,7 @@ pub(crate) async fn perform_capture(
         image_data,
         operation: ImageOperationKind::Screenshot,
         fallback_format_override: None,
+        destination: request.destination,
         saved_path,
         copied_to_clipboard,
         save_error,
@@ -234,13 +228,8 @@ pub(crate) async fn deliver_image(
     let mut save_error = None;
     let saved_path = match request.destination {
         CaptureDestination::FileOnly => {
-            if let Some(config) =
-                save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
-            {
-                Some(save_bytes(Arc::clone(&dependencies.saver), image_data.clone(), config).await?)
-            } else {
-                None
-            }
+            let config = required_save_config(save_config)?;
+            Some(save_bytes(Arc::clone(&dependencies.saver), image_data.clone(), config).await?)
         }
         CaptureDestination::ClipboardAndFile => {
             if let Some(config) =
@@ -286,6 +275,7 @@ pub(crate) async fn deliver_image(
         image_data,
         operation: request.operation,
         fallback_format_override: request.fallback_format_override,
+        destination: request.destination,
         saved_path,
         copied_to_clipboard,
         save_error,
@@ -393,10 +383,23 @@ pub(crate) async fn deliver_document(
         image_data: document_bytes,
         operation: request.operation,
         fallback_format_override: None,
+        destination: request.destination,
         saved_path: Some(saved_path),
         copied_to_clipboard: false,
         save_error: None,
     })
+}
+
+/// The save configuration a file-only delivery needs.
+///
+/// The file is the only place the image goes, so a missing save directory is
+/// an error rather than a silent success that saved nothing.
+fn required_save_config(
+    save_config: Option<FileSaveConfig>,
+) -> Result<FileSaveConfig, CaptureError> {
+    save_config
+        .filter(|config| !config.save_directory.as_os_str().is_empty())
+        .ok_or_else(no_save_directory_error)
 }
 
 async fn save_bytes(

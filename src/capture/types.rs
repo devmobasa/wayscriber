@@ -421,6 +421,8 @@ pub struct CaptureResult {
     pub image_data: Vec<u8>,
     pub operation: ImageOperationKind,
     pub fallback_format_override: Option<ImageFormatMetadata>,
+    /// Where the caller asked for the image to go.
+    pub destination: CaptureDestination,
     /// Path where the image was saved (if saved).
     pub saved_path: Option<PathBuf>,
     /// Whether the image was copied to clipboard.
@@ -430,6 +432,24 @@ pub struct CaptureResult {
     /// not silence this: the caller has to tell the user their file was not
     /// written.
     pub save_error: Option<String>,
+}
+
+impl CaptureResult {
+    /// Whether a requested clipboard copy failed with no saved file holding
+    /// the image either, so the caller has to offer another way to keep it.
+    ///
+    /// A file-only delivery never asked for the clipboard, so it never counts.
+    pub fn clipboard_copy_failed(&self) -> bool {
+        let clipboard_requested = matches!(
+            self.destination,
+            CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile
+        );
+
+        clipboard_requested
+            && !self.copied_to_clipboard
+            && self.saved_path.is_none()
+            && !self.image_data.is_empty()
+    }
 }
 
 /// Why a capture operation failed.

@@ -136,6 +136,14 @@ fn save_to_free_path(
     )))
 }
 
+/// The error for a save that has no directory to write into.
+pub(crate) fn no_save_directory_error() -> CaptureError {
+    CaptureError::SaveError(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "no save directory configured",
+    ))
+}
+
 /// Ensure the save directory exists, creating it if necessary.
 ///
 /// # Arguments
@@ -169,6 +177,12 @@ pub fn save_screenshot(
     image_data: &[u8],
     config: &FileSaveConfig,
 ) -> Result<PathBuf, CaptureError> {
+    // An empty directory would resolve file names against the working
+    // directory of the process.
+    if config.save_directory.as_os_str().is_empty() {
+        return Err(no_save_directory_error());
+    }
+
     // Ensure directory exists
     let directory = ensure_directory_exists(&config.save_directory)?;
 
@@ -316,6 +330,16 @@ mod tests {
                 format: "png".to_string(),
             },
         )
+    }
+
+    #[test]
+    fn save_screenshot_refuses_an_empty_save_directory() {
+        let error = save_to(Path::new(""), b"image").expect_err("no directory");
+
+        assert!(
+            matches!(&error, CaptureError::SaveError(io) if io.kind() == std::io::ErrorKind::InvalidInput),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]

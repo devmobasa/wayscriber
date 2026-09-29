@@ -476,9 +476,7 @@ fn handle_capture_results(state: &mut WaylandState) {
             }
 
             // Handle clipboard failure with fallback option
-            let clipboard_failed = !result.copied_to_clipboard
-                && result.saved_path.is_none()
-                && !result.image_data.is_empty();
+            let clipboard_failed = result.clipboard_copy_failed();
 
             if clipboard_failed {
                 // Clipboard was the only destination and it failed - don't exit,
