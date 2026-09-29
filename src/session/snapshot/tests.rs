@@ -1,4 +1,4 @@
-use super::compression::{compress_bytes, is_gzip};
+use super::compression::{ExpandedSessionTooLarge, compress_bytes, is_gzip};
 use super::load::{
     LoadSnapshotOutcome, load_named_session_candidate,
     load_named_session_candidate_with_expanded_limit, load_snapshot_inner,
@@ -12,7 +12,7 @@ use super::types::{
     ToolStateSnapshot,
 };
 use super::{load_snapshot, save_snapshot};
-use crate::draw::frame::{ShapeSnapshot, UndoAction};
+use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeSnapshot, UndoAction};
 use crate::draw::{ArrowStyle, Color, FontDescriptor, Frame, Shape};
 use crate::input::EraserMode;
 use crate::session::options::{CompressionMode, SessionOptions};
@@ -520,6 +520,91 @@ fn load_snapshot_inner_refuses_compressed_payload_over_expanded_limit() {
     assert!(
         err.to_string().contains("exceeds the safety limit"),
         "unexpected error: {err:#}"
+    );
+}
+
+#[test]
+fn load_snapshot_inner_refuses_plain_payload_over_the_read_limit() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "plain-read-limit");
+    options.persist_transparent = true;
+    options.compression = CompressionMode::Off;
+    save_snapshot(&sample_snapshot(), &options).expect("save_snapshot should succeed");
+    options.max_file_size_bytes = 16;
+
+    let Err(err) =
+        load_snapshot_inner_with_expanded_limit(&options.session_file_path(), &options, 16)
+    else {
+        panic!("plain payload should exceed the read limit");
+    };
+
+    assert!(
+        err.downcast_ref::<ExpandedSessionTooLarge>().is_some(),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[test]
+fn load_snapshot_inner_reads_plain_payload_up_to_the_configured_file_size() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "plain-configured-size");
+    options.persist_transparent = true;
+    options.compression = CompressionMode::Off;
+    save_snapshot(&sample_snapshot(), &options).expect("save_snapshot should succeed");
+    let file_size = std::fs::metadata(options.session_file_path())
+        .unwrap()
+        .len();
+    options.max_file_size_bytes = file_size;
+
+    let loaded =
+        load_snapshot_inner_with_expanded_limit(&options.session_file_path(), &options, 16)
+            .expect("an uncompressed save within the configured size should load")
+            .expect("snapshot should be present");
+
+    assert!(!loaded.compressed);
+    assert!(loaded.snapshot.has_board_data());
+}
+
+#[test]
+fn load_snapshot_inner_drops_all_history_nested_past_the_compound_limit() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "deep-history");
+    options.persist_transparent = true;
+    options.persist_history = true;
+    options.compression = CompressionMode::Off;
+    let mut snapshot = sample_snapshot();
+    let frame = &mut snapshot.boards[0].pages.pages[0];
+    let create = UndoAction::Create {
+        shapes: vec![(0, frame.shapes[0].clone())],
+    };
+    frame.push_undo_action(create.clone(), usize::MAX);
+    frame.push_undo_action(create, usize::MAX);
+    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+    let path = options.session_file_path();
+    let mut doc: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let stack = doc["boards"][0]["pages"][0]["undo_stack"]
+        .as_array_mut()
+        .expect("saved undo stack");
+    assert_eq!(stack.len(), 2);
+    let mut nested = stack.pop().unwrap();
+    for _ in 0..=MAX_COMPOUND_DEPTH {
+        nested = serde_json::json!({ "kind": "compound", "actions": [nested] });
+    }
+    stack.push(nested);
+    std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+
+    let loaded = load_snapshot_inner(&path, &options)
+        .expect("load_snapshot_inner should succeed")
+        .expect("snapshot should be present");
+
+    let page = &loaded.snapshot.boards[0].pages.pages[0];
+    assert_eq!(page.shapes.len(), 1);
+    assert_eq!(
+        page.undo_stack_len(),
+        0,
+        "the shallow entry is dropped with the deep one"
     );
 }
 
