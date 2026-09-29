@@ -2670,7 +2670,11 @@ If you specify invalid values:
 - **Out of range**: Values will be clamped to valid ranges
 - **Invalid color name**: Falls back to default (red)
 - **Malformed RGB**: Falls back to default color
-- **Parse errors**: Entire config file ignored, defaults used
+- **Wrong type or unknown option** (for example `theme = "drak"`, or `undo = "Ctrl+Z"` instead of
+  a list): only that setting uses its default for the session, and startup names it. A list such as
+  `[[boards.items]]`, and a table whose keys belong together (a preset slot, `drag_tools`), falls
+  back as a whole. The file is not changed.
+- **TOML syntax errors**: Entire config file ignored, defaults used
 
 Check the application logs for warnings about config issues.
 

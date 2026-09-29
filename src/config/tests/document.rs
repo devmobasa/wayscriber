@@ -378,7 +378,7 @@ future_knob = 17
     let (document, warning) =
         ConfigDocument::load_for_editing_from_path(&temp.path).expect("load repairable document");
     let warning = warning.expect("repair warning");
-    assert!(warning.contains("[performance]"), "{warning}");
+    assert!(warning.contains("[performance.buffer_count]"), "{warning}");
 
     let outcome = document
         .save_with_backup(document.config().clone())
@@ -421,13 +421,13 @@ exit_after_capture = true # keep
         ConfigDocument::load_for_editing_from_path(&temp.path).expect("salvaged load");
 
     let warning = warning.expect("the fallback is reported");
-    assert!(warning.contains("[keybindings]"), "{warning}");
+    assert!(warning.contains("[keybindings.undo]"), "{warning}");
     let sections: Vec<_> = document
         .section_errors()
         .iter()
         .map(|error| error.section.as_str())
         .collect();
-    assert_eq!(sections, ["keybindings"]);
+    assert_eq!(sections, ["keybindings.undo"]);
     assert_eq!(document.config().drawing.default_thickness, 7.0);
     assert!(document.config().capture.exit_after_capture);
     assert_eq!(
@@ -453,6 +453,29 @@ exit_after_capture = true # keep
     );
     let reloaded = ConfigDocument::load_from_path(&temp.path).expect("the saved file loads");
     assert!(reloaded.section_errors().is_empty());
+}
+
+/// Salvage works per value, so the save replaces the one value that failed
+/// and leaves its section's other settings, comments, and unknown keys alone.
+#[test]
+fn a_salvaged_save_replaces_only_the_value_that_failed() {
+    let temp = TempConfig::new("salvage-one-value");
+    temp.write(
+        "[ui]\n# theme first\ntheme = \"drak\"\nshow_status_bar = false # mine\nfuture_ui = 1\n",
+    );
+    let (document, _) =
+        ConfigDocument::load_for_editing_from_path(&temp.path).expect("salvaged load");
+    assert!(!document.config().ui.show_status_bar);
+
+    document
+        .save_with_backup(document.config().clone())
+        .expect("save the salvaged draft");
+
+    let saved = fs::read_to_string(&temp.path).unwrap();
+    assert!(!saved.contains("theme = "), "{saved}");
+    assert!(saved.contains("show_status_bar = false # mine"), "{saved}");
+    assert!(saved.contains("future_ui = 1"), "{saved}");
+    ConfigDocument::load_from_path(&temp.path).expect("the saved file loads");
 }
 
 /// An edit the user makes inside the entry that failed replaces the bad
@@ -495,8 +518,11 @@ fn editing_load_can_repair_malformed_toml_with_a_backup() {
     );
 }
 
+/// The list is the entry that failed, so it goes whole — its unknown keys
+/// cannot be told apart from the entry they sit in — while the unknown keys
+/// of the section around it stay.
 #[test]
-fn repair_mode_removes_invalid_known_collections_but_keeps_root_unknowns() {
+fn repair_mode_removes_invalid_known_collections_but_keeps_other_unknowns() {
     let temp = TempConfig::new("repair-invalid-collection");
     let original = r#"config_revision = 1
 future_root = "preserve me"
@@ -520,7 +546,7 @@ future_entry_option = "cannot be separated safely"
 
     let saved = fs::read_to_string(&temp.path).unwrap();
     assert!(saved.contains("future_root = \"preserve me\""));
-    assert!(!saved.contains("future_drawing_option"));
+    assert!(saved.contains("future_drawing_option = true"), "{saved}");
     assert!(!saved.contains("quick_colors"));
     assert!(!saved.contains("future_entry_option"));
     ConfigDocument::load_from_path(&temp.path).expect("collection repair is valid");

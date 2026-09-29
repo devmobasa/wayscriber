@@ -83,11 +83,13 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
     });
 }
 
-/// A value serde cannot map costs its own section for the session — not the
-/// whole file. Before this, one typo threw away every customization with only
-/// a log line, the total-loss variant of #293.
+/// A value serde cannot map costs only itself for the session — not the whole
+/// file, and not the rest of its section. Before per-section salvage, one typo
+/// threw away every customization with only a log line, the total-loss
+/// variant of #293; before per-value salvage, it still cost every other
+/// setting in `[ui]`.
 #[test]
-fn a_bad_value_in_one_section_keeps_every_other_section() {
+fn a_bad_value_costs_only_itself() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -102,17 +104,116 @@ fn a_bad_value_in_one_section_keeps_every_other_section() {
         assert_eq!(loaded.config.drawing.default_thickness, 7.0);
         assert!(loaded.config.capture.exit_after_capture);
         assert!(
-            loaded.config.ui.show_status_bar,
-            "the section holding the bad value falls back to defaults as a whole"
+            !loaded.config.ui.show_status_bar,
+            "the rest of the section holding the bad value stays in effect"
         );
+        assert_eq!(loaded.config.ui.theme, UiConfig::default().theme);
         assert_eq!(loaded.section_errors.len(), 1);
-        assert_eq!(loaded.section_errors[0].section, "ui");
+        assert_eq!(loaded.section_errors[0].section, "ui.theme");
+        assert!(loaded.section_failed("ui"));
+        assert!(
+            !loaded.section_failed("u"),
+            "sections match whole path segments"
+        );
         assert_eq!(
             fs::read_to_string(&config_file).unwrap(),
             original,
             "loading repairs the session, never the file"
         );
     });
+}
+
+/// Loads `contents` as the active config file.
+fn load_config_text(contents: &str) -> LoadedConfig {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(config_dir.join("config.toml"), contents).unwrap();
+        Config::load().expect("a value error must not fail the load")
+    })
+}
+
+fn failed_entries(loaded: &LoadedConfig) -> Vec<&str> {
+    loaded
+        .section_errors
+        .iter()
+        .map(|error| error.section.as_str())
+        .collect()
+}
+
+/// `[keybindings]` holds every shortcut in one table, so one mistyped list
+/// used to reset all of them. Only that action falls back now, and it falls
+/// back as an omitted action does: its default is an offer, not something
+/// the file authored.
+#[test]
+fn a_bad_shortcut_list_costs_only_its_action() {
+    let loaded = load_config_text("[keybindings]\nundo = \"Ctrl+Z\"\nredo = [\"Ctrl+Y\"]\n");
+
+    assert_eq!(failed_entries(&loaded), ["keybindings.undo"]);
+    assert_eq!(loaded.config.keybindings.core.redo, ["Ctrl+Y"]);
+    assert_eq!(
+        loaded.config.keybindings.core.undo,
+        KeybindingsConfig::default().core.undo
+    );
+    assert_eq!(
+        loaded.config.keybinding_authorship,
+        KeybindingAuthorship::FromFile(["redo".to_string()].into_iter().collect())
+    );
+}
+
+/// A list's entries are positional, so an array of tables falls back whole:
+/// dropping one board would renumber the rest.
+#[test]
+fn a_bad_entry_in_an_array_of_tables_costs_the_list() {
+    let loaded = load_config_text(
+        "[boards]\nmax_count = 5\n\n[[boards.items]]\nid = \"a\"\nname = \"A\"\n\
+         background = 42\n",
+    );
+
+    assert_eq!(failed_entries(&loaded), ["boards.items"]);
+    let boards = loaded.config.boards.expect("boards");
+    assert_eq!(boards.max_count, 5);
+    assert_eq!(boards.items.len(), BoardsConfig::default_items().len());
+}
+
+/// A table with required keys cannot be split: without the bad key it would
+/// still not map, so the whole table falls back and its siblings stay.
+#[test]
+fn a_table_with_required_keys_falls_back_whole() {
+    let loaded = load_config_text(
+        "[presets]\nslot_count = 4\n\n[presets.slot_1]\ntool = \"pen\"\ncolor = \"red\"\n\
+         size = \"big\"\n",
+    );
+
+    assert_eq!(failed_entries(&loaded), ["presets.slot_1"]);
+    assert_eq!(loaded.config.presets.slot_count, 4);
+    assert!(loaded.config.presets.slot_1.is_none());
+}
+
+/// Drag tools have a hand-written `Deserialize` whose keys depend on each
+/// other, so the table falls back as one unit.
+#[test]
+fn drag_tools_fall_back_as_one_table() {
+    let loaded = load_config_text(
+        "[drawing]\ndefault_thickness = 7.0\n\n[drawing.drag_tools.left]\n\
+         drag_tool = \"banana\"\n",
+    );
+
+    assert_eq!(failed_entries(&loaded), ["drawing.drag_tools"]);
+    assert_eq!(loaded.config.drawing.default_thickness, 7.0);
+    assert!(loaded.config.drawing.drag_tools.is_none());
+}
+
+/// A check for a whole section still sees a failure inside it, which is what
+/// keeps destructive session commands from acting on defaulted paths.
+#[test]
+fn a_bad_value_inside_a_section_still_marks_the_section_failed() {
+    let loaded = load_config_text("[session]\nstorage = \"cloud\"\nper_output = false\n");
+
+    assert_eq!(failed_entries(&loaded), ["session.storage"]);
+    assert!(!loaded.config.session.per_output);
+    assert!(loaded.section_failed("session"));
+    assert!(!loaded.section_failed("ui"));
 }
 
 /// The overlay and the editor read the same file, so they must agree on what
@@ -153,8 +254,8 @@ fn the_editor_salvages_the_same_values_the_overlay_loads() {
 }
 
 /// An unknown stroke-controls style falls back the way every enum key does:
-/// `[ui]` runs on defaults (so the style is the default panel), the error is
-/// reported, and the rest of the file still applies.
+/// that key runs on its default (the panel), the error is reported, and the
+/// rest of the file still applies.
 #[test]
 fn an_unknown_stroke_controls_style_falls_back_to_the_default_panel() {
     with_temp_config_home(|config_root| {
@@ -175,7 +276,10 @@ fn an_unknown_stroke_controls_style_falls_back_to_the_default_panel() {
             crate::config::ToolbarStrokeControls::Panel
         );
         assert_eq!(loaded.section_errors.len(), 1);
-        assert_eq!(loaded.section_errors[0].section, "ui");
+        assert_eq!(
+            loaded.section_errors[0].section,
+            "ui.toolbar.stroke_controls"
+        );
     });
 }
 

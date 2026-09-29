@@ -41,15 +41,29 @@ pub enum ConfigSource {
     Default,
 }
 
-/// A top-level config entry the load could not understand and replaced with
-/// its defaults for this session. The file keeps the authored value.
+/// A config entry the load could not understand and replaced with its
+/// defaults for this session. The file keeps the authored value.
+///
+/// The entry is as small as the load could make it: the one value that failed
+/// when its table can be split, or a whole list or table when it cannot.
 #[derive(Debug, Clone)]
 pub struct ConfigSectionError {
-    /// The top-level key, e.g. `ui` for `[ui]` or `config_revision`.
+    /// The dotted path of the entry, e.g. `ui.theme`, `keybindings.undo`,
+    /// `boards.items`, or `config_revision`.
     pub section: String,
     /// The deserialization error, without spans (the value was re-checked from
     /// the parsed document, not the source text).
     pub error: String,
+}
+
+impl ConfigSectionError {
+    /// Whether this entry is `section` itself or lies inside it, so a check
+    /// for `session` also sees a failed `session.storage`.
+    pub fn is_within(&self, section: &str) -> bool {
+        self.section
+            .strip_prefix(section)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+    }
 }
 
 impl std::fmt::Display for ConfigSectionError {
@@ -65,23 +79,23 @@ pub struct LoadedConfig {
     pub source: ConfigSource,
     /// What validation had to change in memory. Empty for an unvalidated load.
     pub validation: ConfigValidationReport,
-    /// Top-level entries that failed to deserialize and are running on
-    /// defaults for this session. The caller is expected to show these rather
-    /// than let them disappear into the log: before this existed, one bad
-    /// value silently cost the user every customization in the file.
+    /// Entries that failed to deserialize and are running on defaults for
+    /// this session. The caller is expected to show these rather than let
+    /// them disappear into the log: before this existed, one bad value
+    /// silently cost the user every customization in the file.
     pub section_errors: Vec<ConfigSectionError>,
 }
 
 impl LoadedConfig {
-    /// Whether this top-level entry failed to deserialize and is running on
-    /// defaults. Consumers whose behavior must not silently degrade when
-    /// their section is unreadable — destructive commands that would act on
-    /// default paths, or policies that fail closed — check this instead of
-    /// trusting the defaulted value.
+    /// Whether any entry of this section failed to deserialize and is running
+    /// on defaults. Consumers whose behavior must not silently degrade when
+    /// their section is partly unreadable — destructive commands that would
+    /// act on default paths, or policies that fail closed — check this instead
+    /// of trusting the defaulted values.
     pub fn section_failed(&self, section: &str) -> bool {
         self.section_errors
             .iter()
-            .any(|entry| entry.section == section)
+            .any(|entry| entry.is_within(section))
     }
 }
 

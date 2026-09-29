@@ -997,7 +997,7 @@ fn a_file_with_one_unreadable_value_loads_its_other_settings_and_saves_them_back
     assert!(matches!(app.status, StatusMessage::Warning(_)));
     assert!(
         status_contains(&app.status, "Some settings could not be read")
-            && status_contains(&app.status, "[keybindings]"),
+            && status_contains(&app.status, "[keybindings.undo]"),
         "{:?}",
         app.status.text()
     );
