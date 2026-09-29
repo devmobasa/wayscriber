@@ -26,6 +26,7 @@ mod tool_preview;
 mod ui;
 mod ui_effect_damage;
 
+use crate::backend::wayland::state::buffer_damage::BufferDamageTracker;
 use plan::{FrameGeometry, FrameVisibility, plan_frame};
 pub(in crate::backend::wayland) use runtime::RenderRuntime;
 use runtime::{UiEffect, UiEffectFlags};
@@ -95,7 +96,8 @@ impl WaylandState {
             self.paint_frame(&plan, &acquired, &mut breakdown)?;
             self.submit_frame(qh, acquired, &plan, &mut breakdown)?;
             Ok(plan.keep_rendering)
-        })?;
+        });
+        let outcome = force_full_damage_on_failure(&mut self.buffer_damage, outcome)?;
         if outcome == RenderOutcome::BuffersInFlight {
             debug!("All {buffer_count} buffers in flight - deferring this frame");
             self.record_perf_render_skip(PerfRenderSkipReason::BuffersInFlight);
@@ -114,6 +116,19 @@ fn render_acquired_frame<B>(
         return Ok(RenderOutcome::BuffersInFlight);
     };
     render(buffer).map(|keep_rendering| RenderOutcome::Committed { keep_rendering })
+}
+
+/// A failed attempt has already drained its slot's damage and may have cleared
+/// or half-painted that slot. Nothing else records the loss, so every slot
+/// repaints in full rather than letting a reused slot show stale pixels.
+fn force_full_damage_on_failure<T>(
+    damage: &mut BufferDamageTracker,
+    result: Result<T>,
+) -> Result<T> {
+    if result.is_err() {
+        damage.mark_all_full(FullDamageReason::RenderFailed);
+    }
+    result
 }
 
 #[cfg(test)]

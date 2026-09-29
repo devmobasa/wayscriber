@@ -1,7 +1,9 @@
 use std::time::{Duration, Instant};
 
 use super::runtime::{UiDamageHistory, UiEffect};
-use super::{RenderOutcome, render_acquired_frame};
+use super::{RenderOutcome, force_full_damage_on_failure, render_acquired_frame};
+use crate::backend::wayland::state::FullDamageReason;
+use crate::backend::wayland::state::buffer_damage::BufferDamageTracker;
 use crate::backend::wayland::state::ui_animation::UiAnimationClock;
 use crate::input::InputState;
 use crate::input::state::test_support::make_test_input_state;
@@ -135,4 +137,61 @@ fn paint_failure_retains_preparation_mutations_without_reporting_a_commit() {
     assert_eq!(error.to_string(), "paint failed");
     assert_eq!(owners.stages, ["prepare", "paint"]);
     owners.assert_prepared();
+}
+
+const POOL_GENERATION: u64 = 1;
+const POOL_SIZE: usize = 4096;
+
+/// Two settled slots with one dirty rect pending, and slot 1 already drained by
+/// the frame that is about to fail or succeed.
+fn tracker_with_drained_slot(dirty: Rect) -> BufferDamageTracker {
+    let mut tracker = BufferDamageTracker::new(2);
+    for slot in [1, 2] {
+        let _ = tracker.take_buffer_damage_report(slot, 800, 600, POOL_GENERATION, POOL_SIZE);
+    }
+    tracker.mark_rect(dirty);
+
+    let drained = tracker.take_buffer_damage_report(1, 800, 600, POOL_GENERATION, POOL_SIZE);
+    assert_eq!(drained.regions, [dirty]);
+    tracker
+}
+
+#[test]
+fn failed_frame_forces_full_damage_on_every_slot() {
+    let dirty = Rect::new(10, 10, 20, 20).expect("dirty rect");
+    let full = Rect::new(0, 0, 800, 600).expect("surface rect");
+    let mut tracker = tracker_with_drained_slot(dirty);
+
+    let result = force_full_damage_on_failure(
+        &mut tracker,
+        Err::<RenderOutcome, _>(anyhow::anyhow!("paint failed")),
+    );
+
+    assert_eq!(
+        result.expect_err("failure propagates").to_string(),
+        "paint failed"
+    );
+    for slot in [1, 2] {
+        let report = tracker.take_buffer_damage_report(slot, 800, 600, POOL_GENERATION, POOL_SIZE);
+        assert_eq!(report.regions, [full], "slot {slot}");
+        assert_eq!(report.full_reason, Some(FullDamageReason::RenderFailed));
+    }
+}
+
+#[test]
+fn committed_frame_keeps_partial_damage() {
+    let dirty = Rect::new(10, 10, 20, 20).expect("dirty rect");
+    let mut tracker = tracker_with_drained_slot(dirty);
+    let committed = RenderOutcome::Committed {
+        keep_rendering: false,
+    };
+
+    let outcome = force_full_damage_on_failure(&mut tracker, Ok(committed));
+
+    assert_eq!(outcome.expect("committed frame"), committed);
+    let drained = tracker.take_buffer_damage_report(1, 800, 600, POOL_GENERATION, POOL_SIZE);
+    assert!(drained.regions.is_empty());
+    let lagging = tracker.take_buffer_damage_report(2, 800, 600, POOL_GENERATION, POOL_SIZE);
+    assert_eq!(lagging.regions, [dirty]);
+    assert_eq!(lagging.full_reason, None);
 }

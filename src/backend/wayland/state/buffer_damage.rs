@@ -44,6 +44,7 @@ pub(in crate::backend::wayland) enum FullDamageReason {
     EmptyDamageFallback,
     DamageRegionsCoverSurface,
     DamageRegionLimit,
+    RenderFailed,
     Unknown,
 }
 
@@ -69,6 +70,7 @@ impl FullDamageReason {
             Self::EmptyDamageFallback => "empty_damage_fallback",
             Self::DamageRegionsCoverSurface => "damage_regions_cover_surface",
             Self::DamageRegionLimit => "damage_region_limit",
+            Self::RenderFailed => "render_failed",
             Self::Unknown => "unknown",
         }
     }
