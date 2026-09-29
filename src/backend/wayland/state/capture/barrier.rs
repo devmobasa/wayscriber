@@ -274,55 +274,6 @@ impl WaylandState {
         }
     }
 
-    /// Re-admit the same request after refreshing geometry, without restoring
-    /// any overlay pixels between the stale attempt and its one retry.
-    pub(in crate::backend::wayland) fn poll_portal_layout_retries(&mut self) {
-        if !self.frozen.has_portal_layout_retry() && !self.zoom.has_portal_layout_retry() {
-            return;
-        }
-        self.refresh_freeze_zoom_geometry();
-        for reason in [OverlaySuppression::Frozen, OverlaySuppression::Zoom] {
-            let restarted = match reason {
-                OverlaySuppression::Frozen => self.frozen.restart_portal_preflight(),
-                OverlaySuppression::Zoom => self.zoom.restart_portal_preflight(),
-                _ => unreachable!(),
-            };
-            match restarted {
-                Ok(false) => {}
-                Ok(true) if self.suppression.reason() == reason => {
-                    self.suppression
-                        .barrier
-                        .begin(reason, self.gtk_toolbar.is_some());
-                    self.buffer_damage
-                        .mark_all_full(FullDamageReason::OverlaySuppression);
-                    self.input_state.needs_redraw = true;
-                    self.toolbar.mark_dirty();
-                }
-                Ok(true) => {
-                    self.cancel_overlay_capture_preflight(
-                        reason,
-                        Some("Capture retry lost overlay suppression"),
-                    );
-                }
-                Err(error) => {
-                    log::warn!("Portal {reason:?} retry preflight failed: {error}");
-                    match reason {
-                        OverlaySuppression::Frozen if self.frozen.has_acquisition_attempt() => {
-                            self.frozen
-                                .finish_preflight_failure(error, &mut self.input_state);
-                        }
-                        OverlaySuppression::Zoom => self
-                            .zoom
-                            .finish_preflight_failure(&mut self.input_state, error),
-                        _ => {
-                            self.cancel_overlay_capture_preflight(reason, Some(&error));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     /// Records the frame callback for the fresh hidden main-surface commit.
     pub(in crate::backend::wayland) fn mark_overlay_capture_frame_ready(
         &mut self,

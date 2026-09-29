@@ -1,4 +1,11 @@
 //! Capture admission and the layout identity retained through fallback.
+use std::time::{Duration, Instant};
+
+use super::frozen_geometry::OutputGeometry;
+
+const PORTAL_LAYOUT_QUIET_PERIOD: Duration = Duration::from_millis(100);
+const PORTAL_LAYOUT_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
+const INCOMPLETE_LAYOUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CaptureLayout {
     output_id: Option<u32>,
@@ -80,6 +87,9 @@ pub(super) enum PortalLayoutRetry {
     Available,
     Pending {
         output_id: u32,
+        generation: u64,
+        not_before: Instant,
+        deadline: Instant,
     },
     Spent,
 }
@@ -90,6 +100,8 @@ impl PortalLayoutRetry {
         captured: Option<u32>,
         active: Option<u32>,
         changed: bool,
+        generation: u64,
+        now: Instant,
     ) -> bool {
         let Some(output_id) = captured else {
             return false;
@@ -97,7 +109,13 @@ impl PortalLayoutRetry {
         if !matches!(self, Self::Available) || active != captured || !changed {
             return false;
         }
-        *self = Self::Pending { output_id };
+
+        *self = Self::Pending {
+            output_id,
+            generation,
+            not_before: now + PORTAL_LAYOUT_QUIET_PERIOD,
+            deadline: now + PORTAL_LAYOUT_SETTLE_TIMEOUT,
+        };
         true
     }
 
@@ -105,18 +123,155 @@ impl PortalLayoutRetry {
         matches!(self, Self::Pending { .. })
     }
 
-    pub(super) fn take_pending(&mut self) -> Option<u32> {
-        let Self::Pending { output_id } = *self else {
+    pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
+        let Self::Pending {
+            not_before,
+            deadline,
+            ..
+        } = *self
+        else {
             return None;
         };
+
+        Some(not_before.min(deadline).saturating_duration_since(now))
+    }
+
+    /// Admit only a complete snapshot after a quiet period. Output events can
+    /// arrive in multiple batches; a deadline bounds metadata that never settles.
+    pub(super) fn take_ready(
+        &mut self,
+        active_output: Option<u32>,
+        active_generation: u64,
+        geometry: Option<&OutputGeometry>,
+        now: Instant,
+    ) -> Result<Option<u32>, &'static str> {
+        let Self::Pending {
+            output_id,
+            generation,
+            not_before,
+            deadline,
+        } = self
+        else {
+            return Ok(None);
+        };
+        if active_output != Some(*output_id) {
+            *self = Self::Spent;
+            return Err("Screen capture failed after the active output changed.");
+        }
+        if now >= *deadline {
+            *self = Self::Spent;
+            return Err("Screen capture failed because the display layout did not settle.");
+        }
+        if active_generation != *generation {
+            *generation = active_generation;
+            *not_before = now + PORTAL_LAYOUT_QUIET_PERIOD;
+        }
+        if now < *not_before {
+            return Ok(None);
+        }
+        if !geometry.is_some_and(OutputGeometry::portal_layout_is_complete) {
+            *not_before = now + INCOMPLETE_LAYOUT_POLL_INTERVAL;
+            return Ok(None);
+        }
+
+        let output_id = *output_id;
         *self = Self::Spent;
-        Some(output_id)
+        Ok(Some(output_id))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn geometry() -> OutputGeometry {
+        OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((2, 1)),
+            (2, 1),
+            1,
+            wayland_client::protocol::wl_output::Transform::Normal,
+            Some((2, 1)),
+        )
+        .unwrap()
+        .with_known_output_count(Some(1))
+    }
+
+    #[test]
+    fn retry_waits_for_both_output_update_batches_and_spends_the_budget_once() {
+        let now = Instant::now();
+        let geometry = geometry();
+        let mut retry = PortalLayoutRetry::default();
+        assert!(retry.schedule(Some(1), Some(1), true, 4, now));
+
+        assert_eq!(retry.timeout(now), Some(Duration::from_millis(100)));
+        assert_eq!(
+            retry.take_ready(Some(1), 4, Some(&geometry), now + Duration::from_millis(99)),
+            Ok(None)
+        );
+        assert_eq!(
+            retry.take_ready(
+                Some(1),
+                5,
+                Some(&geometry),
+                now + Duration::from_millis(100)
+            ),
+            Ok(None)
+        );
+        assert_eq!(
+            retry.timeout(now + Duration::from_millis(100)),
+            Some(Duration::from_millis(100))
+        );
+        assert_eq!(
+            retry.take_ready(
+                Some(1),
+                5,
+                Some(&geometry),
+                now + Duration::from_millis(199)
+            ),
+            Ok(None)
+        );
+        assert_eq!(
+            retry.take_ready(
+                Some(1),
+                5,
+                Some(&geometry),
+                now + Duration::from_millis(200)
+            ),
+            Ok(Some(1))
+        );
+        assert_eq!(retry.timeout(now + Duration::from_millis(200)), None);
+        assert!(!retry.schedule(Some(1), Some(1), true, 6, now));
+    }
+
+    #[test]
+    fn incomplete_topology_wait_is_paced_and_bounded() {
+        let now = Instant::now();
+        let incomplete = geometry().with_known_output_count(Some(2));
+        let mut retry = PortalLayoutRetry::default();
+        assert!(retry.schedule(Some(1), Some(1), true, 4, now));
+
+        assert_eq!(
+            retry.take_ready(
+                Some(1),
+                4,
+                Some(&incomplete),
+                now + Duration::from_millis(100)
+            ),
+            Ok(None)
+        );
+        assert_eq!(
+            retry.timeout(now + Duration::from_millis(100)),
+            Some(Duration::from_millis(50))
+        );
+        assert!(
+            retry
+                .take_ready(Some(1), 4, Some(&incomplete), now + Duration::from_secs(1))
+                .is_err()
+        );
+        assert!(!retry.is_pending());
+        assert_eq!(retry.timeout(now + Duration::from_secs(1)), None);
+    }
 
     #[test]
     fn dispatch_retains_layout_until_reset() {

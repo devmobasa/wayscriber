@@ -66,6 +66,22 @@ impl OutputGeometry {
         })
     }
 
+    /// Multi-output portal inference requires metadata for every live output.
+    /// A proven single output can also use its exact native-size screenshot.
+    pub(super) fn portal_layout_is_complete(&self) -> bool {
+        if self.verified_pixel_size().is_none() {
+            return false;
+        }
+
+        match self.known_output_count {
+            Some(1) => true,
+            Some(count) if count > 1 => self.portal_outputs.as_ref().is_some_and(|outputs| {
+                outputs.len() == count as usize && self.active_output_is_in_portal_snapshot()
+            }),
+            _ => false,
+        }
+    }
+
     pub fn update_from(
         logical_pos: Option<(i32, i32)>,
         logical_size: Option<(i32, i32)>,
