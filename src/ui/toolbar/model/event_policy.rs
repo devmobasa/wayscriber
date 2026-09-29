@@ -129,6 +129,10 @@ pub(crate) enum ToolbarBackendRoute {
     MoveTopToolbar,
 }
 
+/// The keyboard action a toolbar event is equivalent to, which gives its
+/// control a shortcut badge, a tooltip label, rebind capture, and shortcut
+/// coaching. Exhaustive, so a new event has to decide instead of silently
+/// going without.
 pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
     match event {
         ToolbarEvent::SelectTool(tool) => action_for_tool(*tool),
@@ -184,7 +188,117 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::OpenCommandPalette => Some(Action::ToggleCommandPalette),
         ToolbarEvent::PickScreenColor => Some(Action::PickScreenColor),
         ToolbarEvent::OpenFontPicker => Some(Action::OpenFontPicker),
-        _ => None,
+
+        // A zero step changes nothing, so it names no action.
+        ToolbarEvent::NudgeThickness(_)
+        | ToolbarEvent::NudgeMarkerOpacity(_)
+        | ToolbarEvent::NudgeFontSize(_) => None,
+        // Steps only the next arrow's style; the keyboard action also
+        // restyles selected arrows.
+        ToolbarEvent::CycleArrowStyle => None,
+        // Values chosen in the control itself, and the popups and panels that
+        // choose them. The keyboard steps these, if it reaches them at all.
+        ToolbarEvent::SetColor(_)
+        | ToolbarEvent::EditQuickColor { .. }
+        | ToolbarEvent::SetThickness(_)
+        | ToolbarEvent::SetMarkerOpacity(_)
+        | ToolbarEvent::SetSpotlightMagnification(_)
+        | ToolbarEvent::SetPenSmoothing(_)
+        | ToolbarEvent::NudgePenSmoothing(_)
+        | ToolbarEvent::SetShapeRecognitionSensitivity(_)
+        | ToolbarEvent::NudgeShapeRecognitionSensitivity(_)
+        | ToolbarEvent::SetFont(_)
+        | ToolbarEvent::SetFontBold(_)
+        | ToolbarEvent::SetFontSize(_)
+        | ToolbarEvent::SetPolygonSides(_)
+        | ToolbarEvent::NudgePolygonSides(_)
+        | ToolbarEvent::ToggleArrowLabels(_)
+        | ToolbarEvent::SetArrowStyle(_)
+        | ToolbarEvent::ToggleHighlightToolRing(_)
+        | ToolbarEvent::SetUndoDelay(_)
+        | ToolbarEvent::SetRedoDelay(_)
+        | ToolbarEvent::SetCustomUndoDelay(_)
+        | ToolbarEvent::SetCustomRedoDelay(_)
+        | ToolbarEvent::SetCustomUndoSteps(_)
+        | ToolbarEvent::SetCustomRedoSteps(_)
+        | ToolbarEvent::CustomUndo
+        | ToolbarEvent::CustomRedo
+        | ToolbarEvent::CopyHexColor
+        | ToolbarEvent::PasteHexColor
+        | ToolbarEvent::EditHexColor
+        | ToolbarEvent::OpenColorPickerPopup
+        | ToolbarEvent::OpenPrecisionEntry(_)
+        | ToolbarEvent::CommitPrecisionEntry { .. }
+        | ToolbarEvent::CancelPrecisionEntry
+        | ToolbarEvent::AdjustSelectionProperty { .. }
+        | ToolbarEvent::RefreshZoomCapture => None,
+        // Sessions, runtime-UI recovery, and the toolbar's own chrome, layout,
+        // and Settings preferences: toolbar state rather than drawing actions.
+        ToolbarEvent::OpenSession
+        | ToolbarEvent::OpenRecentSession(_)
+        | ToolbarEvent::SaveSessionAs
+        | ToolbarEvent::SaveSessionAsConfirm(_)
+        | ToolbarEvent::SaveSessionAsCancel
+        | ToolbarEvent::SessionInfo
+        | ToolbarEvent::ClearSession
+        | ToolbarEvent::OpenConfigFile
+        | ToolbarEvent::RequestRuntimeUiReset
+        | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+        | ToolbarEvent::CancelUnsupportedRuntimeUiReset
+        | ToolbarEvent::RetryRuntimeUiPersistence
+        | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+        | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::CancelRuntimeUiRecovery
+        | ToolbarEvent::ToggleInputHud(_)
+        | ToolbarEvent::ToggleCustomSection(_)
+        | ToolbarEvent::ToggleDelaySliders(_)
+        | ToolbarEvent::ToggleTopOverflow(_)
+        | ToolbarEvent::ToggleSessionPopover(_)
+        | ToolbarEvent::ToggleSettingsPopover(_)
+        | ToolbarEvent::ToggleCanvasPopover(_)
+        | ToolbarEvent::ScrollTopPopover(_)
+        | ToolbarEvent::SetTopMinimized(_)
+        | ToolbarEvent::SetTopDisplayMode(_)
+        | ToolbarEvent::CloseTopToolbar
+        | ToolbarEvent::PinTopToolbar(_)
+        | ToolbarEvent::ToggleIconMode(_)
+        | ToolbarEvent::ToggleMoreColors(_)
+        | ToolbarEvent::ToggleActionsSection(_)
+        | ToolbarEvent::ToggleActionsAdvanced(_)
+        | ToolbarEvent::ToggleZoomActions(_)
+        | ToolbarEvent::TogglePagesSection(_)
+        | ToolbarEvent::ToggleBoardsSection(_)
+        | ToolbarEvent::TogglePresets(_)
+        | ToolbarEvent::ToggleStepSection(_)
+        | ToolbarEvent::ToggleTextControls(_)
+        | ToolbarEvent::ToggleContextAwareUi(_)
+        | ToolbarEvent::TogglePresetToasts(_)
+        | ToolbarEvent::ToggleIdleFade(_)
+        | ToolbarEvent::ToggleToolPreview(_)
+        | ToolbarEvent::ToggleStatusBar(_)
+        | ToolbarEvent::SetStatusBarInteractive(_)
+        | ToolbarEvent::SetStatusBarItemVisible(_, _)
+        | ToolbarEvent::ToggleStatusBoardBadge(_)
+        | ToolbarEvent::ToggleStatusPageBadge(_)
+        | ToolbarEvent::ToggleFloatingBadgeAlways(_)
+        | ToolbarEvent::SetToolbarLayoutMode(_)
+        | ToolbarEvent::ToggleLayoutMenu(_)
+        | ToolbarEvent::TogglePenFeelPanel(_)
+        | ToolbarEvent::ToggleArrowStyleMenu(_)
+        | ToolbarEvent::SetToolbarItemHidden(_, _)
+        | ToolbarEvent::MoveToolbarItem { .. }
+        | ToolbarEvent::StartToolbarItemDrag { .. }
+        | ToolbarEvent::DragToolbarItemOver { .. }
+        | ToolbarEvent::ResetToolbarItemOrder(_)
+        | ToolbarEvent::ResetToolbarItemHiddenOverrides
+        | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
+        | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
+        | ToolbarEvent::SetStatusBarContentsOpen(_)
+        | ToolbarEvent::SetSettingsDetailsOpen(_)
+        | ToolbarEvent::ToggleShapePicker(_)
+        | ToolbarEvent::MoveTopToolbar { .. } => None,
     }
 }
 
@@ -268,6 +382,10 @@ pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
 /// other's toggles and the shared scrollbar (switching between them is one
 /// gesture), and Open Configurator is reachable from both Session and
 /// Settings.
+///
+/// Exhaustive, with the events hosted in no popover listed too, so a new
+/// event has to declare where it lives rather than fall through to closing
+/// everything.
 pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopover] {
     use ToolbarPopover as P;
     const TOP_MENUS: &[ToolbarPopover] = &[P::Canvas, P::Session, P::Settings];
@@ -289,8 +407,11 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         | ToolbarEvent::NudgePenSmoothing(_)
         | ToolbarEvent::SetShapeRecognitionSensitivity(_)
         | ToolbarEvent::NudgeShapeRecognitionSensitivity(_) => &[P::PenFeel],
-        // Shapes hosts its own inline options.
-        ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_) => &[P::ShapePicker],
+        // Shapes hosts its own inline options. `SetPolygonSides` is the
+        // absolute form of the sides stepper there.
+        ToolbarEvent::ToggleFill(_)
+        | ToolbarEvent::NudgePolygonSides(_)
+        | ToolbarEvent::SetPolygonSides(_) => &[P::ShapePicker],
 
         ToolbarEvent::OpenPrecisionEntry(_)
         | ToolbarEvent::CommitPrecisionEntry { .. }
@@ -394,7 +515,59 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
         | ToolbarEvent::CancelRuntimeUiRecovery => &[P::Settings],
 
-        _ => &[],
+        // Hosted in no popover: each of these dismisses whatever is open.
+        //
+        // The board picker sits in the Canvas popover's Boards row, but it
+        // opens a modal over the overlay, so the popover that launched it
+        // closes; opening the command palette closes Settings the same way.
+        ToolbarEvent::ToggleBoardPicker | ToolbarEvent::BoardRename => &[],
+        // The style pill, the tool strip, and the strip's own chrome. A strip
+        // control dropped into the overflow flyout closes it when used, like
+        // any menu item, and choosing a shape is the shapes popover's purpose.
+        ToolbarEvent::SelectTool(_)
+        | ToolbarEvent::SetColor(_)
+        | ToolbarEvent::SetQuickColor { .. }
+        | ToolbarEvent::EditQuickColor { .. }
+        | ToolbarEvent::SetThickness(_)
+        | ToolbarEvent::NudgeThickness(_)
+        | ToolbarEvent::SetMarkerOpacity(_)
+        | ToolbarEvent::NudgeMarkerOpacity(_)
+        | ToolbarEvent::SetSpotlightMagnification(_)
+        | ToolbarEvent::SetEraserMode(_)
+        | ToolbarEvent::SetFont(_)
+        | ToolbarEvent::SetFontBold(_)
+        | ToolbarEvent::OpenFontPicker
+        | ToolbarEvent::SetFontSize(_)
+        | ToolbarEvent::NudgeFontSize(_)
+        | ToolbarEvent::ToggleArrowLabels(_)
+        | ToolbarEvent::CycleArrowStyle
+        | ToolbarEvent::SetArrowStyle(_)
+        | ToolbarEvent::ResetArrowLabelCounter
+        | ToolbarEvent::ResetStepMarkerCounter
+        | ToolbarEvent::CopyHexColor
+        | ToolbarEvent::PasteHexColor
+        | ToolbarEvent::EditHexColor
+        | ToolbarEvent::OpenColorPickerPopup
+        | ToolbarEvent::AdjustSelectionProperty { .. }
+        | ToolbarEvent::PickScreenColor
+        | ToolbarEvent::CaptureScreenshot
+        | ToolbarEvent::CopyTextFromScreen
+        | ToolbarEvent::EnterTextMode
+        | ToolbarEvent::EnterStickyNoteMode
+        | ToolbarEvent::ToggleAllHighlight(_)
+        | ToolbarEvent::ToggleHighlightToolRing(_)
+        | ToolbarEvent::ApplyPreset(_)
+        | ToolbarEvent::SavePreset(_)
+        | ToolbarEvent::ClearPreset(_)
+        | ToolbarEvent::ExitOverlay
+        | ToolbarEvent::SetTopMinimized(_)
+        | ToolbarEvent::SetTopDisplayMode(_)
+        | ToolbarEvent::CloseTopToolbar
+        | ToolbarEvent::PinTopToolbar(_)
+        | ToolbarEvent::ToggleMoreColors(_)
+        | ToolbarEvent::ToggleToolPreview(_)
+        | ToolbarEvent::RefreshZoomCapture
+        | ToolbarEvent::MoveTopToolbar { .. } => &[],
     }
 }
 
@@ -768,6 +941,69 @@ mod popover_affinity_tests {
         assert!(configurator.contains(&P::Session) && configurator.contains(&P::Settings));
         let shapes = popovers_for_event(&ToolbarEvent::ToggleShapePicker(true));
         assert!(shapes.contains(&P::ShapePicker) && shapes.contains(&P::TopOverflow));
+    }
+
+    /// Both forms of the polygon-sides option live in the shapes popover's
+    /// option row, like Fill beside them.
+    #[test]
+    fn the_shapes_popover_spares_its_option_rows() {
+        use ToolbarPopover as P;
+
+        for event in [
+            ToolbarEvent::ToggleFill(true),
+            ToolbarEvent::NudgePolygonSides(1),
+            ToolbarEvent::SetPolygonSides(6),
+        ] {
+            assert_eq!(popovers_for_event(&event), &[P::ShapePicker], "{event:?}");
+        }
+    }
+
+    /// Every Canvas popover control keeps Canvas open, except the board
+    /// picker: it opens a modal over the overlay, so the popover that
+    /// launched it closes.
+    #[test]
+    fn the_canvas_popover_spares_every_control_it_hosts_but_the_board_picker() {
+        use super::super::{
+            toolbar_actions_model_for_popover, toolbar_advanced_group_for_popover,
+            toolbar_boards_model_for_popover, toolbar_pages_model_for_popover,
+            toolbar_zoom_group_for_popover,
+        };
+        use crate::input::state::test_support::make_test_input_state;
+        use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
+        use ToolbarPopover as P;
+
+        let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+            &make_test_input_state(),
+            ToolbarBindingHints::default(),
+        );
+        snapshot.show_actions_section = true;
+        snapshot.show_actions_advanced = true;
+        snapshot.show_boards_section = true;
+        snapshot.show_pages_section = true;
+        snapshot.show_zoom_actions = true;
+        snapshot.delay_actions_enabled = true;
+        let groups = [
+            toolbar_actions_model_for_popover(&snapshot),
+            toolbar_advanced_group_for_popover(&snapshot),
+            toolbar_boards_model_for_popover(&snapshot),
+            toolbar_pages_model_for_popover(&snapshot),
+            toolbar_zoom_group_for_popover(&snapshot),
+        ];
+
+        let events: Vec<_> = groups
+            .iter()
+            .flatten()
+            .flat_map(|group| group.buttons.iter().map(|button| &button.event))
+            .collect();
+        assert!(events.contains(&&ToolbarEvent::ToggleBoardPicker));
+        for event in events {
+            let spared = popovers_for_event(event).contains(&P::Canvas);
+            assert_eq!(
+                spared,
+                *event != ToolbarEvent::ToggleBoardPicker,
+                "{event:?}"
+            );
+        }
     }
 
     /// Clicks and wheel steps inside the Pen feel panel adjust the levels
