@@ -116,6 +116,100 @@ fn board_grid_draft_preserves_patterns_and_rejects_invalid_spacing() {
         assert_eq!(draft.boards.items[1].grid_spacing, invalid);
     }
 }
+
+/// The form errors a board draft produces, as `field: message` lines.
+fn board_errors(edit: impl FnOnce(&mut ConfigDraft)) -> Vec<String> {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    edit(&mut draft);
+    match draft.to_config(&config) {
+        Ok(_) => Vec::new(),
+        Err(errors) => errors
+            .into_iter()
+            .map(|error| format!("{}: {}", error.field, error.message))
+            .collect(),
+    }
+}
+
+/// Core lowercases board ids on load, so an upper-case id could never be
+/// saved as typed. The draft names the field and the id that would work.
+#[test]
+fn an_upper_case_board_id_is_refused_at_its_field() {
+    let errors = board_errors(|draft| draft.boards.items[1].id = "Math".to_string());
+
+    assert_eq!(
+        errors,
+        ["boards.items[1].id: Board ids are lowercase; use \"math\""]
+    );
+}
+
+/// Core renames the second of two equal ids, so the draft refuses the
+/// duplicate instead of letting Save fail on the rename.
+#[test]
+fn a_duplicate_board_id_is_refused_at_the_later_board() {
+    let errors = board_errors(|draft| draft.boards.items[2].id = " whiteboard ".to_string());
+
+    assert_eq!(
+        errors,
+        ["boards.items[2].id: Board 2 already uses the id \"whiteboard\""]
+    );
+}
+
+/// Core inserts an Overlay board when none is left, so removing it used to
+/// make Save impossible with no hint why.
+#[test]
+fn a_board_list_without_a_transparent_board_is_refused() {
+    let errors = board_errors(|draft| {
+        draft.boards.items.remove(0);
+        draft.boards.ensure_default_exists();
+    });
+
+    assert_eq!(
+        errors,
+        ["boards.items: Keep one board with a Transparent background; the overlay draws on it"]
+    );
+}
+
+/// Core drops boards beyond the maximum, so the draft names both numbers
+/// and the two ways out.
+#[test]
+fn more_boards_than_the_maximum_are_refused() {
+    let errors = board_errors(|draft| draft.boards.max_count = "2".to_string());
+
+    assert_eq!(
+        errors,
+        ["boards.items: 5 boards exceed Max boards (2); remove a board or raise Max boards"]
+    );
+}
+
+#[test]
+fn a_zero_board_maximum_is_refused() {
+    let errors = board_errors(|draft| {
+        draft.boards.max_count = "0".to_string();
+        draft.boards.items.truncate(1);
+    });
+
+    assert_eq!(errors, ["boards.max_count: Expected at least 1"]);
+}
+
+/// Every draft the board checks accept is one core leaves exactly as it is,
+/// which is what lets Save write it.
+#[test]
+fn a_board_draft_the_checks_accept_saves_unchanged() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.boards.items[1].id = "math".to_string();
+    draft.boards.items[2].id = String::new();
+    draft.boards.max_count = "5".to_string();
+    draft.boards.items.swap(0, 2);
+    draft.boards.ensure_default_exists();
+
+    let saved = draft.to_config(&config).expect("valid board draft");
+
+    if let Err(error) = saved.validate_for_save() {
+        panic!("{error}");
+    }
+}
 use super::super::fields::{
     ArrowStyleOption, DragMouseButton, DragToolField, DragToolOption, FontWeightOption,
     InputHudModeOption, InputHudPositionOption, OverrideOption, PdfFitModeOption,

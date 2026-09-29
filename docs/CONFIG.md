@@ -1572,7 +1572,7 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 ```
 
 **Fields:**
-- `max_count` — hard cap on total boards.
+- `max_count` — hard cap on total boards (at least 1). Loading drops boards past it.
 - `auto_create` — create a board when switching to an empty slot.
 - `show_board_badge` — show board name/slot in the status bar.
 - `pan_enabled` — allow panning on solid-color boards with <kbd>Space</kbd> + left-drag.
@@ -1583,8 +1583,10 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
   starts from, edited in the configurator. The key is ignored whatever you set it to and will be
   removed in a future release.
 - `default_board` — board id to activate on startup.
-- `items` — ordered list of boards; each board has:
-  - `id` — stable identifier (used by keybindings and persistence).
+- `items` — ordered list of boards. At least one board must have a transparent background; loading
+  adds the Overlay board when none does. Each board has:
+  - `id` — stable identifier (used by keybindings and persistence). Ids are lowercase and unique;
+    loading lowercases an id and renames a duplicate (`math-2`).
   - `name` — display name in the UI.
   - `background` — `"transparent"` or `{ rgb = [..] }`.
   - `default_pen_color` — optional; if omitted and `auto_adjust_pen = true`, pen color is auto-contrasted.

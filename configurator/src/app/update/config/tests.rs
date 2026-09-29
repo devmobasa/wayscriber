@@ -396,7 +396,9 @@ fn a_draft_with_out_of_range_numbers_keeps_the_document() {
 #[test]
 fn a_value_core_would_correct_is_refused_with_its_path() {
     let (mut app, _dir, _path) = app_with_config_file("");
-    app.draft.boards.items[1].id = "Math".to_string();
+    app.draft.boards.items[1]
+        .background_color
+        .set_component(0, "1.5".to_string());
     app.refresh_dirty_flag();
 
     let effects = app.handle_save_requested();
@@ -404,7 +406,31 @@ fn a_value_core_would_correct_is_refused_with_its_path() {
     assert!(effects.is_empty());
     assert!(app.document.loaded().is_some());
     assert!(
-        status_contains(&app.status, "boards.items[1].id: "),
+        status_contains(
+            &app.status,
+            "boards.items[1].background[0]: 1.5 would be saved as 1.0"
+        ),
+        "{:?}",
+        app.status.text()
+    );
+}
+
+/// Board-list shapes core would reshape are refused by the draft itself,
+/// before core is asked, and each refusal names the field to change.
+#[test]
+fn removing_the_overlay_board_is_refused_with_a_located_reason() {
+    let (mut app, _dir, _path) = app_with_config_file("");
+    let _ = app.handle_boards_remove_item(0);
+
+    let effects = app.handle_save_requested();
+
+    assert!(effects.is_empty());
+    assert!(app.document.loaded().is_some());
+    assert!(
+        status_contains(
+            &app.status,
+            "boards.items: Keep one board with a Transparent background"
+        ),
         "{:?}",
         app.status.text()
     );
