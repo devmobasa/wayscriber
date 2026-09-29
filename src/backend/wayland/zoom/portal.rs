@@ -2,8 +2,12 @@ use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
 
-use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
-use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
+#[cfg(test)]
+use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen::ScreenImageProvenance;
+#[cfg(test)]
+use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, portal_output_matches,
 };

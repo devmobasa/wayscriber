@@ -1,16 +1,17 @@
 use super::state::{FrozenCaptureBackend, FrozenState};
+use crate::backend::wayland::capture_preflight::PortalRetryError;
 use std::time::{Duration, Instant};
 
 impl FrozenState {
     pub(super) fn queue_portal_layout_retry(
         &mut self,
         captured: Option<u32>,
-        changed: bool,
+        layout_changed: bool,
     ) -> bool {
         if !self.layout_retry.schedule(
             captured,
             self.active_output_id,
-            changed,
+            layout_changed,
             self.portal_layout_generation,
             Instant::now(),
         ) {
@@ -63,7 +64,14 @@ impl FrozenState {
                 self.active_geometry.as_ref(),
                 now,
             )
-            .map_err(str::to_string)?
+            .map_err(|error| match error {
+                PortalRetryError::OutputChanged => {
+                    "Freeze failed after the display layout changed".to_string()
+                }
+                PortalRetryError::LayoutDidNotSettle => {
+                    "Freeze failed because the display layout did not settle".to_string()
+                }
+            })?
         else {
             return Ok(false);
         };

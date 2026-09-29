@@ -102,7 +102,7 @@ mod tests {
     use crate::backend::wayland::acquisition::{ScreenAcquisitionOwner, ScreenAcquisitionRegistry};
     use crate::backend::wayland::frozen::FrozenCaptureBackend;
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
-    use crate::backend::wayland::zoom::ZoomCaptureBackend;
+    use crate::backend::wayland::zoom::{ZoomCaptureBackend, ZoomSourceOutcome};
     use std::time::Duration;
 
     #[tokio::test]
@@ -221,7 +221,13 @@ mod tests {
                         assert!(frozen.take_capture_done());
                         assert!(!frozen.is_in_progress());
                     } else {
-                        assert_eq!(zoom.take_source_terminal().unwrap().id, zoom_id.unwrap());
+                        let terminal = zoom.take_source_terminal().unwrap();
+                        assert_eq!(terminal.id, zoom_id.unwrap());
+                        if failure == Some("output") {
+                            assert_eq!(terminal.outcome, ZoomSourceOutcome::StaleLayout);
+                        } else {
+                            assert!(matches!(terminal.outcome, ZoomSourceOutcome::Failed(_)));
+                        }
                         assert!(zoom.take_source_terminal().is_none());
                         assert!(zoom.take_capture_done());
                         assert!(!zoom.is_in_progress());

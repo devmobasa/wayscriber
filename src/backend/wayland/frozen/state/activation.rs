@@ -106,6 +106,7 @@ impl FrozenState {
                 "Freeze failed after the display layout changed",
             );
         }
+
         let mut image = pending.image;
         let mut provenance = None;
 

@@ -85,6 +85,12 @@ impl<B: Copy> CapturePreflight<B> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PortalRetryError {
+    OutputChanged,
+    LayoutDidNotSettle,
+}
+
 /// One retry retained by the original request while its portal result is discarded.
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) enum PortalLayoutRetry {
@@ -104,14 +110,14 @@ impl PortalLayoutRetry {
         &mut self,
         captured: Option<u32>,
         active: Option<u32>,
-        changed: bool,
+        layout_changed: bool,
         generation: u64,
         now: Instant,
     ) -> bool {
         let Some(output_id) = captured else {
             return false;
         };
-        if !matches!(self, Self::Available) || active != captured || !changed {
+        if !matches!(self, Self::Available) || active != captured || !layout_changed {
             return false;
         }
 
@@ -150,7 +156,7 @@ impl PortalLayoutRetry {
         active_generation: u64,
         geometry: Option<&OutputGeometry>,
         now: Instant,
-    ) -> Result<Option<u32>, &'static str> {
+    ) -> Result<Option<u32>, PortalRetryError> {
         let Self::Pending {
             output_id,
             generation,
@@ -162,11 +168,11 @@ impl PortalLayoutRetry {
         };
         if active_output != Some(*output_id) {
             *self = Self::Spent;
-            return Err("Screen capture failed after the active output changed.");
+            return Err(PortalRetryError::OutputChanged);
         }
         if now >= *deadline {
             *self = Self::Spent;
-            return Err("Screen capture failed because the display layout did not settle.");
+            return Err(PortalRetryError::LayoutDidNotSettle);
         }
 
         if active_generation != *generation {

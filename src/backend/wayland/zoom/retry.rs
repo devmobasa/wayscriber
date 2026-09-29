@@ -1,11 +1,12 @@
 use super::state::{ZoomCaptureBackend, ZoomState};
+use crate::backend::wayland::capture_preflight::PortalRetryError;
 use std::time::{Duration, Instant};
 
 impl ZoomState {
     pub(super) fn queue_portal_layout_retry(
         &mut self,
         captured: Option<u32>,
-        changed: bool,
+        layout_changed: bool,
     ) -> bool {
         if self.current_capture_id().is_none() {
             return false;
@@ -14,7 +15,7 @@ impl ZoomState {
         if !self.layout_retry.schedule(
             captured,
             self.active_output_id,
-            changed,
+            layout_changed,
             self.portal_layout_generation,
             Instant::now(),
         ) {
@@ -66,7 +67,14 @@ impl ZoomState {
                 self.active_geometry.as_ref(),
                 now,
             )
-            .map_err(str::to_string)?
+            .map_err(|error| match error {
+                PortalRetryError::OutputChanged => {
+                    "Zoom failed after the display layout changed".to_string()
+                }
+                PortalRetryError::LayoutDidNotSettle => {
+                    "Zoom failed because the display layout did not settle".to_string()
+                }
+            })?
         else {
             return Ok(false);
         };
