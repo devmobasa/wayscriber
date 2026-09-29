@@ -269,13 +269,41 @@ fn looks_like_uri_bytes(value: &[u8]) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
 }
 
+/// Markers through which one wayscriber process tells another what it is.
+///
+/// The broker runs with the environment of the process that started it, so
+/// without this a daemon-launched overlay's markers reached every helper it
+/// spawned, and from there xdg-open's browser, the configurator, tesseract
+/// and curl. A wayscriber started anywhere in those trees then took itself
+/// for a daemon child.
+const INTERNAL_PROCESS_MARKERS: [&str; 4] = [
+    crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
+    crate::env_vars::DETACHED_ENV,
+    crate::RESUME_SESSION_ENV,
+    crate::env_vars::DAEMON_WATCHDOG_FD_ENV,
+];
+
+/// Whether `kind` relaunches wayscriber itself, the only helpers that keep
+/// the internal markers. The overlay launch sets the ones it needs itself,
+/// and the initial detach carries the caller's session choice across.
+fn relaunches_wayscriber(kind: HelperKind) -> bool {
+    matches!(kind, HelperKind::Overlay | HelperKind::InitialDetach)
+}
+
 pub(super) fn command(
+    kind: HelperKind,
     program: OsWire,
     arguments: Vec<OsWire>,
     environment: Vec<(OsWire, Option<OsWire>)>,
 ) -> Command {
     let mut command = Command::new(program.into_os());
     command.args(arguments.into_iter().map(OsWire::into_os));
+    if !relaunches_wayscriber(kind) {
+        for marker in INTERNAL_PROCESS_MARKERS {
+            command.env_remove(marker);
+        }
+    }
+
     for (name, value) in environment {
         let name = name.into_os();
         if let Some(value) = value {

@@ -804,6 +804,51 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
 }
 
 #[test]
+fn helpers_do_not_inherit_the_internal_process_markers() {
+    const MARKERS: [&str; 3] = [
+        crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
+        crate::env_vars::DETACHED_ENV,
+        crate::RESUME_SESSION_ENV,
+    ];
+    let _environment = crate::test_env::lock();
+    let previous = MARKERS.map(std::env::var_os);
+    for marker in MARKERS {
+        // SAFETY: serialized by the test environment mutex held above.
+        unsafe { std::env::set_var(marker, "inherited") };
+    }
+
+    let guard = start_for_runtime().unwrap();
+    let script = MARKERS
+        .map(|marker| format!("${{{marker}-unset}}"))
+        .join(",");
+    let output = guard.broker().run(
+        HelperKind::TestShell,
+        OsStr::new("sh"),
+        [
+            OsStr::new("-c"),
+            OsStr::new(&format!("printf '%s' \"{script}\"")),
+        ],
+        Vec::new(),
+        Duration::from_secs(5),
+        1024,
+    );
+    drop(guard);
+    for (marker, value) in MARKERS.into_iter().zip(previous) {
+        // SAFETY: serialized by the test environment mutex held above.
+        unsafe {
+            match value {
+                Some(value) => std::env::set_var(marker, value),
+                None => std::env::remove_var(marker),
+            }
+        }
+    }
+
+    let output = output.unwrap();
+    assert_eq!(output.status, 0);
+    assert_eq!(output.stdout, b"unset,unset,unset");
+}
+
+#[test]
 fn operation_bound_run_terminates_descendants_that_retain_pipes() {
     let guard = start_for_runtime().unwrap();
     let started = Instant::now();

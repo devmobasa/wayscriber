@@ -263,7 +263,7 @@ fn handle_operation(
                 bail!("prefix output is restricted to wl-paste");
             }
             let output = run_bounded(
-                super::manifest::command(program, arguments, environment),
+                super::manifest::command(kind, program, arguments, environment),
                 input,
                 Duration::from_millis(timeout_ms).min(Duration::from_secs(120)),
                 output_cap.min(MAX_OUTPUT_BYTES),
@@ -303,7 +303,7 @@ fn handle_operation(
             // Retained publication discards stdout/stderr structurally
             // (publish_bounded uses Stdio::null); there is no output cap to enforce.
             let output = publish_bounded(
-                super::manifest::command(program, arguments, environment),
+                super::manifest::command(kind, program, arguments, environment),
                 input,
                 Duration::from_millis(timeout_ms).min(Duration::from_secs(120)),
                 shutdown_fd,
@@ -420,7 +420,7 @@ fn spawn_helper(
     if children.len() >= MAX_OWNED_CHILDREN {
         bail!("broker child capacity exhausted");
     }
-    let mut command = super::manifest::command(program, arguments, environment);
+    let mut command = super::manifest::command(kind, program, arguments, environment);
     let watchdog_descriptor = if watchdog {
         if !matches!(kind, HelperKind::Overlay) || lifetime != HelperLifetime::OwnedChild {
             #[cfg(test)]

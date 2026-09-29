@@ -140,16 +140,37 @@ fn run_update_check() -> anyhow::Result<()> {
 #[cfg(unix)]
 fn detach_from_tty() {
     // Start a new session to drop the controlling terminal (prevents stuck shells).
+    // SAFETY: setsid takes no arguments; a failure only leaves the session as is.
     unsafe {
         let _ = libc::setsid();
     }
-    // Best-effort close of stdio if they still point to a TTY.
+    // Point stdio that still refers to a TTY at /dev/null. Closing it instead
+    // frees the descriptor number for the next open, and the logger's stderr
+    // writes would then land in whatever file that open returned.
     for fd in [libc::STDIN_FILENO, libc::STDOUT_FILENO, libc::STDERR_FILENO] {
+        // SAFETY: isatty only inspects the descriptor number it is given.
         let is_tty = unsafe { libc::isatty(fd) } == 1;
-        if is_tty {
-            let _ = unsafe { libc::close(fd) };
+        if is_tty && let Err(error) = redirect_to_dev_null(fd) {
+            log::warn!("Failed to detach descriptor {fd} from the terminal: {error}");
         }
     }
+}
+
+/// Replaces `fd` with a descriptor for /dev/null, keeping the number in use.
+#[cfg(unix)]
+fn redirect_to_dev_null(fd: std::os::fd::RawFd) -> std::io::Result<()> {
+    use std::os::fd::AsRawFd;
+
+    let null = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")?;
+    // SAFETY: both descriptors are open. dup2 atomically replaces `fd` and
+    // leaves `null` open for its owner to close.
+    if unsafe { libc::dup2(null.as_raw_fd(), fd) } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
@@ -339,5 +360,24 @@ mod tests {
             anchor_session_file_for_daemon_request(path.clone(), Path::new("/tmp/other-cwd"));
 
         assert_eq!(anchored, path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn detached_descriptor_keeps_its_number_and_writes_go_nowhere() {
+        use std::io::Write;
+        use std::os::fd::AsRawFd;
+
+        let temp = crate::test_temp::tempdir().unwrap();
+        let path = temp.path().join("was-a-terminal");
+        let mut file = File::create(&path).unwrap();
+        file.write_all(b"before ").unwrap();
+
+        redirect_to_dev_null(file.as_raw_fd()).unwrap();
+        file.write_all(b"after").unwrap();
+
+        // SAFETY: F_GETFD only inspects the descriptor the file still owns.
+        assert!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } >= 0);
+        assert_eq!(std::fs::read(&path).unwrap(), b"before ");
     }
 }
