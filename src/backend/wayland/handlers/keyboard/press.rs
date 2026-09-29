@@ -1,13 +1,13 @@
 //! Key-press routing shared by the overlay's own keyboard focus and the GTK
 //! toolbar, which forwards the presses it receives while it holds focus.
 
-use log::debug;
+use log::trace;
 use smithay_client_toolkit::seat::keyboard::Keysym;
 use std::time::Instant;
 use wayland_client::{Connection, QueueHandle};
 
 use super::super::super::state::WaylandState;
-use super::{is_repeatable_key, keysym_to_key, should_try_toolbar_key};
+use super::{is_repeatable_key, key_for_log, keysym_to_key, should_try_toolbar_key};
 use crate::input::Key;
 
 /// Where a key press came from.
@@ -190,7 +190,7 @@ impl WaylandState {
                 _ => {}
             }
         }
-        debug!("Key pressed: {:?}", key);
+        trace!("Key pressed: {}", key_for_log(key));
         let modal_capture = self.input_state.modal_owns_text_input();
         let modal_blocks_repeat = self.input_state.modal_blocks_canvas_key_repeat();
         if should_try_toolbar_key(key, modal_capture)

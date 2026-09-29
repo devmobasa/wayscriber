@@ -2,7 +2,7 @@
 mod press;
 mod translate;
 
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Modifiers, RawModifiers, RepeatInfo,
 };
@@ -162,7 +162,7 @@ impl KeyboardHandler for WaylandState {
         event: KeyEvent,
     ) {
         let key = keysym_to_key(event.keysym);
-        debug!("Key released: {:?}", key);
+        trace!("Key released: {}", key_for_log(key));
         // Stop auto-repeat once the held key comes up.
         self.key_repeat.clear_if_released(key);
         if screen_modal_swallows_key_release(
@@ -277,6 +277,18 @@ fn is_repeatable_key(key: Key) -> bool {
             | Key::PageUp
             | Key::PageDown
     )
+}
+
+/// A key as a log line may show it: which key, but never which character.
+///
+/// The persistent daily log would otherwise hold everything typed into an
+/// annotation, one key per line, for anyone who turns on verbose logging to
+/// report a bug.
+fn key_for_log(key: Key) -> String {
+    match key {
+        Key::Char(_) => "Char(..)".to_string(),
+        other => format!("{other:?}"),
+    }
 }
 
 impl WaylandState {
@@ -609,6 +621,15 @@ mod tests {
 
         assert_eq!(timing.interval, MIN_KEY_REPEAT_INTERVAL);
         assert_eq!(timing.delay, Duration::ZERO);
+    }
+
+    #[test]
+    fn typed_characters_are_redacted_from_key_logs() {
+        for character in ['p', 'Q', '7', '@', 'é'] {
+            assert_eq!(key_for_log(Key::Char(character)), "Char(..)");
+        }
+        assert_eq!(key_for_log(Key::Escape), "Escape");
+        assert_eq!(key_for_log(Key::Backspace), "Backspace");
     }
 
     #[test]
