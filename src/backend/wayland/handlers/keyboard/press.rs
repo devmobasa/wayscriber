@@ -6,15 +6,16 @@ use smithay_client_toolkit::seat::keyboard::Keysym;
 use std::time::Instant;
 use wayland_client::{Connection, QueueHandle};
 
-use super::super::super::state::WaylandState;
+use super::super::super::state::{KeyboardId, WaylandState};
 use super::{is_repeatable_key, key_for_log, keysym_to_key, should_try_toolbar_key};
 use crate::input::Key;
 
 /// Where a key press came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland) enum KeyPressSource {
-    /// The overlay's own `wl_keyboard`, which also reports the release.
-    Seat,
+    /// One of the overlay's own `wl_keyboard`s, which also reports the
+    /// release. Auto-repeat follows that keyboard's repeat settings.
+    Seat(KeyboardId),
     /// The GTK toolbar, which holds keyboard focus on its own Wayland
     /// connection and forwards presses only. GTK repeats held keys itself.
     GtkToolbar,
@@ -24,7 +25,7 @@ impl KeyPressSource {
     /// Held-key behaviors (board pan on Space, auto-repeat) wait for a
     /// release that only the overlay's own keyboard delivers.
     pub(in crate::backend::wayland) fn delivers_release(self) -> bool {
-        matches!(self, Self::Seat)
+        matches!(self, Self::Seat(_))
     }
 }
 
@@ -208,12 +209,12 @@ impl WaylandState {
         // dispatch. Some dedicated entry modals manage or intentionally block
         // repeat themselves; other routed overlays (for example Help search)
         // still use this timer even though they disable the canvas IME.
-        if !modal_blocks_repeat
-            && source.delivers_release()
+        if let KeyPressSource::Seat(keyboard) = source
+            && !modal_blocks_repeat
             && is_repeatable_key(key)
             && self.focus.keyboard_focused()
         {
-            self.key_repeat.arm(key, Instant::now());
+            self.key_repeat.arm(key, keyboard, Instant::now());
         }
     }
 }
@@ -258,7 +259,7 @@ mod tests {
 
     #[test]
     fn only_the_overlay_seat_delivers_releases() {
-        assert!(KeyPressSource::Seat.delivers_release());
+        assert!(KeyPressSource::Seat(KeyboardId::for_test(1)).delivers_release());
         assert!(!KeyPressSource::GtkToolbar.delivers_release());
     }
 }

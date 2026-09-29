@@ -6,7 +6,7 @@ use wayland_client::{
     protocol::{wl_keyboard, wl_seat, wl_touch},
 };
 
-use super::super::state::WaylandState;
+use super::super::state::{KeyboardId, WaylandState};
 use crate::input::RegionInputSource;
 
 impl SeatHandler for WaylandState {
@@ -138,6 +138,7 @@ impl WaylandState {
             Ok(keyboard) => {
                 debug!("Keyboard initialized");
                 if let Some(replaced) = self.focus.attach_keyboard(seat.clone(), keyboard) {
+                    self.key_repeat.forget_keyboard(KeyboardId::of(&replaced));
                     release_keyboard(replaced);
                 }
             }
@@ -147,6 +148,7 @@ impl WaylandState {
 
     fn release_seat_keyboard(&mut self, seat: &wl_seat::WlSeat) {
         if let Some(keyboard) = self.focus.detach_keyboard(seat) {
+            self.key_repeat.forget_keyboard(KeyboardId::of(&keyboard));
             release_keyboard(keyboard);
         }
     }

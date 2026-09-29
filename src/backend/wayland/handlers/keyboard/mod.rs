@@ -14,7 +14,7 @@ use wayland_client::{
 
 use crate::{config::Action, input::Key, notification};
 
-use super::super::state::{KeyRepeatTiming, WaylandState};
+use super::super::state::{KeyRepeatTiming, KeyboardId, WaylandState};
 pub(in crate::backend::wayland) use press::{ForwardedKey, KeyPressSource};
 pub(in crate::backend::wayland) use translate::keysym_to_key;
 
@@ -141,7 +141,7 @@ impl KeyboardHandler for WaylandState {
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<Self>,
-        _keyboard: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
     ) {
@@ -150,7 +150,8 @@ impl KeyboardHandler for WaylandState {
             debug!("Ignoring key press before overlay ready");
             return;
         }
-        self.dispatch_key_press(keysym_to_key(event.keysym), KeyPressSource::Seat, conn, qh);
+        let source = KeyPressSource::Seat(KeyboardId::of(keyboard));
+        self.dispatch_key_press(keysym_to_key(event.keysym), source, conn, qh);
     }
 
     fn release_key(
@@ -208,12 +209,12 @@ impl KeyboardHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         info: RepeatInfo,
     ) {
         let timing = key_repeat_timing(info);
         debug!("Key repeat timing from the seat: {timing:?}");
-        self.key_repeat.set_timing(timing);
+        self.key_repeat.set_timing(KeyboardId::of(keyboard), timing);
     }
 
     fn repeat_key(

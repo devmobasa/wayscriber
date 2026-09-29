@@ -78,7 +78,7 @@ mod helpers;
 mod input_actions;
 mod input_hud;
 mod key_repeat;
-pub(in crate::backend::wayland) use key_repeat::KeyRepeatTiming;
+pub(in crate::backend::wayland) use key_repeat::{KeyRepeatTiming, KeyboardId};
 mod keybindings;
 pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
 mod ocr;
