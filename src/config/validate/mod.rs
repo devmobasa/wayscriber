@@ -15,7 +15,7 @@ mod presets;
 mod render_profiles;
 mod save;
 mod session;
-pub use save::SaveValidationError;
+pub use save::{CorrectedValue, SaveValidationError};
 mod spotlight;
 #[cfg(feature = "tablet-input")]
 mod tablet;

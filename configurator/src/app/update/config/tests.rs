@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use wayscriber::config::{Action, CURRENT_CONFIG_REVISION, Config, ConfigDocument};
 
+use super::save::save_validation_errors;
 use super::*;
 use crate::app::effects::Effect;
 use crate::app::state::{ConfiguratorApp, StatusMessage};
@@ -387,6 +388,44 @@ fn a_draft_with_out_of_range_numbers_keeps_the_document() {
         &app.status,
         "drawing.default_thickness: Expected 1-50"
     ));
+}
+
+/// A value only core validation would change used to refuse the save with
+/// one fixed sentence about "allowed ranges" and no field. The refusal now
+/// names the path core would correct.
+#[test]
+fn a_value_core_would_correct_is_refused_with_its_path() {
+    let (mut app, _dir, _path) = app_with_config_file("");
+    app.draft.boards.items[1].id = "Math".to_string();
+    app.refresh_dirty_flag();
+
+    let effects = app.handle_save_requested();
+
+    assert!(effects.is_empty());
+    assert!(app.document.loaded().is_some());
+    assert!(
+        status_contains(&app.status, "boards.items[1].id: "),
+        "{:?}",
+        app.status.text()
+    );
+}
+
+/// Every corrected path becomes its own form error, in the same
+/// `path: message` shape the draft's own validators use.
+#[test]
+fn every_corrected_value_becomes_its_own_form_error() {
+    let mut config = Config::default();
+    config.drawing.default_thickness = 999.0;
+    config.arrow.length = 1.0;
+    let error = config
+        .validate_for_save()
+        .expect_err("out-of-range values must be refused");
+
+    let errors = save_validation_errors(error);
+
+    let fields: Vec<_> = errors.iter().map(|error| error.field.as_str()).collect();
+    assert_eq!(fields, ["arrow.length", "drawing.default_thickness"]);
+    assert_eq!(errors[1].message, "999.0 would be saved as 50.0");
 }
 
 /// Hex text the parser rejects was never applied to the draft, so a save

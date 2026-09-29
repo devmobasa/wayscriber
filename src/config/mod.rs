@@ -99,7 +99,7 @@ pub(crate) use types::{
 };
 #[allow(unused_imports)]
 pub use validate::{
-    ConfigValidationReport, DefaultShortcutSkipped, InvalidKeybinding,
+    ConfigValidationReport, CorrectedValue, DefaultShortcutSkipped, InvalidKeybinding,
     KeybindingConflictResolution, KeybindingProblem, SaveValidationError,
 };
 
