@@ -2,6 +2,8 @@
 
 use super::types::{CaptureError, CaptureType};
 use std::collections::HashMap;
+use std::future::Future;
+use std::time::Duration;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, proxy};
 
@@ -10,6 +12,15 @@ const PORTAL_REQUEST_PATH_PREFIX: &str = "/org/freedesktop/portal/desktop/reques
 const PORTAL_OPTION_HANDLE_TOKEN_KEY: &str = "handle_token";
 const PORTAL_HANDLE_RANDOM_BYTES: usize = 16;
 const LOWERCASE_HEX: &[u8; 16] = b"0123456789abcdef";
+
+/// How long a non-interactive request may wait for the portal to answer. It
+/// matches the limit the freeze and zoom portal fallbacks use.
+const PORTAL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long an interactive request may wait while the user picks a window or
+/// region. It matches the limit for an interactive `slurp` selection.
+const PORTAL_INTERACTIVE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(120);
+/// How long closing an unanswered request may take before it is abandoned.
+const PORTAL_CLOSE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// D-Bus proxy for the xdg-desktop-portal Screenshot interface.
 #[proxy(
@@ -51,6 +62,9 @@ trait Request {
     /// * `results` - Dictionary containing the screenshot URI result key
     #[zbus(signal)]
     fn response(&self, response: u32, results: HashMap<String, OwnedValue>) -> zbus::Result<()>;
+
+    /// Close the request, dismissing any dialog it still shows.
+    fn close(&self) -> zbus::Result<()>;
 }
 
 struct PortalAttempt {
@@ -133,6 +147,11 @@ async fn capture_once(
     proxy: &ScreenshotProxy<'_>,
     mut options: HashMap<String, zbus::zvariant::Value<'static>>,
 ) -> Result<String, CaptureError> {
+    // The overlay stays hidden until this returns, so a portal that accepts
+    // the request and never answers must not keep it hidden for good.
+    let response_timeout = response_timeout(&options);
+    let deadline = tokio::time::Instant::now() + response_timeout;
+
     let handle_token = next_handle_token()?;
     let request_path = portal_request_path(connection, &handle_token)?;
     options.insert(
@@ -156,10 +175,14 @@ async fn capture_once(
         .receive_response()
         .await
         .map_err(CaptureError::DBusError)?;
-    let returned_path = proxy
-        .screenshot("", options)
-        .await
-        .map_err(map_portal_call_error)?;
+    let returned_path = within_deadline(
+        deadline,
+        response_timeout,
+        proxy.screenshot("", options),
+        close_request(connection, request_path.clone()),
+    )
+    .await?
+    .map_err(map_portal_call_error)?;
 
     log::info!("Screenshot request created: {:?}", returned_path);
 
@@ -169,8 +192,15 @@ async fn capture_once(
     // before calling Screenshot. Older implementations may return a different
     // path; switch to that path as required by the Request compatibility
     // contract instead of rejecting an otherwise valid request.
+    let close = close_request(connection, returned_path.clone());
     let response_signal = if returned_path == request_path {
-        crate::zbus_stream::next(&mut response_stream).await
+        within_deadline(
+            deadline,
+            response_timeout,
+            crate::zbus_stream::next(&mut response_stream),
+            close,
+        )
+        .await?
     } else {
         log::warn!(
             "Screenshot portal returned a different request path; updating Response subscription"
@@ -178,7 +208,7 @@ async fn capture_once(
         let returned_request_proxy = RequestProxy::builder(connection)
             .destination(PORTAL_DESTINATION)
             .map_err(CaptureError::DBusError)?
-            .path(returned_path)
+            .path(returned_path.clone())
             .map_err(CaptureError::DBusError)?
             .build()
             .await
@@ -187,7 +217,13 @@ async fn capture_once(
             .receive_response()
             .await
             .map_err(CaptureError::DBusError)?;
-        crate::zbus_stream::next(&mut returned_response_stream).await
+        within_deadline(
+            deadline,
+            response_timeout,
+            crate::zbus_stream::next(&mut returned_response_stream),
+            close,
+        )
+        .await?
     }
     .ok_or_else(|| CaptureError::InvalidResponse("No Response signal received".to_string()))?;
 
@@ -202,6 +238,59 @@ async fn capture_once(
     );
 
     parse_response(args.response, &args.results)
+}
+
+/// The time a request may wait for the portal's answer.
+fn response_timeout(options: &HashMap<String, zbus::zvariant::Value<'static>>) -> Duration {
+    let interactive =
+        options.get(PORTAL_OPTION_INTERACTIVE_KEY) == Some(&zbus::zvariant::Value::from(true));
+    if interactive {
+        PORTAL_INTERACTIVE_RESPONSE_TIMEOUT
+    } else {
+        PORTAL_RESPONSE_TIMEOUT
+    }
+}
+
+/// Run one step of a portal request until `deadline`.
+///
+/// On expiry the request is closed, so its dialog does not outlive the
+/// capture, and the capture fails instead of waiting forever.
+async fn within_deadline<T>(
+    deadline: tokio::time::Instant,
+    limit: Duration,
+    step: impl Future<Output = T>,
+    close: impl Future<Output = ()>,
+) -> Result<T, CaptureError> {
+    match tokio::time::timeout_at(deadline, step).await {
+        Ok(value) => Ok(value),
+        Err(_) => {
+            log::warn!(
+                "Screenshot portal did not answer within {}s; closing the request",
+                limit.as_secs()
+            );
+            close.await;
+            Err(CaptureError::PortalTimeout(limit))
+        }
+    }
+}
+
+/// Ask the portal to close an unanswered request, without waiting long for it.
+async fn close_request(connection: &Connection, path: OwnedObjectPath) {
+    let close = async {
+        RequestProxy::builder(connection)
+            .destination(PORTAL_DESTINATION)?
+            .path(path)?
+            .build()
+            .await?
+            .close()
+            .await
+    };
+
+    match tokio::time::timeout(PORTAL_CLOSE_TIMEOUT, close).await {
+        Ok(Ok(())) => log::debug!("Closed the unanswered screenshot portal request"),
+        Ok(Err(error)) => log::warn!("Could not close the screenshot portal request: {error}"),
+        Err(_) => log::warn!("Closing the screenshot portal request timed out"),
+    }
 }
 
 fn next_handle_token() -> Result<String, CaptureError> {
@@ -460,6 +549,66 @@ mod tests {
     fn portal_response_code_one_preserves_user_cancellation() {
         let error = parse_response(1, &HashMap::new()).expect_err("response 1 must cancel");
         assert!(matches!(error, CaptureError::Cancelled(_)));
+    }
+
+    #[test]
+    fn interactive_portal_requests_wait_longer_than_non_interactive_ones() {
+        assert_eq!(
+            response_timeout(&build_portal_options(CaptureType::FullScreen)),
+            PORTAL_RESPONSE_TIMEOUT
+        );
+        assert_eq!(
+            response_timeout(&build_portal_options(CaptureType::Selection {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+            })),
+            PORTAL_INTERACTIVE_RESPONSE_TIMEOUT
+        );
+        assert_eq!(
+            response_timeout(&build_active_window_interactive_options()),
+            PORTAL_INTERACTIVE_RESPONSE_TIMEOUT
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unanswered_portal_request_is_closed_and_fails() {
+        let limit = Duration::from_millis(20);
+        let closed = std::sync::atomic::AtomicBool::new(false);
+
+        let result = within_deadline(
+            tokio::time::Instant::now() + limit,
+            limit,
+            std::future::pending::<()>(),
+            async { closed.store(true, std::sync::atomic::Ordering::SeqCst) },
+        )
+        .await;
+
+        let error = result.expect_err("a silent portal must not be awaited forever");
+        assert!(matches!(error, CaptureError::PortalTimeout(_)), "{error}");
+        assert_eq!(
+            error.failure_kind(),
+            crate::capture::CaptureFailureKind::PortalError
+        );
+        assert!(closed.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn an_answered_portal_request_is_left_open() {
+        let limit = Duration::from_secs(5);
+        let closed = std::sync::atomic::AtomicBool::new(false);
+
+        let result = within_deadline(
+            tokio::time::Instant::now() + limit,
+            limit,
+            std::future::ready(7),
+            async { closed.store(true, std::sync::atomic::Ordering::SeqCst) },
+        )
+        .await;
+
+        assert_eq!(result.expect("answered in time"), 7);
+        assert!(!closed.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]

@@ -526,6 +526,10 @@ pub enum CaptureError {
     #[cfg_attr(not(feature = "portal"), allow(dead_code))]
     PortalResponse(u32),
 
+    /// The screenshot portal did not answer its request in time.
+    #[cfg_attr(not(feature = "portal"), allow(dead_code))]
+    PortalTimeout(std::time::Duration),
+
     /// The compositor fast path failed, and so did the portal fallback.
     FallbackFailed {
         primary: Box<CaptureError>,
@@ -539,7 +543,7 @@ impl CaptureError {
         match self {
             Self::MissingTool { tool, .. } => CaptureFailureKind::MissingTool(tool),
             Self::PermissionDenied => CaptureFailureKind::PermissionDenied,
-            Self::PortalResponse(_) => CaptureFailureKind::PortalError,
+            Self::PortalResponse(_) | Self::PortalTimeout(_) => CaptureFailureKind::PortalError,
             Self::SaveError(_) => CaptureFailureKind::Save,
             Self::FallbackFailed { primary, fallback } => match fallback.failure_kind() {
                 // The portal is missing or failed without a specific reason, so
@@ -572,6 +576,11 @@ impl fmt::Display for CaptureError {
             Self::Cancelled(reason) => write!(f, "Capture cancelled: {reason}"),
             Self::MissingTool { tool, detail } => write!(f, "failed to run {tool}: {detail}"),
             Self::PortalResponse(code) => write!(f, "Portal returned error code {code}"),
+            Self::PortalTimeout(limit) => write!(
+                f,
+                "Screenshot portal did not answer within {}s",
+                limit.as_secs()
+            ),
             Self::FallbackFailed { primary, fallback } => write!(
                 f,
                 "Hyprland capture failed: {primary}. Portal fallback failed: {fallback}"
