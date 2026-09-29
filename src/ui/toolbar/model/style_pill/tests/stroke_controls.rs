@@ -149,7 +149,7 @@ fn the_pen_feel_chip_opens_its_panel_and_summarizes_the_tools_levels() {
     );
     assert_eq!(
         chip.tooltip(&shape_pen).as_deref(),
-        Some("Smoothing: Medium \u{b7} Shape detection: Forgiving \u{2014} click to adjust")
+        Some("Smoothing: Medium \u{b7} Shape detection: Forgiving (click to adjust)")
     );
 
     // Pen and Marker have no detection to summarize.
@@ -157,7 +157,7 @@ fn the_pen_feel_chip_opens_its_panel_and_summarizes_the_tools_levels() {
     pen.pen_smoothing = 0;
     assert_eq!(
         chip.tooltip(&pen).as_deref(),
-        Some("Smoothing: Off \u{2014} click to adjust")
+        Some("Smoothing: Off (click to adjust)")
     );
 
     // Open, it reads as pressed and its click closes the panel.

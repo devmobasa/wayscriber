@@ -11,61 +11,47 @@ pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, Capture
         CaptureType::FullScreen => match hyprland::capture_full_screen_hyprland().await {
             Ok(data) => Ok(data),
             Err(CaptureError::Cancelled(reason)) => Err(CaptureError::Cancelled(reason)),
-            Err(e) => {
-                let primary = e.to_string();
-                log::warn!(
-                    "Full screen capture via Hyprland failed: {}. Falling back to portal.",
-                    primary
-                );
-                match portal_fallback(CaptureType::FullScreen).await {
-                    Ok(data) => Ok(data),
-                    Err(portal_err) => Err(CaptureError::ImageError(format!(
-                        "Hyprland capture failed: {primary}. Portal fallback failed: {portal_err}"
-                    ))),
-                }
-            }
+            Err(e) => fall_back_to_portal("Full screen", e, CaptureType::FullScreen).await,
         },
         CaptureType::ActiveWindow => match hyprland::capture_active_window_hyprland().await {
             Ok(data) => Ok(data),
             Err(CaptureError::Cancelled(reason)) => Err(CaptureError::Cancelled(reason)),
-            Err(e) => {
-                let primary = e.to_string();
-                log::warn!(
-                    "Active window capture via Hyprland failed: {}. Falling back to portal.",
-                    primary
-                );
-                match portal_fallback(CaptureType::ActiveWindow).await {
-                    Ok(data) => Ok(data),
-                    Err(portal_err) => Err(CaptureError::ImageError(format!(
-                        "Hyprland capture failed: {primary}. Portal fallback failed: {portal_err}"
-                    ))),
-                }
-            }
+            Err(e) => fall_back_to_portal("Active window", e, CaptureType::ActiveWindow).await,
         },
         CaptureType::Selection { .. } => match hyprland::capture_selection_hyprland().await {
             Ok(data) => Ok(data),
             Err(CaptureError::Cancelled(reason)) => Err(CaptureError::Cancelled(reason)),
             Err(e) => {
-                let primary = e.to_string();
-                log::warn!(
-                    "Selection capture via Hyprland failed: {}. Falling back to portal.",
-                    primary
-                );
-                match portal_fallback(CaptureType::Selection {
+                let selection = CaptureType::Selection {
                     x: 0,
                     y: 0,
                     width: 0,
                     height: 0,
-                })
-                .await
-                {
-                    Ok(data) => Ok(data),
-                    Err(portal_err) => Err(CaptureError::ImageError(format!(
-                        "Hyprland capture failed: {primary}. Portal fallback failed: {portal_err}"
-                    ))),
-                }
+                };
+                fall_back_to_portal("Selection", e, selection).await
             }
         },
+    }
+}
+
+/// Retry through the portal after the compositor fast path failed.
+///
+/// Both errors are kept, so the user is told the more useful reason. A user
+/// cancelling the portal dialog stays a cancellation, not a failure.
+async fn fall_back_to_portal(
+    label: &str,
+    primary: CaptureError,
+    capture_type: CaptureType,
+) -> Result<Vec<u8>, CaptureError> {
+    log::warn!("{label} capture via Hyprland failed: {primary}. Falling back to portal.");
+
+    match portal_fallback(capture_type).await {
+        Ok(data) => Ok(data),
+        Err(CaptureError::Cancelled(reason)) => Err(CaptureError::Cancelled(reason)),
+        Err(fallback) => Err(CaptureError::FallbackFailed {
+            primary: Box::new(primary),
+            fallback: Box::new(fallback),
+        }),
     }
 }
 

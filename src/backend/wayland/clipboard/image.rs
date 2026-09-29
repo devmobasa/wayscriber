@@ -42,7 +42,7 @@ pub(super) fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> Clipboa
             limit: limits.max_pixels(),
         };
     }
-    if let Err(err) = decode_rgba(format, &bytes) {
+    if let Err(err) = decode_rgba(format, &bytes, limits.into()) {
         return ClipboardPasteResult::DecodeFailed(err);
     }
     log::info!(

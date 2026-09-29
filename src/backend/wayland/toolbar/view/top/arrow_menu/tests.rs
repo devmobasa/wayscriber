@@ -52,7 +52,7 @@ fn the_chip_draws_and_names_the_style_and_opens_the_menu() {
     assert_eq!(interaction.event, ToolbarEvent::ToggleArrowStyleMenu(true));
     assert_eq!(
         interaction.tooltip.as_deref(),
-        Some("Arrow style: Pointy \u{2014} click to choose")
+        Some("Arrow style: Pointy (click to choose)")
     );
 
     let glyph = tree

@@ -178,6 +178,34 @@ fn socket_pair(label: &str) -> Result<(OwnedFd, OwnedFd)> {
     })
 }
 
+/// Whether the broker process exits within `grace`, reaping it if it does.
+pub(super) fn broker_exits_within(child_pid: libc::pid_t, grace: std::time::Duration) -> bool {
+    if child_pid <= 0 {
+        return true;
+    }
+
+    let deadline = std::time::Instant::now() + grace;
+    let mut status = 0;
+    loop {
+        // SAFETY: child_pid names the raw-clone broker child owned by its guard.
+        let result = unsafe { libc::waitpid(child_pid, &mut status, libc::WNOHANG) };
+        if result == child_pid {
+            return true;
+        }
+        if result < 0 {
+            if io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            // Already reaped: nothing is left to wait for.
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 pub(super) fn wait_for_broker_process(child_pid: libc::pid_t) {
     if child_pid <= 0 {
         return;

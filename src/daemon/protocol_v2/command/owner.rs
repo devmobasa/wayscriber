@@ -14,9 +14,9 @@ use super::super::wire::{
 use super::super::{BootClock, BootDeadline};
 use super::layout::{
     QuarantineKind, bump_revision, command_root, control_path, controls_dir, flock, gc_dir,
-    gc_quarantine, is_atomic_temp, lock_until, open_lock, prepare_layout, quarantine_entry,
-    queue_dir, queue_path, read_control, read_dir_bounded, read_record, try_admission_lock,
-    try_lock_until, unlock, write_control,
+    gc_quarantine, lock_until, open_lock, prepare_layout, quarantine_entry, queue_dir, queue_path,
+    read_control, read_dir_bounded, read_record, try_admission_lock, try_lock_until, unlock,
+    write_control,
 };
 use super::recovery::{parse_queue_name, recover_previous_generation, validate_reference};
 use super::staging::recover_staging;
@@ -107,7 +107,7 @@ impl CommandOwner {
                     continue;
                 }
             };
-            if is_atomic_temp(&name, "") || name.starts_with('.') {
+            if name.starts_with('.') {
                 continue;
             }
             let (order, identity) = match parse_queue_name(&name) {

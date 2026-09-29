@@ -154,7 +154,7 @@ impl UpdateState {
                 }
             }
             Self::Available { update, .. } => match update.released.as_deref() {
-                Some(released) => format!("Released {released} — see how to update"),
+                Some(released) => format!("Released {released} · see how to update"),
                 None => "See how to update".to_string(),
             },
             Self::Failed(reason) => reason.clone(),

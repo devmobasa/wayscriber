@@ -91,6 +91,15 @@ impl RenderColorProfile {
             | u32::from(premul_blue)
     }
 
+    fn remap_pixel_bytes(&self, bytes: &mut [u8; 4]) {
+        let pixel = u32::from_ne_bytes(*bytes);
+        let mapped = self.remap_pixel(pixel);
+        if mapped != pixel {
+            *bytes = mapped.to_ne_bytes();
+        }
+    }
+
+    /// Remaps every pixel covered by `regions` exactly once, even where they overlap.
     pub fn remap_argb8888_regions(
         &self,
         data: &mut [u8],
@@ -103,38 +112,14 @@ impl RenderColorProfile {
             return;
         }
 
-        let stride = stride as usize;
-        for region in regions {
-            let x0 = region.x.max(0).min(width);
-            let y0 = region.y.max(0).min(height);
-            let x1 = region.x.saturating_add(region.width).max(0).min(width);
-            let y1 = region.y.saturating_add(region.height).max(0).min(height);
-            if x1 <= x0 || y1 <= y0 {
-                continue;
+        for_each_disjoint_span(width, height, stride, data.len(), regions, |span| {
+            for pixel in data[span].as_chunks_mut::<4>().0 {
+                self.remap_pixel_bytes(pixel);
             }
-
-            for y in y0..y1 {
-                let row_start = y as usize * stride;
-                for x in x0..x1 {
-                    let offset = row_start + x as usize * 4;
-                    if offset + 4 > data.len() {
-                        return;
-                    }
-                    let pixel = u32::from_ne_bytes([
-                        data[offset],
-                        data[offset + 1],
-                        data[offset + 2],
-                        data[offset + 3],
-                    ]);
-                    let mapped = self.remap_pixel(pixel);
-                    if mapped != pixel {
-                        data[offset..offset + 4].copy_from_slice(&mapped.to_ne_bytes());
-                    }
-                }
-            }
-        }
+        });
     }
 
+    /// Like [`Self::remap_argb8888_regions`], but skips pixels that still equal `baseline`.
     pub fn remap_argb8888_regions_changed_from(
         &self,
         data: &mut [u8],
@@ -153,37 +138,103 @@ impl RenderColorProfile {
             return;
         }
 
-        let stride = stride as usize;
-        for region in regions {
-            let x0 = region.x.max(0).min(width);
-            let y0 = region.y.max(0).min(height);
-            let x1 = region.x.saturating_add(region.width).max(0).min(width);
-            let y1 = region.y.saturating_add(region.height).max(0).min(height);
-            if x1 <= x0 || y1 <= y0 {
-                continue;
-            }
-
-            for y in y0..y1 {
-                let row_start = y as usize * stride;
-                for x in x0..x1 {
-                    let offset = row_start + x as usize * 4;
-                    if offset + 4 > data.len() {
-                        return;
-                    }
-                    if data[offset..offset + 4] == baseline[offset..offset + 4] {
-                        continue;
-                    }
-                    let pixel = u32::from_ne_bytes([
-                        data[offset],
-                        data[offset + 1],
-                        data[offset + 2],
-                        data[offset + 3],
-                    ]);
-                    let mapped = self.remap_pixel(pixel);
-                    if mapped != pixel {
-                        data[offset..offset + 4].copy_from_slice(&mapped.to_ne_bytes());
-                    }
+        for_each_disjoint_span(width, height, stride, data.len(), regions, |span| {
+            let pixels = data[span.clone()].as_chunks_mut::<4>().0;
+            for (pixel, before) in pixels.iter_mut().zip(baseline[span].as_chunks::<4>().0) {
+                if pixel != before {
+                    self.remap_pixel_bytes(pixel);
                 }
+            }
+        });
+    }
+}
+
+/// A clamped pixel rectangle covering columns `x0..x1` of rows `y0..y1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PixelBand {
+    x0: i32,
+    x1: i32,
+    y0: i32,
+    y1: i32,
+}
+
+/// Clamps `regions` to a `width` x `height` surface and splits their union into
+/// disjoint bands, so a pixel covered by several overlapping regions appears once.
+fn disjoint_bands(width: i32, height: i32, regions: &[Rect]) -> Vec<PixelBand> {
+    let clamped: Vec<PixelBand> = regions
+        .iter()
+        .filter_map(|region| {
+            let band = PixelBand {
+                x0: region.x.max(0).min(width),
+                x1: region.x.saturating_add(region.width).max(0).min(width),
+                y0: region.y.max(0).min(height),
+                y1: region.y.saturating_add(region.height).max(0).min(height),
+            };
+            (band.x0 < band.x1 && band.y0 < band.y1).then_some(band)
+        })
+        .collect();
+
+    // Between two consecutive horizontal edges every region either covers all
+    // rows or none, so each row strip needs one merged set of column spans.
+    let mut edges: Vec<i32> = clamped.iter().flat_map(|band| [band.y0, band.y1]).collect();
+    edges.sort_unstable();
+    edges.dedup();
+
+    let mut bands = Vec::new();
+    let mut spans = Vec::with_capacity(clamped.len());
+    for strip in edges.windows(2) {
+        let (y0, y1) = (strip[0], strip[1]);
+        spans.clear();
+        spans.extend(
+            clamped
+                .iter()
+                .filter(|band| band.y0 <= y0 && y0 < band.y1)
+                .map(|band| (band.x0, band.x1)),
+        );
+        spans.sort_unstable();
+
+        let mut open: Option<(i32, i32)> = None;
+        for &(x0, x1) in &spans {
+            open = match open {
+                Some((start, end)) if x0 <= end => Some((start, end.max(x1))),
+                Some((start, end)) => {
+                    bands.push(PixelBand {
+                        x0: start,
+                        x1: end,
+                        y0,
+                        y1,
+                    });
+                    Some((x0, x1))
+                }
+                None => Some((x0, x1)),
+            };
+        }
+        if let Some((x0, x1)) = open {
+            bands.push(PixelBand { x0, x1, y0, y1 });
+        }
+    }
+    bands
+}
+
+/// Calls `visit` with the byte range of each damaged row span of an ARGB8888
+/// buffer, covering every damaged pixel exactly once. Spans past `data_len` are
+/// truncated to whole pixels that fit.
+fn for_each_disjoint_span(
+    width: i32,
+    height: i32,
+    stride: i32,
+    data_len: usize,
+    regions: &[Rect],
+    mut visit: impl FnMut(std::ops::Range<usize>),
+) {
+    let stride = stride as usize;
+    for band in disjoint_bands(width, height, regions) {
+        for y in band.y0..band.y1 {
+            let row_start = y as usize * stride;
+            let start = row_start + band.x0 as usize * 4;
+            let end = (row_start + band.x1 as usize * 4).min(data_len);
+            if start < end {
+                visit(start..end);
             }
         }
     }

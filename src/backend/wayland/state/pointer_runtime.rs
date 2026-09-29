@@ -2,13 +2,14 @@ use log::warn;
 use smithay_client_toolkit::seat::pointer::{CursorIcon, PointerData, ThemedPointer};
 use wayland_client::{
     Connection, Proxy,
-    protocol::{wl_pointer, wl_surface, wl_touch},
+    protocol::{wl_pointer, wl_seat, wl_surface, wl_touch},
 };
 use wayland_protocols::wp::{
     pointer_constraints::zv1::client::zwp_locked_pointer_v1::ZwpLockedPointerV1,
     relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
 };
 
+use super::seat_devices::SeatDevices;
 use crate::{
     input::state::{RegionInputSource, ToastPress},
     ui::{OnboardingCardPress, ZoomChipPress},
@@ -213,8 +214,8 @@ impl PendingChromePress {
 /// Pointer, cursor, pointer-lock, and single-contact touch protocol runtime.
 pub(in crate::backend::wayland) struct PointerRuntime {
     themed_pointer: Option<ThemedPointer<PointerData>>,
-    #[allow(dead_code)] // Retains the protocol object while the seat advertises touch.
-    touch: Option<wl_touch::WlTouch>,
+    /// Each seat's `wl_touch`, kept while the seat advertises touch.
+    touches: SeatDevices<wl_seat::WlSeat, wl_touch::WlTouch>,
     active_touch: TouchState,
     active_touch_surface: Option<wl_surface::WlSurface>,
     locked_pointer: Option<ZwpLockedPointerV1>,
@@ -231,7 +232,7 @@ impl PointerRuntime {
     pub(super) fn new() -> Self {
         Self {
             themed_pointer: None,
-            touch: None,
+            touches: SeatDevices::default(),
             active_touch: TouchState::default(),
             active_touch_surface: None,
             locked_pointer: None,
@@ -258,12 +259,21 @@ impl PointerRuntime {
         self.reset_cursor_cache();
     }
 
-    pub(in crate::backend::wayland) fn attach_touch(&mut self, touch: wl_touch::WlTouch) {
-        self.touch = Some(touch);
+    /// Keep `seat`'s touch device, returning one it replaces for release.
+    pub(in crate::backend::wayland) fn attach_touch(
+        &mut self,
+        seat: wl_seat::WlSeat,
+        touch: wl_touch::WlTouch,
+    ) -> Option<wl_touch::WlTouch> {
+        self.touches.attach(seat, touch)
     }
 
-    pub(in crate::backend::wayland) fn detach_touch(&mut self) {
-        self.touch = None;
+    /// Stop keeping `seat`'s touch device and hand it back for release.
+    pub(in crate::backend::wayland) fn detach_touch(
+        &mut self,
+        seat: &wl_seat::WlSeat,
+    ) -> Option<wl_touch::WlTouch> {
+        self.touches.detach(seat)
     }
 
     pub(in crate::backend::wayland) fn current_pointer(&self) -> Option<wl_pointer::WlPointer> {

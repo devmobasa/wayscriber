@@ -3,28 +3,18 @@ use super::*;
 pub(super) fn load_snapshot_opened_with_expanded_limit(
     session_path: &Path,
     options: &SessionOptions,
-    mut file: fs::File,
+    file: fs::File,
     max_expanded_size: u64,
     max_encoded_size: Option<u64>,
     newer_version_action: NewerVersionAction,
 ) -> Result<Option<LoadedSnapshot>> {
-    let mut file_bytes = Vec::new();
-    if let Some(max_encoded_size) = max_encoded_size {
-        file.by_ref()
-            .take(max_encoded_size.saturating_add(1))
-            .read_to_end(&mut file_bytes)
-            .context("failed to read session file")?;
-        if file_bytes.len() as u64 > max_encoded_size {
-            return Err(anyhow!(
-                "session file {} is larger than configured limit of {} bytes",
-                session_path.display(),
-                max_encoded_size
-            ));
-        }
-    } else {
-        file.read_to_end(&mut file_bytes)
-            .context("failed to read session file")?;
-    }
+    let file_bytes = read_session_bytes(
+        session_path,
+        options,
+        file,
+        max_expanded_size,
+        max_encoded_size,
+    )?;
 
     // Keep the original encoded payload only when decompression would consume
     // it. A too-new session must be preserved byte-for-byte, including its gzip
@@ -32,7 +22,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     let encoded_session = is_gzip(&file_bytes).then(|| file_bytes.clone());
     let (decompressed, compressed) = maybe_decompress_with_limit(file_bytes, max_expanded_size)?;
 
-    let original_value: Value =
+    let mut value: Value =
         serde_json::from_slice(&decompressed).context("failed to parse session json")?;
 
     // The version gate runs on the raw document, before schema
@@ -40,7 +30,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     // incompatibly, and a deserialization failure would send the file down
     // the corrupt-backup path — whose backup slot rotation eventually
     // replaces, exactly the loss preservation exists to prevent.
-    if let Some(version) = original_value.get("version").and_then(Value::as_u64)
+    if let Some(version) = value.get("version").and_then(Value::as_u64)
         && version > u64::from(CURRENT_VERSION)
     {
         warn!(
@@ -65,30 +55,34 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
         }
         return Ok(None);
     }
+    drop(encoded_session);
 
-    let max_depth = max_history_depth(&original_value);
-    let mut working_value = original_value.clone();
+    let max_depth = max_history_depth(&value);
     if max_depth > MAX_COMPOUND_DEPTH {
         warn!(
             "Session history depth {} exceeds limit {}; dropping history",
             max_depth, MAX_COMPOUND_DEPTH
         );
-        strip_history_fields(&mut working_value);
+        strip_history_fields(&mut value);
     }
 
-    let session_file: SessionFile = match serde_json::from_value(working_value.clone()) {
+    // Deserialization consumes the document, so a retry parses the retained
+    // bytes again instead of holding a second copy of every string up front.
+    let session_file: SessionFile = match serde_json::from_value(value) {
         Ok(file) => file,
         Err(err) => {
             warn!(
                 "Failed to deserialize session ({}); retrying without history",
                 err
             );
-            let mut stripped = original_value.clone();
+            let mut stripped: Value =
+                serde_json::from_slice(&decompressed).context("failed to parse session json")?;
             strip_history_fields(&mut stripped);
             serde_json::from_value(stripped)
                 .context("failed to parse session after stripping history")?
         }
     };
+    drop(decompressed);
 
     let SessionFile {
         active_board_id,
@@ -193,6 +187,45 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
         compressed,
         version: session_file.version,
     }))
+}
+
+/// Reads the whole session file, but never more than a limit.
+///
+/// A caller-supplied `max_encoded_size` is the configured file-size check.
+/// Otherwise the limit is the larger of the expanded-size cap and the
+/// configured file size: uncompressed saves may use the whole configured size,
+/// and a plain file expands to exactly its encoded size.
+fn read_session_bytes(
+    session_path: &Path,
+    options: &SessionOptions,
+    file: fs::File,
+    max_expanded_size: u64,
+    max_encoded_size: Option<u64>,
+) -> Result<Vec<u8>> {
+    let read_limit =
+        max_encoded_size.unwrap_or_else(|| max_expanded_size.max(options.max_file_size_bytes));
+
+    let mut file_bytes = Vec::new();
+    file.take(read_limit.saturating_add(1))
+        .read_to_end(&mut file_bytes)
+        .context("failed to read session file")?;
+
+    let read_size = file_bytes.len() as u64;
+    if read_size <= read_limit {
+        return Ok(file_bytes);
+    }
+    if max_encoded_size.is_some() {
+        return Err(anyhow!(
+            "session file {} is larger than configured limit of {} bytes",
+            session_path.display(),
+            read_limit
+        ));
+    }
+    Err(ExpandedSessionTooLarge {
+        expanded_size: read_size,
+        max_expanded_size: read_limit,
+    }
+    .into())
 }
 
 fn board_pages_from_file(

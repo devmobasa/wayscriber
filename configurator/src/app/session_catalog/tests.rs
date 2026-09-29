@@ -138,6 +138,45 @@ fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
 }
 
 #[test]
+fn inactive_session_reservation_holds_the_overlay_lock_but_not_the_daemon_lock() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+
+    let reservation = reserve_inactive_session_operation(SessionCatalogOperation::Clear).unwrap();
+
+    let daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon)
+        .expect("a daemon starting during the operation must get its lock");
+    assert!(matches!(
+        runtime_lock_active(RuntimeLockKind::Overlay, SessionCatalogOperation::Clear),
+        Ok(true)
+    ));
+    drop(daemon_lock);
+    drop(reservation);
+    assert!(matches!(
+        runtime_lock_active(RuntimeLockKind::Overlay, SessionCatalogOperation::Clear),
+        Ok(false)
+    ));
+}
+
+#[test]
+fn inactive_session_reservation_refuses_a_running_daemon() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
+
+    let error = match reserve_inactive_session_operation(SessionCatalogOperation::Move) {
+        Ok(_) => panic!("a held daemon lock must refuse the operation"),
+        Err(error) => error,
+    };
+
+    assert!(error.contains("manually started daemon"), "{error}");
+    assert!(matches!(
+        runtime_lock_active(RuntimeLockKind::Overlay, SessionCatalogOperation::Move),
+        Ok(false)
+    ));
+}
+
+#[test]
 fn cached_status_blocker_does_not_probe_runtime_locks() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());

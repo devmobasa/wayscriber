@@ -400,6 +400,28 @@ fn active_mode_requires_wayland_env() {
 
 #[cfg(unix)]
 #[test]
+fn daemon_toggle_without_a_daemon_reports_that_it_is_not_running() {
+    let temp = TempDir::new().unwrap();
+    let runtime_dir = temp.path().join("runtime");
+    fs::create_dir_all(&runtime_dir).unwrap();
+
+    let mut command = wayscriber_cmd();
+    command
+        .env(XDG_RUNTIME_DIR_ENV, &runtime_dir)
+        .env(XDG_CONFIG_HOME_ENV, temp.path().join("config"))
+        .env(XDG_DATA_HOME_ENV, temp.path().join("data"))
+        .env(HOME_ENV, temp.path().join("home"))
+        .env(RUST_LOG_ENV, "off")
+        .arg("--daemon-toggle");
+
+    run_command_with_timeout(&mut command, &temp, Duration::from_secs(5))
+        .failure()
+        .code(1)
+        .stderr_contains("wayscriber daemon is not running");
+}
+
+#[cfg(unix)]
+#[test]
 fn daemon_lock_conflict_exits_seventy_five_without_starting_runtime_services() {
     let temp = TempDir::new().unwrap();
     let runtime_dir = temp.path().join("runtime");

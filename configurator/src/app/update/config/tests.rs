@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use wayscriber::config::{Action, CURRENT_CONFIG_REVISION, Config, ConfigDocument};
 
+use super::save::save_validation_errors;
 use super::*;
 use crate::app::effects::Effect;
 use crate::app::state::{ConfiguratorApp, StatusMessage};
@@ -387,6 +388,70 @@ fn a_draft_with_out_of_range_numbers_keeps_the_document() {
         &app.status,
         "drawing.default_thickness: Expected 1-50"
     ));
+}
+
+/// A value only core validation would change used to refuse the save with
+/// one fixed sentence about "allowed ranges" and no field. The refusal now
+/// names the path core would correct.
+#[test]
+fn a_value_core_would_correct_is_refused_with_its_path() {
+    let (mut app, _dir, _path) = app_with_config_file("");
+    app.draft.boards.items[1]
+        .background_color
+        .set_component(0, "1.5".to_string());
+    app.refresh_dirty_flag();
+
+    let effects = app.handle_save_requested();
+
+    assert!(effects.is_empty());
+    assert!(app.document.loaded().is_some());
+    assert!(
+        status_contains(
+            &app.status,
+            "boards.items[1].background[0]: 1.5 would be saved as 1.0"
+        ),
+        "{:?}",
+        app.status.text()
+    );
+}
+
+/// Board-list shapes core would reshape are refused by the draft itself,
+/// before core is asked, and each refusal names the field to change.
+#[test]
+fn removing_the_overlay_board_is_refused_with_a_located_reason() {
+    let (mut app, _dir, _path) = app_with_config_file("");
+    let _ = app.handle_boards_remove_item(0);
+
+    let effects = app.handle_save_requested();
+
+    assert!(effects.is_empty());
+    assert!(app.document.loaded().is_some());
+    assert!(
+        status_contains(
+            &app.status,
+            "boards.items: Keep one board with a Transparent background"
+        ),
+        "{:?}",
+        app.status.text()
+    );
+}
+
+/// Every corrected path becomes its own form error, in the same
+/// `path: message` shape the draft's own validators use.
+#[test]
+fn every_corrected_value_becomes_its_own_form_error() {
+    let mut config = Config::default();
+    config.drawing.default_thickness = 999.0;
+    config.arrow.length = 1.0;
+    let error = config
+        .validate_for_save()
+        .expect_err("out-of-range values must be refused");
+
+    let errors = save_validation_errors(error);
+
+    let fields: Vec<_> = errors.iter().map(|error| error.field.as_str()).collect();
+    assert_eq!(fields, ["arrow.length", "drawing.default_thickness"]);
+    assert_eq!(errors[1].message, "999.0 would be saved as 50.0");
 }
 
 /// Hex text the parser rejects was never applied to the draft, so a save
@@ -907,6 +972,54 @@ fn config_setting(contents: &str, key: &str) -> Option<String> {
 
 fn read_config(path: &Path) -> String {
     std::fs::read_to_string(path).expect("read the saved config")
+}
+
+/// A file that is valid TOML but holds one value serde cannot map used to
+/// load as a page of defaults, and saving it stripped every authored setting.
+/// The draft now holds the file's values, the status names the one entry on
+/// defaults instead of calling the file unparseable, and Save keeps the rest.
+#[test]
+fn a_file_with_one_unreadable_value_loads_its_other_settings_and_saves_them_back() {
+    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "# mine\n[drawing]\ndefault_thickness = 7.0\n\n[keybindings]\nundo = \"Ctrl+Z\"\n",
+    )
+    .expect("write test config");
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let loaded = ConfigDocument::load_for_editing_from_path(&path)
+        .map(|(document, warning)| (Box::new(document), warning))
+        .map_err(|error| error.to_string());
+
+    let _ = app.handle_config_loaded(loaded);
+
+    assert!(matches!(app.status, StatusMessage::Warning(_)));
+    assert!(
+        status_contains(&app.status, "Some settings could not be read")
+            && status_contains(&app.status, "[keybindings.undo]"),
+        "{:?}",
+        app.status.text()
+    );
+    assert!(!status_contains(&app.status, "could not be parsed"));
+    assert_eq!(app.draft.drawing_default_thickness, "7");
+
+    app.draft.drawing_default_thickness = "8".to_string();
+    app.refresh_dirty_flag();
+    save_draft(&mut app);
+
+    let saved = read_config(&path);
+    assert!(saved.contains("# mine"), "{saved}");
+    assert_eq!(
+        config_setting(&saved, "default_thickness").as_deref(),
+        Some("default_thickness = 8.0")
+    );
+    assert!(!saved.contains("undo"), "{saved}");
+    assert!(
+        app.document
+            .loaded()
+            .is_some_and(|document| document.section_errors().is_empty())
+    );
 }
 
 /// The whole point of the review flow: an old file that the user never

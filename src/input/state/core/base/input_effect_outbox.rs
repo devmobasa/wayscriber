@@ -185,10 +185,14 @@ impl InputEffectOutbox {
                     requested,
                     dismissed_by_toolbar,
                 });
+                // A pointer release has no immediate drain, so the config edits
+                // it makes, such as a preset saved from the properties panel,
+                // are written from here.
                 self.drain_kinds(
                     &[
                         InputEffectKind::CopyHex,
                         InputEffectKind::PasteHex,
+                        InputEffectKind::Preset,
                         InputEffectKind::QuickColor,
                         InputEffectKind::KeybindingEdit,
                     ],
@@ -355,6 +359,12 @@ fn same_slot(left: &InputEffect, right: &InputEffect) -> bool {
     match (left, right) {
         (InputEffect::ToolbarPersistence(left), InputEffect::ToolbarPersistence(right)) => {
             std::mem::discriminant(left) == std::mem::discriminant(right)
+        }
+        // Each preset slot and each quick color is a config write of its own,
+        // so a later edit replaces only the pending write for the same one.
+        (InputEffect::Preset(left), InputEffect::Preset(right)) => left.slot() == right.slot(),
+        (InputEffect::QuickColor(left), InputEffect::QuickColor(right)) => {
+            left.index == right.index
         }
         _ => left.kind() == right.kind(),
     }

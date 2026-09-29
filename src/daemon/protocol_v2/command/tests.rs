@@ -67,6 +67,49 @@ fn publish_claim_commit_complete_ack_and_gc() {
 }
 
 #[test]
+fn a_commit_after_the_authorization_deadline_rejects_instead_of_committing() {
+    with_runtime(|| {
+        let token = token();
+        let owner = CommandOwner::open(&token).unwrap();
+        let client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: false,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+        let mut claimed = owner.claim_next().unwrap().unwrap();
+        // The earliest valid deadline is the request time itself, which has
+        // already passed by the time the daemon commits.
+        let clock = &mut claimed.control.submission_clock;
+        clock.authorization_deadline_boottime_ns = clock.requested_boottime_ns;
+
+        let committed = claimed.commit(EffectKind::StartAndShow).unwrap();
+
+        assert_eq!(committed, None);
+        assert_eq!(claimed.authorized_effect(), None);
+        assert!(matches!(
+            &claimed.control().decision,
+            CommandDecision::Rejected { reason } if reason == super::claimed::COMMIT_DEADLINE_EXPIRED
+        ));
+        claimed.defer().unwrap();
+        assert_eq!(
+            client.wait().unwrap(),
+            TerminalCommandResult::FailedNoEffect(
+                super::claimed::COMMIT_DEADLINE_EXPIRED.to_string()
+            )
+        );
+    });
+}
+
+#[test]
 fn abandoned_unqueued_publication_is_rejected_and_collected() {
     with_runtime(|| {
         let token = token();
@@ -595,6 +638,38 @@ fn queue_filename_order_and_no_op_commit_are_strict() {
         claimed.commit(EffectKind::NoOp).unwrap();
         claimed.defer().unwrap();
         assert_eq!(client.wait().unwrap(), TerminalCommandResult::Succeeded);
+    });
+}
+
+#[test]
+fn a_leftover_admission_temp_does_not_wedge_the_command_root() {
+    with_runtime(|| {
+        let root = command_root();
+        prepare_layout(&root).unwrap();
+        let leftover = root.join(".admission.json.1.2.3.tmp");
+        fs::write(&leftover, b"partial").unwrap();
+
+        validate_root_shape(&root).unwrap();
+        let token = token();
+        let _owner = CommandOwner::open(&token).unwrap();
+        let _client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: false,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+
+        assert!(!leftover.exists());
+        fs::write(root.join(".future.1.2.3.tmp"), b"sentinel").unwrap();
+        assert!(validate_root_shape(&root).is_err());
     });
 }
 

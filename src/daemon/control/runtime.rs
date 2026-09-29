@@ -111,12 +111,22 @@ pub(super) fn clear_stale_daemon_state_if_matches(expected: &DaemonRuntimeInfo) 
     }
 }
 
-pub(super) fn read_daemon_runtime_info() -> Result<DaemonRuntimeInfo> {
+/// Fails with "not running" when no daemon holds the single-instance lock,
+/// clearing the runtime files a daemon that died left behind.
+///
+/// Checked before the runtime record is read: without a daemon the record is
+/// missing or stale, and reading it would surface a raw "No such file" or a
+/// dead process instead of saying the daemon is not running.
+pub(super) fn ensure_daemon_running() -> Result<()> {
     if let Some(_lock_file) = try_acquire_daemon_lock()? {
         clear_stale_daemon_state();
         return Err(anyhow!("wayscriber daemon is not running"));
     }
+    Ok(())
+}
 
+pub(super) fn read_daemon_runtime_info() -> Result<DaemonRuntimeInfo> {
+    ensure_daemon_running()?;
     read_daemon_runtime_file()
 }
 

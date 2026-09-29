@@ -724,7 +724,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     hide_all_chrome(&mut available);
     assert_eq!(
         available.active_toast().map(|toast| toast.message.as_str()),
-        Some("All UI hidden — right-click to restore")
+        Some("All UI hidden: right-click to restore")
     );
 
     let mut disabled = create_test_input_state();
@@ -733,7 +733,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     hide_all_chrome(&mut disabled);
     assert_eq!(
         disabled.active_toast().map(|toast| toast.message.as_str()),
-        Some("All UI hidden — select the recovery action")
+        Some("All UI hidden: select the recovery action")
     );
     assert_eq!(
         disabled
@@ -751,7 +751,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     hide_all_chrome(&mut zoomed);
     assert_eq!(
         zoomed.active_toast().map(|toast| toast.message.as_str()),
-        Some("All UI hidden — right-click to restore")
+        Some("All UI hidden: right-click to restore")
     );
 
     let mut right_click_radial = create_test_input_state();
@@ -762,7 +762,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
         right_click_radial
             .active_toast()
             .map(|toast| toast.message.as_str()),
-        Some("All UI hidden — select the recovery action")
+        Some("All UI hidden: select the recovery action")
     );
 }
 

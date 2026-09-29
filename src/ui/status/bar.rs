@@ -237,11 +237,11 @@ impl StatusHudSegmentKind {
     /// the tooltip is what says they act.
     pub(crate) fn tooltip(self) -> &'static str {
         match self {
-            Self::Board => "Boards \u{2014} click to switch or add one",
-            Self::Page => "Pages \u{2014} click to switch or add one",
-            Self::Color => "Color \u{2014} click to pick another",
-            Self::Tool => "Tool \u{2014} click for the radial menu",
-            Self::Size => "Size \u{2014} click for the radial menu",
+            Self::Board => "Boards: click to switch or add one",
+            Self::Page => "Pages: click to switch or add one",
+            Self::Color => "Color: click to pick another",
+            Self::Tool => "Tool: click for the radial menu",
+            Self::Size => "Size: click for the radial menu",
             Self::Help => "Every shortcut and command",
             Self::Toolbar => "Show the toolbar again",
             Self::About => "About Wayscriber",

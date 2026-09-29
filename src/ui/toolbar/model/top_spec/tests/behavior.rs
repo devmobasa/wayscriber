@@ -598,7 +598,7 @@ fn preset_slots_say_what_they_hold_and_how_to_fill_them() {
     assert!(
         TopToolbarControl::Preset(1)
             .tooltip(&snapshot)
-            .starts_with("Preset 2: Lecture \u{2014} Marker, #336699, 12px"),
+            .starts_with("Preset 2: Lecture \u{b7} Marker, #336699, 12px"),
         "{}",
         TopToolbarControl::Preset(1).tooltip(&snapshot)
     );
@@ -626,10 +626,7 @@ fn preset_slots_say_what_they_hold_and_how_to_fill_them() {
 
     // Without a binding the click is the only way in, and the tooltip says so.
     let unbound = TopToolbarControl::Preset(3).tooltip(&self::snapshot());
-    assert_eq!(
-        unbound,
-        "Preset 4 (empty) \u{2014} click to save the current tool"
-    );
+    assert_eq!(unbound, "Preset 4 (empty): click to save the current tool");
 }
 
 /// Strip controls that currently read as the active tool: tool buttons plus

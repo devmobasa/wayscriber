@@ -31,23 +31,25 @@ impl Daemon {
         Duration::from_secs(secs.min(OVERLAY_SPAWN_BACKOFF_MAX.as_secs()))
     }
 
-    pub(super) fn overlay_spawn_allowed(&mut self) -> bool {
+    /// The time left before another overlay spawn may be tried, or `None`
+    /// when no backoff is holding it back.
+    pub(super) fn overlay_spawn_backoff_remaining(&mut self) -> Option<Duration> {
         if let Some(next_retry) = self.overlay_spawn_next_retry {
             let now = Instant::now();
             if now < next_retry {
+                let remaining = next_retry.saturating_duration_since(now);
                 if !self.overlay_spawn_backoff_logged {
-                    let remaining = next_retry.saturating_duration_since(now);
                     warn!(
                         "Overlay spawn backoff active (retry in {}s)",
                         remaining.as_secs().max(1)
                     );
                     self.overlay_spawn_backoff_logged = true;
                 }
-                return false;
+                return Some(remaining);
             }
         }
         self.overlay_spawn_backoff_logged = false;
-        true
+        None
     }
 
     pub(super) fn record_overlay_spawn_failure(&mut self, message: String) {
@@ -297,16 +299,16 @@ mod tests {
     }
 
     #[test]
-    fn overlay_spawn_allowed_honors_retry_window() {
+    fn overlay_spawn_backoff_honors_retry_window() {
         let mut daemon = Daemon::new(None, false, None, None);
         daemon.overlay_spawn_next_retry = Some(Instant::now() + Duration::from_secs(2));
         daemon.overlay_spawn_backoff_logged = false;
 
-        assert!(!daemon.overlay_spawn_allowed());
+        assert!(daemon.overlay_spawn_backoff_remaining().is_some());
         assert!(daemon.overlay_spawn_backoff_logged);
 
         daemon.overlay_spawn_next_retry = Some(Instant::now() - Duration::from_secs(1));
-        assert!(daemon.overlay_spawn_allowed());
+        assert!(daemon.overlay_spawn_backoff_remaining().is_none());
         assert!(!daemon.overlay_spawn_backoff_logged);
     }
 

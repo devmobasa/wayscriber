@@ -1,5 +1,6 @@
 use crate::draw::shape::EmbeddedImage;
-use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
+use crate::image_decode::{decode_rgba, format_from_mime_or_bytes, image_dimensions};
+use crate::screen_pixels::EmbeddedImageLimits;
 use cairo::{Format, ImageSurface};
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -187,7 +188,12 @@ fn cached_surface(cache: &mut ImageSurfaceCache, data: &EmbeddedImage) -> Option
 
 fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
     let format = format_from_mime_or_bytes(&data.mime_type, &data.bytes)?;
-    let image = decode_rgba(format, &data.bytes).ok()?;
+    // A session file can pair any payload with any recorded size. Draw only
+    // images whose header agrees, and only within the paste budget.
+    if image_dimensions(format, &data.bytes).ok()? != (data.width, data.height) {
+        return None;
+    }
+    let image = decode_rgba(format, &data.bytes, EmbeddedImageLimits::default().into()).ok()?;
     let width = image.width;
     let height = image.height;
     if width == 0 || height == 0 {
@@ -367,8 +373,36 @@ mod tests {
         };
         let distinct = super::cached_surface(&mut cache, &separate_payload).unwrap();
         assert!(!Rc::ptr_eq(&first, &distinct));
-        let different_metadata = crate::draw::EmbeddedImage { width: 2, ..data };
+        let different_metadata = crate::draw::EmbeddedImage {
+            mime_type: String::new(),
+            ..data
+        };
         let distinct = super::cached_surface(&mut cache, &different_metadata).unwrap();
         assert!(!Rc::ptr_eq(&first, &distinct));
+    }
+
+    #[test]
+    fn image_whose_recorded_size_disagrees_with_its_header_is_not_drawn() {
+        let mut bytes = Vec::new();
+        ImageSurface::create(Format::ARgb32, 2, 2)
+            .unwrap()
+            .write_to_png(&mut bytes)
+            .unwrap();
+        let recorded = crate::draw::EmbeddedImage {
+            mime_type: "image/png".into(),
+            width: 2,
+            height: 2,
+            bytes: bytes.into(),
+        };
+        let mut cache = ImageSurfaceCache::default();
+
+        let tampered = crate::draw::EmbeddedImage {
+            width: 1,
+            ..recorded.clone()
+        };
+
+        assert!(super::cached_surface(&mut cache, &tampered).is_none());
+        assert!(cache.entries.is_empty());
+        assert!(super::cached_surface(&mut cache, &recorded).is_some());
     }
 }

@@ -157,12 +157,15 @@ fn clear_registered_signals() {
 
 fn create_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     let mut fds = [-1; 2];
+    // Close-on-exec from creation: set afterwards, a process spawned between
+    // the two calls would inherit both ends. Only the write end is made
+    // non-blocking below, because the listener blocks in its read.
     // SAFETY: `fds` points to two valid c_int slots for libc to fill.
-    if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
+    if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
         return Err(io::Error::last_os_error());
     }
 
-    if let Err(err) = configure_pipe(fds[0], fds[1]) {
+    if let Err(err) = set_status_flag(fds[1], libc::O_NONBLOCK) {
         close_fd(fds[0]);
         close_fd(fds[1]);
         return Err(err);
@@ -171,25 +174,6 @@ fn create_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     // SAFETY: pipe returned two fresh descriptors and ownership is transferred
     // exactly once into these wrappers.
     Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
-}
-
-fn configure_pipe(read_fd: RawFd, write_fd: RawFd) -> io::Result<()> {
-    set_fd_flag(read_fd, libc::FD_CLOEXEC)?;
-    set_fd_flag(write_fd, libc::FD_CLOEXEC)?;
-    set_status_flag(write_fd, libc::O_NONBLOCK)
-}
-
-fn set_fd_flag(fd: RawFd, flag: libc::c_int) -> io::Result<()> {
-    // SAFETY: `fd` is an open file descriptor owned by this module.
-    let current = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-    if current < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: `fd` is valid and `current | flag` is a valid F_SETFD bitset.
-    if unsafe { libc::fcntl(fd, libc::F_SETFD, current | flag) } < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
 }
 
 fn set_status_flag(fd: RawFd, flag: libc::c_int) -> io::Result<()> {

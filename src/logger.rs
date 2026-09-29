@@ -1,6 +1,8 @@
 mod file;
 mod filter;
+mod panic;
 
+use std::cell::Cell;
 use std::fmt::Write as _;
 use std::io::{self, Write as IoWrite};
 use std::sync::Mutex;
@@ -13,6 +15,11 @@ use self::filter::LogFilter;
 
 const INITIAL_RECORD_CAPACITY: usize = 256;
 const MAX_RETAINED_RECORD_CAPACITY: usize = 64 * 1024;
+
+thread_local! {
+    /// Whether this thread is inside [`SimpleLogger::log`], holding its lock.
+    static WRITING_RECORD: Cell<bool> = const { Cell::new(false) };
+}
 
 pub(crate) fn init(log_to_file: bool) {
     let filter = LogFilter::from_env();
@@ -36,6 +43,7 @@ pub(crate) fn init(log_to_file: bool) {
 
     if log::set_boxed_logger(Box::new(logger)).is_ok() {
         log::set_max_level(max_level);
+        panic::install_hook();
     }
 }
 
@@ -106,6 +114,14 @@ impl Log for SimpleLogger {
             return;
         }
 
+        // A record logged while this thread is already writing one would wait
+        // forever on the lock this thread holds. The panic hook does exactly
+        // that for a panic raised mid-write, from a `Display` impl say, so the
+        // nested record is dropped and the panic still unwinds.
+        let Some(_writing) = WritingRecord::enter() else {
+            return;
+        };
+
         let mut state = match self.state.lock() {
             Ok(state) => state,
             Err(poisoned) => poisoned.into_inner(),
@@ -118,6 +134,22 @@ impl Log for SimpleLogger {
         if let Ok(mut state) = self.state.lock() {
             state.sink.flush();
         }
+    }
+}
+
+/// Marks this thread as writing a record until dropped, unwinding included.
+struct WritingRecord;
+
+impl WritingRecord {
+    fn enter() -> Option<Self> {
+        let already_writing = WRITING_RECORD.with(|writing| writing.replace(true));
+        (!already_writing).then_some(Self)
+    }
+}
+
+impl Drop for WritingRecord {
+    fn drop(&mut self) {
+        WRITING_RECORD.with(|writing| writing.set(false));
     }
 }
 
@@ -334,6 +366,49 @@ mod tests {
         let line = String::from_utf8(output.bytes()).expect("valid log output");
         assert_eq!(line.lines().count(), 1);
         assert!(line.ends_with("ERROR wayscriber::ocr\\nworker: first\\r\\nsecond\\nthird\\r\n"));
+    }
+
+    #[test]
+    fn a_record_logged_while_the_thread_writes_one_is_dropped_instead_of_deadlocking() {
+        struct LogsWhileFormatting<'a>(&'a SimpleLogger);
+
+        impl std::fmt::Display for LogsWhileFormatting<'_> {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.log(&warning_record());
+                formatter.write_str("outer record")
+            }
+        }
+
+        let output = SharedWriter::default();
+        let filter = crate::test_env::with_env_var("RUST_LOG", Some("warn".as_ref()), || {
+            LogFilter::from_env()
+        });
+        let logger = SimpleLogger {
+            filter,
+            state: Mutex::new(LoggerState {
+                sink: LogSink::single(Box::new(output.clone())),
+                record_buffer: String::with_capacity(INITIAL_RECORD_CAPACITY),
+            }),
+            include_timestamp: false,
+        };
+
+        logger.log(
+            &Record::builder()
+                .args(format_args!("{}", LogsWhileFormatting(&logger)))
+                .level(Level::Warn)
+                .target("wayscriber::daemon")
+                .build(),
+        );
+        logger.log(&warning_record());
+
+        let output = String::from_utf8(output.bytes()).expect("valid log output");
+        assert_eq!(
+            output.lines().collect::<Vec<_>>(),
+            [
+                "WARN wayscriber::daemon: outer record",
+                "WARN wayscriber::daemon: sink failure record"
+            ]
+        );
     }
 
     #[test]

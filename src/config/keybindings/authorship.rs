@@ -39,6 +39,11 @@ impl KeybindingAuthorship {
             // in it, so fall back to treating the parsed values as authored.
             return Self::AllExplicit;
         };
+        Self::from_toml_table(&root)
+    }
+
+    /// [`Self::from_toml_source`] for a document already parsed into a table.
+    pub(crate) fn from_toml_table(root: &toml::Table) -> Self {
         let keys = root
             .get("keybindings")
             .and_then(toml::Value::as_table)

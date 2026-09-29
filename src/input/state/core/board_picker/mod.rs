@@ -220,35 +220,13 @@ fn truncate_search_label(value: &str, max_chars: usize) -> String {
     truncated
 }
 
+/// Parses a board color through the shared hex parser. Board colors are
+/// opaque, so a form that carries translucency is refused.
 fn parse_hex_color(value: &str) -> Option<Color> {
-    let mut hex = value.trim().trim_start_matches("0x");
-    if hex.starts_with('#') {
-        hex = &hex[1..];
-    }
-    if hex.len() != 6 && hex.len() != 3 {
-        return None;
-    }
-    let expanded = if hex.len() == 3 {
-        let mut out = String::new();
-        for ch in hex.chars() {
-            out.push(ch);
-            out.push(ch);
-        }
-        out
-    } else {
-        hex.to_string()
-    };
-    let r = u8::from_str_radix(&expanded[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&expanded[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&expanded[4..6], 16).ok()?;
-    Some(Color {
-        r: r as f64 / 255.0,
-        g: g as f64 / 255.0,
-        b: b as f64 / 255.0,
-        a: 1.0,
-    })
+    super::color_picker_popup::parse_hex_color(value).filter(|color| color.a >= 1.0)
 }
 
+/// The opaque six-digit form, the only one a board color takes.
 fn color_to_hex(color: Color) -> String {
     format!(
         "#{:02X}{:02X}{:02X}",
@@ -344,6 +322,19 @@ mod tests {
     #[test]
     fn parse_hex_color_rejects_invalid_digits() {
         assert_eq!(parse_hex_color("#12xz89"), None);
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_six_bytes_of_non_ascii_text() {
+        // Six bytes like "RRGGBB", but a byte slice would split a character.
+        assert_eq!("€abc".len(), 6);
+        assert_eq!(parse_hex_color("€abc"), None);
+        assert_eq!(parse_hex_color("#ééé"), None);
+    }
+
+    #[test]
+    fn parse_hex_color_keeps_board_colors_opaque() {
+        assert_eq!(parse_hex_color("#33669980"), None);
     }
 
     #[test]

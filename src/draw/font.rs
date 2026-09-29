@@ -40,27 +40,93 @@ impl FontDescriptor {
         self.weight.trim().eq_ignore_ascii_case("bold")
     }
 
-    /// Converts this font descriptor to a Pango font description string.
+    /// The Pango font description this descriptor asks for, at `size` points.
     ///
-    /// Format: "Family Style Weight Size"
-    /// Example: "Sans Bold 32" or "Monospace Italic 24"
+    /// Built field by field rather than parsed from a string. Pango's string
+    /// form reads style, weight, and stretch words off the end of the family,
+    /// so a family such as "Roboto Condensed" or "Archivo Black" would come
+    /// back as "Roboto" condensed or "Archivo" black and render in whatever
+    /// fontconfig substitutes. The size keeps its fraction.
+    pub fn to_pango_description(&self, size: f64) -> pango::FontDescription {
+        let mut description = family_description(&self.family, size);
+        if let Some(weight) = pango_weight(&self.weight) {
+            description.set_weight(weight);
+        }
+        if let Some(style) = pango_style(&self.style) {
+            description.set_style(style);
+        }
+
+        description
+    }
+
+    /// The same description in Pango's string form.
+    ///
+    /// Used where a string is the currency: measurement cache keys and the
+    /// caret and layout helpers that take one. Pango writes it, so
+    /// `pango::FontDescription::from_string` reads back exactly what
+    /// [`Self::to_pango_description`] built: a family ending in a style word
+    /// is closed with a comma, as in "Roboto Condensed, Bold 17.5".
     pub fn to_pango_string(&self, size: f64) -> String {
-        let mut parts = vec![self.family.clone()];
+        self.to_pango_description(size).to_string()
+    }
+}
 
-        // Add style if not normal
-        if self.style.to_lowercase() != "normal" {
-            parts.push(capitalize_first(&self.style));
+/// A description of `family` alone, at `size` points.
+///
+/// The family is set as a name, never parsed, for the reason given on
+/// [`FontDescriptor::to_pango_description`].
+pub fn family_description(family: &str, size: f64) -> pango::FontDescription {
+    let mut description = pango::FontDescription::new();
+    description.set_family(family.trim());
+    description.set_size((size * f64::from(pango::SCALE)).round() as i32);
+
+    description
+}
+
+/// The Pango weight for a configured weight: a name, or a number from 100 to
+/// 900. A number between two of Pango's named weights takes the nearer
+/// hundred. `None` for anything else, which leaves Pango's default.
+fn pango_weight(weight: &str) -> Option<pango::Weight> {
+    let weight = weight.trim().to_ascii_lowercase();
+    let named = match weight.as_str() {
+        "thin" => pango::Weight::Thin,
+        "ultralight" => pango::Weight::Ultralight,
+        "light" => pango::Weight::Light,
+        "semilight" => pango::Weight::Semilight,
+        "book" => pango::Weight::Book,
+        "normal" => pango::Weight::Normal,
+        "medium" => pango::Weight::Medium,
+        "semibold" => pango::Weight::Semibold,
+        "bold" => pango::Weight::Bold,
+        "ultrabold" => pango::Weight::Ultrabold,
+        "heavy" => pango::Weight::Heavy,
+        "ultraheavy" => pango::Weight::Ultraheavy,
+        numeric => {
+            let value = numeric.parse::<u32>().ok()?;
+            match (value.clamp(100, 900) + 50) / 100 {
+                1 => pango::Weight::Thin,
+                2 => pango::Weight::Ultralight,
+                3 => pango::Weight::Light,
+                4 => pango::Weight::Normal,
+                5 => pango::Weight::Medium,
+                6 => pango::Weight::Semibold,
+                7 => pango::Weight::Bold,
+                8 => pango::Weight::Ultrabold,
+                _ => pango::Weight::Heavy,
+            }
         }
+    };
 
-        // Add weight if not normal
-        if self.weight.to_lowercase() != "normal" {
-            parts.push(capitalize_first(&self.weight));
-        }
+    Some(named)
+}
 
-        // Add size
-        parts.push(format!("{}", size.round() as i32));
-
-        parts.join(" ")
+/// The Pango style for a configured style, or `None` for an unknown word.
+fn pango_style(style: &str) -> Option<pango::Style> {
+    match style.trim().to_ascii_lowercase().as_str() {
+        "normal" => Some(pango::Style::Normal),
+        "italic" => Some(pango::Style::Italic),
+        "oblique" => Some(pango::Style::Oblique),
+        _ => None,
     }
 }
 
@@ -71,15 +137,6 @@ impl Default for FontDescriptor {
             weight: "bold".to_string(),
             style: "normal".to_string(),
         }
-    }
-}
-
-/// Capitalizes the first letter of a string.
-fn capitalize_first(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }
 
@@ -111,6 +168,108 @@ mod tests {
             "normal".to_string(),
         );
         assert_eq!(font.to_pango_string(16.0), "JetBrains Mono Light 16");
+    }
+
+    fn descriptor(family: &str, weight: &str, style: &str) -> FontDescriptor {
+        FontDescriptor::new(family.to_string(), weight.to_string(), style.to_string())
+    }
+
+    #[test]
+    fn a_family_ending_in_a_style_word_survives_the_pango_string() {
+        // Pango reads style, weight, and stretch words off the end of a family
+        // list that is not closed with a comma, so these would otherwise become
+        // "Roboto" condensed and "Archivo" black.
+        for family in [
+            "Roboto Condensed",
+            "Archivo Black",
+            "Foo Italic",
+            "Noto Sans Mono",
+        ] {
+            let parsed = pango::FontDescription::from_string(
+                &descriptor(family, "normal", "normal").to_pango_string(17.0),
+            );
+
+            assert_eq!(parsed.family().as_deref(), Some(family));
+            assert_eq!(parsed.stretch(), pango::Stretch::Normal, "{family}");
+            assert_eq!(parsed.weight(), pango::Weight::Normal, "{family}");
+            assert_eq!(parsed.style(), pango::Style::Normal, "{family}");
+        }
+    }
+
+    #[test]
+    fn weight_style_and_fractional_size_survive_the_pango_string() {
+        let parsed = pango::FontDescription::from_string(
+            &descriptor("Roboto Condensed", "bold", "italic").to_pango_string(17.5),
+        );
+
+        assert_eq!(parsed.family().as_deref(), Some("Roboto Condensed"));
+        assert_eq!(parsed.weight(), pango::Weight::Bold);
+        assert_eq!(parsed.style(), pango::Style::Italic);
+        assert_eq!(parsed.size(), (17.5 * f64::from(pango::SCALE)) as i32);
+    }
+
+    #[test]
+    fn the_structural_description_keeps_family_weight_style_and_size() {
+        let description =
+            descriptor("Archivo Black", "ultralight", "oblique").to_pango_description(12.25);
+
+        assert_eq!(description.family().as_deref(), Some("Archivo Black"));
+        assert_eq!(description.weight(), pango::Weight::Ultralight);
+        assert_eq!(description.style(), pango::Style::Oblique);
+        assert_eq!(description.stretch(), pango::Stretch::Normal);
+        assert_eq!(description.size(), (12.25 * f64::from(pango::SCALE)) as i32);
+    }
+
+    #[test]
+    fn a_family_only_description_keeps_the_whole_name() {
+        // The font picker previews each row in the family it names.
+        let description = family_description("Roboto Condensed", 17.0);
+
+        assert_eq!(description.family().as_deref(), Some("Roboto Condensed"));
+        assert_eq!(description.stretch(), pango::Stretch::Normal);
+        assert_eq!(description.size(), 17 * pango::SCALE);
+    }
+
+    #[test]
+    fn a_numeric_weight_applies_instead_of_joining_the_family() {
+        let parsed = pango::FontDescription::from_string(
+            &descriptor("Sans", "700", "normal").to_pango_string(20.0),
+        );
+
+        assert_eq!(parsed.family().as_deref(), Some("Sans"));
+        assert_eq!(parsed.weight(), pango::Weight::Bold);
+    }
+
+    #[test]
+    fn every_weight_and_style_the_config_accepts_is_applied() {
+        let weights = [
+            ("normal", pango::Weight::Normal),
+            ("bold", pango::Weight::Bold),
+            ("Bold", pango::Weight::Bold),
+            ("light", pango::Weight::Light),
+            ("ultralight", pango::Weight::Ultralight),
+            ("heavy", pango::Weight::Heavy),
+            ("ultrabold", pango::Weight::Ultrabold),
+            ("100", pango::Weight::Thin),
+            ("400", pango::Weight::Normal),
+            ("900", pango::Weight::Heavy),
+        ];
+        for (weight, expected) in weights {
+            let description = descriptor("Sans", weight, "normal").to_pango_description(10.0);
+
+            assert_eq!(description.weight(), expected, "weight {weight}");
+        }
+
+        let styles = [
+            ("normal", pango::Style::Normal),
+            ("italic", pango::Style::Italic),
+            ("Oblique", pango::Style::Oblique),
+        ];
+        for (style, expected) in styles {
+            let description = descriptor("Sans", "normal", style).to_pango_description(10.0);
+
+            assert_eq!(description.style(), expected, "style {style}");
+        }
     }
 }
 

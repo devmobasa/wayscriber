@@ -5,10 +5,10 @@ impl InputState {
     ///
     /// Font size is clamped to 8.0-72.0px range (same as config validation).
     pub fn adjust_font_size(&mut self, delta: f64) {
-        self.style.current_font_size = (self.style.current_font_size + delta).clamp(8.0, 72.0);
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        if !self.set_font_size(self.style.current_font_size + delta) {
+            return;
+        }
+
         log::debug!(
             "Font size adjusted to {:.1}px",
             self.style.current_font_size

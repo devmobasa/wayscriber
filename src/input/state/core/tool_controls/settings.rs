@@ -191,14 +191,21 @@ impl InputState {
         true
     }
 
+    /// Ends a change to a style value that presets store. The style no longer
+    /// matches the preset it came from, so the active-preset marker goes out.
+    fn finish_preset_style_change(&mut self) {
+        self.preset_slots.clear_active();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.mark_session_dirty();
+    }
+
     /// Sets the marker opacity multiplier (0.05-0.9). Returns true if changed.
     pub fn set_marker_opacity(&mut self, opacity: f64) -> bool {
         if !self.style.set_marker_opacity(opacity) {
             return false;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -396,10 +403,7 @@ impl InputState {
         let changed = self.style.set_thickness(tool, clamped);
         debug_assert!(changed);
         self.mark_current_provisional_dirty_full_with(measurer);
-        self.preset_slots.clear_active();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -418,10 +422,7 @@ impl InputState {
         let changed = self.style.set_eraser_size(clamped);
         debug_assert!(changed);
         self.mark_current_provisional_dirty_full_with(measurer);
-        self.preset_slots.clear_active();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -430,9 +431,7 @@ impl InputState {
         if !self.style.set_eraser_mode(mode) {
             return false;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -441,9 +440,7 @@ impl InputState {
         if !self.style.toggle_eraser_mode() {
             return false;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -522,9 +519,7 @@ impl InputState {
         if !self.style.set_font_size(size) {
             return false;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -533,6 +528,7 @@ impl InputState {
         if !self.style.set_fill_enabled(enabled) {
             return false;
         }
+        self.preset_slots.clear_active();
         self.needs_redraw = true;
         self.mark_session_dirty();
         true
@@ -542,9 +538,7 @@ impl InputState {
         if !self.style.set_polygon_sides(sides) {
             return false;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 
@@ -552,9 +546,7 @@ impl InputState {
         if !self.style.nudge_polygon_sides(delta) {
             return false;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_preset_style_change();
         true
     }
 }

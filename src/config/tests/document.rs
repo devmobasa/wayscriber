@@ -361,6 +361,9 @@ fn saving_over_an_empty_existing_config_does_not_stamp_a_revision() {
     );
 }
 
+/// The file is valid TOML, so the repair is a salvage rather than a rebuild:
+/// it replaces the entry that failed and nothing else, and it records no
+/// migration revision the file never went through.
 #[test]
 fn editing_load_can_repair_typed_parse_failure_without_losing_unknown_keys() {
     let temp = TempConfig::new("repair-invalid-config");
@@ -375,7 +378,7 @@ future_knob = 17
     let (document, warning) =
         ConfigDocument::load_for_editing_from_path(&temp.path).expect("load repairable document");
     let warning = warning.expect("repair warning");
-    assert!(warning.contains("Failed to parse config"));
+    assert!(warning.contains("[performance.buffer_count]"), "{warning}");
 
     let outcome = document
         .save_with_backup(document.config().clone())
@@ -384,10 +387,112 @@ future_knob = 17
     assert!(saved.contains("future_root = \"preserve me\""));
     assert!(saved.contains("future_knob = 17"));
     assert!(!saved.contains("buffer_count"));
-    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    assert!(!saved.contains("config_revision"), "{saved}");
     let backup = outcome.backup_path().expect("repair backup");
     assert_eq!(fs::read_to_string(backup).unwrap(), original);
     ConfigDocument::load_from_path(&temp.path).expect("repaired config is valid");
+}
+
+/// A value serde cannot map used to cost the editor the whole file: it got an
+/// all-defaults repair draft, and saving that draft stripped every authored
+/// setting, while the overlay ran the same file with one section on defaults.
+/// The editor now salvages the same way, so the draft holds the file's values
+/// and its save replaces only the entry that failed.
+#[test]
+fn editing_load_salvages_a_value_error_and_its_save_keeps_the_rest() {
+    let temp = TempConfig::new("salvage-value-error");
+    let original = r#"# my settings
+[drawing]
+default_thickness = 7.0
+
+[keybindings]
+undo = "Ctrl+Z"
+
+[capture]
+exit_after_capture = true # keep
+"#;
+    temp.write(original);
+
+    assert!(
+        ConfigDocument::load_from_path(&temp.path).is_err(),
+        "a strict load still refuses the file"
+    );
+    let (document, warning) =
+        ConfigDocument::load_for_editing_from_path(&temp.path).expect("salvaged load");
+
+    let warning = warning.expect("the fallback is reported");
+    assert!(warning.contains("[keybindings.undo]"), "{warning}");
+    let sections: Vec<_> = document
+        .section_errors()
+        .iter()
+        .map(|error| error.section.as_str())
+        .collect();
+    assert_eq!(sections, ["keybindings.undo"]);
+    assert_eq!(document.config().drawing.default_thickness, 7.0);
+    assert!(document.config().capture.exit_after_capture);
+    assert_eq!(
+        document.config().keybindings.core.undo,
+        KeybindingsConfig::default().core.undo
+    );
+
+    let outcome = document
+        .save_with_backup(document.config().clone())
+        .expect("save the salvaged draft");
+
+    let saved = fs::read_to_string(&temp.path).unwrap();
+    assert!(saved.contains("# my settings"), "{saved}");
+    assert!(saved.contains("default_thickness = 7.0"), "{saved}");
+    assert!(
+        saved.contains("exit_after_capture = true # keep"),
+        "{saved}"
+    );
+    assert!(!saved.contains("undo"), "{saved}");
+    assert_eq!(
+        fs::read_to_string(outcome.backup_path().expect("backup")).unwrap(),
+        original
+    );
+    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("the saved file loads");
+    assert!(reloaded.section_errors().is_empty());
+}
+
+/// Salvage works per value, so the save replaces the one value that failed
+/// and leaves its section's other settings, comments, and unknown keys alone.
+#[test]
+fn a_salvaged_save_replaces_only_the_value_that_failed() {
+    let temp = TempConfig::new("salvage-one-value");
+    temp.write(
+        "[ui]\n# theme first\ntheme = \"drak\"\nshow_status_bar = false # mine\nfuture_ui = 1\n",
+    );
+    let (document, _) =
+        ConfigDocument::load_for_editing_from_path(&temp.path).expect("salvaged load");
+    assert!(!document.config().ui.show_status_bar);
+
+    document
+        .save_with_backup(document.config().clone())
+        .expect("save the salvaged draft");
+
+    let saved = fs::read_to_string(&temp.path).unwrap();
+    assert!(!saved.contains("theme = "), "{saved}");
+    assert!(saved.contains("show_status_bar = false # mine"), "{saved}");
+    assert!(saved.contains("future_ui = 1"), "{saved}");
+    ConfigDocument::load_from_path(&temp.path).expect("the saved file loads");
+}
+
+/// An edit the user makes inside the entry that failed replaces the bad
+/// value, like any other edit.
+#[test]
+fn a_salvaged_save_writes_an_edit_inside_the_failed_entry() {
+    let temp = TempConfig::new("salvage-edit-failed-entry");
+    temp.write("[keybindings]\nundo = \"Ctrl+Z\"\n");
+    let (document, _) =
+        ConfigDocument::load_for_editing_from_path(&temp.path).expect("salvaged load");
+    let mut config = document.config().clone();
+    config.keybindings.core.undo = vec!["Ctrl+Alt+Z".to_string()];
+
+    document.save_with_backup(config).expect("save the edit");
+
+    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("the saved file loads");
+    assert_eq!(reloaded.config().keybindings.core.undo, ["Ctrl+Alt+Z"]);
 }
 
 #[test]
@@ -413,8 +518,11 @@ fn editing_load_can_repair_malformed_toml_with_a_backup() {
     );
 }
 
+/// The list is the entry that failed, so it goes whole — its unknown keys
+/// cannot be told apart from the entry they sit in — while the unknown keys
+/// of the section around it stay.
 #[test]
-fn repair_mode_removes_invalid_known_collections_but_keeps_root_unknowns() {
+fn repair_mode_removes_invalid_known_collections_but_keeps_other_unknowns() {
     let temp = TempConfig::new("repair-invalid-collection");
     let original = r#"config_revision = 1
 future_root = "preserve me"
@@ -438,7 +546,7 @@ future_entry_option = "cannot be separated safely"
 
     let saved = fs::read_to_string(&temp.path).unwrap();
     assert!(saved.contains("future_root = \"preserve me\""));
-    assert!(!saved.contains("future_drawing_option"));
+    assert!(saved.contains("future_drawing_option = true"), "{saved}");
     assert!(!saved.contains("quick_colors"));
     assert!(!saved.contains("future_entry_option"));
     ConfigDocument::load_from_path(&temp.path).expect("collection repair is valid");

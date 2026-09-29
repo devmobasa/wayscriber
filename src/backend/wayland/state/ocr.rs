@@ -360,11 +360,11 @@ impl WaylandState {
         // authoritative image rectangle into the surface pixels the sweep is
         // painted over.
         let scan_region = match self.region_capture.active() {
-            Some(ActiveScreenRegion::Ready { source, .. }) => Some(
+            Some(ActiveScreenRegion::Ready { source, .. }) => {
                 crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(
                     &source, rect,
-                ),
-            ),
+                )
+            }
             _ => None,
         };
         let pixels = match self.crop_ocr_selection(rect) {

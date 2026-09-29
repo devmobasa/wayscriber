@@ -67,16 +67,6 @@ impl LayerShellHandler for WaylandState {
 
             self.input_state
                 .update_screen_dimensions(self.surface.width(), self.surface.height());
-            let (phys_w, phys_h) = self.surface.physical_dimensions();
-            self.frozen
-                .handle_resize(phys_w, phys_h, &mut self.input_state);
-            self.zoom
-                .handle_resize(phys_w, phys_h, &mut self.input_state);
-            self.cancel_screen_modals_if_source_changed();
-
-            // Refresh active geometry for capture validation using the latest
-            // configured surface size and compositor output metadata.
-            self.refresh_freeze_zoom_geometry();
         }
 
         self.surface.set_configured(true);
@@ -93,6 +83,12 @@ impl LayerShellHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+        // Refresh active geometry for capture validation using the latest
+        // configured surface size and compositor output metadata. The check
+        // on screen modals comes after it, as on xdg: the refresh is what
+        // moves the output identity and layout generation a region selector
+        // or eyedropper is compared against.
+        self.refresh_freeze_zoom_geometry();
         self.cancel_screen_modals_if_source_changed();
 
         // Re-apply toolbar offsets now that we have a configured surface size; avoids clamping to 0

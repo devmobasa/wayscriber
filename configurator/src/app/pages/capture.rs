@@ -66,7 +66,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |value| Message::ToggleChanged(ToggleField::CaptureExitAfter, value),
         )
         .entry_row_validated(
-            "OCR languages (e.g. eng, eng+deu \u{2014} needs the matching Tesseract packages)",
+            "OCR languages (e.g. eng, eng+deu; needs the matching Tesseract packages)",
             |app| app.draft.capture.ocr_languages.clone(),
             |value| Message::TextChanged(TextField::CaptureOcrLanguages, value),
             |app| {

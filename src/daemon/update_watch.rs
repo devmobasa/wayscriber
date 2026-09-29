@@ -227,7 +227,7 @@ fn send_notification(update: &AvailableUpdate) -> Result<(), NotificationError> 
 /// The body states plainly that nothing was installed, and where the steps are.
 fn notification_body(current: &str, update: &AvailableUpdate) -> String {
     format!(
-        "You are running {current}. Wayscriber does not install updates itself — see {}",
+        "You are running {current}. Wayscriber does not install updates itself. See {}",
         update.update_url
     )
 }

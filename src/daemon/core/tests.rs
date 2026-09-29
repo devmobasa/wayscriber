@@ -4,6 +4,37 @@ use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::thread;
 
 #[test]
+fn a_starting_daemon_waits_out_a_brief_lock_probe() {
+    with_runtime_dir(|| {
+        let probe = hold_daemon_lock();
+        let release = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(50));
+            drop(probe);
+        });
+
+        let mut daemon = Daemon::new(None, false, None, None);
+        daemon.acquire_daemon_lock().unwrap();
+        release.join().unwrap();
+
+        let mut second = Daemon::new(None, false, None, None);
+        let error = second.acquire_daemon_lock().unwrap_err();
+        assert!(error.is::<AlreadyRunningError>(), "{error:#}");
+    });
+}
+
+#[test]
+fn an_unusable_process_broker_ends_the_daemon_loop() {
+    let guard = crate::process_broker::start_for_runtime().unwrap();
+
+    ensure_process_broker_usable(None).unwrap();
+    ensure_process_broker_usable(Some(guard.broker())).unwrap();
+
+    guard.broker().mark_unusable_for_test();
+    let error = ensure_process_broker_usable(Some(guard.broker())).unwrap_err();
+    assert!(error.to_string().contains("no longer usable"), "{error:#}");
+}
+
+#[test]
 fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
     let wake = RuntimeWakeSource::new().unwrap();
     let deadline = BootDeadlineSource::new().unwrap();
@@ -375,6 +406,7 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
     super::super::protocol_v2::write_runtime_record_v2(&crate::paths::daemon_pid_file(), &runtime)
         .unwrap();
+    let _daemon_lock = hold_daemon_lock();
 
     let observed_modes = Arc::new(Mutex::new(Vec::new()));
     let runner_modes = Arc::clone(&observed_modes);
@@ -527,4 +559,175 @@ fn failed_anonymous_action_admission_does_not_allow_the_tail_to_overtake() {
             None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
         }
     }
+}
+
+fn with_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
+    let _env_guard = crate::test_env::lock();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    // SAFETY: this helper holds the process environment mutex.
+    unsafe {
+        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+    }
+
+    let result = run();
+
+    // SAFETY: this helper still holds the process environment mutex.
+    unsafe {
+        match previous_runtime_dir {
+            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+        }
+    }
+    result
+}
+
+/// Holds the single-instance lock as a running daemon does, so clients reach
+/// the harness instead of reporting that no daemon is running.
+fn hold_daemon_lock() -> std::fs::File {
+    let path = daemon_lock_file();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lock = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .unwrap();
+    try_lock_exclusive(&lock).unwrap();
+    lock
+}
+
+/// A daemon that starts its overlay as a process (no internal runner) and is
+/// inside the backoff window after a spawn failure, so it attempts no start.
+fn daemon_in_spawn_backoff() -> Daemon {
+    let mut daemon = Daemon::new(None, false, None, None);
+    daemon.overlay_spawn_failures = 1;
+    daemon.overlay_spawn_next_retry = Some(Instant::now() + Duration::from_secs(60));
+    daemon
+}
+
+#[test]
+fn typed_v2_requests_during_spawn_backoff_fail_without_an_effect() {
+    with_runtime_dir(|| {
+        let token = ProtocolToken::generate().unwrap();
+        let token_text = token.to_string();
+        let owner = CommandOwner::open(&token_text).unwrap();
+        let journal = ActionJournal::open().unwrap();
+        let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
+        super::super::protocol_v2::write_runtime_record_v2(
+            &crate::paths::daemon_pid_file(),
+            &runtime,
+        )
+        .unwrap();
+        let _daemon_lock = hold_daemon_lock();
+        let mut daemon = daemon_in_spawn_backoff();
+        daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
+        daemon.instance_token = token_text.clone();
+        daemon.v2_command_owner = Some(owner);
+        daemon.v2_action_journal = Some(journal.clone());
+
+        for request in [
+            DaemonToggleRequest {
+                mode: Some("whiteboard".into()),
+                ..Default::default()
+            },
+            DaemonToggleRequest {
+                overlay_action: Some(TrayAction::CaptureFull),
+                ..Default::default()
+            },
+        ] {
+            let result = std::thread::scope(|scope| {
+                let caller = scope.spawn(|| crate::daemon::send_daemon_toggle_request(&request));
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !caller.is_finished() {
+                    daemon.process_v2_commands().unwrap();
+                    assert!(Instant::now() < deadline, "v2 caller did not finish");
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                caller.join().unwrap()
+            });
+
+            let error = result.expect_err("a deferred start must not report success");
+            assert!(format!("{error:#}").contains("backing off"), "{error:#}");
+        }
+
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+        assert!(daemon.pending_toggle_request.is_none());
+        assert!(
+            journal
+                .claim_next(&token_text, |_, _| Ok(true))
+                .unwrap()
+                .is_none()
+        );
+    });
+}
+
+#[test]
+fn anonymous_action_during_spawn_backoff_is_abandoned_rather_than_replayed() {
+    with_runtime_dir(|| {
+        let token = ProtocolToken::generate().unwrap().to_string();
+        let _owner = CommandOwner::open(&token).unwrap();
+        let journal = ActionJournal::open().unwrap();
+        let mut daemon = daemon_in_spawn_backoff();
+        daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
+        daemon.instance_token = token.clone();
+        daemon.v2_action_journal = Some(journal.clone());
+        let wake = RuntimeWakeSource::new().unwrap();
+        let publisher = daemon.overlay_action_intents.publisher(wake.handle());
+        publisher.publish(TrayAction::CaptureFull).unwrap();
+
+        let (claimed, _) = daemon.claim_overlay_action_batch().unwrap();
+        let error = daemon.process_overlay_action_intents(claimed).unwrap_err();
+
+        assert!(format!("{error:#}").contains("backing off"), "{error:#}");
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+        assert!(
+            journal
+                .claim_next(&token, |_, _| Ok(true))
+                .unwrap()
+                .is_none()
+        );
+    });
+}
+
+#[test]
+fn legacy_action_during_spawn_backoff_fails_without_queueing_it() {
+    with_runtime_dir(|| {
+        let mut daemon = daemon_in_spawn_backoff();
+        daemon.protocol_mode = DaemonControlProtocolMode::rollback_compatibility();
+
+        let error = daemon
+            .process_single_toggle(
+                Some(DaemonToggleRequest {
+                    overlay_action: Some(TrayAction::CaptureFull),
+                    ..Default::default()
+                }),
+                None,
+                false,
+            )
+            .unwrap_err();
+
+        assert!(format!("{error:#}").contains("backing off"), "{error:#}");
+        assert!(daemon.pending_toggle_request.is_none());
+        assert!(crate::tray_action::take_pending_actions().is_empty());
+    });
+}
+
+#[test]
+fn a_deferred_overlay_start_does_not_keep_its_request_for_a_later_start() {
+    let mut daemon = daemon_in_spawn_backoff();
+    daemon.pending_toggle_request = Some(DaemonToggleRequest {
+        mode: Some("whiteboard".into()),
+        session_file: Some(PathBuf::from("/tmp/stale.wayscriber-session")),
+        ..Default::default()
+    });
+    daemon.pending_activation_token = Some("stale-token".into());
+
+    let outcome = daemon.show_overlay().unwrap();
+
+    assert!(matches!(outcome, ShowOutcome::BackingOff { .. }));
+    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    assert!(daemon.pending_toggle_request.is_none());
+    assert!(daemon.pending_activation_token.is_none());
 }

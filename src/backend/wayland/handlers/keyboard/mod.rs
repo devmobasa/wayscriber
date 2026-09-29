@@ -2,8 +2,10 @@
 mod press;
 mod translate;
 
-use log::{debug, warn};
-use smithay_client_toolkit::seat::keyboard::{KeyEvent, KeyboardHandler, Modifiers, RawModifiers};
+use log::{debug, trace, warn};
+use smithay_client_toolkit::seat::keyboard::{
+    KeyEvent, KeyboardHandler, Modifiers, RawModifiers, RepeatInfo,
+};
 use std::time::{Duration, Instant};
 use wayland_client::{
     Connection, QueueHandle,
@@ -12,7 +14,7 @@ use wayland_client::{
 
 use crate::{config::Action, input::Key, notification};
 
-use super::super::state::WaylandState;
+use super::super::state::{KeyRepeatTiming, KeyboardId, WaylandState};
 pub(in crate::backend::wayland) use press::{ForwardedKey, KeyPressSource};
 pub(in crate::backend::wayland) use translate::keysym_to_key;
 
@@ -139,7 +141,7 @@ impl KeyboardHandler for WaylandState {
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<Self>,
-        _keyboard: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
     ) {
@@ -148,7 +150,8 @@ impl KeyboardHandler for WaylandState {
             debug!("Ignoring key press before overlay ready");
             return;
         }
-        self.dispatch_key_press(keysym_to_key(event.keysym), KeyPressSource::Seat, conn, qh);
+        let source = KeyPressSource::Seat(KeyboardId::of(keyboard));
+        self.dispatch_key_press(keysym_to_key(event.keysym), source, conn, qh);
     }
 
     fn release_key(
@@ -160,7 +163,7 @@ impl KeyboardHandler for WaylandState {
         event: KeyEvent,
     ) {
         let key = keysym_to_key(event.keysym);
-        debug!("Key released: {:?}", key);
+        trace!("Key released: {}", key_for_log(key));
         // Stop auto-repeat once the held key comes up.
         self.key_repeat.clear_if_released(key);
         if screen_modal_swallows_key_release(
@@ -202,6 +205,18 @@ impl KeyboardHandler for WaylandState {
         self.sync_region_square_modifier(modifiers.shift);
     }
 
+    fn update_repeat_info(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        keyboard: &wl_keyboard::WlKeyboard,
+        info: RepeatInfo,
+    ) {
+        let timing = key_repeat_timing(info);
+        debug!("Key repeat timing from the seat: {timing:?}");
+        self.key_repeat.set_timing(KeyboardId::of(keyboard), timing);
+    }
+
     fn repeat_key(
         &mut self,
         conn: &Connection,
@@ -217,12 +232,27 @@ impl KeyboardHandler for WaylandState {
     }
 }
 
-/// Delay before a held key begins repeating. Shared with the input HUD's
-/// system monitor so held keys tick at the same cadence in both capture modes.
+/// Delay before a held key begins repeating, until the seat reports its own.
+/// Also the input HUD's system-monitor cadence, which has no seat to ask.
 pub(in crate::backend::wayland) const KEY_REPEAT_INITIAL_DELAY: Duration =
     Duration::from_millis(400);
-/// Interval between repeats once repeating (≈25/s).
+/// Interval between repeats once repeating (about 25/s), on the same terms.
 pub(in crate::backend::wayland) const KEY_REPEAT_INTERVAL: Duration = Duration::from_millis(40);
+/// Shortest repeat interval honored, so an absurd reported rate cannot turn
+/// the event loop into a busy loop.
+const MIN_KEY_REPEAT_INTERVAL: Duration = Duration::from_millis(1);
+
+/// The repeat timing a seat's `repeat_info` asks for; `None` when the seat
+/// turns repeat off (a rate of 0).
+fn key_repeat_timing(info: RepeatInfo) -> Option<KeyRepeatTiming> {
+    match info {
+        RepeatInfo::Repeat { rate, delay } => Some(KeyRepeatTiming {
+            delay: Duration::from_millis(u64::from(delay)),
+            interval: (Duration::from_secs(1) / rate.get()).max(MIN_KEY_REPEAT_INTERVAL),
+        }),
+        RepeatInfo::Disable => None,
+    }
+}
 
 /// Keys that auto-repeat while held: text entry, deletion, and
 /// navigation. Action/toggle keys (Return, Escape, Tab, F-keys) are left
@@ -250,10 +280,19 @@ fn is_repeatable_key(key: Key) -> bool {
     )
 }
 
-impl WaylandState {
-    pub(in crate::backend::wayland) const KEY_REPEAT_INITIAL_DELAY: Duration =
-        KEY_REPEAT_INITIAL_DELAY;
+/// A key as a log line may show it: which key, but never which character.
+///
+/// The persistent daily log would otherwise hold everything typed into an
+/// annotation, one key per line, for anyone who turns on verbose logging to
+/// report a bug.
+fn key_for_log(key: Key) -> String {
+    match key {
+        Key::Char(_) => "Char(..)".to_string(),
+        other => format!("{other:?}"),
+    }
+}
 
+impl WaylandState {
     pub(in crate::backend::wayland) fn clear_key_repeat(&mut self) {
         self.key_repeat.clear();
     }
@@ -382,10 +421,7 @@ impl WaylandState {
     ) {
         let can_repeat =
             self.focus.keyboard_focused() && !self.input_state.modal_blocks_canvas_key_repeat();
-        let Some(key) = self
-            .key_repeat
-            .take_due(now, can_repeat, KEY_REPEAT_INTERVAL)
-        else {
+        let Some(key) = self.key_repeat.take_due(now, can_repeat) else {
             return;
         };
         self.dispatch_key_repeat(key, conn, qh);
@@ -549,6 +585,53 @@ fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionR
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn repeat(rate: u32, delay: u32) -> RepeatInfo {
+        RepeatInfo::Repeat {
+            rate: std::num::NonZeroU32::new(rate).expect("non-zero rate"),
+            delay,
+        }
+    }
+
+    #[test]
+    fn the_seat_repeat_rate_and_delay_become_the_repeat_timing() {
+        assert_eq!(
+            key_repeat_timing(repeat(25, 600)),
+            Some(KeyRepeatTiming {
+                delay: Duration::from_millis(600),
+                interval: Duration::from_millis(40),
+            })
+        );
+        assert_eq!(
+            key_repeat_timing(repeat(50, 200)),
+            Some(KeyRepeatTiming {
+                delay: Duration::from_millis(200),
+                interval: Duration::from_millis(20),
+            })
+        );
+    }
+
+    #[test]
+    fn a_seat_that_disables_repeat_leaves_no_repeat_timing() {
+        assert_eq!(key_repeat_timing(RepeatInfo::Disable), None);
+    }
+
+    #[test]
+    fn an_absurd_repeat_rate_is_held_to_the_shortest_interval() {
+        let timing = key_repeat_timing(repeat(u32::MAX, 0)).expect("repeat stays on");
+
+        assert_eq!(timing.interval, MIN_KEY_REPEAT_INTERVAL);
+        assert_eq!(timing.delay, Duration::ZERO);
+    }
+
+    #[test]
+    fn typed_characters_are_redacted_from_key_logs() {
+        for character in ['p', 'Q', '7', '@', 'é'] {
+            assert_eq!(key_for_log(Key::Char(character)), "Char(..)");
+        }
+        assert_eq!(key_for_log(Key::Escape), "Escape");
+        assert_eq!(key_for_log(Key::Backspace), "Backspace");
+    }
 
     #[test]
     fn toolbar_routing_is_blocked_while_a_modal_capture_is_active() {

@@ -463,8 +463,9 @@ impl WaylandState {
             && let Some(ActiveScreenRegion::Ready {
                 purpose, source, ..
             }) = self.region_capture.active()
+            && let Some(display) =
+                super::super::screen_image::screen_rect_for_image_rect(&source, rect)
         {
-            let display = super::super::screen_image::screen_rect_for_image_rect(&source, rect);
             return Some(RegionSelectionGeometry::authoritative(
                 purpose,
                 rect,

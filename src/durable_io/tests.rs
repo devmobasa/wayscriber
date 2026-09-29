@@ -86,6 +86,29 @@ fn temporary_file_creation_skips_colliding_paths() {
     assert_eq!(fs::read_to_string(second).unwrap(), "new");
 }
 
+#[test]
+fn temporary_names_are_recognised_by_the_file_they_were_meant_for() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let generated = next_temp_path(temp.path(), std::ffi::OsStr::new("admission.json"));
+    let generated = generated.file_name().unwrap().to_str().unwrap();
+
+    assert_eq!(temp_file_target(generated), Some("admission.json"));
+    assert!(is_temp_file_for(generated, "admission.json"));
+    assert!(is_temp_file_for(".a.b.ready.1.2.3.tmp", "a.b.ready"));
+    assert!(!is_temp_file_for(generated, "admission"));
+    for name in [
+        "admission.json",
+        "admission.json.1.2.3.tmp",
+        ".admission.json.tmp-1",
+        ".admission.json.1.2.tmp",
+        ".admission.json.1.x.3.tmp",
+        ".admission.json.1..3.tmp",
+        "..1.2.3.tmp",
+    ] {
+        assert_eq!(temp_file_target(name), None, "{name}");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn temporary_file_creation_skips_symlink_collisions() {

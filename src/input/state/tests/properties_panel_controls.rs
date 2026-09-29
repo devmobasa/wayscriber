@@ -1182,6 +1182,39 @@ fn a_selection_saves_its_style_into_a_preset_slot_and_another_takes_it_on() {
 }
 
 #[test]
+fn preset_saves_from_the_panel_reach_the_runtime_drain_one_per_slot() {
+    use crate::input::state::{InputEffect, InputEffectDrain, PanelAction, PresetAction};
+
+    // A panel click is a pointer release, and nothing drains the effects a
+    // release emits until the event loop's runtime pass. Two saves before it
+    // are two config writes, one for each slot.
+    let mut state = create_test_input_state();
+    let source = add_styled_rect(&mut state, PALETTE_GREEN, 8.0, true);
+    open(&mut state, vec![source]);
+    for slot in [1, 2] {
+        click(
+            &mut state,
+            PropertiesPanelHit::Action(PanelAction::SavePreset),
+        );
+        click(
+            &mut state,
+            PropertiesPanelHit::Action(PanelAction::Preset(slot)),
+        );
+    }
+
+    let saved_slots: Vec<usize> = state
+        .drain_input_effects(InputEffectDrain::Runtime)
+        .into_iter()
+        .filter_map(|effect| match effect {
+            InputEffect::Preset(PresetAction::Save { slot, .. }) => Some(slot),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(saved_slots, vec![1, 2]);
+}
+
+#[test]
 fn escape_disarms_saving_before_it_closes_the_panel() {
     use crate::input::state::PanelAction;
 

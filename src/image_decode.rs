@@ -1,5 +1,7 @@
 use std::io::Cursor;
 
+use crate::screen_pixels::EmbeddedImageLimits;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EncodedImageFormat {
     Png,
@@ -11,6 +13,46 @@ pub(crate) struct DecodedImage {
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) rgba: Vec<u8>,
+}
+
+/// The largest image one decode may produce.
+///
+/// The decoder checks the header against this budget before it allocates a
+/// frame buffer, so a small, highly compressible file cannot claim gigabytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DecodeLimits {
+    max_pixels: u64,
+}
+
+impl DecodeLimits {
+    /// A screenshot of the whole output layout, which is cropped to one output
+    /// after decoding. 16384 pixels per side is the cap zune-jpeg already
+    /// applied by default and a common maximum GPU texture size.
+    pub(crate) const SCREEN_CAPTURE: Self = Self {
+        max_pixels: 16_384 * 16_384,
+    };
+
+    fn check(self, width: u32, height: u32) -> Result<(), String> {
+        let within = u64::from(width)
+            .checked_mul(u64::from(height))
+            .is_some_and(|pixels| pixels <= self.max_pixels);
+        if within {
+            return Ok(());
+        }
+
+        Err(format!(
+            "image {width}x{height} exceeds the {} pixel decode budget",
+            self.max_pixels
+        ))
+    }
+}
+
+impl From<EmbeddedImageLimits> for DecodeLimits {
+    fn from(limits: EmbeddedImageLimits) -> Self {
+        Self {
+            max_pixels: limits.max_pixels(),
+        }
+    }
 }
 
 pub(crate) fn format_from_mime_or_bytes(
@@ -35,13 +77,16 @@ pub(crate) fn image_dimensions(
     }
 }
 
+/// Decodes an image to RGBA8, or fails without allocating a frame buffer
+/// when the header declares more pixels than `limits` allows.
 pub(crate) fn decode_rgba(
     format: EncodedImageFormat,
     bytes: &[u8],
+    limits: DecodeLimits,
 ) -> Result<DecodedImage, String> {
     match format {
-        EncodedImageFormat::Png => decode_png_rgba(bytes),
-        EncodedImageFormat::Jpeg => decode_jpeg_rgba(bytes),
+        EncodedImageFormat::Png => decode_png_rgba(bytes, limits),
+        EncodedImageFormat::Jpeg => decode_jpeg_rgba(bytes, limits),
     }
 }
 
@@ -63,9 +108,12 @@ fn png_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
     Ok((info.width, info.height))
 }
 
-fn decode_png_rgba(bytes: &[u8]) -> Result<DecodedImage, String> {
+fn decode_png_rgba(bytes: &[u8], limits: DecodeLimits) -> Result<DecodedImage, String> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let header = decoder.read_header_info().map_err(|err| err.to_string())?;
+    limits.check(header.width, header.height)?;
+
     let mut reader = decoder.read_info().map_err(|err| err.to_string())?;
     let size = reader
         .output_buffer_size()
@@ -150,19 +198,22 @@ fn jpeg_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
     Ok((u32::from(info.width), u32::from(info.height)))
 }
 
-fn decode_jpeg_rgba(bytes: &[u8]) -> Result<DecodedImage, String> {
+fn decode_jpeg_rgba(bytes: &[u8], limits: DecodeLimits) -> Result<DecodedImage, String> {
     use zune_jpeg::zune_core::bytestream::ZCursor;
     use zune_jpeg::zune_core::colorspace::ColorSpace;
     use zune_jpeg::zune_core::options::DecoderOptions;
 
     let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGB);
     let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
-    let rgb = decoder.decode().map_err(|err| err.to_string())?;
+    decoder.decode_headers().map_err(|err| err.to_string())?;
     let info = decoder
         .info()
         .ok_or_else(|| "JPEG did not include dimensions".to_string())?;
     let width = u32::from(info.width);
     let height = u32::from(info.height);
+    limits.check(width, height)?;
+
+    let rgb = decoder.decode().map_err(|err| err.to_string())?;
     let expected_len = pixel_count(width, height)?
         .checked_mul(3)
         .ok_or_else(|| "image dimensions are too large".to_string())?;
@@ -194,17 +245,101 @@ fn pixel_count(width: u32, height: u32) -> Result<usize, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{EncodedImageFormat, decode_rgba};
+    use super::{DecodeLimits, EncodedImageFormat, decode_rgba};
+    use crate::screen_pixels::EmbeddedImageLimits;
+
+    fn encode_rgba_png(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let mut encoder = png::Encoder::new(&mut bytes, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer
+            .write_image_data(&vec![0x7f; width as usize * height as usize * 4])
+            .unwrap();
+        writer.finish().unwrap();
+        bytes
+    }
+
+    /// A PNG signature and IHDR declaring `width`x`height`, with no image data.
+    fn png_header_only(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let mut encoder = png::Encoder::new(&mut bytes, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        drop(encoder.write_header().unwrap());
+        bytes
+    }
 
     #[test]
     fn decode_jpeg_rgba_preserves_cmyk_jpeg_colors() {
         let bytes = crate::base64::decode_standard(CMYK_RED_JPEG).unwrap();
 
-        let image = decode_rgba(EncodedImageFormat::Jpeg, &bytes).unwrap();
+        let image = decode_rgba(
+            EncodedImageFormat::Jpeg,
+            &bytes,
+            EmbeddedImageLimits::default().into(),
+        )
+        .unwrap();
 
         assert_eq!(image.width, 1);
         assert_eq!(image.height, 1);
         assert_eq!(image.rgba, [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn png_header_over_the_embedded_budget_is_rejected_before_image_data() {
+        let bytes = png_header_only(20_000, 20_000);
+
+        let err = decode_rgba(
+            EncodedImageFormat::Png,
+            &bytes,
+            EmbeddedImageLimits::default().into(),
+        )
+        .unwrap_err();
+
+        assert!(
+            err.contains("20000x20000 exceeds the 48000000 pixel decode budget"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn png_decode_admits_exactly_the_budget_and_rejects_one_pixel_more() {
+        let bytes = encode_rgba_png(2, 2);
+
+        let at_budget = decode_rgba(
+            EncodedImageFormat::Png,
+            &bytes,
+            DecodeLimits { max_pixels: 4 },
+        )
+        .unwrap();
+        let over_budget = decode_rgba(
+            EncodedImageFormat::Png,
+            &bytes,
+            DecodeLimits { max_pixels: 3 },
+        );
+
+        assert_eq!((at_budget.width, at_budget.height), (2, 2));
+        assert_eq!(at_budget.rgba.len(), 16);
+        assert!(over_budget.unwrap_err().contains("decode budget"));
+    }
+
+    #[test]
+    fn jpeg_header_over_the_budget_is_rejected_before_decoding() {
+        let bytes = crate::base64::decode_standard(CMYK_RED_JPEG).unwrap();
+
+        let err = decode_rgba(
+            EncodedImageFormat::Jpeg,
+            &bytes,
+            DecodeLimits { max_pixels: 0 },
+        )
+        .unwrap_err();
+
+        assert!(
+            err.contains("1x1 exceeds the 0 pixel decode budget"),
+            "{err}"
+        );
     }
 
     const CMYK_RED_JPEG: &str = "\

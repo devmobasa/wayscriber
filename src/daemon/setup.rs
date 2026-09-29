@@ -35,9 +35,28 @@ fn ensure_user_service_file() -> Result<PathBuf> {
     }
 
     let executable = std::env::current_exe().context("failed to resolve wayscriber executable")?;
+    let executable = service_executable(executable)?;
     let service_contents = render_user_service_unit(&executable);
     write_if_changed(&service_path, &service_contents)?;
     Ok(service_path)
+}
+
+/// The running executable, if a unit may start it.
+///
+/// After an in-place upgrade the kernel reports the running image as
+/// `… (deleted)`, and a unit pointing there, or at anything that is no longer
+/// a file, fails every start while setup reports success.
+fn service_executable(executable: PathBuf) -> Result<PathBuf> {
+    let replaced = executable
+        .to_str()
+        .is_some_and(|path| path.ends_with(" (deleted)"));
+    if replaced || !executable.is_file() {
+        bail!(
+            "the running wayscriber executable {} was replaced or removed; restart wayscriber and run background setup again",
+            executable.display()
+        );
+    }
+    Ok(executable)
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<()> {
@@ -133,6 +152,29 @@ mod tests {
                 OsStr::new("wayscriber.service"),
             ]
         );
+    }
+
+    #[test]
+    fn a_replaced_or_missing_executable_is_not_written_into_the_unit() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let installed = temp.path().join("wayscriber");
+        fs::write(&installed, b"binary").unwrap();
+
+        assert_eq!(service_executable(installed.clone()).unwrap(), installed);
+        let replaced = temp.path().join("wayscriber (deleted)");
+        fs::write(&replaced, b"binary").unwrap();
+        for path in [
+            replaced,
+            temp.path().join("missing"),
+            temp.path().to_path_buf(),
+        ] {
+            let error = service_executable(path.clone()).unwrap_err();
+            assert!(
+                format!("{error:#}").contains("restart wayscriber"),
+                "{}: {error:#}",
+                path.display()
+            );
+        }
     }
 
     #[test]

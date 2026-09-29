@@ -68,9 +68,9 @@ pub(super) fn render_page_panel(
 
     // Header: show "drag to reorder" hint only during drag
     let label = if is_dragging && page_count > 1 {
-        format!("Pages — {}  • drag to reorder", board.spec.name)
+        format!("Pages: {}  • drag to reorder", board.spec.name)
     } else {
-        format!("Pages — {}", board.spec.name)
+        format!("Pages: {}", board.spec.name)
     };
     let footer_style = UiTextStyle {
         family: "Sans",

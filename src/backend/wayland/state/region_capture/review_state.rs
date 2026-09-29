@@ -5,7 +5,7 @@ pub(super) struct InteractiveReviewSeed {
     pub(super) source: ScreenSourceToken,
     pub(super) rect: ImagePixelRect,
     #[cfg(test)]
-    pub(super) display: RegionSelection,
+    pub(super) display: Option<RegionSelection>,
 }
 
 impl InteractiveReviewSeed {
@@ -55,16 +55,15 @@ impl ActiveScreenRegion {
             source: *source,
             rect,
             #[cfg(test)]
-            display: {
-                let display = super::super::screen_image::screen_rect_for_image_rect(source, rect);
-                RegionSelection {
+            display: super::super::screen_image::screen_rect_for_image_rect(source, rect).map(
+                |display| RegionSelection {
                     start: (f64::from(display.x), f64::from(display.y)),
                     end: (
                         f64::from(display.x.saturating_add(display.width)),
                         f64::from(display.y.saturating_add(display.height)),
                     ),
-                }
-            },
+                },
+            ),
         };
         // Re-entering Review replaces the rectangle wholesale — `Ctrl+A` can
         // do that while a grip is still held — so the old grip must not
@@ -99,8 +98,11 @@ impl ActiveScreenRegion {
         if logical_anchor.is_some() || review_resize.is_some() {
             return false;
         }
-        let display =
-            crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(source, rect);
+        let Some(display) =
+            crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(source, rect)
+        else {
+            return false;
+        };
         let x = logical.0.floor() as i32;
         let y = logical.1.floor() as i32;
         if x < display.x

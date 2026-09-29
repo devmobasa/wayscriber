@@ -9,12 +9,13 @@ use super::super::{SELECTION_DRAG_THRESHOLD, TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DO
 /// Ends a selection press released at `release`. A press that stayed within
 /// the click radius was a click on the grabbed shape, and the second click in
 /// a row opens it: text and sticky notes for editing, anything else in the
-/// properties panel.
+/// properties panel. A press that another action settled while it was held
+/// (`release` is `None`) records its move but is never a click.
 pub(super) fn finish_moving_selection(
     state: &mut InputState,
     measurer: &crate::draw::TextMeasurer,
     mut grab: SelectionGrab,
-    release: (i32, i32),
+    release: Option<(i32, i32)>,
     snapshots: Vec<(ShapeId, ShapeSnapshot)>,
     moved: bool,
 ) {
@@ -22,7 +23,7 @@ pub(super) fn finish_moving_selection(
         state.push_translation_undo(measurer, snapshots);
     }
 
-    if grab.track(release.0, release.1) {
+    if release.is_none_or(|(x, y)| grab.track(x, y)) {
         state.text_editing.set_last_click(None);
     } else if state.text_editing.register_click(
         grab.shape_id,

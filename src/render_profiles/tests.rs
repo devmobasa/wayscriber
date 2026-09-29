@@ -127,6 +127,131 @@ fn remap_argb8888_changed_regions_skips_unchanged_canvas_pixels() {
     );
 }
 
+fn black_white_swap_profile() -> RenderColorProfile {
+    RenderColorProfile::from_config(&RenderProfileConfig {
+        id: "print".to_string(),
+        name: "Print".to_string(),
+        mappings: vec![
+            RenderColorMappingConfig {
+                from: "#000000".to_string(),
+                to: "#FFFFFF".to_string(),
+            },
+            RenderColorMappingConfig {
+                from: "#FFFFFF".to_string(),
+                to: "#000000".to_string(),
+            },
+        ],
+    })
+    .expect("profile")
+}
+
+fn filled_pixels(width: usize, height: usize, pixel: u32) -> Vec<u8> {
+    pixel.to_ne_bytes().repeat(width * height)
+}
+
+fn read_pixels(data: &[u8]) -> Vec<u32> {
+    data.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|bytes| u32::from_ne_bytes(*bytes))
+        .collect()
+}
+
+/// A 4x3 surface with two overlapping damage rects; `#` marks damaged pixels:
+///
+/// ```text
+/// ###.
+/// ####
+/// .###
+/// ```
+fn overlapping_damage() -> [Rect; 2] {
+    [
+        Rect::new(0, 0, 3, 2).expect("valid rect"),
+        Rect::new(1, 1, 3, 2).expect("valid rect"),
+    ]
+}
+
+fn expected_after_overlapping_swap() -> Vec<u32> {
+    let black = argb(255, 0, 0, 0);
+    let white = argb(255, 255, 255, 255);
+    vec![
+        white, white, white, black, //
+        white, white, white, white, //
+        black, white, white, white, //
+    ]
+}
+
+#[test]
+fn remap_argb8888_regions_remaps_overlapping_damage_once() {
+    let profile = black_white_swap_profile();
+    let mut data = filled_pixels(4, 3, argb(255, 0, 0, 0));
+
+    profile.remap_argb8888_regions(&mut data, 4, 3, 16, &overlapping_damage());
+
+    assert_eq!(read_pixels(&data), expected_after_overlapping_swap());
+}
+
+#[test]
+fn remap_argb8888_changed_regions_remaps_overlapping_damage_once() {
+    let profile = black_white_swap_profile();
+    let baseline = filled_pixels(4, 3, argb(255, 255, 0, 0));
+    let mut data = filled_pixels(4, 3, argb(255, 0, 0, 0));
+
+    profile.remap_argb8888_regions_changed_from(
+        &mut data,
+        &baseline,
+        4,
+        3,
+        16,
+        &overlapping_damage(),
+    );
+
+    assert_eq!(read_pixels(&data), expected_after_overlapping_swap());
+}
+
+#[test]
+fn remap_argb8888_regions_remaps_duplicate_and_contained_damage_once() {
+    let profile = black_white_swap_profile();
+    let mut data = filled_pixels(4, 1, argb(255, 0, 0, 0));
+    let damage = [
+        Rect::new(0, 0, 4, 1).expect("valid rect"),
+        Rect::new(0, 0, 4, 1).expect("valid rect"),
+        Rect::new(1, 0, 2, 1).expect("valid rect"),
+    ];
+
+    profile.remap_argb8888_regions(&mut data, 4, 1, 16, &damage);
+
+    assert_eq!(read_pixels(&data), vec![argb(255, 255, 255, 255); 4]);
+}
+
+#[test]
+fn remap_argb8888_regions_clamps_damage_to_the_surface() {
+    let profile = black_white_swap_profile();
+    let mut data = filled_pixels(3, 2, argb(255, 0, 0, 0));
+    let damage = [
+        Rect::new(-5, -5, 7, 6).expect("valid rect"),
+        Rect::new(1, 1, 50, 50).expect("valid rect"),
+        Rect {
+            x: 0,
+            y: 0,
+            width: -3,
+            height: 2,
+        },
+    ];
+
+    profile.remap_argb8888_regions(&mut data, 3, 2, 12, &damage);
+
+    let black = argb(255, 0, 0, 0);
+    let white = argb(255, 255, 255, 255);
+    assert_eq!(
+        read_pixels(&data),
+        vec![
+            white, white, black, //
+            black, white, white, //
+        ]
+    );
+}
+
 #[test]
 fn render_profile_set_cycles_through_profiles_and_off_state() {
     fn active_id(set: &RenderProfileSet) -> Option<&str> {

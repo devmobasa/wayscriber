@@ -26,6 +26,7 @@ use super::control::read_daemon_toggle_response;
 #[cfg(test)]
 use super::control::{DaemonToggleCommand, DaemonToggleCommands};
 use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_listener};
+use super::overlay::{ShowOutcome, overlay_start_backoff_reason};
 use super::protocol_v2::DaemonControlProtocolMode;
 use super::protocol_v2::OverlayChildOwner;
 use super::protocol_v2::{
@@ -49,9 +50,30 @@ const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(70
 // This bounds retries after journal I/O admission failures. It is unrelated to
 // the removed tray startup-discovery fallback; retries use the existing v2 timerfd.
 const ACTION_ADMISSION_RETRY_DELAY: Duration = Duration::from_millis(50);
+// How long a starting daemon keeps trying for its single-instance lock before
+// it concludes another daemon holds it, and how often it retries meanwhile.
+const DAEMON_LOCK_PROBE_GRACE: Duration = Duration::from_millis(250);
+const DAEMON_LOCK_RETRY: Duration = Duration::from_millis(10);
 #[cfg(unix)]
 const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 mod toggles;
+
+/// Fails once the daemon's process broker is unusable.
+///
+/// A failed exchange retires the broker for good, and without one the daemon
+/// can never start an overlay again. Staying up would keep the tray alive
+/// while every show silently backs off, so the daemon exits instead and lets
+/// the service manager's `Restart=on-failure` start a fresh one.
+fn ensure_process_broker_usable(
+    broker: Option<&crate::process_broker::ProcessBroker>,
+) -> Result<()> {
+    match broker {
+        Some(broker) if !broker.is_healthy() => Err(anyhow::anyhow!(
+            "process broker is no longer usable; exiting so the daemon can be restarted"
+        )),
+        _ => Ok(()),
+    }
+}
 
 fn finish_action_batch(failures: Vec<String>) -> Result<()> {
     if failures.is_empty() {
@@ -232,13 +254,25 @@ impl Daemon {
             .open(&lock_path)
             .with_context(|| format!("failed to open daemon lock {}", lock_path.display()))?;
 
-        match try_lock_exclusive(&lock_file) {
-            Ok(()) => {
-                self.lock_file = Some(lock_file);
-                Ok(())
+        // Clients and the configurator probe this lock by taking it for an
+        // instant. A daemon starting during a probe must not take it for
+        // another daemon: it would exit as already running, and the unit's
+        // RestartPreventExitStatus=75 would leave the service down.
+        let deadline = Instant::now() + DAEMON_LOCK_PROBE_GRACE;
+        loop {
+            match try_lock_exclusive(&lock_file) {
+                Ok(()) => {
+                    self.lock_file = Some(lock_file);
+                    return Ok(());
+                }
+                Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return Err(AlreadyRunningError.into());
+                    }
+                    std::thread::sleep(DAEMON_LOCK_RETRY);
+                }
+                Err(err) => return Err(err).context("failed to lock daemon instance"),
             }
-            Err(err) if err.kind() == ErrorKind::WouldBlock => Err(AlreadyRunningError.into()),
-            Err(err) => Err(err).context("failed to lock daemon instance"),
         }
     }
 
@@ -516,6 +550,7 @@ impl Daemon {
                 }
             }
 
+            ensure_process_broker_usable(crate::process_broker::current().ok().as_ref())?;
             self.arm_v2_lifecycle_deadline()?;
             let readiness = wait_for_daemon_lifecycle(
                 daemon_wake,
@@ -654,8 +689,12 @@ impl Daemon {
                 continue;
             }
 
+            // A start held back by the spawn backoff is a failed delivery: an
+            // entry left eligible would replay whenever the overlay next
+            // started, long after the click that asked for it.
             let delivery = if self.overlay_state == OverlayState::Hidden {
                 self.show_overlay()
+                    .and_then(ShowOutcome::require_shown)
                     .and_then(|()| self.signal_overlay_action_ready(action))
             } else {
                 self.signal_overlay_action_ready(action)
@@ -737,6 +776,14 @@ impl Daemon {
                     claimed.defer()?;
                     continue;
                 }
+                if self.overlay_state == OverlayState::Hidden
+                    && let Some(retry_in) = self.overlay_start_backoff()
+                {
+                    claimed.reject(&overlay_start_backoff_reason(retry_in))?;
+                    claimed.defer()?;
+                    continue;
+                }
+
                 let journal = self
                     .v2_action_journal
                     .as_ref()
@@ -748,16 +795,26 @@ impl Daemon {
                     continue;
                 };
                 let was_hidden = self.overlay_state == OverlayState::Hidden;
-                claimed.commit(if was_hidden {
+                let committed = claimed.commit(if was_hidden {
                     EffectKind::StartAndDeliverAction
                 } else {
                     EffectKind::DeliverReadyAction
                 })?;
                 claimed.defer()?;
+                if committed.is_none() {
+                    // The deadline passed and the command was rejected, so the
+                    // client was told nothing happened: nothing may start.
+                    journal.abandon_command(
+                        &command_identity,
+                        &prepared,
+                        "command authorization deadline expired before commit",
+                    )?;
+                    continue;
+                }
 
                 self.pending_toggle_request = Some(legacy_request);
                 if was_hidden {
-                    if let Err(error) = self.show_overlay() {
+                    if let Err(error) = self.show_overlay().and_then(ShowOutcome::require_shown) {
                         let reason = format!("committed overlay start failed: {error:#}");
                         journal.abandon_command(&command_identity, &prepared, &reason)?;
                         warn!("{reason}");
@@ -796,7 +853,22 @@ impl Daemon {
             } else {
                 EffectKind::StartAndShow
             };
-            claimed.commit(effect)?;
+            // Decided before the commit, so the caller learns that nothing
+            // happened instead of a success for a start that never ran.
+            if effect == EffectKind::StartAndShow
+                && let Some(retry_in) = self.overlay_start_backoff()
+            {
+                claimed.reject(&overlay_start_backoff_reason(retry_in))?;
+                claimed.defer()?;
+                continue;
+            }
+
+            if claimed.commit(effect)?.is_none() {
+                // Rejected at its deadline: the client was told nothing
+                // happened, so the overlay must not change.
+                claimed.defer()?;
+                continue;
+            }
             // Typed requests are individually authorized and must not inherit
             // the legacy desktop-shortcut duplicate suppression window.
             self.last_plain_visibility_toggle_completed_at = None;

@@ -7,7 +7,7 @@ use wayscriber::config::{
 use crate::models::color::ColorTripletInput;
 use crate::models::error::FormError;
 
-use super::validation::{default_pen_fallback, parse_triplet, parse_usize};
+use super::validation::{check_board_list, default_pen_fallback, parse_triplet, parse_usize};
 use super::{BoardBackgroundOption, BoardItemDraft, BoardsDraft, OptionalTripletInput};
 
 impl OptionalTripletInput {
@@ -159,9 +159,12 @@ impl BoardsDraft {
 
     pub fn to_config(&self, errors: &mut Vec<FormError>) -> BoardsConfig {
         let mut config = BoardsConfig::default();
+        let mut max_count = None;
         parse_usize(&self.max_count, "boards.max_count", errors, |value| {
-            config.max_count = value
+            config.max_count = value;
+            max_count = Some(value);
         });
+        check_board_list(self, max_count, errors);
         config.auto_create = self.auto_create;
         config.show_board_badge = self.show_board_badge;
         config.pan_enabled = self.pan_enabled;

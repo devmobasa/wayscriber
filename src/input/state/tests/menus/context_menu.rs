@@ -530,7 +530,7 @@ fn page_context_menu_header_uses_page_name_and_enables_move_submenu() {
     state.open_page_context_menu((5, 5), blackboard, 1);
 
     let entries = state.context_menu_entries();
-    assert_eq!(entries[0].label, "Agenda — Page 2 (2/2)");
+    assert_eq!(entries[0].label, "Agenda: Page 2 (2/2)");
     let move_entry = entries
         .iter()
         .find(|entry| entry.submenu == Some(ContextMenuKind::PageMove))

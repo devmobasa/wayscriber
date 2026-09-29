@@ -144,3 +144,121 @@ fn test_text_mode_f10_shows_help() {
     // Should still be in text mode
     assert!(matches!(state.state, DrawingState::TextInput { .. }));
 }
+
+const FUNCTION_KEYS: [Key; 12] = [
+    Key::F1,
+    Key::F2,
+    Key::F3,
+    Key::F4,
+    Key::F5,
+    Key::F6,
+    Key::F7,
+    Key::F8,
+    Key::F9,
+    Key::F10,
+    Key::F11,
+    Key::F12,
+];
+
+fn function_key_label(key: Key) -> String {
+    crate::input::state::actions::key_press::bindings::key_to_action_label(key)
+        .expect("function keys have binding labels")
+}
+
+/// Every default binding on a function key, with the key that triggers it.
+fn default_function_key_bindings() -> Vec<(crate::config::KeyBinding, Key, Action)> {
+    let map = crate::config::KeybindingsConfig::default()
+        .build_action_map()
+        .expect("default keybindings build");
+    let mut bindings = Vec::new();
+    for (shortcut, action) in map {
+        let crate::config::Shortcut::Single(crate::config::ShortcutTrigger::Keyboard(binding)) =
+            shortcut
+        else {
+            continue;
+        };
+        if let Some(key) = FUNCTION_KEYS
+            .into_iter()
+            .find(|key| function_key_label(*key) == binding.key)
+        {
+            bindings.push((binding, key, action));
+        }
+    }
+    bindings
+}
+
+/// What each default function-key action visibly changes. A new default
+/// function-key binding needs a probe here.
+fn function_key_action_probe(state: &mut InputState, action: Action) -> String {
+    match action {
+        Action::ToggleHelp | Action::ToggleQuickHelp => format!(
+            "{} {}",
+            state.help_overlay.visible, state.help_overlay.quick_mode
+        ),
+        Action::ToggleStatusBar => state.ui_visibility.show_status_bar.to_string(),
+        Action::ToggleToolbar => state.toolbar_visible().to_string(),
+        Action::CycleToolbarDisplay => format!("{:?}", state.toolbar_top_display_mode()),
+        Action::ToggleLightMode => state.light_mode_active().to_string(),
+        Action::OpenContextMenu => state.is_context_menu_open().to_string(),
+        Action::OpenConfigurator => format!("{:?}", state.take_pending_backend_action()),
+        other => panic!("no probe for the default function-key action {other:?}"),
+    }
+}
+
+#[test]
+fn every_default_function_key_binding_works_while_typing() {
+    let bindings = default_function_key_bindings();
+    assert!(
+        bindings
+            .iter()
+            .any(|(_, key, action)| *key == Key::F6 && *action == Action::ToggleLightMode),
+        "F6 toggles light mode by default"
+    );
+
+    for (binding, key, action) in bindings {
+        let mut state = create_test_input_state();
+        state.compositor_capabilities.layer_shell = true;
+        state.state = DrawingState::text_input(100, 100, String::from("draft"));
+        let before = function_key_action_probe(&mut state, action);
+        state.modifiers.ctrl = binding.ctrl;
+        state.modifiers.shift = binding.shift;
+        state.modifiers.alt = binding.alt;
+        state.modifiers.logo = binding.logo;
+
+        state.on_key_press(key);
+
+        assert_ne!(
+            function_key_action_probe(&mut state, action),
+            before,
+            "{binding:?} did not run {action:?} while typing"
+        );
+    }
+}
+
+#[test]
+fn user_bound_function_keys_work_while_typing() {
+    for key in FUNCTION_KEYS {
+        let label = function_key_label(key);
+        let mut keybindings = crate::config::KeybindingsConfig::default();
+        for bound in [
+            &mut keybindings.ui.toggle_help,
+            &mut keybindings.ui.toggle_toolbar,
+            &mut keybindings.ui.cycle_toolbar_display,
+            &mut keybindings.ui.toggle_light_mode,
+            &mut keybindings.ui.open_configurator,
+        ] {
+            bound.retain(|existing| *existing != label);
+        }
+        keybindings.ui.toggle_status_bar = vec![label.clone()];
+        let mut state = create_test_input_state_with_keybindings(keybindings);
+        state.state = DrawingState::text_input(100, 100, String::from("draft"));
+        let shown = state.ui_visibility.show_status_bar;
+
+        state.on_key_press(key);
+
+        assert_ne!(
+            state.ui_visibility.show_status_bar, shown,
+            "{label} bound to the status bar did nothing while typing"
+        );
+    }
+}

@@ -35,18 +35,20 @@ pub(super) enum ConfigLoadFailure {
     /// The whole file was unreadable (I/O or TOML syntax); every setting is a
     /// default.
     File { error: String },
-    /// Named top-level sections were unreadable; those sections are defaults,
-    /// the rest of the file is in effect.
+    /// Named entries (single values where the load could split their table)
+    /// were unreadable; those entries are defaults, the rest of the file is in
+    /// effect.
     Sections(Vec<ConfigSectionError>),
 }
 
 impl ConfigLoadFailure {
-    /// Whether `section` is running on defaults because authored config could
-    /// not be read. A whole-file failure necessarily includes every section.
+    /// Whether any part of `section` is running on defaults because authored
+    /// config could not be read. A whole-file failure necessarily includes
+    /// every section.
     pub(super) fn section_failed(&self, section: &str) -> bool {
         match self {
             Self::File { .. } => true,
-            Self::Sections(sections) => sections.iter().any(|entry| entry.section == section),
+            Self::Sections(sections) => sections.iter().any(|entry| entry.is_within(section)),
         }
     }
 }
@@ -151,7 +153,7 @@ pub(super) fn notify_config_load_failure(
             (
                 format!("Config {names} could not be read; using defaults for it"),
                 format!(
-                    "{details}\nNothing was changed in {}; fix the value there to get the section back.",
+                    "{details}\nNothing was changed in {}; fix the value there to get the setting back.",
                     config_path_display()
                 ),
             )
@@ -694,9 +696,9 @@ mod tests {
         });
     }
 
-    /// One bad value costs its own section for the session; everything else
-    /// the user authored stays in effect, and startup says which section is
-    /// running on defaults.
+    /// One bad value costs only itself for the session; everything else the
+    /// user authored stays in effect, and startup says which setting is
+    /// running on defaults and which section it belongs to.
     #[test]
     fn load_keeps_the_rest_of_the_file_when_one_section_is_invalid() {
         with_temp_config_home(|_| {
@@ -718,7 +720,7 @@ mod tests {
                 panic!("expected a per-section load failure report");
             };
             assert_eq!(sections.len(), 1);
-            assert_eq!(sections[0].section, "ui");
+            assert_eq!(sections[0].section, "ui.theme");
             let failure = loaded.load_failure.as_ref().expect("section failure");
             assert!(failure.section_failed("ui"));
             assert!(!failure.section_failed("session"));

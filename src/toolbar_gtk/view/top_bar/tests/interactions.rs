@@ -338,38 +338,43 @@ fn assert_shape_pill_interaction(
 
 #[test]
 fn gtk_stateful_toggle_adapter_emits_the_requested_live_state() {
-    use super::super::controls::event_for_toggle_state;
+    use super::super::controls::TopToggle;
 
     let cases = [
         (
-            model::TopToolbarControl::ShapePicker,
+            TopToggle::ShapePicker,
             ToolbarEvent::ToggleShapePicker(false),
             ToolbarEvent::ToggleShapePicker(true),
         ),
         (
-            model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight),
+            TopToggle::Highlight,
             ToolbarEvent::ToggleAllHighlight(false),
             ToolbarEvent::ToggleAllHighlight(true),
         ),
         (
-            model::TopToolbarControl::Pin,
+            TopToggle::Pin,
             ToolbarEvent::PinTopToolbar(false),
             ToolbarEvent::PinTopToolbar(true),
         ),
         (
-            model::TopToolbarControl::Overflow,
+            TopToggle::Overflow,
             ToolbarEvent::ToggleTopOverflow(false),
             ToolbarEvent::ToggleTopOverflow(true),
         ),
         (
-            model::TopToolbarControl::HighlightRing,
+            TopToggle::LayoutMode,
+            ToolbarEvent::ToggleLayoutMenu(false),
+            ToolbarEvent::ToggleLayoutMenu(true),
+        ),
+        (
+            TopToggle::HighlightRing,
             ToolbarEvent::ToggleHighlightToolRing(false),
             ToolbarEvent::ToggleHighlightToolRing(true),
         ),
     ];
 
-    for (control, inactive, active) in cases {
-        assert_eq!(event_for_toggle_state(control, false), inactive);
-        assert_eq!(event_for_toggle_state(control, true), active);
+    for (toggle, inactive, active) in cases {
+        assert_eq!(toggle.event(false), inactive);
+        assert_eq!(toggle.event(true), active);
     }
 }

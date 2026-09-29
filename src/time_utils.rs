@@ -156,6 +156,8 @@ fn utc_datetime_from_unix(secs: i64) -> Option<LocalDateTime> {
 fn libc_datetime_from_unix(secs: i64, local: bool) -> Option<LocalDateTime> {
     let raw = unix_seconds_to_time_t(secs)?;
     let mut out = std::mem::MaybeUninit::<libc::tm>::uninit();
+    // SAFETY: `raw` is a valid time_t and `out` points to writable storage for
+    // one `tm`. The reentrant variants keep no pointer to either.
     let ptr = unsafe {
         if local {
             libc::localtime_r(&raw, out.as_mut_ptr())
@@ -167,6 +169,7 @@ fn libc_datetime_from_unix(secs: i64, local: bool) -> Option<LocalDateTime> {
         return None;
     }
 
+    // SAFETY: a non-null result means the call filled in every field of `out`.
     let tm = unsafe { out.assume_init() };
     tm_to_datetime(tm)
 }

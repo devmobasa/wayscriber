@@ -90,6 +90,26 @@ fn catalog_path_honors_xdg_data_home() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn catalog_file_and_its_new_directories_are_private() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = crate::test_temp::tempdir().unwrap();
+    let data_home = temp.path().join("data");
+    let _env = EnvGuard::set_xdg_data_home(&data_home);
+    let session = temp.path().join("lecture.wayscriber-session");
+    fs::write(&session, b"{}").unwrap();
+
+    upsert_session_event(&session, CatalogEvent::Opened).unwrap();
+
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    let path = catalog_path();
+    assert_eq!(mode(&path), 0o600);
+    assert_eq!(mode(path.parent().unwrap()), 0o700);
+    assert_eq!(mode(&data_home), 0o700);
+}
+
 #[test]
 fn malformed_catalog_is_not_clobbered_by_upsert_failure() {
     let temp = crate::test_temp::tempdir().unwrap();

@@ -40,6 +40,9 @@ std::thread_local! {
 #[derive(Debug, Clone)]
 pub(in crate::input::state) struct CanvasIndex {
     hit_test_cache: HashMap<ShapeId, crate::util::Rect>,
+    /// The frame whose shapes `hit_test_cache` describes. Shape ids are
+    /// page-local, so an entry is only meaningful for the frame it came from.
+    hit_test_cache_frame: Option<ActiveFrameOrderGuard>,
     content_generation: u64,
     tolerance: f64,
     linear_threshold: usize,
@@ -51,6 +54,7 @@ impl Default for CanvasIndex {
     fn default() -> Self {
         Self {
             hit_test_cache: HashMap::new(),
+            hit_test_cache_frame: None,
             content_generation: 0,
             tolerance: 6.0,
             linear_threshold: 400,
@@ -80,6 +84,7 @@ impl CanvasIndex {
     pub(super) fn invalidate(&mut self) {
         self.content_generation = self.content_generation.wrapping_add(1);
         self.hit_test_cache.clear();
+        self.hit_test_cache_frame = None;
         self.spatial_index = None;
     }
 
@@ -95,6 +100,7 @@ impl CanvasIndex {
         guard: ActiveFrameOrderGuard,
     ) {
         self.content_generation = self.content_generation.wrapping_add(1);
+        self.sync_hit_test_cache_frame(guard);
         self.hit_test_cache.remove(&id);
 
         if self
@@ -251,6 +257,7 @@ impl CanvasIndex {
         let tolerance =
             HitTestTolerance::new(self.tolerance).unwrap_or(HitTestTolerance::ONE_PIXEL);
         let len = frame.shapes.len();
+        self.sync_hit_test_cache_frame(guard);
 
         if len > self.linear_threshold {
             self.ensure_for_frame(measurer, frame, guard);
@@ -320,6 +327,20 @@ impl CanvasIndex {
     #[cfg(test)]
     pub(super) fn has_spatial_index(&self) -> bool {
         self.spatial_index.is_some()
+    }
+
+    /// Drops cached bounds that belong to another frame before they are read
+    /// or edited for `guard`'s frame.
+    fn sync_hit_test_cache_frame(&mut self, guard: ActiveFrameOrderGuard) {
+        if self
+            .hit_test_cache_frame
+            .is_some_and(|frame| frame.same_frame(guard))
+        {
+            return;
+        }
+
+        self.hit_test_cache.clear();
+        self.hit_test_cache_frame = Some(guard);
     }
 
     fn normalized_tolerance(tolerance: f64) -> f64 {
@@ -436,6 +457,39 @@ mod canvas_index_owner_tests {
         );
 
         assert!(!index.has_spatial_index());
+    }
+
+    #[test]
+    fn cached_hit_bounds_do_not_follow_a_page_local_id_onto_another_frame() {
+        let measurer = TextMeasurer::default();
+        let source = frame_with_rectangles(1);
+        let mut target = Frame::new();
+        let target_id = target.add_shape(Shape::Rect {
+            x: 300,
+            y: 300,
+            w: 10,
+            h: 10,
+            color: Color::new(0.0, 0.0, 0.0, 1.0),
+            thick: 2.0,
+            fill: true,
+            fill_color: None,
+        });
+        assert_eq!(source.shapes[0].id, target_id, "shape ids are page-local");
+        let mut index = CanvasIndex::default();
+        assert_eq!(
+            index.hit_test_at(&measurer, &source, guard(1, &source), 5, 5),
+            Some(target_id)
+        );
+
+        let target_guard = ActiveFrameOrderGuard {
+            board_index: 1,
+            ..guard(1, &target)
+        };
+
+        assert_eq!(
+            index.hit_test_at(&measurer, &target, target_guard, 305, 305),
+            Some(target_id)
+        );
     }
 
     #[test]

@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 use super::super::super::state::{OverlaySuppression, WaylandState};
 use super::super::helpers::friendly_capture_error;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
-use crate::capture::{CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind};
+use crate::capture::{
+    CaptureFailureKind, CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind,
+};
 use crate::config::Action;
 use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
 use crate::notification;
@@ -159,6 +161,7 @@ pub(super) fn handle_pending_actions(
             }
             InputEffect::CopyHex(color) => state.handle_copy_hex_color(color),
             InputEffect::PasteHex(target) => state.handle_paste_hex_color(target),
+            InputEffect::Preset(action) => state.handle_preset_action(action),
             InputEffect::QuickColor(edit) => state.handle_quick_color_edit(edit),
             InputEffect::KeybindingEdit(request) => state.handle_keybinding_edit(request),
             InputEffect::Backend(action) => apply_backend_effect(state, action),
@@ -175,8 +178,7 @@ pub(super) fn handle_pending_actions(
             | InputEffect::TextCopy(_)
             | InputEffect::TextPaste(_)
             | InputEffect::SelectionClipboardPublish(_)
-            | InputEffect::ClipboardPaste(_)
-            | InputEffect::Preset(_)) => {
+            | InputEffect::ClipboardPaste(_)) => {
                 unreachable!("runtime drain returned {effect:?}")
             }
         }
@@ -350,7 +352,7 @@ fn handle_capture_worker_failure(
         state.capture.finish_capture_lifecycle();
         let message = operation
             .filter(|operation| *operation == ImageOperationKind::Screenshot)
-            .map(|_| friendly_capture_error(error))
+            .map(|_| friendly_capture_error(CaptureFailureKind::Other))
             .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
         warn!("Board region capture worker failed: {error}");
         state
@@ -393,10 +395,17 @@ fn resolve_board_capture_outcome(
             );
             None
         }
-        (CaptureOutcome::Failed { operation, message }, Some(_)) => {
+        (
+            CaptureOutcome::Failed {
+                operation,
+                kind,
+                message,
+            },
+            Some(_),
+        ) => {
             state.capture.finish_capture_lifecycle();
             let friendly_error = if matches!(operation, ImageOperationKind::Screenshot) {
-                friendly_capture_error(&message)
+                friendly_capture_error(kind)
             } else {
                 message.clone()
             };
@@ -467,9 +476,7 @@ fn handle_capture_results(state: &mut WaylandState) {
             }
 
             // Handle clipboard failure with fallback option
-            let clipboard_failed = !result.copied_to_clipboard
-                && result.saved_path.is_none()
-                && !result.image_data.is_empty();
+            let clipboard_failed = result.clipboard_copy_failed();
 
             if clipboard_failed {
                 // Clipboard was the only destination and it failed - don't exit,
@@ -585,11 +592,15 @@ fn handle_capture_results(state: &mut WaylandState) {
         CaptureOutcome::DesktopBackdropSuccess(backdrop) => {
             state.finish_pending_board_pdf_export_with_backdrop(backdrop, exit_after_capture);
         }
-        CaptureOutcome::Failed { operation, message } => {
+        CaptureOutcome::Failed {
+            operation,
+            kind,
+            message,
+        } => {
             state.capture.clear_pending_pdf_export();
             let friendly_error =
                 if matches!(operation, crate::capture::ImageOperationKind::Screenshot) {
-                    friendly_capture_error(&message)
+                    friendly_capture_error(kind)
                 } else {
                     message.clone()
                 };
@@ -666,7 +677,7 @@ fn handle_capture_manager_failure(
     state.capture.finish_capture_lifecycle();
 
     let message = match operation {
-        Some(ImageOperationKind::Screenshot) => friendly_capture_error(error),
+        Some(ImageOperationKind::Screenshot) => friendly_capture_error(CaptureFailureKind::Other),
         Some(operation) => format!(
             "{} failed because the capture worker stopped.",
             operation.saved_log_label()

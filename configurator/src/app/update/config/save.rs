@@ -1,5 +1,5 @@
 use crate::app::document_workflow::LeaveAction;
-use wayscriber::config::{Config, ConfigDocument, ConfigValidationReport};
+use wayscriber::config::{Config, ConfigDocument, ConfigValidationReport, SaveValidationError};
 
 use crate::messages::ConfigSaveResult;
 use crate::models::ConfigDraft;
@@ -95,9 +95,7 @@ impl ConfiguratorApp {
         document: &ConfigDocument,
     ) -> Result<(Config, ConfigValidationReport), Vec<FormError>> {
         let config = self.draft.to_config(document.config())?;
-        config
-            .validate_for_save()
-            .map_err(|error| vec![FormError::new("config", error.to_string())])
+        config.validate_for_save().map_err(save_validation_errors)
     }
 
     pub(in crate::app::update) fn handle_config_saved(
@@ -159,5 +157,19 @@ impl ConfiguratorApp {
         }
 
         Vec::new()
+    }
+}
+
+/// One form error per value core would change, named by its config path, so
+/// the refusal points at the field to fix instead of at the whole file.
+pub(super) fn save_validation_errors(error: SaveValidationError) -> Vec<FormError> {
+    match error {
+        SaveValidationError::CorrectedValues(values) => values
+            .into_iter()
+            .map(|value| FormError::new(value.path.clone(), value.summary()))
+            .collect(),
+        error @ SaveValidationError::Representation(_) => {
+            vec![FormError::new("config", error.to_string())]
+        }
     }
 }

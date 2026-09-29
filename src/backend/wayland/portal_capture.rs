@@ -4,8 +4,36 @@ use std::time::Duration;
 #[cfg(feature = "portal")]
 const PORTAL_STARTUP_PROBE_TIMEOUT: Duration = Duration::from_millis(500);
 
+/// Whether freeze may fall back to the screenshot portal.
 #[cfg(feature = "portal")]
-pub(crate) fn screenshot_portal_available(runtime: &tokio::runtime::Runtime) -> bool {
+pub(crate) fn portal_freeze_fallback(
+    runtime: &tokio::runtime::Runtime,
+    direct_capture_supported: bool,
+) -> bool {
+    portal_fallback_available(direct_capture_supported, || {
+        screenshot_portal_available(runtime)
+    })
+}
+
+#[cfg(not(feature = "portal"))]
+pub(crate) fn portal_freeze_fallback(
+    _runtime: &tokio::runtime::Runtime,
+    _direct_capture_supported: bool,
+) -> bool {
+    false
+}
+
+/// With a direct capture backend the portal only backs it up, so it is tried
+/// if a direct capture fails, as zoom already does, instead of being probed:
+/// the probe blocks overlay startup on D-Bus. Only when the portal would be
+/// the sole backend does startup still ask whether it is there.
+#[cfg(feature = "portal")]
+fn portal_fallback_available(direct_capture_supported: bool, probe: impl FnOnce() -> bool) -> bool {
+    direct_capture_supported || probe()
+}
+
+#[cfg(feature = "portal")]
+fn screenshot_portal_available(runtime: &tokio::runtime::Runtime) -> bool {
     runtime.block_on(async {
         tokio::time::timeout(
             PORTAL_STARTUP_PROBE_TIMEOUT,
@@ -14,11 +42,6 @@ pub(crate) fn screenshot_portal_available(runtime: &tokio::runtime::Runtime) -> 
         .await
         .unwrap_or(false)
     })
-}
-
-#[cfg(not(feature = "portal"))]
-pub(crate) fn screenshot_portal_available(_runtime: &tokio::runtime::Runtime) -> bool {
-    false
 }
 
 #[cfg(feature = "portal")]
@@ -97,6 +120,21 @@ pub(crate) fn crop_argb(
 #[cfg(test)]
 mod tests {
     use super::{crop_argb, layout_token_matches, portal_output_matches};
+
+    #[cfg(feature = "portal")]
+    #[test]
+    fn a_direct_capture_backend_skips_the_startup_portal_probe() {
+        assert!(super::portal_fallback_available(true, || {
+            panic!("the portal must not be probed when direct capture exists")
+        }));
+    }
+
+    #[cfg(feature = "portal")]
+    #[test]
+    fn without_a_direct_capture_backend_the_portal_probe_decides() {
+        assert!(super::portal_fallback_available(false, || true));
+        assert!(!super::portal_fallback_available(false, || false));
+    }
 
     #[test]
     fn crop_argb_respects_bounds() {

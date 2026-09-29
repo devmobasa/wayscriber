@@ -17,6 +17,7 @@ mod field_metadata;
 pub(crate) mod io;
 mod migration;
 mod paths;
+mod salvage;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
@@ -99,7 +100,7 @@ pub(crate) use types::{
 };
 #[allow(unused_imports)]
 pub use validate::{
-    ConfigValidationReport, DefaultShortcutSkipped, InvalidKeybinding,
+    ConfigValidationReport, CorrectedValue, DefaultShortcutSkipped, InvalidKeybinding,
     KeybindingConflictResolution, KeybindingProblem, SaveValidationError,
 };
 

@@ -12,9 +12,9 @@ use super::{AboutWindowState, clipboard, icon, surface_size};
 /// How the footer acknowledges an action that has no visible result of its own.
 const COPIED_NOTICE: &str = "Copied to clipboard";
 const OPENING_NOTICE: &str = "Opening in your browser";
-const OPEN_FAILED_NOTICE: &str = "Could not open your browser — see logs";
-const REPORTED_NOTICE: &str = "Diagnostics copied — opening browser";
-const REPORT_OPEN_FAILED_NOTICE: &str = "Diagnostics copied — browser open failed";
+const OPEN_FAILED_NOTICE: &str = "Could not open your browser (see logs)";
+const REPORTED_NOTICE: &str = "Diagnostics copied, opening browser";
+const REPORT_OPEN_FAILED_NOTICE: &str = "Diagnostics copied, but the browser did not open";
 
 impl AboutWindowState {
     #[allow(clippy::too_many_arguments)]

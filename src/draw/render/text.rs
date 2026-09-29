@@ -263,9 +263,9 @@ pub fn render_text_over_with_halo_with_measurer(
     // Create Pango layout for text rendering
     let layout = pangocairo::functions::create_layout(ctx);
 
-    // Set font description from config
-    let font_desc_str = font_descriptor.to_pango_string(size);
-    let font_desc = pango::FontDescription::from_string(&font_desc_str);
+    // Set font description from config; the string form is the cache key.
+    let font_desc = font_descriptor.to_pango_description(size);
+    let font_desc_str = font_desc.to_string();
     layout.set_font_description(Some(&font_desc));
 
     // Set the text (Pango handles newlines automatically)

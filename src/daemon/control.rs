@@ -24,7 +24,10 @@ pub(crate) use response::{write_daemon_toggle_command_error, write_daemon_toggle
 #[cfg(test)]
 use runtime::read_daemon_runtime_file;
 pub(crate) use runtime::{clear_daemon_pid_file, write_daemon_pid_file};
-use runtime::{clear_stale_daemon_state_if_matches, read_daemon_runtime_info, signal_daemon_pid};
+use runtime::{
+    clear_stale_daemon_state_if_matches, ensure_daemon_running, read_daemon_runtime_info,
+    signal_daemon_pid,
+};
 
 const MAX_DAEMON_TOGGLE_REQUEST_AGE: Duration = Duration::from_secs(5);
 // Must exceed the request freshness window plus the overlay graceful stop path
@@ -176,7 +179,21 @@ pub(crate) fn generate_daemon_instance_token() -> String {
 }
 
 pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Result<()> {
-    match crate::daemon::protocol_v2::read_runtime_record(&crate::paths::daemon_pid_file())? {
+    ensure_daemon_running()?;
+
+    let record =
+        match crate::daemon::protocol_v2::read_runtime_record(&crate::paths::daemon_pid_file()) {
+            Ok(record) => record,
+            // The daemon takes its lock before it publishes the record, so a lock
+            // held with no record means one is still starting up.
+            Err(error) if is_not_found(&error) => {
+                return Err(anyhow!(
+                    "wayscriber daemon is starting and not ready yet; try again"
+                ));
+            }
+            Err(error) => return Err(error),
+        };
+    match record {
         crate::daemon::protocol_v2::ClassifiedRuntimeRecord::V2(runtime) => {
             let command = crate::daemon::protocol_v2::ClientCommand::publish(
                 &crate::daemon::protocol_v2::DaemonRequestV2::from(request),
@@ -209,6 +226,14 @@ pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Resul
         wait_daemon_toggle_command_response(&command)?;
     }
     Ok(())
+}
+
+fn is_not_found(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+    })
 }
 
 fn finish_v2_command(result: crate::daemon::protocol_v2::TerminalCommandResult) -> Result<()> {

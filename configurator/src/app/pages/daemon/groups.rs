@@ -77,7 +77,7 @@ pub(super) fn install_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Step 1 \u{2014} Install the service")
+        .title("Step 1: Install the service")
         .description("Install wayscriber as a background service.")
         .build();
 
@@ -109,7 +109,7 @@ pub(super) fn shortcut_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Step 2 \u{2014} Set your shortcut")
+        .title("Step 2: Set your shortcut")
         .build();
 
     let locked_label = hint_label("Install the background service first, then set your shortcut.");
@@ -254,7 +254,7 @@ pub(super) fn start_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Step 3 \u{2014} Start the service")
+        .title("Step 3: Start the service")
         .build();
 
     let locked_label = hint_label("Install the background service first.");

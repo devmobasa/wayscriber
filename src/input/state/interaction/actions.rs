@@ -198,19 +198,19 @@ pub(crate) fn route_action_with_resources(
     // enter here directly and do not pass through `handle_action`.
     state.flush_spotlight_magnification_gesture();
 
-    // A held bend handle ends before the action runs. Keys still reach the
-    // overlay while the pointer button is down, and any action that mutates the
-    // arrow — Nudge, Delete, Duplicate, a property change — would record an
-    // entry against the already-bent shape while the gesture still holds a
-    // pre-bend snapshot. The release would then record a second entry from that
-    // stale snapshot, so undoing twice would put the bend back instead of
-    // taking it away.
+    // A held move, resize, text resize, magnification, or bend drag ends
+    // before the action runs. Keys still reach the overlay while the pointer
+    // button is down, and any action that edits those shapes — Nudge, Delete,
+    // Undo, a property change — would record an entry while the gesture still
+    // holds its pre-gesture snapshots. The release would then record a second
+    // entry from those stale snapshots, so undoing twice would not return the
+    // shapes to where they started.
     //
-    // `Exit` is the exception: cancelling that gesture is precisely its job, and
-    // committing first would leave Escape nothing to cancel and quietly keep the
-    // arc the user was backing out of.
+    // `Exit` is the exception: cancelling that gesture is precisely its job,
+    // and committing first would leave Escape nothing to cancel and quietly
+    // keep the change the user was backing out of.
     if !matches!(action, Action::Exit) {
-        state.finish_active_arrow_bend();
+        state.settle_snapshot_gesture_with_measurer(resources.measurer);
     }
 
     if !matches!(

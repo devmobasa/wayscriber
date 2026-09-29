@@ -97,7 +97,23 @@ pub(crate) fn prepare_layout(root: &Path) -> Result<()> {
     validate_root_shape(root)
 }
 
+/// Fails on any entry the protocol does not own. A temporary that an
+/// interrupted `admission.json` write left behind is the protocol's own and is
+/// tolerated: without the admission lock it may belong to a write in progress.
 pub(super) fn validate_root_shape(root: &Path) -> Result<()> {
+    check_root_shape(root, false)
+}
+
+/// [`validate_root_shape`], collecting leftover `admission.json` temporaries.
+/// The caller must hold the admission lock. Every write of that record runs
+/// under the lock, so with it held a temporary can only be what a writer that
+/// died before its rename left behind, and keeping them would let a series of
+/// interrupted clients fill the root to its entry cap.
+pub(super) fn validate_root_shape_collecting_temps(root: &Path) -> Result<()> {
+    check_root_shape(root, true)
+}
+
+fn check_root_shape(root: &Path, collect_temps: bool) -> Result<()> {
     let allowed = BTreeSet::from([
         ".creating",
         ".gc",
@@ -115,15 +131,24 @@ pub(super) fn validate_root_shape(root: &Path) -> Result<()> {
             .file_name()
             .into_string()
             .map_err(|_| anyhow!("v2 root contains a non-UTF-8 entry"))?;
-        if !allowed.contains(name.as_str()) && !is_atomic_temp(&name, "admission.json") {
+        if allowed.contains(name.as_str()) {
+            continue;
+        }
+        if !crate::durable_io::is_temp_file_for(&name, "admission.json") {
             bail!("unexpected v2 command-root entry {name}");
+        }
+
+        if collect_temps {
+            match fs::remove_file(entry.path()) {
+                Ok(()) => log::warn!("Removed leftover v2 admission temporary {name}"),
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => {
+                    log::warn!("Failed to remove leftover v2 admission temporary {name}: {error}")
+                }
+            }
         }
     }
     Ok(())
-}
-
-pub(super) fn is_atomic_temp(name: &str, target: &str) -> bool {
-    name.starts_with(&format!(".{target}.tmp-"))
 }
 
 pub(super) fn read_dir_bounded(path: &Path, cap: usize) -> Result<Vec<fs::DirEntry>> {

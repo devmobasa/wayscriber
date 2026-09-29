@@ -804,6 +804,51 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
 }
 
 #[test]
+fn helpers_do_not_inherit_the_internal_process_markers() {
+    const MARKERS: [&str; 3] = [
+        crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
+        crate::env_vars::DETACHED_ENV,
+        crate::RESUME_SESSION_ENV,
+    ];
+    let _environment = crate::test_env::lock();
+    let previous = MARKERS.map(std::env::var_os);
+    for marker in MARKERS {
+        // SAFETY: serialized by the test environment mutex held above.
+        unsafe { std::env::set_var(marker, "inherited") };
+    }
+
+    let guard = start_for_runtime().unwrap();
+    let script = MARKERS
+        .map(|marker| format!("${{{marker}-unset}}"))
+        .join(",");
+    let output = guard.broker().run(
+        HelperKind::TestShell,
+        OsStr::new("sh"),
+        [
+            OsStr::new("-c"),
+            OsStr::new(&format!("printf '%s' \"{script}\"")),
+        ],
+        Vec::new(),
+        Duration::from_secs(5),
+        1024,
+    );
+    drop(guard);
+    for (marker, value) in MARKERS.into_iter().zip(previous) {
+        // SAFETY: serialized by the test environment mutex held above.
+        unsafe {
+            match value {
+                Some(value) => std::env::set_var(marker, value),
+                None => std::env::remove_var(marker),
+            }
+        }
+    }
+
+    let output = output.unwrap();
+    assert_eq!(output.status, 0);
+    assert_eq!(output.stdout, b"unset,unset,unset");
+}
+
+#[test]
 fn operation_bound_run_terminates_descendants_that_retain_pipes() {
     let guard = start_for_runtime().unwrap();
     let started = Instant::now();
@@ -828,6 +873,60 @@ fn operation_bound_run_terminates_descendants_that_retain_pipes() {
             .parse::<u32>()
             .is_ok()
     );
+}
+
+#[test]
+fn a_descendant_outside_the_helper_group_cannot_hold_the_broker_on_its_pipes() {
+    let guard = start_for_runtime().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let pid_path = temp.path().join("descendant.pid");
+    // The helper waits until the descendant has written its pid, which it
+    // does only after setsid(). Exiting sooner lets the group kill reach the
+    // descendant before it leaves the group, and then nothing holds the pipes.
+    let script = format!(
+        "setsid sh -c 'echo $$ > \"$0\"; exec sleep 30' '{path}' & \
+         while [ ! -s '{path}' ]; do sleep 0.01; done",
+        path = pid_path.display()
+    );
+
+    let started = Instant::now();
+    let result = guard.broker().run(
+        HelperKind::TestShell,
+        OsStr::new("sh"),
+        [OsStr::new("-c"), OsStr::new(&script)],
+        Vec::new(),
+        Duration::from_secs(1),
+        1024,
+    );
+    let elapsed = started.elapsed();
+    if let Some(pid) = std::fs::read_to_string(&pid_path)
+        .ok()
+        .and_then(|pid| pid.trim().parse::<libc::pid_t>().ok())
+    {
+        // SAFETY: cleanup of the descendant this test started in its own session.
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
+
+    let error = result.expect_err("output still held open must not read as complete");
+    assert!(
+        format!("{error:#}").contains("pipe is still open"),
+        "{error:#}"
+    );
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    assert!(guard.broker().is_healthy());
+    guard
+        .broker()
+        .run(
+            HelperKind::TestSleep,
+            OsStr::new("sleep"),
+            [OsStr::new("0")],
+            Vec::new(),
+            Duration::from_secs(1),
+            1024,
+        )
+        .unwrap();
 }
 
 #[test]

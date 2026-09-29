@@ -213,6 +213,91 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
     }
 }
 
+fn add_active_rect(state: &mut InputState, x: i32, y: i32) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x,
+        y,
+        w: 30,
+        h: 30,
+        fill: true,
+        fill_color: None,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
+    })
+}
+
+/// Selects and hit-tests shape `id` at `(x, y)` on the active board, so both
+/// the selection and the per-id hit-test cache hold that board's shape.
+fn select_and_hit_active_shape(state: &mut InputState, id: ShapeId, x: i32, y: i32) {
+    assert_eq!(state.hit_test_at(x, y), Some(id));
+    state.set_selection(vec![id]);
+    state.open_context_menu((x, y), vec![id], ContextMenuKind::Shape, Some(id));
+    assert!(state.is_context_menu_open());
+}
+
+fn assert_board_transition_dropped_page_local_state(
+    state: &mut InputState,
+    target_id: ShapeId,
+    target_point: (i32, i32),
+) {
+    assert!(state.selected_shape_ids().is_empty());
+    assert!(!state.is_context_menu_open());
+
+    let shape_count = state.boards.active_frame().shapes.len();
+    assert!(!state.delete_selection_with(&crate::draw::TextMeasurer::default()));
+    assert_eq!(state.boards.active_frame().shapes.len(), shape_count);
+
+    assert_eq!(
+        state.hit_test_at(target_point.0, target_point.1),
+        Some(target_id)
+    );
+}
+
+#[test]
+fn switch_board_drops_the_source_boards_selection_menu_and_hit_cache() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let whiteboard_shape = add_active_rect(&mut state, 300, 300);
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    let overlay_shape = add_active_rect(&mut state, 10, 10);
+    assert_eq!(overlay_shape, whiteboard_shape, "shape ids are page-local");
+    select_and_hit_active_shape(&mut state, overlay_shape, 20, 20);
+
+    state.switch_board(BOARD_ID_WHITEBOARD);
+
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert_board_transition_dropped_page_local_state(&mut state, whiteboard_shape, (310, 310));
+}
+
+#[test]
+fn switch_board_slot_drops_the_source_boards_selection_menu_and_hit_cache() {
+    let mut state = create_test_input_state();
+    let whiteboard = board_index(&state, BOARD_ID_WHITEBOARD);
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let whiteboard_shape = add_active_rect(&mut state, 300, 300);
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    let overlay_shape = add_active_rect(&mut state, 10, 10);
+    select_and_hit_active_shape(&mut state, overlay_shape, 20, 20);
+
+    state.switch_board_slot(whiteboard);
+
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert_board_transition_dropped_page_local_state(&mut state, whiteboard_shape, (310, 310));
+}
+
+#[test]
+fn duplicate_board_drops_the_source_boards_selection_and_menu() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let source_shape = add_active_rect(&mut state, 300, 300);
+    select_and_hit_active_shape(&mut state, source_shape, 310, 310);
+
+    state.duplicate_board();
+
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert_board_transition_dropped_page_local_state(&mut state, source_shape, (310, 310));
+}
+
 #[test]
 fn duplicate_board_from_transparent_shows_info_toast_without_creating_board() {
     let mut state = create_test_input_state();

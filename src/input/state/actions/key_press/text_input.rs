@@ -27,31 +27,11 @@ impl InputState {
             return;
         }
 
-        let should_check_actions = match key {
-            // Special keys always check for actions
-            Key::Escape
-            | Key::F1
-            | Key::F2
-            | Key::F4
-            | Key::F9
-            | Key::F10
-            | Key::F11
-            | Key::F12
-            | Key::Return
-            | Key::Up
-            | Key::Down
-            | Key::Left
-            | Key::Right
-            | Key::Delete
-            | Key::Home
-            | Key::End
-            | Key::PageUp
-            | Key::PageDown => true,
-            // Character keys only check if modifiers are held
-            Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
-            // Other keys can check as well
-            _ => self.modifiers.ctrl || self.modifiers.alt,
-        };
+        // Keys that type text reach shortcuts only with Ctrl or Alt held. Every
+        // other key checks the keymap, so any function key the user binds
+        // works while typing, not just the ones bound by default.
+        let types_text = matches!(key, Key::Char(_) | Key::Space | Key::Backspace | Key::Tab);
+        let should_check_actions = !types_text || self.modifiers.ctrl || self.modifiers.alt;
 
         if should_check_actions && let Some(key_str) = key_to_action_label(key) {
             if let Some(action) = self.find_action(&key_str) {

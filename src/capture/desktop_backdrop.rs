@@ -9,7 +9,7 @@ use crate::capture::{
         DesktopBackdropGeometry,
     },
 };
-use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
+use crate::image_decode::{DecodeLimits, decode_rgba, format_from_mime_or_bytes};
 
 pub(crate) async fn capture_desktop_backdrop(
     request: DesktopBackdropCaptureRequest,
@@ -37,9 +37,10 @@ fn decode_desktop_backdrop(
     let format = format_from_mime_or_bytes("", &image_data).ok_or_else(|| {
         CaptureError::ImageError("Desktop backdrop capture returned an unsupported image".into())
     })?;
-    let decoded = decode_rgba(format, &image_data).map_err(|err| {
-        CaptureError::ImageError(format!("Failed to decode desktop backdrop: {err}"))
-    })?;
+    let decoded =
+        decode_rgba(format, &image_data, DecodeLimits::SCREEN_CAPTURE).map_err(|err| {
+            CaptureError::ImageError(format!("Failed to decode desktop backdrop: {err}"))
+        })?;
     let argb = rgba_to_cairo_argb(&decoded.rgba)?;
     desktop_backdrop_from_argb(argb, decoded.width, decoded.height, &request)
 }

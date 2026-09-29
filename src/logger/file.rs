@@ -161,7 +161,7 @@ impl DailyFileWriter {
             }
         };
         if let Some(parent) = path.parent()
-            && let Err(err) = fs::create_dir_all(parent)
+            && let Err(err) = create_private_dir_all(parent)
         {
             eprintln!(
                 "Failed to create log directory {}: {}",
@@ -172,7 +172,12 @@ impl DailyFileWriter {
             return;
         }
 
-        match fs::OpenOptions::new().create(true).append(true).open(&path) {
+        // Logs name session files and paths, so new ones are private.
+        let mut open_options = fs::OpenOptions::new();
+        open_options.create(true).append(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut open_options, 0o600);
+        match open_options.open(&path) {
             Ok(file) => {
                 self.file = Some(file);
                 self.current_date = Some(date);
@@ -210,6 +215,22 @@ impl DailyFileWriter {
     }
 }
 
+/// Creates missing directories with mode 0700, as the XDG base directory spec asks.
+#[cfg(unix)]
+fn create_private_dir_all(dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+}
+
+#[cfg(not(unix))]
+fn create_private_dir_all(dir: &Path) -> io::Result<()> {
+    fs::create_dir_all(dir)
+}
+
 impl Write for DailyFileWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.ensure_file();
@@ -236,6 +257,38 @@ impl Write for DailyFileWriter {
 mod tests {
     use super::LogFileTarget;
     use std::path::PathBuf;
+
+    #[cfg(unix)]
+    #[test]
+    fn new_log_file_and_its_new_directories_are_private() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = crate::test_temp::tempdir().unwrap();
+        let data = temp.path().join("wayscriber");
+        let logs = data.join("logs");
+        let mut writer = super::DailyFileWriter::new(LogFileTarget {
+            base: logs.clone(),
+            treat_as_dir: true,
+            append_date: true,
+        });
+
+        writer.write_all(b"session saved\n").unwrap();
+        writer.flush().unwrap();
+
+        let mode =
+            |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let log_files: Vec<_> = std::fs::read_dir(&logs)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert!(!log_files.is_empty());
+        for log_file in &log_files {
+            assert_eq!(mode(log_file), 0o600, "{}", log_file.display());
+        }
+        assert_eq!(mode(&logs), 0o700);
+        assert_eq!(mode(&data), 0o700);
+    }
 
     #[test]
     fn dated_log_file_name_preserves_or_adds_extension() {

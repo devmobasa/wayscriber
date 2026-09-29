@@ -21,6 +21,8 @@
 //! semantic role, both tokens are kept and marked `TODO(theme-consolidation)`
 //! — consolidation is deliberate follow-up work, not a side effect.
 
+#[cfg(test)]
+mod contrast_tests;
 pub mod css;
 pub mod swatch;
 
@@ -117,7 +119,9 @@ pub mod overlay {
     pub const TEXT_HINT: Rgba = (0.70, 0.73, 0.78, 0.9);
     /// Dim keyboard-shortcut hint inside overlay popups (dimmer than
     /// `TEXT_HINT`): the color popup's hint row, the precise-entry hint.
-    pub const TEXT_HINT_DIM: Rgba = (0.6, 0.6, 0.65, 0.7);
+    /// Opaque, because any translucency drops it below WCAG AA (4.5:1) on
+    /// the modal background it is drawn on.
+    pub const TEXT_HINT_DIM: Rgba = (0.6, 0.6, 0.65, 1.0);
     /// Disabled text
     pub const TEXT_DISABLED: Rgba = (0.60, 0.64, 0.68, 0.65);
     /// Placeholder text
@@ -783,7 +787,9 @@ impl Theme {
             // HIG: light-mode fg is near-black, never pure black
             text_primary: (0.0, 0.0, 0.024, 0.8),
             text_secondary: (0.0, 0.0, 0.024, 0.6),
-            text_tertiary: (0.0, 0.0, 0.024, 0.4),
+            // The lowest alpha that keeps hints and footers at WCAG AA
+            // (4.5:1) on every light surface, a hovered card included.
+            text_tertiary: (0.0, 0.0, 0.024, 0.58),
             shadow: (0.0, 0.0, 0.0, 0.18),
             accent: rgba(ACCENT_RGB, 1.0),
             accent_bright: rgba(ACCENT_BRIGHT_RGB, 0.95),

@@ -307,7 +307,9 @@ capture suppression operates on the paired resources without runtime pairing che
   diagnostics, source path, and exact source revision behind one interface.
   `save_with_backup` merges known fields while retaining comments and unsupported settings, copies
   the previous contents to a timestamped `.bak`, and writes through the durable atomic-write policy.
-  Its editor load path can expose a defaults-based repair document for readable but invalid config,
+  Its editor load path salvages valid TOML the same way `Config::load` does (both deserialize
+  through `config/salvage.rs`), so only the entries that do not map hold defaults and a save
+  replaces only those. It exposes a defaults-based repair document only for a file that is not TOML,
   while true I/O failures leave the configurator's last good document untouched.
 - A save records only the delta between the config the document loaded and the config its caller
   hands back. A value that loading clamped, normalized, deduplicated, or reset keeps the text the

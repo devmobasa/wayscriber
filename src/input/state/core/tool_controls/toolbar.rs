@@ -61,11 +61,11 @@ impl InputState {
             parts.push(format!("{binding} status bar"));
         }
         let message = if parts.is_empty() && self.right_click_chrome_recovery_available() {
-            "All UI hidden — right-click to restore".to_string()
+            "All UI hidden: right-click to restore".to_string()
         } else if parts.is_empty() {
-            "All UI hidden — select the recovery action".to_string()
+            "All UI hidden: select the recovery action".to_string()
         } else {
-            format!("All UI hidden — {}", parts.join(" · "))
+            format!("All UI hidden: {}", parts.join(" · "))
         };
         let (action_label, recovery_action) = if self.presenter_hides_toolbars() {
             ("Show status bar", Action::ToggleStatusBar)

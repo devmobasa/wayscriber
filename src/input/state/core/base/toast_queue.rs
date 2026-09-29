@@ -168,7 +168,9 @@ struct PendingToast {
 /// outside (on `InputState`) so rendering/damage/click code is untouched.
 #[derive(Debug, Default)]
 pub struct ToastQueue {
-    /// Sorted by priority descending, FIFO (seq ascending) within a class.
+    /// Sorted by priority descending and FIFO within a class, except that a
+    /// re-queued preempted toast sits at the front of its class. The order
+    /// is positional: `seq` records age, not place.
     pending: Vec<PendingToast>,
     /// Last message shown per key this session (rate-limit memory).
     shown_contents: HashMap<&'static str, String>,
@@ -214,12 +216,16 @@ impl ToastQueue {
             return ToastPushOutcome::UpdatedActive;
         }
         if let Some(index) = self.pending.iter().position(|entry| entry.key == key) {
-            let priority_changed = self.pending[index].priority != priority;
-            self.pending[index].priority = priority;
-            self.pending[index].toast = toast;
-            if priority_changed {
-                self.pending
-                    .sort_by(|a, b| b.priority.cmp(&a.priority).then(a.seq.cmp(&b.seq)));
+            if self.pending[index].priority == priority {
+                self.pending[index].toast = toast;
+            } else {
+                // Only this entry moves. Re-sorting the queue by age would
+                // also move a re-queued preempted toast, which holds the front
+                // of its class with a newer seq than the peers behind it.
+                let mut entry = self.pending.remove(index);
+                entry.priority = priority;
+                entry.toast = toast;
+                self.insert_at_class_end(entry);
             }
 
             // A same-key update can promote a queued informational result into
@@ -388,21 +394,23 @@ impl ToastQueue {
     /// higher priority.
     fn enqueue_fifo(&mut self, priority: ToastPriority, key: &'static str, toast: Toast) {
         let seq = self.next_seq();
+        self.insert_at_class_end(PendingToast {
+            priority,
+            key,
+            toast,
+            seq,
+        });
+        self.enforce_capacity();
+    }
+
+    /// Inserts `entry` after every entry of equal or higher priority.
+    fn insert_at_class_end(&mut self, entry: PendingToast) {
         let position = self
             .pending
             .iter()
-            .position(|entry| entry.priority < priority)
+            .position(|queued| queued.priority < entry.priority)
             .unwrap_or(self.pending.len());
-        self.pending.insert(
-            position,
-            PendingToast {
-                priority,
-                key,
-                toast,
-                seq,
-            },
-        );
-        self.enforce_capacity();
+        self.pending.insert(position, entry);
     }
 
     /// Re-queue a preempted active toast at the *front* of its priority class
@@ -701,6 +709,44 @@ mod tests {
             Some("showing"),
             "preempted toast keeps seniority over queued peers"
         );
+    }
+
+    #[test]
+    fn a_queued_priority_change_keeps_a_preempted_toasts_seniority() {
+        let mut queue = ToastQueue::default();
+        let mut active = None;
+        let now = Instant::now();
+        queue.push(&mut active, ToastPriority::Info, "a", Toast::info("a"), now);
+        queue.push(&mut active, ToastPriority::Info, "b", Toast::info("b"), now);
+        queue.push(
+            &mut active,
+            ToastPriority::Critical,
+            "c",
+            Toast::error("c"),
+            now,
+        );
+        queue.push(&mut active, ToastPriority::Info, "d", Toast::info("d"), now);
+
+        // Same key, higher class: "d" moves up, and nothing else may move.
+        assert_eq!(
+            queue.push(
+                &mut active,
+                ToastPriority::Action,
+                "d",
+                Toast::info("d!"),
+                now
+            ),
+            ToastPushOutcome::UpdatedQueued
+        );
+
+        let mut shown = Vec::new();
+        let mut later = now;
+        while active.is_some() {
+            later += Duration::from_millis(T0_DURATION);
+            queue.advance(&mut active, later);
+            shown.extend(active_key(&active));
+        }
+        assert_eq!(shown, ["d", "a", "b"]);
     }
 
     #[test]

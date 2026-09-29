@@ -2,6 +2,9 @@ use crate::util::Rect;
 
 use super::super::canvas_layer::CanvasLayerCache;
 
+/// Transient UI chrome whose footprint is damaged from frame to frame.
+///
+/// `StatusTooltip` must stay the last variant: `COUNT` derives from it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum UiEffect {
     UiToast,
@@ -23,16 +26,24 @@ pub(super) enum UiEffect {
 }
 
 impl UiEffect {
-    const COUNT: usize = 16;
+    const COUNT: usize = Self::StatusTooltip as usize + 1;
 
     const fn index(self) -> usize {
         self as usize
     }
 }
 
+/// One bit per [`UiEffect`].
+type UiEffectBits = u32;
+
+const _: () = assert!(
+    UiEffect::COUNT <= UiEffectBits::BITS as usize,
+    "every UiEffect needs its own bit in UiEffectFlags"
+);
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct UiEffectFlags {
-    active: u16,
+    active: UiEffectBits,
     blocked_feedback: bool,
 }
 
@@ -297,26 +308,50 @@ mod tests {
         Rect::new(x, 0, 10, 10).expect("test rectangle")
     }
 
+    const EFFECTS: [UiEffect; UiEffect::COUNT] = [
+        UiEffect::UiToast,
+        UiEffect::PresetToast,
+        UiEffect::TextEditEntry,
+        UiEffect::StatusHud,
+        UiEffect::ZoomChip,
+        UiEffect::InputHud,
+        UiEffect::CommandPalette,
+        UiEffect::ColorPicker,
+        UiEffect::ToolPreview,
+        UiEffect::ShapeMeasureBadge,
+        UiEffect::OcrScan,
+        UiEffect::ContextMenu,
+        UiEffect::ContextSubmenu,
+        UiEffect::RecognitionChip,
+        UiEffect::OnboardingCard,
+        UiEffect::StatusTooltip,
+    ];
+
+    #[test]
+    fn effect_indices_follow_declaration_order() {
+        for (index, effect) in EFFECTS.into_iter().enumerate() {
+            assert_eq!(effect.index(), index, "{effect:?}");
+        }
+    }
+
+    #[test]
+    fn effect_flags_are_independent() {
+        for effect in EFFECTS {
+            let flags = UiEffectFlags::default().with(effect, true);
+
+            for other in EFFECTS {
+                assert_eq!(
+                    flags.active(other),
+                    other == effect,
+                    "{effect:?} / {other:?}"
+                );
+            }
+            assert!(!flags.with(effect, false).active(effect));
+        }
+    }
+
     #[test]
     fn effect_slots_are_independent() {
-        const EFFECTS: [UiEffect; UiEffect::COUNT] = [
-            UiEffect::UiToast,
-            UiEffect::PresetToast,
-            UiEffect::TextEditEntry,
-            UiEffect::StatusHud,
-            UiEffect::ZoomChip,
-            UiEffect::InputHud,
-            UiEffect::CommandPalette,
-            UiEffect::ColorPicker,
-            UiEffect::ToolPreview,
-            UiEffect::ShapeMeasureBadge,
-            UiEffect::OcrScan,
-            UiEffect::ContextMenu,
-            UiEffect::ContextSubmenu,
-            UiEffect::RecognitionChip,
-            UiEffect::OnboardingCard,
-            UiEffect::StatusTooltip,
-        ];
         let mut history = UiDamageHistory::default();
 
         for (index, effect) in EFFECTS.into_iter().enumerate() {

@@ -1,9 +1,13 @@
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
-use wayland_client::{Proxy, protocol::wl_seat};
+use wayland_client::{
+    Proxy,
+    protocol::{wl_keyboard, wl_seat},
+};
 
 use super::WaylandState;
+use super::seat_devices::SeatDevices;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum MainLayerFocusPhase {
@@ -18,6 +22,8 @@ pub(in crate::backend::wayland) struct FocusState {
     main_layer_focus_phase: MainLayerFocusPhase,
     has_pointer_focus: bool,
     current_seat: Option<wl_seat::WlSeat>,
+    /// Each seat's `wl_keyboard`, kept while the seat advertises a keyboard.
+    keyboards: SeatDevices<wl_seat::WlSeat, wl_keyboard::WlKeyboard>,
     last_activation_serial: Option<u32>,
     overlay_ready: bool,
     suppress_focus_exit_until: Option<Instant>,
@@ -43,6 +49,7 @@ impl FocusState {
             main_layer_focus_phase: MainLayerFocusPhase::default(),
             has_pointer_focus: false,
             current_seat: None,
+            keyboards: SeatDevices::default(),
             last_activation_serial: None,
             overlay_ready: false,
             suppress_focus_exit_until: None,
@@ -89,6 +96,23 @@ impl FocusState {
 
     pub(in crate::backend::wayland) fn set_current_seat(&mut self, seat: Option<wl_seat::WlSeat>) {
         self.current_seat = seat;
+    }
+
+    /// Keep `seat`'s keyboard, returning one it replaces for release.
+    pub(in crate::backend::wayland) fn attach_keyboard(
+        &mut self,
+        seat: wl_seat::WlSeat,
+        keyboard: wl_keyboard::WlKeyboard,
+    ) -> Option<wl_keyboard::WlKeyboard> {
+        self.keyboards.attach(seat, keyboard)
+    }
+
+    /// Stop keeping `seat`'s keyboard and hand it back for release.
+    pub(in crate::backend::wayland) fn detach_keyboard(
+        &mut self,
+        seat: &wl_seat::WlSeat,
+    ) -> Option<wl_keyboard::WlKeyboard> {
+        self.keyboards.detach(seat)
     }
 
     pub(in crate::backend::wayland) fn last_activation_serial(&self) -> Option<u32> {

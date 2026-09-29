@@ -186,12 +186,14 @@ Every chrome toggle in that table is a runtime override layered over the value y
 your `config.toml` still reads exactly as you wrote it and editing it there still wins: a
 configurator Save reseeds the override, and the field you changed goes back to following the file.
 
-If the graphical configurator can read the file but cannot parse its TOML or known value types, it
-opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a
-backup of the unreadable source, retains unknown keys that can be separated safely when the TOML
-structure itself was parseable, and replaces the unreadable known configuration. A transient reload
-error leaves the last good document and unsaved draft in place; its revision guard still prevents
-overwriting a changed file.
+If the file is valid TOML but some values have the wrong type or an unknown option, the graphical
+configurator reads it the way the overlay does: every setting that can be read keeps its value, and
+only the others show built-in defaults. The load status lists those settings. Saving first creates
+a backup, then replaces only those settings; the rest of the file keeps its values, comments, and
+unknown keys. If the file cannot be parsed as TOML at all, the configurator opens a clearly marked
+repair draft using built-in defaults. Saving that draft first creates a backup of the unreadable
+source and replaces the unreadable configuration. A transient reload error leaves the last good
+document and unsaved draft in place; its revision guard still prevents overwriting a changed file.
 
 ## Configuration File Location
 
@@ -1572,7 +1574,7 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 ```
 
 **Fields:**
-- `max_count` — hard cap on total boards.
+- `max_count` — hard cap on total boards (at least 1). Loading drops boards past it.
 - `auto_create` — create a board when switching to an empty slot.
 - `show_board_badge` — show board name/slot in the status bar.
 - `pan_enabled` — allow panning on solid-color boards with <kbd>Space</kbd> + left-drag.
@@ -1583,8 +1585,10 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
   starts from, edited in the configurator. The key is ignored whatever you set it to and will be
   removed in a future release.
 - `default_board` — board id to activate on startup.
-- `items` — ordered list of boards; each board has:
-  - `id` — stable identifier (used by keybindings and persistence).
+- `items` — ordered list of boards. At least one board must have a transparent background; loading
+  adds the Overlay board when none does. Each board has:
+  - `id` — stable identifier (used by keybindings and persistence). Ids are lowercase and unique;
+    loading lowercases an id and renames a duplicate (`math-2`).
   - `name` — display name in the UI.
   - `background` — `"transparent"` or `{ rgb = [..] }`.
   - `default_pen_color` — optional; if omitted and `auto_adjust_pen = true`, pen color is auto-contrasted.
@@ -2666,7 +2670,11 @@ If you specify invalid values:
 - **Out of range**: Values will be clamped to valid ranges
 - **Invalid color name**: Falls back to default (red)
 - **Malformed RGB**: Falls back to default color
-- **Parse errors**: Entire config file ignored, defaults used
+- **Wrong type or unknown option** (for example `theme = "drak"`, or `undo = "Ctrl+Z"` instead of
+  a list): only that setting uses its default for the session, and startup names it. A list such as
+  `[[boards.items]]`, and a table whose keys belong together (a preset slot, `drag_tools`), falls
+  back as a whole. The file is not changed.
+- **TOML syntax errors**: Entire config file ignored, defaults used
 
 Check the application logs for warnings about config issues.
 

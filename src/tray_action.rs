@@ -1,3 +1,4 @@
+use crate::daemon::protocol_v2::DaemonControlProtocolMode;
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use anyhow::{Context, Result};
 use log::warn;
@@ -111,6 +112,19 @@ fn parse_action_file(path: &Path, content: &str) -> Option<TrayAction> {
     }
 }
 
+/// Takes the actions a daemon queued as files, when `mode` is protocol v1.
+///
+/// Under v2 nothing writes this queue: tray actions travel through the action
+/// journal, which binds each one to a daemon generation and applies it once. A
+/// file here can only be stale, left by a pre-upgrade daemon or a crashed run,
+/// and replaying it would bypass those rules, so v2 leaves the queue unread.
+pub(crate) fn take_pending_legacy_actions(mode: DaemonControlProtocolMode) -> Vec<TrayAction> {
+    if mode != DaemonControlProtocolMode::LegacyV1 {
+        return Vec::new();
+    }
+    take_pending_actions()
+}
+
 pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
     let dir = crate::paths::tray_action_dir();
     let mut paths = match fs::read_dir(&dir) {
@@ -181,9 +195,24 @@ pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TrayAction, queue_action, take_pending_actions};
+    use super::{TrayAction, queue_action, take_pending_actions, take_pending_legacy_actions};
+    use crate::daemon::protocol_v2::DaemonControlProtocolMode;
     use crate::env_vars::XDG_RUNTIME_DIR_ENV;
     use std::env;
+
+    #[test]
+    fn a_v2_overlay_leaves_the_legacy_action_queue_unread() {
+        let tmp = crate::test_temp::tempdir().unwrap();
+        crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(tmp.path().as_os_str()), || {
+            queue_action(TrayAction::CaptureFull).unwrap();
+
+            assert!(take_pending_legacy_actions(DaemonControlProtocolMode::PublishedV2).is_empty());
+            assert_eq!(
+                take_pending_legacy_actions(DaemonControlProtocolMode::rollback_compatibility()),
+                vec![TrayAction::CaptureFull]
+            );
+        });
+    }
 
     #[test]
     fn tray_action_round_trip() {

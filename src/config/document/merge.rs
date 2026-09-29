@@ -88,36 +88,112 @@ pub(super) fn conservative_repair_source_document(
     Ok(repair_source)
 }
 
+/// The source for saving a salvaged document: the file as authored, minus the
+/// known content of each entry the load could not map.
+///
+/// The draft holds defaults for those entries, so their authored values are
+/// what the save replaces; every other entry keeps its text, comments, and
+/// formatting. Unknown keys inside a failed entry stay too, unless
+/// `whole_entries` asks for the entries to go entirely — the fallback for when
+/// something the serialized config does not model is what still fails.
+///
+/// Each entry is a dotted path of table keys, as `ConfigSectionError` names
+/// it.
+pub(super) fn unreadable_repair_source_document(
+    source: &DocumentMut,
+    previous: &Config,
+    updated: &Config,
+    entries: &[&str],
+    whole_entries: bool,
+) -> Result<DocumentMut> {
+    let previous = serialize_config_document(previous)?;
+    let updated = serialize_config_document(updated)?;
+    let mut repair_source = source.clone();
+
+    for entry in entries {
+        let path = entry.split('.').collect::<Vec<_>>();
+        let Some((key, parents)) = path.split_last() else {
+            continue;
+        };
+        let Some(raw) = table_like_at_path_mut(repair_source.as_table_mut(), parents) else {
+            continue;
+        };
+        if whole_entries {
+            raw.remove(key);
+            continue;
+        }
+
+        let previous_parent = table_like_at_path(previous.as_table(), parents);
+        let updated_parent = table_like_at_path(updated.as_table(), parents);
+        remove_known_item(
+            raw,
+            previous_parent.and_then(|table| table.get(key)),
+            updated_parent.and_then(|table| table.get(key)),
+            key,
+        );
+    }
+    Ok(repair_source)
+}
+
+fn table_like_at_path<'a>(table: &'a dyn TableLike, path: &[&str]) -> Option<&'a dyn TableLike> {
+    let Some((head, tail)) = path.split_first() else {
+        return Some(table);
+    };
+    let child = table.get(head)?.as_table_like()?;
+    table_like_at_path(child, tail)
+}
+
 fn remove_known_content(
     raw: &mut dyn TableLike,
     previous: Option<&dyn TableLike>,
     updated: &dyn TableLike,
 ) {
     for key in known_keys(previous, updated) {
-        let previous_item = previous.and_then(|table| table.get(&key));
-        let updated_item = updated.get(&key);
-        let known_tables = previous_item
-            .into_iter()
-            .chain(updated_item)
-            .filter_map(Item::as_table_like)
-            .collect::<Vec<_>>();
-        let all_known_items_are_tables = previous_item
-            .into_iter()
-            .chain(updated_item)
-            .all(|item| item.as_table_like().is_some());
+        remove_known_item(
+            raw,
+            previous.and_then(|table| table.get(&key)),
+            updated.get(&key),
+            &key,
+        );
+    }
+}
 
-        if all_known_items_are_tables
-            && let Some(raw_table) = raw.get_mut(&key).and_then(Item::as_table_like_mut)
-        {
-            let previous_table = previous_item.and_then(Item::as_table_like);
-            let updated_table = updated_item
-                .and_then(Item::as_table_like)
-                .or_else(|| known_tables.first().copied())
-                .expect("a known table-like item is available");
-            remove_known_content(raw_table, previous_table, updated_table);
-        } else {
-            raw.remove(&key);
-        }
+/// Removes what `raw[key]` holds of the known serialization, recursing into
+/// tables so their unknown keys survive.
+fn remove_known_item(
+    raw: &mut dyn TableLike,
+    previous_item: Option<&Item>,
+    updated_item: Option<&Item>,
+    key: &str,
+) {
+    // Nothing in the serialization describes this key, so none of its
+    // content can be told apart as known.
+    if previous_item.is_none() && updated_item.is_none() {
+        raw.remove(key);
+        return;
+    }
+
+    let known_tables = previous_item
+        .into_iter()
+        .chain(updated_item)
+        .filter_map(Item::as_table_like)
+        .collect::<Vec<_>>();
+    let all_known_items_are_tables = previous_item
+        .into_iter()
+        .chain(updated_item)
+        .all(|item| item.as_table_like().is_some());
+
+    if all_known_items_are_tables
+        && let Some(raw_table) = raw.get_mut(key).and_then(Item::as_table_like_mut)
+    {
+        let previous_table = previous_item.and_then(Item::as_table_like);
+        let updated_table = updated_item
+            .and_then(Item::as_table_like)
+            .or_else(|| known_tables.first().copied())
+            .expect("a known table-like item is available");
+        remove_known_content(raw_table, previous_table, updated_table);
+    } else {
+        raw.remove(key);
     }
 }
 

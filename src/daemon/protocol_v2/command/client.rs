@@ -16,8 +16,8 @@ use super::super::{BootClock, BootIdentity, NamespaceIdentity};
 use super::layout::{
     admission_lock, allocate_order, bump_revision, command_root, control_path,
     create_private_directory, creating_dir, ensure_capacity, lock_until, open_lock, prepare_layout,
-    queue_path, read_control, try_lock_until, unlock, validate_root_shape, write_control,
-    write_record,
+    queue_path, read_control, try_lock_until, unlock, validate_root_shape_collecting_temps,
+    write_control, write_record,
 };
 use super::{AUTHORIZATION_WINDOW, ClientCommand, RESPONSE_WINDOW, TerminalCommandResult};
 
@@ -52,7 +52,7 @@ impl ClientCommand {
         let authorization_deadline = now.checked_add(AUTHORIZATION_WINDOW)?;
         let response_deadline = now.checked_add(RESPONSE_WINDOW)?;
         let admission = admission_lock(&root, authorization_deadline)?;
-        validate_root_shape(&root)?;
+        validate_root_shape_collecting_temps(&root)?;
         ensure_capacity(&root)?;
 
         let order = allocate_order(&root)?;

@@ -9,11 +9,12 @@ use super::io::{
     create_config_backup, ensure_config_file_size, prepare_config_parent, write_config_text_atomic,
 };
 use super::keybindings::KeybindingAuthorship;
-use super::{Config, ConfigSource};
+use super::salvage::deserialize_salvaging;
+use super::{Config, ConfigSectionError, ConfigSource};
 use crate::durable_io::{
     DestinationExpectation, FileIdentity, OverwriteMode, resolve_symlink_chain,
 };
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fmt;
@@ -25,7 +26,7 @@ use toml_edit::DocumentMut;
 use lock::{CONFIG_WRITE_LOCK_TIMEOUT, acquire_config_write_lock};
 use merge::{
     conservative_repair_source_document, merge_config_document, repair_source_document,
-    serialize_config_document,
+    serialize_config_document, unreadable_repair_source_document,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -433,7 +434,22 @@ pub struct ConfigDocument {
     source: ConfigSource,
     revision: SourceRevision,
     diagnostics: Vec<ConfigDiagnostic>,
-    repair_mode: bool,
+    repair: RepairScope,
+}
+
+/// What a save of this document has to replace that the load could not use.
+#[derive(Debug)]
+enum RepairScope {
+    /// The file loaded cleanly: a save writes the caller's delta and nothing
+    /// else.
+    None,
+    /// The file is not TOML at all, so the draft was built from defaults and a
+    /// save replaces every known setting with it.
+    Rebuild,
+    /// The TOML parsed, but these entries did not map and the draft holds
+    /// their defaults. A save replaces those entries and keeps the rest of the
+    /// file as authored.
+    Unreadable(Vec<ConfigSectionError>),
 }
 
 impl ConfigDocument {
@@ -448,10 +464,15 @@ impl ConfigDocument {
     }
 
     /// Loads a document for an interactive editor, falling back to a repairable
-    /// default draft when the file exists but its contents cannot be parsed.
+    /// draft when the file exists but its contents cannot all be used.
     ///
-    /// The returned warning contains the original parse failure. Saving the
-    /// fallback document remains revision-guarded and creates a backup first.
+    /// Valid TOML whose values do not all map is salvaged the way the overlay
+    /// loads it: every entry that maps keeps its value, the rest hold defaults
+    /// and are listed in [`Self::section_errors`]. Only a file that is not TOML
+    /// at all falls back to a draft of built-in defaults.
+    ///
+    /// The returned warning describes what could not be used. Saving either
+    /// fallback remains revision-guarded and creates a backup first.
     pub fn load_for_editing() -> Result<(Self, Option<String>)> {
         Self::load_for_editing_from_path(Config::get_config_path()?)
     }
@@ -459,8 +480,11 @@ impl ConfigDocument {
     pub fn load_for_editing_from_path(path: impl Into<PathBuf>) -> Result<(Self, Option<String>)> {
         let source_path = path.into();
         let revision = SourceRevision::read(&source_path)?;
-        match Self::from_revision(source_path.clone(), revision.clone()) {
-            Ok(document) => Ok((document, None)),
+        match Self::read(source_path.clone(), revision.clone()) {
+            Ok(document) => {
+                let warning = document.unreadable_summary();
+                Ok((document, warning))
+            }
             Err(error) if revision.bytes().is_some() => {
                 let document = revision
                     .bytes()
@@ -476,7 +500,7 @@ impl ConfigDocument {
                         source: ConfigSource::Primary,
                         revision,
                         diagnostics: Vec::new(),
-                        repair_mode: true,
+                        repair: RepairScope::Rebuild,
                     },
                     Some(format!("{error:#}")),
                 ))
@@ -485,7 +509,20 @@ impl ConfigDocument {
         }
     }
 
+    /// A strict load: a file with any entry that does not map is an error.
     fn from_revision(source_path: PathBuf, revision: SourceRevision) -> Result<Self> {
+        let document = Self::read(source_path, revision)?;
+        if let Some(summary) = document.unreadable_summary() {
+            bail!(
+                "Failed to parse config from {}: {summary}",
+                document.source_path.display()
+            );
+        }
+        Ok(document)
+    }
+
+    /// Reads the revision, salvaging the entries that map.
+    fn read(source_path: PathBuf, revision: SourceRevision) -> Result<Self> {
         match revision.bytes() {
             Some(bytes) => {
                 let input = std::str::from_utf8(bytes).with_context(|| {
@@ -497,6 +534,11 @@ impl ConfigDocument {
                 let parsed = parse_typed_config(input).with_context(|| {
                     format!("Failed to parse config from {}", source_path.display())
                 })?;
+                let repair = if parsed.section_errors.is_empty() {
+                    RepairScope::None
+                } else {
+                    RepairScope::Unreadable(parsed.section_errors)
+                };
                 Ok(Self {
                     config: parsed.config,
                     authored_config: parsed.authored,
@@ -505,7 +547,7 @@ impl ConfigDocument {
                     source: ConfigSource::Primary,
                     revision,
                     diagnostics: parsed.diagnostics,
-                    repair_mode: false,
+                    repair,
                 })
             }
             None => Ok(Self {
@@ -516,9 +558,22 @@ impl ConfigDocument {
                 source: ConfigSource::Default,
                 revision,
                 diagnostics: Vec::new(),
-                repair_mode: false,
+                repair: RepairScope::None,
             }),
         }
+    }
+
+    /// The entries the load could not map, one line each, or `None` when
+    /// every entry mapped.
+    fn unreadable_summary(&self) -> Option<String> {
+        let errors = self.section_errors();
+        (!errors.is_empty()).then(|| {
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
     }
 
     pub fn config(&self) -> &Config {
@@ -562,6 +617,16 @@ impl ConfigDocument {
 
     pub fn diagnostics(&self) -> &[ConfigDiagnostic] {
         &self.diagnostics
+    }
+
+    /// Entries of the file that did not map and hold their defaults in
+    /// [`Self::config`]. A save replaces exactly these with the draft's
+    /// values; everything else in the file stays as authored.
+    pub fn section_errors(&self) -> &[ConfigSectionError] {
+        match &self.repair {
+            RepairScope::Unreadable(errors) => errors,
+            RepairScope::None | RepairScope::Rebuild => &[],
+        }
     }
 
     /// Writes an updated configuration, preserving the source document's
@@ -625,28 +690,7 @@ impl ConfigDocument {
         updated: &Config,
         before_write: &mut dyn FnMut(),
     ) -> Result<ConfigDocumentSaveOutcome> {
-        let repair_source = self
-            .repair_mode
-            .then(|| repair_source_document(&self.document, previous, updated))
-            .transpose()?;
-        let source = repair_source.as_ref().unwrap_or(&self.document);
-        let mut merged = merge_config_document(source, previous, updated, self.repair_mode)?;
-        let mut output = merged.to_string();
-        let parsed = parse_typed_config(&output);
-        let parsed = match parsed {
-            Ok(parsed) => parsed,
-            Err(_) if self.repair_mode => {
-                let conservative =
-                    conservative_repair_source_document(&self.document, previous, updated)?;
-                merged = merge_config_document(&conservative, previous, updated, self.repair_mode)?;
-                output = merged.to_string();
-                parse_typed_config(&output)
-                    .context("Repaired config failed its validation parse before save")?
-            }
-            Err(error) => {
-                return Err(error).context("Merged config failed its validation parse before save");
-            }
-        };
+        let (merged, output, parsed) = self.merge_for_save(previous, updated)?;
 
         // The file this window is about, resolved once — through its parent
         // directories as much as through its own final component. Everything
@@ -716,10 +760,82 @@ impl ConfigDocument {
                 source: ConfigSource::Primary,
                 revision,
                 diagnostics: parsed.diagnostics,
-                repair_mode: false,
+                repair: RepairScope::None,
             },
             backup_path,
         })
+    }
+
+    /// The merged document a save would write, its text, and its parse.
+    ///
+    /// The output must map completely: salvage is for reading a file the user
+    /// wrote, not for accepting one this save produced. A repair that still
+    /// fails retries with a coarser source before giving up.
+    fn merge_for_save(
+        &self,
+        previous: &Config,
+        updated: &Config,
+    ) -> Result<(DocumentMut, String, ParsedConfig)> {
+        let merge = |source: &DocumentMut, repairing: bool| -> Result<(DocumentMut, String)> {
+            let merged = merge_config_document(source, previous, updated, repairing)?;
+            let output = merged.to_string();
+            Ok((merged, output))
+        };
+
+        match &self.repair {
+            RepairScope::None => {
+                let (merged, output) = merge(&self.document, false)?;
+                let parsed = parse_complete_config(&output)
+                    .context("Merged config failed its validation parse before save")?;
+                Ok((merged, output, parsed))
+            }
+            RepairScope::Rebuild => {
+                let source = repair_source_document(&self.document, previous, updated)?;
+                let (merged, output) = merge(&source, true)?;
+                if let Ok(parsed) = parse_complete_config(&output) {
+                    return Ok((merged, output, parsed));
+                }
+
+                let conservative =
+                    conservative_repair_source_document(&self.document, previous, updated)?;
+                let (merged, output) = merge(&conservative, true)?;
+                let parsed = parse_complete_config(&output)
+                    .context("Repaired config failed its validation parse before save")?;
+                Ok((merged, output, parsed))
+            }
+            RepairScope::Unreadable(errors) => {
+                let entries = errors
+                    .iter()
+                    .map(|error| error.section.as_str())
+                    .collect::<Vec<_>>();
+                let source = unreadable_repair_source_document(
+                    &self.document,
+                    previous,
+                    updated,
+                    &entries,
+                    false,
+                )?;
+                let (merged, output) = merge(&source, false)?;
+                if let Ok(parsed) = parse_complete_config(&output) {
+                    return Ok((merged, output, parsed));
+                }
+
+                // What still fails is something the merge cannot see as a
+                // known setting, such as an unknown key inside one of the
+                // entries: replace those entries whole.
+                let whole = unreadable_repair_source_document(
+                    &self.document,
+                    previous,
+                    updated,
+                    &entries,
+                    true,
+                )?;
+                let (merged, output) = merge(&whole, false)?;
+                let parsed = parse_complete_config(&output)
+                    .context("Repaired config failed its validation parse before save")?;
+                Ok((merged, output, parsed))
+            }
+        }
     }
 
     /// Whether the file this document loaded is still the file it would write.
@@ -797,22 +913,28 @@ struct ParsedConfig {
     /// The same parse before `validate_and_clamp` ran.
     authored: Config,
     diagnostics: Vec<ConfigDiagnostic>,
+    /// Entries that did not map and hold their defaults in both configs.
+    section_errors: Vec<ConfigSectionError>,
 }
 
 fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
     let mut ignored = BTreeSet::new();
-    let deserializer = toml::Deserializer::parse(input).context("Failed to parse TOML")?;
-    let mut config: Config = serde_ignored::deserialize(deserializer, |path| {
-        let path = path.to_string();
-        if !is_known_feature_gated_path(&path) {
-            ignored.insert(path);
-        }
-    })
-    .map_err(|error| anyhow!(error))?;
-    // Serde reports an omitted `[keybindings]` field as this build's default,
-    // so presence has to come from the source text for resolution to tell an
-    // authored shortcut from an offer (#293).
-    config.keybinding_authorship = KeybindingAuthorship::from_toml_source(input);
+    // The salvage also records which `[keybindings]` keys the source spells
+    // out: serde reports an omitted field as this build's default, so presence
+    // has to come from the source text for resolution to tell an authored
+    // shortcut from an offer (#293).
+    let salvaged = deserialize_salvaging(input, |table| {
+        // A salvaged parse deserializes twice; only the pass that produced
+        // the config may report what it ignored.
+        ignored.clear();
+        serde_ignored::deserialize(table, |path| {
+            let path = path.to_string();
+            if !is_known_feature_gated_path(&path) {
+                ignored.insert(path);
+            }
+        })
+    })?;
+    let mut config = salvaged.config;
     let authored = config.clone();
     let validation = config.validate_and_clamp();
     collect_flattened_unknown_paths(input, &config, &mut ignored)?;
@@ -874,7 +996,26 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
         config,
         authored,
         diagnostics,
+        section_errors: salvaged.section_errors,
     })
+}
+
+/// [`parse_typed_config`] for text a save produced, where any entry that does
+/// not map is a merge defect rather than something to salvage.
+fn parse_complete_config(input: &str) -> Result<ParsedConfig> {
+    let parsed = parse_typed_config(input)?;
+    if !parsed.section_errors.is_empty() {
+        bail!(
+            "{}",
+            parsed
+                .section_errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+        );
+    }
+    Ok(parsed)
 }
 
 fn collect_flattened_unknown_paths(

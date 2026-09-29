@@ -289,12 +289,21 @@ fn family_preview_factory() -> gtk::SignalListItemFactory {
         };
         label.set_label(&family);
         let attributes = gtk::pango::AttrList::new();
-        attributes.insert(gtk::pango::AttrFontDesc::new(
-            &gtk::pango::FontDescription::from_string(&family),
-        ));
+        attributes.insert(gtk::pango::AttrFontDesc::new(&family_preview_font(&family)));
         label.set_attributes(Some(&attributes));
     });
     factory
+}
+
+/// The font a catalog row previews its family in.
+///
+/// Built field by field: `FontDescription::from_string` reads trailing style,
+/// weight, and stretch words off the family, so "Roboto Condensed" would preview
+/// in Roboto and "Archivo Black" in Archivo.
+fn family_preview_font(family: &str) -> gtk::pango::FontDescription {
+    let mut description = gtk::pango::FontDescription::new();
+    description.set_family(family);
+    description
 }
 
 /// The family the row is showing, if the model has one at that position.
@@ -381,6 +390,17 @@ mod tests {
 
         let note = missing_family_note("Wayscriber No Such Font 9000").expect("missing warns");
         assert!(note.contains("Wayscriber No Such Font 9000"));
+    }
+
+    #[test]
+    fn a_family_ending_in_a_style_word_previews_in_that_family() {
+        for family in ["Roboto Condensed", "Archivo Black", "Noto Sans Light"] {
+            let description = family_preview_font(family);
+
+            assert_eq!(description.family().as_deref(), Some(family));
+            assert_eq!(description.weight(), gtk::pango::Weight::Normal);
+            assert_eq!(description.stretch(), gtk::pango::Stretch::Normal);
+        }
     }
 
     #[test]

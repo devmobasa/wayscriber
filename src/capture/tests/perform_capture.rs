@@ -8,7 +8,7 @@ use crate::capture::{
     file::FileSaveConfig,
     pipeline::{CaptureRequest, deliver_document, deliver_image, perform_capture},
     types::{
-        CaptureDestination, CaptureError, CaptureType, DocumentDeliveryRequest,
+        CaptureDestination, CaptureError, CaptureResult, CaptureType, DocumentDeliveryRequest,
         ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument,
         RenderedImage,
     },
@@ -507,7 +507,23 @@ async fn test_perform_capture_clipboard_failure() {
         .await
         .unwrap();
     assert!(!result.copied_to_clipboard);
+    assert!(result.clipboard_copy_failed());
     assert_eq!(*clipboard_handle.calls.lock().unwrap(), 2);
+}
+
+#[test]
+fn file_only_result_without_a_saved_file_is_not_a_clipboard_failure() {
+    let result = CaptureResult {
+        image_data: vec![1, 2, 3],
+        operation: ImageOperationKind::Screenshot,
+        fallback_format_override: None,
+        destination: CaptureDestination::FileOnly,
+        saved_path: None,
+        copied_to_clipboard: false,
+        save_error: None,
+    };
+
+    assert!(!result.clipboard_copy_failed());
 }
 
 #[tokio::test]
@@ -659,4 +675,103 @@ async fn perform_capture_propagates_source_error() {
         ),
         other => panic!("expected ImageError, got {other:?}"),
     }
+}
+
+fn file_only_deps(saver: MockSaver, clipboard: MockClipboard) -> CaptureDependencies {
+    CaptureDependencies {
+        source: Arc::new(MockSource {
+            data: vec![1, 2, 3],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        }),
+        saver: Arc::new(saver),
+        clipboard: Arc::new(clipboard),
+    }
+}
+
+fn unused_saver() -> MockSaver {
+    MockSaver {
+        should_fail: false,
+        path: PathBuf::from("/tmp/unused.png"),
+        calls: Arc::new(Mutex::new(0)),
+    }
+}
+
+fn unused_clipboard() -> MockClipboard {
+    MockClipboard {
+        should_fail: false,
+        calls: Arc::new(Mutex::new(0)),
+    }
+}
+
+fn assert_missing_save_directory(error: CaptureError) {
+    match error {
+        CaptureError::SaveError(io) => assert!(
+            io.to_string().contains("no save directory"),
+            "unexpected save error: {io}"
+        ),
+        other => panic!("expected SaveError, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn perform_capture_file_only_without_a_save_directory_fails() {
+    let saver = unused_saver();
+    let clipboard = unused_clipboard();
+    let deps = file_only_deps(saver.clone(), clipboard.clone());
+    let request = CaptureRequest {
+        capture_type: CaptureType::FullScreen,
+        destination: CaptureDestination::FileOnly,
+        save_config: Some(FileSaveConfig {
+            save_directory: PathBuf::new(),
+            ..FileSaveConfig::default()
+        }),
+    };
+
+    let error = perform_capture(request, Arc::new(deps))
+        .await
+        .expect_err("a file-only capture with nowhere to save must fail");
+
+    assert_missing_save_directory(error);
+    assert_eq!(*saver.calls.lock().unwrap(), 0);
+    assert_eq!(*clipboard.calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn perform_capture_file_only_without_a_save_config_fails() {
+    let deps = file_only_deps(unused_saver(), unused_clipboard());
+    let request = CaptureRequest {
+        capture_type: CaptureType::FullScreen,
+        destination: CaptureDestination::FileOnly,
+        save_config: None,
+    };
+
+    let error = perform_capture(request, Arc::new(deps))
+        .await
+        .expect_err("a file-only capture with nowhere to save must fail");
+
+    assert_missing_save_directory(error);
+}
+
+#[tokio::test]
+async fn deliver_image_file_only_without_a_save_directory_fails() {
+    let saver = unused_saver();
+    let deps = file_only_deps(saver.clone(), unused_clipboard());
+    let request = ImageDeliveryRequest {
+        image: rendered_png(vec![137, 80, 78, 71]),
+        destination: CaptureDestination::FileOnly,
+        save_config: Some(FileSaveConfig {
+            save_directory: PathBuf::new(),
+            ..FileSaveConfig::default()
+        }),
+        operation: ImageOperationKind::CanvasExport,
+        fallback_format_override: Some(ImageFormatMetadata::png()),
+    };
+
+    let error = deliver_image(request, Arc::new(deps))
+        .await
+        .expect_err("a file-only export with nowhere to save must fail");
+
+    assert_missing_save_directory(error);
+    assert_eq!(*saver.calls.lock().unwrap(), 0);
 }
