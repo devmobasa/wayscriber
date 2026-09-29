@@ -358,7 +358,7 @@ fn bounded_layout(
     text: &str,
 ) -> pango::Layout {
     let layout = pangocairo::functions::create_layout(ctx);
-    let description = pango::FontDescription::from_string(&format!("{family} {size}"));
+    let description = crate::draw::font::family_description(family, size);
     layout.set_font_description(Some(&description));
     layout.set_text(text);
     layout.set_ellipsize(pango::EllipsizeMode::End);
@@ -369,7 +369,7 @@ fn bounded_layout(
 /// Natural width of `text`, for callers dividing a row between two labels.
 fn text_width(ctx: &cairo::Context, family: &str, size: f64, text: &str) -> f64 {
     let layout = pangocairo::functions::create_layout(ctx);
-    let description = pango::FontDescription::from_string(&format!("{family} {size}"));
+    let description = crate::draw::font::family_description(family, size);
     layout.set_font_description(Some(&description));
     layout.set_text(text);
     f64::from(layout.extents().1.width()) / f64::from(pango::SCALE)

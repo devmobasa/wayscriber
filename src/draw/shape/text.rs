@@ -162,11 +162,12 @@ pub(crate) fn sticky_note_text_layout_with_measurer(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) -> StickyNoteTextLayout {
-    let font_desc_str = font_descriptor.to_pango_string(size);
+    // The string form is the measurement cache key.
+    let font_desc = font_descriptor.to_pango_description(size);
+    let font_desc_str = font_desc.to_string();
 
     // Create layout for rendering (required for draw operations)
     let layout = pangocairo::functions::create_layout(ctx);
-    let font_desc = pango::FontDescription::from_string(&font_desc_str);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);
     if let Some(width) = wrap_width {
