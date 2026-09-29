@@ -55,6 +55,26 @@ fn handle_render_failure(
     None
 }
 
+/// Whether another frame is needed after a successful render attempt.
+///
+/// The loop consumes the request that starts a frame before rendering, so
+/// `raised_during_render` is true only when the pass itself asked for another
+/// frame, for example a warning toast pushed while painting the canvas.
+/// Nothing the committed frame could not yet show may be dropped here.
+fn needs_redraw_after_render(
+    outcome: RenderOutcome,
+    raised_during_render: bool,
+    pending_history: bool,
+) -> bool {
+    match outcome {
+        // Nothing was painted, so the consumed request still stands.
+        RenderOutcome::BuffersInFlight => true,
+        RenderOutcome::Committed { keep_rendering } => {
+            raised_during_render || keep_rendering || pending_history
+        }
+    }
+}
+
 pub(super) fn maybe_render(
     state: &mut WaylandState,
     conn: &wayland_client::Connection,
@@ -91,18 +111,26 @@ pub(super) fn maybe_render(
             state.input_state.status_hud.hover(),
             state.input_state.zoom_chip.hover(),
         );
+        // Consume the request that starts this frame. Whatever the render
+        // pass requests from here on is still set when it returns.
+        state.input_state.needs_redraw = false;
         match state.render(qh) {
-            Ok(RenderOutcome::BuffersInFlight) => {
+            Ok(outcome @ RenderOutcome::BuffersInFlight) => {
                 // Nothing was painted or committed: the compositor still owns
-                // every slot. Leave `needs_redraw` set so the next pass retries,
+                // every slot. Keep `needs_redraw` set so the next pass retries,
                 // and pace that retry off `last_render_time` like any other
                 // attempt so the FPS cap throttles the wait instead of spinning.
                 // The frame counters stay untouched - this was not a frame.
+                state.input_state.needs_redraw = needs_redraw_after_render(
+                    outcome,
+                    state.input_state.needs_redraw,
+                    state.input_state.has_pending_history(),
+                );
                 *consecutive_render_failures = 0;
                 *last_render_time = Some(Instant::now());
                 debug!("Main loop: render deferred - all buffers still held by the compositor");
             }
-            Ok(RenderOutcome::Committed { keep_rendering }) => {
+            Ok(outcome @ RenderOutcome::Committed { keep_rendering }) => {
                 let render_end = Instant::now();
                 let render_duration = render_end.saturating_duration_since(render_start);
                 if render_duration > Duration::from_millis(5) {
@@ -112,8 +140,11 @@ pub(super) fn maybe_render(
                 // Reset failure counter and record render time.
                 *consecutive_render_failures = 0;
                 *last_render_time = Some(render_end);
-                state.input_state.needs_redraw =
-                    keep_rendering || state.input_state.has_pending_history();
+                state.input_state.needs_redraw = needs_redraw_after_render(
+                    outcome,
+                    state.input_state.needs_redraw,
+                    state.input_state.has_pending_history(),
+                );
                 // Font enumeration is slow enough to miss a frame budget, but
                 // starting it before this point would move that cost onto
                 // startup. The worker wakes the event loop when the cache is
@@ -215,6 +246,38 @@ mod tests {
     fn frame_rate_cap_timeout_returns_none_when_budget_elapsed() {
         let last = Instant::now() - Duration::from_millis(20);
         assert_eq!(frame_rate_cap_timeout(60, Some(last)), None);
+    }
+
+    #[test]
+    fn needs_redraw_after_render_keeps_requests_raised_while_painting() {
+        let committed = RenderOutcome::Committed {
+            keep_rendering: false,
+        };
+
+        assert!(needs_redraw_after_render(committed, true, false));
+        assert!(!needs_redraw_after_render(committed, false, false));
+    }
+
+    #[test]
+    fn needs_redraw_after_render_adds_animation_and_history_requests() {
+        let animating = RenderOutcome::Committed {
+            keep_rendering: true,
+        };
+        let idle = RenderOutcome::Committed {
+            keep_rendering: false,
+        };
+
+        assert!(needs_redraw_after_render(animating, false, false));
+        assert!(needs_redraw_after_render(idle, false, true));
+    }
+
+    #[test]
+    fn needs_redraw_after_render_retries_when_every_buffer_is_in_flight() {
+        assert!(needs_redraw_after_render(
+            RenderOutcome::BuffersInFlight,
+            false,
+            false
+        ));
     }
 
     #[test]
