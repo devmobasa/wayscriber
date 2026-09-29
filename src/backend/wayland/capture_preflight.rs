@@ -41,6 +41,16 @@ impl<B: Copy> CapturePreflight<B> {
         Some(backend)
     }
 
+    pub(super) fn changed_on_output(&self, output_id: Option<u32>, generation: u64) -> bool {
+        let layout = match self {
+            Self::Idle => return false,
+            Self::Pending { layout, .. } | Self::Capturing { layout } => layout,
+        };
+        layout.output_id.is_some()
+            && layout.output_id == output_id
+            && layout.generation != generation
+    }
+
     pub(super) fn layout_matches(&self, output_id: Option<u32>, generation: u64) -> bool {
         let layout = match self {
             Self::Idle => return true,
@@ -52,6 +62,47 @@ impl<B: Copy> CapturePreflight<B> {
             output_id,
             generation,
         )
+    }
+}
+
+/// One retry retained by the original request while its portal result is discarded.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) enum PortalLayoutRetry {
+    #[default]
+    Available,
+    Pending {
+        output_id: u32,
+    },
+    Spent,
+}
+
+impl PortalLayoutRetry {
+    pub(super) fn schedule(
+        &mut self,
+        captured: Option<u32>,
+        active: Option<u32>,
+        changed: bool,
+    ) -> bool {
+        let Some(output_id) = captured else {
+            return false;
+        };
+        if !matches!(self, Self::Available) || active != captured || !changed {
+            return false;
+        }
+        *self = Self::Pending { output_id };
+        true
+    }
+
+    pub(super) fn is_pending(&self) -> bool {
+        matches!(self, Self::Pending { .. })
+    }
+
+    pub(super) fn take_pending(&mut self) -> Option<u32> {
+        let Self::Pending { output_id } = *self else {
+            return None;
+        };
+        *self = Self::Spent;
+        Some(output_id)
     }
 }
 

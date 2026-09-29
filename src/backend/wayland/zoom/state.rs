@@ -1,4 +1,4 @@
-use crate::backend::wayland::capture_preflight::CapturePreflight;
+use crate::backend::wayland::capture_preflight::{CapturePreflight, PortalLayoutRetry};
 use std::sync::Arc;
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
@@ -117,6 +117,7 @@ pub struct ZoomState {
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight: CapturePreflight<bool>,
     pub(super) capture_done: bool,
+    pub(super) layout_retry: PortalLayoutRetry,
     next_capture_id: u64,
     current_capture_id: Option<ZoomCaptureId>,
     pub(super) source_terminal: Option<ZoomSourceTerminal>,
@@ -161,6 +162,7 @@ impl ZoomState {
             runtime_wake,
             preflight: CapturePreflight::Idle,
             capture_done: false,
+            layout_retry: PortalLayoutRetry::default(),
             next_capture_id: 1,
             current_capture_id: None,
             source_terminal: None,
@@ -269,7 +271,10 @@ impl ZoomState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some() || self.portal.is_running() || self.preflight.is_pending()
+        self.capture.is_some()
+            || self.portal.is_running()
+            || self.preflight.is_pending()
+            || self.layout_retry.is_pending()
     }
 
     #[cfg(test)]
@@ -330,6 +335,7 @@ impl ZoomState {
             .checked_add(1)
             .expect("zoom capture id space exhausted");
         self.current_capture_id = Some(id);
+        self.layout_retry = PortalLayoutRetry::default();
         id
     }
 
@@ -342,6 +348,7 @@ impl ZoomState {
         outcome: ZoomSourceOutcome,
         report: Option<ZoomTerminalReport>,
     ) {
+        self.layout_retry = PortalLayoutRetry::default();
         let Some(id) = self.current_capture_id.take() else {
             return;
         };
@@ -377,7 +384,7 @@ impl ZoomState {
     }
 
     pub fn abort_capture(&mut self) -> bool {
-        let mut changed = self.pending_activation;
+        let mut changed = self.pending_activation || self.layout_retry.is_pending();
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
             changed = true;
@@ -386,6 +393,7 @@ impl ZoomState {
             changed = true;
         }
         self.preflight = CapturePreflight::Idle;
+        self.layout_retry = PortalLayoutRetry::default();
         self.portal.finish();
         self.pending_activation = false;
         if changed {
@@ -461,6 +469,7 @@ impl ZoomState {
             capture.frame.destroy();
         }
         self.preflight = CapturePreflight::Idle;
+        self.layout_retry = PortalLayoutRetry::default();
         self.capture_done = true;
         self.portal.finish();
         self.pending_activation = false;

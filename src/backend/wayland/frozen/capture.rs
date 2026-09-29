@@ -91,6 +91,7 @@ impl FrozenState {
         }
 
         self.capture_done = false;
+        self.layout_retry = Default::default();
         let backend = self
             .preferred_backend()
             .context("no frozen capture backend is available")?;

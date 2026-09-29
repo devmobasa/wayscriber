@@ -36,6 +36,9 @@ pub(super) fn poll_capture_deadlines(
     qh: &wayland_client::QueueHandle<WaylandState>,
     now: Instant,
 ) {
+    // Re-admit retries after dispatch, before GTK synchronization and rendering.
+    // This lets a fresh GTK generation be published in the same iteration.
+    state.poll_portal_layout_retries();
     state.poll_overlay_capture_barrier_timeout(now);
     if let Some(backend) = state.frozen.take_timed_out_direct_capture(now) {
         warn!("{backend:?} frozen capture timed out; trying the next backend");
@@ -44,6 +47,9 @@ pub(super) fn poll_capture_deadlines(
 }
 
 pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
+    if state.frozen.has_portal_layout_retry() || state.zoom.has_portal_layout_retry() {
+        return Some(Duration::ZERO);
+    }
     super::min_timeout(
         state.overlay_capture_barrier_timeout(now),
         super::min_timeout(

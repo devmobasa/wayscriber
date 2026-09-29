@@ -106,49 +106,13 @@ impl FrozenState {
         let poll = self.portal.poll();
         match poll {
             PortalPoll::Ready(Ok((target_output, layout_generation, source_geometry, image))) => {
-                log::info!(
-                    "portal.freeze captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
-                    self.active_output_id,
-                    self.output_layout_generation
+                self.apply_portal_image(
+                    target_output,
+                    layout_generation,
+                    source_geometry,
+                    image,
+                    input_state,
                 );
-                let output_matches = portal_output_matches(target_output, self.active_output_id);
-                let layout_matches = layout_generation == self.output_layout_generation;
-
-                if output_matches && layout_matches {
-                    match image {
-                        Ok(image) => {
-                            self.set_pending_portal_image(image, target_output, source_geometry)
-                        }
-                        Err(err) => {
-                            warn!("Portal frozen raster rejected: {err}");
-                            if self.has_acquisition_attempt() {
-                                self.finish_preflight_failure(err.to_string(), input_state);
-                            } else {
-                                input_state.push_toast(
-                                    ToastPriority::Critical,
-                                    "freeze",
-                                    Toast::error(err.to_string()),
-                                );
-                                input_state.set_frozen_active(false);
-                                self.capture_done = true;
-                            }
-                        }
-                    }
-                } else {
-                    if !layout_matches {
-                        warn!("Portal capture discarded after the output layout changed");
-                    } else {
-                        warn!("Portal capture for inactive output discarded");
-                    }
-                    if self.has_acquisition_attempt() {
-                        self.finish_acquisition(ScreenAcquisitionOutcome::StaleLayout, input_state);
-                    } else {
-                        Self::push_stale_layout_toast(input_state);
-                        self.capture_done = true;
-                    }
-                }
-
-                self.finish_portal_task();
             }
             PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
                 log::info!("Portal frozen capture cancelled: {reason}");
@@ -222,6 +186,60 @@ impl FrozenState {
                 }
             }
         }
+    }
+
+    fn apply_portal_image(
+        &mut self,
+        target_output: Option<u32>,
+        layout_generation: u64,
+        source_geometry: Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
+        image: Result<crate::backend::wayland::frozen::FrozenImage, CaptureError>,
+        input_state: &mut InputState,
+    ) {
+        log::info!(
+            "portal.freeze captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
+            self.active_output_id,
+            self.output_layout_generation
+        );
+        let output_matches = portal_output_matches(target_output, self.active_output_id);
+        let layout_matches = layout_generation == self.output_layout_generation;
+
+        if output_matches && layout_matches {
+            match image {
+                Ok(image) => self.set_pending_portal_image(image, target_output, source_geometry),
+                Err(err) => {
+                    warn!("Portal frozen raster rejected: {err}");
+                    if self.has_acquisition_attempt() {
+                        self.finish_preflight_failure(err.to_string(), input_state);
+                    } else {
+                        input_state.push_toast(
+                            ToastPriority::Critical,
+                            "freeze",
+                            Toast::error(err.to_string()),
+                        );
+                        input_state.set_frozen_active(false);
+                        self.capture_done = true;
+                    }
+                }
+            }
+        } else {
+            if !layout_matches {
+                warn!("Portal capture discarded after the output layout changed");
+            } else {
+                warn!("Portal capture for inactive output discarded");
+            }
+            if self.queue_portal_layout_retry(target_output, !layout_matches) {
+                return;
+            }
+            if self.has_acquisition_attempt() {
+                self.finish_acquisition(ScreenAcquisitionOutcome::StaleLayout, input_state);
+            } else {
+                Self::push_stale_layout_toast(input_state);
+                self.capture_done = true;
+            }
+        }
+
+        self.finish_portal_task();
     }
 
     pub fn portal_timeout(&self, now: Instant) -> Option<Duration> {

@@ -1,4 +1,4 @@
-use crate::backend::wayland::capture_preflight::CapturePreflight;
+use crate::backend::wayland::capture_preflight::{CapturePreflight, PortalLayoutRetry};
 use log::info;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -133,6 +133,7 @@ pub struct FrozenState {
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight: CapturePreflight<FrozenCaptureBackend>,
     pub(super) capture_done: bool,
+    pub(super) layout_retry: PortalLayoutRetry,
     pending_image: Option<PendingFrozenImage>,
     acquisition_attempt: Option<(ScreenAcquisitionId, ScreenAcquisitionOwner)>,
     acquisition_completion: Option<ScreenAcquisitionCompletion>,
@@ -197,6 +198,7 @@ impl FrozenState {
             runtime_wake,
             preflight: CapturePreflight::Idle,
             capture_done: false,
+            layout_retry: PortalLayoutRetry::default(),
             pending_image: None,
             acquisition_attempt: None,
             acquisition_completion: None,
@@ -347,6 +349,10 @@ impl FrozenState {
             FrozenCaptureSource::Desktop { cropped: true };
     }
 
+    pub(super) fn discard_pending_image_for_retry(&mut self) {
+        self.pending_image = None;
+    }
+
     pub fn has_pending_image(&self) -> bool {
         self.pending_image.is_some()
     }
@@ -356,6 +362,7 @@ impl FrozenState {
             || self.portal.is_running()
             || self.preflight.is_pending()
             || self.pending_image.is_some()
+            || self.layout_retry.is_pending()
     }
 
     pub(in crate::backend::wayland) fn take_preflight_pending(
@@ -456,6 +463,7 @@ impl FrozenState {
     }
 
     fn finish_attempt_resources(&mut self) {
+        self.layout_retry = PortalLayoutRetry::default();
         if let Some(capture) = self.direct_capture.take() {
             capture.destroy();
         }
@@ -591,6 +599,14 @@ impl FrozenState {
             self.active_output_id,
             self.output_layout_generation,
         ) {
+            if matches!(pending.source, FrozenCaptureSource::Desktop { .. })
+                && self.queue_portal_layout_retry(
+                    pending.target_output_id,
+                    pending.layout_generation != self.output_layout_generation,
+                )
+            {
+                return Ok(false);
+            }
             return self.reject_pending_image(
                 input_state,
                 "Freeze failed after the display layout changed",
@@ -637,6 +653,13 @@ impl FrozenState {
                 .cloned()
                 .and_then(|geometry| geometry.with_revalidated_output_count(live_output_count))
             else {
+                let topology_changed = pending
+                    .source_geometry
+                    .as_ref()
+                    .is_some_and(|geo| geo.output_count_conflicts_with_live(live_output_count));
+                if self.queue_portal_layout_retry(pending.target_output_id, topology_changed) {
+                    return Ok(false);
+                }
                 return self.reject_pending_image(
                     input_state,
                     "Freeze failed after the output layout changed",

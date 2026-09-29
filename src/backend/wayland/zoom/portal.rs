@@ -111,6 +111,9 @@ impl ZoomState {
                         geometry.output_count_conflicts_with_live(live_output_count)
                     }) {
                         warn!("Portal zoom capture discarded after output topology changed");
+                        if self.queue_portal_layout_retry(target_output, true) {
+                            return;
+                        }
                         self.finish_failed_portal_task(input_state, ZoomSourceOutcome::StaleLayout);
                         return;
                     }
@@ -131,6 +134,9 @@ impl ZoomState {
                         warn!("Portal zoom capture discarded after the output layout changed");
                     } else {
                         warn!("Portal zoom capture for inactive output discarded");
+                    }
+                    if self.queue_portal_layout_retry(target_output, !layout_matches) {
+                        return;
                     }
                     self.finish_failed_portal_task(input_state, ZoomSourceOutcome::StaleLayout);
                     return;
@@ -583,11 +589,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stale_layout_preserves_the_current_zoom_image_and_activation() {
+    async fn exhausted_layout_retry_preserves_the_current_zoom_image_and_activation() {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
+        zoom.layout_retry = crate::backend::wayland::capture_preflight::PortalLayoutRetry::Spent;
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
@@ -670,11 +677,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stale_live_output_count_discards_a_single_output_portal_image() {
+    async fn exhausted_topology_retry_discards_a_single_output_portal_image() {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
+        zoom.layout_retry = crate::backend::wayland::capture_preflight::PortalLayoutRetry::Spent;
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0)).with_known_output_count(Some(1))));

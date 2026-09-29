@@ -176,6 +176,16 @@ impl OverlayCaptureBarrier {
         Some(active.reason)
     }
 
+    fn submission_timeout(&self, can_render: bool) -> Option<Duration> {
+        self.active
+            .filter(|active| {
+                can_render
+                    && active.gtk_paint_generation.is_none()
+                    && active.main_surface_phase == MainSurfaceCapturePhase::AwaitingRender
+            })
+            .map(|_| Duration::ZERO)
+    }
+
     fn frame_timeout(&self, now: Instant) -> Option<Duration> {
         let active = self.active?;
         if active.main_surface_phase != MainSurfaceCapturePhase::AwaitingFrame {
@@ -225,7 +235,14 @@ impl WaylandState {
         &self,
         now: Instant,
     ) -> Option<Duration> {
-        self.suppression.barrier.frame_timeout(now)
+        self.suppression
+            .barrier
+            .submission_timeout(
+                self.surface.is_configured()
+                    && !self.surface.frame_callback_pending()
+                    && self.input_state.needs_redraw,
+            )
+            .or_else(|| self.suppression.barrier.frame_timeout(now))
     }
 
     pub(in crate::backend::wayland) fn poll_overlay_capture_barrier_timeout(
@@ -249,6 +266,55 @@ impl WaylandState {
         let message = "Screen capture cancelled because the compositor did not confirm the hidden overlay frame.";
         if !self.cancel_overlay_capture_preflight(timeout.reason, Some(message)) {
             push_capture_preflight_cancellation_toast(&mut self.input_state, message);
+        }
+    }
+
+    /// Re-admit the same request after refreshing geometry, without restoring
+    /// any overlay pixels between the stale attempt and its one retry.
+    pub(in crate::backend::wayland) fn poll_portal_layout_retries(&mut self) {
+        if !self.frozen.has_portal_layout_retry() && !self.zoom.has_portal_layout_retry() {
+            return;
+        }
+        self.refresh_freeze_zoom_geometry();
+        for reason in [OverlaySuppression::Frozen, OverlaySuppression::Zoom] {
+            let restarted = match reason {
+                OverlaySuppression::Frozen => self.frozen.restart_portal_preflight(),
+                OverlaySuppression::Zoom => self.zoom.restart_portal_preflight(),
+                _ => unreachable!(),
+            };
+            match restarted {
+                Ok(false) => {}
+                Ok(true) if self.suppression.reason() == reason => {
+                    self.suppression
+                        .barrier
+                        .begin(reason, self.gtk_toolbar.is_some());
+                    self.buffer_damage
+                        .mark_all_full(FullDamageReason::OverlaySuppression);
+                    self.input_state.needs_redraw = true;
+                    self.toolbar.mark_dirty();
+                }
+                Ok(true) => {
+                    self.cancel_overlay_capture_preflight(
+                        reason,
+                        Some("Capture retry lost overlay suppression"),
+                    );
+                }
+                Err(error) => {
+                    log::warn!("Portal {reason:?} retry preflight failed: {error}");
+                    match reason {
+                        OverlaySuppression::Frozen if self.frozen.has_acquisition_attempt() => {
+                            self.frozen
+                                .finish_preflight_failure(error, &mut self.input_state);
+                        }
+                        OverlaySuppression::Zoom => self
+                            .zoom
+                            .finish_preflight_failure(&mut self.input_state, error),
+                        _ => {
+                            self.cancel_overlay_capture_preflight(reason, Some(&error));
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -349,6 +415,9 @@ impl WaylandState {
                     &self.tokio_handle,
                 ) {
                     log::warn!("Frozen preflight capture failed: {err}");
+                    if self.frozen.retry_stale_portal_preflight(backend) {
+                        return;
+                    }
                     if self.frozen.has_acquisition_attempt() {
                         self.frozen
                             .finish_preflight_failure(err.to_string(), &mut self.input_state);
@@ -375,6 +444,9 @@ impl WaylandState {
                     &self.tokio_handle,
                 ) {
                     log::warn!("Zoom preflight capture failed: {err}");
+                    if self.zoom.retry_stale_portal_preflight(use_fallback) {
+                        return;
+                    }
                     self.zoom
                         .finish_preflight_failure(&mut self.input_state, err.to_string());
                 }
@@ -452,6 +524,34 @@ mod tests {
     use crate::backend::wayland::state::acquisition::report_zoom_terminal_to;
     use crate::backend::wayland::zoom::ZoomWaiterOwner;
     use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn completed_barrier_retry_requires_fresh_gtk_and_main_presentations() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        let first = barrier.begin(OverlaySuppression::Frozen, true).unwrap();
+        assert!(barrier.acknowledge_gtk_paint(first));
+        assert_eq!(barrier.begin_main_surface_submission(), Some(first));
+        barrier.mark_main_surface_frame_ready(first);
+        assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
+
+        let retry = barrier.begin(OverlaySuppression::Frozen, true).unwrap();
+        assert_eq!(barrier.submission_timeout(true), None);
+        assert_ne!(retry, first);
+        assert!(!barrier.acknowledge_gtk_paint(first));
+        barrier.mark_main_surface_frame_ready(first);
+        assert_eq!(barrier.begin_main_surface_submission(), None);
+        assert_eq!(barrier.take_ready(), None);
+        assert!(barrier.acknowledge_gtk_paint(retry));
+        assert_eq!(barrier.submission_timeout(true), Some(Duration::ZERO));
+        assert_eq!(barrier.submission_timeout(false), None);
+        assert_eq!(barrier.take_ready(), None);
+        assert_eq!(barrier.begin_main_surface_submission(), Some(retry));
+        assert_eq!(barrier.submission_timeout(true), None);
+        barrier.mark_main_surface_frame_ready(first);
+        assert_eq!(barrier.take_ready(), None);
+        barrier.mark_main_surface_frame_ready(retry);
+        assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
+    }
 
     #[test]
     fn main_surface_frame_deadline_starts_only_after_submission() {

@@ -2,6 +2,7 @@ mod capture;
 mod ext_image_copy;
 mod image;
 mod portal;
+mod retry;
 mod state;
 
 use wayland_client::protocol::wl_output;
