@@ -599,6 +599,38 @@ fn queue_filename_order_and_no_op_commit_are_strict() {
 }
 
 #[test]
+fn a_leftover_admission_temp_does_not_wedge_the_command_root() {
+    with_runtime(|| {
+        let root = command_root();
+        prepare_layout(&root).unwrap();
+        let leftover = root.join(".admission.json.1.2.3.tmp");
+        fs::write(&leftover, b"partial").unwrap();
+
+        validate_root_shape(&root).unwrap();
+        let token = token();
+        let _owner = CommandOwner::open(&token).unwrap();
+        let _client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: false,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+
+        assert!(!leftover.exists());
+        fs::write(root.join(".future.1.2.3.tmp"), b"sentinel").unwrap();
+        assert!(validate_root_shape(&root).is_err());
+    });
+}
+
+#[test]
 fn unknown_root_entries_and_noncanonical_queue_names_fail_closed() {
     with_runtime(|| {
         let root = command_root();

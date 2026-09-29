@@ -359,6 +359,31 @@ where
     })
 }
 
+/// The file a temporary name left by an atomic write was destined for, or
+/// `None` when `name` does not have that shape.
+///
+/// A write that dies between creating its temporary and renaming it leaves
+/// the temporary behind, next to the file it was meant to replace. A caller
+/// that audits its directory has to recognise those leftovers as its own
+/// rather than as foreign entries, and this is the one place that knows how
+/// [`next_temp_path`] spells them: `.{target}.{pid}.{stamp}.{sequence}.tmp`.
+pub fn temp_file_target(name: &str) -> Option<&str> {
+    let mut rest = name.strip_prefix('.')?.strip_suffix(".tmp")?;
+    for _ in 0..3 {
+        let (head, number) = rest.rsplit_once('.')?;
+        if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        rest = head;
+    }
+    (!rest.is_empty()).then_some(rest)
+}
+
+/// Whether `name` is a temporary an atomic write of `target` left behind.
+pub fn is_temp_file_for(name: &str, target: &str) -> bool {
+    temp_file_target(name) == Some(target)
+}
+
 fn next_temp_path(parent: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -386,6 +386,11 @@ pub(crate) fn recover_stale_child_records() -> Result<()> {
             .file_name()
             .into_string()
             .map_err(|_| anyhow!("overlay child proof name is not UTF-8"))?;
+        if let Some(target) = crate::durable_io::temp_file_target(&name) {
+            collect_leftover_proof_temp(&entry.path(), target)?;
+            continue;
+        }
+
         let (generation, kind) = name
             .rsplit_once('.')
             .ok_or_else(|| anyhow!("invalid overlay child proof name"))?;
@@ -445,6 +450,28 @@ pub(crate) fn recover_stale_child_records() -> Result<()> {
         fs::remove_file(entry.path())?;
     }
     Ok(())
+}
+
+/// Removes the temporary an interrupted proof write left behind.
+///
+/// Recovery runs before this daemon starts an overlay, so a writer that could
+/// still rename the temporary belongs to a daemon that is gone, and that
+/// daemon's watchdog is already stopping it. A temporary for anything but a
+/// proof record is not this directory's own and still fails recovery.
+fn collect_leftover_proof_temp(path: &std::path::Path, target: &str) -> Result<()> {
+    let (generation, kind) = target
+        .rsplit_once('.')
+        .ok_or_else(|| anyhow!("invalid overlay child proof temporary"))?;
+    super::wire::validate_id(generation)?;
+    if !matches!(kind, "ready" | "active" | "enabled" | "signals") {
+        bail!("unknown overlay child proof kind");
+    }
+
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).context("failed to remove overlay child proof temporary"),
+    }
 }
 
 pub(crate) fn open_daemon_watchdog() -> Result<OwnedFd> {
@@ -784,6 +811,36 @@ mod tests {
 
         recover_stale_child_records().unwrap();
         assert!(!active_path(&generation).exists());
+
+        // SAFETY: this test still holds the environment mutex.
+        unsafe {
+            if let Some(previous) = previous {
+                std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, previous);
+            } else {
+                std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+            }
+        }
+    }
+
+    #[test]
+    fn recovery_collects_a_leftover_record_temp_instead_of_failing() {
+        let _environment = crate::test_env::lock();
+        let temp = crate::test_temp::tempdir().unwrap();
+        let previous = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+        // SAFETY: serialized by the test environment mutex.
+        unsafe { std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
+        let generation = super::super::ProtocolId::generate().unwrap().to_string();
+        fs::create_dir_all(ready_dir()).unwrap();
+        let leftover = ready_dir().join(format!(".{generation}.ready.1.2.3.tmp"));
+        fs::write(&leftover, b"partial").unwrap();
+
+        recover_stale_child_records().unwrap();
+        assert!(!leftover.exists());
+
+        let foreign = ready_dir().join(".unrelated.1.2.3.tmp");
+        fs::write(&foreign, b"sentinel").unwrap();
+        assert!(recover_stale_child_records().is_err());
+        assert!(foreign.exists());
 
         // SAFETY: this test still holds the environment mutex.
         unsafe {

@@ -45,6 +45,23 @@ impl ActionJournal {
                 .file_name()
                 .into_string()
                 .map_err(|_| anyhow!("action filename is not UTF-8"))?;
+            // Every journal write holds this lock, so a temporary for an
+            // action record is what a writer that died before its rename
+            // left behind, not work in progress.
+            if crate::durable_io::temp_file_target(&name)
+                .is_some_and(|target| parse_action_name(target).is_ok())
+            {
+                match fs::remove_file(entry.path()) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == ErrorKind::NotFound => {}
+                    Err(error) => {
+                        unlock(&lock)?;
+                        return Err(error).context("failed to remove action record temporary");
+                    }
+                }
+                continue;
+            }
+
             let (order, identity) = parse_action_name(&name)?;
             if entries.insert(order, (identity, entry.path())).is_some() {
                 unlock(&lock)?;

@@ -439,3 +439,18 @@ fn rollback_keeps_an_indeterminate_command_action_tombstone() {
         ));
     });
 }
+
+#[test]
+fn rollback_collects_a_leftover_action_record_temp() {
+    with_runtime(|| {
+        let journal = ActionJournal::open().unwrap();
+        let identity = super::super::ProtocolId::generate().unwrap().to_string();
+        let leftover =
+            queue_dir(&journal.root).join(format!(".{}.1.2.3.tmp", action_name(1, &identity)));
+        fs::write(&leftover, b"partial").unwrap();
+
+        super::super::prepare_rollback_compatibility().unwrap();
+
+        assert!(!leftover.exists());
+    });
+}
