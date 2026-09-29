@@ -136,7 +136,9 @@ fn failure_detail(program: &str, stderr: &str, code: Option<i32>) -> String {
     }
 }
 
-/// Command line for one fetcher. HTTPS is enforced across redirects, the
+/// Command line for one fetcher. curl follows at most three redirects, each
+/// restricted to HTTPS. wget can restrict the scheme only in recursive mode, so
+/// it follows no redirect: the manifest is a static file served directly. The
 /// response is size-capped, and the whole request is time-boxed so a hung
 /// server cannot pin a thread.
 fn fetch_arguments(program: &str, url: &str, timeout: Duration) -> Vec<String> {
@@ -181,8 +183,9 @@ fn fetch_arguments(program: &str, url: &str, timeout: Duration) -> Vec<String> {
             "--no-netrc".into(),
             "--no-verbose".into(),
             "--output-document=-".into(),
-            "--https-only".into(),
-            "--max-redirect=3".into(),
+            // `--https-only` applies only to recursive retrieval; a single
+            // download would follow a redirect to plain HTTP.
+            "--max-redirect=0".into(),
             "--tries=1".into(),
             format!("--timeout={seconds}"),
             url.to_string(),
@@ -245,7 +248,12 @@ mod tests {
         );
 
         assert!(args.contains(&"--no-config".to_string()));
-        assert!(args.contains(&"--https-only".to_string()));
+        // wget cannot keep a redirect on HTTPS, so it must not follow any.
+        let redirect_limits: Vec<_> = args
+            .iter()
+            .filter(|arg| arg.starts_with("--max-redirect"))
+            .collect();
+        assert_eq!(redirect_limits, ["--max-redirect=0"]);
         assert!(args.contains(&"--timeout=7".to_string()));
         assert!(args.contains(&"--tries=1".to_string()));
         // Errors must survive: only progress output is suppressed.
