@@ -8,7 +8,7 @@ use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
 use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
-use crate::backend::wayland::portal_capture::screenshot_portal_available;
+use crate::backend::wayland::portal_capture::portal_freeze_fallback;
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, XDG_ACTIVATION_TOKEN_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
 };
@@ -103,8 +103,9 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     input_state.set_session_preflight_options(session_options.clone());
     let screencopy_supported = setup.screencopy_manager.is_some();
     let image_copy_capture_supported = setup.ext_image_copy_managers.is_some();
-    let portal_freeze_supported = screenshot_portal_available(&backend.tokio_runtime);
     let direct_capture_supported = screencopy_supported || image_copy_capture_supported;
+    let portal_freeze_supported =
+        portal_freeze_fallback(&backend.tokio_runtime, direct_capture_supported);
     let frozen_supported = direct_capture_supported || portal_freeze_supported;
     let tokio_handle = backend.tokio_runtime.handle().clone();
     let startup_activation_token = env::var(XDG_ACTIVATION_TOKEN_ENV)
