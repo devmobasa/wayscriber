@@ -432,6 +432,24 @@ pub struct CaptureResult {
     pub save_error: Option<String>,
 }
 
+/// Why a capture operation failed.
+///
+/// Decided where the error is created, so the explanation shown to the user
+/// never depends on the wording of an error message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureFailureKind {
+    /// A helper program could not be started because it is not installed.
+    MissingTool(&'static str),
+    /// The portal or the user refused screen capture.
+    PermissionDenied,
+    /// The screenshot portal answered with an error response.
+    PortalError,
+    /// The image could not be written to a file.
+    Save,
+    /// No more specific explanation is known.
+    Other,
+}
+
 /// Outcome of a capture request (success or failure).
 #[derive(Debug, Clone)]
 pub enum CaptureOutcome {
@@ -440,6 +458,7 @@ pub enum CaptureOutcome {
     RenderedImageReady(RenderedImage),
     Failed {
         operation: ImageOperationKind,
+        kind: CaptureFailureKind,
         message: String,
     },
     Cancelled {
@@ -476,6 +495,47 @@ pub enum CaptureError {
     InvalidResponse(String),
 
     Cancelled(String),
+
+    /// A helper program could not be started because it is not installed.
+    MissingTool {
+        tool: &'static str,
+        detail: String,
+    },
+
+    /// The screenshot portal answered its request with an error code.
+    #[cfg_attr(not(feature = "portal"), allow(dead_code))]
+    PortalResponse(u32),
+
+    /// The compositor fast path failed, and so did the portal fallback.
+    FallbackFailed {
+        primary: Box<CaptureError>,
+        fallback: Box<CaptureError>,
+    },
+}
+
+impl CaptureError {
+    /// What kind of failure this is, for choosing the user-facing explanation.
+    pub fn failure_kind(&self) -> CaptureFailureKind {
+        match self {
+            Self::MissingTool { tool, .. } => CaptureFailureKind::MissingTool(tool),
+            Self::PermissionDenied => CaptureFailureKind::PermissionDenied,
+            Self::PortalResponse(_) => CaptureFailureKind::PortalError,
+            Self::SaveError(_) => CaptureFailureKind::Save,
+            Self::FallbackFailed { primary, fallback } => match fallback.failure_kind() {
+                // The portal is missing or failed without a specific reason, so
+                // the fast path's reason (a missing grim, say) is the useful one.
+                CaptureFailureKind::Other => primary.failure_kind(),
+                kind => kind,
+            },
+            #[cfg(feature = "dbus")]
+            Self::DBusError(_) => CaptureFailureKind::Other,
+            Self::PortalUnavailable
+            | Self::ClipboardError(_)
+            | Self::ImageError(_)
+            | Self::InvalidResponse(_)
+            | Self::Cancelled(_) => CaptureFailureKind::Other,
+        }
+    }
 }
 
 impl fmt::Display for CaptureError {
@@ -490,6 +550,12 @@ impl fmt::Display for CaptureError {
             Self::ImageError(err) => write!(f, "Image processing error: {err}"),
             Self::InvalidResponse(err) => write!(f, "Portal returned invalid response: {err}"),
             Self::Cancelled(reason) => write!(f, "Capture cancelled: {reason}"),
+            Self::MissingTool { tool, detail } => write!(f, "failed to run {tool}: {detail}"),
+            Self::PortalResponse(code) => write!(f, "Portal returned error code {code}"),
+            Self::FallbackFailed { primary, fallback } => write!(
+                f,
+                "Hyprland capture failed: {primary}. Portal fallback failed: {fallback}"
+            ),
         }
     }
 }

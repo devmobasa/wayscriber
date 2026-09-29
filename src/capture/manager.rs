@@ -460,9 +460,14 @@ fn outcome_from_result(
             CaptureOutcome::Cancelled { operation, reason }
         }
         Err(error) => {
+            let kind = error.failure_kind();
             let message = operation.format_error(&error);
             log::error!("Image operation failed: {message}");
-            CaptureOutcome::Failed { operation, message }
+            CaptureOutcome::Failed {
+                operation,
+                kind,
+                message,
+            }
         }
     }
 }

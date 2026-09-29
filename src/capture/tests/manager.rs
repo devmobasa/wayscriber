@@ -16,7 +16,7 @@ use crate::capture::{
     dependencies::{CaptureDependencies, CaptureFuture, CaptureSource},
     file::FileSaveConfig,
     manager::{CaptureManager, CapturePoll, CaptureSubmitError},
-    types::{CaptureDestination, CaptureError, CaptureOutcome, CaptureType},
+    types::{CaptureDestination, CaptureError, CaptureFailureKind, CaptureOutcome, CaptureType},
 };
 
 use super::fixtures::{MockClipboard, MockSaver, MockSource, create_placeholder_image};
@@ -351,7 +351,10 @@ async fn capture_manager_records_failure_status() {
     let outcome = wait_for_manager_outcome(&mut manager).await;
 
     match outcome {
-        Some(CaptureOutcome::Failed { message: msg, .. }) => {
+        Some(CaptureOutcome::Failed {
+            kind, message: msg, ..
+        }) => {
+            assert_eq!(kind, CaptureFailureKind::Save);
             assert!(
                 msg.contains("save failed"),
                 "unexpected failure message: {msg}"
@@ -610,7 +613,9 @@ async fn request_image_delivery_records_canvas_save_failure() {
     let outcome = wait_for_manager_outcome(&mut manager).await;
 
     match outcome {
-        Some(CaptureOutcome::Failed { operation, message }) => {
+        Some(CaptureOutcome::Failed {
+            operation, message, ..
+        }) => {
             assert_eq!(operation, ImageOperationKind::CanvasExport);
             assert!(
                 message.contains("Failed to save canvas export"),
@@ -664,7 +669,9 @@ async fn request_document_delivery_records_board_pdf_save_failure() {
     let outcome = wait_for_manager_outcome(&mut manager).await;
 
     match outcome {
-        Some(CaptureOutcome::Failed { operation, message }) => {
+        Some(CaptureOutcome::Failed {
+            operation, message, ..
+        }) => {
             assert_eq!(operation, ImageOperationKind::BoardPdfExport);
             assert!(
                 message.contains("Failed to save board PDF export"),
@@ -766,6 +773,7 @@ async fn request_render_image_reports_render_failure_and_keeps_the_manager_healt
         wait_for_manager_outcome(&mut manager).await,
         Some(CaptureOutcome::Failed {
             operation: ImageOperationKind::Screenshot,
+            kind: CaptureFailureKind::Other,
             message,
         }) if message.contains("generic render failed")
     ));

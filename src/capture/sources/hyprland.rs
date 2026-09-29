@@ -15,7 +15,7 @@ fn grim_geometry_arguments(geometry: &str) -> [&str; 3] {
 
 fn run_helper(
     kind: HelperKind,
-    program: &str,
+    program: &'static str,
     arguments: &[&str],
     timeout: Duration,
     output_cap: usize,
@@ -31,7 +31,24 @@ fn run_helper(
                 output_cap,
             )
         })
-        .map_err(|error| CaptureError::ImageError(format!("failed to run {program}: {error:#}")))
+        .map_err(|error| helper_run_error(program, &error))
+}
+
+/// Classify a broker failure to run `program`.
+///
+/// The broker reports its spawn error as text, so a program that is not
+/// installed is recognised by the `ENOENT` code that the spawn error carries.
+/// Every other failure keeps its detail without claiming a missing tool.
+fn helper_run_error(program: &'static str, error: &anyhow::Error) -> CaptureError {
+    let detail = format!("{error:#}");
+    if detail.contains(&format!("(os error {})", libc::ENOENT)) {
+        CaptureError::MissingTool {
+            tool: program,
+            detail,
+        }
+    } else {
+        CaptureError::ImageError(format!("failed to run {program}: {detail}"))
+    }
 }
 
 /// Capture the entire Wayland scene using `grim`.
@@ -255,6 +272,33 @@ mod tests {
         let geometry = active_window_geometry(&window).unwrap();
 
         assert_eq!(geometry, "100,100 800x600");
+    }
+
+    #[test]
+    fn helper_run_error_reports_a_missing_program_as_a_missing_tool() {
+        let error = anyhow::anyhow!(
+            "process broker rejected request: broker helper spawn failed: No such file or directory (os error 2)"
+        );
+
+        let error = helper_run_error("grim", &error);
+
+        assert_eq!(
+            error.failure_kind(),
+            crate::capture::CaptureFailureKind::MissingTool("grim")
+        );
+    }
+
+    #[test]
+    fn helper_run_error_does_not_blame_the_tool_for_other_broker_failures() {
+        let error = anyhow::anyhow!("runtime process broker is not active");
+
+        let error = helper_run_error("grim", &error);
+
+        assert_eq!(
+            error.failure_kind(),
+            crate::capture::CaptureFailureKind::Other
+        );
+        assert!(error.to_string().contains("failed to run grim"));
     }
 
     #[test]

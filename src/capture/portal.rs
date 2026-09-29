@@ -60,6 +60,9 @@ struct PortalAttempt {
 
 const PORTAL_RESULT_URI_KEY: &str = "uri";
 const PORTAL_OPTION_INTERACTIVE_KEY: &str = "interactive";
+const PORTAL_ERROR_CANCELLED: &str = "org.freedesktop.portal.Error.Cancelled";
+const PORTAL_ERROR_NOT_ALLOWED: &str = "org.freedesktop.portal.Error.NotAllowed";
+const DBUS_ERROR_ACCESS_DENIED: &str = "org.freedesktop.DBus.Error.AccessDenied";
 
 /// Capture a screenshot using xdg-desktop-portal.
 ///
@@ -281,26 +284,34 @@ fn parse_response(
         }
         code => {
             log::error!("Screenshot failed with code {}", code);
-            Err(CaptureError::InvalidResponse(format!(
-                "Portal returned error code {}",
-                code
-            )))
+            Err(CaptureError::PortalResponse(code))
         }
     }
 }
 
+/// Map a failed `Screenshot` call by its D-Bus error name, never its text.
 fn map_portal_call_error(err: zbus::Error) -> CaptureError {
-    let message = err.to_string();
-    let lowercase_message = message.to_ascii_lowercase();
-    if lowercase_message.contains("cancelled") || lowercase_message.contains("canceled") {
-        log::info!("Portal screenshot call was cancelled");
-        CaptureError::Cancelled("portal screenshot request was cancelled".to_string())
-    } else if lowercase_message.contains("denied") {
-        log::warn!("Portal screenshot permission was denied");
-        CaptureError::PermissionDenied
-    } else {
-        log::error!("Portal screenshot call failed: {err}");
-        CaptureError::DBusError(err)
+    let error_name = match &err {
+        zbus::Error::MethodError(name, _, _) => Some(name.as_str()),
+        zbus::Error::FDO(fdo_error) if matches!(**fdo_error, zbus::fdo::Error::AccessDenied(_)) => {
+            Some(DBUS_ERROR_ACCESS_DENIED)
+        }
+        _ => None,
+    };
+
+    match error_name {
+        Some(PORTAL_ERROR_CANCELLED) => {
+            log::info!("Portal screenshot call was cancelled");
+            CaptureError::Cancelled("portal screenshot request was cancelled".to_string())
+        }
+        Some(PORTAL_ERROR_NOT_ALLOWED | DBUS_ERROR_ACCESS_DENIED) => {
+            log::warn!("Portal screenshot permission was denied: {err}");
+            CaptureError::PermissionDenied
+        }
+        _ => {
+            log::error!("Portal screenshot call failed: {err}");
+            CaptureError::DBusError(err)
+        }
     }
 }
 
@@ -449,5 +460,54 @@ mod tests {
     fn portal_response_code_one_preserves_user_cancellation() {
         let error = parse_response(1, &HashMap::new()).expect_err("response 1 must cancel");
         assert!(matches!(error, CaptureError::Cancelled(_)));
+    }
+
+    #[test]
+    fn portal_response_error_code_is_a_portal_error() {
+        let error = parse_response(2, &HashMap::new()).expect_err("response 2 must fail");
+
+        assert!(matches!(error, CaptureError::PortalResponse(2)));
+        assert_eq!(
+            error.failure_kind(),
+            crate::capture::CaptureFailureKind::PortalError
+        );
+    }
+
+    fn method_error(name: &str, detail: &str) -> zbus::Error {
+        let call = zbus::Message::method_call("/org/freedesktop/portal/desktop", "Screenshot")
+            .expect("method call builder")
+            .build(&())
+            .expect("method call");
+        let reply = zbus::Message::error(&call.header(), name)
+            .expect("error builder")
+            .build(&(detail,))
+            .expect("error reply");
+        zbus::Error::from(reply)
+    }
+
+    #[test]
+    fn portal_call_errors_are_mapped_by_dbus_error_name() {
+        assert!(matches!(
+            map_portal_call_error(method_error(PORTAL_ERROR_NOT_ALLOWED, "not allowed")),
+            CaptureError::PermissionDenied
+        ));
+        assert!(matches!(
+            map_portal_call_error(method_error(DBUS_ERROR_ACCESS_DENIED, "no")),
+            CaptureError::PermissionDenied
+        ));
+        assert!(matches!(
+            map_portal_call_error(method_error(PORTAL_ERROR_CANCELLED, "closed")),
+            CaptureError::Cancelled(_)
+        ));
+    }
+
+    #[test]
+    fn portal_call_error_text_does_not_decide_the_mapping() {
+        let error = map_portal_call_error(method_error(
+            "org.freedesktop.portal.Error.Failed",
+            "screenshot cancelled: access denied",
+        ));
+
+        assert!(matches!(error, CaptureError::DBusError(_)), "{error}");
     }
 }

@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 use super::super::super::state::{OverlaySuppression, WaylandState};
 use super::super::helpers::friendly_capture_error;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
-use crate::capture::{CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind};
+use crate::capture::{
+    CaptureFailureKind, CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind,
+};
 use crate::config::Action;
 use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
 use crate::notification;
@@ -350,7 +352,7 @@ fn handle_capture_worker_failure(
         state.capture.finish_capture_lifecycle();
         let message = operation
             .filter(|operation| *operation == ImageOperationKind::Screenshot)
-            .map(|_| friendly_capture_error(error))
+            .map(|_| friendly_capture_error(CaptureFailureKind::Other))
             .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
         warn!("Board region capture worker failed: {error}");
         state
@@ -393,10 +395,17 @@ fn resolve_board_capture_outcome(
             );
             None
         }
-        (CaptureOutcome::Failed { operation, message }, Some(_)) => {
+        (
+            CaptureOutcome::Failed {
+                operation,
+                kind,
+                message,
+            },
+            Some(_),
+        ) => {
             state.capture.finish_capture_lifecycle();
             let friendly_error = if matches!(operation, ImageOperationKind::Screenshot) {
-                friendly_capture_error(&message)
+                friendly_capture_error(kind)
             } else {
                 message.clone()
             };
@@ -585,11 +594,15 @@ fn handle_capture_results(state: &mut WaylandState) {
         CaptureOutcome::DesktopBackdropSuccess(backdrop) => {
             state.finish_pending_board_pdf_export_with_backdrop(backdrop, exit_after_capture);
         }
-        CaptureOutcome::Failed { operation, message } => {
+        CaptureOutcome::Failed {
+            operation,
+            kind,
+            message,
+        } => {
             state.capture.clear_pending_pdf_export();
             let friendly_error =
                 if matches!(operation, crate::capture::ImageOperationKind::Screenshot) {
-                    friendly_capture_error(&message)
+                    friendly_capture_error(kind)
                 } else {
                     message.clone()
                 };
@@ -666,7 +679,7 @@ fn handle_capture_manager_failure(
     state.capture.finish_capture_lifecycle();
 
     let message = match operation {
-        Some(ImageOperationKind::Screenshot) => friendly_capture_error(error),
+        Some(ImageOperationKind::Screenshot) => friendly_capture_error(CaptureFailureKind::Other),
         Some(operation) => format!(
             "{} failed because the capture worker stopped.",
             operation.saved_log_label()

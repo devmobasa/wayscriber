@@ -11,41 +11,36 @@ use super::runtime_wake::timeout_to_poll_ms;
 use super::runtime_wake::{
     RuntimeWakeSource, TerminalReadinessPolicy, poll_with_retry, validate_poll_readiness,
 };
+use crate::capture::CaptureFailureKind;
 use crate::{RESUME_SESSION_ENV, runtime_session_override};
 
-pub(super) fn friendly_capture_error(error: &str) -> String {
-    let lower = error.to_lowercase();
-
-    if is_missing_tool(&lower, "slurp") {
-        return "Missing screenshot tool: slurp. Install slurp + grim and try again.".to_string();
+pub(super) fn friendly_capture_error(kind: CaptureFailureKind) -> String {
+    match kind {
+        CaptureFailureKind::MissingTool("slurp") => {
+            "Missing screenshot tool: slurp. Install slurp + grim and try again.".to_string()
+        }
+        CaptureFailureKind::MissingTool("grim") => {
+            "Missing screenshot tool: grim. Install grim and try again.".to_string()
+        }
+        CaptureFailureKind::MissingTool("wl-copy") => {
+            "Missing clipboard tool: wl-clipboard (wl-copy). Install it and try again.".to_string()
+        }
+        CaptureFailureKind::PermissionDenied => {
+            "Permission denied. Enable screen sharing in system settings.".to_string()
+        }
+        CaptureFailureKind::PortalError => {
+            "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service."
+                .to_string()
+        }
+        CaptureFailureKind::Save => {
+            "Screenshot was not saved. Check the capture save directory and try again.".to_string()
+        }
+        // Other helpers, such as `hyprctl`, are only absent on desktops where
+        // the portal is the real capture path, so installing them is no fix.
+        CaptureFailureKind::MissingTool(_) | CaptureFailureKind::Other => {
+            "Screen capture failed. Please try again.".to_string()
+        }
     }
-    if is_missing_tool(&lower, "grim") {
-        return "Missing screenshot tool: grim. Install grim and try again.".to_string();
-    }
-    if is_missing_tool(&lower, "wl-copy") {
-        return "Missing clipboard tool: wl-clipboard (wl-copy). Install it and try again."
-            .to_string();
-    }
-    if lower.contains("requestcancelled") || lower.contains("cancelled") {
-        "Screen capture cancelled by user".to_string()
-    } else if lower.contains("permission") {
-        "Permission denied. Enable screen sharing in system settings.".to_string()
-    } else if lower.contains("portal returned error code") {
-        "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service."
-            .to_string()
-    } else if lower.contains("busy") {
-        "Screen capture in progress. Try again in a moment.".to_string()
-    } else {
-        "Screen capture failed. Please try again.".to_string()
-    }
-}
-
-fn is_missing_tool(lower: &str, tool: &str) -> bool {
-    lower.contains(tool)
-        && (lower.contains("no such file")
-            || lower.contains("not found")
-            || lower.contains("failed to run")
-            || lower.contains("failed to spawn"))
 }
 
 fn normalize_read_result(result: Result<usize, WaylandError>) -> Result<usize, WaylandError> {
@@ -322,6 +317,7 @@ mod tests {
     use std::sync::{Mutex, OnceLock};
 
     use super::*;
+    use crate::capture::CaptureError;
     use crate::set_runtime_session_override;
 
     fn env_mutex() -> &'static Mutex<()> {
@@ -730,36 +726,82 @@ mod tests {
     #[test]
     fn friendly_capture_error_covers_known_classes() {
         assert_eq!(
-            friendly_capture_error("failed to spawn slurp: No such file"),
+            friendly_capture_error(CaptureFailureKind::MissingTool("slurp")),
             "Missing screenshot tool: slurp. Install slurp + grim and try again."
         );
         assert_eq!(
-            friendly_capture_error("grim not found"),
+            friendly_capture_error(CaptureFailureKind::MissingTool("grim")),
             "Missing screenshot tool: grim. Install grim and try again."
         );
         assert_eq!(
-            friendly_capture_error("wl-copy failed to run"),
+            friendly_capture_error(CaptureFailureKind::MissingTool("wl-copy")),
             "Missing clipboard tool: wl-clipboard (wl-copy). Install it and try again."
         );
         assert_eq!(
-            friendly_capture_error("RequestCancelled by user"),
-            "Screen capture cancelled by user"
-        );
-        assert_eq!(
-            friendly_capture_error("permission denied"),
+            friendly_capture_error(CaptureFailureKind::PermissionDenied),
             "Permission denied. Enable screen sharing in system settings."
         );
         assert_eq!(
-            friendly_capture_error("portal returned error code 2"),
+            friendly_capture_error(CaptureFailureKind::PortalError),
             "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service."
         );
         assert_eq!(
-            friendly_capture_error("resource busy"),
-            "Screen capture in progress. Try again in a moment."
+            friendly_capture_error(CaptureFailureKind::Save),
+            "Screenshot was not saved. Check the capture save directory and try again."
         );
         assert_eq!(
-            friendly_capture_error("something unexpected"),
+            friendly_capture_error(CaptureFailureKind::MissingTool("hyprctl")),
             "Screen capture failed. Please try again."
+        );
+        assert_eq!(
+            friendly_capture_error(CaptureFailureKind::Other),
+            "Screen capture failed. Please try again."
+        );
+    }
+
+    #[test]
+    fn portal_permission_denial_is_not_reported_as_a_missing_grim() {
+        // GNOME or KDE without grim: the fast path cannot start grim, then
+        // the portal refuses. The refusal is what the user can act on.
+        let error = CaptureError::FallbackFailed {
+            primary: Box::new(CaptureError::MissingTool {
+                tool: "grim",
+                detail: "broker helper spawn failed: No such file or directory (os error 2)"
+                    .to_string(),
+            }),
+            fallback: Box::new(CaptureError::PermissionDenied),
+        };
+
+        assert_eq!(
+            friendly_capture_error(error.failure_kind()),
+            "Permission denied. Enable screen sharing in system settings."
+        );
+    }
+
+    #[test]
+    fn missing_grim_is_reported_when_the_portal_has_no_better_reason() {
+        let error = CaptureError::FallbackFailed {
+            primary: Box::new(CaptureError::MissingTool {
+                tool: "grim",
+                detail: "No such file or directory (os error 2)".to_string(),
+            }),
+            fallback: Box::new(CaptureError::PortalUnavailable),
+        };
+
+        assert_eq!(
+            friendly_capture_error(error.failure_kind()),
+            "Missing screenshot tool: grim. Install grim and try again."
+        );
+    }
+
+    #[test]
+    fn a_failed_file_save_is_not_reported_as_a_screen_sharing_permission() {
+        let error =
+            CaptureError::SaveError(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+
+        assert_eq!(
+            friendly_capture_error(error.failure_kind()),
+            "Screenshot was not saved. Check the capture save directory and try again."
         );
     }
 
