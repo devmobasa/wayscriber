@@ -4,6 +4,25 @@ use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::thread;
 
 #[test]
+fn a_starting_daemon_waits_out_a_brief_lock_probe() {
+    with_runtime_dir(|| {
+        let probe = hold_daemon_lock();
+        let release = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(50));
+            drop(probe);
+        });
+
+        let mut daemon = Daemon::new(None, false, None, None);
+        daemon.acquire_daemon_lock().unwrap();
+        release.join().unwrap();
+
+        let mut second = Daemon::new(None, false, None, None);
+        let error = second.acquire_daemon_lock().unwrap_err();
+        assert!(error.is::<AlreadyRunningError>(), "{error:#}");
+    });
+}
+
+#[test]
 fn an_unusable_process_broker_ends_the_daemon_loop() {
     let guard = crate::process_broker::start_for_runtime().unwrap();
 

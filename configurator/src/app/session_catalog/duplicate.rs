@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogOperation};
 
 use super::{
-    RuntimeLockKind, acquire_runtime_lock_for_inactive_operation, load_session_catalog_sync,
-    service_status_blocker,
+    load_session_catalog_sync, reserve_inactive_session_operation, service_status_blocker,
 };
 
 use super::super::blocking_jobs::{BlockingJobKind, run_blocking};
@@ -32,14 +31,7 @@ fn duplicate_session_catalog_entry_sync(
         .find(|item| item.id == id)
         .cloned()
         .ok_or_else(|| "Session is no longer in the catalog.".to_string())?;
-    let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
-        RuntimeLockKind::Daemon,
-        SessionCatalogOperation::Duplicate,
-    )?;
-    let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
-        RuntimeLockKind::Overlay,
-        SessionCatalogOperation::Duplicate,
-    )?;
+    let _reservation = reserve_inactive_session_operation(SessionCatalogOperation::Duplicate)?;
     if let Some(blocker) = service_status_blocker(Some(status), SessionCatalogOperation::Duplicate)
     {
         return Err(blocker);

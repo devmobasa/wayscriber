@@ -88,14 +88,7 @@ pub(super) async fn clear_session_catalog_entry(
     run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
         let status = load_daemon_runtime_status_sync()?;
         let item = find_session_catalog_item(&id)?;
-        let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
-            RuntimeLockKind::Daemon,
-            SessionCatalogOperation::Clear,
-        )?;
-        let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
-            RuntimeLockKind::Overlay,
-            SessionCatalogOperation::Clear,
-        )?;
+        let _reservation = reserve_inactive_session_operation(SessionCatalogOperation::Clear)?;
         if let Some(blocker) = service_status_blocker(Some(&status), SessionCatalogOperation::Clear)
         {
             return Err(blocker);
@@ -122,14 +115,8 @@ pub(super) async fn clear_session_catalog_tool_state_entry(
     run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
         let status = load_daemon_runtime_status_sync()?;
         let item = find_session_catalog_item(&id)?;
-        let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
-            RuntimeLockKind::Daemon,
-            SessionCatalogOperation::ClearToolState,
-        )?;
-        let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
-            RuntimeLockKind::Overlay,
-            SessionCatalogOperation::ClearToolState,
-        )?;
+        let _reservation =
+            reserve_inactive_session_operation(SessionCatalogOperation::ClearToolState)?;
         if let Some(blocker) =
             service_status_blocker(Some(&status), SessionCatalogOperation::ClearToolState)
         {
@@ -291,6 +278,30 @@ fn runtime_lock_active(
             path.display()
         )),
     }
+}
+
+/// The runtime lock an inactive-session operation holds until it is dropped.
+pub(super) struct InactiveSessionReservation {
+    _overlay_lock: File,
+}
+
+/// Refuses an operation on an inactive session while a daemon or an overlay
+/// runs, and keeps overlays from starting until the reservation is dropped.
+///
+/// The daemon lock is only probed and released at once. Holding it for the
+/// whole operation made a daemon that started meanwhile exit as already
+/// running, and the unit's `RestartPreventExitStatus=75` then left the
+/// service down. Overlays are what write sessions, and the overlay lock held
+/// here keeps one from starting, including one a new daemon launches.
+pub(super) fn reserve_inactive_session_operation(
+    operation: SessionCatalogOperation,
+) -> Result<InactiveSessionReservation, String> {
+    acquire_runtime_lock_for_inactive_operation(RuntimeLockKind::Daemon, operation).map(drop)?;
+    let overlay_lock =
+        acquire_runtime_lock_for_inactive_operation(RuntimeLockKind::Overlay, operation)?;
+    Ok(InactiveSessionReservation {
+        _overlay_lock: overlay_lock,
+    })
 }
 
 #[cfg(test)]

@@ -50,6 +50,10 @@ const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(70
 // This bounds retries after journal I/O admission failures. It is unrelated to
 // the removed tray startup-discovery fallback; retries use the existing v2 timerfd.
 const ACTION_ADMISSION_RETRY_DELAY: Duration = Duration::from_millis(50);
+// How long a starting daemon keeps trying for its single-instance lock before
+// it concludes another daemon holds it, and how often it retries meanwhile.
+const DAEMON_LOCK_PROBE_GRACE: Duration = Duration::from_millis(250);
+const DAEMON_LOCK_RETRY: Duration = Duration::from_millis(10);
 #[cfg(unix)]
 const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 mod toggles;
@@ -250,13 +254,25 @@ impl Daemon {
             .open(&lock_path)
             .with_context(|| format!("failed to open daemon lock {}", lock_path.display()))?;
 
-        match try_lock_exclusive(&lock_file) {
-            Ok(()) => {
-                self.lock_file = Some(lock_file);
-                Ok(())
+        // Clients and the configurator probe this lock by taking it for an
+        // instant. A daemon starting during a probe must not take it for
+        // another daemon: it would exit as already running, and the unit's
+        // RestartPreventExitStatus=75 would leave the service down.
+        let deadline = Instant::now() + DAEMON_LOCK_PROBE_GRACE;
+        loop {
+            match try_lock_exclusive(&lock_file) {
+                Ok(()) => {
+                    self.lock_file = Some(lock_file);
+                    return Ok(());
+                }
+                Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return Err(AlreadyRunningError.into());
+                    }
+                    std::thread::sleep(DAEMON_LOCK_RETRY);
+                }
+                Err(err) => return Err(err).context("failed to lock daemon instance"),
             }
-            Err(err) if err.kind() == ErrorKind::WouldBlock => Err(AlreadyRunningError.into()),
-            Err(err) => Err(err).context("failed to lock daemon instance"),
         }
     }
 
