@@ -308,7 +308,7 @@ fn with_catalog_write<T>(update: impl FnOnce(&mut CatalogFile) -> Result<T>) -> 
     let dir = path
         .parent()
         .ok_or_else(|| anyhow!("session catalog path has no parent: {}", path.display()))?;
-    fs::create_dir_all(dir).with_context(|| {
+    create_private_dir_all(dir).with_context(|| {
         format!(
             "failed to create session catalog directory {}",
             dir.display()
@@ -380,16 +380,17 @@ fn save_catalog_atomic_with_temp_path(
     let payload =
         serde_json::to_vec_pretty(catalog).context("failed to serialize session catalog")?;
     let result = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(tmp_path)
-            .with_context(|| {
-                format!(
-                    "failed to open temporary session catalog {}",
-                    tmp_path.display()
-                )
-            })?;
+        // The catalog lists session names, paths and times: keep it private.
+        let mut open_options = OpenOptions::new();
+        open_options.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut open_options, 0o600);
+        let mut file = open_options.open(tmp_path).with_context(|| {
+            format!(
+                "failed to open temporary session catalog {}",
+                tmp_path.display()
+            )
+        })?;
         file.write_all(&payload)
             .context("failed to write session catalog")?;
         file.sync_all().context("failed to sync session catalog")?;
@@ -420,6 +421,22 @@ fn catalog_dir() -> PathBuf {
     crate::paths::data_dir()
         .unwrap_or_else(|| crate::paths::home_dir().unwrap_or_else(std::env::temp_dir))
         .join("wayscriber")
+}
+
+/// Creates missing directories with mode 0700, as the XDG base directory spec asks.
+#[cfg(unix)]
+fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+}
+
+#[cfg(not(unix))]
+fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dir)
 }
 
 fn catalog_lock_path(path: &Path) -> PathBuf {
