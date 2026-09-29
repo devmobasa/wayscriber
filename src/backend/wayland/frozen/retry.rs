@@ -1,5 +1,5 @@
 use super::state::{FrozenCaptureBackend, FrozenState};
-use crate::backend::wayland::capture_preflight::PortalRetryError;
+use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use std::time::{Duration, Instant};
 
 impl FrozenState {
@@ -12,7 +12,7 @@ impl FrozenState {
             captured,
             self.active_output_id,
             layout_changed,
-            self.portal_layout_generation,
+            self.layout_generations.desktop,
             Instant::now(),
         ) {
             return false;
@@ -23,7 +23,7 @@ impl FrozenState {
         self.capture_done = false;
         log::info!(
             "portal.freeze phase=retry-queued output={captured:?} current_layout={} budget_remaining=0",
-            self.portal_layout_generation
+            self.layout_generations.desktop
         );
 
         true
@@ -33,11 +33,11 @@ impl FrozenState {
         &mut self,
         backend: FrozenCaptureBackend,
     ) -> bool {
-        let changed = backend == FrozenCaptureBackend::Portal
+        let portal_layout_changed = backend == FrozenCaptureBackend::Portal
             && self
                 .preflight
-                .changed_on_output(self.active_output_id, self.portal_layout_generation);
-        self.queue_portal_layout_retry(self.active_output_id, changed)
+                .changed_on_output(self.active_output_id, self.layout_generations.desktop);
+        self.queue_portal_layout_retry(self.active_output_id, portal_layout_changed)
     }
 
     pub(in crate::backend::wayland) fn has_portal_layout_retry(&self) -> bool {
@@ -55,23 +55,16 @@ impl FrozenState {
     pub(in crate::backend::wayland) fn restart_portal_preflight(
         &mut self,
         now: Instant,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, CapturePreflightError> {
         let Some(output_id) = self
             .layout_retry
             .take_ready(
                 self.active_output_id,
-                self.portal_layout_generation,
+                self.layout_generations.desktop,
                 self.active_geometry.as_ref(),
                 now,
             )
-            .map_err(|error| match error {
-                PortalRetryError::OutputChanged => {
-                    "Freeze failed after the display layout changed".to_string()
-                }
-                PortalRetryError::LayoutDidNotSettle => {
-                    "Freeze failed because the display layout did not settle".to_string()
-                }
-            })?
+            .map_err(CapturePreflightError::from)?
         else {
             return Ok(false);
         };
@@ -79,11 +72,11 @@ impl FrozenState {
         self.preflight.begin(
             FrozenCaptureBackend::Portal,
             Some(output_id),
-            self.portal_layout_generation,
+            self.layout_generations.desktop,
         );
         log::info!(
             "portal.freeze phase=retry-preflight output={output_id} layout={}",
-            self.portal_layout_generation
+            self.layout_generations.desktop
         );
 
         Ok(true)
@@ -145,7 +138,7 @@ mod tests {
                 Some(FrozenCaptureBackend::Portal)
             );
 
-            let old_generation = frozen.portal_layout_generation;
+            let old_generation = frozen.layout_generations.desktop;
             frozen.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
                 wake.handle(),
@@ -177,7 +170,7 @@ mod tests {
                 Some(FrozenCaptureBackend::Portal)
             );
 
-            let fresh_generation = frozen.portal_layout_generation;
+            let fresh_generation = frozen.layout_generations.desktop;
             frozen.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
                 wake.handle(),
@@ -282,7 +275,7 @@ mod tests {
             frozen.set_active_geometry(Some(geometry(0)));
             frozen.start_capture_for(id, owner).unwrap();
             frozen.take_preflight_pending();
-            let generation = frozen.portal_layout_generation;
+            let generation = frozen.layout_generations.desktop;
             frozen.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
                 wake.handle(),

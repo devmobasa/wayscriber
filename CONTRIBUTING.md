@@ -206,9 +206,12 @@ timings during pointer motion. Also record the process peak-RSS delta while enco
 `Ctrl+A` crop. Keep these measurements with the change's manual test evidence; they are intentionally
 not collected by CI.
 
-These captures now fail when the active output does not advertise a current `wl_output` mode.
-Plugging or unplugging any monitor also cancels in-flight Freeze and Zoom captures on unrelated
-outputs, because output count is part of the layout identity used to reject stale frames.
+Freeze and Zoom fail when the active output does not advertise a current `wl_output` mode.
+Changes confined to another monitor preserve direct captures and installed active-output sources.
+Portal captures discard stale desktop snapshots and retry once after complete geometry settles,
+while preserving the original output identity and request. A second change during the retry or an
+active-output switch is terminal. Board PDF desktop captures retain a full-desktop generation check,
+including changes to other monitors even when the screenshot dimensions stay the same.
 
 `./tools/code-health-report.sh` reports navigational maintainability metrics. Its CI artifact is
 observational, not a global file/function-size gate; use the report to find code worth understanding,

@@ -13,8 +13,7 @@ impl FrozenState {
         self.pending_image = Some(PendingFrozenImage {
             image,
             target_output_id: Some(target_output_id),
-            layout_generation: self.output_layout_generation,
-            portal_layout_generation: None,
+            layout_generation: self.layout_generations.active_output,
             source_geometry: Some(source_geometry),
             output_transform: None,
             source: FrozenCaptureSource::ActiveOutput,
@@ -31,8 +30,7 @@ impl FrozenState {
         self.pending_image = Some(PendingFrozenImage {
             image,
             target_output_id: Some(target_output_id),
-            layout_generation: self.output_layout_generation,
-            portal_layout_generation: None,
+            layout_generation: self.layout_generations.active_output,
             source_geometry: Some(source_geometry),
             output_transform,
             source: FrozenCaptureSource::ActiveOutput,
@@ -48,11 +46,12 @@ impl FrozenState {
         self.pending_image = Some(PendingFrozenImage {
             image,
             target_output_id,
-            layout_generation: self.output_layout_generation,
-            portal_layout_generation: Some(self.portal_layout_generation),
+            layout_generation: self.layout_generations.active_output,
             source_geometry,
             output_transform: None,
-            source: FrozenCaptureSource::Portal,
+            source: FrozenCaptureSource::Portal {
+                desktop_generation: self.layout_generations.desktop,
+            },
         });
     }
 
@@ -84,20 +83,20 @@ impl FrozenState {
         let Some(pending) = self.pending_image.take() else {
             return Ok(false);
         };
+        let portal_layout_changed = matches!(
+            pending.source,
+            FrozenCaptureSource::Portal { desktop_generation }
+                if desktop_generation != self.layout_generations.desktop
+        );
         if !layout_token_matches(
             pending.target_output_id,
             pending.layout_generation,
             self.active_output_id,
-            self.output_layout_generation,
-        ) || pending
-            .portal_layout_generation
-            .is_some_and(|generation| generation != self.portal_layout_generation)
+            self.layout_generations.active_output,
+        ) || portal_layout_changed
         {
-            if matches!(pending.source, FrozenCaptureSource::Portal)
-                && self.queue_portal_layout_retry(
-                    pending.target_output_id,
-                    pending.portal_layout_generation != Some(self.portal_layout_generation),
-                )
+            if matches!(pending.source, FrozenCaptureSource::Portal { .. })
+                && self.queue_portal_layout_retry(pending.target_output_id, portal_layout_changed)
             {
                 return Ok(false);
             }
@@ -143,7 +142,7 @@ impl FrozenState {
             }
         }
 
-        if let FrozenCaptureSource::Portal = pending.source {
+        if let FrozenCaptureSource::Portal { .. } = pending.source {
             let Some(geometry) = pending
                 .source_geometry
                 .as_ref()

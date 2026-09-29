@@ -7,6 +7,82 @@ const PORTAL_LAYOUT_QUIET_PERIOD: Duration = Duration::from_millis(100);
 const PORTAL_LAYOUT_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
 const INCOMPLETE_LAYOUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Direct/installed pixels depend on the active viewport; desktop captures also
+/// depend on other outputs and the screenshot's crop bounds.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct CaptureLayoutGenerations {
+    pub(super) active_output: u64,
+    pub(super) desktop: u64,
+}
+
+impl CaptureLayoutGenerations {
+    pub(super) fn update(
+        &mut self,
+        before: Option<&OutputGeometry>,
+        after: Option<&OutputGeometry>,
+    ) {
+        if before != after {
+            self.desktop = self.desktop.wrapping_add(1);
+        }
+        if !OutputGeometry::same_active_output(before, after) {
+            self.active_output = self.active_output.wrapping_add(1);
+        }
+    }
+}
+
+/// Failure category survives until the domain owner publishes its terminal.
+/// Display text is produced only for diagnostics and the user-facing report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum CapturePreflightError {
+    StaleLayout,
+    LayoutDidNotSettle,
+    LostSuppression,
+    Backend(String),
+}
+
+impl CapturePreflightError {
+    pub(super) fn message(&self, domain: &str) -> String {
+        match self {
+            Self::StaleLayout => format!("{domain} failed after the display layout changed"),
+            Self::LayoutDidNotSettle => {
+                format!("{domain} failed because the display layout did not settle")
+            }
+            Self::LostSuppression => "Capture retry lost overlay suppression".to_string(),
+            Self::Backend(message) => message.clone(),
+        }
+    }
+
+    /// Layout churn that outlasted the settling bound is still a layout-change
+    /// terminal, not a backend failure that owners may route to a fallback.
+    pub(super) fn is_stale_layout(&self) -> bool {
+        matches!(self, Self::StaleLayout | Self::LayoutDidNotSettle)
+    }
+
+    pub(super) fn from_backend(error: anyhow::Error) -> Self {
+        match error.downcast::<Self>() {
+            Ok(error) => error,
+            Err(error) => Self::Backend(error.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for CapturePreflightError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message("Screen capture"))
+    }
+}
+
+impl std::error::Error for CapturePreflightError {}
+
+impl From<PortalRetryError> for CapturePreflightError {
+    fn from(error: PortalRetryError) -> Self {
+        match error {
+            PortalRetryError::OutputChanged => Self::StaleLayout,
+            PortalRetryError::LayoutDidNotSettle => Self::LayoutDidNotSettle,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CaptureLayout {
     output_id: Option<u32>,
@@ -82,6 +158,18 @@ impl<B: Copy> CapturePreflight<B> {
             output_id,
             generation,
         )
+    }
+
+    pub(super) fn ensure_layout_current(
+        &self,
+        output_id: Option<u32>,
+        generation: u64,
+    ) -> Result<(), CapturePreflightError> {
+        if self.layout_matches(output_id, generation) {
+            Ok(())
+        } else {
+            Err(CapturePreflightError::StaleLayout)
+        }
     }
 }
 
@@ -170,6 +258,8 @@ impl PortalLayoutRetry {
             *self = Self::Spent;
             return Err(PortalRetryError::OutputChanged);
         }
+        // Admission itself is bounded, even if dispatch wakes late after the
+        // geometry's quiet period. Never start a new barrier after this deadline.
         if now >= *deadline {
             *self = Self::Spent;
             return Err(PortalRetryError::LayoutDidNotSettle);

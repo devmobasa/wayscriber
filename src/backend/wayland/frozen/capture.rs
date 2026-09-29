@@ -249,7 +249,7 @@ impl FrozenState {
         self.direct_capture = Some(DirectCaptureAttempt::WlrScreencopy {
             session: Box::new(capture),
             context: DirectCaptureContext::new(
-                CaptureLayoutContext::new(target_output_id, self.output_layout_generation),
+                CaptureLayoutContext::new(target_output_id, self.layout_generations.active_output),
                 source_geometry,
             ),
         });
@@ -421,7 +421,7 @@ impl FrozenState {
         let image = result?;
         if !context
             .layout
-            .matches(self.active_output_id, self.output_layout_generation)
+            .matches(self.active_output_id, self.layout_generations.active_output)
         {
             return Ok(false);
         }

@@ -1,5 +1,5 @@
 use super::state::{ZoomCaptureBackend, ZoomState};
-use crate::backend::wayland::capture_preflight::PortalRetryError;
+use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use std::time::{Duration, Instant};
 
 impl ZoomState {
@@ -16,7 +16,7 @@ impl ZoomState {
             captured,
             self.active_output_id,
             layout_changed,
-            self.portal_layout_generation,
+            self.layout_generations.desktop,
             Instant::now(),
         ) {
             return false;
@@ -26,7 +26,7 @@ impl ZoomState {
         self.capture_done = false;
         log::info!(
             "portal.zoom phase=retry-queued output={captured:?} current_layout={} budget_remaining=0",
-            self.portal_layout_generation
+            self.layout_generations.desktop
         );
 
         true
@@ -36,11 +36,11 @@ impl ZoomState {
         &mut self,
         backend: ZoomCaptureBackend,
     ) -> bool {
-        let changed = (backend == ZoomCaptureBackend::Portal)
+        let portal_layout_changed = (backend == ZoomCaptureBackend::Portal)
             && self
                 .preflight
-                .changed_on_output(self.active_output_id, self.portal_layout_generation);
-        self.queue_portal_layout_retry(self.active_output_id, changed)
+                .changed_on_output(self.active_output_id, self.layout_generations.desktop);
+        self.queue_portal_layout_retry(self.active_output_id, portal_layout_changed)
     }
 
     pub(in crate::backend::wayland) fn has_portal_layout_retry(&self) -> bool {
@@ -58,23 +58,16 @@ impl ZoomState {
     pub(in crate::backend::wayland) fn restart_portal_preflight(
         &mut self,
         now: Instant,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, CapturePreflightError> {
         let Some(output_id) = self
             .layout_retry
             .take_ready(
                 self.active_output_id,
-                self.portal_layout_generation,
+                self.layout_generations.desktop,
                 self.active_geometry.as_ref(),
                 now,
             )
-            .map_err(|error| match error {
-                PortalRetryError::OutputChanged => {
-                    "Zoom failed after the display layout changed".to_string()
-                }
-                PortalRetryError::LayoutDidNotSettle => {
-                    "Zoom failed because the display layout did not settle".to_string()
-                }
-            })?
+            .map_err(CapturePreflightError::from)?
         else {
             return Ok(false);
         };
@@ -82,11 +75,11 @@ impl ZoomState {
         self.preflight.begin(
             ZoomCaptureBackend::Portal,
             Some(output_id),
-            self.portal_layout_generation,
+            self.layout_generations.desktop,
         );
         log::info!(
             "portal.zoom phase=retry-preflight output={output_id} layout={}",
-            self.portal_layout_generation
+            self.layout_generations.desktop
         );
 
         Ok(true)
@@ -118,6 +111,7 @@ mod tests {
         .unwrap()
         .with_known_output_count(Some(1))
     }
+
     fn image(byte: u8) -> FrozenImage {
         FrozenImage {
             width: 2,
@@ -147,7 +141,7 @@ mod tests {
             let mut input = make_test_input_state();
             zoom.set_active_output(None, Some(1));
             zoom.set_active_geometry(Some(geometry(0)));
-            zoom.start_capture(true, &tokio::runtime::Handle::current())
+            zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::Portal)
                 .unwrap();
             assert_eq!(
                 zoom.take_preflight_pending(),
@@ -161,7 +155,7 @@ mod tests {
             }));
             zoom.request_activation();
 
-            let old_generation = zoom.portal_layout_generation;
+            let old_generation = zoom.layout_generations.desktop;
             zoom.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
                 wake.handle(),
@@ -201,7 +195,7 @@ mod tests {
             );
             assert!(zoom.ensure_preflight_layout_current().is_ok());
 
-            let fresh_generation = zoom.portal_layout_generation;
+            let fresh_generation = zoom.layout_generations.desktop;
             zoom.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
                 wake.handle(),
@@ -259,7 +253,7 @@ mod tests {
             zoom.set_active_output(None, Some(1));
             zoom.set_active_geometry(Some(geometry(0)));
             let id = zoom.begin_identified_capture();
-            let generation = zoom.output_layout_generation;
+            let generation = zoom.layout_generations.active_output;
             zoom.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
                 wake.handle(),
@@ -287,6 +281,7 @@ mod tests {
             }
 
             drain(&mut zoom, &mut input).await;
+
             assert!(!zoom.has_portal_layout_retry());
             assert!(!zoom.is_in_progress());
 
@@ -309,13 +304,16 @@ mod tests {
             let id = zoom.begin_identified_capture();
             zoom.request_activation();
             assert!(zoom.queue_portal_layout_retry(Some(1), true));
+
             if switch_output {
                 zoom.set_active_output(None, Some(2));
+
                 assert!(
                     zoom.restart_portal_preflight(Instant::now() + Duration::from_millis(150))
                         .is_err()
                 );
             }
+
             assert!(zoom.abort_capture());
             assert!(!zoom.has_portal_layout_retry());
             assert!(

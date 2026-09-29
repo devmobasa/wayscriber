@@ -1,7 +1,7 @@
 //! Re-admission of portal requests after a bounded layout settling period.
 use super::super::core::overlay::OverlaySuppressionState;
 use super::super::*;
-use crate::input::state::{Toast, ToastPriority};
+use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use std::time::Instant;
 
 impl WaylandState {
@@ -48,13 +48,6 @@ fn advance_portal_layout_retries(
             Ok(ready) => restarted |= ready,
             Err(error) => {
                 log::warn!("Portal Freeze retry preflight failed: {error}");
-                if !frozen.has_acquisition_attempt() {
-                    input.push_toast(
-                        ToastPriority::Critical,
-                        "freeze",
-                        Toast::error(error.clone()),
-                    );
-                }
                 frozen.finish_preflight_failure(error, input);
             }
         }
@@ -83,10 +76,10 @@ fn restart_suppressed_portal_retry(
     suppression: &mut OverlaySuppressionState,
     reason: OverlaySuppression,
     wait_for_gtk: bool,
-    restart: impl FnOnce() -> Result<bool, String>,
-) -> Result<bool, String> {
+    restart: impl FnOnce() -> Result<bool, CapturePreflightError>,
+) -> Result<bool, CapturePreflightError> {
     if suppression.reason() != reason {
-        return Err("Capture retry lost overlay suppression".to_string());
+        return Err(CapturePreflightError::LostSuppression);
     }
     if !restart()? {
         return Ok(false);
@@ -99,7 +92,9 @@ fn restart_suppressed_portal_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::wayland::acquisition::{ScreenAcquisitionOwner, ScreenAcquisitionRegistry};
+    use crate::backend::wayland::acquisition::{
+        ScreenAcquisitionOutcome, ScreenAcquisitionOwner, ScreenAcquisitionRegistry,
+    };
     use crate::backend::wayland::frozen::FrozenCaptureBackend;
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
     use crate::backend::wayland::zoom::{ZoomCaptureBackend, ZoomSourceOutcome};
@@ -143,7 +138,7 @@ mod tests {
                     frozen.set_active_geometry(Some(changed));
                     assert!(frozen.retry_stale_portal_preflight(FrozenCaptureBackend::Portal));
                 } else {
-                    zoom.start_capture(true, &tokio::runtime::Handle::current())
+                    zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::Portal)
                         .unwrap();
                     zoom_id = zoom.current_capture_id();
                     zoom.take_preflight_pending();
@@ -217,13 +212,21 @@ mod tests {
                     if reason == OverlaySuppression::Frozen {
                         let terminal = frozen.take_acquisition_completion().unwrap();
                         assert_eq!((terminal.id, terminal.owner), (id, owner));
+                        if matches!(failure, Some("output" | "metadata")) {
+                            assert_eq!(terminal.outcome, ScreenAcquisitionOutcome::StaleLayout);
+                        } else {
+                            assert!(matches!(
+                                terminal.outcome,
+                                ScreenAcquisitionOutcome::Failed(_)
+                            ));
+                        }
                         assert!(frozen.take_acquisition_completion().is_none());
                         assert!(frozen.take_capture_done());
                         assert!(!frozen.is_in_progress());
                     } else {
                         let terminal = zoom.take_source_terminal().unwrap();
                         assert_eq!(terminal.id, zoom_id.unwrap());
-                        if failure == Some("output") {
+                        if matches!(failure, Some("output" | "metadata")) {
                             assert_eq!(terminal.outcome, ZoomSourceOutcome::StaleLayout);
                         } else {
                             assert!(matches!(terminal.outcome, ZoomSourceOutcome::Failed(_)));

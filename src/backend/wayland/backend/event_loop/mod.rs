@@ -269,6 +269,11 @@ fn event_loop_timeout(
     last_render_time: Option<Instant>,
 ) -> Option<Duration> {
     let vsync_enabled = state.config.performance.enable_vsync;
+    let frame_cap_timeout = if vsync_enabled {
+        None
+    } else {
+        render::frame_rate_cap_timeout(state.config.performance.max_fps_no_vsync, last_render_time)
+    };
     let should_block = capture_active
         || !state.surface.is_configured()
         || (vsync_enabled && state.surface.frame_callback_pending());
@@ -297,10 +302,6 @@ fn event_loop_timeout(
     let base_timeout = if should_block {
         min_timeout(autosave_timeout, focus_exit_timeout)
     } else if !vsync_enabled && state.input_state.needs_redraw {
-        let frame_cap_timeout = render::frame_rate_cap_timeout(
-            state.config.performance.max_fps_no_vsync,
-            last_render_time,
-        );
         let frame_timeout = match (frame_cap_timeout, animation_timeout) {
             (Some(frame), Some(animation)) => Some(frame.min(animation)),
             (Some(frame), None) => Some(frame),
@@ -323,7 +324,7 @@ fn event_loop_timeout(
         state.toolbar_drag_handoff_timeout(now),
         state.input_state.command_palette_repeat_timeout(now),
         state.input_state.font_picker_repeat_timeout(now),
-        capture::capture_timeout(state, now, last_render_time),
+        capture::capture_timeout(state, now, frame_cap_timeout.unwrap_or(Duration::ZERO)),
         interaction::interaction_timeout(state.spotlight.wheel_idle_deadline(), now),
         durable_action_retry_timeout(state, now),
         pending_backend_action_timeout,

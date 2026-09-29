@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::wayland::zoom::ZoomCaptureBackend;
 use crate::input::{ZoomAnchor, ZoomRequest};
 
 impl WaylandState {
@@ -210,19 +211,23 @@ impl WaylandState {
             warn!("Zoom capture requested while frozen capture is in progress; ignoring");
             return Ok(());
         }
-        let use_fallback = !self.zoom.manager_available();
-        if use_fallback {
+        let backend = if self.zoom.manager_available() {
+            ZoomCaptureBackend::WlrScreencopy
+        } else {
+            ZoomCaptureBackend::Portal
+        };
+        if backend == ZoomCaptureBackend::Portal {
             warn!("Zoom: screencopy unavailable, using portal fallback");
         } else {
             log::info!("Zoom: using screencopy fast path");
         }
         if !self.enter_overlay_suppression_with_keyboard_policy(
             OverlaySuppression::Zoom,
-            zoom_suppression_keyboard_policy(use_fallback),
+            zoom_suppression_keyboard_policy(backend),
         ) {
             anyhow::bail!("Zoom capture requested while another overlay operation is preparing");
         }
-        match self.zoom.start_capture(use_fallback, &self.tokio_handle) {
+        match self.zoom.start_capture(backend) {
             Ok(()) => Ok(()),
             Err(err) => {
                 self.exit_overlay_suppression(OverlaySuppression::Zoom);
@@ -232,8 +237,10 @@ impl WaylandState {
     }
 }
 
-fn zoom_suppression_keyboard_policy(use_fallback: bool) -> OverlaySuppressionKeyboardPolicy {
-    if use_fallback {
+fn zoom_suppression_keyboard_policy(
+    backend: ZoomCaptureBackend,
+) -> OverlaySuppressionKeyboardPolicy {
+    if backend == ZoomCaptureBackend::Portal {
         // Portal dialogs need the compositor to release Wayscriber's focus.
         OverlaySuppressionKeyboardPolicy::Release
     } else {
@@ -290,11 +297,11 @@ mod tests {
     #[test]
     fn native_zoom_retains_keyboard_but_portal_zoom_releases_it() {
         assert_eq!(
-            zoom_suppression_keyboard_policy(false),
+            zoom_suppression_keyboard_policy(ZoomCaptureBackend::WlrScreencopy),
             OverlaySuppressionKeyboardPolicy::Retain
         );
         assert_eq!(
-            zoom_suppression_keyboard_policy(true),
+            zoom_suppression_keyboard_policy(ZoomCaptureBackend::Portal),
             OverlaySuppressionKeyboardPolicy::Release
         );
     }

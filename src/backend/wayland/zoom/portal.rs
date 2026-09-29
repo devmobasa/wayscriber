@@ -2,11 +2,7 @@ use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
 
-#[cfg(test)]
-use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen::ScreenImageProvenance;
-#[cfg(test)]
-use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, portal_output_matches,
@@ -39,10 +35,10 @@ impl ZoomState {
         )
         .map_err(anyhow::Error::msg)?;
 
-        let layout_generation = self.portal_layout_generation;
+        let layout_generation = self.layout_generations.desktop;
         let provenance = ScreenImageProvenance::new(
             target_output_id,
-            self.output_layout_generation,
+            self.layout_generations.active_output,
             geo.scale,
             geo.transform,
         )
@@ -98,10 +94,10 @@ impl ZoomState {
                 log::info!(
                     "portal.zoom captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
                     self.active_output_id,
-                    self.portal_layout_generation
+                    self.layout_generations.desktop
                 );
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
-                let layout_matches = layout_generation == self.portal_layout_generation;
+                let layout_matches = layout_generation == self.layout_generations.desktop;
 
                 if output_matches && layout_matches {
                     // Crop used the spawn-time geometry. SCTK may advertise
@@ -214,6 +210,8 @@ impl ZoomState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::wayland::frozen::FrozenImage;
+    use crate::backend::wayland::frozen_geometry::OutputGeometry;
     use crate::backend::wayland::portal_task::PORTAL_CAPTURE_TIMEOUT;
     use crate::input::state::test_support::make_test_input_state;
 
@@ -607,7 +605,7 @@ mod tests {
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
         zoom.set_active_output(None, Some(1));
-        let layout_generation = zoom.output_layout_generation;
+        let layout_generation = zoom.layout_generations.active_output;
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
@@ -650,7 +648,7 @@ mod tests {
         let geometry = crop_geometry((0, 0));
         zoom.set_active_geometry(Some(geometry.clone()));
         zoom.set_active_output(None, Some(1));
-        let layout_generation = zoom.output_layout_generation;
+        let layout_generation = zoom.layout_generations.active_output;
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
@@ -695,7 +693,7 @@ mod tests {
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0)).with_known_output_count(Some(1))));
         zoom.set_active_output(None, Some(1));
-        let layout_generation = zoom.output_layout_generation;
+        let layout_generation = zoom.layout_generations.active_output;
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),

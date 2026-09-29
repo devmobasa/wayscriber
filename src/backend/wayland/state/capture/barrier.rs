@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
@@ -20,7 +21,10 @@ fn finish_zoom_preflight_cancellation(
     message: &str,
 ) -> bool {
     let terminal_will_report = zoom.current_capture_id().is_some();
-    zoom.finish_preflight_failure(input_state, message.to_string());
+    zoom.finish_preflight_failure(
+        input_state,
+        CapturePreflightError::Backend(message.to_string()),
+    );
     terminal_will_report
 }
 
@@ -375,8 +379,10 @@ impl WaylandState {
                         return;
                     }
                     if self.frozen.has_acquisition_attempt() {
-                        self.frozen
-                            .finish_preflight_failure(err.to_string(), &mut self.input_state);
+                        self.frozen.finish_preflight_failure(
+                            CapturePreflightError::from_backend(err),
+                            &mut self.input_state,
+                        );
                     } else {
                         self.input_state.push_toast(
                             ToastPriority::Critical,
@@ -403,8 +409,10 @@ impl WaylandState {
                     if self.zoom.retry_stale_portal_preflight(backend) {
                         return;
                     }
-                    self.zoom
-                        .finish_preflight_failure(&mut self.input_state, err.to_string());
+                    self.zoom.finish_preflight_failure(
+                        &mut self.input_state,
+                        CapturePreflightError::from_backend(err),
+                    );
                 }
             }
             OverlaySuppression::Capture | OverlaySuppression::DesktopBackdrop => {
@@ -715,7 +723,7 @@ mod tests {
         for owner in [Some(ZoomWaiterOwner::Ocr), None] {
             let mut zoom = crate::backend::wayland::zoom::ZoomState::new(None);
             let mut input_state = make_test_input_state();
-            zoom.start_capture(false, &tokio::runtime::Handle::current())
+            zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
                 .expect("identified zoom capture");
 
             assert!(finish_zoom_preflight_cancellation(

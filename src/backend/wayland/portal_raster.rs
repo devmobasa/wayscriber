@@ -371,6 +371,29 @@ mod tests {
     }
 
     #[test]
+    fn packed_mixed_density_crop_uses_screenshot_origin_instead_of_logical_times_scale() {
+        let outputs = [output(0, 0, (4, 2), (4, 2)), output(4, 0, (4, 2), (8, 4))];
+        let mut geo = geometry(outputs[1], &outputs);
+        geo.scale = 2;
+        let mut pixels = Vec::new();
+        let mut expected = Vec::new();
+        for y in 0..4 {
+            for x in 0..12 {
+                let pixel = (0xff000000_u32 | (y << 8) | x).to_ne_bytes();
+                pixels.extend_from_slice(&pixel);
+                if x >= 4 {
+                    expected.extend_from_slice(&pixel);
+                }
+            }
+        }
+
+        let image = crop_portal_raster(pixels, 12, 4, &geo).unwrap();
+
+        assert_eq!((image.width, image.height, image.stride), (8, 4, 32));
+        assert_eq!(image.data, expected);
+    }
+
+    #[test]
     fn native_sized_raster_requires_a_proven_single_output_when_bounds_are_missing() {
         let geometry = OutputGeometry::update_from(
             Some((10, 20)),
@@ -395,6 +418,7 @@ mod tests {
             )
             .is_err()
         );
+
         let image = crop_portal_raster(
             pixels.clone(),
             2,

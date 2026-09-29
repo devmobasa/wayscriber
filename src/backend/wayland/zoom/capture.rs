@@ -116,11 +116,11 @@ fn finalize_capture_image(image: FrozenImage, context: &CaptureContext) -> Resul
 }
 
 impl ZoomState {
-    /// Start a screencopy capture for the active output.
-    pub fn start_capture(
+    /// Queue capture using the preferred backend, with portal fallback when
+    /// the compositor has no screencopy manager.
+    pub(in crate::backend::wayland) fn start_capture(
         &mut self,
-        use_fallback: bool,
-        _tokio_handle: &tokio::runtime::Handle,
+        preferred_backend: ZoomCaptureBackend,
     ) -> Result<()> {
         anyhow::ensure!(
             self.source_terminal.is_none(),
@@ -133,10 +133,10 @@ impl ZoomState {
 
         self.begin_identified_capture();
         self.capture_done = false;
-        let backend = if use_fallback || self.manager.is_none() {
+        let backend = if self.manager.is_none() {
             ZoomCaptureBackend::Portal
         } else {
-            ZoomCaptureBackend::WlrScreencopy
+            preferred_backend
         };
         self.preflight.begin(
             backend,
@@ -194,7 +194,7 @@ impl ZoomState {
         let context = CaptureContext::new(
             target_output_id,
             source_geometry,
-            self.output_layout_generation,
+            self.layout_generations.active_output,
         );
 
         info!(
@@ -362,7 +362,7 @@ impl ZoomState {
         if !capture
             .context
             .layout
-            .matches(self.active_output_id, self.output_layout_generation)
+            .matches(self.active_output_id, self.layout_generations.active_output)
         {
             return Ok(false);
         }
@@ -475,7 +475,7 @@ mod tests {
         let mut state = ZoomState::new_with_runtime_wake(None, wake.handle());
 
         state
-            .start_capture(false, &tokio::runtime::Handle::current())
+            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
             .expect("queue portal zoom capture");
 
         assert!(state.preflight_pending());

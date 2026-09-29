@@ -50,18 +50,8 @@ pub(super) fn poll_capture_deadlines(
 pub(super) fn capture_timeout(
     state: &WaylandState,
     now: Instant,
-    last_render_time: Option<Instant>,
+    render_delay: Duration,
 ) -> Option<Duration> {
-    let render_delay = if state.config.performance.enable_vsync {
-        Duration::ZERO
-    } else {
-        super::render::frame_rate_cap_timeout(
-            state.config.performance.max_fps_no_vsync,
-            last_render_time,
-        )
-        .unwrap_or(Duration::ZERO)
-    };
-
     [
         state.frozen.portal_layout_retry_timeout(now),
         state.zoom.portal_layout_retry_timeout(now),

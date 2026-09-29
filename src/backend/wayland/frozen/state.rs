@@ -3,7 +3,9 @@ mod direct;
 
 pub(super) use direct::{DirectCaptureAttempt, DirectCaptureContext};
 
-use crate::backend::wayland::capture_preflight::{CapturePreflight, PortalLayoutRetry};
+use crate::backend::wayland::capture_preflight::{
+    CaptureLayoutGenerations, CapturePreflight, CapturePreflightError, PortalLayoutRetry,
+};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wayland_client::protocol::wl_output;
@@ -27,7 +29,6 @@ struct PendingFrozenImage {
     image: FrozenImage,
     target_output_id: Option<u32>,
     layout_generation: u64,
-    portal_layout_generation: Option<u64>,
     source_geometry: Option<OutputGeometry>,
     output_transform: Option<wl_output::Transform>,
     source: FrozenCaptureSource,
@@ -36,7 +37,7 @@ struct PendingFrozenImage {
 #[derive(Clone, Copy)]
 enum FrozenCaptureSource {
     ActiveOutput,
-    Portal,
+    Portal { desktop_generation: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,12 +58,8 @@ pub struct FrozenState {
     pub(super) active_output: Option<wl_output::WlOutput>,
     pub(super) active_output_id: Option<u32>,
     pub(super) active_geometry: Option<OutputGeometry>,
-    /// Bumped when freeze/zoom crop geometry actually changes so in-flight
-    /// portal captures can be rejected after a layout change.
-    /// Active viewport generation used by direct capture and installed sources.
-    pub(super) output_layout_generation: u64,
-    /// Full desktop generation used only by portal snapshots and preflight.
-    pub(super) portal_layout_generation: u64,
+    /// Shared active-output and full-desktop validity generations.
+    pub(super) layout_generations: CaptureLayoutGenerations,
     pub(super) direct_capture: Option<DirectCaptureAttempt>,
     pub(super) image: Option<Arc<FrozenImage>>,
     image_provenance: Option<ScreenImageProvenance>,
@@ -127,8 +124,7 @@ impl FrozenState {
             active_output: None,
             active_output_id: None,
             active_geometry: None,
-            output_layout_generation: 0,
-            portal_layout_generation: 0,
+            layout_generations: CaptureLayoutGenerations::default(),
             direct_capture: None,
             image: None,
             image_provenance: None,
@@ -174,18 +170,13 @@ impl FrozenState {
     }
 
     pub fn set_active_geometry(&mut self, geometry: Option<OutputGeometry>) {
-        if self.active_geometry != geometry {
-            self.portal_layout_generation = self.portal_layout_generation.wrapping_add(1);
-        }
-        if !OutputGeometry::same_active_output(self.active_geometry.as_ref(), geometry.as_ref()) {
-            self.output_layout_generation = self.output_layout_generation.wrapping_add(1);
-        }
-
+        self.layout_generations
+            .update(self.active_geometry.as_ref(), geometry.as_ref());
         self.active_geometry = geometry;
     }
 
-    pub(in crate::backend::wayland) fn output_layout_generation(&self) -> u64 {
-        self.output_layout_generation
+    pub(in crate::backend::wayland) fn desktop_layout_generation(&self) -> u64 {
+        self.layout_generations.desktop
     }
 
     pub(in crate::backend::wayland) fn source_context_matches(
@@ -193,7 +184,7 @@ impl FrozenState {
         provenance: ScreenImageProvenance,
     ) -> bool {
         self.active_output_id == Some(provenance.output_id)
-            && self.output_layout_generation == provenance.output_layout_generation
+            && self.layout_generations.active_output == provenance.output_layout_generation
     }
 
     pub(in crate::backend::wayland) fn image_provenance(&self) -> Option<ScreenImageProvenance> {
@@ -252,31 +243,27 @@ impl FrozenState {
         self.preflight.begin(
             FrozenCaptureBackend::Portal,
             self.active_output_id,
-            self.portal_layout_generation,
+            self.layout_generations.desktop,
         );
     }
 
     pub(super) fn capture_layout_generation(&self, backend: FrozenCaptureBackend) -> u64 {
         match backend {
-            FrozenCaptureBackend::Portal => self.portal_layout_generation,
+            FrozenCaptureBackend::Portal => self.layout_generations.desktop,
             FrozenCaptureBackend::WlrScreencopy | FrozenCaptureBackend::ExtImageCopy => {
-                self.output_layout_generation
+                self.layout_generations.active_output
             }
         }
     }
 
-    pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), String> {
-        if self.preflight.layout_matches(
+    pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), CapturePreflightError> {
+        self.preflight.ensure_layout_current(
             self.active_output_id,
             self.preflight
                 .backend()
                 .map(|backend| self.capture_layout_generation(backend))
-                .unwrap_or(self.output_layout_generation),
-        ) {
-            Ok(())
-        } else {
-            Err("Freeze failed after the display layout changed".to_string())
-        }
+                .unwrap_or(self.layout_generations.active_output),
+        )
     }
 
     #[cfg(test)]
@@ -296,7 +283,10 @@ impl FrozenState {
         &mut self,
         input_state: &mut InputState,
     ) {
-        let stale_message = self.ensure_preflight_layout_current().err();
+        let stale_message = self
+            .ensure_preflight_layout_current()
+            .err()
+            .map(|error| error.message("Freeze"));
         let message = stale_message
             .clone()
             .unwrap_or_else(|| "Freeze could not capture the screen.".to_string());
@@ -315,14 +305,20 @@ impl FrozenState {
 
     pub(in crate::backend::wayland) fn finish_preflight_failure(
         &mut self,
-        message: String,
+        error: CapturePreflightError,
         input_state: &mut InputState,
     ) {
-        let outcome = if self.ensure_preflight_layout_current().is_err() {
+        if !self.has_acquisition_attempt() {
+            self.abandon_acquisition(input_state);
+            return;
+        }
+
+        let outcome = if error.is_stale_layout() {
             ScreenAcquisitionOutcome::StaleLayout
         } else {
-            ScreenAcquisitionOutcome::Failed(message)
+            ScreenAcquisitionOutcome::Failed(error.message("Freeze"))
         };
+
         self.finish_acquisition(outcome, input_state);
     }
 
@@ -779,15 +775,15 @@ mod tests {
     #[test]
     fn output_layout_generation_bumps_only_when_geometry_changes() {
         let mut state = FrozenState::new(None);
-        assert_eq!(state.output_layout_generation, 0);
+        assert_eq!(state.layout_generations.active_output, 0);
         let first = desktop_geometry(0, 0, 4, 1, 1, Some((0, 0)));
         state.set_active_geometry(Some(first.clone()));
-        assert_eq!(state.output_layout_generation, 1);
+        assert_eq!(state.layout_generations.active_output, 1);
         state.set_active_geometry(Some(first));
-        assert_eq!(state.output_layout_generation, 1);
+        assert_eq!(state.layout_generations.active_output, 1);
         state.set_active_geometry(Some(desktop_geometry(0, 0, 4, 1, 1, Some((6, 0)))));
-        assert_eq!(state.output_layout_generation, 1);
-        assert_eq!(state.portal_layout_generation, 2);
+        assert_eq!(state.layout_generations.active_output, 1);
+        assert_eq!(state.layout_generations.desktop, 2);
     }
 
     #[test]
@@ -797,7 +793,7 @@ mod tests {
         state.set_active_output(None, Some(7));
         let first = desktop_geometry(0, 0, 2, 1, 1, Some((0, 0)));
         state.set_active_geometry(Some(first.clone()));
-        let generation = state.output_layout_generation;
+        let generation = state.layout_generations.active_output;
         let provenance =
             ScreenImageProvenance::new(7, generation, 1, wl_output::Transform::Normal).unwrap();
         state.set_pending_output_image(
@@ -818,7 +814,7 @@ mod tests {
         assert!(state.source_context_matches(provenance));
         assert!(state.activate_pending_image(2, 1, &mut input).unwrap());
         assert_eq!(state.image_provenance(), Some(provenance));
-        assert!(state.portal_layout_generation > generation);
+        assert!(state.layout_generations.desktop > generation);
     }
 
     #[test]
@@ -1395,7 +1391,13 @@ mod tests {
             (1, 1),
         )));
 
-        state.finish_preflight_failure("backend refused".to_string(), &mut input_state);
+        let error = state
+            .ensure_preflight_layout_current()
+            .map_err(anyhow::Error::msg)
+            .unwrap_err();
+
+        state
+            .finish_preflight_failure(CapturePreflightError::from_backend(error), &mut input_state);
 
         assert_eq!(
             state
@@ -1403,5 +1405,23 @@ mod tests {
                 .map(|completion| completion.outcome),
             Some(ScreenAcquisitionOutcome::StaleLayout)
         );
+    }
+
+    #[test]
+    fn unowned_preflight_failure_clears_retry_and_publishes_capture_done() {
+        let mut state = FrozenState::new_inner(None, None, true, None, true, false);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(1));
+        state.start_capture().unwrap();
+        state.take_preflight_pending();
+        assert!(state.queue_portal_layout_retry(Some(1), true));
+
+        state.finish_preflight_failure(CapturePreflightError::LostSuppression, &mut input_state);
+
+        assert!(!state.has_portal_layout_retry());
+        assert!(!state.is_in_progress());
+        assert!(state.take_capture_done());
+        assert!(state.take_acquisition_completion().is_none());
+        assert!(input_state.needs_redraw);
     }
 }
