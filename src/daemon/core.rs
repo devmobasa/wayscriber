@@ -795,12 +795,22 @@ impl Daemon {
                     continue;
                 };
                 let was_hidden = self.overlay_state == OverlayState::Hidden;
-                claimed.commit(if was_hidden {
+                let committed = claimed.commit(if was_hidden {
                     EffectKind::StartAndDeliverAction
                 } else {
                     EffectKind::DeliverReadyAction
                 })?;
                 claimed.defer()?;
+                if committed.is_none() {
+                    // The deadline passed and the command was rejected, so the
+                    // client was told nothing happened: nothing may start.
+                    journal.abandon_command(
+                        &command_identity,
+                        &prepared,
+                        "command authorization deadline expired before commit",
+                    )?;
+                    continue;
+                }
 
                 self.pending_toggle_request = Some(legacy_request);
                 if was_hidden {
@@ -853,7 +863,12 @@ impl Daemon {
                 continue;
             }
 
-            claimed.commit(effect)?;
+            if claimed.commit(effect)?.is_none() {
+                // Rejected at its deadline: the client was told nothing
+                // happened, so the overlay must not change.
+                claimed.defer()?;
+                continue;
+            }
             // Typed requests are individually authorized and must not inherit
             // the legacy desktop-shortcut duplicate suppression window.
             self.last_plain_visibility_toggle_completed_at = None;

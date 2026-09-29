@@ -14,6 +14,9 @@ use super::super::{BootClock, BootDeadline};
 use super::layout::{bump_revision, flock, lock_until, read_control, unlock, write_control};
 use super::{ClaimedCommand, FinalEffect};
 
+/// The rejection reason recorded when a commit arrives after its deadline.
+pub(super) const COMMIT_DEADLINE_EXPIRED: &str = "command authorization deadline expired";
+
 impl ClaimedCommand {
     pub(crate) fn identity(&self) -> &str {
         &self.control.identity
@@ -101,7 +104,12 @@ impl ClaimedCommand {
         Ok(Some(prepared))
     }
 
-    pub(crate) fn commit(&mut self, effect_kind: EffectKind) -> Result<String> {
+    /// Commits the command to `effect_kind` and returns its effect id.
+    ///
+    /// Returns `None` when the authorization deadline has already passed: the
+    /// command is rejected instead, the client is told nothing happened, and the
+    /// caller must not apply the effect.
+    pub(crate) fn commit(&mut self, effect_kind: EffectKind) -> Result<Option<String>> {
         if !matches!(self.control.decision, CommandDecision::Open) {
             bail!("command decision is no longer open");
         }
@@ -111,7 +119,8 @@ impl ClaimedCommand {
                 .submission_clock
                 .authorization_deadline_boottime_ns
         {
-            return self.reject("command authorization deadline expired");
+            self.reject(COMMIT_DEADLINE_EXPIRED)?;
+            return Ok(None);
         }
         let effect_id = fresh_id()?;
         let recovery_generation = fresh_id()?;
@@ -149,7 +158,7 @@ impl ClaimedCommand {
             });
         }
         write_control(&self.control_path, &self.control)?;
-        Ok(effect_id)
+        Ok(Some(effect_id))
     }
 
     pub(crate) fn reject(&mut self, reason: &str) -> Result<String> {
