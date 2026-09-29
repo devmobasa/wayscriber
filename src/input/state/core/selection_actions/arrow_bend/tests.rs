@@ -428,8 +428,9 @@ fn escape_still_cancels_a_bend_rather_than_committing_it() {
 
 #[test]
 fn an_action_with_no_bend_running_leaves_the_interaction_alone() {
-    // `finish_active_arrow_bend` runs on every action now, so taking the state
-    // apart before confirming a bend is running would cancel whatever else was.
+    // `finish_active_arrow_bend` runs before every toolbar event and panel
+    // edit, so taking the state apart before confirming a bend is running
+    // would cancel whatever else was.
     let mut state = make_test_input_state();
     state.state = DrawingState::Selecting {
         start_x: 10,

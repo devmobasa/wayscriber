@@ -10,6 +10,14 @@ mod panels;
 mod selection;
 mod text;
 
+/// How a pointer interaction ends: by its own button release, or because
+/// another action settled it while the button was still held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GestureEnd {
+    Release,
+    Interrupted,
+}
+
 impl InputState {
     /// Processes mouse button release events.
     ///
@@ -109,6 +117,43 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
+        self.end_pointer_interaction_with(measurer, (canvas_x, canvas_y), GestureEnd::Release);
+    }
+
+    /// Lands a held gesture that owns pre-gesture snapshots, recording it
+    /// exactly as its release would, and returns whether one was running.
+    ///
+    /// Such a gesture records nothing until it ends and then commits one entry
+    /// measured from the snapshots taken when it began. Any other edit that
+    /// records history while it is held — a nudge, Delete, Undo — would leave
+    /// the release committing from a stale "before", so that edit settles the
+    /// gesture first. The later release then finds nothing left to finish.
+    pub(in crate::input::state) fn settle_snapshot_gesture_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) -> bool {
+        if !matches!(
+            self.state,
+            DrawingState::MovingSelection { .. }
+                | DrawingState::ResizingSelection { .. }
+                | DrawingState::ResizingText { .. }
+                | DrawingState::AdjustingSpotlightMagnification { .. }
+                | DrawingState::BendingArrow { .. }
+        ) {
+            return false;
+        }
+
+        let canvas = self.pointer.canvas();
+        self.end_pointer_interaction_with(measurer, canvas, GestureEnd::Interrupted);
+        true
+    }
+
+    fn end_pointer_interaction_with(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        (canvas_x, canvas_y): (i32, i32),
+        end: GestureEnd,
+    ) {
         let state = std::mem::replace(&mut self.state, DrawingState::Idle);
         match state {
             DrawingState::MovingSelection {
@@ -117,14 +162,8 @@ impl InputState {
                 moved,
                 ..
             } => {
-                selection::finish_moving_selection(
-                    self,
-                    measurer,
-                    grab,
-                    (canvas_x, canvas_y),
-                    snapshots,
-                    moved,
-                );
+                let release = matches!(end, GestureEnd::Release).then_some((canvas_x, canvas_y));
+                selection::finish_moving_selection(self, measurer, grab, release, snapshots, moved);
             }
             DrawingState::Selecting {
                 start_x,
