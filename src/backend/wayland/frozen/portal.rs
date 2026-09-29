@@ -38,7 +38,7 @@ impl FrozenState {
         )
         .map_err(anyhow::Error::msg)?;
 
-        let layout_generation = self.output_layout_generation;
+        let layout_generation = self.portal_layout_generation;
         // Notify user that portal fallback is in progress
         crate::notification::send_notification_async(
             tokio_handle,
@@ -206,7 +206,7 @@ impl FrozenState {
         log::info!(
             "portal.freeze captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
             self.active_output_id,
-            self.output_layout_generation
+            self.portal_layout_generation
         );
         let output_matches = portal_output_matches(target_output, self.active_output_id);
         // SCTK can advertise a wl_output before its new_output callback
@@ -215,7 +215,7 @@ impl FrozenState {
             .as_ref()
             .is_some_and(|geometry| geometry.output_count_conflicts_with_live(live_output_count));
         let layout_matches =
-            layout_generation == self.output_layout_generation && !topology_changed;
+            layout_generation == self.portal_layout_generation && !topology_changed;
 
         if output_matches && layout_matches {
             match image {
@@ -329,7 +329,7 @@ mod tests {
         frozen.set_active_geometry(Some(geometry.clone()));
         frozen.start_capture_for(id, owner).unwrap();
         frozen.take_preflight_pending();
-        let generation = frozen.output_layout_generation;
+        let generation = frozen.portal_layout_generation;
 
         frozen.apply_portal_image(
             Some(1),
@@ -542,7 +542,7 @@ mod tests {
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         frozen.set_active_geometry(Some(crop_geometry((0, 0))));
-        let layout_generation = frozen.output_layout_generation;
+        let layout_generation = frozen.portal_layout_generation;
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
@@ -566,7 +566,7 @@ mod tests {
         let mut input = make_test_input_state();
         let geometry = crop_geometry((0, 0));
         frozen.set_active_geometry(Some(geometry.clone()));
-        let layout_generation = frozen.output_layout_generation;
+        let layout_generation = frozen.portal_layout_generation;
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),

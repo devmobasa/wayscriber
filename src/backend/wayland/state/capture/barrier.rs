@@ -437,19 +437,19 @@ impl WaylandState {
                 }
             }
             OverlaySuppression::Zoom => {
-                let Some(use_fallback) = self.zoom.take_preflight_pending() else {
+                let Some(backend) = self.zoom.take_preflight_pending() else {
                     log::warn!("Zoom capture barrier completed without a pending preflight");
                     self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
                 if let Err(err) = self.zoom.begin_preflight_capture(
-                    use_fallback,
+                    backend,
                     self.protocol.shm(),
                     qh,
                     &self.tokio_handle,
                 ) {
                     log::warn!("Zoom preflight capture failed: {err}");
-                    if self.zoom.retry_stale_portal_preflight(use_fallback) {
+                    if self.zoom.retry_stale_portal_preflight(backend) {
                         return;
                     }
                     self.zoom

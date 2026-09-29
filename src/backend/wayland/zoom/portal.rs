@@ -35,10 +35,10 @@ impl ZoomState {
         )
         .map_err(anyhow::Error::msg)?;
 
-        let layout_generation = self.output_layout_generation;
+        let layout_generation = self.portal_layout_generation;
         let provenance = ScreenImageProvenance::new(
             target_output_id,
-            layout_generation,
+            self.output_layout_generation,
             geo.scale,
             geo.transform,
         )
@@ -57,7 +57,9 @@ impl ZoomState {
                     let (data, width, height) = decode_image_to_argb(&bytes).map_err(|error| {
                         CaptureError::ImageError(format!("Decode failed: {error}"))
                     })?;
-                    let image = crop_portal_image(data, width, height, &geo);
+                    let image = crate::backend::wayland::portal_raster::crop_portal_raster(
+                        data, width, height, &geo,
+                    );
 
                     Ok((Some(target_output_id), layout_generation, provenance, image))
                 }
@@ -92,10 +94,10 @@ impl ZoomState {
                 log::info!(
                     "portal.zoom captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
                     self.active_output_id,
-                    self.output_layout_generation
+                    self.portal_layout_generation
                 );
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
-                let layout_matches = layout_generation == self.output_layout_generation;
+                let layout_matches = layout_generation == self.portal_layout_generation;
 
                 if output_matches && layout_matches {
                     // Crop used the spawn-time geometry. SCTK may advertise
@@ -205,15 +207,6 @@ impl ZoomState {
     }
 }
 
-fn crop_portal_image(
-    data: Vec<u8>,
-    width: u32,
-    height: u32,
-    geometry: &OutputGeometry,
-) -> Result<FrozenImage, CaptureError> {
-    crate::backend::wayland::portal_raster::crop_portal_raster(data, width, height, geometry)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,8 +304,13 @@ mod tests {
             screenshot_height: Some(3),
         }));
 
-        let image = crop_portal_image(vec![7; 5 * 3 * 4], 5, 3, &geometry)
-            .expect("fractional output screenshot");
+        let image = crate::backend::wayland::portal_raster::crop_portal_raster(
+            vec![7; 5 * 3 * 4],
+            5,
+            3,
+            &geometry,
+        )
+        .expect("fractional output screenshot");
 
         assert_eq!((image.width, image.height), (5, 3));
         assert_eq!(image.stride, 20);
@@ -365,8 +363,13 @@ mod tests {
             .unwrap()
             .with_desktop_backdrop_geometry(DesktopBackdropGeometry::from_outputs(active, &outputs))
             .with_portal_outputs(Some(outputs.to_vec()));
-            let image =
-                crop_portal_image(pixels.clone(), 24, 8, &geometry).expect("KDE mixed-scale crop");
+            let image = crate::backend::wayland::portal_raster::crop_portal_raster(
+                pixels.clone(),
+                24,
+                8,
+                &geometry,
+            )
+            .expect("KDE mixed-scale crop");
             assert_eq!((image.width, image.height), (8, 4));
             assert_eq!(
                 image.data,
@@ -393,7 +396,15 @@ mod tests {
             },
         ));
 
-        assert!(crop_portal_image(vec![0; 3 * 4], 3, 1, &geometry).is_err());
+        assert!(
+            crate::backend::wayland::portal_raster::crop_portal_raster(
+                vec![0; 3 * 4],
+                3,
+                1,
+                &geometry
+            )
+            .is_err()
+        );
     }
 
     async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) {

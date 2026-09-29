@@ -133,18 +133,9 @@ pub(super) fn crop_portal_raster(
         .portal_outputs
         .as_deref()
         .and_then(LogicalDesktop::from_outputs);
-    let active_is_known = geometry.portal_outputs.as_ref().is_some_and(|outputs| {
-        outputs.iter().any(|output| {
-            output.logical_x == geometry.logical_x
-                && output.logical_y == geometry.logical_y
-                && output.logical_width == geometry.logical_width
-                && output.logical_height == geometry.logical_height
-                && (output.physical_width, output.physical_height) == target
-        })
-    });
     let uniform = desktop
         .as_ref()
-        .filter(|_| active_is_known)
+        .filter(|_| geometry.active_output_is_in_portal_snapshot())
         .and_then(|desktop| desktop.crop(geometry, (width, height)));
     let crop = match (packed, uniform) {
         (Some(packed), Some(uniform)) if packed != uniform => None,

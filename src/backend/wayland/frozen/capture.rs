@@ -98,7 +98,7 @@ impl FrozenState {
         self.preflight.begin(
             backend,
             self.active_output_id,
-            self.output_layout_generation,
+            self.capture_layout_generation(backend),
         );
         Ok(())
     }

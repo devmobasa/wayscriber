@@ -1,4 +1,4 @@
-use super::state::ZoomState;
+use super::state::{ZoomCaptureBackend, ZoomState};
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 
 impl ZoomState {
@@ -24,19 +24,19 @@ impl ZoomState {
         self.capture_done = false;
         log::info!(
             "portal.zoom phase=retry-queued output={captured:?} current_layout={} budget_remaining=0",
-            self.output_layout_generation
+            self.portal_layout_generation
         );
         true
     }
 
     pub(in crate::backend::wayland) fn retry_stale_portal_preflight(
         &mut self,
-        use_fallback: bool,
+        backend: ZoomCaptureBackend,
     ) -> bool {
-        let changed = (use_fallback || self.manager.is_none())
+        let changed = (backend == ZoomCaptureBackend::Portal)
             && self
                 .preflight
-                .changed_on_output(self.active_output_id, self.output_layout_generation);
+                .changed_on_output(self.active_output_id, self.portal_layout_generation);
         self.queue_portal_layout_retry(self.active_output_id, changed)
     }
 
@@ -57,11 +57,14 @@ impl ZoomState {
             self.active_output_id,
             "portal zoom retry",
         )?;
-        self.preflight
-            .begin(true, Some(output_id), self.output_layout_generation);
+        self.preflight.begin(
+            ZoomCaptureBackend::Portal,
+            Some(output_id),
+            self.portal_layout_generation,
+        );
         log::info!(
             "portal.zoom phase=retry-preflight output={output_id} layout={}",
-            self.output_layout_generation
+            self.portal_layout_generation
         );
         Ok(true)
     }
@@ -121,7 +124,10 @@ mod tests {
             zoom.set_active_geometry(Some(geometry(0)));
             zoom.start_capture(true, &tokio::runtime::Handle::current())
                 .unwrap();
-            assert_eq!(zoom.take_preflight_pending(), Some(true));
+            assert_eq!(
+                zoom.take_preflight_pending(),
+                Some(ZoomCaptureBackend::Portal)
+            );
             let id = zoom.current_capture_id().unwrap();
             let mut waiters = ZoomWaiterRegistry::default();
             assert!(waiters.register(ZoomWaiter {
@@ -157,7 +163,10 @@ mod tests {
             assert!(zoom.take_source_terminal().is_none());
             assert_eq!(zoom.current_capture_id(), Some(id));
             assert!(zoom.restart_portal_preflight().unwrap());
-            assert_eq!(zoom.take_preflight_pending(), Some(true));
+            assert_eq!(
+                zoom.take_preflight_pending(),
+                Some(ZoomCaptureBackend::Portal)
+            );
             assert!(zoom.ensure_preflight_layout_current().is_ok());
             let fresh_generation = zoom.output_layout_generation;
             zoom.portal.start(PortalTask::spawn(

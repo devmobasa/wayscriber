@@ -24,7 +24,7 @@ impl FrozenState {
         self.capture_done = false;
         log::info!(
             "portal.freeze phase=retry-queued output={captured:?} current_layout={} budget_remaining=0",
-            self.output_layout_generation
+            self.portal_layout_generation
         );
         true
     }
@@ -36,7 +36,7 @@ impl FrozenState {
         let changed = backend == FrozenCaptureBackend::Portal
             && self
                 .preflight
-                .changed_on_output(self.active_output_id, self.output_layout_generation);
+                .changed_on_output(self.active_output_id, self.portal_layout_generation);
         self.queue_portal_layout_retry(self.active_output_id, changed)
     }
 
@@ -60,11 +60,11 @@ impl FrozenState {
         self.preflight.begin(
             FrozenCaptureBackend::Portal,
             Some(output_id),
-            self.output_layout_generation,
+            self.portal_layout_generation,
         );
         log::info!(
             "portal.freeze phase=retry-preflight output={output_id} layout={}",
-            self.output_layout_generation
+            self.portal_layout_generation
         );
         Ok(true)
     }

@@ -17,7 +17,7 @@ use crate::backend::wayland::frozen::{
 use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::input::InputState;
 
-use super::state::ZoomState;
+use super::state::{ZoomCaptureBackend, ZoomState};
 
 /// Internal capture session tracking a single screencopy frame.
 pub(super) struct CaptureSession {
@@ -133,17 +133,22 @@ impl ZoomState {
 
         self.begin_identified_capture();
         self.capture_done = false;
+        let backend = if use_fallback || self.manager.is_none() {
+            ZoomCaptureBackend::Portal
+        } else {
+            ZoomCaptureBackend::WlrScreencopy
+        };
         self.preflight.begin(
-            use_fallback || self.manager.is_none(),
+            backend,
             self.active_output_id,
-            self.output_layout_generation,
+            self.capture_layout_generation(backend),
         );
         Ok(())
     }
 
-    pub fn begin_preflight_capture<State>(
+    pub(in crate::backend::wayland) fn begin_preflight_capture<State>(
         &mut self,
-        use_fallback: bool,
+        backend: ZoomCaptureBackend,
         shm: &Shm,
         qh: &QueueHandle<State>,
         tokio_handle: &tokio::runtime::Handle,
@@ -154,7 +159,7 @@ impl ZoomState {
     {
         self.ensure_preflight_layout_current()
             .map_err(anyhow::Error::msg)?;
-        if use_fallback || self.manager.is_none() {
+        if backend == ZoomCaptureBackend::Portal {
             info!("capture.preflight component=zoom phase=portal-start suppression_ready=true");
             self.capture_via_portal(tokio_handle)
         } else {
@@ -475,7 +480,10 @@ mod tests {
 
         assert!(state.preflight_pending());
         assert!(!state.portal.is_running());
-        assert_eq!(state.take_preflight_pending(), Some(true));
+        assert_eq!(
+            state.take_preflight_pending(),
+            Some(ZoomCaptureBackend::Portal)
+        );
     }
 
     #[test]

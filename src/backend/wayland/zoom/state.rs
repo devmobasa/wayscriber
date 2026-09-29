@@ -99,15 +99,22 @@ impl ZoomWaiterRegistry {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum ZoomCaptureBackend {
+    WlrScreencopy,
+    Portal,
+}
+
 /// Zoom state, capture logic, and pan/lock bookkeeping.
 pub struct ZoomState {
     pub(super) manager: Option<ZwlrScreencopyManagerV1>,
     pub(super) active_output: Option<wl_output::WlOutput>,
     pub(super) active_output_id: Option<u32>,
     pub(super) active_geometry: Option<OutputGeometry>,
-    /// Bumped when freeze/zoom crop geometry actually changes so in-flight
-    /// portal captures can be rejected after a layout change.
+    /// Active viewport generation used by direct capture and installed sources.
     pub(super) output_layout_generation: u64,
+    /// Full desktop generation used only by portal snapshots and preflight.
+    pub(super) portal_layout_generation: u64,
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<Arc<FrozenImage>>,
     image_provenance: Option<ScreenImageProvenance>,
@@ -115,7 +122,7 @@ pub struct ZoomState {
     image_generation: u64,
     pub(super) portal: PortalOperation<PortalCaptureResult>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
-    pub(super) preflight: CapturePreflight<bool>,
+    pub(super) preflight: CapturePreflight<ZoomCaptureBackend>,
     pub(super) capture_done: bool,
     pub(super) layout_retry: PortalLayoutRetry,
     next_capture_id: u64,
@@ -153,6 +160,7 @@ impl ZoomState {
             active_output_id: None,
             active_geometry: None,
             output_layout_generation: 0,
+            portal_layout_generation: 0,
             capture: None,
             image: None,
             image_provenance: None,
@@ -187,8 +195,12 @@ impl ZoomState {
 
     pub fn set_active_geometry(&mut self, geometry: Option<OutputGeometry>) {
         if self.active_geometry != geometry {
+            self.portal_layout_generation = self.portal_layout_generation.wrapping_add(1);
+        }
+        if !OutputGeometry::same_active_output(self.active_geometry.as_ref(), geometry.as_ref()) {
             self.output_layout_generation = self.output_layout_generation.wrapping_add(1);
         }
+
         self.active_geometry = geometry;
     }
 
@@ -282,21 +294,36 @@ impl ZoomState {
         self.preflight.is_pending()
     }
 
-    pub fn take_preflight_pending(&mut self) -> Option<bool> {
+    pub(in crate::backend::wayland) fn take_preflight_pending(
+        &mut self,
+    ) -> Option<ZoomCaptureBackend> {
         self.preflight.take_pending()
     }
 
     #[cfg(test)]
     pub(super) fn snapshot_preflight_layout(&mut self) {
-        self.preflight
-            .begin(true, self.active_output_id, self.output_layout_generation);
+        self.preflight.begin(
+            ZoomCaptureBackend::Portal,
+            self.active_output_id,
+            self.portal_layout_generation,
+        );
+    }
+
+    pub(super) fn capture_layout_generation(&self, backend: ZoomCaptureBackend) -> u64 {
+        match backend {
+            ZoomCaptureBackend::Portal => self.portal_layout_generation,
+            ZoomCaptureBackend::WlrScreencopy => self.output_layout_generation,
+        }
     }
 
     pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), String> {
-        if self
-            .preflight
-            .layout_matches(self.active_output_id, self.output_layout_generation)
-        {
+        if self.preflight.layout_matches(
+            self.active_output_id,
+            self.preflight
+                .backend()
+                .map(|backend| self.capture_layout_generation(backend))
+                .unwrap_or(self.output_layout_generation),
+        ) {
             Ok(())
         } else {
             Err("Zoom failed after the display layout changed".to_string())
@@ -554,6 +581,50 @@ mod tests {
                 report: None,
             })
         );
+    }
+
+    #[tokio::test]
+    async fn portal_desktop_change_preserves_installed_source_but_invalidates_preflight() {
+        let mut state = ZoomState::new(None);
+        state.set_active_output(None, Some(7));
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((2, 1)),
+            (2, 1),
+            1,
+            wl_output::Transform::Normal,
+            Some((2, 1)),
+        )
+        .unwrap();
+        state.set_active_geometry(Some(geometry.clone()));
+        let provenance = ScreenImageProvenance::new(
+            7,
+            state.output_layout_generation,
+            1,
+            wl_output::Transform::Normal,
+        )
+        .unwrap();
+        state.install_image(
+            FrozenImage {
+                width: 2,
+                height: 1,
+                stride: 8,
+                data: vec![7; 8],
+            },
+            provenance,
+        );
+        state
+            .start_capture(true, &tokio::runtime::Handle::current())
+            .unwrap();
+        let generation = state.image_generation();
+        let mut changed = geometry.with_known_output_count(Some(2));
+        changed.screenshot_size = Some((4, 1));
+
+        state.set_active_geometry(Some(changed));
+
+        assert!(state.source_context_matches(provenance));
+        assert_eq!(state.image_generation(), generation);
+        assert!(state.ensure_preflight_layout_current().is_err());
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub(super) enum CapturePreflight<B> {
         layout: CaptureLayout,
     },
     Capturing {
+        backend: B,
         layout: CaptureLayout,
     },
 }
@@ -37,14 +38,21 @@ impl<B: Copy> CapturePreflight<B> {
         let Self::Pending { backend, layout } = *self else {
             return None;
         };
-        *self = Self::Capturing { layout };
+        *self = Self::Capturing { backend, layout };
         Some(backend)
+    }
+
+    pub(super) fn backend(&self) -> Option<B> {
+        match *self {
+            Self::Idle => None,
+            Self::Pending { backend, .. } | Self::Capturing { backend, .. } => Some(backend),
+        }
     }
 
     pub(super) fn changed_on_output(&self, output_id: Option<u32>, generation: u64) -> bool {
         let layout = match self {
             Self::Idle => return false,
-            Self::Pending { layout, .. } | Self::Capturing { layout } => layout,
+            Self::Pending { layout, .. } | Self::Capturing { layout, .. } => layout,
         };
         layout.output_id.is_some()
             && layout.output_id == output_id
@@ -54,7 +62,7 @@ impl<B: Copy> CapturePreflight<B> {
     pub(super) fn layout_matches(&self, output_id: Option<u32>, generation: u64) -> bool {
         let layout = match self {
             Self::Idle => return true,
-            Self::Pending { layout, .. } | Self::Capturing { layout } => layout,
+            Self::Pending { layout, .. } | Self::Capturing { layout, .. } => layout,
         };
         super::portal_capture::layout_token_matches(
             layout.output_id,

@@ -32,6 +32,40 @@ pub struct OutputGeometry {
 }
 
 impl OutputGeometry {
+    /// Identity of the active viewport, independent of portal desktop bounds.
+    pub(super) fn same_active_output(before: Option<&Self>, after: Option<&Self>) -> bool {
+        match (before, after) {
+            (Some(before), Some(after)) => {
+                before.logical_x == after.logical_x
+                    && before.logical_y == after.logical_y
+                    && before.logical_width == after.logical_width
+                    && before.logical_height == after.logical_height
+                    && before.scale == after.scale
+                    && before.transform == after.transform
+                    && before.overlay_buffer_size == after.overlay_buffer_size
+                    && before.pixel_size == after.pixel_size
+            }
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    pub(super) fn active_output_is_in_portal_snapshot(&self) -> bool {
+        let Some(target) = self.verified_pixel_size() else {
+            return false;
+        };
+
+        self.portal_outputs.as_ref().is_some_and(|outputs| {
+            outputs.iter().any(|output| {
+                output.logical_x == self.logical_x
+                    && output.logical_y == self.logical_y
+                    && output.logical_width == self.logical_width
+                    && output.logical_height == self.logical_height
+                    && (output.physical_width, output.physical_height) == target
+            })
+        })
+    }
+
     pub fn update_from(
         logical_pos: Option<(i32, i32)>,
         logical_size: Option<(i32, i32)>,

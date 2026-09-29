@@ -7,8 +7,8 @@ mod view;
 pub use state::ZoomState;
 #[allow(unused_imports)]
 pub(in crate::backend::wayland) use state::{
-    ZoomCaptureId, ZoomSourceOutcome, ZoomSourceTerminal, ZoomTerminalReport, ZoomWaiter,
-    ZoomWaiterOwner, ZoomWaiterRegistry,
+    ZoomCaptureBackend, ZoomCaptureId, ZoomSourceOutcome, ZoomSourceTerminal, ZoomTerminalReport,
+    ZoomWaiter, ZoomWaiterOwner, ZoomWaiterRegistry,
 };
 
 const MIN_ZOOM_SCALE: f64 = 1.0;
