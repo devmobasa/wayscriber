@@ -27,6 +27,77 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     assert!(state.is_session_dirty());
 }
 
+/// A style edit made through an `InputState` setter; true when it changed.
+type StyleChange = fn(&mut InputState) -> bool;
+
+/// The preset that saving would capture from the current style.
+fn captured_preset(state: &mut InputState) -> ToolPresetConfig {
+    state.save_preset(1);
+    state.preset_slots.preset(1).expect("captured preset")
+}
+
+#[test]
+fn changing_any_preset_stored_style_value_leaves_the_active_preset() {
+    let changes: [(&str, StyleChange); 12] = [
+        ("tool", |state| state.set_tool_override(Some(Tool::Rect))),
+        ("color", |state| {
+            state.set_color(Color::new(0.1, 0.6, 0.3, 1.0))
+        }),
+        ("size", |state| state.set_thickness(9.0)),
+        ("eraser size", |state| state.set_eraser_size(30.0)),
+        ("eraser mode", |state| {
+            state.set_eraser_mode(EraserMode::Stroke)
+        }),
+        ("eraser mode toggle", InputState::toggle_eraser_mode),
+        ("marker opacity", |state| state.set_marker_opacity(0.5)),
+        ("fill", |state| {
+            state.set_fill_enabled(!state.style.fill_enabled)
+        }),
+        ("font size", |state| state.set_font_size(40.0)),
+        ("font size step", |state| {
+            let before = state.style.current_font_size;
+            state.adjust_font_size(2.0);
+            state.style.current_font_size != before
+        }),
+        ("polygon sides", |state| state.set_polygon_sides(7)),
+        ("polygon sides step", |state| state.nudge_polygon_sides(1)),
+    ];
+
+    for (field, change) in changes {
+        let mut state = create_test_input_state();
+        let before = captured_preset(&mut state);
+        state.preset_slots.restore_active(Some(2));
+
+        assert!(change(&mut state), "the {field} change was a no-op");
+
+        assert_eq!(
+            state.preset_slots.active(),
+            None,
+            "changing the {field} kept the active preset lit"
+        );
+        assert_ne!(
+            captured_preset(&mut state),
+            before,
+            "a preset does not store the {field}"
+        );
+    }
+}
+
+#[test]
+fn setting_a_preset_stored_value_to_itself_keeps_the_active_preset() {
+    let mut state = create_test_input_state();
+    let opacity = state.style.marker_opacity;
+    let font_size = state.style.current_font_size;
+    state.preset_slots.restore_active(Some(2));
+
+    assert!(!state.set_marker_opacity(opacity));
+    assert!(!state.set_font_size(font_size));
+    state.style.current_font_size = 72.0;
+    state.adjust_font_size(2.0);
+
+    assert_eq!(state.preset_slots.active(), Some(2));
+}
+
 #[test]
 fn set_tool_override_preserves_text_input_state() {
     let mut state = create_test_input_state();
