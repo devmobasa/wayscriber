@@ -81,6 +81,22 @@ impl WaylandState {
         DesktopBackdropGeometry::from_outputs(active, &outputs)
     }
 
+    fn portal_output_geometries_excluding(
+        &self,
+        exclude: Option<&wl_output::WlOutput>,
+    ) -> Option<Vec<DesktopBackdropOutputGeometry>> {
+        self.protocol
+            .output()
+            .outputs()
+            .filter(|candidate| !exclude.is_some_and(|destroyed| destroyed == candidate))
+            .map(|candidate| {
+                desktop_backdrop_output_geometry_from_info(
+                    &self.protocol.output().info(&candidate)?,
+                )
+            })
+            .collect()
+    }
+
     /// Count advertised `wl_output` objects, including ones whose `new_output`
     /// callback has not run yet. SCTK can insert the proxy before metadata
     /// completes; Freeze/Zoom must not treat that window as a proven single
@@ -114,9 +130,11 @@ impl WaylandState {
     ) {
         let backdrop_geometry = self.desktop_backdrop_geometry_excluding(exclude);
         let known_output_count = self.known_output_count_excluding(exclude);
+        let portal_outputs = self.portal_output_geometries_excluding(exclude);
         let geometry = geometry.map(|geo| {
             geo.with_desktop_backdrop_geometry(backdrop_geometry)
                 .with_known_output_count(known_output_count)
+                .with_portal_outputs(portal_outputs)
         });
         self.frozen.set_active_geometry(geometry.clone());
         self.zoom.set_active_geometry(geometry);

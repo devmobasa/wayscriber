@@ -186,7 +186,13 @@ Then use the configurator's Daemon tab, or create a GNOME custom shortcut that r
 wayscriber --daemon-toggle
 ```
 
-Freeze prefers compositor-native `wlr-screencopy` or `ext-image-copy-capture` when either protocol is available, then falls back to the screenshot portal. On GNOME, Freeze works when that portal is available and responsive; the first use may show a desktop permission prompt. Portal capture can be slower than direct compositor capture. On mixed-DPI or multi-monitor layouts, Wayscriber accepts a portal image only when it can validate the active output's crop; otherwise Freeze fails instead of guessing at an origin or scale. Freeze and Zoom also require the active output to advertise a current mode. Connecting or disconnecting a monitor cancels any in-flight Freeze or Zoom capture, including on screens that did not change.
+Freeze prefers compositor-native `wlr-screencopy` or `ext-image-copy-capture` when either protocol is available, then falls back to the screenshot portal. On GNOME, Freeze works when that portal is available and responsive; the first use may show a desktop permission prompt. Portal capture can be slower than direct compositor capture. On mixed-DPI or multi-monitor layouts, Wayscriber accepts a portal image only when it can validate the active output's crop; otherwise Freeze fails instead of guessing at an origin or scale. Freeze and Zoom also require the active output to advertise a current mode.
+
+Direct Freeze and Zoom captures remain valid when only another monitor changes.
+Portal captures discard a stale desktop snapshot and retry once on the same active
+output, after complete output geometry settles. A further change during the retry
+ends the capture. Switching or replacing the active output also ends the request;
+start a new capture on the desired output.
 
 Light passthrough mode is not available in the regular app on stock GNOME Wayland. GNOME's xdg-shell fallback does not expose the shell-level overlay behavior needed to keep annotations visible while input goes to apps underneath, so `--light-toggle` is intentionally disabled instead of pretending to pass input through. A GNOME Shell extension companion would be the real path for that workflow.
 

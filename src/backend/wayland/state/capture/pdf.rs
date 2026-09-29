@@ -118,7 +118,7 @@ impl WaylandState {
             .and_then(|output| self.protocol.output().info(&output).map(|info| info.id));
         if !pending
             .layout_context
-            .matches(active_output_id, self.frozen.output_layout_generation())
+            .matches_desktop(active_output_id, &self.frozen)
         {
             let message =
                 "Board PDF export failed: output layout changed during desktop capture".to_string();
@@ -233,8 +233,7 @@ impl WaylandState {
         let output = self.surface.current_output()?;
         let output_id = self.protocol.output().info(&output)?.id;
         let geometry = self.desktop_backdrop_geometry()?;
-        let layout_context =
-            CaptureLayoutContext::new(output_id, self.frozen.output_layout_generation());
+        let layout_context = CaptureLayoutContext::for_desktop(output_id, &self.frozen);
         let request = DesktopBackdropCaptureRequest {
             logical_width: self.surface.width(),
             logical_height: self.surface.height(),

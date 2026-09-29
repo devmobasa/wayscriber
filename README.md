@@ -75,9 +75,12 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 
 | Platform | Status | Notes |
 |----------|--------|-------|
-| Wayland (layer-shell) | ✅ Supported | Hyprland, Sway, River, Wayfire, Niri/Cosmic, Plasma/KWin |
+| Wayland (layer-shell) | ✅ Supported | Hyprland, Sway, River, Wayfire, Niri/Cosmic |
+| Plasma/KWin | ✅ Supported | Layer-shell overlay; Freeze and Zoom use the `xdg-desktop-portal-kde` screenshot portal |
 | GNOME | ⚠️ Partial | Normal overlay and Freeze via portal when available; [light passthrough](#light-passthrough-mode) unavailable |
 | X11 | ❌ | Not supported |
+
+On Plasma/KWin, Freeze and Zoom require a working screenshot portal and may require portal consent.
 
 The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See the notes in [Debian and Ubuntu](#debian-and-ubuntu) and [Fedora and RHEL](#fedora-and-rhel). The AUR packages and Nix are unaffected.
 

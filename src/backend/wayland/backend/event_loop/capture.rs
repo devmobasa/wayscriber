@@ -16,12 +16,13 @@ use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
 use crate::notification;
 
 pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
+    let live_output_count = state.live_output_count();
+
     // Apply any completed portal fallback captures without blocking.
     state
         .frozen
-        .poll_portal_capture(&mut state.input_state, now);
+        .poll_portal_capture(&mut state.input_state, now, live_output_count);
     handle_pending_frozen_image(state, now);
-    let live_output_count = state.live_output_count();
     state
         .zoom
         .poll_portal_capture(&mut state.input_state, now, live_output_count);
@@ -36,6 +37,9 @@ pub(super) fn poll_capture_deadlines(
     qh: &wayland_client::QueueHandle<WaylandState>,
     now: Instant,
 ) {
+    // Re-admit retries after dispatch, before GTK synchronization and rendering.
+    // This lets a fresh GTK generation be published in the same iteration.
+    state.poll_portal_layout_retries(now);
     state.poll_overlay_capture_barrier_timeout(now);
     if let Some(backend) = state.frozen.take_timed_out_direct_capture(now) {
         warn!("{backend:?} frozen capture timed out; trying the next backend");
@@ -43,20 +47,22 @@ pub(super) fn poll_capture_deadlines(
     }
 }
 
-pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
-    super::min_timeout(
-        state.overlay_capture_barrier_timeout(now),
-        super::min_timeout(
-            state.frozen.direct_capture_timeout(now),
-            super::min_timeout(
-                state.frozen.portal_timeout(now),
-                super::min_timeout(
-                    state.zoom.portal_timeout(now),
-                    state.surface.placement().xdg_frozen().timeout(now),
-                ),
-            ),
-        ),
-    )
+pub(super) fn capture_timeout(
+    state: &WaylandState,
+    now: Instant,
+    render_delay: Duration,
+) -> Option<Duration> {
+    [
+        state.frozen.portal_layout_retry_timeout(now),
+        state.zoom.portal_layout_retry_timeout(now),
+        state.overlay_capture_barrier_timeout(now, render_delay),
+        state.frozen.direct_capture_timeout(now),
+        state.frozen.portal_timeout(now),
+        state.zoom.portal_timeout(now),
+        state.surface.placement().xdg_frozen().timeout(now),
+    ]
+    .into_iter()
+    .fold(None, super::min_timeout)
 }
 
 fn handle_pending_frozen_image(state: &mut WaylandState, now: Instant) {

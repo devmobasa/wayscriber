@@ -180,7 +180,7 @@ impl FrozenState {
         self.direct_capture = Some(DirectCaptureAttempt::ExtImageCopy {
             session: Box::new(ExtImageCopySession::new(source, session, pool)),
             context: DirectCaptureContext::new(
-                CaptureLayoutContext::new(target_output_id, self.output_layout_generation),
+                CaptureLayoutContext::new(target_output_id, self.layout_generations.active_output),
                 source_geometry,
             ),
         });
@@ -405,7 +405,7 @@ impl FrozenState {
         (*capture).destroy();
         if !context
             .layout
-            .matches(self.active_output_id, self.output_layout_generation)
+            .matches(self.active_output_id, self.layout_generations.active_output)
         {
             return Ok(false);
         }

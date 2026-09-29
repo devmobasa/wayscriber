@@ -68,6 +68,21 @@ pub(in crate::backend::wayland) struct PendingBoardPaste {
 }
 
 impl CaptureLayoutContext {
+    pub(in crate::backend::wayland) fn for_desktop(
+        target_output_id: u32,
+        source: &super::frozen::FrozenState,
+    ) -> Self {
+        Self::new(target_output_id, source.desktop_layout_generation())
+    }
+
+    pub(in crate::backend::wayland) fn matches_desktop(
+        self,
+        active_output_id: Option<u32>,
+        source: &super::frozen::FrozenState,
+    ) -> bool {
+        self.matches(active_output_id, source.desktop_layout_generation())
+    }
+
     pub(in crate::backend::wayland) fn new(target_output_id: u32, layout_generation: u64) -> Self {
         Self {
             target_output_id,
@@ -618,5 +633,64 @@ mod tests {
         assert!(!context.matches(Some(8), 3));
         assert!(!context.matches(Some(7), 4));
         assert!(!context.matches(None, 3));
+    }
+
+    #[test]
+    fn desktop_capture_context_rejects_other_output_changes_with_unchanged_raster_size() {
+        use crate::backend::wayland::frozen::FrozenState;
+        use crate::backend::wayland::frozen_geometry::OutputGeometry;
+        use wayland_client::protocol::wl_output;
+
+        let mut source = FrozenState::new(None);
+        let mut backdrop = crate::capture::DesktopBackdropGeometry {
+            logical_x: 0,
+            logical_y: 0,
+            logical_width: 2,
+            logical_height: 1,
+            physical_width: Some(2),
+            physical_height: Some(1),
+            crop_x: Some(0),
+            crop_y: Some(0),
+            screenshot_width: Some(4),
+            screenshot_height: Some(1),
+        };
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((2, 1)),
+            (2, 1),
+            1,
+            wl_output::Transform::Normal,
+            Some((2, 1)),
+        )
+        .unwrap()
+        .with_desktop_backdrop_geometry(Some(backdrop))
+        .with_known_output_count(Some(2));
+        source.set_active_output(None, Some(7));
+        source.set_active_geometry(Some(geometry.clone()));
+        source.set_pending_output_image(
+            crate::backend::wayland::frozen::FrozenImage {
+                width: 2,
+                height: 1,
+                stride: 8,
+                data: vec![7; 8],
+            },
+            7,
+            geometry.clone(),
+        );
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        assert!(source.activate_pending_image(2, 1, &mut input).unwrap());
+        let context = CaptureLayoutContext::for_desktop(7, &source);
+        let direct_provenance = source.image_provenance().unwrap();
+
+        assert!(context.matches_desktop(Some(7), &source));
+        assert!(!context.matches_desktop(Some(8), &source));
+
+        backdrop.crop_x = Some(1);
+        source.set_active_geometry(Some(
+            geometry.with_desktop_backdrop_geometry(Some(backdrop)),
+        ));
+
+        assert!(source.source_context_matches(direct_provenance));
+        assert!(!context.matches_desktop(Some(7), &source));
     }
 }

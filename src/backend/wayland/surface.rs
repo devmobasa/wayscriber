@@ -442,6 +442,13 @@ impl SurfaceState {
         Ok(())
     }
 
+    /// A capture barrier may wake for a render only if a slot can be acquired.
+    /// Buffer releases wake Wayland dispatch; waiting on them avoids polling.
+    pub(super) fn has_available_buffer(&self, buffer_count: usize) -> bool {
+        self.slots.len() < buffer_count.max(1)
+            || self.slots.iter().any(|slot| !slot.has_active_buffers())
+    }
+
     /// Hands out a buffer for this frame, or `None` while the compositor still
     /// owns every slot.
     ///
@@ -505,6 +512,62 @@ impl SurfaceState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct BufferGlobals(wl_shm::WlShm);
+
+    wayland_client::delegate_noop!(BufferGlobals: ignore wayland_client::protocol::wl_registry::WlRegistry);
+    wayland_client::delegate_noop!(BufferGlobals: ignore wl_shm::WlShm);
+
+    impl smithay_client_toolkit::globals::ProvidesBoundGlobal<wl_shm::WlShm, 1> for BufferGlobals {
+        fn bound_global(
+            &self,
+        ) -> Result<wl_shm::WlShm, smithay_client_toolkit::error::GlobalError> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn capture_buffer_availability_tracks_real_slot_activation_release_and_pool_reset() {
+        // Only local client objects are needed: SCTK owns the slot/active-buffer
+        // bookkeeping. Keep a private socket peer alive; never use the desktop.
+        let (client, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        let connection = wayland_client::Connection::from_socket(client).unwrap();
+        let queue = connection.new_event_queue::<BufferGlobals>();
+        let qh = queue.handle();
+        let registry = connection.display().get_registry(&qh, ());
+        let globals = BufferGlobals(registry.bind::<wl_shm::WlShm, _, _>(1, 1, &qh, ()));
+        let mut pool = SlotPool::new(128, &globals).unwrap();
+        let mut surface = SurfaceState::new(SurfacePlacement::new(None, false, false));
+        let first = pool.new_slot(64).unwrap();
+        let second = pool.new_slot(64).unwrap();
+        let first_buffer = pool
+            .create_buffer_in(&first, 1, 1, 4, wl_shm::Format::Argb8888)
+            .unwrap();
+        let second_buffer = pool
+            .create_buffer_in(&second, 1, 1, 4, wl_shm::Format::Argb8888)
+            .unwrap();
+        surface.slots = vec![first, second];
+
+        assert!(surface.has_available_buffer(2));
+
+        first_buffer.activate().unwrap();
+
+        assert!(surface.has_available_buffer(2));
+
+        second_buffer.activate().unwrap();
+
+        assert!(!surface.has_available_buffer(2));
+        assert!(!surface.has_available_buffer(0));
+        assert!(surface.has_available_buffer(3));
+
+        first_buffer.deactivate().unwrap();
+
+        assert!(surface.has_available_buffer(2));
+
+        surface.drop_pool();
+
+        assert!(surface.has_available_buffer(0));
+    }
 
     #[test]
     fn frozen_fullscreen_deadline_uses_injected_time() {

@@ -4,6 +4,7 @@ use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
+#[cfg(test)]
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
@@ -37,7 +38,7 @@ impl FrozenState {
         )
         .map_err(anyhow::Error::msg)?;
 
-        let layout_generation = self.output_layout_generation;
+        let layout_generation = self.layout_generations.desktop;
         // Notify user that portal fallback is in progress
         crate::notification::send_notification_async(
             tokio_handle,
@@ -54,16 +55,17 @@ impl FrozenState {
                         CaptureError::ImageError(format!("Decode failed: {error}"))
                     })?;
 
+                    let image = crate::backend::wayland::portal_raster::crop_portal_raster(
+                        data,
+                        width,
+                        height,
+                        &source_geometry,
+                    );
                     Ok((
                         Some(target_output_id),
                         layout_generation,
                         Some(source_geometry),
-                        FrozenImage {
-                            width,
-                            height,
-                            stride: (width * 4) as i32,
-                            data,
-                        },
+                        image,
                     ))
                 }
                 .await
@@ -73,7 +75,12 @@ impl FrozenState {
     }
 
     /// Check for completed portal capture and apply result if present.
-    pub fn poll_portal_capture(&mut self, input_state: &mut InputState, now: Instant) {
+    pub fn poll_portal_capture(
+        &mut self,
+        input_state: &mut InputState,
+        now: Instant,
+        live_output_count: Option<u32>,
+    ) {
         if !self.portal.is_running() {
             return;
         }
@@ -104,26 +111,14 @@ impl FrozenState {
         let poll = self.portal.poll();
         match poll {
             PortalPoll::Ready(Ok((target_output, layout_generation, source_geometry, image))) => {
-                let output_matches = portal_output_matches(target_output, self.active_output_id);
-                let layout_matches = layout_generation == self.output_layout_generation;
-
-                if output_matches && layout_matches {
-                    self.set_pending_desktop_image(image, target_output, source_geometry);
-                } else {
-                    if !layout_matches {
-                        warn!("Portal capture discarded after the output layout changed");
-                    } else {
-                        warn!("Portal capture for inactive output discarded");
-                    }
-                    if self.has_acquisition_attempt() {
-                        self.finish_acquisition(ScreenAcquisitionOutcome::StaleLayout, input_state);
-                    } else {
-                        Self::push_stale_layout_toast(input_state);
-                        self.capture_done = true;
-                    }
-                }
-
-                self.finish_portal_task();
+                self.apply_portal_image(
+                    target_output,
+                    layout_generation,
+                    source_geometry,
+                    image,
+                    input_state,
+                    live_output_count,
+                );
             }
             PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
                 log::info!("Portal frozen capture cancelled: {reason}");
@@ -199,6 +194,72 @@ impl FrozenState {
         }
     }
 
+    fn apply_portal_image(
+        &mut self,
+        target_output: Option<u32>,
+        layout_generation: u64,
+        source_geometry: Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
+        image: Result<crate::backend::wayland::frozen::FrozenImage, CaptureError>,
+        input_state: &mut InputState,
+        live_output_count: Option<u32>,
+    ) {
+        log::info!(
+            "portal.freeze captured_output={target_output:?} active_output={:?} captured_layout={layout_generation} active_layout={}",
+            self.active_output_id,
+            self.layout_generations.desktop
+        );
+        let output_matches = portal_output_matches(target_output, self.active_output_id);
+        // SCTK can advertise a wl_output before its new_output callback
+        // refreshes geometry. Discard that snapshot before reading a crop error.
+        let topology_changed = source_geometry
+            .as_ref()
+            .is_some_and(|geometry| geometry.output_count_conflicts_with_live(live_output_count));
+        let layout_matches =
+            layout_generation == self.layout_generations.desktop && !topology_changed;
+
+        if output_matches && layout_matches {
+            match image {
+                Ok(image) => self.set_pending_portal_image(image, target_output, source_geometry),
+                Err(err) => {
+                    warn!("Portal frozen raster rejected: {err}");
+                    if self.has_acquisition_attempt() {
+                        self.finish_preflight_failure(
+                            crate::backend::wayland::capture_preflight::CapturePreflightError::Backend(
+                                err.to_string(),
+                            ),
+                            input_state,
+                        );
+                    } else {
+                        input_state.push_toast(
+                            ToastPriority::Critical,
+                            "freeze",
+                            Toast::error(err.to_string()),
+                        );
+                        input_state.set_frozen_active(false);
+                        self.capture_done = true;
+                    }
+                }
+            }
+        } else {
+            if !layout_matches {
+                warn!("Portal capture discarded after the output layout changed");
+            } else {
+                warn!("Portal capture for inactive output discarded");
+            }
+            if self.queue_portal_layout_retry(target_output, !layout_matches) {
+                return;
+            }
+            if self.has_acquisition_attempt() {
+                self.finish_acquisition(ScreenAcquisitionOutcome::StaleLayout, input_state);
+            } else {
+                Self::push_stale_layout_toast(input_state);
+                self.capture_done = true;
+            }
+        }
+
+        self.finish_portal_task();
+    }
+
     pub fn portal_timeout(&self, now: Instant) -> Option<Duration> {
         self.portal.timeout(now)
     }
@@ -242,6 +303,7 @@ mod tests {
             screenshot_origin: Some(origin),
             screenshot_size: None,
             known_output_count: None,
+            portal_outputs: None,
         }
     }
 
@@ -250,13 +312,44 @@ mod tests {
         input: &mut InputState,
     ) -> anyhow::Result<()> {
         for _ in 0..100 {
-            frozen.poll_portal_capture(input, Instant::now());
+            frozen.poll_portal_capture(input, Instant::now(), None);
             if !frozen.portal.is_running() {
                 return Ok(());
             }
             tokio::task::yield_now().await;
         }
         anyhow::bail!("frozen portal task did not finish")
+    }
+
+    #[test]
+    fn live_topology_is_checked_before_a_crop_error() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let owner = ScreenAcquisitionOwner::Ocr;
+        let id = registry.request(owner).unwrap();
+        let geometry = crop_geometry((0, 0)).with_known_output_count(Some(1));
+        frozen.set_active_output(None, Some(1));
+        frozen.set_active_geometry(Some(geometry.clone()));
+        frozen.start_capture_for(id, owner).unwrap();
+        frozen.take_preflight_pending();
+        let generation = frozen.layout_generations.desktop;
+
+        frozen.apply_portal_image(
+            Some(1),
+            generation,
+            Some(geometry),
+            Err(CaptureError::ImageError("stale raster size".to_string())),
+            &mut input,
+            Some(2),
+        );
+
+        assert!(frozen.has_portal_layout_retry());
+        assert!(frozen.has_acquisition_attempt());
+        assert!(!frozen.has_pending_image());
+        assert!(frozen.take_acquisition_completion().is_none());
+        assert!(!frozen.take_capture_done());
     }
 
     #[tokio::test]
@@ -291,7 +384,7 @@ mod tests {
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), image(0))) },
+            async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), Ok(image(0)))) },
         ));
         poll_until_finished(&mut frozen, &mut input).await?;
 
@@ -358,7 +451,7 @@ mod tests {
                 PortalTask::disconnected_for_test(now)
             });
 
-            frozen.poll_portal_capture(&mut input, now);
+            frozen.poll_portal_capture(&mut input, now, None);
 
             assert!(!frozen.is_in_progress());
             assert!(!frozen.portal.is_running());
@@ -436,7 +529,7 @@ mod tests {
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, None, image(9))) },
+            async { Ok((Some(1), 0, None, Ok(image(9)))) },
         ));
 
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -454,11 +547,11 @@ mod tests {
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         frozen.set_active_geometry(Some(crop_geometry((0, 0))));
-        let layout_generation = frozen.output_layout_generation;
+        let layout_generation = frozen.layout_generations.desktop;
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, None, image(9))) },
+            async move { Ok((None, layout_generation, None, Ok(image(9)))) },
         ));
         frozen.set_active_geometry(Some(crop_geometry((6, 0))));
 
@@ -478,11 +571,11 @@ mod tests {
         let mut input = make_test_input_state();
         let geometry = crop_geometry((0, 0));
         frozen.set_active_geometry(Some(geometry.clone()));
-        let layout_generation = frozen.output_layout_generation;
+        let layout_generation = frozen.layout_generations.desktop;
         frozen.portal.start(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, None, image(0))) },
+            async move { Ok((None, layout_generation, None, Ok(image(0)))) },
         ));
         frozen.set_active_geometry(Some(geometry));
 

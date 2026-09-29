@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
@@ -20,7 +21,10 @@ fn finish_zoom_preflight_cancellation(
     message: &str,
 ) -> bool {
     let terminal_will_report = zoom.current_capture_id().is_some();
-    zoom.finish_preflight_failure(input_state, message.to_string());
+    zoom.finish_preflight_failure(
+        input_state,
+        CapturePreflightError::Backend(message.to_string()),
+    );
     terminal_will_report
 }
 
@@ -176,6 +180,16 @@ impl OverlayCaptureBarrier {
         Some(active.reason)
     }
 
+    fn submission_timeout(&self, can_render: bool, render_delay: Duration) -> Option<Duration> {
+        self.active
+            .filter(|active| {
+                can_render
+                    && active.gtk_paint_generation.is_none()
+                    && active.main_surface_phase == MainSurfaceCapturePhase::AwaitingRender
+            })
+            .map(|_| render_delay)
+    }
+
     fn frame_timeout(&self, now: Instant) -> Option<Duration> {
         let active = self.active?;
         if active.main_surface_phase != MainSurfaceCapturePhase::AwaitingFrame {
@@ -224,8 +238,20 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn overlay_capture_barrier_timeout(
         &self,
         now: Instant,
+        render_delay: Duration,
     ) -> Option<Duration> {
-        self.suppression.barrier.frame_timeout(now)
+        self.suppression
+            .barrier
+            .submission_timeout(
+                self.surface.is_configured()
+                    && !self.surface.frame_callback_pending()
+                    && self.input_state.needs_redraw
+                    && self
+                        .surface
+                        .has_available_buffer(self.config.performance.buffer_count as usize),
+                render_delay,
+            )
+            .or_else(|| self.suppression.barrier.frame_timeout(now))
     }
 
     pub(in crate::backend::wayland) fn poll_overlay_capture_barrier_timeout(
@@ -349,9 +375,14 @@ impl WaylandState {
                     &self.tokio_handle,
                 ) {
                     log::warn!("Frozen preflight capture failed: {err}");
+                    if self.frozen.retry_stale_portal_preflight(backend) {
+                        return;
+                    }
                     if self.frozen.has_acquisition_attempt() {
-                        self.frozen
-                            .finish_preflight_failure(err.to_string(), &mut self.input_state);
+                        self.frozen.finish_preflight_failure(
+                            CapturePreflightError::from_backend(err),
+                            &mut self.input_state,
+                        );
                     } else {
                         self.input_state.push_toast(
                             ToastPriority::Critical,
@@ -363,20 +394,25 @@ impl WaylandState {
                 }
             }
             OverlaySuppression::Zoom => {
-                let Some(use_fallback) = self.zoom.take_preflight_pending() else {
+                let Some(backend) = self.zoom.take_preflight_pending() else {
                     log::warn!("Zoom capture barrier completed without a pending preflight");
                     self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
                 if let Err(err) = self.zoom.begin_preflight_capture(
-                    use_fallback,
+                    backend,
                     self.protocol.shm(),
                     qh,
                     &self.tokio_handle,
                 ) {
                     log::warn!("Zoom preflight capture failed: {err}");
-                    self.zoom
-                        .finish_preflight_failure(&mut self.input_state, err.to_string());
+                    if self.zoom.retry_stale_portal_preflight(backend) {
+                        return;
+                    }
+                    self.zoom.finish_preflight_failure(
+                        &mut self.input_state,
+                        CapturePreflightError::from_backend(err),
+                    );
                 }
             }
             OverlaySuppression::Capture | OverlaySuppression::DesktopBackdrop => {
@@ -452,6 +488,51 @@ mod tests {
     use crate::backend::wayland::state::acquisition::report_zoom_terminal_to;
     use crate::backend::wayland::zoom::ZoomWaiterOwner;
     use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn completed_barrier_retry_requires_fresh_gtk_and_main_presentations() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        let first = barrier.begin(OverlaySuppression::Frozen, true).unwrap();
+        assert!(barrier.acknowledge_gtk_paint(first));
+        assert_eq!(barrier.begin_main_surface_submission(), Some(first));
+        barrier.mark_main_surface_frame_ready(first);
+        assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
+
+        let retry = barrier.begin(OverlaySuppression::Frozen, true).unwrap();
+        assert_eq!(barrier.submission_timeout(true, Duration::ZERO), None);
+        assert_ne!(retry, first);
+        assert!(!barrier.acknowledge_gtk_paint(first));
+        barrier.mark_main_surface_frame_ready(first);
+        assert_eq!(barrier.begin_main_surface_submission(), None);
+        assert_eq!(barrier.take_ready(), None);
+        assert!(barrier.acknowledge_gtk_paint(retry));
+        assert_eq!(
+            barrier.submission_timeout(true, Duration::ZERO),
+            Some(Duration::ZERO)
+        );
+        assert_eq!(barrier.submission_timeout(false, Duration::ZERO), None);
+        assert_eq!(barrier.take_ready(), None);
+        assert_eq!(barrier.begin_main_surface_submission(), Some(retry));
+        assert_eq!(barrier.submission_timeout(true, Duration::ZERO), None);
+        barrier.mark_main_surface_frame_ready(first);
+        assert_eq!(barrier.take_ready(), None);
+        barrier.mark_main_surface_frame_ready(retry);
+        assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
+    }
+
+    #[test]
+    fn submission_wakeup_respects_buffer_availability_and_frame_pacing() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        barrier.begin(OverlaySuppression::Zoom, false);
+        let cap_delay = Duration::from_millis(16);
+
+        assert_eq!(barrier.submission_timeout(false, Duration::ZERO), None);
+        assert_eq!(barrier.submission_timeout(true, cap_delay), Some(cap_delay));
+        assert_eq!(
+            barrier.submission_timeout(true, Duration::ZERO),
+            Some(Duration::ZERO)
+        );
+    }
 
     #[test]
     fn main_surface_frame_deadline_starts_only_after_submission() {
@@ -642,7 +723,7 @@ mod tests {
         for owner in [Some(ZoomWaiterOwner::Ocr), None] {
             let mut zoom = crate::backend::wayland::zoom::ZoomState::new(None);
             let mut input_state = make_test_input_state();
-            zoom.start_capture(false, &tokio::runtime::Handle::current())
+            zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
                 .expect("identified zoom capture");
 
             assert!(finish_zoom_preflight_cancellation(

@@ -7,11 +7,13 @@
 - `capture.rs` coordinates frozen capture setup.
 - `image.rs` owns frozen image data handling.
 - `portal.rs` provides portal-based fallback behavior.
-- `state.rs` tracks frozen-mode state.
+- `state.rs` tracks frozen-mode state and acquisition ownership. `state/activation.rs` validates and installs completed output images and owns their resize, unfreeze, and cancellation lifecycle; `state/direct.rs` owns direct attempt resources and deadlines.
+- `retry.rs` retains the original Freeze acquisition through the shared portal settling policy and fresh preflight.
 
 ## Invariants
 - Preserve overlay-hide, capture, restore, and render ordering.
 - Treat user cancellation as cancellation, not a hard failure.
+- Portal crop and resampling run in the worker through `../portal_raster.rs`. Activation checks identity, layout, topology, and native dimensions before installation.
 - Keep coordinate and scale handling aligned with `src/backend/wayland/frozen_geometry.rs`, zoom behavior, and render state.
 
 ## Coupled Changes

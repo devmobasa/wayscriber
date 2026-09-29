@@ -91,13 +91,14 @@ impl FrozenState {
         }
 
         self.capture_done = false;
+        self.layout_retry = Default::default();
         let backend = self
             .preferred_backend()
             .context("no frozen capture backend is available")?;
         self.preflight.begin(
             backend,
             self.active_output_id,
-            self.output_layout_generation,
+            self.capture_layout_generation(backend),
         );
         Ok(())
     }
@@ -248,7 +249,7 @@ impl FrozenState {
         self.direct_capture = Some(DirectCaptureAttempt::WlrScreencopy {
             session: Box::new(capture),
             context: DirectCaptureContext::new(
-                CaptureLayoutContext::new(target_output_id, self.output_layout_generation),
+                CaptureLayoutContext::new(target_output_id, self.layout_generations.active_output),
                 source_geometry,
             ),
         });
@@ -420,7 +421,7 @@ impl FrozenState {
         let image = result?;
         if !context
             .layout
-            .matches(self.active_output_id, self.output_layout_generation)
+            .matches(self.active_output_id, self.layout_generations.active_output)
         {
             return Ok(false);
         }

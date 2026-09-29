@@ -10,6 +10,7 @@ mod handlers;
 pub(crate) mod input_monitor;
 mod overlay_passthrough;
 mod portal_capture;
+mod portal_raster;
 mod portal_task;
 mod runtime_operation;
 mod runtime_ui_state;

@@ -1,6 +1,6 @@
 use wayland_client::protocol::wl_output;
 
-use crate::capture::DesktopBackdropGeometry;
+use crate::capture::{DesktopBackdropGeometry, DesktopBackdropOutputGeometry};
 
 /// Geometry and scale details for the active output, used for cropping fallback captures.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,9 +27,61 @@ pub struct OutputGeometry {
     /// Number of live `wl_output` objects when this snapshot was taken.
     /// `None` means topology was not recorded (tests / incomplete refresh).
     pub(super) known_output_count: Option<u32>,
+    /// Complete, sorted logical/native output snapshot for uniform portal rasters.
+    pub(super) portal_outputs: Option<Vec<DesktopBackdropOutputGeometry>>,
 }
 
 impl OutputGeometry {
+    /// Identity of the active viewport, independent of portal desktop bounds.
+    pub(super) fn same_active_output(before: Option<&Self>, after: Option<&Self>) -> bool {
+        match (before, after) {
+            (Some(before), Some(after)) => {
+                before.logical_x == after.logical_x
+                    && before.logical_y == after.logical_y
+                    && before.logical_width == after.logical_width
+                    && before.logical_height == after.logical_height
+                    && before.scale == after.scale
+                    && before.transform == after.transform
+                    && before.overlay_buffer_size == after.overlay_buffer_size
+                    && before.pixel_size == after.pixel_size
+            }
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    pub(super) fn active_output_is_in_portal_snapshot(&self) -> bool {
+        let Some(target) = self.verified_pixel_size() else {
+            return false;
+        };
+
+        self.portal_outputs.as_ref().is_some_and(|outputs| {
+            outputs.iter().any(|output| {
+                output.logical_x == self.logical_x
+                    && output.logical_y == self.logical_y
+                    && output.logical_width == self.logical_width
+                    && output.logical_height == self.logical_height
+                    && (output.physical_width, output.physical_height) == target
+            })
+        })
+    }
+
+    /// Multi-output portal inference requires metadata for every live output.
+    /// A proven single output can also use its exact native-size screenshot.
+    pub(super) fn portal_layout_is_complete(&self) -> bool {
+        if self.verified_pixel_size().is_none() {
+            return false;
+        }
+
+        match self.known_output_count {
+            Some(1) => true,
+            Some(count) if count > 1 => self.portal_outputs.as_ref().is_some_and(|outputs| {
+                outputs.len() == count as usize && self.active_output_is_in_portal_snapshot()
+            }),
+            _ => false,
+        }
+    }
+
     pub fn update_from(
         logical_pos: Option<(i32, i32)>,
         logical_size: Option<(i32, i32)>,
@@ -68,6 +120,7 @@ impl OutputGeometry {
             screenshot_origin: None,
             screenshot_size: None,
             known_output_count: None,
+            portal_outputs: None,
         })
     }
 }
@@ -444,6 +497,26 @@ impl OutputGeometry {
             self.screenshot_origin = geometry.physical_origin();
             self.screenshot_size = geometry.screenshot_size();
         }
+        self
+    }
+
+    pub(super) fn with_portal_outputs(
+        mut self,
+        outputs: Option<Vec<DesktopBackdropOutputGeometry>>,
+    ) -> Self {
+        self.portal_outputs = outputs.map(|mut outputs| {
+            outputs.sort_by_key(|output| {
+                (
+                    output.logical_x,
+                    output.logical_y,
+                    output.logical_width,
+                    output.logical_height,
+                    output.physical_width,
+                    output.physical_height,
+                )
+            });
+            outputs
+        });
         self
     }
 
