@@ -118,6 +118,7 @@ mod tests {
             data: vec![byte; 8],
         }
     }
+
     async fn drain(zoom: &mut ZoomState, input: &mut crate::input::InputState) {
         for _ in 0..100 {
             zoom.poll_portal_capture(input, Instant::now(), Some(1));
@@ -126,6 +127,7 @@ mod tests {
             }
             tokio::task::yield_now().await;
         }
+
         panic!("portal task did not finish");
     }
 
@@ -150,6 +152,7 @@ mod tests {
                 owner: ZoomWaiterOwner::Ocr
             }));
             zoom.request_activation();
+
             let old_generation = zoom.portal_layout_generation;
             zoom.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
@@ -169,8 +172,11 @@ mod tests {
                     ))
                 },
             ));
+
             zoom.set_active_geometry(Some(geometry(8)));
+
             drain(&mut zoom, &mut input).await;
+
             assert!(zoom.is_in_progress());
             assert!(zoom.has_portal_layout_retry());
             assert!(zoom.pending_activation);
@@ -186,6 +192,7 @@ mod tests {
                 Some(ZoomCaptureBackend::Portal)
             );
             assert!(zoom.ensure_preflight_layout_current().is_ok());
+
             let fresh_generation = zoom.portal_layout_generation;
             zoom.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
@@ -205,16 +212,20 @@ mod tests {
                     ))
                 },
             ));
+
             if second_change {
                 zoom.set_active_geometry(Some(geometry(16)));
             }
+
             drain(&mut zoom, &mut input).await;
+
             let terminal = zoom.take_source_terminal().unwrap();
             assert_eq!(terminal.id, id);
             assert!(waiters.take_for_terminal(&terminal).unwrap().1);
             assert!(!zoom.has_portal_layout_retry());
             assert!(zoom.take_capture_done());
             assert!(zoom.take_source_terminal().is_none());
+
             if second_change {
                 assert_eq!(terminal.outcome, ZoomSourceOutcome::StaleLayout);
                 assert!(!zoom.active);
@@ -266,9 +277,11 @@ mod tests {
             if cancelled {
                 zoom.set_active_geometry(Some(geometry(8)));
             }
+
             drain(&mut zoom, &mut input).await;
             assert!(!zoom.has_portal_layout_retry());
             assert!(!zoom.is_in_progress());
+
             let terminal = zoom.take_source_terminal().unwrap();
             assert_eq!(terminal.id, id);
             assert!(if cancelled {

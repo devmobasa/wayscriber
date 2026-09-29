@@ -37,6 +37,7 @@ fn advance_portal_layout_retries(
     now: Instant,
 ) -> bool {
     let mut restarted = false;
+
     if frozen.has_portal_layout_retry() {
         match restart_suppressed_portal_retry(
             suppression,
@@ -128,10 +129,12 @@ mod tests {
                 frozen.set_active_geometry(Some(geometry.clone()));
                 zoom.set_active_output(None, Some(1));
                 zoom.set_active_geometry(Some(geometry.clone()));
+
                 let mut registry = ScreenAcquisitionRegistry::default();
                 let owner = ScreenAcquisitionOwner::Ocr;
                 let id = registry.request(owner).unwrap();
                 let mut zoom_id = None;
+
                 let mut changed = geometry;
                 changed.logical_x = 8;
                 if reason == OverlaySuppression::Frozen {
@@ -162,6 +165,7 @@ mod tests {
                     )
                     .unwrap();
                 let first_gtk = suppression.barrier.gtk_paint_generation();
+
                 if failure == Some("output") {
                     frozen.set_active_output(None, Some(2));
                     zoom.set_active_output(None, Some(2));
@@ -170,6 +174,7 @@ mod tests {
                     frozen.set_active_geometry(None);
                     zoom.set_active_geometry(None);
                 }
+
                 let now = Instant::now();
 
                 if failure.is_none() {
@@ -183,6 +188,7 @@ mod tests {
                     ));
                     assert_eq!(suppression.barrier.gtk_paint_generation(), first_gtk);
                 }
+
                 let admitted = advance_portal_layout_retries(
                     &mut frozen,
                     &mut zoom,

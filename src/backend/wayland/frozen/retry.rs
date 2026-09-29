@@ -107,6 +107,7 @@ mod tests {
         .unwrap()
         .with_known_output_count(Some(1))
     }
+
     async fn drain(frozen: &mut FrozenState, input: &mut crate::input::InputState) {
         for _ in 0..100 {
             frozen.poll_portal_capture(input, Instant::now(), None);
@@ -115,6 +116,7 @@ mod tests {
             }
             tokio::task::yield_now().await;
         }
+
         panic!("portal task did not finish");
     }
 
@@ -134,6 +136,7 @@ mod tests {
                 frozen.take_preflight_pending(),
                 Some(FrozenCaptureBackend::Portal)
             );
+
             let old_generation = frozen.portal_layout_generation;
             frozen.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
@@ -147,8 +150,11 @@ mod tests {
                     ))
                 },
             ));
+
             frozen.set_active_geometry(Some(geometry(8)));
+
             drain(&mut frozen, &mut input).await;
+
             assert!(frozen.has_portal_layout_retry());
             assert!(frozen.has_acquisition_attempt());
             assert!(!frozen.take_capture_done());
@@ -162,6 +168,7 @@ mod tests {
                 frozen.take_preflight_pending(),
                 Some(FrozenCaptureBackend::Portal)
             );
+
             let fresh_generation = frozen.portal_layout_generation;
             frozen.portal.start(PortalTask::spawn(
                 &tokio::runtime::Handle::current(),
@@ -180,15 +187,18 @@ mod tests {
                     ))
                 },
             ));
+
             if second_change {
                 frozen.set_active_geometry(Some(geometry(16)));
             }
+
             drain(&mut frozen, &mut input).await;
             if !second_change {
                 assert!(frozen.activate_pending_image(2, 1, &mut input).unwrap());
                 assert_eq!(frozen.image().unwrap().data, vec![9; 8]);
                 assert!(input.frozen_active());
             }
+
             let terminal = frozen.take_acquisition_completion().unwrap();
             assert_eq!((terminal.id, terminal.owner), (id, owner));
             assert!(if second_change {
@@ -289,6 +299,7 @@ mod tests {
 
             assert!(!frozen.has_portal_layout_retry());
             assert!(!frozen.is_in_progress());
+
             let terminal = frozen.take_acquisition_completion().unwrap();
             assert_eq!((terminal.id, terminal.owner), (id, owner));
             assert!(if cancelled {
@@ -310,6 +321,7 @@ mod tests {
             assert!(frozen.queue_portal_layout_retry(Some(1), true));
             if switch_output {
                 frozen.set_active_output(None, Some(2));
+
                 assert!(frozen.restart_portal_preflight(Instant::now()).is_err());
             }
 

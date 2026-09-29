@@ -30,6 +30,7 @@ impl LogicalDesktop {
         let (mut right, mut bottom) = (x, y);
         // KWin CaptureWorkspace uses at least 1x, then the maximum output scale.
         let (mut density_min, mut density_max) = (1.0_f64, 1.0_f64);
+
         for output in outputs {
             if output.logical_width == 0
                 || output.logical_height == 0
@@ -38,10 +39,12 @@ impl LogicalDesktop {
             {
                 return None;
             }
+
             x = x.min(i64::from(output.logical_x));
             y = y.min(i64::from(output.logical_y));
             right = right.max(i64::from(output.logical_x) + i64::from(output.logical_width));
             bottom = bottom.max(i64::from(output.logical_y) + i64::from(output.logical_height));
+
             // xdg-output rounds logical sizes to integers. Intersect both axes'
             // scale intervals instead of treating wl_output's integer scale as native density.
             let lower = (f64::from(output.physical_width)
@@ -53,9 +56,11 @@ impl LogicalDesktop {
             if lower > upper {
                 return None;
             }
+
             density_min = density_min.max(lower);
             density_max = density_max.max(upper);
         }
+
         Some(Self {
             x,
             y,
@@ -71,6 +76,7 @@ impl LogicalDesktop {
         if self.width == 0 || self.height == 0 || width == 0 || height == 0 {
             return None;
         }
+
         let lower = ((f64::from(width) - 0.5) / f64::from(self.width))
             .max((f64::from(height) - 0.5) / f64::from(self.height));
         let upper = ((f64::from(width) + 0.5) / f64::from(self.width))
@@ -78,6 +84,7 @@ impl LogicalDesktop {
         if lower > upper || lower > self.density_max || upper < self.density_min {
             return None;
         }
+
         let x = i64::from(geometry.logical_x).checked_sub(self.x)?;
         let y = i64::from(geometry.logical_y).checked_sub(self.y)?;
         let right = x.checked_add(i64::from(geometry.logical_width))?;
@@ -85,10 +92,12 @@ impl LogicalDesktop {
         if x < 0 || y < 0 || right > i64::from(self.width) || bottom > i64::from(self.height) {
             return None;
         }
+
         let map_x =
             |edge: i64| (edge as f64 * f64::from(width) / f64::from(self.width)).round() as u32;
         let map_y =
             |edge: i64| (edge as f64 * f64::from(height) / f64::from(self.height)).round() as u32;
+
         Some(Crop {
             x: map_x(x),
             y: map_y(y),
@@ -112,6 +121,7 @@ pub(super) fn crop_portal_raster(
     if width == 0 || height == 0 || expected_len != Some(data.len()) {
         return Err(error("Portal capture buffer does not match its dimensions"));
     }
+
     let target = geometry
         .verified_pixel_size()
         .ok_or_else(|| error("Portal capture output dimensions are unavailable"))?;
@@ -120,6 +130,7 @@ pub(super) fn crop_portal_raster(
             "Portal capture aspect does not match the overlay surface",
         ));
     }
+
     let packed = geometry
         .portal_crop_origin(width, height)
         .map(|(x, y)| Crop {
@@ -129,6 +140,7 @@ pub(super) fn crop_portal_raster(
             height: target.1,
         })
         .filter(|crop| contains_crop((width, height), *crop));
+
     let desktop = geometry
         .portal_outputs
         .as_deref()
@@ -142,6 +154,7 @@ pub(super) fn crop_portal_raster(
         (Some(crop), _) | (_, Some(crop)) => Some(crop),
         _ => None,
     };
+
     log::info!(
         "portal.raster image={}x{} packed_expected={:?} logical_desktop={:?} crop={:?} target={:?}",
         width,
@@ -151,12 +164,14 @@ pub(super) fn crop_portal_raster(
         crop,
         target,
     );
+
     let crop = crop.ok_or_else(|| {
         error("Portal capture does not match an unambiguous active output layout")
     })?;
     if !contains_crop((width, height), crop) {
         return Err(error("Portal capture does not contain the active output"));
     }
+
     let (_, _, data) = crop_argb(
         &data,
         width,
@@ -167,6 +182,7 @@ pub(super) fn crop_portal_raster(
         crop.height,
     )
     .ok_or_else(|| error("Portal capture crop is invalid"))?;
+
     resample(data, (crop.width, crop.height), target)
 }
 
@@ -205,6 +221,7 @@ fn resample(
             data,
         });
     }
+
     // Cairo filters premultiplied ARGB directly, avoiding alpha/color corruption.
     let map_error = |err: cairo::Error| {
         CaptureError::ImageError(format!("Portal image resampling failed: {err}"))
@@ -228,6 +245,7 @@ fn resample(
         dimension(target.1)?,
     )
     .map_err(map_error)?;
+
     {
         let context = cairo::Context::new(&dst).map_err(map_error)?;
         context.scale(
@@ -242,10 +260,12 @@ fn resample(
         context.set_operator(cairo::Operator::Source);
         context.paint().map_err(map_error)?;
     }
+
     let data = dst
         .data()
         .map_err(|err| CaptureError::ImageError(format!("Portal image pixels unavailable: {err}")))?
         .to_vec();
+
     Ok(ScreenImage {
         width: target.0,
         height: target.1,
@@ -320,8 +340,70 @@ mod tests {
                     .copy_from_slice(&0xff123456_u32.to_ne_bytes());
             }
         }
+
         let image = crop_portal_raster(data, 16, 20, &geo).unwrap();
+
         assert_eq!(image.data, 0xff123456_u32.to_ne_bytes().repeat(4 * 8));
+    }
+
+    #[test]
+    fn rotated_output_uses_transformed_native_dimensions_without_rotating_pixels_again() {
+        let outputs = [output(0, 0, (8, 4), (8, 4)), output(8, 0, (1, 3), (2, 6))];
+        let mut geo = geometry(outputs[1], &outputs);
+        geo.transform = wl_output::Transform::_90;
+        geo.scale = 2;
+        geo.overlay_buffer_size = (2, 6);
+        let mut data = 0xff000000_u32.to_ne_bytes().repeat(18 * 8);
+        let mut expected = Vec::new();
+        for y in 0..6 {
+            for x in 16..18 {
+                let pixel = (0xff000000_u32 | ((y + 1) << 8) | x).to_ne_bytes();
+                data[((y * 18 + x) * 4) as usize..((y * 18 + x + 1) * 4) as usize]
+                    .copy_from_slice(&pixel);
+                expected.extend_from_slice(&pixel);
+            }
+        }
+
+        let image = crop_portal_raster(data, 18, 8, &geo).unwrap();
+
+        assert_eq!((image.width, image.height), (2, 6));
+        assert_eq!(image.data, expected);
+    }
+
+    #[test]
+    fn native_sized_raster_requires_a_proven_single_output_when_bounds_are_missing() {
+        let geometry = OutputGeometry::update_from(
+            Some((10, 20)),
+            Some((2, 1)),
+            (2, 1),
+            1,
+            wl_output::Transform::Normal,
+            Some((2, 1)),
+        )
+        .unwrap();
+        let pixels = [0xff123456_u32, 0xff654321_u32]
+            .into_iter()
+            .flat_map(u32::to_ne_bytes)
+            .collect::<Vec<_>>();
+
+        assert!(
+            crop_portal_raster(
+                pixels.clone(),
+                2,
+                1,
+                &geometry.clone().with_known_output_count(Some(2))
+            )
+            .is_err()
+        );
+        let image = crop_portal_raster(
+            pixels.clone(),
+            2,
+            1,
+            &geometry.with_known_output_count(Some(1)),
+        )
+        .unwrap();
+
+        assert_eq!(image.data, pixels);
     }
 
     #[test]
@@ -333,7 +415,9 @@ mod tests {
         ];
         let geo = geometry(outputs[1], &outputs);
         let desktop = LogicalDesktop::from_outputs(&outputs).unwrap();
+
         let crop = desktop.crop(&geo, (3584, 1080)).unwrap();
+
         assert_eq!(
             crop,
             Crop {
@@ -363,7 +447,9 @@ mod tests {
             .into_iter()
             .flat_map(u32::to_ne_bytes)
             .collect();
+
         let image = resample(data, (2, 1), (1, 1)).unwrap();
+
         assert_eq!(image.data, 0x80404040_u32.to_ne_bytes());
     }
 

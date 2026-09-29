@@ -6,6 +6,7 @@ use super::frozen_geometry::OutputGeometry;
 const PORTAL_LAYOUT_QUIET_PERIOD: Duration = Duration::from_millis(100);
 const PORTAL_LAYOUT_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
 const INCOMPLETE_LAYOUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CaptureLayout {
     output_id: Option<u32>,
@@ -45,7 +46,9 @@ impl<B: Copy> CapturePreflight<B> {
         let Self::Pending { backend, layout } = *self else {
             return None;
         };
+
         *self = Self::Capturing { backend, layout };
+
         Some(backend)
     }
 
@@ -61,6 +64,7 @@ impl<B: Copy> CapturePreflight<B> {
             Self::Idle => return false,
             Self::Pending { layout, .. } | Self::Capturing { layout, .. } => layout,
         };
+
         layout.output_id.is_some()
             && layout.output_id == output_id
             && layout.generation != generation
@@ -71,6 +75,7 @@ impl<B: Copy> CapturePreflight<B> {
             Self::Idle => return true,
             Self::Pending { layout, .. } | Self::Capturing { layout, .. } => layout,
         };
+
         super::portal_capture::layout_token_matches(
             layout.output_id,
             layout.generation,
@@ -116,6 +121,7 @@ impl PortalLayoutRetry {
             not_before: now + PORTAL_LAYOUT_QUIET_PERIOD,
             deadline: now + PORTAL_LAYOUT_SETTLE_TIMEOUT,
         };
+
         true
     }
 
@@ -162,6 +168,7 @@ impl PortalLayoutRetry {
             *self = Self::Spent;
             return Err("Screen capture failed because the display layout did not settle.");
         }
+
         if active_generation != *generation {
             *generation = active_generation;
             *not_before = now + PORTAL_LAYOUT_QUIET_PERIOD;
