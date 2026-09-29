@@ -387,6 +387,7 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
     super::super::protocol_v2::write_runtime_record_v2(&crate::paths::daemon_pid_file(), &runtime)
         .unwrap();
+    let _daemon_lock = hold_daemon_lock();
 
     let observed_modes = Arc::new(Mutex::new(Vec::new()));
     let runner_modes = Arc::clone(&observed_modes);
@@ -562,6 +563,22 @@ fn with_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
     result
 }
 
+/// Holds the single-instance lock as a running daemon does, so clients reach
+/// the harness instead of reporting that no daemon is running.
+fn hold_daemon_lock() -> std::fs::File {
+    let path = daemon_lock_file();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lock = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .unwrap();
+    try_lock_exclusive(&lock).unwrap();
+    lock
+}
+
 /// A daemon that starts its overlay as a process (no internal runner) and is
 /// inside the backoff window after a spawn failure, so it attempts no start.
 fn daemon_in_spawn_backoff() -> Daemon {
@@ -584,6 +601,7 @@ fn typed_v2_requests_during_spawn_backoff_fail_without_an_effect() {
             &runtime,
         )
         .unwrap();
+        let _daemon_lock = hold_daemon_lock();
         let mut daemon = daemon_in_spawn_backoff();
         daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
         daemon.instance_token = token_text.clone();

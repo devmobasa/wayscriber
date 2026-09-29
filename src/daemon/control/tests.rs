@@ -584,3 +584,56 @@ fn take_daemon_toggle_request_ignores_canceled_payload_but_marks_typed_signal() 
         None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
     }
 }
+
+fn with_client_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
+    let tmp = crate::test_temp::tempdir().unwrap();
+    crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(tmp.path().as_os_str()), run)
+}
+
+fn hold_daemon_lock() -> fs::File {
+    let path = crate::paths::daemon_lock_file();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .unwrap();
+    crate::session::try_lock_exclusive(&lock).unwrap();
+    lock
+}
+
+#[test]
+fn client_without_a_daemon_reports_that_it_is_not_running() {
+    with_client_runtime_dir(|| {
+        let error = send_daemon_toggle_request(&DaemonToggleRequest::default()).unwrap_err();
+
+        assert_eq!(format!("{error:#}"), "wayscriber daemon is not running");
+    });
+}
+
+#[test]
+fn client_clears_a_v2_record_whose_daemon_released_its_lock() {
+    with_client_runtime_dir(|| {
+        let token = crate::daemon::protocol_v2::ProtocolToken::generate().unwrap();
+        let runtime = crate::daemon::protocol_v2::DaemonRuntimeRecordV2::current(token).unwrap();
+        crate::daemon::protocol_v2::write_runtime_record_v2(&daemon_pid_file(), &runtime).unwrap();
+
+        let error = send_daemon_toggle_request(&DaemonToggleRequest::default()).unwrap_err();
+
+        assert_eq!(format!("{error:#}"), "wayscriber daemon is not running");
+        assert!(!daemon_pid_file().exists());
+    });
+}
+
+#[test]
+fn client_of_a_daemon_still_starting_says_so() {
+    with_client_runtime_dir(|| {
+        let _lock = hold_daemon_lock();
+
+        let error = send_daemon_toggle_request(&DaemonToggleRequest::default()).unwrap_err();
+
+        assert!(format!("{error:#}").contains("not ready yet"), "{error:#}");
+    });
+}
