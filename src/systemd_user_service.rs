@@ -28,16 +28,46 @@ pub fn portal_shortcut_dropin_path_from_config_root(config_root: &Path) -> PathB
         .join("shortcut.conf")
 }
 
+/// Quotes `path` as the command word of an `ExecStart=` line.
+///
+/// systemd expands `%` specifiers in the command word, but `$VAR` substitution
+/// applies only to the arguments after it, so a `$` in the path stays as it is:
+/// doubling it would name an executable that does not exist.
 pub fn quote_systemd_exec(path: &Path) -> String {
-    let escaped = path
-        .to_string_lossy()
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"");
-    format!("\"{escaped}\"")
+    let mut quoted = String::from("\"");
+    for character in path.to_string_lossy().chars() {
+        push_quoted_char(&mut quoted, character);
+    }
+    quoted.push('"');
+    quoted
 }
 
+/// Escapes `value` for a double-quoted `Environment=` assignment, where `$`
+/// has no special meaning and stays as it is.
 pub fn escape_systemd_env_value(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        push_quoted_char(&mut escaped, character);
+    }
+    escaped
+}
+
+/// Appends `character` as it must appear inside a double-quoted systemd word.
+///
+/// Quoting alone is not enough: `%` still starts a specifier, and a line break
+/// would end the setting and start a new directive. `%` is doubled, and
+/// control characters become C-style `\xNN` escapes, which systemd decodes
+/// back to the original byte.
+fn push_quoted_char(out: &mut String, character: char) {
+    match character {
+        '\\' => out.push_str("\\\\"),
+        '"' => out.push_str("\\\""),
+        '%' => out.push_str("%%"),
+        character if character.is_ascii_control() => {
+            out.push_str(&format!("\\x{:02x}", u32::from(character)));
+        }
+        character => out.push(character),
+    }
 }
 
 /// The system directories the unit's PATH always ends with, so helper tools
@@ -77,8 +107,8 @@ pub fn render_user_service_unit(binary_path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        portal_shortcut_dropin_path_from_config_root, quote_systemd_exec, render_user_service_unit,
-        user_service_unit_path_from_config_root,
+        escape_systemd_env_value, portal_shortcut_dropin_path_from_config_root, quote_systemd_exec,
+        render_user_service_unit, user_service_unit_path_from_config_root,
     };
     use std::path::Path;
 
@@ -138,5 +168,34 @@ mod tests {
     fn render_user_service_unit_quotes_exec_path() {
         let unit = render_user_service_unit(Path::new("/tmp/My Apps/wayscriber"));
         assert!(unit.contains("ExecStart=\"/tmp/My Apps/wayscriber\" --daemon"));
+    }
+
+    #[test]
+    fn exec_path_escapes_specifiers_but_keeps_dollar_literal() {
+        // `systemd-analyze verify` accepts `$` as written in the command word
+        // and reports `$$` as a missing executable.
+        assert_eq!(
+            quote_systemd_exec(Path::new("/opt/100%/$HOME/wayscriber")),
+            "\"/opt/100%%/$HOME/wayscriber\""
+        );
+    }
+
+    #[test]
+    fn environment_value_escapes_specifiers_but_keeps_dollar_literal() {
+        assert_eq!(
+            escape_systemd_env_value("a\\b\"c%d$e\tf"),
+            "a\\\\b\\\"c%%d$e\\x09f"
+        );
+    }
+
+    #[test]
+    fn a_line_break_in_the_install_path_cannot_add_a_directive() {
+        let normal = render_user_service_unit(Path::new("/opt/wayscriber/wayscriber"));
+        let unit =
+            render_user_service_unit(Path::new("/opt/x\nExecStartPre=/bin/false\n/wayscriber"));
+
+        assert_eq!(unit.lines().count(), normal.lines().count());
+        assert!(!unit.lines().any(|line| line == "ExecStartPre=/bin/false"));
+        assert!(unit.contains("ExecStart=\"/opt/x\\x0aExecStartPre=/bin/false\\x0a/wayscriber\""));
     }
 }
