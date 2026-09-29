@@ -20,35 +20,11 @@ impl InputState {
                 }
             }
             Action::EnterTextMode => {
-                if matches!(self.state, DrawingState::Idle) {
-                    self.text_editing.prepare_new(TextInputMode::Plain);
-                    self.style.text_wrap_width = None;
-                    self.begin_text_input_session();
-                    let (screen_width, screen_height) = self.view.screen_size();
-                    self.state = DrawingState::text_input(
-                        (screen_width / 2) as i32,
-                        (screen_height / 2) as i32,
-                        String::new(),
-                    );
-                    self.update_text_preview_dirty_with(measurer);
-                    self.needs_redraw = true;
-                }
+                self.start_text_draft_at_view_centre_with(measurer, TextInputMode::Plain);
                 true
             }
             Action::EnterStickyNoteMode => {
-                if matches!(self.state, DrawingState::Idle) {
-                    self.text_editing.prepare_new(TextInputMode::StickyNote);
-                    self.style.text_wrap_width = None;
-                    self.begin_text_input_session();
-                    let (screen_width, screen_height) = self.view.screen_size();
-                    self.state = DrawingState::text_input(
-                        (screen_width / 2) as i32,
-                        (screen_height / 2) as i32,
-                        String::new(),
-                    );
-                    self.update_text_preview_dirty_with(measurer);
-                    self.needs_redraw = true;
-                }
+                self.start_text_draft_at_view_centre_with(measurer, TextInputMode::StickyNote);
                 true
             }
             Action::ClearCanvas => {
@@ -94,5 +70,30 @@ impl InputState {
             }
             _ => false,
         }
+    }
+
+    /// Starts a new draft where the screen centre falls on the canvas. The
+    /// keyboard entry points have no pointer position to place it at, and on
+    /// a panned or zoomed board the screen centre is not the canvas point
+    /// with the same numbers.
+    fn start_text_draft_at_view_centre_with(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        mode: TextInputMode,
+    ) {
+        if !matches!(self.state, DrawingState::Idle) {
+            return;
+        }
+
+        self.text_editing.prepare_new(mode);
+        self.style.text_wrap_width = None;
+        self.begin_text_input_session();
+        let (screen_width, screen_height) = self.view.screen_size();
+        let (x, y) =
+            self.canvas_coords_for_screen((screen_width / 2) as i32, (screen_height / 2) as i32);
+        self.state = DrawingState::text_input(x, y, String::new());
+
+        self.update_text_preview_dirty_with(measurer);
+        self.needs_redraw = true;
     }
 }

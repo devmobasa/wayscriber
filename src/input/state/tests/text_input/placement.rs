@@ -181,3 +181,36 @@ fn editing_a_note_that_already_straddles_the_edge_does_not_move_it() {
         other => panic!("expected the note, found {other:?}"),
     }
 }
+
+/// Sets up a view whose visible canvas no longer starts at the screen origin.
+type MovedView = fn(&mut InputState);
+
+#[test]
+fn keyboard_text_entry_starts_at_the_centre_of_a_panned_or_zoomed_view() {
+    let views: [(&str, MovedView); 2] = [
+        ("panned", |state| {
+            state.switch_board(crate::input::BOARD_ID_WHITEBOARD);
+            assert!(state.boards.active_frame_mut().set_view_offset(1500, 900));
+        }),
+        ("zoomed", |state| {
+            state.set_zoom_status(true, false, 2.0, (100.0, 200.0));
+        }),
+    ];
+
+    for (view, move_view) in views {
+        for action in [Action::EnterTextMode, Action::EnterStickyNoteMode] {
+            let mut state = output_state();
+            move_view(&mut state);
+            let centre = state.canvas_coords_for_screen(OUTPUT.0 as i32 / 2, OUTPUT.1 as i32 / 2);
+            assert_ne!(centre, (400, 300), "the {view} view must move the canvas");
+
+            enter_mode(&mut state, action);
+
+            assert_eq!(
+                draft_origin(&state),
+                centre,
+                "{action:?} on a {view} view did not start at its centre"
+            );
+        }
+    }
+}
