@@ -89,6 +89,7 @@ mod pointer_runtime;
 pub(in crate::backend::wayland) use pointer_runtime::TouchTarget;
 mod preference_stores;
 mod protocol_globals;
+mod seat_devices;
 pub(in crate::backend::wayland) use protocol_globals::{ProtocolGlobals, ProtocolGlobalsSeed};
 mod region_capture;
 pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
