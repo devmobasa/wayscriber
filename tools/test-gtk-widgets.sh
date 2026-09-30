@@ -36,3 +36,5 @@ dbus-run-session -- cargo test --locked -p wayscriber --all-features --lib \
     toolbar_gtk:: -- --test-threads=1 --nocapture 2>&1 | tee "$GTK_TEST_RUNTIME/tests.log"
 grep -Fq 'EXECUTED: GTK focus and slider assertions' "$GTK_TEST_RUNTIME/tests.log"
 grep -Fq 'EXECUTED: GTK widget contract assertions' "$GTK_TEST_RUNTIME/tests.log"
+grep -Fq 'EXECUTED: GTK native popup presentation regression' "$GTK_TEST_RUNTIME/tests.log"
+grep -Fq 'EXECUTED: GTK native menu presentation assertions' "$GTK_TEST_RUNTIME/tests.log"

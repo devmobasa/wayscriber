@@ -161,6 +161,7 @@ internal static class DevelopmentCommands
     private static async Task<int> GtkWidgets( ToolContext context, string[] args )
     {
         new Arguments( args ).RequireEmpty( "ci gtk-widgets" );
+
         using var runtime = new TemporaryDirectory( "wayscriber-gtk-tests" );
         const string display = "wayscriber-widget-tests";
         var environment = new Dictionary<string, string?>
@@ -172,6 +173,7 @@ internal static class DevelopmentCommands
             [EnvironmentVariables.GtkAccessibility] = "test",
             [EnvironmentVariables.WayscriberRequireGtkTests] = EnvironmentVariables.Enabled,
         };
+
         using var westonCancellation = CancellationTokenSource.CreateLinkedTokenSource( context.CancellationToken );
         var weston = context.Processes.RunAsync( new ProcessRequest( Programs.Weston,
             ["--backend=headless-backend.so", "--renderer=pixman", "--no-config", $"--socket={display}", "--idle-time=0", $"--log={Path.Combine( runtime.Path, "weston.log" )}"],
@@ -192,19 +194,23 @@ internal static class DevelopmentCommands
             {
                 throw new ToolException( "Weston did not create its Wayland socket." );
             }
+
             var result = await context.Run( Programs.DbusRunSession, [CommandLineOptions.EndOfOptions, Programs.Cargo, CommandNames.Test, CommandLineOptions.Locked, "-p",
                 RepositoryNames.MainPackage, CommandLineOptions.AllFeatures, "--lib",
                 "toolbar_gtk::", CommandLineOptions.EndOfOptions, CommandLineOptions.SingleTestThread, "--nocapture"], environment: environment, capture: true );
             await context.Output.WriteAsync( result.StandardOutput );
             await context.Error.WriteAsync( result.StandardError );
+
             var combinedOutput = result.StandardOutput + result.StandardError;
-            foreach ( var marker in new[] { "EXECUTED: GTK focus and slider assertions", "EXECUTED: GTK widget contract assertions" } )
+            foreach ( var marker in new[] { "EXECUTED: GTK focus and slider assertions", "EXECUTED: GTK widget contract assertions",
+                "EXECUTED: GTK native popup presentation regression", "EXECUTED: GTK native menu presentation assertions" } )
             {
                 if ( !combinedOutput.Contains( marker, StringComparison.Ordinal ) )
                 {
                     throw new ToolException( $"GTK test output lacks marker: {marker}" );
                 }
             }
+
             return ExitCodes.Success;
         }
         finally
@@ -229,7 +235,7 @@ internal static class DevelopmentCommands
         {
             "checks" => common.Concat( ["clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] )
                 .Concat( repositoryPackages ),
-            "widgets" => common.Concat( ["weston", "dbus-x11", "fonts-dejavu-core", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] ),
+            "widgets" => common.Concat( ["weston", "dbus-x11", "python3", "libgl1-mesa-dri", "fonts-dejavu-core", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] ),
             "package" => common.Concat( ["rpm"] ),
             "repositories" => repositoryPackages,
             _ => null,
