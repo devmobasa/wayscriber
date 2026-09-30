@@ -7,10 +7,7 @@ use std::time::{Duration, Instant};
 
 use gtk4::prelude::*;
 
-use super::{
-    CaptureProofTarget, CaptureSurfaceContent, after_next_surface_paint_counter,
-    widget_native_is_mapped,
-};
+use super::{CaptureProofTarget, CaptureSurfaceContent, widget_native_is_mapped};
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
 use native_popovers::NativePopoverCapture;
 
@@ -398,8 +395,6 @@ async fn wait_for_surface_presentation(
             "GTK capture suppression generation {generation} found no frame clock for mapped {name}"
         )
     })?;
-    let rendered_counter = Rc::new(Cell::new(None));
-    let callback_counter = Rc::clone(&rendered_counter);
 
     log::info!(
         "capture.preflight id={generation} component=gtk surface={name} phase=proof-requested sequence={ordinal}/{target_count} elapsed_ms={}",
@@ -411,11 +406,10 @@ async fn wait_for_surface_presentation(
     // without a new Wayland buffer or presentation event. Give this target a
     // fresh but still alpha-zero texture before arming its dedicated frame.
     target.refresh_transparent_proof();
-    after_next_surface_paint_counter(widget, move |counter| {
-        callback_counter.set(counter);
-    });
+    // A shared frame clock can paint the parent while the popup is frozen.
+    // Bind this proof to the fresh paintable's actual native snapshot.
 
-    while rendered_counter.get().is_none() {
+    while target.content.proof_frame().is_none() {
         reject_withdrawn_target(generation, target, started)?;
         if proof_started.elapsed() >= CAPTURE_PAINT_TIMEOUT || Instant::now() >= deadline {
             return Err(format!(
@@ -425,7 +419,7 @@ async fn wait_for_surface_presentation(
         gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 
-    let Some(frame_counter) = rendered_counter.get() else {
+    let Some(frame_counter) = target.content.proof_frame() else {
         return Err(format!(
             "GTK capture suppression generation {generation} lost the dedicated transparent render from {name}"
         ));
@@ -493,6 +487,7 @@ fn reject_withdrawn_target(
 
 #[cfg(test)]
 mod tests {
+    mod presentation;
     mod process;
 
     use super::*;

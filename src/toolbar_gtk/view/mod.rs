@@ -1,6 +1,7 @@
 //! GTK toolbar windows: owns the top strip, the shared
 //! stylesheet, and output pinning.
 
+mod capture_proof;
 mod capture_suppression;
 mod drag;
 mod sections;
@@ -141,6 +142,7 @@ pub(super) struct CaptureSurfaceContent {
     root: gtk4::Overlay,
     proof: gtk4::Picture,
     proof_serial: std::rc::Rc<std::cell::Cell<u8>>,
+    proof_observation: capture_proof::ProofObservation,
 }
 
 impl CaptureSurfaceContent {
@@ -151,7 +153,11 @@ impl CaptureSurfaceContent {
         let bytes = gtk4::glib::Bytes::from_static(&[0xff, 0x00, 0xff, 0x00]);
         let texture =
             gtk4::gdk::MemoryTexture::new(1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8, &bytes, 4);
-        let proof = gtk4::Picture::for_paintable(&texture);
+        let proof_observation = std::rc::Rc::new(std::cell::Cell::new(None));
+        let proof = gtk4::Picture::new();
+        let paintable =
+            capture_proof::CaptureProof::new(&texture, &proof, proof_observation.clone(), 0);
+        proof.set_paintable(Some(&paintable));
         proof.set_content_fit(gtk4::ContentFit::Fill);
         proof.set_halign(gtk4::Align::Fill);
         proof.set_valign(gtk4::Align::Fill);
@@ -162,12 +168,16 @@ impl CaptureSurfaceContent {
 
         let root = gtk4::Overlay::new();
         root.add_css_class(CAPTURE_SURFACE_CONTENT_CLASS);
+        // GTK-owned menus have no ordinary child in this wrapper. Keep their
+        // proof area nonzero so GTK actually snapshots the alpha-zero texture.
+        root.set_size_request(1, 1);
         root.add_overlay(&proof);
 
         Self {
             root,
             proof,
             proof_serial: std::rc::Rc::new(std::cell::Cell::new(0)),
+            proof_observation,
         }
     }
 
@@ -225,8 +235,22 @@ impl CaptureSurfaceContent {
         let bytes = gtk4::glib::Bytes::from_owned(bytes);
         let texture =
             gtk4::gdk::MemoryTexture::new(1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8, &bytes, 4);
-        self.proof.set_paintable(Some(&texture));
+        self.proof_observation.set(None);
+        let paintable = capture_proof::CaptureProof::new(
+            &texture,
+            &self.proof,
+            self.proof_observation.clone(),
+            serial,
+        );
+        self.proof.set_paintable(Some(&paintable));
         self.root.queue_draw();
+    }
+
+    fn proof_frame(&self) -> Option<i64> {
+        self.proof_observation
+            .get()
+            .filter(|render| render.serial == self.proof_serial.get())
+            .map(|render| render.frame_counter)
     }
 
     fn content_opacity(&self) -> Option<f64> {
@@ -395,31 +419,25 @@ where
     W: IsA<gtk4::Widget>,
     F: FnOnce() + 'static,
 {
-    after_next_surface_paint_counter(widget, move |_| callback());
-}
-
-fn after_next_surface_paint_counter<W, F>(widget: &W, callback: F)
-where
-    W: IsA<gtk4::Widget>,
-    F: FnOnce(Option<i64>) + 'static,
-{
     let Some(frame_clock) = widget.frame_clock() else {
-        callback(None);
+        callback();
         return;
     };
+
     let callback = std::rc::Rc::new(std::cell::RefCell::new(Some(callback)));
     let handler = std::rc::Rc::new(std::cell::RefCell::new(None));
     let callback_slot = callback.clone();
     let handler_slot = handler.clone();
     let callback_clock = frame_clock.clone();
-    let handler_id = frame_clock.connect_after_paint(move |clock| {
+    let handler_id = frame_clock.connect_after_paint(move |_| {
         if let Some(handler_id) = handler_slot.borrow_mut().take() {
             callback_clock.disconnect(handler_id);
         }
         if let Some(callback) = callback_slot.borrow_mut().take() {
-            callback(Some(clock.frame_counter()));
+            callback();
         }
     });
+
     *handler.borrow_mut() = Some(handler_id);
     widget.queue_draw();
     frame_clock.request_phase(gtk4::gdk::FrameClockPhase::PAINT);

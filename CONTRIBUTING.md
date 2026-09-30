@@ -240,9 +240,15 @@ features, alongside source, packaging, retained release-contract, and C# tool
 checks when .NET is installed. CI runs the equivalent C# command and additionally checks dynamic
 and static gtk4-layer-shell linkage and uploads its code-health report.
 
-GTK widget coverage runs separately with `./tools/test-gtk-widgets.sh` (Weston and
-`dbus-run-session` required). It creates a private headless display and requires
-GTK initialization; an unavailable display fails this check. Successful widget
-bodies print `EXECUTED` markers. Ordinary tests without a display report an
-optional skip. Neither route proves layer-shell focus or screen capture behavior
-on a user's compositor.
+GTK widget coverage runs separately with `./tools/test-gtk-widgets.sh` (Weston,
+`dbus-run-session`, Python 3, `pkg-config`, Mesa software OpenGL, and Wayland
+protocol XML required). It creates a private headless display and requires GTK
+initialization; an unavailable display fails this check. The native popup tests
+use another private Weston with software OpenGL and a protocol proxy to hold one
+popup frame callback while its shared clock paints, then require capture to finish
+after the popup's fresh render is acknowledged. They cover a plain `GtkPopover`
+and `GtkPopoverMenu`'s empty proof overlay and menu restoration. Successful bodies
+print `EXECUTED` markers. Ordinary widget tests without a display report an
+optional skip; when a display is available, their GTK assertions run. The native
+popup tests require the dedicated GTK gate. Neither route proves layer-shell
+focus or screen capture behavior on a user's compositor.
