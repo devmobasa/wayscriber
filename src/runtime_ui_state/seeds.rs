@@ -9,6 +9,10 @@ pub(crate) struct SeedState {
 }
 
 impl SeedState {
+    #[allow(
+        dead_code,
+        reason = "Seed inspection and construction support config reload and identity contract tests"
+    )]
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
@@ -50,6 +54,10 @@ impl ValidatedInteractionSeeds {
         self.values.get(target)
     }
 
+    #[allow(
+        dead_code,
+        reason = "Seed inspection and construction support config reload and identity contract tests"
+    )]
     pub(crate) fn remove(
         &mut self,
         target: &InteractionSeedTarget,
@@ -57,12 +65,20 @@ impl ValidatedInteractionSeeds {
         self.values.remove(target)
     }
 
+    #[allow(
+        dead_code,
+        reason = "Seed inspection and construction support config reload and identity contract tests"
+    )]
     pub(crate) fn iter(
         &self,
     ) -> impl Iterator<Item = (&InteractionSeedTarget, &InteractionSeedValue)> {
         self.values.iter()
     }
 
+    #[allow(
+        dead_code,
+        reason = "Seed inspection and construction support config reload and identity contract tests"
+    )]
     pub(crate) fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -111,6 +127,10 @@ impl StagedSeedReload {
         })
     }
 
+    #[allow(
+        dead_code,
+        reason = "Seed inspection and construction support config reload and identity contract tests"
+    )]
     pub(crate) fn registry(&self) -> &InteractionSeedRegistry {
         &self.registry
     }
@@ -155,6 +175,10 @@ impl InteractionSeedRegistry {
         self.state(target).and_then(SeedState::normalized_value)
     }
 
+    #[allow(
+        dead_code,
+        reason = "Seed inspection and construction support config reload and identity contract tests"
+    )]
     pub(crate) fn contains_current(&self, target: &InteractionSeedTarget) -> bool {
         self.current_value(target).is_some()
     }

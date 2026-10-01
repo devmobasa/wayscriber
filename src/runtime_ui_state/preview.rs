@@ -6,6 +6,10 @@ use super::*;
 pub(crate) struct RuntimeUiLiveOnlyGuard {
     pub(crate) controller_id: ControllerId,
     pub(crate) authority_epoch: u64,
+    #[allow(
+        dead_code,
+        reason = "Preview identity and scope are retained as rollback and reconciliation evidence"
+    )]
     pub(crate) session_id: u64,
     pub(crate) guards: Vec<SeedGuard>,
 }
@@ -20,6 +24,10 @@ pub(crate) struct RuntimePersistentPreviewSession {
 #[derive(Debug)]
 pub(crate) struct RuntimeLiveOnlyPreviewSession {
     pub(crate) guard: RuntimeUiLiveOnlyGuard,
+    #[allow(
+        dead_code,
+        reason = "Preview identity and scope are retained as rollback and reconciliation evidence"
+    )]
     pub(crate) scope: RuntimeUiMutationScope,
     pub(crate) rollback: PreviewRollbackSnapshot,
 }

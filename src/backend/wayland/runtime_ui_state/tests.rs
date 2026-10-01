@@ -49,7 +49,7 @@ fn test_runtime_allow_startup_incident(config: &Config, path: &Path) -> ToolbarR
         lifecycle: RuntimeUiLifecycleState::startup(bootstrap.startup_incident),
         board_pin_seeds,
         deferred_board_pin_restores: BTreeMap::new(),
-        writer: Some(RuntimeUiStateWriter::spawn(store).unwrap()),
+        writer: Some(RuntimeUiStateWriter::spawn_with_completion_notifier(store, || {}).unwrap()),
         pending_writer_command: None,
         live_rebuild_pending: false,
         item_drag: None,

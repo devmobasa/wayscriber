@@ -127,6 +127,10 @@ pub(crate) struct RuntimeUiLiveOnlyOverlay {
 }
 
 impl RuntimeUiLiveOnlyOverlay {
+    #[allow(
+        dead_code,
+        reason = "Preview overlay inspection is used by mutation and rollback contract tests"
+    )]
     pub(crate) fn get(&self, target: &InteractionSeedTarget) -> Option<&InteractionSeedValue> {
         self.values.get(target)
     }
@@ -270,6 +274,10 @@ impl RuntimeUiMutationValues {
 pub(crate) struct RuntimeUiMutationPermit {
     pub(crate) controller_id: ControllerId,
     pub(crate) authority_epoch: u64,
+    #[allow(
+        dead_code,
+        reason = "Mutation identity is retained as permit evidence for protocol assertions"
+    )]
     pub(crate) mutation_id: u64,
     pub(crate) guards: Vec<SeedGuard>,
 }

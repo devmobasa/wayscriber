@@ -36,9 +36,7 @@ mod process_broker;
 pub mod render_profiles;
 pub mod runtime_capabilities;
 pub(crate) mod screen_pixels;
-// Phases 2-3 establish the controller and storage contracts before later
-// phases route live UI producers through them.
-#[allow(dead_code)]
+// Runtime UI controllers coordinate the live toolbar and other UI operations.
 pub(crate) mod runtime_ui_state;
 pub mod session;
 mod session_override;
