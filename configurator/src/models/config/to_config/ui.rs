@@ -1,9 +1,12 @@
 use super::super::draft::ConfigDraft;
-use super::super::parse::{parse_field, parse_field_in_range, parse_u64_field, parse_usize_field};
+use super::super::parse::{
+    parse_field, parse_field_in_range, parse_u64_field, parse_u64_in_range, parse_usize_field,
+};
 use crate::models::error::FormError;
 use wayscriber::config::{
-    CLICK_HIGHLIGHT_OUTLINE_MAX, CLICK_HIGHLIGHT_OUTLINE_MIN, CLICK_HIGHLIGHT_RADIUS_MAX,
-    CLICK_HIGHLIGHT_RADIUS_MIN, Config, XdgFocusLossBehavior,
+    CLICK_HIGHLIGHT_DURATION_MAX_MS, CLICK_HIGHLIGHT_DURATION_MIN_MS, CLICK_HIGHLIGHT_OUTLINE_MAX,
+    CLICK_HIGHLIGHT_OUTLINE_MIN, CLICK_HIGHLIGHT_RADIUS_MAX, CLICK_HIGHLIGHT_RADIUS_MIN, Config,
+    XdgFocusLossBehavior,
 };
 
 impl ConfigDraft {
@@ -145,9 +148,11 @@ impl ConfigDraft {
             errors,
             |value| config.ui.click_highlight.outline_thickness = value,
         );
-        parse_u64_field(
+        parse_u64_in_range(
             &self.click_highlight_duration_ms,
             "ui.click_highlight.duration_ms",
+            CLICK_HIGHLIGHT_DURATION_MIN_MS,
+            CLICK_HIGHLIGHT_DURATION_MAX_MS,
             errors,
             |value| config.ui.click_highlight.duration_ms = value,
         );
