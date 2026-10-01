@@ -154,5 +154,23 @@
     "path": "src/domain/tests.rs",
     "source": "use crate::input::Tool;",
     "reject": false
+  },
+  {
+    "name": "raw module name",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::r#input::Tool;",
+    "reject": true
+  },
+  {
+    "name": "grouped raw module name",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::{r#input};",
+    "reject": true
+  },
+  {
+    "name": "allowed raw nested name",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::domain::{r#input};",
+    "reject": false
   }
 ]
