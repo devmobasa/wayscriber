@@ -94,7 +94,7 @@ impl Drop for ConfigWriteLock {
             // Closing the descriptor would release it anyway; unlocking first
             // says so at the point where the window ends. A failure here leaves
             // the close to do it, so there is nothing for the caller to act on.
-            let _ = crate::session::unlock(file);
+            let _ = crate::durable_io::unlock(file);
         }
     }
 }
@@ -115,7 +115,7 @@ pub(super) fn acquire_at(path: &Path, timeout: Duration) -> Result<ConfigWriteLo
     let file = open_lock_file(path)?;
     let started = Instant::now();
     loop {
-        match crate::session::try_lock_exclusive(&file) {
+        match crate::durable_io::try_lock_exclusive(&file) {
             Ok(()) => return Ok(ConfigWriteLock { file: Some(file) }),
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 let waited = started.elapsed();

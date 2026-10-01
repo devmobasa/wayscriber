@@ -80,7 +80,7 @@ pub(super) fn render_command_row(
     if let Some(icon) = cmd.icon {
         let icon_alpha = if is_selected { 0.95 } else { 0.7 };
         constants::set_color(ctx, constants::with_alpha(theme.text_primary, icon_alpha));
-        icon(
+        crate::toolbar_icons::action_icon_painter(icon)(
             ctx,
             inner_x + 10.0,
             item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ICON_SIZE) / 2.0,

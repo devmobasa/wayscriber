@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use toml_edit::{Array, ArrayOfTables, DocumentMut, Item, Key, Table, TableLike, Value};
 
 use super::super::Config;
-use crate::input::boards::BoundaryBoardIdSet;
+use crate::domain::BoundaryBoardIdSet;
 use crate::render_profiles::normalize_profile_id;
 
 pub(super) fn merge_config_document(

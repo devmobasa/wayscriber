@@ -74,17 +74,6 @@ pub enum UiTheme {
     Light,
 }
 
-impl UiTheme {
-    /// Maps the config value onto the runtime theme mode.
-    pub fn to_theme_mode(self) -> crate::ui::theme::ThemeMode {
-        match self {
-            UiTheme::Auto => crate::ui::theme::ThemeMode::Auto,
-            UiTheme::Dark => crate::ui::theme::ThemeMode::Dark,
-            UiTheme::Light => crate::ui::theme::ThemeMode::Light,
-        }
-    }
-}
-
 /// Reduced-motion preference (`[ui] reduced_motion`).
 ///
 /// `on` disables UI animations. `auto` is reserved for a future desktop-portal

@@ -1181,3 +1181,14 @@ mod popup_theme_tests {
         }
     }
 }
+
+impl crate::config::UiTheme {
+    /// Maps the config value onto the runtime theme mode.
+    pub fn to_theme_mode(self) -> crate::ui::theme::ThemeMode {
+        match self {
+            crate::config::UiTheme::Auto => crate::ui::theme::ThemeMode::Auto,
+            crate::config::UiTheme::Dark => crate::ui::theme::ThemeMode::Dark,
+            crate::config::UiTheme::Light => crate::ui::theme::ThemeMode::Light,
+        }
+    }
+}
