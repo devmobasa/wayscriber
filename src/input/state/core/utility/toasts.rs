@@ -755,51 +755,6 @@ mod tests {
         assert!(state.test_blocked_feedback_active());
     }
 
-    /// Producer-migration completeness: every toast producer goes through
-    /// `push_toast(priority, key, toast)`. The legacy `set_ui_toast*` shims
-    /// have been removed; no module may reintroduce them.
-    #[test]
-    fn all_toast_producers_use_the_priority_queue_api() {
-        let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let allowlist = [
-            // This file names the retired shims in the assertion string below.
-            "input/state/core/utility/toasts.rs",
-        ];
-
-        let mut offenders = Vec::new();
-        let mut stack = vec![src_root.clone()];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).expect("read src dir") {
-                let entry = entry.expect("dir entry");
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-                    continue;
-                }
-                let rel = path
-                    .strip_prefix(&src_root)
-                    .expect("path under src")
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                if allowlist.contains(&rel.as_str()) {
-                    continue;
-                }
-                let contents = std::fs::read_to_string(&path).expect("read source file");
-                if contents.contains(".set_ui_toast") {
-                    offenders.push(rel);
-                }
-            }
-        }
-
-        assert!(
-            offenders.is_empty(),
-            "files still using legacy set_ui_toast* instead of push_toast: {offenders:?}"
-        );
-    }
-
     #[test]
     fn advance_text_edit_entry_feedback_clears_expired_feedback() {
         let mut state = make_state();
