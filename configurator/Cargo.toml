@@ -21,3 +21,6 @@ gtk4 = { version = "0.11", features = ["v4_10"] }
 [features]
 default = ["tablet-input"]
 tablet-input = ["wayscriber/tablet-input"]
+
+[dev-dependencies]
+tempfile = "3"
