@@ -86,6 +86,10 @@ impl PersistenceRecoveryHandle {
         self.incident
     }
 
+    #[allow(
+        dead_code,
+        reason = "Recovery handle identity inspection supports stale-completion contract tests"
+    )]
     pub(crate) fn handle_id(&self) -> RecoveryHandleId {
         self.handle_id
     }
@@ -363,6 +367,10 @@ pub(crate) struct PersistenceRecoveryEvidence {
 }
 
 #[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "Structured recovery evidence is retained even when a live consumer only inspects the outcome"
+)]
 pub(crate) enum PersistenceRecoveryResult {
     Recovered {
         incident: PersistenceIncidentId,
@@ -416,6 +424,10 @@ pub(crate) enum PersistenceRecoveryResult {
 }
 
 #[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "Structured recovery evidence is retained even when a live consumer only inspects the outcome"
+)]
 pub(crate) enum BeginPersistenceRecoveryResult {
     Started {
         client: RecoveryAttemptClient,
@@ -436,6 +448,10 @@ pub(crate) enum CheckoutPersistenceRecoveryHandleResult {
 }
 
 #[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "Structured recovery evidence is retained even when a live consumer only inspects the outcome"
+)]
 pub(crate) enum SubmitPersistenceRecoveryResult {
     Continue {
         dispatched: RecoveryCommandId,
@@ -463,6 +479,10 @@ pub(crate) enum SubmitPersistenceRecoveryResult {
 }
 
 #[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "Structured recovery evidence is retained even when a live consumer only inspects the outcome"
+)]
 pub(crate) enum CancelPersistenceRecoveryResult {
     Cancelled,
     PendingIrrevocableIo {

@@ -2,6 +2,10 @@ use super::integration::durability_satisfies_flush;
 use super::*;
 
 impl PersistencePipeline {
+    #[allow(
+        dead_code,
+        reason = "Flush queuing is retained for controller receipt and ordering contracts"
+    )]
     pub(crate) fn request_flush(
         &mut self,
         through: AcceptedStateRevision,

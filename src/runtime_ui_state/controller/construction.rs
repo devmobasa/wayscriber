@@ -138,6 +138,10 @@ impl RuntimeUiStateController {
         &self.seeds
     }
 
+    #[allow(
+        dead_code,
+        reason = "Controller state inspection supports independent mutation and persistence contract tests"
+    )]
     pub(crate) fn model(&self) -> &RuntimeUiModel {
         &self.model
     }
@@ -204,6 +208,10 @@ impl RuntimeUiStateController {
         self.preview_resolution_outbox.extend(resolved);
     }
 
+    #[allow(
+        dead_code,
+        reason = "Controller state inspection supports independent mutation and persistence contract tests"
+    )]
     pub(crate) fn pipeline(&self) -> &PersistencePipeline {
         &self.pipeline
     }

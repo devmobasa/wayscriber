@@ -6,6 +6,10 @@ impl RuntimeUiStateController {
         self.pipeline.receipt(revision)
     }
 
+    #[allow(
+        dead_code,
+        reason = "Receipt and flush endpoints preserve the persistence protocol; live toolbar currently uses completion integration"
+    )]
     pub(crate) fn take_receipt(
         &mut self,
         revision: AcceptedStateRevision,
@@ -13,6 +17,10 @@ impl RuntimeUiStateController {
         self.pipeline.take_receipt(revision)
     }
 
+    #[allow(
+        dead_code,
+        reason = "Receipt and flush endpoints preserve the persistence protocol; live toolbar currently uses completion integration"
+    )]
     pub(crate) fn request_flush(
         &mut self,
         through: AcceptedStateRevision,
@@ -34,6 +42,10 @@ impl RuntimeUiStateController {
         self.pipeline.flush_outcome(id)
     }
 
+    #[allow(
+        dead_code,
+        reason = "Receipt and flush endpoints preserve the persistence protocol; live toolbar currently uses completion integration"
+    )]
     pub(crate) fn take_flush_outcome(&mut self, id: FlushRequestId) -> Option<FlushOutcome> {
         self.pipeline.take_flush_outcome(id)
     }

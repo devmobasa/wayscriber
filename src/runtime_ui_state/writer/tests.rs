@@ -24,7 +24,7 @@ fn every_accepted_command_produces_one_typed_completion() {
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
-    let writer = RuntimeUiStateWriter::spawn(store).unwrap();
+    let writer = RuntimeUiStateWriter::spawn_with_completion_notifier(store, || {}).unwrap();
     let request = SourceMutationRequest {
         id: SourceMutationId(1),
         accepted_through: AcceptedStateRevision(1),
@@ -109,7 +109,8 @@ fn source_commands_are_serialized_against_the_previous_completion_source() {
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let missing = store.inspect().unwrap().observation.revision;
-    let writer = RuntimeUiStateWriter::spawn(store.clone()).unwrap();
+    let writer =
+        RuntimeUiStateWriter::spawn_with_completion_notifier(store.clone(), || {}).unwrap();
     let first = SourceMutationRequest {
         id: SourceMutationId(1),
         accepted_through: AcceptedStateRevision(1),
@@ -154,7 +155,7 @@ fn writer_reports_filesystem_failures_without_dropping_completion() {
     let path = temp.path().join("gone/runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
-    let writer = RuntimeUiStateWriter::spawn(store).unwrap();
+    let writer = RuntimeUiStateWriter::spawn_with_completion_notifier(store, || {}).unwrap();
     writer
         .submit(RuntimeStateWriterCommand::SourceMutation(
             SourceMutationRequest {
@@ -183,7 +184,9 @@ fn inspection_command_returns_exact_unsupported_bytes() {
     let path = temp.path().join("runtime-ui.toml");
     let bytes = b"version = 22\nfuture = true\n";
     fs::write(&path, bytes).unwrap();
-    let writer = RuntimeUiStateWriter::spawn(RuntimeUiStateStore::new(path)).unwrap();
+    let writer =
+        RuntimeUiStateWriter::spawn_with_completion_notifier(RuntimeUiStateStore::new(path), || {})
+            .unwrap();
     let command = RecoveryIoCommand {
         controller_id: ControllerId(1),
         incident: PersistenceIncidentId(2),
@@ -218,7 +221,9 @@ fn inspection_command_returns_exact_unsupported_bytes() {
 fn a_batch_of_accepted_inspections_has_no_missing_or_duplicate_completion() {
     let temp = crate::test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
-    let writer = RuntimeUiStateWriter::spawn(RuntimeUiStateStore::new(path)).unwrap();
+    let writer =
+        RuntimeUiStateWriter::spawn_with_completion_notifier(RuntimeUiStateStore::new(path), || {})
+            .unwrap();
     for id in 1..=12 {
         writer
             .submit(RuntimeStateWriterCommand::Recovery(RecoveryIoCommand {
@@ -256,7 +261,8 @@ fn malformed_startup_is_preserved_and_reset_through_real_recovery_io() {
         .into_controller_bootstrap(startup_seeds());
     let incident = bootstrap.startup_incident.unwrap();
     let mut controller = bootstrap.controller;
-    let writer = RuntimeUiStateWriter::spawn(store.clone()).unwrap();
+    let writer =
+        RuntimeUiStateWriter::spawn_with_completion_notifier(store.clone(), || {}).unwrap();
 
     let recovery = match controller.checkout_persistence_recovery_handle(incident) {
         CheckoutPersistenceRecoveryHandleResult::CheckedOut(handle) => handle,

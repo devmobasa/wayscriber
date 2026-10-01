@@ -31,17 +31,29 @@ pub(crate) enum CommitResult {
     },
     NoChange,
     RejectedStaleAuthorityEpoch,
+    #[allow(
+        dead_code,
+        reason = "Typed rejection evidence is retained for diagnostics and controller contract tests"
+    )]
     RejectedSeedChanged {
         targets: Vec<InteractionSeedTarget>,
     },
     RejectedWrongController,
     RejectedUnsupportedVersion,
     RejectedShuttingDown,
+    #[allow(
+        dead_code,
+        reason = "Typed rejection evidence is retained for diagnostics and controller contract tests"
+    )]
     RejectedInvalidValues(MutationShapeError),
     RejectedControllerBusy {
         permit: RuntimeUiMutationPermit,
         barrier: ControllerBarrierId,
     },
+    #[allow(
+        dead_code,
+        reason = "Typed rejection evidence is retained for diagnostics and controller contract tests"
+    )]
     RejectedPersistence(PipelineProtocolError),
 }
 
@@ -57,6 +69,10 @@ pub(crate) enum UpdateSeedsResult {
     },
     RejectedShuttingDown,
     Rejected(SeedRegistryError),
+    #[allow(
+        dead_code,
+        reason = "Typed rejection evidence is retained for diagnostics and controller contract tests"
+    )]
     RejectedPersistence(PipelineProtocolError),
 }
 
@@ -198,7 +214,6 @@ pub(crate) enum ExternalAuthorityInstallError {
     FileStatusMismatch,
     UnexpectedDecodedAuthority,
     AuthorityEpochExhausted,
-    Seed(SeedRegistryError),
     Persistence(PipelineProtocolError),
 }
 

@@ -9,6 +9,7 @@ macro_rules! id_type {
         pub(crate) struct $name(pub(crate) u64);
 
         impl $name {
+            #[allow(dead_code, reason = "Some protocol identities only need their numeric projection in serialization or contract tests")]
             pub(crate) const fn get(self) -> u64 {
                 self.0
             }
@@ -209,6 +210,10 @@ pub(crate) enum RuntimeUiFileStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ControllerBarrierOperation {
+    #[allow(
+        dead_code,
+        reason = "Explicit reset barrier is retained for controller reset contracts"
+    )]
     RequestRuntimeUiReset,
     ResetSupported,
     ConfirmUnsupportedReset,
@@ -223,7 +228,6 @@ pub(crate) enum RecoveryAttemptStep {
     AwaitingControllerDecision,
     SourceMutationInFlight(RecoveryCommandId),
     ProtocolFailureAwaitingSourceMutation(RecoveryCommandId),
-    CleanupInFlight(RecoveryCommandId),
     CancellationPending(RecoveryCommandId),
 }
 
@@ -233,8 +237,6 @@ pub(crate) enum ControllerBarrierPhase {
     WaitingForPrerequisite(SourceMutationId),
     Writing(SourceMutationId),
     Reinspecting,
-    InstallingAuthority,
-    ResolvingPreviews,
     PersistenceUnhealthy {
         incident: PersistenceIncidentId,
     },

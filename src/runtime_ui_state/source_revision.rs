@@ -67,6 +67,10 @@ impl RuntimeStatePathIdentity {
         &self.source_path
     }
 
+    #[allow(
+        dead_code,
+        reason = "Source revision inspection and synthetic revisions support durable-store identity contract tests"
+    )]
     pub(crate) fn followed_links(&self) -> &[(PathBuf, PathBuf)] {
         &self.followed_links
     }
@@ -94,6 +98,10 @@ impl RuntimeStateSourceRevision {
         Self::Missing { path }
     }
 
+    #[allow(
+        dead_code,
+        reason = "Source revision inspection and synthetic revisions support durable-store identity contract tests"
+    )]
     pub(crate) fn present(path: RuntimeStatePathIdentity, bytes: impl Into<Arc<[u8]>>) -> Self {
         Self::Present {
             path,
@@ -127,6 +135,10 @@ impl RuntimeStateSourceRevision {
         }
     }
 
+    #[allow(
+        dead_code,
+        reason = "Source revision inspection and synthetic revisions support durable-store identity contract tests"
+    )]
     pub(crate) fn file_identity(&self) -> Option<RuntimeStateFileIdentity> {
         match self {
             Self::Missing { .. } => None,

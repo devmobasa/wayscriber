@@ -1,8 +1,9 @@
 //! Seed-guarded runtime UI state authority and persistence coordination.
 //!
 //! This module deliberately owns no toolbar event routing. It contains the
-//! serialized controller boundary plus the isolated runtime-state wire, store,
-//! and writer machinery used to exercise that boundary before UI integration.
+//! serialized controller boundary plus runtime-state wire, store, and writer
+//! machinery. The backend toolbar adapter routes live mutations and completions
+//! through these owners.
 
 mod controller;
 mod model;
