@@ -11,7 +11,7 @@ internal static class ChecksCommand
     [
         "build-package-repos.sh", "build.sh", "bump-version.sh", "check-arch-installer-manifest.sh",
         "check-config-writers.py", "check-nixpkgs-recipe.py", "check-process-sites.py",
-        "check-rust-source-coverage.py", "check-shared-dependencies.py", "check-version-consistency.sh",
+        "check-rust-source-coverage.py", "check-shared-dependencies.py", "test-shared-dependencies.py", "check-version-consistency.sh",
         "code-health-report.sh", "create-release-tag.sh", "fetch-all-deps.sh", "install-configurator.sh",
         "install-gtk4-layer-shell.sh", "install.sh", "lint-and-test.sh", "package.sh",
         "publish-release-tag.sh", "reload-daemon.sh", "run.sh", "set-portal-shortcut.sh", "test-aur-desktop-assets.sh", "test-gtk-widgets.sh",
@@ -38,8 +38,8 @@ internal static class ChecksCommand
         var errors = new List<string>( );
         foreach ( var (directory, forbidden) in new[]
         {
-            ("src/domain", "config|input|draw|backend|ui|session"),
-            ("src/config/validate", "input|backend"),
+            ("src/domain", new HashSet<string>( ["config", "input", "draw", "backend", "ui", "session"] )),
+            ("src/config/validate", new HashSet<string>( ["input", "backend"] )),
         } )
         {
             foreach ( var path in Directory.EnumerateFiles( context.Path( directory.Split( '/' ) ), "*.rs", SearchOption.AllDirectories ) )
@@ -48,9 +48,8 @@ internal static class ChecksCommand
                 {
                     continue;
                 }
-                var source = Regex.Replace( Files.Read( path ), @"/\*.*?\*/|//[^\n]*", string.Empty, RegexOptions.Singleline );
-                var pattern = $@"crate\s*::\s*(?:{forbidden})\b|use\s+crate\s*::\s*\{{[^;]*\b(?:{forbidden})\s*::";
-                if ( Regex.IsMatch( source, pattern ) )
+                var relative = Path.GetRelativePath( context.RepositoryRoot, path ).Replace( Path.DirectorySeparatorChar, '/' );
+                if ( SharedDependencyGuard.HasUpwardPath( Files.Read( path ), relative, forbidden ) )
                 {
                     errors.Add( $"{Path.GetRelativePath( context.RepositoryRoot, path )}: upward dependency in shared layer" );
                 }

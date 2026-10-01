@@ -12,3 +12,5 @@
 #:include Commands/PackagingCommands.cs
 #:include Commands/ReleaseAurCommands.cs
 #:include Commands/ReportCommands.cs
+
+#:include Infrastructure/SharedDependencyGuard.cs
