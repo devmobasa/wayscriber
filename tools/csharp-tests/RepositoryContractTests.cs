@@ -7,6 +7,35 @@ namespace Wayscriber.Tools.Tests;
 public sealed class RepositoryContractTests
 {
     [Fact]
+    public async Task SharedDependencyCommandsEnforceTheSharedSyntaxCorpus( )
+    {
+        var root = FindRepository( );
+        using var corpus = JsonDocument.Parse( File.ReadAllText( Path.Combine( root, "tools/shared-dependency-fixtures.json" ) ) );
+        var command = ChecksCommand.Commands.Single( command => command.Name == CommandNames.SharedDependencies );
+        foreach ( var fixture in corpus.RootElement.EnumerateArray( ) )
+        {
+            using var directory = new TemporaryDirectory( "wayscriber-shared-dependency-test" );
+            Directory.CreateDirectory( Path.Combine( directory.Path, "src/domain" ) );
+            Directory.CreateDirectory( Path.Combine( directory.Path, "src/config/validate" ) );
+            var sourcePath = Path.Combine( directory.Path, fixture.GetProperty( "path" ).GetString( )! );
+            Directory.CreateDirectory( Path.GetDirectoryName( sourcePath )! );
+            File.WriteAllText( sourcePath, fixture.GetProperty( "source" ).GetString( ) );
+            var context = new ToolContext( directory.Path, TextWriter.Null, TextWriter.Null,
+                new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
+
+            var error = await Record.ExceptionAsync( ( ) => command.Handler( context, [] ) );
+            Assert.True( (error is ToolException) == fixture.GetProperty( "reject" ).GetBoolean( ),
+                $"C# fixture {fixture.GetProperty( "name" ).GetString( )}: {error}" );
+            Assert.True( error is null or ToolException );
+        }
+
+        var request = new ProcessRequest( "python3", [Path.Combine( root, "tools/test-shared-dependencies.py" )], root,
+            CaptureOutput: true, Trace: false );
+        var result = await new ProcessRunner( TextWriter.Null, TextWriter.Null ).RunAsync( request, CancellationToken.None );
+        Assert.Equal( ExitCodes.Success, result.ExitCode );
+    }
+
+    [Fact]
     public void StandaloneInstallersRemainAvailableWithoutDotnet( )
     {
         var root = FindRepository( );

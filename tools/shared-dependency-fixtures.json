@@ -1,0 +1,158 @@
+[
+  {
+    "name": "direct",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::input::Tool;",
+    "reject": true
+  },
+  {
+    "name": "grouped leaf",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::{input::Tool};",
+    "reject": true
+  },
+  {
+    "name": "grouped module",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::{input};",
+    "reject": true
+  },
+  {
+    "name": "multiline alias",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::{domain::Color,\n input as runtime};",
+    "reject": true
+  },
+  {
+    "name": "nested group",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::{domain::Color, input::{Tool, InputState}};",
+    "reject": true
+  },
+  {
+    "name": "parent relative",
+    "path": "src/domain/probe.rs",
+    "source": "use super::super::input::Tool;",
+    "reject": true
+  },
+  {
+    "name": "grouped relative",
+    "path": "src/domain/probe.rs",
+    "source": "use super::{super::input::Tool};",
+    "reject": true
+  },
+  {
+    "name": "expression path",
+    "path": "src/domain/probe.rs",
+    "source": "fn f() { crate::backend::run(); }",
+    "reject": true
+  },
+  {
+    "name": "allowed domain",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::domain::{Color, tool::Tool};",
+    "reject": false
+  },
+  {
+    "name": "allowed nested name",
+    "path": "src/domain/probe.rs",
+    "source": "use crate::domain::{input::Tool};",
+    "reject": false
+  },
+  {
+    "name": "allowed sibling",
+    "path": "src/domain/probe.rs",
+    "source": "use super::input::Tool;",
+    "reject": false
+  },
+  {
+    "name": "allowed self",
+    "path": "src/domain/probe.rs",
+    "source": "use self::input::Tool;",
+    "reject": false
+  },
+  {
+    "name": "line comment",
+    "path": "src/domain/probe.rs",
+    "source": "// use crate::{input};\nuse crate::domain::Color;",
+    "reject": false
+  },
+  {
+    "name": "block comment",
+    "path": "src/domain/probe.rs",
+    "source": "/* use super::super::input::Tool; */",
+    "reject": false
+  },
+  {
+    "name": "nested comment",
+    "path": "src/domain/probe.rs",
+    "source": "/* outer /* inner */ use crate::input::Tool; */",
+    "reject": false
+  },
+  {
+    "name": "string",
+    "path": "src/domain/probe.rs",
+    "source": "const S: &str = \"use crate::{input}; //\";",
+    "reject": false
+  },
+  {
+    "name": "escaped string",
+    "path": "src/domain/probe.rs",
+    "source": "const S: &str = \"\\\" crate::input::Tool\";",
+    "reject": false
+  },
+  {
+    "name": "raw string",
+    "path": "src/domain/probe.rs",
+    "source": "const S: &str = r#\"crate::input::Tool; /*\"#;",
+    "reject": false
+  },
+  {
+    "name": "raw string hashes",
+    "path": "src/domain/probe.rs",
+    "source": "const S: &str = r###\"a \"# crate::input::Tool\"###;",
+    "reject": false
+  },
+  {
+    "name": "byte string",
+    "path": "src/domain/probe.rs",
+    "source": "const S: &[u8] = b\"crate::input::Tool\";",
+    "reject": false
+  },
+  {
+    "name": "lifetime and char",
+    "path": "src/domain/probe.rs",
+    "source": "fn f<'a>() { let c = '\"'; let t: &'a str = \"ok\"; }",
+    "reject": false
+  },
+  {
+    "name": "nested parent relative",
+    "path": "src/domain/nested/probe.rs",
+    "source": "use super::super::super::{ui};",
+    "reject": true
+  },
+  {
+    "name": "mod relative",
+    "path": "src/domain/nested/mod.rs",
+    "source": "use super::super::input::Tool;",
+    "reject": true
+  },
+  {
+    "name": "validation upward",
+    "path": "src/config/validate/probe.rs",
+    "source": "use super::super::super::{input};",
+    "reject": true
+  },
+  {
+    "name": "validation allowed config",
+    "path": "src/config/validate/probe.rs",
+    "source": "use crate::config::Config;",
+    "reject": false
+  },
+  {
+    "name": "compatibility exception",
+    "path": "src/domain/tests.rs",
+    "source": "use crate::input::Tool;",
+    "reject": false
+  }
+]
