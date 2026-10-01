@@ -124,10 +124,7 @@ fn auto_orientation_matches_source_for_standard_pages() {
 }
 
 #[test]
-fn rendered_pdf_reports_page_count_and_sizes_when_pdfinfo_is_available() {
-    if Command::new("pdfinfo").arg("-v").output().is_err() {
-        return;
-    }
+fn rendered_pdf_reports_exact_page_count_and_ordered_sizes() {
     let source = CanvasExportRect::new(0.0, 0.0, 100.0, 100.0).expect("source");
     let pages = vec![
         pdf_page(300.0, 200.0, source, 0, 2),
@@ -143,6 +140,7 @@ fn rendered_pdf_reports_page_count_and_sizes_when_pdfinfo_is_available() {
     std::fs::write(&path, bytes).expect("write pdf");
 
     let output = Command::new("pdfinfo")
+        .env("LC_ALL", "C")
         .arg("-f")
         .arg("1")
         .arg("-l")
@@ -150,14 +148,10 @@ fn rendered_pdf_reports_page_count_and_sizes_when_pdfinfo_is_available() {
         .arg(&path)
         .output()
         .expect("pdfinfo");
-    if !output.status.success() {
-        return;
-    }
-    let text = String::from_utf8_lossy(&output.stdout);
-
-    assert!(text.contains("Pages:"));
-    assert!(text.contains('2'));
-    assert!(text.contains("300 x 200") || text.contains("200 x 300"));
+    let text = checked_pdf_output(output);
+    assert_eq!(pdf_field(&text, "Pages"), "2");
+    assert_eq!(pdf_field(&text, "Page    1 size"), "300 x 200 pts");
+    assert_eq!(pdf_field(&text, "Page    2 size"), "200 x 300 pts");
 }
 
 fn text_pdf(text_halo_enabled: bool) -> Vec<u8> {
@@ -184,13 +178,48 @@ fn text_pdf(text_halo_enabled: bool) -> Vec<u8> {
 
 #[test]
 fn pdf_export_honours_the_text_halo_setting() {
-    let disabled = text_pdf(false);
-    let enabled = text_pdf(true);
-    assert_ne!(
-        disabled.len(),
-        enabled.len(),
-        "vector PDF output must contain the configured text rendering",
-    );
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    for enabled in [false, true] {
+        let path = temp.path().join(format!("halo-{enabled}.pdf"));
+        let prefix = temp.path().join(format!("halo-{enabled}"));
+        std::fs::write(&path, text_pdf(enabled)).expect("write text PDF");
+        checked_pdf_output(
+            Command::new("pdftoppm")
+                .env("LC_ALL", "C")
+                .args(["-png", "-singlefile", "-r", "72"])
+                .arg(&path)
+                .arg(&prefix)
+                .output()
+                .expect("pdftoppm is required for PDF artifact tests (install poppler)"),
+        );
+        let bytes = std::fs::read(prefix.with_extension("png")).expect("rasterized PDF");
+        let image = crate::image_decode::decode_rgba(
+            crate::image_decode::EncodedImageFormat::Png,
+            &bytes,
+            crate::screen_pixels::EmbeddedImageLimits::default().into(),
+        )
+        .expect("decode rasterized PDF");
+        assert_eq!((image.width, image.height), (400, 120));
+        let red = image
+            .rgba
+            .chunks_exact(4)
+            .filter(|p| p[0] > 180 && p[1] < 80 && p[2] < 80)
+            .count();
+        let dark = image
+            .rgba
+            .chunks_exact(4)
+            .filter(|p| p[0] < 80 && p[1] < 80 && p[2] < 80)
+            .count();
+        assert!(red > 100, "red glyphs must remain visible: {red}");
+        if enabled {
+            assert!(
+                dark > 100,
+                "enabled halo must outline the red glyphs: {dark}"
+            );
+        } else {
+            assert_eq!(dark, 0, "disabled halo must not add a dark outline");
+        }
+    }
 }
 
 fn pdf_page(
@@ -267,20 +296,34 @@ fn worker_exports_three_page_pdf_from_unicode_metadata() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("worker-pages.pdf");
     std::fs::write(&path, bytes).expect("write worker PDF");
-    let output = match Command::new("pdfinfo").arg(&path).output() {
-        Ok(output) => output,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
-        Err(error) => panic!("failed to run pdfinfo: {error}"),
-    };
+    let info = checked_pdf_output(
+        Command::new("pdfinfo")
+            .env("LC_ALL", "C")
+            .arg(&path)
+            .output()
+            .expect("pdfinfo is required for PDF artifact tests (install poppler)"),
+    );
+    assert_eq!(
+        pdf_field(&info, "Pages"),
+        "3",
+        "worker PDF must contain all three pages"
+    );
+}
+
+fn checked_pdf_output(output: std::process::Output) -> String {
     assert!(
         output.status.success(),
-        "pdfinfo failed: {}",
+        "PDF reader failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let info = String::from_utf8_lossy(&output.stdout);
-    let pages = info
-        .lines()
-        .find_map(|line| line.strip_prefix("Pages:"))
-        .expect("pdfinfo page count");
-    assert_eq!(pages.trim(), "3", "worker PDF must contain all three pages");
+    String::from_utf8(output.stdout).expect("PDF reader output is UTF-8")
+}
+
+fn pdf_field<'a>(info: &'a str, name: &str) -> &'a str {
+    info.lines()
+        .find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            (key == name).then(|| value.trim())
+        })
+        .unwrap_or_else(|| panic!("missing PDF field {name:?}: {info}"))
 }
