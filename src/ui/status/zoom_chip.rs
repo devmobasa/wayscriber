@@ -722,7 +722,7 @@ fn draw_zoom_sign(ctx: &cairo::Context, m: &ZoomGlyphMetrics, run_x: f64, plus: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{StatusBarStyle};
+    use crate::config::StatusBarStyle;
 
     fn make_state() -> InputState {
         crate::input::state::test_support::make_test_input_state()
