@@ -36,7 +36,7 @@ pub use action_meta::{
 pub use core::{CURRENT_CONFIG_REVISION, Config};
 pub use document::{
     ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
-    ConfigWriteLockTimeout,
+    ConfigSourceChanged, ConfigWriteLockTimeout,
 };
 pub use enums::{
     RadialMenuMouseBinding, ReducedMotion, RegionPicker, StatusPosition, UiTheme,
