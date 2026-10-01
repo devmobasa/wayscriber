@@ -9,12 +9,13 @@ internal static class SharedDependencyGuard
     private static readonly Regex NonCode = new(
         "r(?<hashes>#{0,16})\".*?\"\\k<hashes>|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\\\n])'|//[^\\n]*|/\\*",
         RegexOptions.Singleline );
-    private static readonly Regex Tokens = new( @"[A-Za-z_][A-Za-z_0-9]*|::|[{},;*]" );
+    private static readonly Regex Tokens = new( @"r#[A-Za-z_][A-Za-z_0-9]*|[A-Za-z_][A-Za-z_0-9]*|::|[{},;*]" );
     private static readonly Regex CommentMarkers = new( @"/\*|\*/" );
 
     public static bool HasUpwardPath( string source, string relativePath, IReadOnlySet<string> forbidden )
     {
-        var tokens = Tokens.Matches( StripNonCode( source ) ).Select( match => match.Value ).ToArray( );
+        var tokens = Tokens.Matches( StripNonCode( source ) )
+            .Select( match => match.Value.StartsWith( "r#", StringComparison.Ordinal ) ? match.Value[2..] : match.Value ).ToArray( );
         var module = relativePath[..^3].Split( '/' ).Skip( 1 ).ToList( );
         if ( module[^1] == "mod" )
         {

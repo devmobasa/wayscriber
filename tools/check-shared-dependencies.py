@@ -13,7 +13,7 @@ NON_CODE = re.compile(
     r'r(?P<hashes>#{0,16})".*?"(?P=hashes)|"(?:\\.|[^"\\])*"|'
     r"'(?:\\.|[^'\\\n])'|//[^\n]*|/\*", re.S
 )
-TOKENS = re.compile(r'[A-Za-z_][A-Za-z_0-9]*|::|[{},;*]')
+TOKENS = re.compile(r'r#[A-Za-z_][A-Za-z_0-9]*|[A-Za-z_][A-Za-z_0-9]*|::|[{},;*]')
 BOUNDARIES = [
     ("src/domain", {"config", "input", "draw", "backend", "ui", "session"}),
     ("src/config/validate", {"input", "backend"}),
@@ -45,7 +45,7 @@ def module_path(relative_path):
 
 
 def has_upward_path(source, relative_path, forbidden):
-    tokens = TOKENS.findall(strip_non_code(source))
+    tokens = [token.removeprefix("r#") for token in TOKENS.findall(strip_non_code(source))]
     module = module_path(relative_path)
 
     def tree(index, prefix):
