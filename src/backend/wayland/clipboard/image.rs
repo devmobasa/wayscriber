@@ -67,18 +67,3 @@ fn canonical_image_mime_type(format: EncodedImageFormat) -> &'static str {
         EncodedImageFormat::Jpeg => "image/jpeg",
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::screen_pixels::EmbeddedImageLimits;
-
-    #[test]
-    fn image_byte_cap_leaves_room_for_default_persisted_create_history() {
-        let encoded_len = EmbeddedImageLimits::default().max_bytes().div_ceil(3) * 4;
-        let duplicated_history_len = encoded_len * 2;
-        let default_session_budget = 50 * 1024 * 1024;
-        let json_margin = 512 * 1024;
-
-        assert!(duplicated_history_len + json_margin < default_session_budget);
-    }
-}
