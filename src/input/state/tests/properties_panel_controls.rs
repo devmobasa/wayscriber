@@ -1162,8 +1162,9 @@ fn a_selection_saves_its_style_into_a_preset_slot_and_another_takes_it_on() {
     assert_eq!(saved.size, 8.0);
     assert_eq!(saved.fill_enabled, Some(true));
     assert!(matches!(
-        state.take_pending_preset_action(),
-        Some(crate::input::state::PresetAction::Save { slot, .. }) if slot == empty_slot
+        state.drain_input_effects(crate::input::state::InputEffectDrain::Runtime)
+            .into_iter().filter(|effect| matches!(effect, crate::input::state::InputEffect::Preset(_))).collect::<Vec<_>>().as_slice(),
+        [crate::input::state::InputEffect::Preset(crate::input::state::PresetAction::Save { slot, .. })] if *slot == empty_slot
     ));
 
     let tool_before = state.active_tool();

@@ -337,7 +337,7 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Action};
+    use crate::config::Action;
     use crate::draw::{BLACK, WHITE};
     use crate::input::state::KeybindingEditOperation;
     use crate::input::state::core::base::{InputEffect, InputEffectDrain};
@@ -450,18 +450,6 @@ mod tests {
             Some(ZoomAction::ToggleLock)
         );
         assert_eq!(state.take_pending_zoom_action(), None);
-    }
-
-    #[test]
-    fn pending_preset_action_is_taken_once() {
-        let mut state = make_state();
-        state.emit_input_effect(InputEffect::Preset(PresetAction::Clear { slot: 2 }));
-
-        assert!(matches!(
-            state.take_pending_preset_action(),
-            Some(PresetAction::Clear { slot: 2 })
-        ));
-        assert!(state.take_pending_preset_action().is_none());
     }
 
     #[test]
