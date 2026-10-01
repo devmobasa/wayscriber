@@ -250,6 +250,7 @@ impl InputState {
     ) -> bool {
         let changed = self.text_editing.insert_text(&mut self.state, text);
         if changed {
+            self.note_session_interaction_activity();
             self.needs_redraw = true;
             self.update_text_preview_dirty_from_editor_with(measurer);
         }

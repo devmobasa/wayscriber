@@ -37,6 +37,12 @@ pub(super) fn persist_session(state: &mut WaylandState) -> Result<(), anyhow::Er
             state.session.target_epoch()
         );
     }
+    if let Err(error) = state.finish_pending_session_command() {
+        if let Some(transaction) = state.session_transaction.take() {
+            state.fail_session_command(transaction.command(), &error);
+        }
+        log::warn!("Explicit session command failed during shutdown: {error:#}");
+    }
     let save_result = persist_final_session(state);
     let worker_failed = !state.persistence.is_healthy();
     let shutdown_result = state.persistence.shutdown(state.session.target_epoch());
@@ -187,6 +193,11 @@ fn persist_final_session(state: &mut WaylandState) -> Result<(), anyhow::Error> 
 }
 
 pub(super) fn autosave_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
+    if state.session_transaction.is_some() {
+        // A queued command may outlive a failed autosave completion. Admit it
+        // on the next tick even when no worker wake remains outstanding.
+        return (!state.persistence.is_active()).then_some(Duration::ZERO);
+    }
     let autosave = scheduled_autosave_timeout(
         &state.session,
         state.session_options(),
@@ -214,8 +225,13 @@ fn scheduled_autosave_timeout(
 }
 
 pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<(), anyhow::Error> {
-    drain_persistence_completion(state)?;
+    let completion_result = drain_persistence_completion(state);
     observe_input_dirty(state, now);
+    state.poll_pending_session_command();
+    completion_result?;
+    if state.session_transaction.is_some() {
+        return Ok(());
+    }
 
     if !state.persistence.is_healthy() {
         return Ok(());
@@ -412,7 +428,13 @@ impl PersistenceCompletionRuntime for WaylandState {
     fn try_receive_persistence_completion(
         &mut self,
     ) -> Result<Option<PersistenceCompletion>, anyhow::Error> {
-        self.persistence.try_receive()
+        let result = self.persistence.try_receive();
+        if let Err(error) = &result
+            && let Some(transaction) = self.session_transaction.take()
+        {
+            self.fail_session_command(transaction.command(), error);
+        }
+        result
     }
 
     fn apply_persistence_completion(
@@ -460,6 +482,14 @@ fn apply_persistence_completion(
     completion: PersistenceCompletion,
 ) -> Result<(), anyhow::Error> {
     observe_input_dirty(state, Instant::now());
+    if state
+        .session_transaction
+        .as_ref()
+        .is_some_and(|transaction| transaction.request_id == Some(completion.id))
+    {
+        state.complete_session_command(completion);
+        return Ok(());
+    }
     let id = completion.id;
     let save_result: Result<SaveCompletion, anyhow::Error> = match completion.result {
         Ok(PersistenceOutcome::Save(save)) => Ok(save),

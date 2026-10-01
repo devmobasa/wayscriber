@@ -151,6 +151,21 @@ impl InputState {
             || self.radial_menu_is_size_dragging()
     }
 
+    /// Transient edits have their own revision because they become session-dirty
+    /// only on release or text finalization. Disk completions must preserve them.
+    pub(crate) fn session_interaction_state(&self) -> (u64, bool) {
+        (
+            self.session_flags.interaction_revision(),
+            self.has_cancelable_session_capture_interaction(),
+        )
+    }
+
+    pub(crate) fn note_session_interaction_activity(&mut self) {
+        if self.has_cancelable_session_capture_interaction() {
+            self.session_flags.note_interaction_activity();
+        }
+    }
+
     fn has_cancelable_session_capture_interaction(&self) -> bool {
         self.has_active_pointer_interaction()
             || matches!(self.state, DrawingState::TextInput { .. })

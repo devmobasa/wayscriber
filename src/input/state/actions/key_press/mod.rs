@@ -57,7 +57,9 @@ impl InputState {
         resources: crate::input::state::InputTextResources<'_>,
         key: Key,
     ) {
+        self.note_session_interaction_activity();
         let _ = interaction::route_key_press_with_resources(self, resources, key);
+        self.note_session_interaction_activity();
     }
 
     pub fn on_key_repeat(&mut self, key: Key) {
@@ -77,6 +79,8 @@ impl InputState {
         resources: crate::input::state::InputTextResources<'_>,
         key: Key,
     ) {
+        self.note_session_interaction_activity();
         let _ = interaction::route_key_repeat_with_resources(self, resources, key);
+        self.note_session_interaction_activity();
     }
 }

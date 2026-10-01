@@ -236,6 +236,8 @@ pub(super) struct WaylandState {
     // Session persistence
     pub(super) session: SessionState,
     pub(super) persistence: crate::backend::wayland::session::PersistenceController,
+    pub(super) session_transaction:
+        Option<crate::backend::wayland::session::ExplicitSessionTransaction>,
     session_dialog: self::toolbar::SessionFileDialogController,
     pub(super) durable_action_finish: Option<crate::daemon::protocol_v2::ClaimedAction>,
     pub(super) durable_action_retry_at: Option<Instant>,
