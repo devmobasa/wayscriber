@@ -529,8 +529,8 @@ fn finalize_temp_file(
 /// expectation found a file it was never told about, and `AlreadyExists` is the
 /// answer to its own question. A write carrying one was told the name was free
 /// and is now finding out that it is not — the caller's expectation broke, the
-/// same as every other way this window ends, and only that wording sends an
-/// editor round to reload and reapply instead of reporting a failed save.
+/// same as every other way this window ends. The typed destination-change result
+/// lets an editor reload and reapply instead of reporting a failed save.
 fn finalize_rename_error(
     overwrite: OverwriteMode,
     expected: Option<DestinationExpectation<'_>>,

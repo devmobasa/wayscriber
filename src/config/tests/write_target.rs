@@ -241,7 +241,7 @@ fn a_retarget_after_the_last_check_still_writes_the_file_the_window_was_about() 
 /// file's text over the new one, destroying an edit nobody here ever read, and
 /// report a clean save. The identity of the file that was checked is what the
 /// rename is made conditional on, so the save is refused instead — and refused
-/// in the wording that sends the editors round again, because reloading and
+/// as the typed source-change error that sends editors round again, because reloading and
 /// reapplying onto the file that is there now is exactly the right recovery.
 #[test]
 fn a_file_swapped_in_under_the_checked_name_is_refused_rather_than_overwritten() {
