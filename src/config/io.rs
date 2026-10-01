@@ -328,21 +328,9 @@ impl std::fmt::Display for QuickColorSlotMissing {
 
 impl std::error::Error for QuickColorSlotMissing {}
 
-/// The substring a save uses to report that the file moved under a loaded
-/// document.
-///
-/// Two places produce it: `ensure_source_unchanged`, where the document
-/// compares what it loaded against what the path holds now, and
-/// [`write_config_text_atomic`], where the rename finds a different file than
-/// the one those comparisons were about. Both are already pinned by the
-/// document suite; `a_stale_document_is_recognised_and_retried` below re-checks
-/// the coupling against a real stale save rather than trusting it.
-const STALE_SOURCE_MARKER: &str = "changed on disk";
-
+/// Whether retry can recover by reloading the changed source revision.
 pub(crate) fn is_stale_source_error(error: &anyhow::Error) -> bool {
-    error
-        .chain()
-        .any(|cause| cause.to_string().contains(STALE_SOURCE_MARKER))
+    error.downcast_ref::<super::ConfigSourceChanged>().is_some()
 }
 
 /// The shared shape of every narrow config editor.
@@ -765,9 +753,8 @@ pub(super) fn create_config_backup(path: &Path) -> Result<PathBuf> {
 /// the complete revision still being there; the identity coming back names the
 /// file this write created, which is what the caller's next comparison expects.
 ///
-/// A destination that moved is reported in the wording
-/// [`is_stale_source_error`] recognises, because the recovery is the editors'
-/// ordinary one: load what the path holds now and reapply the edit onto it.
+/// A destination that moved is reported as `ConfigSourceChanged`, because
+/// the recovery is the editors' ordinary one: load what the path holds now and reapply the edit onto it.
 pub(super) fn write_config_text_atomic(
     destination: &Path,
     contents: &str,
@@ -784,10 +771,13 @@ pub(super) fn write_config_text_atomic(
         Some(expected),
     ) {
         Ok(identity) => Ok(identity),
-        Err(error) if matches!(error, DurableIoError::DestinationChanged { .. }) => Err(anyhow!(
-            "Configuration changed on disk at {}: {error}. Reload before saving.",
-            destination.display()
-        )),
+        Err(error) if matches!(error, DurableIoError::DestinationChanged { .. }) => {
+            let diagnostic = format!(
+                "Configuration changed on disk at {}: {error}. Reload before saving.",
+                destination.display()
+            );
+            Err(error).context(super::ConfigSourceChanged::new(diagnostic))
+        }
         Err(error) => Err(error)
             .with_context(|| format!("Failed to write config to {}", destination.display())),
     }
@@ -796,6 +786,78 @@ pub(super) fn write_config_text_atomic(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unrelated_failure_with_stale_wording_does_not_reapply_the_edit() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let path = temp.path().join("config.toml");
+        fs::write(&path, "[ui]\nshow_status_bar = true\n").unwrap();
+        let invocations = std::cell::Cell::new(0);
+
+        let error = edit_one_config_key_with_retry(
+            &path,
+            "status",
+            &|_| {
+                invocations.set(invocations.get() + 1);
+                Err(std::io::Error::other("unrelated file changed on disk")).context("edit failed")
+            },
+            &|_| false,
+        )
+        .unwrap_err();
+
+        assert_eq!(invocations.get(), 1);
+        assert!(error.downcast_ref::<std::io::Error>().is_some());
+        assert_eq!(
+            fs::read_to_string(path).unwrap(),
+            "[ui]\nshow_status_bar = true\n"
+        );
+    }
+
+    #[test]
+    fn changed_source_reapplies_once_and_preserves_the_other_edit() {
+        for collide_twice in [false, true] {
+            let temp = crate::test_temp::tempdir().unwrap();
+            let path = temp.path().join("config.toml");
+            fs::write(&path, "[ui]\nshow_status_bar = true\n").unwrap();
+            let invocations = std::cell::Cell::new(0);
+
+            let result = edit_one_config_key_with_retry(
+                &path,
+                "status",
+                &|config| {
+                    let invocation = invocations.get() + 1;
+                    invocations.set(invocation);
+                    config.ui.show_status_bar = false;
+                    if invocation == 1 || collide_twice {
+                        fs::write(
+                            &path,
+                            format!(
+                                "# concurrent edit {invocation}\n[ui]\nshow_status_bar = true\ntheme = 'light'\n"
+                            ),
+                        )?;
+                    }
+                    Ok(())
+                },
+                &|config| !config.ui.show_status_bar,
+            );
+
+            assert_eq!(invocations.get(), 2, "retry must be bounded to one reapply");
+            let document = super::super::ConfigDocument::load_from_path(&path).unwrap();
+            assert_eq!(document.config().ui.theme, super::super::UiTheme::Light);
+            assert!(
+                fs::read_to_string(&path)
+                    .unwrap()
+                    .contains("# concurrent edit")
+            );
+            if collide_twice {
+                assert!(is_stale_source_error(&result.unwrap_err()));
+                assert!(document.config().ui.show_status_bar);
+            } else {
+                assert!(result.is_ok());
+                assert!(!document.config().ui.show_status_bar);
+            }
+        }
+    }
 
     /// The load-bearing half of the narrow editors' one-key property.
     ///
