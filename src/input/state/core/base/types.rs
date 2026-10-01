@@ -518,6 +518,10 @@ pub enum HelperLaunchRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PendingBackendAction {
     Screenshot(Action),
+    /// Save a matching clipboard-failure image on a bounded backend worker.
+    SaveClipboardFallback {
+        request_id: u64,
+    },
     MeasureMode,
     CanvasExport(Action),
     BoardPdfExport(Action),

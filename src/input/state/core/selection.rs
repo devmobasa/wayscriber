@@ -1,7 +1,7 @@
 mod clipboard;
 
-pub(crate) use clipboard::LocalSelectionContext;
 pub(in crate::input::state::core) use clipboard::SelectionClipboard;
+pub(crate) use clipboard::{ClipboardFallbackSaveRequest, LocalSelectionContext};
 
 use super::base::{InputState, SelectionAxis};
 use crate::draw::{ShapeId, TextMeasurer};

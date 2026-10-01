@@ -128,6 +128,7 @@ pub(super) fn handle_pending_actions(
     state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
     state.poll_desktop_open_completion();
+    state.poll_clipboard_fallback_save();
     state.drain_clipboard_requests();
     let effects = state
         .input_state
@@ -226,6 +227,9 @@ struct FrozenTogglePassDecision {
 fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) {
     match action {
         PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
+        PendingBackendAction::SaveClipboardFallback { request_id } => {
+            state.start_clipboard_fallback_save(request_id)
+        }
         PendingBackendAction::MeasureMode => state.handle_measure_mode_action(),
         PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
         PendingBackendAction::BoardPdfExport(action) => {
