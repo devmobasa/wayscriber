@@ -722,13 +722,9 @@ fn draw_zoom_sign(ctx: &cairo::Context, m: &ZoomGlyphMetrics, run_x: f64, plus: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{KeybindingsConfig, StatusBarStyle};
+    use crate::config::{StatusBarStyle};
 
     fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let _action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
         crate::input::state::test_support::make_test_input_state()
     }
 

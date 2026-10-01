@@ -120,9 +120,6 @@ mod tests {
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
-        let _action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
         let action_bindings = keybindings
             .build_action_bindings()
             .expect("default keybindings bindings");

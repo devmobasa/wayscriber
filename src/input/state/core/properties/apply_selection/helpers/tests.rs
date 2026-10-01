@@ -1,13 +1,7 @@
 use super::*;
-use crate::config::KeybindingsConfig;
 use crate::draw::Color;
 
 fn make_state() -> InputState {
-    let keybindings = KeybindingsConfig::default();
-    let _action_map = keybindings
-        .build_action_map()
-        .expect("default keybindings map");
-
     let mut state = crate::input::state::test_support::make_test_input_state();
     state.update_screen_dimensions(200, 120);
     let _ = state.take_dirty_regions();

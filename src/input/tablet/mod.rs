@@ -69,16 +69,10 @@ pub(crate) fn try_apply_pressure_to_state_with(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::KeybindingsConfig;
     use crate::draw::Shape;
     use crate::input::{DrawingState, MouseButton, Tool};
 
     fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let _action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
-
         crate::input::state::test_support::make_test_input_state()
     }
 

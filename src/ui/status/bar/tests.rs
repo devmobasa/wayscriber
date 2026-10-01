@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{KeybindingsConfig, StatusBarItem, StatusBarStyle};
+use crate::config::{StatusBarItem, StatusBarStyle};
 use crate::draw::{Color, Shape};
 
 /// Worst-case prefix: selection info plus a long output label on a
@@ -12,11 +12,6 @@ const CLUSTER_LINE_HEIGHT: f64 = 21.0;
 const DOT_DIAMETER: f64 = 12.0;
 
 fn make_state() -> InputState {
-    let keybindings = KeybindingsConfig::default();
-    let _action_map = keybindings
-        .build_action_map()
-        .expect("default keybindings map");
-
     crate::input::state::test_support::make_test_input_state()
 }
 

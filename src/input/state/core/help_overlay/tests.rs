@@ -1,15 +1,9 @@
-use crate::config::KeybindingsConfig;
 use crate::input::state::{
     HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayPressSource, HelpOverlayReleaseOutcome,
     InputState,
 };
 
 fn make_state() -> InputState {
-    let keybindings = KeybindingsConfig::default();
-    let _action_map = keybindings
-        .build_action_map()
-        .expect("default keybindings map");
-
     crate::input::state::test_support::make_test_input_state()
 }
 
