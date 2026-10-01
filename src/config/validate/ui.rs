@@ -7,6 +7,50 @@ use crate::config::{
 
 impl Config {
     pub(super) fn validate_ui(&mut self) {
+        self.validate_click_highlight();
+
+        if !(300..=5000).contains(&self.ui.command_palette_toast_duration_ms) {
+            log::warn!(
+                "Invalid command palette toast duration {}ms, clamping to 300-5000ms range",
+                self.ui.command_palette_toast_duration_ms
+            );
+            self.ui.command_palette_toast_duration_ms =
+                self.ui.command_palette_toast_duration_ms.clamp(300, 5000);
+        }
+
+        // Sanitize NaN/Inf before clamping (clamp doesn't fix non-finite values)
+        if !self.ui.toolbar.scale.is_finite() {
+            log::warn!(
+                "Non-finite toolbar scale {:?}, resetting to 1.0",
+                self.ui.toolbar.scale
+            );
+            self.ui.toolbar.scale = 1.0;
+        } else if !(0.5..=3.0).contains(&self.ui.toolbar.scale) {
+            log::warn!(
+                "Invalid toolbar scale {:.2}, clamping to 0.5-3.0 range",
+                self.ui.toolbar.scale
+            );
+            self.ui.toolbar.scale = self.ui.toolbar.scale.clamp(0.5, 3.0);
+        }
+
+        let resolved_items = self.ui.toolbar.items.resolved();
+        for unknown in resolved_items.unknown_hidden {
+            log::warn!(
+                "Unknown toolbar item id {:?} in ui.toolbar.items.hidden; preserving it for forward compatibility",
+                unknown
+            );
+        }
+        for unknown in resolved_items.unknown_shown {
+            log::warn!(
+                "Unknown toolbar item id {:?} in ui.toolbar.items.shown; preserving it for forward compatibility",
+                unknown
+            );
+        }
+
+        self.validate_input_hud();
+    }
+
+    fn validate_click_highlight(&mut self) {
         // Non-finite values use the field's default; finite values retain clamping.
         let defaults = ClickHighlightConfig::default();
         if !self.ui.click_highlight.radius.is_finite() {
@@ -66,47 +110,7 @@ impl Config {
             );
         }
 
-        if !(300..=5000).contains(&self.ui.command_palette_toast_duration_ms) {
-            log::warn!(
-                "Invalid command palette toast duration {}ms, clamping to 300-5000ms range",
-                self.ui.command_palette_toast_duration_ms
-            );
-            self.ui.command_palette_toast_duration_ms =
-                self.ui.command_palette_toast_duration_ms.clamp(300, 5000);
-        }
-
-        // Sanitize NaN/Inf before clamping (clamp doesn't fix non-finite values)
-        if !self.ui.toolbar.scale.is_finite() {
-            log::warn!(
-                "Non-finite toolbar scale {:?}, resetting to 1.0",
-                self.ui.toolbar.scale
-            );
-            self.ui.toolbar.scale = 1.0;
-        } else if !(0.5..=3.0).contains(&self.ui.toolbar.scale) {
-            log::warn!(
-                "Invalid toolbar scale {:.2}, clamping to 0.5-3.0 range",
-                self.ui.toolbar.scale
-            );
-            self.ui.toolbar.scale = self.ui.toolbar.scale.clamp(0.5, 3.0);
-        }
-
-        let resolved_items = self.ui.toolbar.items.resolved();
-        for unknown in resolved_items.unknown_hidden {
-            log::warn!(
-                "Unknown toolbar item id {:?} in ui.toolbar.items.hidden; preserving it for forward compatibility",
-                unknown
-            );
-        }
-        for unknown in resolved_items.unknown_shown {
-            log::warn!(
-                "Unknown toolbar item id {:?} in ui.toolbar.items.shown; preserving it for forward compatibility",
-                unknown
-            );
-        }
-
         self.validate_click_highlight_colors();
-
-        self.validate_input_hud();
     }
 
     fn validate_click_highlight_colors(&mut self) {
