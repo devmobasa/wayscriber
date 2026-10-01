@@ -11,6 +11,7 @@ mod board_validation;
 pub mod color;
 mod drawing;
 mod onboarding;
+mod pressure;
 mod tool;
 
 pub use action::Action;
@@ -27,6 +28,7 @@ pub use board_validation::{
 pub use color::Color;
 pub use drawing::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, step_stroke_thickness};
 pub use onboarding::OnboardingTip;
+pub use pressure::{PressureThicknessEditMode, PressureThicknessEntryMode};
 pub use tool::{DragBindableTool, DragTool, EraserMode, Tool};
 
 #[cfg(test)]

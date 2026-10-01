@@ -666,3 +666,12 @@ the board picker owns only its draft. Session format 7 carries appearance and
 its explicit-override provenance independently of page history. The regression
 and performance evidence for this work is kept with the internal documentation
 rather than in this repository.
+
+Action metadata stores `ActionIcon` identities in `ActionMeta.icon`. Rust callers
+that previously invoked that field as a Cairo painter now resolve it with
+`toolbar_icons::action_icon_painter(icon)`. Config serialization and action labels
+are unchanged. Pressure thickness policy lives in `domain`, with the established
+`input::state` re-exports retained. Preset runtime conversion methods and
+`UiTheme::to_theme_mode` keep their public signatures but live beside their
+runtime consumers. Advisory file locks live in `durable_io`; established session
+lock paths remain available.

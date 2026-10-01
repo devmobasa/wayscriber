@@ -15,6 +15,25 @@ pub enum ActionCategory {
     Presets,
 }
 
+/// Semantic glyph identity; rendering owners choose the Cairo painter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionIcon {
+    Text,
+    StickyNote,
+    Select,
+    Pen,
+    Line,
+    Rect,
+    Ellipse,
+    FreeformPolygon,
+    Arrow,
+    Blur,
+    Marker,
+    StepMarker,
+    Eraser,
+    Undo,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ActionMeta {
     pub action: Action,
@@ -27,11 +46,8 @@ pub struct ActionMeta {
     pub in_command_palette: bool,
     pub in_help: bool,
     pub in_toolbar: bool,
-    /// Shared Cairo glyph painter for surfaces that render this action as an
-    /// icon (the radial compass). Reuses the toolbar's semantic painters so
-    /// the same action can never draw two different glyphs. `None` for
-    /// actions no icon surface needs.
-    pub icon: Option<crate::toolbar_icons::ToolbarIconPainter>,
+    /// Semantic icon for the radial menu and command palette.
+    pub icon: Option<ActionIcon>,
 }
 
 impl ActionMeta {

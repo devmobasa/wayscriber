@@ -390,7 +390,9 @@ fn draw_sub_ring(
         let lx = cx + mid_r * mid_angle.cos();
         let ly = cy + mid_r * mid_angle.sin();
         let color = wedge_content_color(theme, is_hovered, is_active);
-        let icon = action_meta(*action).and_then(|meta| meta.icon);
+        let icon = action_meta(*action)
+            .and_then(|meta| meta.icon)
+            .map(crate::toolbar_icons::action_icon_painter);
         let label = action_short_label(*action);
         match icon {
             Some(_) if show_labels => {
@@ -672,7 +674,9 @@ fn slice_label(slice: &RadialSlice) -> &'static str {
 /// family glyphs for parents.
 fn slice_icon(slice: &RadialSlice) -> Option<ToolbarIconPainter> {
     match slice.kind {
-        RadialSliceKind::Action(action) => action_meta(action).and_then(|meta| meta.icon),
+        RadialSliceKind::Action(action) => action_meta(action)
+            .and_then(|meta| meta.icon)
+            .map(crate::toolbar_icons::action_icon_painter),
         RadialSliceKind::Parent(RadialParent::Shapes) => Some(draw_icon_shape_picker),
         RadialSliceKind::Parent(RadialParent::Notes) => Some(draw_icon_note),
     }

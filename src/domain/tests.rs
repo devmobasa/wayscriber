@@ -439,3 +439,23 @@ fn region_capture_action_classification_is_complete_and_narrow() {
         assert!(!action.is_region_capture(), "action={action:?}");
     }
 }
+
+#[test]
+fn pressure_preferences_preserve_public_paths_and_serialized_names() {
+    use super::{PressureThicknessEditMode as Edit, PressureThicknessEntryMode as Entry};
+
+    assert_json_names(&[
+        (Edit::Disabled, "disabled"),
+        (Edit::Add, "add"),
+        (Edit::Scale, "scale"),
+    ]);
+    assert_json_names(&[
+        (Entry::Never, "never"),
+        (Entry::PressureOnly, "pressure_only"),
+        (Entry::AnyPressure, "any_pressure"),
+    ]);
+    let legacy_edit: crate::input::state::PressureThicknessEditMode = Edit::Scale;
+    let legacy_entry: crate::input::state::PressureThicknessEntryMode = Entry::AnyPressure;
+    assert_eq!(legacy_edit, Edit::Scale);
+    assert_eq!(legacy_entry, Entry::AnyPressure);
+}

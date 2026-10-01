@@ -1,3 +1,7 @@
+mod lock;
+
+pub use lock::{lock_exclusive, lock_shared, try_lock_exclusive, unlock};
+
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};

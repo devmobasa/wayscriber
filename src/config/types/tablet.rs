@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::keybindings::Action;
-use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
+use crate::domain::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
 /// Binding for a single stylus barrel button.
 ///
