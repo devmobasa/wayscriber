@@ -1,40 +1,10 @@
 use super::*;
-use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::MutexGuard;
 
 use crate::models::{
     DesktopEnvironment, LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,
 };
 use wayscriber::env_vars::XDG_RUNTIME_DIR_ENV;
-
-struct RuntimeEnvGuard {
-    previous: Option<OsString>,
-    _guard: MutexGuard<'static, ()>,
-}
-
-impl RuntimeEnvGuard {
-    fn set_xdg_runtime_dir(path: &Path) -> Self {
-        let guard = crate::test_env::lock();
-        let previous = std::env::var_os(XDG_RUNTIME_DIR_ENV);
-        unsafe {
-            std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
-        }
-        Self {
-            previous,
-            _guard: guard,
-        }
-    }
-}
-
-impl Drop for RuntimeEnvGuard {
-    fn drop(&mut self) {
-        match self.previous.take() {
-            Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-            None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
-        }
-    }
-}
 
 fn daemon_status(active: bool) -> DaemonRuntimeStatus {
     DaemonRuntimeStatus {
@@ -57,7 +27,7 @@ fn daemon_status(active: bool) -> DaemonRuntimeStatus {
 #[test]
 fn clear_policy_blocks_running_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let status = daemon_status(true);
 
     let blocker = SessionCatalogOperation::Clear
@@ -70,7 +40,7 @@ fn clear_policy_blocks_running_daemon() {
 #[test]
 fn clear_policy_allows_inactive_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let status = daemon_status(false);
 
     let blocker = SessionCatalogOperation::Clear.cached_status_blocker(Some(&status));
@@ -81,7 +51,7 @@ fn clear_policy_allows_inactive_daemon() {
 #[test]
 fn duplicate_policy_uses_duplicate_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let blocker = SessionCatalogOperation::Duplicate
         .cached_status_blocker(None)
         .expect("unknown status should block duplicate");
@@ -92,7 +62,7 @@ fn duplicate_policy_uses_duplicate_status_message() {
 #[test]
 fn move_policy_uses_move_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let blocker = SessionCatalogOperation::Move
         .cached_status_blocker(None)
         .expect("unknown status should block move");
@@ -103,7 +73,7 @@ fn move_policy_uses_move_status_message() {
 #[test]
 fn clear_policy_blocks_unknown_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let blocker = SessionCatalogOperation::Clear
         .cached_status_blocker(None)
         .expect("unknown status should block clear");
@@ -114,7 +84,7 @@ fn clear_policy_blocks_unknown_daemon_status() {
 #[test]
 fn clear_tool_state_policy_uses_tool_state_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let blocker = SessionCatalogOperation::ClearToolState
         .cached_status_blocker(None)
         .expect("unknown status should block tool reset");
@@ -126,7 +96,7 @@ fn clear_tool_state_policy_uses_tool_state_status_message() {
 #[test]
 fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
     let error = acquire_runtime_lock_for_inactive_operation(
         RuntimeLockKind::Daemon,
@@ -140,7 +110,7 @@ fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
 #[test]
 fn inactive_session_reservation_holds_the_overlay_lock_but_not_the_daemon_lock() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
 
     let reservation = reserve_inactive_session_operation(SessionCatalogOperation::Clear).unwrap();
 
@@ -161,7 +131,7 @@ fn inactive_session_reservation_holds_the_overlay_lock_but_not_the_daemon_lock()
 #[test]
 fn inactive_session_reservation_refuses_a_running_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
 
     let error = match reserve_inactive_session_operation(SessionCatalogOperation::Move) {
@@ -179,7 +149,7 @@ fn inactive_session_reservation_refuses_a_running_daemon() {
 #[test]
 fn cached_status_blocker_does_not_probe_runtime_locks() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
     let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
     let status = daemon_status(false);
@@ -195,7 +165,7 @@ fn cached_status_blocker_does_not_probe_runtime_locks() {
 #[test]
 fn clear_runtime_guards_hold_daemon_and_overlay_locks() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
     let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
 

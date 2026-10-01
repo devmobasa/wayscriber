@@ -1,9 +1,5 @@
 use super::*;
-use std::env;
-use std::sync::Mutex;
 use wayscriber::env_vars::HOME_ENV;
-
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
 fn render_light_controls_quotes_binary_with_spaces() {
@@ -80,15 +76,9 @@ fn has_source_line_matches_quoted_and_inline_commented_targets() {
 
 #[test]
 fn has_source_line_matches_tilde_target() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let tmp = crate::test_temp::tempdir().unwrap();
     let home = tmp.path();
-    let prev_home = env::var_os(HOME_ENV);
-    unsafe {
-        env::set_var(HOME_ENV, home);
-    }
+    let _env = crate::test_env::EnvGuard::set(&[(HOME_ENV, home.as_os_str())]);
 
     let absolute = home
         .join(".config")
@@ -99,11 +89,6 @@ fn has_source_line_matches_tilde_target() {
         "source = ~/.config/hypr/wayscriber-light.conf # already sourced\n",
         &source_line
     ));
-
-    match prev_home {
-        Some(value) => unsafe { env::set_var(HOME_ENV, value) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
 }
 
 #[test]
