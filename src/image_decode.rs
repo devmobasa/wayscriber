@@ -261,6 +261,80 @@ mod tests {
         bytes
     }
 
+    #[test]
+    fn png_normalization_preserves_color_and_alpha_across_formats() {
+        use png::{BitDepth, ColorType};
+
+        let cases: &[(ColorType, BitDepth, &[u8], &[u8])] = &[
+            (
+                ColorType::Rgb,
+                BitDepth::Eight,
+                &[7, 83, 219, 241, 32, 18],
+                &[7, 83, 219, 255, 241, 32, 18, 255],
+            ),
+            (
+                ColorType::Rgba,
+                BitDepth::Eight,
+                &[7, 83, 219, 0, 241, 32, 18, 127, 2, 9, 74, 255],
+                &[7, 83, 219, 0, 241, 32, 18, 127, 2, 9, 74, 255],
+            ),
+            (
+                ColorType::Grayscale,
+                BitDepth::Eight,
+                &[17, 203],
+                &[17, 17, 17, 255, 203, 203, 203, 255],
+            ),
+            (
+                ColorType::GrayscaleAlpha,
+                BitDepth::Eight,
+                &[17, 0, 203, 127, 58, 255],
+                &[17, 17, 17, 0, 203, 203, 203, 127, 58, 58, 58, 255],
+            ),
+            (
+                ColorType::Indexed,
+                BitDepth::Eight,
+                &[0, 1, 2],
+                &[7, 83, 219, 0, 241, 32, 18, 127, 2, 9, 74, 255],
+            ),
+            (
+                ColorType::Rgba,
+                BitDepth::Sixteen,
+                &[
+                    7, 250, 83, 12, 219, 34, 0, 255, 241, 9, 32, 8, 18, 7, 127, 1,
+                ],
+                &[7, 83, 219, 0, 241, 32, 18, 127],
+            ),
+        ];
+
+        for &(color, depth, data, expected) in cases {
+            let width = (expected.len() / 4) as u32;
+            let mut bytes = Vec::new();
+            let mut encoder = png::Encoder::new(&mut bytes, width, 1);
+            encoder.set_color(color);
+            encoder.set_depth(depth);
+            if color == ColorType::Indexed {
+                encoder.set_palette(vec![7, 83, 219, 241, 32, 18, 2, 9, 74]);
+                encoder.set_trns(vec![0, 127, 255]);
+            }
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(data).unwrap();
+            writer.finish().unwrap();
+
+            let image = decode_rgba(
+                EncodedImageFormat::Png,
+                &bytes,
+                DecodeLimits { max_pixels: 3 },
+            )
+            .unwrap();
+            assert_eq!(
+                (image.width, image.height),
+                (width, 1),
+                "{color:?}/{depth:?}"
+            );
+            assert_eq!(image.rgba, expected, "{color:?}/{depth:?}");
+        }
+    }
+
     /// A PNG signature and IHDR declaring `width`x`height`, with no image data.
     fn png_header_only(width: u32, height: u32) -> Vec<u8> {
         let mut bytes = Vec::new();
