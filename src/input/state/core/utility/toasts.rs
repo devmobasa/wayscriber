@@ -122,11 +122,6 @@ impl InputState {
         result
     }
 
-    #[cfg(test)]
-    pub(crate) fn toast_contains(&self, x: i32, y: i32) -> bool {
-        self.feedback.contains(x, y)
-    }
-
     pub(crate) fn note_capability_toast(&mut self, caps: CompositorCapabilities) -> Option<String> {
         self.feedback.note_capability_toast(caps)
     }
@@ -533,12 +528,12 @@ mod tests {
     }
 
     #[test]
-    fn toast_contains_reports_hit_without_dismissing() {
+    fn toast_press_reports_hit_without_dismissing() {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
         state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
-        assert!(state.toast_contains(50, 40));
+        assert!(state.toast_press_at(50, 40).is_some());
         assert!(state.active_toast().is_some());
         assert!(state.test_toast_geometry().is_some());
     }
@@ -560,7 +555,7 @@ mod tests {
         let toast = state.active_toast().expect("preempting toast visible");
         assert_eq!(toast.message, "Delete page?");
         assert!(state.test_toast_geometry().is_none());
-        assert!(!state.toast_contains(50, 40));
+        assert!(state.toast_press_at(50, 40).is_none());
         let stale_press = ToastPress::body(0);
         assert_eq!(
             state.resolve_toast_release(stale_press, 50, 40),
