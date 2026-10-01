@@ -660,3 +660,6 @@ mod tests {
         assert!(matches!(error, CaptureError::DBusError(_)), "{error}");
     }
 }
+
+#[cfg(test)]
+mod transport_tests;

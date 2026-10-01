@@ -233,7 +233,7 @@ internal static class DevelopmentCommands
         var repositoryPackages = new[] { "apt-utils", "dpkg-dev", "rpm", "createrepo-c", "rsync", "gnupg" };
         IEnumerable<string>? packages = profile switch
         {
-            "checks" => common.Concat( ["poppler-utils", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] )
+            "checks" => common.Concat( ["poppler-utils", "dbus-daemon", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] )
                 .Concat( repositoryPackages ),
             "widgets" => common.Concat( ["weston", "dbus-x11", "python3", "libgl1-mesa-dri", "fonts-dejavu-core", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] ),
             "package" => common.Concat( ["rpm"] ),
