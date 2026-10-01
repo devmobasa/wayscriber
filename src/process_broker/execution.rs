@@ -195,6 +195,7 @@ pub(super) fn publish_bounded(
     let mut child = OwnedProcess::process_group(
         command
             .spawn()
+            .map_err(super::error::BrokerError::spawn)
             .context("broker publication helper spawn failed")?,
     );
     let stdin = child.child_mut().stdin.take();
@@ -305,7 +306,7 @@ pub(super) fn run_bounded(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child =
-        OwnedProcess::process_group(command.spawn().context("broker helper spawn failed")?);
+        OwnedProcess::process_group(command.spawn().map_err(super::error::BrokerError::spawn)?);
     let mut stdin = child.child_mut().stdin.take();
     let stdout = child
         .child_mut()

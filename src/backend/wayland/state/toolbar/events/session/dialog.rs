@@ -234,7 +234,12 @@ fn run_session_file_dialog_command(
         )
     }) {
         Ok(output) => output,
-        Err(err) if err.to_string().contains("No such file") => return Ok(None),
+        Err(err)
+            if crate::process_broker::error_kind(&err)
+                == Some(crate::process_broker::BrokerErrorKind::MissingExecutable) =>
+        {
+            return Ok(None);
+        }
         Err(err) => return Err(anyhow!("failed to launch {program}: {err:#}")),
     };
 
