@@ -1,4 +1,8 @@
 use relm4::ComponentSender;
+use wayscriber::config::{
+    CLICK_HIGHLIGHT_DURATION_MAX_MS, CLICK_HIGHLIGHT_DURATION_MIN_MS, CLICK_HIGHLIGHT_OUTLINE_MAX,
+    CLICK_HIGHLIGHT_OUTLINE_MIN, CLICK_HIGHLIGHT_RADIUS_MAX, CLICK_HIGHLIGHT_RADIUS_MIN,
+};
 
 use crate::messages::Message;
 use crate::models::{ColorPickerId, TabId, TextField, ToggleField};
@@ -42,19 +46,37 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "Radius",
             |app| app.draft.click_highlight_radius.clone(),
             |value| Message::TextChanged(TextField::HighlightRadius, value),
-            |app| validate_f64_range(&app.draft.click_highlight_radius, 16.0, 160.0),
+            |app| {
+                validate_f64_range(
+                    &app.draft.click_highlight_radius,
+                    CLICK_HIGHLIGHT_RADIUS_MIN,
+                    CLICK_HIGHLIGHT_RADIUS_MAX,
+                )
+            },
         )
         .entry_row_validated(
             "Outline thickness",
             |app| app.draft.click_highlight_outline_thickness.clone(),
             |value| Message::TextChanged(TextField::HighlightOutlineThickness, value),
-            |app| validate_f64_range(&app.draft.click_highlight_outline_thickness, 1.0, 12.0),
+            |app| {
+                validate_f64_range(
+                    &app.draft.click_highlight_outline_thickness,
+                    CLICK_HIGHLIGHT_OUTLINE_MIN,
+                    CLICK_HIGHLIGHT_OUTLINE_MAX,
+                )
+            },
         )
         .entry_row_validated(
             "Duration (ms)",
             |app| app.draft.click_highlight_duration_ms.clone(),
             |value| Message::TextChanged(TextField::HighlightDurationMs, value),
-            |app| validate_u32_range(&app.draft.click_highlight_duration_ms, 150, 1500),
+            |app| {
+                validate_u32_range(
+                    &app.draft.click_highlight_duration_ms,
+                    CLICK_HIGHLIGHT_DURATION_MIN_MS as u32,
+                    CLICK_HIGHLIGHT_DURATION_MAX_MS as u32,
+                )
+            },
         );
 
     page.group("Colors");

@@ -6,6 +6,7 @@
 //! error text instead, on the same `.error` styling every ported page uses.
 
 use relm4::prelude::*;
+use wayscriber::config::{ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN};
 
 use crate::messages::Message;
 use crate::models::util::format_float;
@@ -15,11 +16,6 @@ use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder};
 
-/// `ArrowConfig::length`, in pixels.
-const LENGTH_RANGE: (f64, f64) = (5.0, 50.0);
-/// `ArrowConfig::angle_degrees`, in degrees.
-const ANGLE_RANGE: (f64, f64) = (15.0, 60.0);
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Arrow);
 
@@ -28,13 +24,13 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "Arrow length (px)",
             |app| app.draft.arrow_length.clone(),
             |value| Message::TextChanged(TextField::ArrowLength, value),
-            |app| validate_f64_range(&app.draft.arrow_length, LENGTH_RANGE.0, LENGTH_RANGE.1),
+            |app| validate_f64_range(&app.draft.arrow_length, ARROW_LENGTH_MIN, ARROW_LENGTH_MAX),
         )
         .entry_row_validated(
             "Arrow angle (deg)",
             |app| app.draft.arrow_angle.clone(),
             |value| Message::TextChanged(TextField::ArrowAngle, value),
-            |app| validate_f64_range(&app.draft.arrow_angle, ANGLE_RANGE.0, ANGLE_RANGE.1),
+            |app| validate_f64_range(&app.draft.arrow_angle, ARROW_ANGLE_MIN, ARROW_ANGLE_MAX),
         )
         .switch_row(
             "Place arrowhead at end of line",

@@ -2573,3 +2573,43 @@ fn default_config_omits_retired_toolbar_keys() {
         );
     }
 }
+
+#[test]
+fn click_highlight_load_repairs_nonfinite_values_and_preserves_finite_bounds() {
+    for (value, radius, thickness, channel) in [
+        ("nan", 24.0, 4.0, None),
+        ("inf", 24.0, 4.0, None),
+        ("-inf", 24.0, 4.0, None),
+        ("-1.0", 16.0, 1.0, Some(0.0)),
+        ("200.0", 160.0, 12.0, Some(1.0)),
+        ("16.0", 16.0, 12.0, Some(1.0)),
+        ("160.0", 160.0, 12.0, Some(1.0)),
+        ("1.0", 16.0, 1.0, Some(1.0)),
+        ("12.0", 16.0, 12.0, Some(1.0)),
+        ("0.0", 16.0, 1.0, Some(0.0)),
+        ("0.5", 16.0, 1.0, Some(0.5)),
+    ] {
+        let temp = TempConfig::new("click-highlight-finite");
+        temp.write(&format!(
+            "[ui.click_highlight]\nradius = {value}\noutline_thickness = {value}\nfill_color = [{value}, {value}, {value}, {value}]\noutline_color = [{value}, {value}, {value}, {value}]\n"
+        ));
+
+        let document = ConfigDocument::load_from_path(&temp.path).unwrap();
+        let highlight = &document.config().ui.click_highlight;
+        assert_eq!(highlight.radius, radius, "radius for {value}");
+        assert_eq!(
+            highlight.outline_thickness, thickness,
+            "thickness for {value}"
+        );
+        assert_eq!(
+            highlight.fill_color,
+            channel.map_or([1.0, 0.8, 0.0, 0.35], |v| [v; 4]),
+            "fill for {value}"
+        );
+        assert_eq!(
+            highlight.outline_color,
+            channel.map_or([1.0, 0.6, 0.0, 0.9], |v| [v; 4]),
+            "outline for {value}"
+        );
+    }
+}
