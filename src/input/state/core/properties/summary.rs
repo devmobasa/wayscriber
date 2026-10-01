@@ -16,6 +16,31 @@ pub(super) fn resolve_selected_shapes<'a>(
     frame: &'a Frame,
     ids: &[ShapeId],
 ) -> Vec<&'a DrawnShape> {
+    if ids.is_empty() {
+        return Vec::new();
+    }
+
+    // Tiny selections need only a few comparisons per shape. Avoid hashing the
+    // whole frame for the common one-shape selection; the bound stays constant.
+    if ids.len() <= 4 {
+        let mut selected = vec![None; ids.len()];
+        let mut remaining = ids.len();
+        for drawn in &frame.shapes {
+            for (id, slot) in ids.iter().zip(&mut selected) {
+                if *id == drawn.id {
+                    if slot.is_none() {
+                        remaining -= 1;
+                    }
+                    *slot = Some(drawn);
+                }
+            }
+            if remaining == 0 {
+                break;
+            }
+        }
+        return selected.into_iter().flatten().collect();
+    }
+
     let mut selected: HashMap<_, Option<&DrawnShape>> = ids.iter().map(|id| (*id, None)).collect();
     for drawn in &frame.shapes {
         if let Some(slot) = selected.get_mut(&drawn.id) {
