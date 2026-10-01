@@ -135,6 +135,9 @@ otherwise it reports that optional local check as skipped. The source-coverage g
 rustc dep-info and rejects tracked or unignored `.rs` files that are outside the supported Cargo
 target/feature matrix.
 
+The all-feature portal transport tests require `dbus-daemon`. Each fixture owns a private
+session bus and connects through its explicit address, leaving the desktop session bus alone.
+
 The canonical gate serializes the Rust test harness because parallel rendering tests have
 crashed in the native font stack through context-menu, board-picker, and region-capture paths.
 This changes scheduling, not test selection; tests may still create their own threads.
