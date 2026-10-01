@@ -586,14 +586,10 @@ pub(in crate::backend::wayland) use persistence::{
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,
 };
 
+pub(in crate::backend::wayland) use runtime::SessionTransaction;
 pub(in crate::backend::wayland) use runtime::{
     RuntimeClearSessionReport, RuntimeClearToolStateReport, RuntimeOpenSessionReport,
     RuntimeSaveAsSessionReport,
-};
-#[cfg(test)]
-pub(super) use runtime::{
-    clear_current_session_runtime, clear_saved_tool_state_runtime, open_named_session_runtime,
-    save_named_session_as_requires_overwrite, save_named_session_as_runtime,
 };
 pub(super) use runtime::{has_session_artifact, should_skip_unloaded_contentless_save};
 

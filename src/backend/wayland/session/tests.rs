@@ -389,25 +389,25 @@ fn runtime_save_as_overwrite_preflight_reports_existing_artifacts() {
     stored_session::save_snapshot(&snapshot_for_board("transparent", 17), &primary_options)
         .expect("save existing target");
     std::fs::write(sidecar_options.clear_marker_file_path(), b"stale clear").expect("stale clear");
-    let session_state = SessionState::new(Some(current_options));
+    let mut session_state = SessionState::new(Some(current_options));
 
     assert!(
         !save_named_session_as_requires_overwrite(
-            &session_state,
+            &mut session_state,
             &fresh_options.session_file_path()
         )
         .expect("fresh preflight")
     );
     assert!(
         save_named_session_as_requires_overwrite(
-            &session_state,
+            &mut session_state,
             &primary_options.session_file_path()
         )
         .expect("primary preflight")
     );
     assert!(
         save_named_session_as_requires_overwrite(
-            &session_state,
+            &mut session_state,
             &sidecar_options.session_file_path()
         )
         .expect("sidecar preflight")
@@ -419,11 +419,11 @@ fn runtime_save_as_overwrite_preflight_skips_current_target() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-preflight-self");
     std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
-    let session_state = SessionState::new(Some(current_options.clone()));
+    let mut session_state = SessionState::new(Some(current_options.clone()));
 
     assert!(
         !save_named_session_as_requires_overwrite(
-            &session_state,
+            &mut session_state,
             &current_options.session_file_path()
         )
         .expect("current target preflight")
@@ -2006,4 +2006,88 @@ fn output_transition_deferral_moves_deadline_forward() {
         state.output_transition_timeout(now),
         Some(Duration::from_millis(500))
     );
+}
+
+fn open_named_session_runtime(
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    session_state: &mut SessionState,
+    target_path: &Path,
+    _now: Instant,
+) -> Result<RuntimeOpenSessionReport> {
+    let mut persistence = PersistenceController::start_for_test()?;
+    SessionTransaction {
+        input_state: input_state,
+        measurer: measurer,
+        session: session_state,
+        persistence: &mut persistence,
+    }
+    .open_named_session_runtime(target_path)
+}
+
+fn save_named_session_as_runtime(
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    session_state: &mut SessionState,
+    target_path: &Path,
+    overwrite: stored_session::SaveAsOverwrite,
+    _now: Instant,
+) -> Result<RuntimeSaveAsSessionReport> {
+    let mut persistence = PersistenceController::start_for_test()?;
+    SessionTransaction {
+        input_state: input_state,
+        measurer: measurer,
+        session: session_state,
+        persistence: &mut persistence,
+    }
+    .save_named_session_as_runtime(target_path, overwrite)
+}
+
+fn save_named_session_as_requires_overwrite(
+    session_state: &mut SessionState,
+    target_path: &Path,
+) -> Result<bool> {
+    let mut input_state = test_input_state();
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut persistence = PersistenceController::start_for_test()?;
+    SessionTransaction {
+        input_state: &mut input_state,
+        measurer: &measurer,
+        session: session_state,
+        persistence: &mut persistence,
+    }
+    .save_named_session_as_requires_overwrite(target_path)
+}
+
+fn clear_current_session_runtime(
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    session_state: &mut SessionState,
+    _now: Instant,
+) -> Result<RuntimeClearSessionReport> {
+    let mut persistence = PersistenceController::start_for_test()?;
+    SessionTransaction {
+        input_state: input_state,
+        measurer: measurer,
+        session: session_state,
+        persistence: &mut persistence,
+    }
+    .clear_current_session_runtime()
+}
+
+fn clear_saved_tool_state_runtime(
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    session_state: &mut SessionState,
+    default_tool_state: stored_session::ToolStateSnapshot,
+    _now: Instant,
+) -> Result<RuntimeClearToolStateReport> {
+    let mut persistence = PersistenceController::start_for_test()?;
+    SessionTransaction {
+        input_state: input_state,
+        measurer: measurer,
+        session: session_state,
+        persistence: &mut persistence,
+    }
+    .clear_saved_tool_state_runtime(default_tool_state)
 }
