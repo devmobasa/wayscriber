@@ -76,6 +76,7 @@ pub(in crate::backend::wayland) struct ClipboardRuntime {
     paste: RuntimeOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
     hex_copy: RuntimeOperationController<String, HexCopyOutcome>,
     pending_hex_copy: Option<String>,
+    fallback_save: RuntimeOperationController<u64, Result<std::path::PathBuf, String>>,
     text_copy: RuntimeOperationController<TextClipboardRequest, TextCopyOutcome>,
     pending_text_copy: VecDeque<TextClipboardRequest>,
     text_paste: RuntimeOperationController<TextPasteTarget, TextPasteOutcome>,
@@ -89,11 +90,34 @@ impl ClipboardRuntime {
             paste: RuntimeOperationController::new(ids.clone(), wake.clone()),
             hex_copy: RuntimeOperationController::new(ids.clone(), wake.clone()),
             pending_hex_copy: None,
+            fallback_save: RuntimeOperationController::new(ids.clone(), wake.clone()),
             text_copy: RuntimeOperationController::new(ids.clone(), wake.clone()),
             pending_text_copy: VecDeque::new(),
             text_paste: RuntimeOperationController::new(ids, wake),
             pending_text_paste: VecDeque::new(),
         }
+    }
+
+    pub(in crate::backend::wayland) fn submit_fallback_save(
+        &mut self,
+        request: std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>,
+        operation: impl FnOnce(
+            std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>,
+        ) -> Result<std::path::PathBuf, String>
+        + Send
+        + 'static,
+    ) -> Result<(), RuntimeOperationSubmitFailure<u64>> {
+        self.fallback_save
+            .try_submit(request.id, "clipboard-fallback-save", move || {
+                operation(request)
+            })
+            .map(drop)
+    }
+
+    pub(in crate::backend::wayland) fn poll_fallback_save(
+        &mut self,
+    ) -> RuntimeOperationPoll<u64, Result<std::path::PathBuf, String>> {
+        self.fallback_save.poll()
     }
 
     pub(in crate::backend::wayland) fn publish_active(&self) -> bool {

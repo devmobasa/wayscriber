@@ -9,10 +9,10 @@ mod mouse;
 mod render;
 mod spotlight;
 mod text_resources;
+pub(crate) use core::{ClipboardFallbackSaveRequest, InputEffect, InputEffectDrain};
 pub(crate) use core::{
     DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
 };
-pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use core::{
     LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
     PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,

@@ -142,7 +142,7 @@ pub use region_select::{
     SelectionPolicy,
 };
 pub(crate) use search::fuzzy_score;
-pub(crate) use selection::LocalSelectionContext;
+pub(crate) use selection::{ClipboardFallbackSaveRequest, LocalSelectionContext};
 pub(crate) use style::DrawingStyle;
 pub(crate) use text_editing::TextEditing;
 pub use tool_controls::PrecisionEntryState;
