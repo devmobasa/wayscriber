@@ -1083,6 +1083,12 @@ font_size = 18.0
 enabled = true
 ```
 
+Click-highlight radius accepts 16–160 pixels, outline thickness 1–12 pixels,
+and duration 150–1500 milliseconds. Finite out-of-range values are clamped on
+load. Non-finite radius, thickness, and RGBA components reset to their respective
+defaults shown above. The configurator keeps invalid input visible and refuses
+to save it.
+
 **Status Bar:**
 - Shows current color, pen thickness, and active tool
 - Press <kbd>F1</kbd>/<kbd>F10</kbd> to toggle help overlay
