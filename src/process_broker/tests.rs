@@ -472,7 +472,8 @@ fn only_the_callback_thread_spawn_declines_to_wait_for_the_transport() {
 
     let error = declined.expect_err("try_spawn must not queue behind the long helper");
     assert!(
-        format!("{error:#}").contains(crate::process_broker::BROKER_BUSY),
+        crate::process_broker::error_kind(&error)
+            == Some(crate::process_broker::BrokerErrorKind::Busy),
         "unexpected try_spawn failure: {error:#}"
     );
     assert!(
@@ -1359,5 +1360,51 @@ fn wl_copy_publication_accepts_capture_sized_input() {
     assert_eq!(
         std::fs::read_to_string(count_path).unwrap().trim(),
         PUBLICATION_BYTES.to_string()
+    );
+}
+
+#[test]
+fn missing_executable_category_survives_real_broker_transport_and_context() {
+    let guard = start_for_runtime().unwrap();
+    let error = guard
+        .broker()
+        .run(
+            HelperKind::SessionZenity,
+            OsStr::new("/definitely-missing-wayscriber-test/zenity"),
+            [OsStr::new("--file-selection")],
+            Vec::new(),
+            Duration::from_secs(1),
+            1024,
+        )
+        .unwrap_err()
+        .context("caller can add diagnostic context");
+
+    assert_eq!(
+        crate::process_broker::error_kind(&error),
+        Some(crate::process_broker::BrokerErrorKind::MissingExecutable)
+    );
+    assert!(format!("{error:#}").contains("broker helper spawn failed"));
+}
+
+#[test]
+fn rejected_diagnostic_with_missing_file_words_is_not_a_missing_executable() {
+    let guard = start_for_runtime().unwrap();
+    let error = guard
+        .broker()
+        .run(
+            HelperKind::SessionZenity,
+            OsStr::new("No such file"),
+            [OsStr::new("--file-selection")],
+            Vec::new(),
+            Duration::from_secs(1),
+            1024,
+        )
+        .unwrap_err()
+        .context("chooser context");
+
+    assert!(format!("{error:#}").contains("No such file"));
+    assert_eq!(
+        crate::process_broker::error_kind(&error),
+        Some(crate::process_broker::BrokerErrorKind::Rejected)
     );
 }
