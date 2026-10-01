@@ -34,6 +34,7 @@ run_check ./tools/check-rust-source-coverage.py
 run_check ./tools/check-process-sites.py
 run_check ./tools/check-config-writers.py
 run_check ./tools/check-shared-dependencies.py
+run_check ./tools/test-shared-dependencies.py
 run_check cargo fmt --all -- --check
 run_check cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run_check cargo build --locked --workspace --all-features --bins
