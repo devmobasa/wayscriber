@@ -1,8 +1,9 @@
 use super::super::base::InputState;
 use super::summary::{
-    PropertySummary, shape_arrow_angle, shape_arrow_head, shape_arrow_length, shape_arrow_style,
-    shape_color, shape_fill_paint, shape_font_size, shape_opacity, shape_spotlight_magnification,
-    shape_text_background, shape_thickness, summarize_property,
+    PropertySummary, resolve_selected_shapes, shape_arrow_angle, shape_arrow_head,
+    shape_arrow_length, shape_arrow_style, shape_color, shape_fill_paint, shape_font_size,
+    shape_opacity, shape_spotlight_magnification, shape_text_background, shape_thickness,
+    summarize_property,
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue};
 use super::utils::{approx_eq, color_label, color_rgba_eq};
@@ -61,7 +62,12 @@ impl InputState {
     /// Whether some selected shape has a color that is not locked.
     pub(crate) fn selection_has_editable_color(&self) -> bool {
         let frame = self.boards.active_frame();
-        summarize_property(frame, self.selected_shape_ids(), shape_color, color_rgba_eq).editable
+        summarize_property(
+            &resolve_selected_shapes(frame, self.selected_shape_ids()),
+            shape_color,
+            color_rgba_eq,
+        )
+        .editable
     }
 
     pub(super) fn build_selection_property_entries(
@@ -69,11 +75,12 @@ impl InputState {
         ids: &[ShapeId],
     ) -> Vec<SelectionPropertyEntry> {
         let frame = self.boards.active_frame();
+        let selected = resolve_selected_shapes(frame, ids);
         let palette = self.style.quick_colors.rendered_entries();
         let mut entries = Vec::new();
 
         // Opacity counts: two reds at different opacities are a mixed color.
-        let color_summary = summarize_property(frame, ids, shape_color, color_rgba_eq);
+        let color_summary = summarize_property(&selected, shape_color, color_rgba_eq);
         if color_summary.applicable {
             entries.push(entry(
                 "Color",
@@ -84,7 +91,7 @@ impl InputState {
             ));
         }
 
-        let thickness_summary = summarize_property(frame, ids, shape_thickness, approx_eq);
+        let thickness_summary = summarize_property(&selected, shape_thickness, approx_eq);
         if thickness_summary.applicable {
             entries.push(entry(
                 "Thickness",
@@ -95,13 +102,9 @@ impl InputState {
             ));
         } else {
             let mut any_pressure = false;
-            let mut all_pressure = !ids.is_empty();
+            let mut all_pressure = !ids.is_empty() && selected.len() == ids.len();
             let mut any_pressure_editable = false;
-            for id in ids {
-                let Some(drawn) = frame.shape(*id) else {
-                    all_pressure = false;
-                    continue;
-                };
+            for drawn in &selected {
                 if matches!(&drawn.shape, Shape::FreehandPressure { .. }) {
                     any_pressure = true;
                     if !drawn.locked {
@@ -135,7 +138,7 @@ impl InputState {
             }
         }
 
-        let opacity_summary = summarize_property(frame, ids, shape_opacity, approx_eq);
+        let opacity_summary = summarize_property(&selected, shape_opacity, approx_eq);
         if opacity_summary.applicable {
             entries.push(entry(
                 "Opacity",
@@ -146,7 +149,7 @@ impl InputState {
             ));
         }
 
-        let fill_summary = summarize_property(frame, ids, shape_fill_paint, |a, b| match (a, b) {
+        let fill_summary = summarize_property(&selected, shape_fill_paint, |a, b| match (a, b) {
             (Some(a), Some(b)) => color_rgba_eq(a, b),
             (a, b) => a.is_none() && b.is_none(),
         });
@@ -162,7 +165,7 @@ impl InputState {
             ));
         }
 
-        let font_summary = summarize_property(frame, ids, shape_font_size, approx_eq);
+        let font_summary = summarize_property(&selected, shape_font_size, approx_eq);
         if font_summary.applicable {
             entries.push(entry(
                 "Font size",
@@ -173,7 +176,7 @@ impl InputState {
             ));
         }
 
-        let head_summary = summarize_property(frame, ids, shape_arrow_head, |a, b| a == b);
+        let head_summary = summarize_property(&selected, shape_arrow_head, |a, b| a == b);
         if head_summary.applicable {
             entries.push(entry(
                 "Arrow head",
@@ -184,7 +187,7 @@ impl InputState {
             ));
         }
 
-        let style_summary = summarize_property(frame, ids, shape_arrow_style, |a, b| a == b);
+        let style_summary = summarize_property(&selected, shape_arrow_style, |a, b| a == b);
         if style_summary.applicable {
             entries.push(entry(
                 "Arrow style",
@@ -195,7 +198,7 @@ impl InputState {
             ));
         }
 
-        let length_summary = summarize_property(frame, ids, shape_arrow_length, approx_eq);
+        let length_summary = summarize_property(&selected, shape_arrow_length, approx_eq);
         if length_summary.applicable {
             entries.push(entry(
                 "Arrow length",
@@ -206,7 +209,7 @@ impl InputState {
             ));
         }
 
-        let angle_summary = summarize_property(frame, ids, shape_arrow_angle, approx_eq);
+        let angle_summary = summarize_property(&selected, shape_arrow_angle, approx_eq);
         if angle_summary.applicable {
             entries.push(entry(
                 "Arrow angle",
@@ -217,7 +220,7 @@ impl InputState {
             ));
         }
 
-        let text_bg_summary = summarize_property(frame, ids, shape_text_background, |a, b| a == b);
+        let text_bg_summary = summarize_property(&selected, shape_text_background, |a, b| a == b);
         if text_bg_summary.applicable {
             entries.push(entry(
                 "Text background",
@@ -229,7 +232,7 @@ impl InputState {
         }
 
         let spotlight_summary =
-            summarize_property(frame, ids, shape_spotlight_magnification, approx_eq);
+            summarize_property(&selected, shape_spotlight_magnification, approx_eq);
         if spotlight_summary.applicable {
             entries.push(entry(
                 "Magnification",
@@ -262,6 +265,36 @@ mod tests {
             .iter()
             .find(|entry| entry.label == label)
             .expect(label)
+    }
+
+    #[test]
+    fn selection_pill_resolves_sparse_and_all_selected_frames_without_id_rescans() {
+        let mut state = make_state();
+        let ids: Vec<_> = (0..2_048)
+            .map(|index| {
+                state.boards.active_frame_mut().add_shape(Shape::Rect {
+                    x: index * 10,
+                    y: 0,
+                    w: 10,
+                    h: 10,
+                    fill: false,
+                    fill_color: None,
+                    color: PALETTE_RED,
+                    thick: 3.0,
+                })
+            })
+            .collect();
+
+        for selected in [vec![ids[2], ids[1_000], ids[2_047]], ids] {
+            state.set_selection(selected);
+            crate::draw::Frame::reset_linear_id_lookup_count();
+            let entries = state.selection_pill_entries();
+
+            assert_eq!(entry(&entries, "Thickness").value, "3.0px");
+            assert_eq!(entry(&entries, "Opacity").value, "100%");
+            assert!(!entry(&entries, "Color").disabled);
+            assert_eq!(crate::draw::Frame::linear_id_lookup_count(), 0);
+        }
     }
 
     #[test]
