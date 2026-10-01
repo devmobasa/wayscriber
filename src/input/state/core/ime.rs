@@ -388,6 +388,7 @@ impl InputState {
     }
 
     pub(crate) fn ime_apply_done_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {
+        self.note_session_interaction_activity();
         let changed = self.text_editing.apply_ime_done(&mut self.state);
         if changed {
             self.needs_redraw = true;

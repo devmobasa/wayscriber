@@ -43,7 +43,9 @@ impl InputState {
         // can delete the arrow outright — after which the release finds no
         // shape and drops the bend without a trace.
         self.finish_active_arrow_bend();
+        self.note_session_interaction_activity();
         let changed = self.apply_toolbar_event_inner_with_resources(resources, event);
+        self.note_session_interaction_activity();
         self.note_toolbar_shortcut_slow_path(coach_action, changed);
         changed
     }

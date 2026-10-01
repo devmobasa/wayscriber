@@ -21,7 +21,8 @@ impl WaylandState {
                 .is_some_and(|pending| {
                     pending.physical_output_identity == physical_output_identity
                 });
-        let interaction_active = session_save::should_defer_for_interaction(self);
+        let interaction_active =
+            self.session_transaction.is_some() || session_save::should_defer_for_interaction(self);
         let input_dirty = self.input_state.is_session_dirty();
         let live_source_resolution_pending = self
             .session
@@ -122,7 +123,7 @@ impl WaylandState {
             self.session.cancel_pending_output_transition();
             return Ok(true);
         }
-        if session_save::should_defer_for_interaction(self) {
+        if self.session_transaction.is_some() || session_save::should_defer_for_interaction(self) {
             self.session
                 .defer_output_transition(now, session_save::interaction_defer_interval());
             log::debug!("Deferring pending output transition while interaction is active");
@@ -179,7 +180,8 @@ impl WaylandState {
             let _ = self.session.resolve_live_source_resolution(false, false);
             return false;
         }
-        let interaction_active = session_save::should_defer_for_interaction(self);
+        let interaction_active =
+            self.session_transaction.is_some() || session_save::should_defer_for_interaction(self);
         if !live_source_reconciliation_ready(
             true,
             self.session.pending_output_transition().is_some(),
@@ -203,7 +205,7 @@ impl WaylandState {
         physical_output_identity: Option<String>,
         reason: &str,
     ) -> anyhow::Result<()> {
-        if session_save::should_defer_for_interaction(self) {
+        if self.session_transaction.is_some() || session_save::should_defer_for_interaction(self) {
             return Err(anyhow::anyhow!(
                 "output transition became ineligible because an interaction started"
             ));

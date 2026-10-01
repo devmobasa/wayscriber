@@ -2008,86 +2008,434 @@ fn output_transition_deferral_moves_deadline_forward() {
     );
 }
 
-fn open_named_session_runtime(
-    input_state: &mut InputState,
+fn drive_session_command(
+    input: &mut InputState,
     measurer: &crate::draw::TextMeasurer,
-    session_state: &mut SessionState,
-    target_path: &Path,
-    _now: Instant,
-) -> Result<RuntimeOpenSessionReport> {
+    session: &mut SessionState,
+    command: SessionCommand,
+) -> Result<SessionCommandReport> {
     let mut persistence = PersistenceController::start_for_test()?;
-    SessionTransaction {
-        input_state,
-        measurer,
-        session: session_state,
-        persistence: &mut persistence,
+    let mut transaction = ExplicitSessionTransaction::new(
+        command,
+        session.target_epoch(),
+        input.session_interaction_state(),
+    );
+    let mut result = None;
+    loop {
+        if let Some(Err(error)) = result.as_ref()
+            && let Some(report) = transaction.accept_catalog_failure(error)
+        {
+            return Ok(report);
+        }
+        let step = transaction.advance(
+            &mut SessionTransaction {
+                input_state: input,
+                measurer,
+                session,
+            },
+            result,
+        )?;
+        match step {
+            TransactionStep::Work(operation) => {
+                result = Some(persistence.run(session.target_epoch(), *operation))
+            }
+            TransactionStep::Complete(report) => return Ok(*report),
+        }
     }
-    .open_named_session_runtime(target_path)
 }
 
-fn save_named_session_as_runtime(
-    input_state: &mut InputState,
+fn open_named_session_runtime(
+    input: &mut InputState,
     measurer: &crate::draw::TextMeasurer,
-    session_state: &mut SessionState,
-    target_path: &Path,
+    session: &mut SessionState,
+    target: &Path,
+    _now: Instant,
+) -> Result<RuntimeOpenSessionReport> {
+    let SessionCommandReport::Open(report) = drive_session_command(
+        input,
+        measurer,
+        session,
+        SessionCommand::Open(target.to_path_buf()),
+    )?
+    else {
+        panic!("unexpected report")
+    };
+    Ok(report)
+}
+fn save_named_session_as_runtime(
+    input: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    session: &mut SessionState,
+    target: &Path,
     overwrite: stored_session::SaveAsOverwrite,
     _now: Instant,
 ) -> Result<RuntimeSaveAsSessionReport> {
-    let mut persistence = PersistenceController::start_for_test()?;
-    SessionTransaction {
-        input_state,
+    let SessionCommandReport::SaveAs(report) = drive_session_command(
+        input,
         measurer,
-        session: session_state,
-        persistence: &mut persistence,
-    }
-    .save_named_session_as_runtime(target_path, overwrite)
+        session,
+        SessionCommand::SaveAs(target.to_path_buf(), overwrite),
+    )?
+    else {
+        panic!("unexpected report")
+    };
+    Ok(report)
 }
-
 fn save_named_session_as_requires_overwrite(
-    session_state: &mut SessionState,
-    target_path: &Path,
+    session: &mut SessionState,
+    target: &Path,
 ) -> Result<bool> {
-    let mut input_state = test_input_state();
-    let measurer = crate::draw::TextMeasurer::default();
-    let mut persistence = PersistenceController::start_for_test()?;
-    SessionTransaction {
-        input_state: &mut input_state,
-        measurer: &measurer,
-        session: session_state,
-        persistence: &mut persistence,
-    }
-    .save_named_session_as_requires_overwrite(target_path)
+    let mut input = test_input_state();
+    let SessionCommandReport::Overwrite(_, required) = drive_session_command(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        session,
+        SessionCommand::CheckOverwrite(target.to_path_buf()),
+    )?
+    else {
+        panic!("unexpected report")
+    };
+    Ok(required)
 }
-
 fn clear_current_session_runtime(
-    input_state: &mut InputState,
+    input: &mut InputState,
     measurer: &crate::draw::TextMeasurer,
-    session_state: &mut SessionState,
+    session: &mut SessionState,
     _now: Instant,
 ) -> Result<RuntimeClearSessionReport> {
-    let mut persistence = PersistenceController::start_for_test()?;
-    SessionTransaction {
-        input_state,
-        measurer,
-        session: session_state,
-        persistence: &mut persistence,
-    }
-    .clear_current_session_runtime()
+    let SessionCommandReport::Clear(report) =
+        drive_session_command(input, measurer, session, SessionCommand::Clear)?
+    else {
+        panic!("unexpected report")
+    };
+    Ok(report)
 }
-
 fn clear_saved_tool_state_runtime(
-    input_state: &mut InputState,
+    input: &mut InputState,
     measurer: &crate::draw::TextMeasurer,
-    session_state: &mut SessionState,
-    default_tool_state: stored_session::ToolStateSnapshot,
+    session: &mut SessionState,
+    defaults: stored_session::ToolStateSnapshot,
     _now: Instant,
 ) -> Result<RuntimeClearToolStateReport> {
-    let mut persistence = PersistenceController::start_for_test()?;
-    SessionTransaction {
-        input_state,
+    let SessionCommandReport::ClearTools(report) = drive_session_command(
+        input,
         measurer,
-        session: session_state,
-        persistence: &mut persistence,
+        session,
+        SessionCommand::ClearTools(Box::new(defaults)),
+    )?
+    else {
+        panic!("unexpected report")
+    };
+    Ok(report)
+}
+
+#[test]
+fn explicit_clear_keeps_dispatch_available_and_preserves_edits_during_blocked_disk_work() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let options = named_options(temp.path(), "blocked-clear");
+    stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(options.lock_file_path())
+        .unwrap();
+    crate::durable_io::lock_exclusive(&lock).unwrap();
+    let mut input = test_input_state();
+    add_line(&mut input, 51);
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut session = SessionState::new(Some(options.clone()));
+    let mut persistence = PersistenceController::start_for_test().unwrap();
+    let mut transaction = ExplicitSessionTransaction::new(
+        SessionCommand::Clear,
+        session.target_epoch(),
+        input.session_interaction_state(),
+    );
+    let TransactionStep::Work(operation) = transaction
+        .advance(
+            &mut SessionTransaction {
+                input_state: &mut input,
+                measurer: &measurer,
+                session: &mut session,
+            },
+            None,
+        )
+        .unwrap()
+    else {
+        panic!("clear must request a disk phase")
+    };
+    let id = persistence
+        .try_submit(session.target_epoch(), *operation)
+        .unwrap();
+    transaction.request_id = Some(id);
+
+    // The real worker cannot acquire its disk lock. Input can still change,
+    // and polling completion does not wait for that lock to be released.
+    assert!(persistence.try_receive().unwrap().is_none());
+    add_line(&mut input, 99);
+    input.mark_session_dirty();
+    session.record_input_dirty(Instant::now(), input.take_session_dirty());
+    assert_eq!(input.boards.active_frame().shapes.len(), 2);
+    drop(lock);
+
+    let completion = persistence.wait_for_completion().unwrap().unwrap();
+    assert_eq!(completion.id, id);
+    let result = transaction.advance(
+        &mut SessionTransaction {
+            input_state: &mut input,
+            measurer: &measurer,
+            session: &mut session,
+        },
+        Some(completion.result),
+    );
+    assert!(matches!(result, Err(error) if error.to_string().contains("edited while")));
+    assert_eq!(input.boards.active_frame().shapes.len(), 2);
+    assert!(session.is_dirty());
+    assert_eq!(
+        session.options().unwrap().session_file_path(),
+        options.session_file_path()
+    );
+    let snapshot = stored_session::snapshot_from_input(&input, &options).unwrap();
+    let outcome = persistence
+        .run(
+            session.target_epoch(),
+            PersistenceOperation::Save {
+                snapshot,
+                options: options.clone(),
+                strategy: SaveStrategy::Normal,
+                contentless_clear_boundary: false,
+            },
+        )
+        .unwrap();
+    assert!(matches!(outcome, PersistenceOutcome::Save(save) if save.committed()));
+    let LoadSnapshotOutcome::Loaded(snapshot) =
+        stored_session::load_snapshot_with_outcome(&options).unwrap()
+    else {
+        panic!("new edits must remain persistable")
+    };
+    assert_eq!(snapshot.boards[0].pages.pages[0].shapes.len(), 2);
+}
+
+#[test]
+fn explicit_open_rejects_a_completion_after_target_epoch_changes() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let options = named_options(temp.path(), "epoch-source");
+    let target = named_options(temp.path(), "epoch-candidate");
+    stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+    let mut input = test_input_state();
+    add_line(&mut input, 91);
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut session = SessionState::new(Some(options));
+    let mut persistence = PersistenceController::start_for_test().unwrap();
+    let mut transaction = ExplicitSessionTransaction::new(
+        SessionCommand::Open(target.session_file_path()),
+        session.target_epoch(),
+        input.session_interaction_state(),
+    );
+    let TransactionStep::Work(operation) = transaction
+        .advance(
+            &mut SessionTransaction {
+                input_state: &mut input,
+                measurer: &measurer,
+                session: &mut session,
+            },
+            None,
+        )
+        .unwrap()
+    else {
+        panic!("open must request validation")
+    };
+    let outcome = persistence.run(session.target_epoch(), *operation);
+    let replacement = named_options(temp.path(), "epoch-new-target");
+    session.commit_runtime_open(replacement.clone(), false);
+
+    let result = transaction.advance(
+        &mut SessionTransaction {
+            input_state: &mut input,
+            measurer: &measurer,
+            session: &mut session,
+        },
+        Some(outcome),
+    );
+    assert!(matches!(result, Err(error) if error.to_string().contains("target changed")));
+    assert_eq!(input.boards.active_frame().shapes.len(), 1);
+    assert_eq!(
+        session.options().unwrap().session_file_path(),
+        replacement.session_file_path()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_open_validates_target_before_saving_dirty_current_session() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "unsaved-source");
+    let candidate = named_options(temp.path(), "symlink-candidate");
+    let destination = temp.path().join("keep-unrelated-bytes");
+    std::fs::write(&destination, b"unrelated content").unwrap();
+    symlink(&destination, candidate.session_file_path()).unwrap();
+    let mut input = test_input_state();
+    add_line(&mut input, 63);
+    input.mark_session_dirty();
+    let mut session = SessionState::new(Some(current.clone()));
+
+    let error = open_named_session_runtime(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        &mut session,
+        &candidate.session_file_path(),
+        Instant::now(),
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("symlink"), "{error:#}");
+    assert!(
+        !current.session_file_path().exists(),
+        "invalid target must be rejected before saving the source"
+    );
+    assert!(input.is_session_dirty());
+    assert_eq!(input.boards.active_frame().shapes.len(), 1);
+    assert_eq!(
+        session.options().unwrap().session_file_path(),
+        current.session_file_path()
+    );
+    assert_eq!(std::fs::read(destination).unwrap(), b"unrelated content");
+}
+
+#[test]
+fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
+    fn begin_draft(input: &mut InputState, measurer: &crate::draw::TextMeasurer, kind: &str) {
+        if kind == "pointer" {
+            input.on_mouse_press(crate::input::MouseButton::Left, 80, 80);
+            input.on_mouse_motion(90, 90);
+            assert!(matches!(input.state, DrawingState::Drawing { .. }));
+        } else {
+            let ui_engine = crate::ui_text::UiTextEngine::default();
+            input.handle_action_with_resources(
+                crate::input::state::InputTextResources {
+                    measurer,
+                    ui_engine: &ui_engine,
+                },
+                Action::EnterTextMode,
+            );
+            input.on_key_press(crate::input::Key::Char('x'));
+            assert!(
+                matches!(&input.state, DrawingState::TextInput { buffer, .. } if buffer == "x")
+            );
+        }
+        assert!(
+            !input.is_session_dirty(),
+            "unfinished drafts have not entered history"
+        );
     }
-    .clear_saved_tool_state_runtime(default_tool_state)
+
+    for (command_kind, pending_phase) in [
+        ("open", "admission"),
+        ("open", "preflight"),
+        ("open", "snapshot"),
+        ("clear", "admission"),
+        ("clear", "snapshot"),
+        ("save_as", "admission"),
+        ("save_as", "preflight"),
+        ("save_as", "snapshot"),
+    ] {
+        for draft_kind in ["pointer", "text"] {
+            let temp = crate::test_temp::tempdir().unwrap();
+            let current = named_options(temp.path(), "draft-source");
+            let target = named_options(temp.path(), "draft-target");
+            if command_kind == "open" {
+                stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+            }
+            let mut input = test_input_state();
+            add_line(&mut input, 61);
+            let measurer = crate::draw::TextMeasurer::default();
+            let mut session = SessionState::new(Some(current.clone()));
+            let mut worker = PersistenceController::start_for_test().unwrap();
+            let command = match command_kind {
+                "open" => SessionCommand::Open(target.session_file_path()),
+                "clear" => SessionCommand::Clear,
+                _ => SessionCommand::SaveAs(
+                    target.session_file_path(),
+                    stored_session::SaveAsOverwrite::Deny,
+                ),
+            };
+            let mut transaction = ExplicitSessionTransaction::new(
+                command,
+                session.target_epoch(),
+                input.session_interaction_state(),
+            );
+            let result = if pending_phase == "admission" {
+                // This is the same retained admission used while an autosave
+                // owns the worker; starting it later must keep its identity.
+                begin_draft(&mut input, &measurer, draft_kind);
+                transaction.advance(
+                    &mut SessionTransaction {
+                        input_state: &mut input,
+                        measurer: &measurer,
+                        session: &mut session,
+                    },
+                    None,
+                )
+            } else {
+                let TransactionStep::Work(mut operation) = transaction
+                    .advance(
+                        &mut SessionTransaction {
+                            input_state: &mut input,
+                            measurer: &measurer,
+                            session: &mut session,
+                        },
+                        None,
+                    )
+                    .unwrap()
+                else {
+                    panic!("expected disk work")
+                };
+                if pending_phase == "snapshot" && command_kind != "clear" {
+                    let preflight = worker.run(session.target_epoch(), *operation);
+                    let TransactionStep::Work(next) = transaction
+                        .advance(
+                            &mut SessionTransaction {
+                                input_state: &mut input,
+                                measurer: &measurer,
+                                session: &mut session,
+                            },
+                            Some(preflight),
+                        )
+                        .unwrap()
+                    else {
+                        panic!("expected snapshot work")
+                    };
+                    operation = next;
+                }
+                begin_draft(&mut input, &measurer, draft_kind);
+                let completion = worker.run(session.target_epoch(), *operation);
+                transaction.advance(
+                    &mut SessionTransaction {
+                        input_state: &mut input,
+                        measurer: &measurer,
+                        session: &mut session,
+                    },
+                    Some(completion),
+                )
+            };
+
+            assert!(
+                matches!(result, Err(error) if error.to_string().contains("interaction changed")),
+                "{command_kind}/{pending_phase}/{draft_kind}"
+            );
+            assert_eq!(
+                session.options().unwrap().session_file_path(),
+                current.session_file_path()
+            );
+            assert_eq!(input.boards.active_frame().shapes.len(), 1);
+            if draft_kind == "pointer" {
+                assert!(
+                    matches!(&input.state, DrawingState::Drawing { points, .. } if points.last() == Some(&(90,90)))
+                );
+            } else {
+                assert!(
+                    matches!(&input.state, DrawingState::TextInput { buffer, .. } if buffer == "x")
+                );
+            }
+        }
+    }
 }

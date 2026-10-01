@@ -158,6 +158,7 @@ impl WaylandState {
             tablet: super::super::tablet_runtime::TabletState::new(tablet_manager, tablet_settings),
             session: SessionState::new(session_options),
             session_config_failed,
+            session_transaction: None,
             persistence,
             input_hud: super::super::input_hud::InputHudRuntime::new(runtime_wake.clone()),
             session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),

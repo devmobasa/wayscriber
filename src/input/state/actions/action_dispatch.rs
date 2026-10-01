@@ -12,7 +12,9 @@ impl InputState {
         resources: crate::input::state::InputTextResources<'_>,
         action: Action,
     ) {
+        self.note_session_interaction_activity();
         let _ = interaction::route_action_with_resources(self, resources, action);
+        self.note_session_interaction_activity();
     }
 
     /// Handle an action for a control that sits away from the pointer, such as

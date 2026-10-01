@@ -1,153 +1,148 @@
-use crate::input::state::{Toast, ToastPriority};
-use std::path::{Path, PathBuf};
-
 use anyhow::{Result, anyhow};
+use std::time::Instant;
 
 use super::super::*;
 use crate::backend::wayland::{
     backend::event_loop::session_save,
     session::{
-        PersistenceOperation, PersistenceOutcome, RuntimeClearSessionReport,
-        RuntimeClearToolStateReport, RuntimeOpenSessionReport, RuntimeSaveAsSessionReport,
+        ExplicitSessionTransaction, PersistenceCompletion, SessionCommand, SessionCommandReport,
+        SessionTransaction, TransactionStep,
     },
 };
-use crate::session::{
-    self as stored_session, ClearToolStateOutcome, SaveAsOverwrite, ToolStateSnapshot,
-};
+use crate::session::ToolStateSnapshot;
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn open_named_session_runtime(
+    /// Admit one explicit command. An existing autosave finishes first without
+    /// waiting in dispatch; the command captures its live input when admitted.
+    pub(in crate::backend::wayland) fn start_session_command(
         &mut self,
-        target_path: &Path,
-    ) -> Result<RuntimeOpenSessionReport> {
-        session_save::persistence_barrier(self)?;
-        let result = crate::backend::wayland::session::SessionTransaction {
-            input_state: &mut self.input_state,
-            measurer: self.render.text_measurer(),
-            session: &mut self.session,
-            persistence: &mut self.persistence,
+        command: SessionCommand,
+    ) -> Result<()> {
+        if self.session_transaction.is_some() {
+            return Err(anyhow!("another session command is already pending"));
         }
-        .open_named_session_runtime(target_path);
-        if result.is_ok() {
-            self.refresh_runtime_ui_config_seeds();
+        if matches!(
+            command,
+            SessionCommand::Clear | SessionCommand::ClearTools(_)
+        ) {
+            ensure_destructive_session_config_available(self.session_config_failed)?;
         }
-        result
+        if !self.persistence.is_healthy() {
+            return Err(anyhow!("session persistence worker is unhealthy"));
+        }
+        self.session_transaction = Some(ExplicitSessionTransaction::new(
+            command,
+            self.session.target_epoch(),
+            self.input_state.session_interaction_state(),
+        ));
+        self.poll_pending_session_command();
+        Ok(())
     }
 
-    pub(in crate::backend::wayland) fn save_named_session_as_runtime(
-        &mut self,
-        target_path: &Path,
-        overwrite: SaveAsOverwrite,
-    ) -> Result<RuntimeSaveAsSessionReport> {
-        session_save::persistence_barrier(self)?;
-
-        crate::backend::wayland::session::SessionTransaction {
-            input_state: &mut self.input_state,
-            measurer: self.render.text_measurer(),
-            session: &mut self.session,
-            persistence: &mut self.persistence,
+    pub(in crate::backend::wayland) fn poll_pending_session_command(&mut self) {
+        if self.persistence.is_active() {
+            return;
         }
-        .save_named_session_as_runtime(target_path, overwrite)
+        let Some(transaction) = self.session_transaction.take() else {
+            return;
+        };
+        self.advance_session_command(transaction, None);
     }
 
-    pub(in crate::backend::wayland) fn save_named_session_as_requires_overwrite(
+    pub(in crate::backend::wayland) fn complete_session_command(
         &mut self,
-        target_path: &Path,
-    ) -> Result<bool> {
-        session_save::persistence_barrier(self)?;
-
-        crate::backend::wayland::session::SessionTransaction {
-            input_state: &mut self.input_state,
-            measurer: self.render.text_measurer(),
-            session: &mut self.session,
-            persistence: &mut self.persistence,
+        completion: PersistenceCompletion,
+    ) {
+        let Some(transaction) = self.session_transaction.take() else {
+            return;
+        };
+        if transaction.request_id != Some(completion.id) {
+            self.fail_session_command(
+                transaction.command(),
+                &anyhow!("explicit session completion identity mismatch"),
+            );
+            return;
         }
-        .save_named_session_as_requires_overwrite(target_path)
+        self.advance_session_command(transaction, Some(completion.result));
     }
 
-    pub(in crate::backend::wayland) fn clear_current_session_runtime(
+    fn advance_session_command(
         &mut self,
-    ) -> Result<RuntimeClearSessionReport> {
-        ensure_destructive_session_config_available(self.session_config_failed)?;
-        session_save::persistence_barrier(self)?;
-        let result = crate::backend::wayland::session::SessionTransaction {
-            input_state: &mut self.input_state,
-            measurer: self.render.text_measurer(),
-            session: &mut self.session,
-            persistence: &mut self.persistence,
+        mut transaction: ExplicitSessionTransaction,
+        result: Option<Result<crate::backend::wayland::session::PersistenceOutcome>>,
+    ) {
+        session_save::observe_input_dirty(self, Instant::now());
+        // A catalog failure follows an already committed open. It is reported
+        // independently, without reverting the canvas or its current edits.
+        let step = if let Some(Err(error)) = result.as_ref()
+            && let Some(report) = transaction.accept_catalog_failure(error)
+        {
+            Ok(TransactionStep::Complete(Box::new(report)))
+        } else {
+            transaction.advance(
+                &mut SessionTransaction {
+                    input_state: &mut self.input_state,
+                    measurer: self.render.text_measurer(),
+                    session: &mut self.session,
+                },
+                result,
+            )
+        };
+        match step {
+            Ok(TransactionStep::Work(operation)) => {
+                // Applying an open refreshes consumer seeds before catalog work.
+                if transaction.has_committed_open() {
+                    self.refresh_runtime_ui_config_seeds();
+                }
+                match self
+                    .persistence
+                    .try_submit(self.session.target_epoch(), *operation)
+                {
+                    Ok(id) => {
+                        transaction.request_id = Some(id);
+                        self.session_transaction = Some(transaction);
+                    }
+                    Err(failure) => {
+                        let error = anyhow!("failed to submit session command: {}", failure.error);
+                        if let Some(report) = transaction.accept_catalog_failure(&error) {
+                            self.finish_session_command(report);
+                        } else {
+                            self.fail_session_command(transaction.command(), &error);
+                        }
+                    }
+                }
+            }
+            Ok(TransactionStep::Complete(report)) => {
+                if matches!(
+                    *report,
+                    SessionCommandReport::Open(_) | SessionCommandReport::Clear(_)
+                ) {
+                    self.refresh_runtime_ui_config_seeds();
+                }
+                self.finish_session_command(*report);
+            }
+            Err(error) => self.fail_session_command(transaction.command(), &error),
         }
-        .clear_current_session_runtime();
-        if result.is_ok() {
-            self.refresh_runtime_ui_config_seeds();
-        }
-        result
-    }
-
-    pub(in crate::backend::wayland) fn clear_saved_tool_state_runtime(
-        &mut self,
-    ) -> Result<RuntimeClearToolStateReport> {
-        ensure_destructive_session_config_available(self.session_config_failed)?;
-        let default_tool_state = ToolStateSnapshot::from_config(&self.config);
-        session_save::persistence_barrier(self)?;
-
-        crate::backend::wayland::session::SessionTransaction {
-            input_state: &mut self.input_state,
-            measurer: self.render.text_measurer(),
-            session: &mut self.session,
-            persistence: &mut self.persistence,
-        }
-        .clear_saved_tool_state_runtime(default_tool_state)
     }
 
     pub(in crate::backend::wayland) fn handle_clear_saved_tool_state_action(&mut self) {
-        match self.clear_saved_tool_state_runtime() {
-            Ok(report) => {
-                let message = clear_tool_state_runtime_message(&report);
-                log::info!("{message}");
-                self.input_state
-                    .push_toast(ToastPriority::Info, "session", Toast::info(message));
-            }
-            Err(err) => {
-                let message = format!("Failed to reset tool defaults: {err:#}");
-                log::warn!("{message}");
-                self.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "session",
-                    Toast::error(message),
-                );
-            }
+        let command =
+            SessionCommand::ClearTools(Box::new(ToolStateSnapshot::from_config(&self.config)));
+        if let Err(error) = self.start_session_command(command) {
+            self.report_session_command_error("Failed to reset tool defaults", &error);
         }
     }
 
-    pub(in crate::backend::wayland) fn inspect_active_session(
-        &mut self,
-    ) -> Result<stored_session::SessionInspection> {
-        let options = self
-            .session_options()
-            .cloned()
-            .ok_or_else(|| anyhow!("no active persisted session target"))?;
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::Inspect { options },
-        )?;
-        let PersistenceOutcome::Inspection(inspection) = outcome else {
-            return Err(anyhow!("unexpected session-inspection worker outcome"));
-        };
-        Ok(inspection)
-    }
-
-    pub(in crate::backend::wayland) fn forget_named_session_by_path(
-        &mut self,
-        path: PathBuf,
-    ) -> Result<bool> {
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::ForgetNamedSessionByPath { path },
-        )?;
-        let PersistenceOutcome::CatalogForgotten(forgotten) = outcome else {
-            return Err(anyhow!("unexpected catalog-forget worker outcome"));
-        };
-        Ok(forgotten)
+    /// Shutdown may wait for durable work; normal dispatch never calls this.
+    pub(in crate::backend::wayland) fn finish_pending_session_command(&mut self) -> Result<()> {
+        while self.session_transaction.is_some() {
+            if self.persistence.is_active() {
+                session_save::persistence_barrier(self)?;
+            } else {
+                self.poll_pending_session_command();
+            }
+        }
+        Ok(())
     }
 }
 
@@ -160,37 +155,13 @@ fn ensure_destructive_session_config_available(section_failed: bool) -> Result<(
     Ok(())
 }
 
-fn clear_tool_state_runtime_message(report: &RuntimeClearToolStateReport) -> String {
-    match report.outcome {
-        Some(ClearToolStateOutcome::Cleared {
-            preserved_board_data: true,
-        }) => {
-            "Tool defaults reset from config. Saved boards and history were preserved.".to_string()
-        }
-        Some(ClearToolStateOutcome::Cleared {
-            preserved_board_data: false,
-        }) => "Tool defaults reset from config. No board data was present.".to_string(),
-        Some(ClearToolStateOutcome::NoToolState) => {
-            "Tool defaults reset from config. No saved tool state was stored.".to_string()
-        }
-        Some(ClearToolStateOutcome::NoSession) => {
-            "Tool defaults reset from config. No saved session file was present.".to_string()
-        }
-        None => "Tool defaults reset from config for this run. No active session file to edit."
-            .to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn destructive_session_actions_fail_closed_after_session_config_fallback() {
-        let err = ensure_destructive_session_config_available(true)
-            .expect_err("default-derived session paths must not be mutated");
+        let err = ensure_destructive_session_config_available(true).unwrap_err();
         assert!(format!("{err:#}").contains("refusing to modify saved session data"));
-        ensure_destructive_session_config_available(false)
-            .expect("a successfully loaded session section permits mutations");
+        ensure_destructive_session_config_available(false).unwrap();
     }
 }
