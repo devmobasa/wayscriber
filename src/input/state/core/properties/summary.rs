@@ -1,4 +1,6 @@
-use crate::draw::{ArrowStyle, Color, Frame, Shape, ShapeId};
+use std::collections::HashMap;
+
+use crate::draw::{ArrowStyle, Color, DrawnShape, Frame, Shape, ShapeId};
 
 #[derive(Debug)]
 pub(super) struct PropertySummary<T> {
@@ -8,59 +10,53 @@ pub(super) struct PropertySummary<T> {
     pub(super) value: Option<T>,
 }
 
-pub(super) fn summarize_property<T, F, Eq>(
-    frame: &Frame,
+/// Resolve IDs with one frame pass while retaining selection order.
+/// Missing IDs are omitted; callers can compare lengths when absence matters.
+pub(super) fn resolve_selected_shapes<'a>(
+    frame: &'a Frame,
     ids: &[ShapeId],
+) -> Vec<&'a DrawnShape> {
+    let mut selected: HashMap<_, Option<&DrawnShape>> = ids.iter().map(|id| (*id, None)).collect();
+    for drawn in &frame.shapes {
+        if let Some(slot) = selected.get_mut(&drawn.id) {
+            *slot = Some(drawn);
+        }
+    }
+
+    ids.iter().filter_map(|id| selected[id]).collect()
+}
+
+pub(super) fn summarize_property<T, F, Eq>(
+    selected: &[&DrawnShape],
     mut extract: F,
     mut eq: Eq,
 ) -> PropertySummary<T>
 where
-    T: Clone,
     F: FnMut(&Shape) -> Option<T>,
     Eq: FnMut(&T, &T) -> bool,
 {
-    let mut values = Vec::new();
-    let mut applicable = 0;
-    for id in ids {
-        let Some(drawn) = frame.shape(*id) else {
-            continue;
-        };
+    let mut applicable = false;
+    let mut first = None;
+    let mut mixed = false;
+    for drawn in selected {
         let Some(value) = extract(&drawn.shape) else {
             continue;
         };
-        applicable += 1;
+        applicable = true;
         if drawn.locked {
             continue;
         }
-        values.push(value);
+        match &first {
+            Some(first) => mixed |= !eq(first, &value),
+            None => first = Some(value),
+        }
     }
-
-    if applicable == 0 {
-        return PropertySummary {
-            applicable: false,
-            editable: false,
-            mixed: false,
-            value: None,
-        };
-    }
-
-    if values.is_empty() {
-        return PropertySummary {
-            applicable: true,
-            editable: false,
-            mixed: false,
-            value: None,
-        };
-    }
-
-    let first = values[0].clone();
-    let mixed = values.iter().skip(1).any(|value| !eq(&first, value));
 
     PropertySummary {
-        applicable: true,
-        editable: true,
+        applicable,
+        editable: first.is_some(),
         mixed,
-        value: Some(first),
+        value: first,
     }
 }
 
@@ -221,7 +217,11 @@ mod tests {
             wrap_width: None,
         });
 
-        let summary = summarize_property(&frame, &[text_id], shape_fill_paint, |a, b| a == b);
+        let summary = summarize_property(
+            &resolve_selected_shapes(&frame, &[text_id]),
+            shape_fill_paint,
+            |a, b| a == b,
+        );
 
         assert!(!summary.applicable);
         assert!(!summary.editable);
@@ -244,7 +244,11 @@ mod tests {
         ));
         frame.shape_mut(id).expect("locked shape").locked = true;
 
-        let summary = summarize_property(&frame, &[id], shape_color, color_eq);
+        let summary = summarize_property(
+            &resolve_selected_shapes(&frame, &[id]),
+            shape_color,
+            color_eq,
+        );
 
         assert!(summary.applicable);
         assert!(!summary.editable);
@@ -276,7 +280,11 @@ mod tests {
             2.0,
         ));
 
-        let summary = summarize_property(&frame, &[first, second], shape_color, color_eq);
+        let summary = summarize_property(
+            &resolve_selected_shapes(&frame, &[first, second]),
+            shape_color,
+            color_eq,
+        );
 
         assert!(summary.applicable);
         assert!(summary.editable);
@@ -317,7 +325,11 @@ mod tests {
         ));
         frame.shape_mut(locked).expect("locked shape").locked = true;
 
-        let summary = summarize_property(&frame, &[unlocked, locked], shape_color, color_eq);
+        let summary = summarize_property(
+            &resolve_selected_shapes(&frame, &[unlocked, locked]),
+            shape_color,
+            color_eq,
+        );
 
         assert!(summary.applicable);
         assert!(summary.editable);
