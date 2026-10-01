@@ -202,12 +202,16 @@ fn pdf_export_honours_the_text_halo_setting() {
         assert_eq!((image.width, image.height), (400, 120));
         let red = image
             .rgba
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[0] > 180 && p[1] < 80 && p[2] < 80)
             .count();
         let dark = image
             .rgba
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[0] < 80 && p[1] < 80 && p[2] < 80)
             .count();
         assert!(red > 100, "red glyphs must remain visible: {red}");
