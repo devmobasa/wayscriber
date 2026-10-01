@@ -232,7 +232,6 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::KeybindingsConfig;
     use crate::domain::OnboardingTip;
     use crate::draw::{Color, Shape};
     use crate::input::state::core::base::UiToastKind;
@@ -244,11 +243,6 @@ mod tests {
     use std::time::Duration;
 
     fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let _action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
-
         crate::input::state::test_support::make_test_input_state()
     }
 
