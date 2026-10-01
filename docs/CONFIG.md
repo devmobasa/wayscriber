@@ -2128,6 +2128,12 @@ The overlay Session panel lives in the top strip's overflow **"Session..."** pop
 - Recent session rows reopen other named sessions. If a recent target is missing, Wayscriber removes that stale catalog entry after the failed open.
 - `Manager` opens the configurator. Overlay Open/Save As dialogs use `zenity` or `kdialog`.
 
+Open, Save As, and Clear run their disk phases on the persistence worker while
+event dispatch continues. One command runs at a time, after any pending autosave
+finishes. If you edit while a captured phase is pending, the edits stay live and
+the target switch is refused; retry the session operation with the updated
+canvas.
+
 The configurator Session tab also shows recent named sessions from the catalog, recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog display labels, reveal file locations, and forget catalog metadata without touching files. Duplicate, Move, and Clear are disabled while an overlay, manually started daemon, or background service is active.
 
 Session overrides and recovery:
