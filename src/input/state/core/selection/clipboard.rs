@@ -259,13 +259,15 @@ impl SelectionClipboard {
         }));
     }
 
-    pub(in crate::input::state::core) fn request_image_save(&mut self) -> Option<u64> {
+    pub(in crate::input::state::core) fn request_image_save(
+        &mut self,
+    ) -> Option<Arc<ClipboardFallbackSaveRequest>> {
         let fallback = self.pending_image_fallback.as_ref()?;
         if self.image_save_requested {
             return None;
         }
         self.image_save_requested = true;
-        Some(fallback.id)
+        Some(fallback.clone())
     }
 
     pub(in crate::input::state::core) fn image_save_request(
