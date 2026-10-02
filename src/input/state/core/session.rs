@@ -149,6 +149,7 @@ impl InputState {
             || self.board_picker_is_page_dragging()
             || self.color_picker_popup_is_dragging()
             || self.radial_menu_is_size_dragging()
+            || self.is_properties_slider_dragging()
     }
 
     /// Transient edits have their own revision because they become session-dirty

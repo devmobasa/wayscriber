@@ -2,6 +2,112 @@ use super::*;
 use crate::backend::wayland::{runtime_ui_state::ToolbarPositionSnapshot, state::MoveDragKind};
 
 #[test]
+fn pending_destructive_commands_preserve_live_slider_edits_and_undo() {
+    use crate::input::state::{PropertiesPanelHit, SelectionPropertyKind};
+
+    for open in [false, true] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let options = named_options(temp.path(), "current");
+        let target = named_options(temp.path(), "candidate");
+        stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
+        stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+        let mut input = test_input_state();
+        let id = add_line(&mut input, 51);
+        let original = input.boards.active_frame().shape(id).unwrap().shape.clone();
+        let depth = input.boards.active_frame().undo_stack_len();
+        let measurer = TextMeasurer::default();
+        let mut session = SessionState::new(Some(options.clone()));
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+        let command = if open {
+            SessionCommand::Open(target.session_file_path())
+        } else {
+            SessionCommand::Clear
+        };
+
+        start_session_command(&mut runtime, command).unwrap();
+        if open {
+            worker.complete_next(); // preflight, followed by the held candidate load
+            runtime.receive();
+        }
+        runtime.input.set_selection(vec![id]);
+        assert!(runtime.input.show_properties_panel_with(&measurer));
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        runtime
+            .input
+            .update_properties_panel_layout(&ctx, 1280, 800);
+        let panel = runtime.input.properties_panel().unwrap();
+        let row = panel
+            .entries
+            .iter()
+            .position(|entry| entry.kind == SelectionPropertyKind::Thickness)
+            .unwrap();
+        let track = runtime
+            .input
+            .properties_panel_layout()
+            .unwrap()
+            .hit_rect(panel, PropertiesPanelHit::Slider(row))
+            .unwrap();
+        assert!(runtime.input.begin_properties_slider_drag_with(
+            &measurer,
+            row,
+            track.right() as i32 - 1
+        ));
+        assert!(
+            !runtime.input.is_session_dirty(),
+            "preview has not committed yet"
+        );
+        assert_eq!(runtime.input.boards.active_frame().undo_stack_len(), depth);
+
+        worker.complete_next();
+        runtime.receive();
+
+        let retained = runtime
+            .input
+            .boards
+            .active_frame()
+            .shape(id)
+            .expect("pending command must retain the edited shape");
+        assert!(matches!(
+            retained.shape,
+            crate::draw::Shape::Line { thick: 50.0, .. }
+        ));
+        assert_eq!(
+            runtime.session.options().unwrap().session_file_path(),
+            options.session_file_path()
+        );
+        assert!(runtime.pending.is_none());
+        assert!(runtime.reports.is_empty());
+        assert!(
+            runtime.errors[0]
+                .to_string()
+                .contains("interaction changed")
+        );
+        assert!(runtime.input.is_properties_slider_dragging());
+        assert_eq!(runtime.input.boards.active_frame().undo_stack_len(), depth);
+
+        runtime.input.finish_properties_slider_drag_with(&measurer);
+        assert!(runtime.input.is_session_dirty());
+        assert_eq!(
+            runtime.input.boards.active_frame().undo_stack_len(),
+            depth + 1
+        );
+        runtime.input.handle_action_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &crate::ui_text::UiTextEngine::default(),
+            },
+            crate::config::Action::Undo,
+        );
+        assert_eq!(
+            runtime.input.boards.active_frame().shape(id).unwrap().shape,
+            original
+        );
+    }
+}
+
+#[test]
 fn autosave_ownership_errors_do_not_publish_failures_or_delay_retry() {
     #[derive(Clone, Copy, Debug)]
     enum Receipt {
