@@ -120,6 +120,13 @@ impl ClipboardRuntime {
         self.fallback_save.poll()
     }
 
+    /// Finish an accepted file write before overlay teardown; never use in dispatch.
+    pub(in crate::backend::wayland) fn wait_fallback_save(
+        &mut self,
+    ) -> RuntimeOperationPoll<u64, Result<std::path::PathBuf, String>> {
+        self.fallback_save.wait()
+    }
+
     pub(in crate::backend::wayland) fn publish_active(&self) -> bool {
         self.publish.is_active()
     }

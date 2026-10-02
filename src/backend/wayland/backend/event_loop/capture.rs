@@ -140,6 +140,7 @@ pub(super) fn handle_pending_actions(
             && matches!(
                 effect,
                 InputEffect::Backend(_)
+                    | InputEffect::ClipboardFallbackSave(_)
                     | InputEffect::FrozenPass { .. }
                     | InputEffect::BoardRuntimeUi(_)
                     | InputEffect::SpotlightMagnifierFeedback
@@ -172,6 +173,9 @@ pub(super) fn handle_pending_actions(
             InputEffect::QuickColor(edit) => state.handle_quick_color_edit(edit),
             InputEffect::KeybindingEdit(request) => state.handle_keybinding_edit(request),
             InputEffect::Backend(action) => apply_backend_effect(state, action),
+            InputEffect::ClipboardFallbackSave(request) => {
+                state.start_clipboard_fallback_save(request)
+            }
             InputEffect::FrozenPass { user_requested } => {
                 handle_frozen_toggle(state, user_requested);
             }
@@ -227,9 +231,6 @@ struct FrozenTogglePassDecision {
 fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) {
     match action {
         PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
-        PendingBackendAction::SaveClipboardFallback { request_id } => {
-            state.start_clipboard_fallback_save(request_id)
-        }
         PendingBackendAction::MeasureMode => state.handle_measure_mode_action(),
         PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
         PendingBackendAction::BoardPdfExport(action) => {

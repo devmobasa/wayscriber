@@ -169,7 +169,7 @@ impl InputState {
 
     /// Queue the retained image for backend file work without holding input dispatch.
     pub(crate) fn save_pending_clipboard_to_file(&mut self) {
-        let Some(request_id) = self.selection_clipboard.request_image_save() else {
+        let Some(request) = self.selection_clipboard.request_image_save() else {
             if !self.selection_clipboard.has_pending_image_fallback() {
                 self.push_toast(
                     ToastPriority::Info,
@@ -181,16 +181,9 @@ impl InputState {
             return;
         };
 
-        self.set_pending_backend_action(
-            super::super::base::PendingBackendAction::SaveClipboardFallback { request_id },
-        );
-    }
-
-    pub(crate) fn clipboard_fallback_save_request(
-        &self,
-        id: u64,
-    ) -> Option<std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>> {
-        self.selection_clipboard.image_save_request(id)
+        self.emit_input_effect(super::super::base::InputEffect::ClipboardFallbackSave(
+            request,
+        ));
     }
 
     pub(crate) fn complete_clipboard_fallback_save(

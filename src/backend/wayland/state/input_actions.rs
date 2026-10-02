@@ -104,6 +104,7 @@ impl WaylandState {
                 InputEffect::TextCopy(request) => self.handle_copy_text(request),
                 InputEffect::TextPaste(target) => self.handle_paste_text(target),
                 effect @ (InputEffect::Backend(_)
+                | InputEffect::ClipboardFallbackSave(_)
                 | InputEffect::SpotlightMagnifierFeedback
                 | InputEffect::ToolbarPersistence(_)
                 | InputEffect::KeybindingEdit(_)

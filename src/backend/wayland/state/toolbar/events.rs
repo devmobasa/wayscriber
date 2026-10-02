@@ -356,6 +356,7 @@ impl WaylandState {
                 InputEffect::CopyHex(color) => self.handle_copy_hex_color(color),
                 InputEffect::PasteHex(target) => self.handle_paste_hex_color(target),
                 effect @ (InputEffect::Backend(_)
+                | InputEffect::ClipboardFallbackSave(_)
                 | InputEffect::SpotlightMagnifierFeedback
                 | InputEffect::ToolbarPersistence(_)
                 | InputEffect::KeybindingEdit(_)

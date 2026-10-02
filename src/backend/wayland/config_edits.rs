@@ -745,6 +745,7 @@ pub(in crate::backend::wayland) fn finish_config_edits(
                 queue_keybinding_edit(&config.keybindings, input_state, worker, request);
             }
             effect @ (InputEffect::Backend(_)
+            | InputEffect::ClipboardFallbackSave(_)
             | InputEffect::SpotlightMagnifierFeedback
             | InputEffect::ToolbarPersistence(_)
             | InputEffect::OutputFocus(_)

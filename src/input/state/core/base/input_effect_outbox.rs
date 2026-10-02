@@ -16,6 +16,8 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone)]
 pub(crate) enum InputEffect {
     Backend(PendingBackendAction),
+    /// An accepted file save owns its bytes even if the clipboard fallback changes.
+    ClipboardFallbackSave(std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>),
     SpotlightMagnifierFeedback,
     ToolbarPersistence(PendingToolbarPersistence),
     KeybindingEdit(KeybindingEditRequest),
@@ -54,11 +56,14 @@ pub(crate) enum InputEffectDrain {
     Runtime,
     /// Config edits that must still be submitted during shutdown.
     DurableConfig,
+    /// Accepted fallback file saves that must finish before overlay teardown.
+    ClipboardFallbackSaves,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::input::state::core) enum InputEffectKind {
     Backend,
+    ClipboardFallbackSave,
     SpotlightMagnifierFeedback,
     ToolbarPersistence,
     KeybindingEdit,
@@ -219,11 +224,15 @@ impl InputEffectOutbox {
                         InputEffectKind::BoardRuntimeUi,
                         InputEffectKind::SpotlightMagnifierFeedback,
                         InputEffectKind::Backend,
+                        InputEffectKind::ClipboardFallbackSave,
                         InputEffectKind::OutputFocus,
                         InputEffectKind::Zoom,
                     ],
                     &mut drained,
                 );
+            }
+            InputEffectDrain::ClipboardFallbackSaves => {
+                self.drain_kind(InputEffectKind::ClipboardFallbackSave, &mut drained);
             }
             InputEffectDrain::DurableConfig => {
                 self.drain_kinds(
@@ -303,6 +312,7 @@ impl InputEffect {
     fn kind(&self) -> InputEffectKind {
         match self {
             Self::Backend(_) => InputEffectKind::Backend,
+            Self::ClipboardFallbackSave(_) => InputEffectKind::ClipboardFallbackSave,
             Self::SpotlightMagnifierFeedback => InputEffectKind::SpotlightMagnifierFeedback,
             Self::ToolbarPersistence(_) => InputEffectKind::ToolbarPersistence,
             Self::KeybindingEdit(_) => InputEffectKind::KeybindingEdit,
@@ -340,6 +350,7 @@ fn policy(effect: &InputEffect) -> EffectPolicy {
         | InputEffect::EyedropperToggle => EffectPolicy::Coalesce,
         InputEffect::OcrPass { .. } => EffectPolicy::Merge,
         InputEffect::Backend(_)
+        | InputEffect::ClipboardFallbackSave(_)
         | InputEffect::KeybindingEdit(_)
         | InputEffect::TextCopy(_)
         | InputEffect::TextPaste(_)

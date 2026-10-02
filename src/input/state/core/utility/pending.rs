@@ -52,6 +52,9 @@ impl InputState {
     /// Whether another backend output action is waiting to be drained.
     pub(crate) fn has_pending_backend_actions(&self) -> bool {
         self.input_effects.contains(InputEffectKind::Backend)
+            || self
+                .input_effects
+                .contains(InputEffectKind::ClipboardFallbackSave)
     }
 
     /// Queues backend output work for retrieval by the backend, oldest first.
