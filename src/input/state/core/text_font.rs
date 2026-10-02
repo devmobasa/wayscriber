@@ -8,7 +8,7 @@
 
 use super::InputState;
 use crate::draw::TextMeasurer;
-use crate::draw::{FontDescriptor, Shape, families_match};
+use crate::draw::{DrawnShape, FontDescriptor, Shape, families_match};
 
 fn text_font_descriptor(shape: &Shape) -> Option<&FontDescriptor> {
     match shape {
@@ -37,13 +37,13 @@ fn text_font_descriptor_mut(shape: &mut Shape) -> Option<&mut FontDescriptor> {
 impl InputState {
     /// Whether the selection holds anything a font applies to.
     pub(crate) fn selection_has_text(&self) -> bool {
-        let frame = self.boards.active_frame();
-        self.selected_shape_ids().iter().any(|id| {
-            frame
-                .shape(*id)
-                .and_then(|drawn| text_font_descriptor(&drawn.shape))
-                .is_some()
-        })
+        Self::resolved_selection_has_text(&self.resolved_selected_shapes())
+    }
+
+    pub(crate) fn resolved_selection_has_text(selected: &[&DrawnShape]) -> bool {
+        selected
+            .iter()
+            .any(|drawn| text_font_descriptor(&drawn.shape).is_some())
     }
 
     fn first_selected_text_descriptor(&self) -> Option<&FontDescriptor> {
@@ -52,19 +52,6 @@ impl InputState {
             frame
                 .shape(*id)
                 .and_then(|drawn| text_font_descriptor(&drawn.shape))
-        })
-    }
-
-    fn first_editable_selected_text_descriptor(&self) -> Option<&FontDescriptor> {
-        let frame = self.boards.active_frame();
-        self.selected_shape_ids().iter().find_map(|id| {
-            frame.shape(*id).and_then(|drawn| {
-                if drawn.locked {
-                    None
-                } else {
-                    text_font_descriptor(&drawn.shape)
-                }
-            })
         })
     }
 
@@ -82,9 +69,14 @@ impl InputState {
     ///
     /// A mixed selection converges when the user clicks rather than borrowing
     /// state from either a locked shape or the unrelated tool default.
-    pub(crate) fn first_editable_selected_text_is_bold(&self) -> Option<bool> {
-        self.first_editable_selected_text_descriptor()
-            .map(FontDescriptor::is_bold)
+    pub(crate) fn resolved_selected_text_is_bold(selected: &[&DrawnShape]) -> Option<bool> {
+        selected.iter().find_map(|drawn| {
+            if drawn.locked {
+                None
+            } else {
+                text_font_descriptor(&drawn.shape).map(FontDescriptor::is_bold)
+            }
+        })
     }
 
     /// Turn bold on or off, on selected text when there is any and on the tool

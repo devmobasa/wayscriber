@@ -19,6 +19,7 @@ impl ToolbarSnapshot {
     ) -> Self {
         let frame = state.boards.active_frame();
         let active_tool = state.active_tool();
+        let selected = state.resolved_selected_shapes();
         let board_count = state.boards.board_count();
         let board_index = state.boards.active_index();
         let board_name = state.board_name().to_string();
@@ -120,10 +121,11 @@ impl ToolbarSnapshot {
             spotlight_magnification: state.style.spotlight_magnification,
             // Filled in by the backend that renders the canvas; see the field.
             spotlight_magnifier_source: None,
-            selection_spotlight_magnification: state.selection_spotlight_magnification(),
+            selection_spotlight_magnification:
+                InputState::resolved_selection_spotlight_magnification(&selected),
             font: state.style.font_descriptor.clone(),
-            selection_has_text: state.selection_has_text(),
-            selected_text_bold: state.first_editable_selected_text_is_bold(),
+            selection_has_text: InputState::resolved_selection_has_text(&selected),
+            selected_text_bold: InputState::resolved_selected_text_is_bold(&selected),
             font_size: state.style.current_font_size,
             text_active,
             note_active,
@@ -220,7 +222,10 @@ impl ToolbarSnapshot {
             // the backend publishes the animated value.
             top_fade: 1.0,
             selection_properties: if active_tool == crate::input::Tool::Select {
-                state.selection_pill_entries()
+                state.build_selection_property_entries_from_resolved(
+                    state.selected_shape_ids(),
+                    &selected,
+                )
             } else {
                 Vec::new()
             },
