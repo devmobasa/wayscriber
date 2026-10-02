@@ -2,7 +2,7 @@ use super::super::super::state::WaylandState;
 use crate::{
     backend::wayland::session::{
         self as runtime_session, PersistenceCompletion, PersistenceOperation, PersistenceOutcome,
-        SaveCompletion, SaveStrategy, SessionState, SubmitFailure,
+        SaveStrategy, SessionState, SubmitFailure,
     },
     session,
     session::SaveSnapshotReport,
@@ -37,12 +37,13 @@ pub(super) fn persist_session(state: &mut WaylandState) -> Result<(), anyhow::Er
             state.session.target_epoch()
         );
     }
-    if let Err(error) = state.finish_pending_session_command() {
-        if let Some(transaction) = state.session_transaction.take() {
-            state.fail_session_command(transaction.command(), &error);
-        }
-        log::warn!("Explicit session command failed during shutdown: {error:#}");
-    }
+    runtime_session::driver::persist_after_pending_commands(
+        state,
+        persist_final_session_and_shutdown,
+    )
+}
+
+fn persist_final_session_and_shutdown(state: &mut WaylandState) -> Result<(), anyhow::Error> {
     let save_result = persist_final_session(state);
     let worker_failed = !state.persistence.is_healthy();
     let shutdown_result = state.persistence.shutdown(state.session.target_epoch());
@@ -477,47 +478,23 @@ pub(in crate::backend::wayland) fn drain_persistence_completion_for_runtime(
     Ok(())
 }
 
-fn apply_persistence_completion(
+pub(in crate::backend::wayland) fn apply_persistence_completion(
     state: &mut WaylandState,
     completion: PersistenceCompletion,
 ) -> Result<(), anyhow::Error> {
-    observe_input_dirty(state, Instant::now());
-    if state
-        .session_transaction
-        .as_ref()
-        .is_some_and(|transaction| transaction.request_id == Some(completion.id))
-    {
-        state.complete_session_command(completion);
-        return Ok(());
-    }
-    let id = completion.id;
-    let save_result: Result<SaveCompletion, anyhow::Error> = match completion.result {
-        Ok(PersistenceOutcome::Save(save)) => Ok(save),
-        Ok(other) => Err(anyhow::anyhow!(
-            "unexpected asynchronous persistence outcome: {other:?}"
-        )),
-        Err(err) => Err(err),
-    };
-    let completed_at = Instant::now();
-    let committed = state
-        .session
-        .complete_autosave(id, completed_at, &save_result)?;
-    match save_result {
-        Ok(save) if committed => {
+    let execution_time = completion.execution_time;
+    match runtime_session::driver::route_session_completion(state, completion) {
+        Ok(Some(save)) => {
             log_session_save_result(
                 SessionSaveReason::Autosave,
                 save.report.as_ref(),
-                completion.execution_time,
+                execution_time,
             );
             notify_session_save_report(state, save.report.as_ref());
         }
-        Ok(_) => {
-            let err = anyhow::anyhow!("autosave worker completed without writing session data");
-            handle_autosave_failure(state, completed_at, &err);
-            return Err(err);
-        }
+        Ok(None) => {}
         Err(err) => {
-            handle_autosave_failure(state, completed_at, &err);
+            handle_autosave_failure(state, Instant::now(), &err);
             return Err(err);
         }
     }
@@ -534,7 +511,7 @@ fn handle_autosave_failure(state: &mut WaylandState, now: Instant, err: &anyhow:
     }
 }
 
-fn handle_persistence_transport_failure(
+pub(in crate::backend::wayland) fn handle_persistence_transport_failure(
     state: &mut WaylandState,
     now: Instant,
     err: &anyhow::Error,

@@ -101,7 +101,7 @@ fn can_create_probe(parent: &Path) -> bool {
     }
 }
 
-fn test_input_state() -> InputState {
+pub(super) fn test_input_state() -> InputState {
     let mut action_map = HashMap::new();
     action_map.insert(Shortcut::parse("Escape").unwrap(), Action::Exit);
     crate::input::state::test_support::TestInputStateBuilder::default()
@@ -112,7 +112,7 @@ fn test_input_state() -> InputState {
         .build()
 }
 
-fn add_line(input: &mut InputState, x2: i32) -> ShapeId {
+pub(super) fn add_line(input: &mut InputState, x2: i32) -> ShapeId {
     input.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
@@ -141,7 +141,7 @@ fn board_shape_count(input: &InputState, id: &str) -> usize {
         .len()
 }
 
-fn sample_snapshot() -> stored_session::SessionSnapshot {
+pub(super) fn sample_snapshot() -> stored_session::SessionSnapshot {
     snapshot_for_board("transparent", 42)
 }
 
@@ -212,7 +212,7 @@ fn sample_tool_state() -> stored_session::ToolStateSnapshot {
     }
 }
 
-fn named_options(base: &Path, name: &str) -> SessionOptions {
+pub(super) fn named_options(base: &Path, name: &str) -> SessionOptions {
     let mut options = SessionOptions::new(base.join("configured"), name);
     options.persist_transparent = true;
     options.set_named_file_target(base.join(format!("{name}.wayscriber-session")));
@@ -236,7 +236,7 @@ fn assert_no_candidate_sidecars(options: &SessionOptions) {
     }
 }
 
-fn loaded_line_x2(options: &SessionOptions) -> i32 {
+pub(super) fn loaded_line_x2(options: &SessionOptions) -> i32 {
     let outcome = stored_session::load_snapshot_with_outcome(options).expect("load session");
     let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
         panic!("expected loaded snapshot, got {outcome:?}");
@@ -334,7 +334,7 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
             .map(SessionOptions::session_file_path),
         Some(current_options.session_file_path())
     );
-    assert!(input.is_session_dirty());
+    assert!(session_state.is_dirty());
     assert_eq!(
         std::fs::read(target_options.session_file_path()).expect("target unchanged"),
         before
@@ -374,7 +374,7 @@ fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
             .map(SessionOptions::session_file_path),
         Some(current_options.session_file_path())
     );
-    assert!(input.is_session_dirty());
+    assert!(session_state.is_dirty());
     assert!(target_options.clear_marker_file_path().exists());
     assert!(!target_options.session_file_path().exists());
 }
@@ -652,7 +652,6 @@ fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
 
     assert!(format!("{err:#}").contains("symlink"), "{err:#}");
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
-    assert!(input.is_session_dirty());
     assert!(session_state.is_dirty());
     assert!(session_state.has_loaded_board_data());
     assert_eq!(
@@ -1421,7 +1420,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
         panic!("expected line");
     };
     assert_eq!((*x1, *y1, *x2, *y2), (100, 0, 109, 10));
-    assert!(input.is_session_dirty());
+    assert!(session_state.is_dirty());
     assert_eq!(
         std::fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
@@ -1669,8 +1668,7 @@ fn runtime_open_current_save_failure_aborts_before_candidate_load() {
             .map(SessionOptions::session_file_path),
         Some(current_options.session_file_path())
     );
-    assert!(input.is_session_dirty());
-    assert!(!session_state.is_dirty());
+    assert!(session_state.is_dirty());
     assert_eq!(
         std::fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
@@ -2014,34 +2012,15 @@ fn drive_session_command(
     session: &mut SessionState,
     command: SessionCommand,
 ) -> Result<SessionCommandReport> {
-    let mut persistence = PersistenceController::start_for_test()?;
-    let mut transaction = ExplicitSessionTransaction::new(
-        command,
-        session.target_epoch(),
-        input.session_interaction_state(),
+    let mut runtime = super::driver::tests::CommandRuntime::new(
+        input,
+        measurer,
+        session,
+        PersistenceController::start_for_test()?,
     );
-    let mut result = None;
-    loop {
-        if let Some(Err(error)) = result.as_ref()
-            && let Some(report) = transaction.accept_catalog_failure(error)
-        {
-            return Ok(report);
-        }
-        let step = transaction.advance(
-            &mut SessionTransaction {
-                input_state: input,
-                measurer,
-                session,
-            },
-            result,
-        )?;
-        match step {
-            TransactionStep::Work(operation) => {
-                result = Some(persistence.run(session.target_epoch(), *operation))
-            }
-            TransactionStep::Complete(report) => return Ok(*report),
-        }
-    }
+    super::driver::start_session_command(&mut runtime, command)?;
+    super::driver::finish_pending_session_command(&mut runtime)?;
+    runtime.into_result()
 }
 
 fn open_named_session_runtime(
@@ -2292,7 +2271,7 @@ fn runtime_open_validates_target_before_saving_dirty_current_session() {
         !current.session_file_path().exists(),
         "invalid target must be rejected before saving the source"
     );
-    assert!(input.is_session_dirty());
+    assert!(session.is_dirty());
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
     assert_eq!(
         session.options().unwrap().session_file_path(),
