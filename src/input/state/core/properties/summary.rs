@@ -2,6 +2,27 @@ use std::collections::HashMap;
 
 use crate::draw::{ArrowStyle, Color, DrawnShape, Frame, Shape, ShapeId};
 
+#[cfg(test)]
+thread_local! {
+    static SELECTION_RESOLUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl super::super::InputState {
+    pub(crate) fn resolved_selected_shapes(&self) -> Vec<&DrawnShape> {
+        resolve_selected_shapes(self.boards.active_frame(), self.selected_shape_ids())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_selection_resolution_count() {
+        SELECTION_RESOLUTIONS.with(|count| count.set(0));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selection_resolution_count() -> usize {
+        SELECTION_RESOLUTIONS.with(std::cell::Cell::get)
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct PropertySummary<T> {
     pub(super) applicable: bool,
@@ -16,6 +37,9 @@ pub(super) fn resolve_selected_shapes<'a>(
     frame: &'a Frame,
     ids: &[ShapeId],
 ) -> Vec<&'a DrawnShape> {
+    #[cfg(test)]
+    SELECTION_RESOLUTIONS.with(|count| count.set(count.get() + 1));
+
     if ids.is_empty() {
         return Vec::new();
     }

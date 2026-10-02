@@ -7,7 +7,7 @@ use super::summary::{
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue};
 use super::utils::{approx_eq, color_label, color_rgba_eq};
-use crate::draw::{Shape, ShapeId};
+use crate::draw::{DrawnShape, Shape, ShapeId};
 use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
 /// Renders one summary the way every popup row shows it: a locked row reads
@@ -76,11 +76,19 @@ impl InputState {
     ) -> Vec<SelectionPropertyEntry> {
         let frame = self.boards.active_frame();
         let selected = resolve_selected_shapes(frame, ids);
+        self.build_selection_property_entries_from_resolved(ids, &selected)
+    }
+
+    pub(crate) fn build_selection_property_entries_from_resolved(
+        &self,
+        ids: &[ShapeId],
+        selected: &[&DrawnShape],
+    ) -> Vec<SelectionPropertyEntry> {
         let palette = self.style.quick_colors.rendered_entries();
         let mut entries = Vec::new();
 
         // Opacity counts: two reds at different opacities are a mixed color.
-        let color_summary = summarize_property(&selected, shape_color, color_rgba_eq);
+        let color_summary = summarize_property(selected, shape_color, color_rgba_eq);
         if color_summary.applicable {
             entries.push(entry(
                 "Color",
@@ -91,7 +99,7 @@ impl InputState {
             ));
         }
 
-        let thickness_summary = summarize_property(&selected, shape_thickness, approx_eq);
+        let thickness_summary = summarize_property(selected, shape_thickness, approx_eq);
         if thickness_summary.applicable {
             entries.push(entry(
                 "Thickness",
@@ -104,7 +112,7 @@ impl InputState {
             let mut any_pressure = false;
             let mut all_pressure = !ids.is_empty() && selected.len() == ids.len();
             let mut any_pressure_editable = false;
-            for drawn in &selected {
+            for drawn in selected {
                 if matches!(&drawn.shape, Shape::FreehandPressure { .. }) {
                     any_pressure = true;
                     if !drawn.locked {
@@ -138,7 +146,7 @@ impl InputState {
             }
         }
 
-        let opacity_summary = summarize_property(&selected, shape_opacity, approx_eq);
+        let opacity_summary = summarize_property(selected, shape_opacity, approx_eq);
         if opacity_summary.applicable {
             entries.push(entry(
                 "Opacity",
@@ -149,7 +157,7 @@ impl InputState {
             ));
         }
 
-        let fill_summary = summarize_property(&selected, shape_fill_paint, |a, b| match (a, b) {
+        let fill_summary = summarize_property(selected, shape_fill_paint, |a, b| match (a, b) {
             (Some(a), Some(b)) => color_rgba_eq(a, b),
             (a, b) => a.is_none() && b.is_none(),
         });
@@ -165,7 +173,7 @@ impl InputState {
             ));
         }
 
-        let font_summary = summarize_property(&selected, shape_font_size, approx_eq);
+        let font_summary = summarize_property(selected, shape_font_size, approx_eq);
         if font_summary.applicable {
             entries.push(entry(
                 "Font size",
@@ -176,7 +184,7 @@ impl InputState {
             ));
         }
 
-        let head_summary = summarize_property(&selected, shape_arrow_head, |a, b| a == b);
+        let head_summary = summarize_property(selected, shape_arrow_head, |a, b| a == b);
         if head_summary.applicable {
             entries.push(entry(
                 "Arrow head",
@@ -187,7 +195,7 @@ impl InputState {
             ));
         }
 
-        let style_summary = summarize_property(&selected, shape_arrow_style, |a, b| a == b);
+        let style_summary = summarize_property(selected, shape_arrow_style, |a, b| a == b);
         if style_summary.applicable {
             entries.push(entry(
                 "Arrow style",
@@ -198,7 +206,7 @@ impl InputState {
             ));
         }
 
-        let length_summary = summarize_property(&selected, shape_arrow_length, approx_eq);
+        let length_summary = summarize_property(selected, shape_arrow_length, approx_eq);
         if length_summary.applicable {
             entries.push(entry(
                 "Arrow length",
@@ -209,7 +217,7 @@ impl InputState {
             ));
         }
 
-        let angle_summary = summarize_property(&selected, shape_arrow_angle, approx_eq);
+        let angle_summary = summarize_property(selected, shape_arrow_angle, approx_eq);
         if angle_summary.applicable {
             entries.push(entry(
                 "Arrow angle",
@@ -220,7 +228,7 @@ impl InputState {
             ));
         }
 
-        let text_bg_summary = summarize_property(&selected, shape_text_background, |a, b| a == b);
+        let text_bg_summary = summarize_property(selected, shape_text_background, |a, b| a == b);
         if text_bg_summary.applicable {
             entries.push(entry(
                 "Text background",
@@ -232,7 +240,7 @@ impl InputState {
         }
 
         let spotlight_summary =
-            summarize_property(&selected, shape_spotlight_magnification, approx_eq);
+            summarize_property(selected, shape_spotlight_magnification, approx_eq);
         if spotlight_summary.applicable {
             entries.push(entry(
                 "Magnification",
