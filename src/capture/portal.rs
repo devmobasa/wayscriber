@@ -662,4 +662,5 @@ mod tests {
 }
 
 #[cfg(test)]
+#[path = "portal/tests/transport.rs"]
 mod transport_tests;
