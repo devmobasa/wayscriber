@@ -1,6 +1,7 @@
 mod board_grid;
 mod document;
 mod file_io;
+mod finite;
 mod immutability;
 mod load;
 mod migration;

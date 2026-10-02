@@ -9,6 +9,20 @@ wayscriber supports customization through a TOML configuration file located at:
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
 
+### Non-finite numbers
+
+Floating-point settings must be finite. When a hand-edited file contains `nan`, `inf`, or
+`-inf`, loading logs a warning and uses the field's built-in default before applying its
+normal range checks. Exceptions are preset sizes (which use the minimum size, 1.0), optional
+preset numeric overrides (which are ignored), and custom board RGB components (which use
+0.0). Each color component is checked independently. Tablet thickness defaults are restored
+before ordering the minimum and maximum.
+
+Finite values keep their existing range policy; fields without load-time bounds, such as
+help/status styling and toolbar offsets, retain finite authored values. Loading does not
+rewrite the file. Configurator saves still report invalid numeric input rather than silently
+saving corrected values.
+
 ### Configured defaults and runtime UI preferences
 
 `config.toml` is the authored source for configured defaults. Some direct overlay customizations are

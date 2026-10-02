@@ -5,8 +5,11 @@ use crate::config::{
     ClickHighlightConfig,
 };
 
+mod styles;
+
 impl Config {
     pub(super) fn validate_ui(&mut self) {
+        self.validate_ui_styles();
         self.validate_click_highlight();
 
         if !(300..=5000).contains(&self.ui.command_palette_toast_duration_ms) {

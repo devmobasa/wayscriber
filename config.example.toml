@@ -2,6 +2,8 @@
 # Location: ~/.config/wayscriber/config.toml
 #
 # All settings are optional. If not specified, defaults will be used.
+# Floating-point settings must be finite (not nan, inf, or -inf).
+# Load-time fallbacks never rewrite this file; see docs/CONFIG.md for the policy.
 #
 # Every value here is a configured default: the value Wayscriber starts from.
 # Edit them in the graphical configurator (`wayscriber-configurator`, or F11

@@ -2,7 +2,7 @@ use crate::config::types::{BoardBackgroundConfig, BoardColorConfig, BoardsConfig
 use crate::domain::{BoundaryBoardIdSet, clamp_board_rgb};
 use log::warn;
 
-use super::Config;
+use super::{Config, float::finite_or_default};
 
 impl Config {
     pub(super) fn validate_boards(&mut self) {
@@ -143,10 +143,14 @@ fn normalize_background(background: &mut BoardBackgroundConfig, id: &str) {
 }
 
 fn clamp_color(color: &mut BoardColorConfig, label: &str) {
-    let original = color.rgb();
-    let (rgb, clamped) = clamp_board_rgb(original);
+    let mut finite = color.rgb();
+    for (index, component) in finite.iter_mut().enumerate() {
+        *component = finite_or_default(*component, 0.0, &format!("{label}[{index}]"));
+    }
+    let (rgb, clamped) = clamp_board_rgb(finite);
+
     if clamped {
-        for (i, (before, after)) in original.iter().zip(rgb.iter()).enumerate() {
+        for (i, (before, after)) in finite.iter().zip(rgb.iter()).enumerate() {
             if before != after {
                 warn!(
                     "Invalid {}[{}] = {:.3}, clamping to 0.0-1.0",
@@ -155,5 +159,6 @@ fn clamp_color(color: &mut BoardColorConfig, label: &str) {
             }
         }
     }
+
     *color = BoardColorConfig::Rgb(rgb);
 }

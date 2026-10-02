@@ -1,13 +1,38 @@
-use super::Config;
+use super::{Config, float::finite_or_default};
 use crate::config::types::{DEFAULT_HIT_TEST_TOLERANCE, MAX_SHAPE_RECOGNITION_SENSITIVITY};
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 
 impl Config {
     pub(super) fn validate_drawing(&mut self) {
+        let defaults = crate::config::DrawingConfig::default();
+        for (field, value, fallback) in [
+            (
+                "drawing.default_thickness",
+                &mut self.drawing.default_thickness,
+                defaults.default_thickness,
+            ),
+            (
+                "drawing.default_eraser_size",
+                &mut self.drawing.default_eraser_size,
+                defaults.default_eraser_size,
+            ),
+            (
+                "drawing.marker_opacity",
+                &mut self.drawing.marker_opacity,
+                defaults.marker_opacity,
+            ),
+            (
+                "drawing.default_font_size",
+                &mut self.drawing.default_font_size,
+                defaults.default_font_size,
+            ),
+        ] {
+            *value = finite_or_default(*value, fallback, field);
+        }
+
         self.validate_stroke_sizes();
 
-        // Marker opacity: 0.05 - 0.9
         // Font cycle: drop blank entries and repeats, keeping the given order.
         // A repeat would make the action appear to skip, and a blank name would
         // resolve to whatever the font system falls back to.
@@ -49,6 +74,7 @@ impl Config {
             self.drawing.shape_recognition_sensitivity = MAX_SHAPE_RECOGNITION_SENSITIVITY;
         }
 
+        // Marker opacity: 0.05 - 0.9
         if !(0.05..=0.9).contains(&self.drawing.marker_opacity) {
             log::warn!(
                 "Invalid marker_opacity {:.2}, clamping to 0.05-0.90 range",

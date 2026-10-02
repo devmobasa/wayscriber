@@ -1,4 +1,4 @@
-use super::Config;
+use super::{Config, float::finite_or_default};
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides};
 
@@ -93,6 +93,11 @@ fn validate_preset(slot: usize, preset: &mut ToolPresetConfig) {
 }
 
 fn clamp_stroke_size(slot: usize, label: &str, value: &mut f64) {
+    *value = finite_or_default(
+        *value,
+        MIN_STROKE_THICKNESS,
+        &format!("presets.slot_{slot}.{label}"),
+    );
     if (MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(value) {
         return;
     }
@@ -108,6 +113,15 @@ fn clamp_stroke_size(slot: usize, label: &str, value: &mut f64) {
 }
 
 fn clamp_optional_float(slot: usize, value: &mut Option<f64>, range: PresetFloatRange) {
+    if value.is_some_and(|value| !value.is_finite()) {
+        log::warn!(
+            "Non-finite {} in preset slot {slot}; ignoring the override",
+            range.label
+        );
+        *value = None;
+        return;
+    }
+
     let Some(value) = value.as_mut() else {
         return;
     };
