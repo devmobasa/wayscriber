@@ -2128,6 +2128,12 @@ The overlay Session panel lives in the top strip's overflow **"Session..."** pop
 - Recent session rows reopen other named sessions. If a recent target is missing, Wayscriber removes that stale catalog entry after the failed open.
 - `Manager` opens the configurator. Overlay Open/Save As dialogs use `zenity` or `kdialog`.
 
+Recent-session catalog updates after Open are best effort. If recording a
+successfully opened session fails, the opened canvas stays active and an
+overlay toast reports the catalog error. Save As and ordinary saves also keep
+catalog bookkeeping best effort, but catalog errors on those paths are logged
+rather than shown in a toast; a successful session-file write remains successful.
+
 Open, Save As, and Clear run their disk phases on the persistence worker while
 event dispatch continues. One command runs at a time, after any pending autosave
 finishes. If you edit while a captured phase is pending, the edits stay live and

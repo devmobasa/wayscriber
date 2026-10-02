@@ -127,13 +127,12 @@ impl ExplicitSessionTransaction {
     }
 
     // Catalog bookkeeping is best effort after a successful open.
-    pub fn accept_catalog_failure(&self, error: &anyhow::Error) -> Option<SessionCommandReport> {
-        if matches!(self.phase, Phase::RecordOpen) {
-            log::warn!("Named session opened, but catalog update failed: {error:#}");
-            Some(SessionCommandReport::Open(self.open_report()))
-        } else {
-            None
-        }
+    pub fn catalog_failure_report(&self, error: anyhow::Error) -> SessionCommandReport {
+        debug_assert!(self.has_committed_open());
+        let mut report = self.open_report();
+        report.catalog_error = Some(error);
+
+        SessionCommandReport::Open(report)
     }
 
     fn work(&mut self, phase: Phase, operation: PersistenceOperation) -> Result<TransactionStep> {
@@ -218,6 +217,7 @@ impl ExplicitSessionTransaction {
             .expect("command has current options")
             .session_file_path()
     }
+
     fn open_report(&self) -> RuntimeOpenSessionReport {
         RuntimeOpenSessionReport {
             previous_path: self.current_path(),
@@ -228,8 +228,10 @@ impl ExplicitSessionTransaction {
                 .session_file_path(),
             saved_current: self.saved_current,
             loaded_board_data: self.loaded_board_data,
+            catalog_error: None,
         }
     }
+
     fn apply_default_tools(
         &self,
         context: &mut SessionTransaction<'_>,

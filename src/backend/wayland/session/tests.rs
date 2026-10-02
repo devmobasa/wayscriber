@@ -15,14 +15,14 @@ use std::sync::MutexGuard;
 #[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
 
-struct EnvGuard {
+pub(super) struct EnvGuard {
     _guard: MutexGuard<'static, ()>,
     catalog_hooks: Option<std::ffi::OsString>,
     xdg_data_home: Option<std::ffi::OsString>,
 }
 
 impl EnvGuard {
-    fn set_xdg_data_home(path: &Path) -> Self {
+    pub(super) fn set_xdg_data_home(path: &Path) -> Self {
         let guard = crate::test_env::lock();
         let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
         let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);

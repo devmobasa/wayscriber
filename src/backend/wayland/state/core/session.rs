@@ -1,12 +1,16 @@
 use anyhow::Result;
 
 use super::super::*;
+use crate::backend::wayland::backend::event_loop::session_save::{
+    handle_autosave_failure, handle_persistence_transport_failure, report_autosave_success,
+};
 use crate::backend::wayland::session::{
-    ExplicitSessionTransaction, PersistenceCompletion, PersistenceController, SessionCommand,
+    ExplicitSessionTransaction, PersistenceController, SaveCompletion, SessionCommand,
     SessionCommandReport, SessionTransaction,
     driver::{self, SessionCommandRuntime},
 };
 use crate::session::ToolStateSnapshot;
+use std::time::{Duration, Instant};
 
 impl SessionCommandRuntime for WaylandState {
     fn session_context(&mut self) -> SessionTransaction<'_> {
@@ -42,15 +46,15 @@ impl SessionCommandRuntime for WaylandState {
     }
 
     fn session_transport_failed(&mut self, error: &anyhow::Error) {
-        crate::backend::wayland::backend::event_loop::session_save::handle_persistence_transport_failure(
-            self, std::time::Instant::now(), error,
-        );
+        handle_persistence_transport_failure(self, Instant::now(), error);
     }
 
-    fn apply_session_completion(&mut self, completion: PersistenceCompletion) -> Result<()> {
-        crate::backend::wayland::backend::event_loop::session_save::apply_persistence_completion(
-            self, completion,
-        )
+    fn autosave_succeeded(&mut self, save: SaveCompletion, execution_time: Duration) {
+        report_autosave_success(self, save, execution_time);
+    }
+
+    fn autosave_failed(&mut self, error: &anyhow::Error) {
+        handle_autosave_failure(self, Instant::now(), error);
     }
 }
 

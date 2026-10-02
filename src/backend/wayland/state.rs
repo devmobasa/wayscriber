@@ -42,7 +42,7 @@ pub(in crate::backend::wayland) use self::core::overlay::{
     OverlaySuppression, OverlaySuppressionKeyboardPolicy,
 };
 pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
-pub(in crate::backend::wayland) use self::toolbar::MoveDragKind;
+pub(in crate::backend::wayland) use self::toolbar::{MoveDragKind, ToolbarChrome, ToolbarDrag};
 use super::{
     RuntimeOperationController, RuntimeOperationIdSource,
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},

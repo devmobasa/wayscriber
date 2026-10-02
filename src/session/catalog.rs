@@ -7,16 +7,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[cfg(test)]
-use crate::env_vars::CATALOG_HOOKS_TEST_ENV;
-
 use super::lock::{lock_exclusive, open_runtime_lock_file, unlock};
-use super::options::SessionOptions;
-
+mod hooks;
 mod identity;
 
-#[cfg(test)]
-use identity::normalize_exact_path;
+pub(crate) use hooks::{
+    record_named_session_opened, record_named_session_saved, try_record_named_session_opened,
+};
 pub use identity::{CatalogPathIdentity, session_path_identity, session_paths_match};
 use identity::{
     display_name_for_path, entry_matches_identity, optional_path_to_string, path_to_string,
@@ -200,59 +197,6 @@ pub fn move_session_path_by_id(id: &str, target_path: &Path) -> Result<Option<Ca
         }
         Ok(Some(entry.clone()))
     })
-}
-
-pub(crate) fn record_named_session_opened(options: &SessionOptions) {
-    if !options.is_named_file() {
-        return;
-    }
-    let path = options.session_file_path();
-
-    #[cfg(test)]
-    if !test_catalog_hooks_enabled_for_path(&path) {
-        return;
-    }
-
-    if let Err(err) = upsert_session_event(&path, CatalogEvent::Opened) {
-        warn!(
-            "Failed to update named session catalog after opening {}: {}",
-            path.display(),
-            err,
-        );
-    }
-}
-
-pub(crate) fn record_named_session_saved(options: &SessionOptions) {
-    if !options.is_named_file() {
-        return;
-    }
-    let path = options.session_file_path();
-
-    #[cfg(test)]
-    if !test_catalog_hooks_enabled_for_path(&path) {
-        return;
-    }
-
-    if path.is_file()
-        && let Err(err) = upsert_session_event(&path, CatalogEvent::Saved)
-    {
-        warn!(
-            "Failed to update named session catalog after saving {}: {}",
-            path.display(),
-            err,
-        );
-    }
-}
-
-#[cfg(test)]
-fn test_catalog_hooks_enabled_for_path(path: &Path) -> bool {
-    let Some(raw) = std::env::var_os(CATALOG_HOOKS_TEST_ENV) else {
-        return false;
-    };
-    if raw.is_empty() || raw == std::ffi::OsStr::new("1") {
-        return true;
-    }
-    normalize_exact_path(path).starts_with(normalize_exact_path(Path::new(&raw)))
 }
 
 impl CatalogFile {

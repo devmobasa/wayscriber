@@ -1,6 +1,6 @@
 //! Live explicit-command orchestration, shared by Wayland and headless runtime tests.
 use anyhow::{Result, anyhow};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::{
     ExplicitSessionTransaction, PersistenceCompletion, PersistenceController, PersistenceOutcome,
@@ -16,14 +16,18 @@ pub(in crate::backend::wayland) trait SessionCommandRuntime {
     fn refresh_session_ui_seeds(&mut self);
     fn finish_session_command(&mut self, report: SessionCommandReport);
     fn fail_session_command(&mut self, command: &SessionCommand, error: &anyhow::Error);
-    fn apply_session_completion(&mut self, completion: PersistenceCompletion) -> Result<()>;
+    fn autosave_succeeded(&mut self, save: SaveCompletion, execution_time: Duration);
+    fn autosave_failed(&mut self, error: &anyhow::Error);
     fn session_transport_failed(&mut self, error: &anyhow::Error);
 }
 
-pub(in crate::backend::wayland) fn observe_input_dirty(runtime: &mut impl SessionCommandRuntime) {
+pub(in crate::backend::wayland) fn observe_input_dirty(
+    runtime: &mut impl SessionCommandRuntime,
+    now: Instant,
+) {
     let context = runtime.session_context();
     let dirty = context.input_state.take_session_dirty();
-    context.session.record_input_dirty(Instant::now(), dirty);
+    context.session.record_input_dirty(now, dirty);
 }
 
 pub(in crate::backend::wayland) fn start_session_command(
@@ -63,9 +67,11 @@ pub(in crate::backend::wayland) fn poll_pending_session_command(
     if runtime.persistence().is_active() {
         return;
     }
+
     let Some(transaction) = runtime.pending_command().take() else {
         return;
     };
+
     advance_session_command(runtime, transaction, None);
 }
 
@@ -83,6 +89,7 @@ pub(in crate::backend::wayland) fn complete_session_command(
         );
         return;
     }
+
     advance_session_command(runtime, transaction, Some(completion.result));
 }
 
@@ -91,14 +98,14 @@ fn advance_session_command(
     mut transaction: ExplicitSessionTransaction,
     result: Option<Result<PersistenceOutcome>>,
 ) {
-    observe_input_dirty(runtime);
+    observe_input_dirty(runtime, Instant::now());
+
     // Catalog failure follows an already committed open; never roll back that canvas.
-    let step = if let Some(Err(error)) = result.as_ref()
-        && let Some(report) = transaction.accept_catalog_failure(error)
-    {
-        Ok(TransactionStep::Complete(Box::new(report)))
-    } else {
-        transaction.advance(&mut runtime.session_context(), result)
+    let step = match result {
+        Some(Err(error)) if transaction.has_committed_open() => Ok(TransactionStep::Complete(
+            Box::new(transaction.catalog_failure_report(error)),
+        )),
+        result => transaction.advance(&mut runtime.session_context(), result),
     };
 
     match step {
@@ -106,6 +113,7 @@ fn advance_session_command(
             if transaction.has_committed_open() {
                 runtime.refresh_session_ui_seeds();
             }
+
             let epoch = runtime.session_context().session.target_epoch();
             match runtime.persistence().try_submit(epoch, *operation) {
                 Ok(id) => {
@@ -113,9 +121,10 @@ fn advance_session_command(
                     *runtime.pending_command() = Some(transaction);
                 }
                 Err(failure) => {
-                    let error = anyhow!("failed to submit session command: {}", failure.error);
-                    if let Some(report) = transaction.accept_catalog_failure(&error) {
-                        runtime.finish_session_command(report);
+                    let error = anyhow::Error::new(failure.error)
+                        .context("failed to submit session command");
+                    if transaction.has_committed_open() {
+                        runtime.finish_session_command(transaction.catalog_failure_report(error));
                     } else {
                         runtime.fail_session_command(transaction.command(), &error);
                     }
@@ -129,26 +138,30 @@ fn advance_session_command(
             ) {
                 runtime.refresh_session_ui_seeds();
             }
+
             runtime.finish_session_command(*report);
         }
         Err(error) => runtime.fail_session_command(transaction.command(), &error),
     }
 }
 
-/// Route autosave receipts separately from commands queued behind them. Once a
-/// command has submitted work, its completion must pass the explicit identity gate.
-pub(in crate::backend::wayland) fn route_session_completion(
+/// Apply a receipt and publish its feedback. Ownership errors return before
+/// autosave failure bookkeeping; only an owned failed save incurs retry backoff.
+pub(in crate::backend::wayland) fn apply_session_completion(
     runtime: &mut impl SessionCommandRuntime,
     completion: PersistenceCompletion,
-) -> Result<Option<SaveCompletion>> {
-    observe_input_dirty(runtime);
+) -> Result<()> {
+    observe_input_dirty(runtime, Instant::now());
+
+    let execution_time = completion.execution_time;
+
     if runtime
         .pending_command()
         .as_ref()
         .is_some_and(|command| command.request_id.is_some())
     {
         complete_session_command(runtime, completion);
-        return Ok(None);
+        return Ok(());
     }
 
     let save_result = match completion.result {
@@ -163,37 +176,63 @@ pub(in crate::backend::wayland) fn route_session_completion(
         Instant::now(),
         &save_result,
     )?;
-    let save = save_result?;
-    if !committed {
-        return Err(anyhow!(
-            "autosave worker completed without writing session data"
-        ));
-    }
-    Ok(Some(save))
+
+    let write_result = save_result.and_then(|save| {
+        if committed {
+            Ok(save)
+        } else {
+            Err(anyhow!(
+                "autosave worker completed without writing session data"
+            ))
+        }
+    });
+
+    let save = match write_result {
+        Ok(save) => save,
+        Err(error) => {
+            runtime.autosave_failed(&error);
+            return Err(error);
+        }
+    };
+
+    runtime.autosave_succeeded(save, execution_time);
+
+    Ok(())
 }
 
 /// Deliberate durability barrier, never called from normal dispatch.
+pub(in crate::backend::wayland) fn persistence_barrier(
+    runtime: &mut impl SessionCommandRuntime,
+) -> Result<()> {
+    observe_input_dirty(runtime, Instant::now());
+
+    if runtime.persistence().is_active() {
+        let completion = match runtime.persistence().wait_for_completion() {
+            Ok(Some(completion)) => completion,
+            Ok(None) => return Err(anyhow!("active persistence request had no completion")),
+            Err(error) => {
+                runtime.session_transport_failed(&error);
+                return Err(error);
+            }
+        };
+        apply_session_completion(runtime, completion)?;
+    }
+
+    if !runtime.persistence().is_healthy() {
+        return Err(anyhow!("session persistence worker is unhealthy"));
+    }
+
+    Ok(())
+}
+
 pub(in crate::backend::wayland) fn finish_pending_session_command(
     runtime: &mut impl SessionCommandRuntime,
 ) -> Result<()> {
     while runtime.pending_command().is_some() {
-        if runtime.persistence().is_active() {
-            let completion = match runtime.persistence().wait_for_completion() {
-                Ok(Some(completion)) => completion,
-                Ok(None) => return Err(anyhow!("active persistence request had no completion")),
-                Err(error) => {
-                    runtime.session_transport_failed(&error);
-                    return Err(error);
-                }
-            };
-            runtime.apply_session_completion(completion)?;
-        } else {
-            poll_pending_session_command(runtime);
-        }
-        if !runtime.persistence().is_healthy() {
-            return Err(anyhow!("session persistence worker is unhealthy"));
-        }
+        poll_pending_session_command(runtime);
+        persistence_barrier(runtime)?;
     }
+
     Ok(())
 }
 
@@ -208,6 +247,7 @@ pub(in crate::backend::wayland) fn persist_after_pending_commands<R: SessionComm
         }
         log::warn!("Explicit session command failed during shutdown: {error:#}");
     }
+
     persist(runtime)
 }
 

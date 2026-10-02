@@ -2,12 +2,13 @@ use super::*;
 use crate::session::{SaveAsOverwrite, SessionSnapshot, ToolStateSnapshot};
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub(in crate::backend::wayland) struct RuntimeOpenSessionReport {
     pub previous_path: PathBuf,
     pub opened_path: PathBuf,
     pub saved_current: bool,
     pub loaded_board_data: bool,
+    pub catalog_error: Option<anyhow::Error>,
 }
 
 #[allow(dead_code)]
