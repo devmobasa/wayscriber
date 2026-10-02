@@ -578,6 +578,7 @@ fn autosave_active(options: &SessionOptions) -> bool {
         && (options.any_enabled() || options.restore_tool_state || options.persist_history)
 }
 
+pub(in crate::backend::wayland) mod driver;
 mod persistence;
 mod runtime;
 
