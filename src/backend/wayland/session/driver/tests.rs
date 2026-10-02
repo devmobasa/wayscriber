@@ -1,7 +1,20 @@
 use super::*;
+use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
+
+mod lifecycle_regressions;
 use crate::backend::wayland::session::{
-    PersistenceOperation, SaveStrategy, SessionState,
-    tests::{add_line, loaded_line_x2, named_options, sample_snapshot, test_input_state},
+    PersistenceOperation, RequestId, SaveStrategy, SessionState,
+    persistence::SubmitError,
+    tests::{EnvGuard, add_line, loaded_line_x2, named_options, sample_snapshot, test_input_state},
+};
+use crate::backend::wayland::{
+    backend::event_loop::session_save::record_autosave_failure,
+    runtime_ui_state::{
+        RuntimeUiSeedRefresh, SeedRefreshContext, ToolbarRuntimeState,
+        refresh_runtime_ui_config_seeds,
+    },
+    state::{ToolbarChrome, ToolbarDrag},
+    toolbar::ToolbarSurfaceManager,
 };
 use crate::{config::Config, draw::TextMeasurer, input::InputState, session as stored_session};
 
@@ -15,8 +28,13 @@ pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
     config_failed: bool,
     reports: Vec<SessionCommandReport>,
     errors: Vec<anyhow::Error>,
-    seed_refreshes: usize,
+    ui: Option<ToolbarRuntimeState>,
+    ui_engine: crate::ui_text::UiTextEngine,
+    chrome: ToolbarChrome,
+    drag: ToolbarDrag,
+    toolbar: ToolbarSurfaceManager,
     autosaves: usize,
+    autosave_failures: usize,
 }
 
 impl<'a> CommandRuntime<'a> {
@@ -36,8 +54,13 @@ impl<'a> CommandRuntime<'a> {
             config_failed: false,
             reports: Vec::new(),
             errors: Vec::new(),
-            seed_refreshes: 0,
+            ui: None,
+            ui_engine: crate::ui_text::UiTextEngine::default(),
+            chrome: ToolbarChrome::new(true, (0.0, 0.0)),
+            drag: ToolbarDrag::new(),
+            toolbar: ToolbarSurfaceManager::new(),
             autosaves: 0,
+            autosave_failures: 0,
         }
     }
 
@@ -50,9 +73,66 @@ impl<'a> CommandRuntime<'a> {
             .ok_or_else(|| anyhow!("command did not publish a terminal report"))
     }
 
+    fn enable_ui_runtime(&mut self, path: &std::path::Path) {
+        let wake = RuntimeWakeSource::new().unwrap();
+        self.ui = Some(
+            ToolbarRuntimeState::start(&self.config, self.input, path, wake.handle()).unwrap(),
+        );
+    }
+
+    fn submit_autosave(
+        &mut self,
+        snapshot: stored_session::SessionSnapshot,
+        options: stored_session::SessionOptions,
+    ) -> RequestId {
+        let window = self.session.prepare_autosave_submission().unwrap();
+        let epoch = self.session.target_epoch();
+        let id = self
+            .persistence
+            .try_submit(
+                epoch,
+                PersistenceOperation::Save {
+                    snapshot,
+                    options,
+                    strategy: SaveStrategy::Autosave,
+                    contentless_clear_boundary: false,
+                },
+            )
+            .unwrap();
+
+        self.session.commit_autosave_submission(id, window);
+
+        id
+    }
+
+    fn apply_session_completion(&mut self, completion: PersistenceCompletion) -> Result<()> {
+        apply_session_completion(self, completion)
+    }
+
     fn receive(&mut self) {
         let completion = self.persistence.wait_for_completion().unwrap().unwrap();
         self.apply_session_completion(completion).unwrap();
+    }
+}
+
+impl RuntimeUiSeedRefresh for CommandRuntime<'_> {
+    fn seed_refresh_context(&mut self) -> SeedRefreshContext<'_> {
+        SeedRefreshContext {
+            config: &self.config,
+            input: self.input,
+            engine: &self.ui_engine,
+            measurer: self.measurer,
+            runtime: self.ui.as_mut(),
+            drag: &mut self.drag,
+            chrome: &mut self.chrome,
+            toolbar: &mut self.toolbar,
+        }
+    }
+
+    fn cancel_position_drags(&mut self) {
+        self.drag.end_move();
+        self.drag.set_preview_active(false);
+        self.drag.cancel_gtk();
     }
 }
 
@@ -64,42 +144,62 @@ impl SessionCommandRuntime for CommandRuntime<'_> {
             session: self.session,
         }
     }
+
     fn pending_command(&mut self) -> &mut Option<ExplicitSessionTransaction> {
         &mut self.pending
     }
+
     fn persistence(&mut self) -> &mut PersistenceController {
         &mut self.persistence
     }
+
     fn session_config_failed(&self) -> bool {
         self.config_failed
     }
+
     fn refresh_session_ui_seeds(&mut self) {
-        self.seed_refreshes += 1;
-        self.input
-            .boards
-            .sync_pin_seeds_from_config(&self.config.resolved_boards());
+        refresh_runtime_ui_config_seeds(self);
     }
+
     fn finish_session_command(&mut self, report: SessionCommandReport) {
         self.reports.push(report);
     }
+
     fn fail_session_command(&mut self, _: &SessionCommand, error: &anyhow::Error) {
         self.errors.push(anyhow!("{error:#}"));
     }
+
     fn session_transport_failed(&mut self, _: &anyhow::Error) {
         self.session.restore_in_flight_autosave();
     }
 
-    fn apply_session_completion(&mut self, completion: PersistenceCompletion) -> Result<()> {
-        if route_session_completion(self, completion)?.is_some() {
-            self.autosaves += 1;
-        }
-        Ok(())
+    fn autosave_succeeded(&mut self, _: SaveCompletion, _: Duration) {
+        self.autosaves += 1;
+    }
+
+    fn autosave_failed(&mut self, _: &anyhow::Error) {
+        let options = self.session.options().unwrap().clone();
+        record_autosave_failure(self.session, Instant::now(), &options);
+        self.autosave_failures += 1;
     }
 }
 
 #[test]
 fn admission_rejects_each_guard_without_submitting_or_retargeting() {
-    for case in ["pending", "unhealthy", "clear-config", "tools-config"] {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Guard {
+        Pending,
+        Unhealthy,
+        ClearConfig,
+        ToolsConfig,
+    }
+
+    for case in [
+        Guard::Pending,
+        Guard::Unhealthy,
+        Guard::ClearConfig,
+        Guard::ToolsConfig,
+    ] {
         let temp = crate::test_temp::tempdir().unwrap();
         let options = named_options(temp.path(), "current");
         let mut input = test_input_state();
@@ -108,14 +208,15 @@ fn admission_rejects_each_guard_without_submitting_or_retargeting() {
         let (persistence, worker) = PersistenceController::controlled_for_test();
         let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
         let mut worker = Some(worker);
+
         let command = match case {
-            "pending" => {
+            Guard::Pending => {
                 start_session_command(&mut runtime, SessionCommand::Inspect).unwrap();
                 worker.as_ref().unwrap().complete_next();
                 // Receipt is held before runtime delivery; the original identity must survive.
                 SessionCommand::Clear
             }
-            "unhealthy" => {
+            Guard::Unhealthy => {
                 drop(worker.take());
                 assert!(
                     runtime
@@ -130,18 +231,18 @@ fn admission_rejects_each_guard_without_submitting_or_retargeting() {
                 );
                 SessionCommand::Inspect
             }
-            "clear-config" => {
+            Guard::ClearConfig => {
                 runtime.config_failed = true;
                 SessionCommand::Clear
             }
-            "tools-config" => {
+            Guard::ToolsConfig => {
                 runtime.config_failed = true;
                 SessionCommand::ClearTools(Box::new(
                     stored_session::ToolStateSnapshot::from_config(&runtime.config),
                 ))
             }
-            _ => unreachable!(),
         };
+
         let before = runtime
             .pending
             .as_ref()
@@ -150,11 +251,12 @@ fn admission_rejects_each_guard_without_submitting_or_retargeting() {
             .unwrap_err()
             .to_string();
         let expected = match case {
-            "pending" => "already pending",
-            "unhealthy" => "unhealthy",
+            Guard::Pending => "already pending",
+            Guard::Unhealthy => "unhealthy",
             _ => "refusing to modify saved session data",
         };
-        assert!(error.contains(expected), "{case}: {error}");
+
+        assert!(error.contains(expected), "{case:?}: {error}");
         assert_eq!(
             runtime
                 .pending
@@ -170,7 +272,7 @@ fn admission_rejects_each_guard_without_submitting_or_retargeting() {
         if let Some(worker) = worker {
             assert!(!worker.has_request());
         }
-        if case == "pending" {
+        if case == Guard::Pending {
             runtime.receive();
             assert!(matches!(
                 runtime.reports.as_slice(),
@@ -190,27 +292,15 @@ fn explicit_command_waits_for_autosave_receipt_and_survives_dispatch_work() {
     let measurer = TextMeasurer::default();
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
-    let window = runtime.session.prepare_autosave_submission().unwrap();
-    let autosave_id = runtime
-        .persistence
-        .try_submit(
-            0,
-            PersistenceOperation::Save {
-                snapshot: sample_snapshot(),
-                options,
-                strategy: SaveStrategy::Autosave,
-                contentless_clear_boundary: false,
-            },
-        )
-        .unwrap();
-    runtime
-        .session
-        .commit_autosave_submission(autosave_id, window);
+
+    let autosave_id = runtime.submit_autosave(sample_snapshot(), options);
+
     start_session_command(&mut runtime, SessionCommand::Inspect).unwrap();
     poll_pending_session_command(&mut runtime);
     assert_eq!(runtime.pending.as_ref().unwrap().request_id, None);
     assert!(runtime.reports.is_empty());
     assert_eq!(runtime.session.edit_generation(), 1);
+
     // The worker has received no completion yet; unrelated live input still progresses.
     add_line(runtime.input, 77);
     runtime.input.mark_session_dirty();
@@ -220,9 +310,11 @@ fn explicit_command_waits_for_autosave_receipt_and_survives_dispatch_work() {
     assert_eq!(runtime.pending.as_ref().unwrap().request_id, None);
     assert!(!worker.has_request());
     assert!(runtime.session.is_dirty());
+
     poll_pending_session_command(&mut runtime);
     let explicit_id = runtime.pending.as_ref().unwrap().request_id.unwrap();
     assert_ne!(explicit_id, autosave_id);
+
     worker.complete_next();
     runtime.receive();
     assert!(runtime.pending.is_none());
@@ -243,11 +335,13 @@ fn live_completion_gate_rejects_a_different_request_identity() {
     let temp = crate::test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "current");
     *runtime.session = SessionState::new(Some(options));
+
     start_session_command(&mut runtime, SessionCommand::Inspect).unwrap();
     worker.complete_next();
     let mut completion = runtime.persistence.wait_for_completion().unwrap().unwrap();
     completion.id.sequence += 1;
     runtime.apply_session_completion(completion).unwrap();
+
     assert!(runtime.pending.is_none());
     assert!(runtime.reports.is_empty());
     assert!(runtime.errors[0].to_string().contains("identity mismatch"));
@@ -272,6 +366,7 @@ fn advance_observes_live_edits_and_finalizes_stale_destructive_work() {
     let completion = runtime.persistence.wait_for_completion().unwrap().unwrap();
     // Exercise advance's own dirty observation, not the completion router's observation.
     complete_session_command(&mut runtime, completion);
+
     assert!(runtime.pending.is_none());
     assert_eq!(runtime.input.boards.active_frame().shapes.len(), 2);
     assert!(runtime.session.is_dirty());
@@ -298,6 +393,7 @@ fn deferred_submission_rejection_is_terminal() {
     runtime.persistence.wait_for_completion().unwrap().unwrap();
     drop(worker);
     poll_pending_session_command(&mut runtime);
+
     assert!(runtime.pending.is_none());
     assert!(runtime.reports.is_empty());
     assert!(runtime.errors[0].to_string().contains("failed to submit"));
@@ -311,6 +407,7 @@ fn advance_failure_publishes_error_and_retires_the_command() {
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
     start_session_command(&mut runtime, SessionCommand::Inspect).unwrap();
+
     assert!(runtime.pending.is_none());
     assert!(runtime.reports.is_empty());
     assert!(
@@ -321,18 +418,98 @@ fn advance_failure_publishes_error_and_retires_the_command() {
     assert!(!worker.has_request());
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CatalogOutcome {
+    Success,
+    Failure,
+    Rejected,
+}
+
+impl CatalogOutcome {
+    fn assert_terminal_report(
+        self,
+        runtime: &CommandRuntime<'_>,
+        target: &stored_session::SessionOptions,
+        root: &std::path::Path,
+    ) {
+        assert!(runtime.pending.is_none());
+        assert!(runtime.errors.is_empty());
+        let [SessionCommandReport::Open(report)] = runtime.reports.as_slice() else {
+            panic!("expected committed Open report");
+        };
+        assert_eq!(report.catalog_error.is_some(), self != Self::Success);
+        assert_eq!(
+            runtime.session.options().unwrap().session_file_path(),
+            target.session_file_path()
+        );
+        assert_eq!(runtime.input.boards.active_frame().shapes.len(), 1);
+        assert!(matches!(
+            runtime.input.boards.active_frame().shapes[0].shape,
+            crate::draw::Shape::Line { x2: 42, .. }
+        ));
+        assert_eq!(loaded_line_x2(target), 42);
+        // Catalog I/O failure leaves the worker usable; rejected transport marks it unhealthy.
+        assert_eq!(runtime.persistence.is_healthy(), self != Self::Rejected);
+
+        match self {
+            Self::Failure => {
+                let error = report.catalog_error.as_ref().unwrap();
+                assert!(
+                    format!("{error:#}").contains("failed to create session catalog directory")
+                );
+                assert!(error.downcast_ref::<std::io::Error>().is_some());
+                assert_eq!(
+                    std::fs::read(root.join("wayscriber")).unwrap(),
+                    b"catalog blocked"
+                );
+            }
+            Self::Success => {
+                let entries = stored_session::catalog::recent_sessions().unwrap();
+                assert_eq!(entries.len(), 1);
+                assert!(stored_session::catalog::session_paths_match(
+                    std::path::Path::new(&entries[0].path),
+                    &target.session_file_path()
+                ));
+                assert!(entries[0].last_opened_at_millis.is_some());
+            }
+            Self::Rejected => {
+                assert!(matches!(
+                    report
+                        .catalog_error
+                        .as_ref()
+                        .unwrap()
+                        .downcast_ref::<SubmitError>(),
+                    Some(SubmitError::Disconnected)
+                ));
+            }
+        }
+    }
+}
+
 #[test]
 fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
-    for catalog in ["success", "failure", "rejected"] {
+    for catalog in [
+        CatalogOutcome::Success,
+        CatalogOutcome::Failure,
+        CatalogOutcome::Rejected,
+    ] {
         let temp = crate::test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "target");
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+        let _env = EnvGuard::set_xdg_data_home(temp.path());
+        if catalog == CatalogOutcome::Failure {
+            // A regular file blocks catalog directory creation, without relying on uid or modes.
+            std::fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
+        }
+
         let mut input = test_input_state();
         let mut session = SessionState::new(Some(current));
         let measurer = TextMeasurer::default();
         let (persistence, worker) = PersistenceController::controlled_for_test();
         let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+        runtime.enable_ui_runtime(&temp.path().join("runtime-ui.toml"));
+        runtime.config.ui.toolbar.top_offset = 64.0;
         runtime.config.boards = Some(runtime.input.boards.to_config());
         for item in &mut runtime.config.boards.as_mut().unwrap().items {
             item.pinned = true;
@@ -342,17 +519,19 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
             SessionCommand::Open(target.session_file_path()),
         )
         .unwrap();
+
         worker.complete_next(); // open preflight
         runtime.receive();
         worker.complete_next(); // candidate load, no dirty current source
         let completion = runtime.persistence.wait_for_completion().unwrap().unwrap();
-        let worker = if catalog == "rejected" {
+        let worker = if catalog == CatalogOutcome::Rejected {
             drop(worker);
             None
         } else {
             Some(worker)
         };
         runtime.apply_session_completion(completion).unwrap();
+
         assert_eq!(
             runtime.session.options().unwrap().session_file_path(),
             target.session_file_path()
@@ -367,19 +546,18 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
                 .iter()
                 .all(|item| item.pinned)
         );
-        assert_eq!(runtime.seed_refreshes, 1);
+        assert_eq!(runtime.chrome.top_offset(), (64.0, 0.0));
+
         if let Some(worker) = worker {
-            // Make a changed authored seed observable on the terminal refresh too.
+            // Make changed consumer-visible seeds observable on the terminal refresh too.
+            runtime.config.ui.toolbar.top_offset = 96.0;
             for item in &mut runtime.config.boards.as_mut().unwrap().items {
                 item.pinned = false;
             }
-            if catalog == "failure" {
-                worker.respond_with(|_| Err(anyhow!("controlled catalog error")));
-            } else {
-                worker.complete_next();
-            }
+            worker.complete_next();
             runtime.receive();
-            assert_eq!(runtime.seed_refreshes, 2);
+
+            assert_eq!(runtime.chrome.top_offset(), (96.0, 0.0));
             assert!(
                 runtime
                     .input
@@ -390,12 +568,8 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
                     .all(|item| !item.pinned)
             );
         }
-        assert!(runtime.pending.is_none());
-        assert!(runtime.errors.is_empty());
-        assert!(matches!(
-            runtime.reports.as_slice(),
-            [SessionCommandReport::Open(_)]
-        ));
+
+        catalog.assert_terminal_report(&runtime, &target, temp.path());
     }
 }
 
@@ -409,14 +583,19 @@ fn clear_completion_refreshes_consumer_seeds() {
     let measurer = TextMeasurer::default();
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+    runtime.enable_ui_runtime(&temp.path().join("runtime-ui.toml"));
+    runtime.config.ui.toolbar.top_offset = 64.0;
     runtime.config.boards = Some(runtime.input.boards.to_config());
     for item in &mut runtime.config.boards.as_mut().unwrap().items {
         item.pinned = true;
     }
+
     start_session_command(&mut runtime, SessionCommand::Clear).unwrap();
     worker.complete_next();
     runtime.receive();
+
     assert!(runtime.input.boards.active_frame().shapes.is_empty());
+    assert_eq!(runtime.chrome.top_offset(), (64.0, 0.0));
     assert!(
         runtime
             .input
@@ -463,6 +642,7 @@ fn shutdown_drains_save_as_and_open_at_every_disk_phase_before_final_save() {
                 runtime.receive();
             }
             assert!(runtime.pending.is_some());
+
             std::thread::scope(|scope| {
                 scope.spawn(move || {
                     for _ in completed..phases {
@@ -495,12 +675,159 @@ fn shutdown_drains_save_as_and_open_at_every_disk_phase_before_final_save() {
                 runtime.session.options().unwrap().session_file_path(),
                 target.session_file_path()
             );
+
             assert_eq!(loaded_line_x2(&target), if open { 42 } else { 51 });
             let loaded = stored_session::load_snapshot(&target).unwrap().unwrap();
             assert_eq!(loaded.boards[0].pages.pages[0].shapes.len(), 2);
             if open {
                 assert_eq!(loaded_line_x2(&current), 51);
             }
+        }
+    }
+}
+
+#[test]
+fn shutdown_starts_ready_to_poll_open_and_save_as_after_an_autosave_receipt() {
+    for open in [true, false] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let current = named_options(temp.path(), "current");
+        let target = named_options(temp.path(), "target");
+        if open {
+            stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+        }
+        let mut input = test_input_state();
+        add_line(&mut input, 51);
+        input.mark_session_dirty();
+        let mut session = SessionState::new(Some(current.clone()));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+        observe_input_dirty(&mut runtime, Instant::now());
+        let snapshot = runtime
+            .input
+            .snapshot_for_persistence_with(&measurer, &current)
+            .unwrap();
+
+        runtime.submit_autosave(snapshot, current.clone());
+        let command = if open {
+            SessionCommand::Open(target.session_file_path())
+        } else {
+            SessionCommand::SaveAs(
+                target.session_file_path(),
+                stored_session::SaveAsOverwrite::Deny,
+            )
+        };
+        start_session_command(&mut runtime, command).unwrap();
+        worker.complete_next();
+        runtime.receive();
+        assert!(!runtime.persistence.is_active());
+        assert_eq!(runtime.pending.as_ref().unwrap().request_id, None);
+        assert!(runtime.reports.is_empty());
+
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                for _ in 0..if open { 3 } else { 2 } {
+                    worker.complete_next();
+                }
+            });
+            persist_after_pending_commands(&mut runtime, |runtime| {
+                assert!(runtime.pending.is_none());
+                assert!(runtime.errors.is_empty());
+                assert_eq!(runtime.reports.len(), 1);
+                assert_eq!(
+                    runtime.session.options().unwrap().session_file_path(),
+                    target.session_file_path()
+                );
+                let snapshot = runtime
+                    .input
+                    .snapshot_for_persistence_with(&measurer, &target)
+                    .unwrap();
+                stored_session::save_snapshot(&snapshot, runtime.session.options().unwrap())?;
+                Ok(())
+            })
+            .unwrap();
+        });
+        assert_eq!(loaded_line_x2(&current), 51);
+        assert_eq!(loaded_line_x2(&target), if open { 42 } else { 51 });
+    }
+}
+
+#[test]
+fn shutdown_reports_open_and_save_as_phase_failures_before_final_persistence() {
+    for (open, phases) in [(false, 2), (true, 4)] {
+        for completed in 0..phases {
+            let temp = crate::test_temp::tempdir().unwrap();
+            let current = named_options(temp.path(), "current");
+            let target = named_options(temp.path(), "target");
+            if open {
+                stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+            }
+            let mut input = test_input_state();
+            add_line(&mut input, 51);
+            input.mark_session_dirty();
+            let mut session = SessionState::new(Some(current.clone()));
+            let measurer = TextMeasurer::default();
+            let (persistence, worker) = PersistenceController::controlled_for_test();
+            let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+            let command = if open {
+                SessionCommand::Open(target.session_file_path())
+            } else {
+                SessionCommand::SaveAs(
+                    target.session_file_path(),
+                    stored_session::SaveAsOverwrite::Deny,
+                )
+            };
+            start_session_command(&mut runtime, command).unwrap();
+            for _ in 0..completed {
+                worker.complete_next();
+                runtime.receive();
+            }
+
+            worker.respond_with(|_| Err(anyhow!("controlled shutdown phase failure")));
+            // The controller remains active with a receipt ready; shutdown must poll it.
+            persist_after_pending_commands(&mut runtime, |runtime| {
+                assert!(runtime.pending.is_none());
+                let catalog_failure = open && completed == 3;
+                let active = if catalog_failure { &target } else { &current };
+                assert_eq!(
+                    runtime.session.options().unwrap().session_file_path(),
+                    active.session_file_path()
+                );
+                if catalog_failure {
+                    assert!(runtime.errors.is_empty());
+                    let [SessionCommandReport::Open(report)] = runtime.reports.as_slice() else {
+                        panic!("expected committed Open report");
+                    };
+                    assert!(
+                        report
+                            .catalog_error
+                            .as_ref()
+                            .unwrap()
+                            .to_string()
+                            .contains("controlled shutdown phase failure")
+                    );
+                } else {
+                    assert!(runtime.reports.is_empty());
+                    assert_eq!(runtime.errors.len(), 1);
+                    assert!(
+                        runtime.errors[0]
+                            .to_string()
+                            .contains("controlled shutdown phase failure")
+                    );
+                }
+
+                let snapshot = runtime
+                    .input
+                    .snapshot_for_persistence_with(&measurer, active)
+                    .unwrap();
+                stored_session::save_snapshot(&snapshot, active)?;
+                assert_eq!(
+                    loaded_line_x2(active),
+                    if catalog_failure { 42 } else { 51 }
+                );
+                Ok(())
+            })
+            .unwrap();
         }
     }
 }
@@ -522,6 +849,7 @@ fn shutdown_cleans_up_pending_work_after_worker_disconnect_and_when_ready_to_pol
             .try_submit(0, PersistenceOperation::HasArtifacts { options })
             .unwrap();
         start_session_command(&mut runtime, SessionCommand::Inspect).unwrap();
+
         if disconnect {
             drop(worker);
             persist_after_pending_commands(&mut runtime, |runtime| {

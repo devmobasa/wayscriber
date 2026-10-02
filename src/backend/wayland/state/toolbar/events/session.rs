@@ -415,10 +415,16 @@ impl WaylandState {
         report: SessionCommandReport,
     ) {
         match report {
-            SessionCommandReport::Open(report) => self.set_session_toolbar_info(format!(
-                "Opened session {}",
-                session_display_name(&report.opened_path)
-            )),
+            SessionCommandReport::Open(report) => {
+                let name = session_display_name(&report.opened_path);
+                if let Some(error) = report.catalog_error {
+                    self.set_session_toolbar_error(format!(
+                        "Opened session {name}; recent-session catalog update failed: {error:#}"
+                    ));
+                } else {
+                    self.set_session_toolbar_info(format!("Opened session {name}"));
+                }
+            }
             SessionCommandReport::SaveAs(report) => {
                 self.clear_toolbar_save_as_overwrite_prompt();
                 self.set_session_toolbar_info(format!(
