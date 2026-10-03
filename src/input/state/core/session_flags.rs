@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub(in crate::input::state) struct SessionFlags {
     dirty: bool,
+    interaction_revision: u64,
     preflight_options: Option<SessionOptions>,
     pending_save_as_overwrite: Option<PathBuf>,
     last_capture_path: Option<PathBuf>,
@@ -15,10 +16,19 @@ impl SessionFlags {
     pub(in crate::input::state) fn new() -> Self {
         Self {
             dirty: false,
+            interaction_revision: 0,
             preflight_options: None,
             pending_save_as_overwrite: None,
             last_capture_path: None,
         }
+    }
+
+    pub(in crate::input::state) const fn interaction_revision(&self) -> u64 {
+        self.interaction_revision
+    }
+
+    pub(in crate::input::state) fn note_interaction_activity(&mut self) {
+        self.interaction_revision = self.interaction_revision.wrapping_add(1);
     }
 
     pub(in crate::input::state) const fn is_dirty(&self) -> bool {

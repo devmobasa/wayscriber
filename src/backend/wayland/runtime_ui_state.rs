@@ -24,8 +24,14 @@ mod lifecycle;
 mod live_state;
 mod positions;
 mod rollback;
+mod seed_refresh;
 mod seeds;
 mod wayland;
+
+#[cfg(test)]
+pub(in crate::backend::wayland) use seed_refresh::{
+    RuntimeUiSeedRefresh, SeedRefreshContext, refresh_runtime_ui_config_seeds,
+};
 
 use live_state::{
     apply_live_board_state, apply_live_toolbar_positions, apply_live_toolbar_state,
@@ -47,6 +53,14 @@ use lifecycle::RuntimeUiLifecycleState;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(in crate::backend::wayland) struct ToolbarPositionSnapshot {
     pub top: (f64, f64),
+}
+
+impl ToolbarPositionSnapshot {
+    fn from_chrome(chrome: &crate::backend::wayland::state::ToolbarChrome) -> Self {
+        Self {
+            top: chrome.top_offset(),
+        }
+    }
 }
 
 #[derive(Debug)]

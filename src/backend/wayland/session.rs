@@ -578,6 +578,7 @@ fn autosave_active(options: &SessionOptions) -> bool {
         && (options.any_enabled() || options.restore_tool_state || options.persist_history)
 }
 
+pub(in crate::backend::wayland) mod driver;
 mod persistence;
 mod runtime;
 
@@ -586,7 +587,11 @@ pub(in crate::backend::wayland) use persistence::{
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,
 };
 
-pub(in crate::backend::wayland) use runtime::SessionTransaction;
+pub(in crate::backend::wayland) use runtime::{
+    ExplicitSessionTransaction, SessionCommand, SessionCommandReport, SessionTransaction,
+    TransactionStep,
+};
+#[cfg(test)]
 pub(in crate::backend::wayland) use runtime::{
     RuntimeClearSessionReport, RuntimeClearToolStateReport, RuntimeOpenSessionReport,
     RuntimeSaveAsSessionReport,

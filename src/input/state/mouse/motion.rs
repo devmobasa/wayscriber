@@ -56,7 +56,9 @@ impl InputState {
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),
         );
+        self.note_session_interaction_activity();
         let _ = route_pointer_motion(self, resources.measurer, PointerMotion::new(points));
+        self.note_session_interaction_activity();
     }
 }
 

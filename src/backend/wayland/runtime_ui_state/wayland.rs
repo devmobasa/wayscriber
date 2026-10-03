@@ -1,14 +1,32 @@
 use super::super::state::{MoveDragKind, WaylandState};
+#[cfg(not(test))]
+use super::seed_refresh::{
+    RuntimeUiSeedRefresh, SeedRefreshContext, refresh_runtime_ui_config_seeds,
+};
 use super::*;
+impl RuntimeUiSeedRefresh for WaylandState {
+    fn seed_refresh_context(&mut self) -> SeedRefreshContext<'_> {
+        SeedRefreshContext {
+            config: &self.config,
+            input: &mut self.input_state,
+            engine: self.render.ui_text(),
+            measurer: self.render.text_measurer(),
+            runtime: self.preferences.runtime_ui_mut().state_mut(),
+            drag: &mut self.toolbar_drag,
+            chrome: &mut self.toolbar_chrome,
+            toolbar: &mut self.toolbar,
+        }
+    }
+
+    fn cancel_position_drags(&mut self) {
+        self.cancel_toolbar_move_drag();
+        self.cancel_gtk_toolbar_drag_lifecycle();
+    }
+}
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn toolbar_position_snapshot(&self) -> ToolbarPositionSnapshot {
-        ToolbarPositionSnapshot {
-            top: (
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1,
-            ),
-        }
+        ToolbarPositionSnapshot::from_chrome(&self.toolbar_chrome)
     }
 
     pub(in crate::backend::wayland) fn apply_toolbar_runtime_finish(
@@ -331,36 +349,7 @@ impl WaylandState {
     /// daemon, but keeping this boundary complete prevents a future
     /// same-process reload from committing an old drag under new seeds.
     pub(in crate::backend::wayland) fn refresh_runtime_ui_config_seeds(&mut self) {
-        let configured_boards = self.config.resolved_boards();
-        self.input_state
-            .boards
-            .sync_pin_seeds_from_config(&configured_boards);
-        let mut positions = self.toolbar_position_snapshot();
-        let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
-            return;
-        };
-        let refresh = runtime.refresh_config_seeds(
-            self.render.ui_text(),
-            self.render.text_measurer(),
-            &self.config,
-            &mut self.input_state,
-            &mut positions,
-        );
-        if !refresh.applied {
-            return;
-        }
-        if refresh.item_drag_aborted {
-            self.input_state.clear_toolbar_item_drag();
-            self.toolbar_drag.set_item_dragging(false);
-        }
-        if refresh.position_drag_aborted {
-            self.cancel_toolbar_move_drag();
-            self.cancel_gtk_toolbar_drag_lifecycle();
-        }
-        self.toolbar_chrome.set_top_offset(positions.top);
-        self.toolbar.mark_dirty();
-        self.input_state.dirty_tracker.mark_full();
-        self.input_state.needs_redraw = true;
+        refresh_runtime_ui_config_seeds(self);
     }
 
     pub(in crate::backend::wayland) fn apply_board_runtime_ui_action(

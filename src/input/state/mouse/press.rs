@@ -160,7 +160,9 @@ impl InputState {
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),
         );
+        self.note_session_interaction_activity();
         let _ = route_pointer_press(self, resources, PointerPress::new(button, points));
+        self.note_session_interaction_activity();
     }
 
     pub(in crate::input::state) fn tool_for_button_press(

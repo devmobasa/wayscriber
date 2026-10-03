@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::wayland::session::{SessionCommand, SessionCommandReport};
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::catalog;
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
@@ -294,28 +295,9 @@ impl WaylandState {
 
     fn handle_toolbar_open_session_path(&mut self, path: &Path) {
         self.clear_toolbar_save_as_overwrite_prompt();
-        match self.open_named_session_runtime(path) {
-            Ok(report) => self.set_session_toolbar_info(format!(
-                "Opened session {}",
-                session_display_name(&report.opened_path)
-            )),
-            Err(err) if missing_session_error_matches_path(path, &err) => {
-                match self.forget_named_session_by_path(path.to_path_buf()) {
-                    Ok(true) => self.set_session_toolbar_error(format!(
-                        "Session file missing; removed from recent sessions: {}",
-                        session_display_name(path)
-                    )),
-                    Ok(false) => self.set_session_toolbar_error(format!(
-                        "Session file missing; no recent-session entry matched: {}",
-                        session_display_name(path)
-                    )),
-                    Err(catalog_err) => self.set_session_toolbar_error(format!(
-                        "Session file missing and recent-session cleanup failed for {}: {catalog_err:#}",
-                        session_display_name(path)
-                    )),
-                }
-            }
-            Err(err) => self.set_session_toolbar_error(format!("Open session failed: {err:#}")),
+        let command = SessionCommand::Open(path.to_path_buf());
+        if let Err(error) = self.start_session_command(command) {
+            self.report_session_command_error("Open session failed", &error);
         }
     }
 
@@ -372,20 +354,8 @@ impl WaylandState {
     }
 
     fn handle_selected_save_as_path(&mut self, path: PathBuf) {
-        match self.save_named_session_as_requires_overwrite(&path) {
-            Ok(true) => {
-                self.input_state.set_pending_save_as_overwrite(path.clone());
-                self.set_session_toolbar_info(format!(
-                    "Replace existing session {}?",
-                    session_display_name(&path)
-                ));
-            }
-            Ok(false) => {
-                self.commit_toolbar_save_session_as(&path, crate::session::SaveAsOverwrite::Deny)
-            }
-            Err(err) => {
-                self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
-            }
+        if let Err(error) = self.start_session_command(SessionCommand::CheckOverwrite(path)) {
+            self.report_session_command_error("Save session failed", &error);
         }
     }
 
@@ -419,37 +389,141 @@ impl WaylandState {
         path: &Path,
         overwrite: crate::session::SaveAsOverwrite,
     ) {
-        match self.save_named_session_as_runtime(path, overwrite) {
-            Ok(report) => {
+        if let Err(error) =
+            self.start_session_command(SessionCommand::SaveAs(path.to_path_buf(), overwrite))
+        {
+            self.clear_toolbar_save_as_overwrite_prompt();
+            self.report_session_command_error("Save session failed", &error);
+        }
+    }
+
+    fn handle_toolbar_session_info(&mut self) {
+        if let Err(error) = self.start_session_command(SessionCommand::Inspect) {
+            self.report_session_command_error("Session info failed", &error);
+        }
+    }
+
+    fn handle_toolbar_clear_session(&mut self) {
+        self.clear_toolbar_save_as_overwrite_prompt();
+        if let Err(error) = self.start_session_command(SessionCommand::Clear) {
+            self.report_session_command_error("Clear session failed", &error);
+        }
+    }
+
+    pub(in crate::backend::wayland) fn finish_session_command(
+        &mut self,
+        report: SessionCommandReport,
+    ) {
+        match report {
+            SessionCommandReport::Open(report) => {
+                let name = session_display_name(&report.opened_path);
+                if let Some(error) = report.catalog_error {
+                    self.set_session_toolbar_error(format!(
+                        "Opened session {name}; recent-session catalog update failed: {error:#}"
+                    ));
+                } else {
+                    self.set_session_toolbar_info(format!("Opened session {name}"));
+                }
+            }
+            SessionCommandReport::SaveAs(report) => {
                 self.clear_toolbar_save_as_overwrite_prompt();
                 self.set_session_toolbar_info(format!(
                     "Saved session as {}",
                     session_display_name(&report.saved_path)
                 ));
             }
-            Err(err) => {
-                self.clear_toolbar_save_as_overwrite_prompt();
-                self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
+            SessionCommandReport::Overwrite(path, required) => {
+                if required {
+                    self.input_state.set_pending_save_as_overwrite(path.clone());
+                    self.set_session_toolbar_info(format!(
+                        "Replace existing session {}?",
+                        session_display_name(&path)
+                    ));
+                } else {
+                    self.commit_toolbar_save_session_as(
+                        &path,
+                        crate::session::SaveAsOverwrite::Deny,
+                    );
+                }
+            }
+            SessionCommandReport::Clear(report) => self.set_session_toolbar_info(format!(
+                "Cleared session {}",
+                session_display_name(&report.cleared_path)
+            )),
+            SessionCommandReport::ClearTools(report) => {
+                let message = match report.outcome {
+                    Some(crate::session::ClearToolStateOutcome::Cleared {
+                        preserved_board_data: true,
+                    }) => {
+                        "Tool defaults reset from config. Saved boards and history were preserved."
+                    }
+                    Some(crate::session::ClearToolStateOutcome::Cleared {
+                        preserved_board_data: false,
+                    }) => "Tool defaults reset from config. No board data was present.",
+                    Some(crate::session::ClearToolStateOutcome::NoToolState) => {
+                        "Tool defaults reset from config. No saved tool state was stored."
+                    }
+                    Some(crate::session::ClearToolStateOutcome::NoSession) => {
+                        "Tool defaults reset from config. No saved session file was present."
+                    }
+                    None => {
+                        "Tool defaults reset from config for this run. No active session file to edit."
+                    }
+                };
+                self.set_session_toolbar_info(message);
+            }
+            SessionCommandReport::Inspection(inspection) => {
+                self.set_session_toolbar_info(session_info_summary(&inspection))
+            }
+            SessionCommandReport::Forgotten(path, forgotten) => {
+                self.set_session_toolbar_error(format!(
+                    "Session file missing; {}: {}",
+                    if forgotten {
+                        "removed from recent sessions"
+                    } else {
+                        "no recent-session entry matched"
+                    },
+                    session_display_name(&path)
+                ))
             }
         }
     }
 
-    fn handle_toolbar_session_info(&mut self) {
-        match self.inspect_active_session() {
-            Ok(inspection) => self.set_session_toolbar_info(session_info_summary(&inspection)),
-            Err(err) => self.set_session_toolbar_error(format!("Session info failed: {err:#}")),
+    pub(in crate::backend::wayland) fn fail_session_command(
+        &mut self,
+        command: &SessionCommand,
+        error: &AnyhowError,
+    ) {
+        if let SessionCommand::Open(path) = command
+            && missing_session_error_matches_path(path, error)
+        {
+            if let Err(catalog_error) =
+                self.start_session_command(SessionCommand::Forget(path.clone()))
+            {
+                self.report_session_command_error(
+                    "Session file missing and recent-session cleanup failed",
+                    &catalog_error,
+                );
+            }
+            return;
         }
+        let prefix = match command {
+            SessionCommand::Open(_) => "Open session failed",
+            SessionCommand::SaveAs(..) | SessionCommand::CheckOverwrite(_) => "Save session failed",
+            SessionCommand::Clear => "Clear session failed",
+            SessionCommand::ClearTools(_) => "Failed to reset tool defaults",
+            SessionCommand::Inspect => "Session info failed",
+            SessionCommand::Forget(_) => "Session file missing and recent-session cleanup failed",
+        };
+        self.report_session_command_error(prefix, error);
     }
 
-    fn handle_toolbar_clear_session(&mut self) {
-        self.clear_toolbar_save_as_overwrite_prompt();
-        match self.clear_current_session_runtime() {
-            Ok(report) => self.set_session_toolbar_info(format!(
-                "Cleared session {}",
-                session_display_name(&report.cleared_path)
-            )),
-            Err(err) => self.set_session_toolbar_error(format!("Clear session failed: {err:#}")),
-        }
+    pub(in crate::backend::wayland) fn report_session_command_error(
+        &mut self,
+        prefix: &str,
+        error: &AnyhowError,
+    ) {
+        self.set_session_toolbar_error(format!("{prefix}: {error:#}"));
     }
 
     fn clear_toolbar_save_as_overwrite_prompt(&mut self) -> bool {

@@ -141,7 +141,7 @@ pub(super) fn record_autosave_success(
     }
 }
 
-pub(super) fn record_autosave_failure(
+pub(in crate::backend::wayland) fn record_autosave_failure(
     session_state: &mut SessionState,
     now: Instant,
     options: &session::SessionOptions,
