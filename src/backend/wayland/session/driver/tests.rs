@@ -576,7 +576,8 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
 #[test]
 fn clear_completion_refreshes_consumer_seeds() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let options = named_options(temp.path(), "clear");
+    let mut options = named_options(temp.path(), "clear");
+    options.autosave_enabled = true;
     let mut input = test_input_state();
     add_line(&mut input, 51);
     let mut session = SessionState::new(Some(options));
@@ -609,6 +610,17 @@ fn clear_completion_refreshes_consumer_seeds() {
         runtime.reports.as_slice(),
         [SessionCommandReport::Clear(_)]
     ));
+    assert!(!runtime.input.is_session_dirty());
+    assert!(!runtime.session.is_dirty());
+    let options = runtime.session.options().unwrap();
+    assert!(
+        runtime
+            .session
+            .autosave_timeout(Instant::now(), options)
+            .is_none()
+    );
+    assert!(options.clear_marker_file_path().exists());
+    assert!(!options.session_file_path().exists());
 }
 
 #[test]

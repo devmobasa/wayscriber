@@ -100,6 +100,12 @@ fn advance_session_command(
 ) {
     observe_input_dirty(runtime, Instant::now());
 
+    // A submitted board or tool-state clear can change disk before its receipt fails.
+    let clear_attempted = matches!(
+        transaction.command(),
+        SessionCommand::Clear | SessionCommand::ClearTools(_)
+    ) && result.is_some();
+
     // Catalog failure follows an already committed open; never roll back that canvas.
     let step = match result {
         Some(Err(error)) if transaction.has_committed_open() => Ok(TransactionStep::Complete(
@@ -141,7 +147,17 @@ fn advance_session_command(
 
             runtime.finish_session_command(*report);
         }
-        Err(error) => runtime.fail_session_command(transaction.command(), &error),
+        Err(error) => {
+            // Resave retained state if a clear may have changed disk, without postponing
+            // already-dirty work or creating an undo entry for a persistence invalidation.
+            let context = runtime.session_context();
+            let needs_recovery = clear_attempted && !context.session.is_dirty();
+            context
+                .session
+                .record_input_dirty(Instant::now(), needs_recovery);
+
+            runtime.fail_session_command(transaction.command(), &error);
+        }
     }
 }
 

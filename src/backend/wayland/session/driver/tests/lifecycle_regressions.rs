@@ -107,6 +107,148 @@ fn pending_destructive_commands_preserve_live_slider_edits_and_undo() {
     }
 }
 
+fn assert_clean_saved_line(
+    runtime: &CommandRuntime<'_>,
+    options: &stored_session::SessionOptions,
+    x2: i32,
+) {
+    let stored_session::LoadSnapshotOutcome::Loaded(snapshot) =
+        stored_session::load_snapshot_with_outcome(options).unwrap()
+    else {
+        panic!("expected saved session");
+    };
+    assert_eq!(snapshot.tool_state.unwrap().current_thickness, 11.0);
+    assert_eq!(runtime.input.thickness_for_active_tool(), 11.0);
+    assert!(options.session_file_path().exists());
+    assert!(!options.clear_marker_file_path().exists());
+    assert_eq!(loaded_line_x2(options), x2);
+    assert!(!runtime.input.is_session_dirty());
+    assert!(!runtime.session.is_dirty());
+    assert!(
+        runtime
+            .session
+            .autosave_timeout(Instant::now(), options)
+            .is_none()
+    );
+}
+
+#[test]
+fn rejected_disk_clears_are_autosaved_after_an_uncommitted_gesture_is_canceled() {
+    for command in [
+        SessionCommand::Clear,
+        SessionCommand::ClearTools(Box::new(stored_session::ToolStateSnapshot::from_config(
+            &Config::default(),
+        ))),
+    ] {
+        assert_rejected_disk_clear_recovers_after_canceled_gesture(command);
+    }
+}
+
+fn assert_rejected_disk_clear_recovers_after_canceled_gesture(command: SessionCommand) {
+    let clears_boards = matches!(command, SessionCommand::Clear);
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = named_options(temp.path(), "current");
+    options.autosave_enabled = true;
+    options.autosave_idle = Duration::from_millis(10);
+    options.autosave_interval = Duration::from_secs(1);
+    let measurer = TextMeasurer::default();
+    let mut input = test_input_state();
+    let _ = input.set_thickness(11.0);
+    let id = add_line(&mut input, 42);
+    let original = input.boards.active_frame().shape(id).unwrap().shape.clone();
+    let depth = input.boards.active_frame().undo_stack_len();
+    let snapshot = input
+        .snapshot_for_persistence_with(&measurer, &options)
+        .unwrap();
+    stored_session::save_snapshot(&snapshot, &options).unwrap();
+    input.clear_session_dirty();
+    let mut session = SessionState::new(Some(options.clone()));
+    session.mark_loaded(true);
+    session.mark_saved(Instant::now(), true);
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+    assert_clean_saved_line(&runtime, &options, 42);
+
+    start_session_command(&mut runtime, command).unwrap();
+    runtime.input.on_mouse_press_with_canvas_and_resources(
+        crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &crate::ui_text::UiTextEngine::default(),
+        },
+        crate::input::MouseButton::Left,
+        500,
+        400,
+        500,
+        400,
+    );
+    assert!(matches!(
+        runtime.input.state,
+        crate::input::DrawingState::Drawing { .. }
+    ));
+    assert!(
+        !runtime.input.is_session_dirty(),
+        "unfinished stroke has not committed"
+    );
+    worker.complete_next();
+    assert_disk_clear_applied(&options, clears_boards);
+    runtime.receive();
+    assert!(runtime.pending.is_none());
+    assert!(runtime.reports.is_empty());
+    assert!(
+        runtime.errors[0]
+            .to_string()
+            .contains("interaction changed")
+    );
+
+    runtime.input.cancel_active_interaction_with(&measurer);
+    let now = Instant::now();
+    observe_input_dirty(&mut runtime, now);
+    assert!(!runtime.input.has_active_pointer_interaction());
+    assert_eq!(
+        runtime.input.boards.active_frame().shape(id).unwrap().shape,
+        original
+    );
+    assert_eq!(runtime.input.boards.active_frame().undo_stack_len(), depth);
+    assert!(
+        runtime.session.is_dirty(),
+        "retained session state must be dirty after disk clear (clears_boards={clears_boards})"
+    );
+    let delay = runtime
+        .session
+        .autosave_timeout(now, &options)
+        .expect("rejected disk clear must schedule recovery autosave");
+    assert!(runtime.session.autosave_due(now + delay, &options));
+    assert_eq!(
+        runtime.session.options().unwrap().session_file_path(),
+        options.session_file_path()
+    );
+
+    let snapshot = runtime
+        .input
+        .snapshot_for_persistence_with(&measurer, &options)
+        .unwrap();
+    runtime.submit_autosave(snapshot, options.clone());
+    worker.complete_next();
+    runtime.receive();
+
+    assert_clean_saved_line(&runtime, &options, 42);
+}
+
+fn assert_disk_clear_applied(options: &stored_session::SessionOptions, clears_boards: bool) {
+    if clears_boards {
+        assert!(!options.session_file_path().exists());
+        assert!(options.clear_marker_file_path().exists());
+    } else {
+        let stored_session::LoadSnapshotOutcome::Loaded(snapshot) =
+            stored_session::load_snapshot_with_outcome(options).unwrap()
+        else {
+            panic!("expected session after tool-state clear");
+        };
+        assert!(snapshot.tool_state.is_none());
+        assert_eq!(loaded_line_x2(options), 42);
+    }
+}
+
 #[test]
 fn autosave_ownership_errors_do_not_publish_failures_or_delay_retry() {
     #[derive(Clone, Copy, Debug)]
