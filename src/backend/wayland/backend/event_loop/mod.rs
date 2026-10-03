@@ -159,6 +159,7 @@ pub(super) fn run_event_loop(
         &mut loop_error,
         || {
             state.cancel_region_capture_for_teardown();
+            state.finish_clipboard_fallback_saves();
             if let Err(err) = session_save::persist_session(state) {
                 warn!("Failed to save session state: {}", err);
                 session_save::notify_session_failure(state, &err);

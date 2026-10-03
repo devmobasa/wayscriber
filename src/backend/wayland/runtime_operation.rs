@@ -236,31 +236,55 @@ where
         let Some(active) = self.active.take() else {
             return RuntimeOperationPoll::Idle;
         };
-        let active_id = active.id;
-        match active.receiver.try_recv() {
+        let message = match active.receiver.try_recv() {
             Err(TryRecvError::Empty) => {
+                let id = active.id;
                 self.active = Some(active);
-                RuntimeOperationPoll::Pending { id: active_id }
+                return RuntimeOperationPoll::Pending { id };
             }
-            Err(TryRecvError::Disconnected) => RuntimeOperationPoll::Disconnected {
+            Err(TryRecvError::Disconnected) => None,
+            Ok(message) => Some(message),
+        };
+
+        self.consume_completion(active, message)
+    }
+
+    /// Wait for accepted work during teardown only; dispatch must continue to use `poll`.
+    pub(in crate::backend::wayland) fn wait(&mut self) -> RuntimeOperationPoll<C, T> {
+        let Some(active) = self.active.take() else {
+            return RuntimeOperationPoll::Idle;
+        };
+        let message = active.receiver.recv().ok();
+
+        self.consume_completion(active, message)
+    }
+
+    fn consume_completion(
+        &mut self,
+        active: ActiveOperation<C, T>,
+        message: Option<ProducerMessage<T>>,
+    ) -> RuntimeOperationPoll<C, T> {
+        let active_id = active.id;
+        match message {
+            None => RuntimeOperationPoll::Disconnected {
                 id: active.id,
                 context: active.context,
             },
-            Ok(ProducerMessage::Ready { id, outcome }) if id == active_id => {
+            Some(ProducerMessage::Ready { id, outcome }) if id == active_id => {
                 RuntimeOperationPoll::Ready {
                     id,
                     context: active.context,
                     outcome,
                 }
             }
-            Ok(ProducerMessage::Failed { id, reason }) if id == active_id => {
+            Some(ProducerMessage::Failed { id, reason }) if id == active_id => {
                 RuntimeOperationPoll::ProducerFailed {
                     id,
                     context: active.context,
                     reason,
                 }
             }
-            Ok(ProducerMessage::Ready { id, .. } | ProducerMessage::Failed { id, .. }) => {
+            Some(ProducerMessage::Ready { id, .. } | ProducerMessage::Failed { id, .. }) => {
                 self.healthy = false;
                 RuntimeOperationPoll::ProducerFailed {
                     id: active.id,

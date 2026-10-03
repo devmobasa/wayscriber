@@ -128,6 +128,7 @@ pub(super) fn handle_pending_actions(
     state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
     state.poll_desktop_open_completion();
+    state.poll_clipboard_fallback_save();
     state.drain_clipboard_requests();
     let effects = state
         .input_state
@@ -139,6 +140,7 @@ pub(super) fn handle_pending_actions(
             && matches!(
                 effect,
                 InputEffect::Backend(_)
+                    | InputEffect::ClipboardFallbackSave(_)
                     | InputEffect::FrozenPass { .. }
                     | InputEffect::BoardRuntimeUi(_)
                     | InputEffect::SpotlightMagnifierFeedback
@@ -171,6 +173,9 @@ pub(super) fn handle_pending_actions(
             InputEffect::QuickColor(edit) => state.handle_quick_color_edit(edit),
             InputEffect::KeybindingEdit(request) => state.handle_keybinding_edit(request),
             InputEffect::Backend(action) => apply_backend_effect(state, action),
+            InputEffect::ClipboardFallbackSave(request) => {
+                state.start_clipboard_fallback_save(request)
+            }
             InputEffect::FrozenPass { user_requested } => {
                 handle_frozen_toggle(state, user_requested);
             }

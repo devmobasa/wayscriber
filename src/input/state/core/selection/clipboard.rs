@@ -7,6 +7,7 @@ use crate::input::state::core::base::{
     WayscriberClipboardSelection,
 };
 use crate::util::Rect;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PRIVATE_CLIPBOARD_SCHEMA_VERSION: u32 = 1;
@@ -29,11 +30,12 @@ enum SelectionPublishState {
 
 /// Pending image data retained when publishing a capture to the clipboard fails.
 #[derive(Debug, Clone)]
-pub(in crate::input::state::core) struct PendingClipboardFallback {
-    pub(in crate::input::state::core) image_data: Vec<u8>,
-    pub(in crate::input::state::core) save_config: FileSaveConfig,
-    pub(in crate::input::state::core) operation: ImageOperationKind,
-    pub(in crate::input::state::core) exit_after_save: bool,
+pub(crate) struct ClipboardFallbackSaveRequest {
+    pub(crate) id: u64,
+    pub(crate) image_data: Arc<[u8]>,
+    pub(crate) save_config: FileSaveConfig,
+    pub(crate) operation: ImageOperationKind,
+    pub(crate) exit_after_save: bool,
 }
 
 /// Local selection clipboard identity, publication, paste requests, and capture fallback.
@@ -45,7 +47,9 @@ pub(in crate::input::state::core) struct SelectionClipboard {
     app_instance_id: String,
     paste_request_counter: u64,
     active_paste_request_id: Option<u64>,
-    pending_image_fallback: Option<PendingClipboardFallback>,
+    pending_image_fallback: Option<Arc<ClipboardFallbackSaveRequest>>,
+    image_fallback_generation: u64,
+    image_save_requested: bool,
     /// A capture copied an image to the system clipboard during this run and
     /// nothing copied here since. The system clipboard cannot be probed
     /// without blocking, so this and the local shapes are all Paste knows.
@@ -72,6 +76,8 @@ impl Default for SelectionClipboard {
             paste_request_counter: 0,
             active_paste_request_id: None,
             pending_image_fallback: None,
+            image_fallback_generation: 0,
+            image_save_requested: false,
             capture_image_published: false,
         }
     }
@@ -242,28 +248,51 @@ impl SelectionClipboard {
         operation: ImageOperationKind,
         exit_after_save: bool,
     ) {
-        self.pending_image_fallback = Some(PendingClipboardFallback {
-            image_data,
+        self.image_fallback_generation = self.image_fallback_generation.wrapping_add(1);
+        self.image_save_requested = false;
+        self.pending_image_fallback = Some(Arc::new(ClipboardFallbackSaveRequest {
+            id: self.image_fallback_generation,
+            image_data: image_data.into(),
             save_config,
             operation,
             exit_after_save,
-        });
+        }));
     }
 
-    pub(in crate::input::state::core) fn take_pending_image_fallback(
+    pub(in crate::input::state::core) fn request_image_save(
         &mut self,
-    ) -> Option<PendingClipboardFallback> {
-        self.pending_image_fallback.take()
+    ) -> Option<Arc<ClipboardFallbackSaveRequest>> {
+        let fallback = self.pending_image_fallback.as_ref()?;
+        if self.image_save_requested {
+            return None;
+        }
+        self.image_save_requested = true;
+        Some(fallback.clone())
     }
 
-    pub(in crate::input::state::core) fn restore_pending_image_fallback(
+    pub(in crate::input::state::core) fn image_save_request(
+        &self,
+        id: u64,
+    ) -> Option<Arc<ClipboardFallbackSaveRequest>> {
+        self.pending_image_fallback
+            .as_ref()
+            .filter(|fallback| fallback.id == id)
+            .cloned()
+    }
+
+    pub(in crate::input::state::core) fn complete_image_save(
         &mut self,
-        fallback: PendingClipboardFallback,
-    ) {
-        self.pending_image_fallback = Some(fallback);
+        id: u64,
+        succeeded: bool,
+    ) -> Option<Arc<ClipboardFallbackSaveRequest>> {
+        let fallback = self.image_save_request(id)?;
+        self.image_save_requested = false;
+        if succeeded {
+            self.pending_image_fallback = None;
+        }
+        Some(fallback)
     }
 
-    #[cfg(test)]
     pub(in crate::input::state::core) fn has_pending_image_fallback(&self) -> bool {
         self.pending_image_fallback.is_some()
     }

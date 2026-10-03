@@ -13,6 +13,7 @@ use crate::input::state::ClipboardPasteRequest;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
+mod fallback_save;
 mod session_paste;
 
 use session_paste::{PastePersistenceDecision, SessionPasteWarning};

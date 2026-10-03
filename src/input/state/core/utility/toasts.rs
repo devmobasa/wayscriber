@@ -3,10 +3,7 @@ use super::super::base::{
     ToastPushOutcome, UiToastState,
 };
 use super::super::feedback::ToastBounds;
-use crate::capture::{
-    ImageOperationKind,
-    file::{FileSaveConfig, save_screenshot},
-};
+use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::domain::Action;
 use std::time::Instant;
 
@@ -170,21 +167,37 @@ impl InputState {
         );
     }
 
-    /// Save pending clipboard fallback image to file.
-    /// On success, clears the fallback and exits if exit-after-capture was enabled.
-    /// On error, retains it for retry.
+    /// Queue the retained image for backend file work without holding input dispatch.
     pub(crate) fn save_pending_clipboard_to_file(&mut self) {
-        let Some(fallback) = self.selection_clipboard.take_pending_image_fallback() else {
-            self.push_toast(
-                ToastPriority::Info,
-                "capture.save",
-                Toast::warning("No pending image to save"),
-            );
-            self.trigger_blocked_feedback();
+        let Some(request) = self.selection_clipboard.request_image_save() else {
+            if !self.selection_clipboard.has_pending_image_fallback() {
+                self.push_toast(
+                    ToastPriority::Info,
+                    "capture.save",
+                    Toast::warning("No pending image to save"),
+                );
+                self.trigger_blocked_feedback();
+            }
             return;
         };
 
-        match save_screenshot(&fallback.image_data, &fallback.save_config) {
+        self.emit_input_effect(super::super::base::InputEffect::ClipboardFallbackSave(
+            request,
+        ));
+    }
+
+    pub(crate) fn complete_clipboard_fallback_save(
+        &mut self,
+        id: u64,
+        result: Result<std::path::PathBuf, String>,
+    ) {
+        let Some(fallback) = self
+            .selection_clipboard
+            .complete_image_save(id, result.is_ok())
+        else {
+            return;
+        };
+        match result {
             Ok(path) => {
                 log::info!(
                     "Saved pending {} to: {}",
@@ -192,21 +205,15 @@ impl InputState {
                     path.display()
                 );
                 self.set_capture_feedback(Some(&path), false);
-                // Exit if exit-after-capture was originally enabled
                 if fallback.exit_after_save {
                     self.request_explicit_exit();
                 }
             }
-            Err(err) => {
-                let message = fallback.operation.format_error(&err);
+            Err(message) => {
                 log::error!(
-                    "Failed to save pending {}: {}",
-                    fallback.operation.saved_log_label(),
-                    message
+                    "Failed to save pending {}: {message}",
+                    fallback.operation.saved_log_label()
                 );
-                // Restore fallback so user can retry
-                self.selection_clipboard
-                    .restore_pending_image_fallback(fallback);
                 self.push_toast(
                     ToastPriority::Critical,
                     "capture.save",
@@ -217,8 +224,6 @@ impl InputState {
             }
         }
     }
-
-    /// Advance the text edit entry feedback animation. Returns true if still active.
     pub fn advance_text_edit_entry_feedback(&mut self, now: Instant) -> bool {
         self.text_editing.expire_edit_entry_feedback(now)
     }
@@ -683,64 +688,6 @@ mod tests {
         let toast = state.active_toast().expect("warning toast");
         assert_eq!(toast.kind, UiToastKind::Warning);
         assert_eq!(toast.message, "No pending image to save");
-        assert!(state.test_blocked_feedback_active());
-    }
-
-    #[test]
-    fn clipboard_fallback_exit_after_save_requests_explicit_overlay_exit() {
-        let mut state = make_state();
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        state.set_clipboard_fallback(
-            b"not-a-real-png-but-save-writes-bytes".to_vec(),
-            FileSaveConfig {
-                save_directory: temp.path().to_path_buf(),
-                filename_template: "fallback".to_string(),
-                format: "png".to_string(),
-            },
-            ImageOperationKind::Screenshot,
-            true,
-        );
-
-        state.save_pending_clipboard_to_file();
-
-        assert!(state.should_exit);
-        assert!(state.take_explicit_exit_requested());
-        assert!(!state.take_explicit_exit_requested());
-    }
-
-    #[test]
-    fn canvas_clipboard_fallback_retry_failure_uses_canvas_wording() {
-        let mut state = make_state();
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        let not_a_directory = temp.path().join("not-a-directory");
-        std::fs::write(&not_a_directory, b"file").expect("test fixture file");
-
-        state.set_clipboard_fallback(
-            vec![1, 2, 3],
-            FileSaveConfig {
-                save_directory: not_a_directory,
-                filename_template: "canvas_fallback".to_string(),
-                format: "png".to_string(),
-            },
-            ImageOperationKind::CanvasExport,
-            false,
-        );
-
-        state.save_pending_clipboard_to_file();
-
-        let toast = state.active_toast().expect("error toast");
-        assert_eq!(toast.kind, UiToastKind::Error);
-        assert!(
-            toast.message.contains("Failed to save canvas export"),
-            "unexpected toast: {}",
-            toast.message
-        );
-        assert!(
-            !toast.message.to_lowercase().contains("screenshot"),
-            "canvas fallback failure should not mention screenshot: {}",
-            toast.message
-        );
-        assert!(state.selection_clipboard.has_pending_image_fallback());
         assert!(state.test_blocked_feedback_active());
     }
 
