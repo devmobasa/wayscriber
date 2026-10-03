@@ -1,6 +1,4 @@
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use std::sync::MutexGuard;
+use std::path::PathBuf;
 
 use super::*;
 use crate::models::{
@@ -8,34 +6,6 @@ use crate::models::{
     ShortcutBackend,
 };
 use wayscriber::env_vars::XDG_RUNTIME_DIR_ENV;
-
-struct RuntimeEnvGuard {
-    previous: Option<OsString>,
-    _guard: MutexGuard<'static, ()>,
-}
-
-impl RuntimeEnvGuard {
-    fn set_xdg_runtime_dir(path: &Path) -> Self {
-        let guard = crate::test_env::lock();
-        let previous = std::env::var_os(XDG_RUNTIME_DIR_ENV);
-        unsafe {
-            std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
-        }
-        Self {
-            previous,
-            _guard: guard,
-        }
-    }
-}
-
-impl Drop for RuntimeEnvGuard {
-    fn drop(&mut self) {
-        match self.previous.take() {
-            Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-            None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
-        }
-    }
-}
 
 fn catalog_item(id: &str, display_name: &str) -> SessionCatalogItem {
     SessionCatalogItem {
@@ -153,7 +123,7 @@ fn catalog_load_preserves_a_defaults_confirmation() {
 #[test]
 fn duplicate_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -170,7 +140,7 @@ fn duplicate_request_blocks_without_daemon_status() {
 #[test]
 fn duplicate_request_sets_busy_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -190,7 +160,7 @@ fn duplicate_request_sets_busy_when_safe() {
 #[test]
 fn move_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -207,7 +177,7 @@ fn move_request_blocks_without_daemon_status() {
 #[test]
 fn move_request_sets_busy_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -227,7 +197,7 @@ fn move_request_sets_busy_when_safe() {
 #[test]
 fn clear_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -243,7 +213,7 @@ fn clear_request_blocks_without_daemon_status() {
 #[test]
 fn clear_tool_state_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -260,7 +230,7 @@ fn clear_tool_state_request_blocks_without_daemon_status() {
 #[test]
 fn clear_tool_state_request_sets_busy_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -281,7 +251,7 @@ fn clear_tool_state_request_sets_busy_when_safe() {
 #[test]
 fn clear_request_sets_pending_confirmation_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -432,7 +402,7 @@ fn stale_clear_cancel_does_not_disarm_a_newer_confirmation() {
 #[test]
 fn clear_confirmed_consumes_the_pending_confirmation() {
     let temp = crate::test_temp::tempdir().expect("temporary test directory");
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -456,7 +426,7 @@ fn clear_confirmed_consumes_the_pending_confirmation() {
 #[test]
 fn clear_confirmed_twice_starts_only_one_clear() {
     let temp = crate::test_temp::tempdir().expect("temporary test directory");
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -478,7 +448,7 @@ fn clear_confirmed_twice_starts_only_one_clear() {
 #[test]
 fn clear_confirmed_for_another_row_leaves_the_pending_one_armed() {
     let temp = crate::test_temp::tempdir().expect("temporary test directory");
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog.replace_items(vec![

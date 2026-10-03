@@ -120,11 +120,23 @@ pub(crate) enum PipelineProtocolError {
     InvalidPublishEpoch,
     RevisionExhausted,
     MutationIdExhausted,
+    #[allow(
+        dead_code,
+        reason = "Flush protocol errors remain part of the controller receipt contract"
+    )]
     FlushIdExhausted,
+    #[allow(
+        dead_code,
+        reason = "Flush protocol errors remain part of the controller receipt contract"
+    )]
     FlushBeyondAccepted {
         requested: AcceptedStateRevision,
         latest: AcceptedStateRevision,
     },
+    #[allow(
+        dead_code,
+        reason = "Flush protocol errors remain part of the controller receipt contract"
+    )]
     ControllerBarrierActive {
         barrier: ControllerBarrierId,
     },
@@ -185,6 +197,10 @@ impl From<HeldReplacementStage> for PendingReplacement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PendingStage {
     Replace(PendingReplacement),
+    #[allow(
+        dead_code,
+        reason = "Flush sequencing is retained for the persistence protocol; live toolbar uses direct completions"
+    )]
     Flush {
         id: FlushRequestId,
         through: AcceptedStateRevision,
@@ -214,6 +230,10 @@ pub(crate) struct PersistencePipeline {
     settled_through: AcceptedStateRevision,
     next_accepted: AcceptedStateRevision,
     next_mutation_id: u64,
+    #[allow(
+        dead_code,
+        reason = "Flush sequencing is retained for the persistence protocol; live toolbar uses direct completions"
+    )]
     next_flush_id: u64,
     in_flight: Option<InFlightSourceMutation>,
     outbound: Option<SourceMutationRequest>,
@@ -262,6 +282,10 @@ impl PersistencePipeline {
         self.settled_through
     }
 
+    #[allow(
+        dead_code,
+        reason = "Accepted-revision inspection is used by independent pipeline contract tests"
+    )]
     pub(crate) fn latest_accepted(&self) -> AcceptedStateRevision {
         self.next_accepted
     }

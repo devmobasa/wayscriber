@@ -9,6 +9,20 @@ wayscriber supports customization through a TOML configuration file located at:
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
 
+### Non-finite numbers
+
+Floating-point settings must be finite. When a hand-edited file contains `nan`, `inf`, or
+`-inf`, loading logs a warning and uses the field's built-in default before applying its
+normal range checks. Exceptions are preset sizes (which use the minimum size, 1.0), optional
+preset numeric overrides (which are ignored), and custom board RGB components (which use
+0.0). Each color component is checked independently. Tablet thickness defaults are restored
+before ordering the minimum and maximum.
+
+Finite values keep their existing range policy; fields without load-time bounds, such as
+help/status styling and toolbar offsets, retain finite authored values. Loading does not
+rewrite the file. Configurator saves still report invalid numeric input rather than silently
+saving corrected values.
+
 ### Configured defaults and runtime UI preferences
 
 `config.toml` is the authored source for configured defaults. Some direct overlay customizations are
@@ -1083,6 +1097,12 @@ font_size = 18.0
 enabled = true
 ```
 
+Click-highlight radius accepts 16–160 pixels, outline thickness 1–12 pixels,
+and duration 150–1500 milliseconds. Finite out-of-range values are clamped on
+load. Non-finite radius, thickness, and RGBA components reset to their respective
+defaults shown above. The configurator keeps invalid input visible and refuses
+to save it.
+
 **Status Bar:**
 - Shows current color, pen thickness, and active tool
 - Press <kbd>F1</kbd>/<kbd>F10</kbd> to toggle help overlay
@@ -2045,6 +2065,10 @@ persist_whiteboard = true
 persist_blackboard = true
 persist_history = true
 restore_tool_state = true
+autosave_enabled = true
+autosave_idle_ms = 5000
+autosave_interval_ms = 45000
+autosave_failure_backoff_ms = 5000
 storage = "auto"
 # custom_directory = "/absolute/path"
 per_output = true
@@ -2059,6 +2083,10 @@ backup_retention = 1
 - `persist_*` — choose which boards survive restarts (`persist_transparent` for overlay, `persist_whiteboard`/`persist_blackboard` gate non-transparent boards for legacy compatibility)
 - `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
 - `restore_tool_state` — save pen colour, thickness, font size, arrow settings (including head placement), and the starting Spotlight magnification; when `true`, the last-used tool state overrides config defaults at startup. Chrome is not tool state: status bar and badge visibility come from `[ui]` on every start, and an overlay toggle of them applies to that run only. Sessions written by older releases still carry a `show_status_bar` value; it is ignored on load and no longer written
+- `autosave_enabled` — when `true` (default), save dirty session data in the background while the overlay is running; at least one board, history, or tool-state persistence option must be enabled. Set to `false` to disable these periodic writes; explicit saves and normal exit persistence still apply.
+- `autosave_idle_ms` — idle debounce in milliseconds, default `5000`: an edit restarts this timer.
+- `autosave_interval_ms` — maximum dirty scheduling interval in milliseconds, default `45000`: autosave becomes due when either the idle debounce or this interval elapses, so continuous edits do not restart both timers. Active gestures, an in-flight write, or a session operation may defer the write.
+- `autosave_failure_backoff_ms` — wait before retrying a failed autosave, in milliseconds, default `5000`. Failed writes keep the session dirty. All three timing values have a minimum of `1000` milliseconds on load; the configurator rejects invalid drafts.
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
 - `per_output` — when `true` (default) keep a separate session file for each monitor; set to `false` to share one file per Wayland display as in earlier releases

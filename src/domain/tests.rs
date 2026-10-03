@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -388,13 +388,24 @@ fn established_public_paths_reexport_domain_types() {
     let _: BoardSpec = board;
 }
 
-#[test]
-fn production_domain_sources_have_no_upward_crate_dependencies() {
-    let domain_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/domain");
+fn check_domain_sources(domain_dir: &Path) -> Result<usize, PathBuf> {
     let mut checked = 0;
 
-    for entry in fs::read_dir(&domain_dir).expect("read src/domain") {
-        let path = entry.expect("read domain entry").path();
+    for entry in fs::read_dir(domain_dir).expect("read domain directory") {
+        let entry = entry.expect("read domain entry");
+        let path = entry.path();
+        let file_type = entry.file_type().expect("read domain entry type");
+
+        // Do not recurse through directory aliases, but still inspect symlinked Rust files.
+        if file_type.is_symlink() && path.is_dir() {
+            continue;
+        }
+        if file_type.is_dir() {
+            if path.file_name().and_then(|name| name.to_str()) != Some("tests") {
+                checked += check_domain_sources(&path)?;
+            }
+            continue;
+        }
         if path.extension().and_then(|extension| extension.to_str()) != Some("rs")
             || path.file_name().and_then(|name| name.to_str()) == Some("tests.rs")
         {
@@ -402,18 +413,60 @@ fn production_domain_sources_have_no_upward_crate_dependencies() {
         }
 
         let source = fs::read_to_string(&path).expect("read domain source");
-        assert!(
-            !source.contains("crate::"),
-            "{} contains an upward crate dependency",
-            path.display()
-        );
+        if source.contains("crate::") {
+            return Err(path);
+        }
         checked += 1;
     }
 
-    assert_eq!(
-        checked, 9,
-        "architecture test must cover every domain source"
+    Ok(checked)
+}
+
+#[test]
+fn production_domain_sources_have_no_upward_crate_dependencies() {
+    let domain_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/domain");
+    let checked = check_domain_sources(&domain_dir)
+        .unwrap_or_else(|path| panic!("{} contains an upward crate dependency", path.display()));
+
+    assert!(
+        checked > 0,
+        "architecture test must inspect production domain sources"
     );
+}
+
+#[test]
+fn nested_domain_sources_are_checked_for_upward_dependencies() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let nested = temp.path().join("nested/deeper");
+    fs::create_dir_all(&nested).unwrap();
+    let source = nested.join("value.rs");
+    fs::write(&source, "use crate::config::Config;\n").unwrap();
+
+    assert_eq!(check_domain_sources(temp.path()).unwrap_err(), source);
+
+    fs::write(&source, "pub struct Value;\n").unwrap();
+
+    let tests = nested.join("tests");
+    fs::create_dir(&tests).unwrap();
+    fs::write(tests.join("fixture.rs"), "use crate::config::Config;\n").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(temp.path(), nested.join("cycle")).unwrap();
+
+    assert_eq!(check_domain_sources(temp.path()).unwrap(), 1);
+
+    #[cfg(unix)]
+    {
+        let linked = crate::test_temp::tempdir().unwrap();
+        fs::write(
+            linked.path().join("source.rs"),
+            "use crate::config::Config;\n",
+        )
+        .unwrap();
+        let alias = nested.join("alias.rs");
+        std::os::unix::fs::symlink(linked.path().join("source.rs"), &alias).unwrap();
+
+        assert_eq!(check_domain_sources(temp.path()).unwrap_err(), alias);
+    }
 }
 
 #[test]
@@ -438,4 +491,24 @@ fn region_capture_action_classification_is_complete_and_narrow() {
     ] {
         assert!(!action.is_region_capture(), "action={action:?}");
     }
+}
+
+#[test]
+fn pressure_preferences_preserve_public_paths_and_serialized_names() {
+    use super::{PressureThicknessEditMode as Edit, PressureThicknessEntryMode as Entry};
+
+    assert_json_names(&[
+        (Edit::Disabled, "disabled"),
+        (Edit::Add, "add"),
+        (Edit::Scale, "scale"),
+    ]);
+    assert_json_names(&[
+        (Entry::Never, "never"),
+        (Entry::PressureOnly, "pressure_only"),
+        (Entry::AnyPressure, "any_pressure"),
+    ]);
+    let legacy_edit: crate::input::state::PressureThicknessEditMode = Edit::Scale;
+    let legacy_entry: crate::input::state::PressureThicknessEntryMode = Entry::AnyPressure;
+    assert_eq!(legacy_edit, Edit::Scale);
+    assert_eq!(legacy_entry, Entry::AnyPressure);
 }

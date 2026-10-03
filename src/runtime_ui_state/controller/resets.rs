@@ -1,6 +1,10 @@
 use super::*;
 
 impl RuntimeUiStateController {
+    #[allow(
+        dead_code,
+        reason = "Reset policy is exercised by recovery contracts; live toolbar currently exposes reconciliation"
+    )]
     pub(crate) fn request_supported_reset(&mut self) -> RequestResetResult {
         self.request_runtime_ui_reset()
     }

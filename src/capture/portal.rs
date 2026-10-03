@@ -660,3 +660,7 @@ mod tests {
         assert!(matches!(error, CaptureError::DBusError(_)), "{error}");
     }
 }
+
+#[cfg(test)]
+#[path = "portal/tests/transport.rs"]
+mod transport_tests;

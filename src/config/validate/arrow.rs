@@ -1,8 +1,16 @@
-use super::Config;
+use super::{Config, float::finite_or_default};
 use crate::config::{ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN};
 
 impl Config {
     pub(super) fn validate_arrow(&mut self) {
+        let defaults = crate::config::ArrowConfig::default();
+        self.arrow.length = finite_or_default(self.arrow.length, defaults.length, "arrow.length");
+        self.arrow.angle_degrees = finite_or_default(
+            self.arrow.angle_degrees,
+            defaults.angle_degrees,
+            "arrow.angle_degrees",
+        );
+
         if !(ARROW_LENGTH_MIN..=ARROW_LENGTH_MAX).contains(&self.arrow.length) {
             log::warn!(
                 "Invalid arrow length {:.1}, clamping to {ARROW_LENGTH_MIN:.1}-{ARROW_LENGTH_MAX:.1} range",

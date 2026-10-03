@@ -29,6 +29,30 @@ pub(crate) use smoothing_preview::draw_smoothing_preview;
 
 pub(crate) type ToolbarIconPainter = fn(&cairo::Context, f64, f64, f64);
 
+/// Resolve action metadata to the shared Cairo glyph used by UI surfaces.
+pub fn action_icon_painter(
+    icon: crate::config::action_meta::ActionIcon,
+) -> fn(&cairo::Context, f64, f64, f64) {
+    use crate::config::action_meta::ActionIcon;
+
+    match icon {
+        ActionIcon::Text => draw_icon_text,
+        ActionIcon::StickyNote => draw_icon_note,
+        ActionIcon::Select => draw_icon_select,
+        ActionIcon::Pen => draw_icon_pen,
+        ActionIcon::Line => draw_icon_line,
+        ActionIcon::Rect => draw_icon_rect,
+        ActionIcon::Ellipse => draw_icon_circle,
+        ActionIcon::FreeformPolygon => draw_icon_polygon,
+        ActionIcon::Arrow => draw_icon_arrow,
+        ActionIcon::Blur => draw_icon_blur,
+        ActionIcon::Marker => draw_icon_marker,
+        ActionIcon::StepMarker => draw_icon_step_marker,
+        ActionIcon::Eraser => draw_icon_eraser,
+        ActionIcon::Undo => draw_icon_undo,
+    }
+}
+
 /// Paint inputs of the micro-mode chip that vary with live state.
 pub(crate) struct MicroChipStyle {
     /// Ring stroke color: the current drawing color.
@@ -234,6 +258,39 @@ mod painter_tests {
         ("zoom_out", draw_icon_zoom_out),
         ("zoom_reset", draw_icon_zoom_reset),
     ];
+
+    #[test]
+    fn icons_reuse_the_shared_semantic_tool_painters() {
+        use crate::input::Tool;
+        use crate::toolbar_icons::top_toolbar_icon_painter;
+        use crate::ui::toolbar::model::{TopToolbarIcon, semantic_icon_for_tool};
+
+        for meta in crate::config::action_meta_iter().filter(|meta| meta.icon.is_some()) {
+            let action = meta.action;
+            let icon = crate::config::action_meta(action)
+                .and_then(|meta| meta.icon)
+                .map(action_icon_painter)
+                .unwrap_or_else(|| panic!("missing icon for {:?}", action));
+            let expected = match action {
+                crate::config::Action::EnterTextMode => {
+                    top_toolbar_icon_painter(TopToolbarIcon::Text)
+                }
+                crate::config::Action::EnterStickyNoteMode => {
+                    top_toolbar_icon_painter(TopToolbarIcon::StickyNote)
+                }
+                _ => {
+                    let tool = Tool::from_select_action(action)
+                        .unwrap_or_else(|| panic!("{:?} should select a tool", action));
+                    top_toolbar_icon_painter(TopToolbarIcon::Tool(semantic_icon_for_tool(tool)))
+                }
+            };
+            assert!(
+                std::ptr::fn_addr_eq(icon, expected),
+                "icon painter for {:?} drifted from the shared semantic painter",
+                action
+            );
+        }
+    }
 
     #[test]
     fn every_public_icon_paints_something_at_every_chrome_size() {

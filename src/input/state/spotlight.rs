@@ -9,6 +9,8 @@ use crate::input::Tool;
 
 use super::{DrawingState, InputState};
 
+mod selection;
+
 /// Every spotlight one frame must dim, collected in a single pass.
 pub(crate) struct SpotlightFrameRegions {
     /// Committed regions first, then the in-progress drag when there is one.
@@ -159,6 +161,25 @@ fn snapshot_magnification(snapshot: &crate::draw::frame::ShapeSnapshot) -> Optio
 }
 
 impl InputState {
+    /// Whether anything on the active page dims the canvas.
+    ///
+    /// Drives the full-damage decision: a spotlight changes every pixel outside
+    /// itself, so partial damage cannot describe adding, moving, or removing one.
+    pub(crate) fn has_spotlight(&self) -> bool {
+        self.boards
+            .active_frame()
+            .shapes
+            .iter()
+            .any(|drawn| matches!(drawn.shape, Shape::Spotlight { .. }))
+            || matches!(
+                &self.state,
+                DrawingState::Drawing {
+                    tool: Tool::Spotlight,
+                    ..
+                }
+            )
+    }
+
     /// Whether a live wheel burst still owes its single undo entry.
     pub(crate) fn has_pending_spotlight_magnification_gesture(&self) -> bool {
         self.spotlight_wheel.is_pending()
@@ -499,44 +520,6 @@ impl InputState {
                 self.style.spotlight_magnification,
             ),
         })
-    }
-
-    /// Highest magnification among the currently selected Spotlights.
-    ///
-    /// `None` when the selection holds no Spotlight at all. The docked
-    /// selection control reports availability against this rather than the
-    /// next-shape default, which is a different number whenever the user
-    /// selects an existing shape.
-    pub fn selection_spotlight_magnification(&self) -> Option<f64> {
-        let frame = self.boards.active_frame();
-        self.selected_shape_ids()
-            .iter()
-            .filter_map(|id| match frame.shape(*id)?.shape {
-                Shape::Spotlight { magnification, .. } => Some(
-                    crate::draw::normalize_spotlight_magnification(magnification),
-                ),
-                _ => None,
-            })
-            .reduce(f64::max)
-    }
-
-    /// Whether anything on the active page dims the canvas.
-    ///
-    /// Drives the full-damage decision: a spotlight changes every pixel outside
-    /// itself, so partial damage cannot describe adding, moving, or removing one.
-    pub(crate) fn has_spotlight(&self) -> bool {
-        self.boards
-            .active_frame()
-            .shapes
-            .iter()
-            .any(|drawn| matches!(drawn.shape, Shape::Spotlight { .. }))
-            || matches!(
-                &self.state,
-                DrawingState::Drawing {
-                    tool: Tool::Spotlight,
-                    ..
-                }
-            )
     }
 }
 

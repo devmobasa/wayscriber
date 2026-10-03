@@ -29,6 +29,27 @@ use merge::{
     serialize_config_document, unreadable_repair_source_document,
 };
 
+/// The source revision or destination changed after a config document was loaded.
+/// Narrow edits may reload and reapply once; other errors must not trigger retry.
+#[derive(Debug)]
+pub struct ConfigSourceChanged {
+    diagnostic: String,
+}
+
+impl ConfigSourceChanged {
+    pub(super) fn new(diagnostic: String) -> Self {
+        Self { diagnostic }
+    }
+}
+
+impl fmt::Display for ConfigSourceChanged {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.diagnostic)
+    }
+}
+
+impl std::error::Error for ConfigSourceChanged {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigDiagnosticKind {
     UnknownSetting,
@@ -848,9 +869,7 @@ impl ConfigDocument {
     /// somewhere else, which is not a smaller version of either: a retargeted
     /// link means the bytes being compared are a different file's, and the
     /// document's edit was merged into text that path no longer holds. Each is
-    /// reported on its own terms, with the same "changed on disk" wording the
-    /// editors' reload-and-reapply retry recognises, because the recovery is the
-    /// same — load what the path names now and reapply the edit onto it.
+    /// reported as `ConfigSourceChanged`, because the recovery is the same — load what the path names now and reapply the edit onto it.
     ///
     /// The destination is re-derived here rather than re-read from the loaded
     /// revision, and it is derived the same way the load derived it: whole path,
@@ -862,27 +881,27 @@ impl ConfigDocument {
     fn ensure_source_unchanged(&self) -> Result<()> {
         let current = SourceRevision::read(&self.source_path)?;
         if current.destination() != self.revision.destination() {
-            bail!(
+            bail!(ConfigSourceChanged::new(format!(
                 "Configuration changed on disk at {}: it now resolves to {} rather than {}. \
                  Reload before saving.",
                 self.source_path.display(),
                 current.destination().display(),
                 self.revision.destination().display(),
-            );
+            )));
         }
         if current.followed_links() != self.revision.followed_links() {
-            bail!(
+            bail!(ConfigSourceChanged::new(format!(
                 "Configuration changed on disk at {}: it reaches {} through different links \
                  than it did. Reload before saving.",
                 self.source_path.display(),
                 self.revision.destination().display(),
-            );
+            )));
         }
         if current != self.revision {
-            bail!(
+            bail!(ConfigSourceChanged::new(format!(
                 "Configuration changed on disk at {}. Reload before saving.",
                 self.source_path.display()
-            );
+            )));
         }
         Ok(())
     }

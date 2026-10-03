@@ -320,7 +320,7 @@ else
 fi
 """ );
         foreach ( var check in new[] { "check-nixpkgs-recipe.py", "check-rust-source-coverage.py", "check-process-sites.py",
-            "check-config-writers.py", "check-shared-dependencies.py" } )
+            "check-config-writers.py", "check-shared-dependencies.py", "test-shared-dependencies.py" } )
         {
             WriteExecutable( Path.Combine( tools, check ), "#!/usr/bin/true\n" );
         }

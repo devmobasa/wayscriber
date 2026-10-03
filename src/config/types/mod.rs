@@ -37,7 +37,11 @@ pub use capture::{
     CaptureConfig, DEFAULT_OCR_LANGUAGES, RegionCaptureConfig, validate_capture_format,
     validate_filename_template, validate_ocr_languages,
 };
-pub use click_highlight::ClickHighlightConfig;
+pub use click_highlight::{
+    CLICK_HIGHLIGHT_DURATION_MAX_MS, CLICK_HIGHLIGHT_DURATION_MIN_MS, CLICK_HIGHLIGHT_OUTLINE_MAX,
+    CLICK_HIGHLIGHT_OUTLINE_MIN, CLICK_HIGHLIGHT_RADIUS_MAX, CLICK_HIGHLIGHT_RADIUS_MIN,
+    ClickHighlightConfig,
+};
 pub use context_menu::ContextMenuUiConfig;
 pub(crate) use drawing::DEFAULT_HIT_TEST_TOLERANCE;
 pub use drawing::DEFAULT_PEN_SMOOTHING;

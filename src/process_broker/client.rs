@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 
+use super::error::{BrokerError, BrokerErrorKind};
 use super::execution::supports_retained_publication;
 use super::transport::{
     GRACEFUL_SHUTDOWN_BYTE, decode_blob, encode_blob, recv_packet, send_packet, set_socket_timeout,
@@ -56,10 +57,6 @@ struct RunOptions {
 /// How long an unusable broker gets to act on the shutdown request before it
 /// is killed.
 const UNHEALTHY_BROKER_EXIT_GRACE: Duration = Duration::from_secs(3);
-
-/// Failure text used when a caller declines to wait for the transport.
-/// Callers match on it to offer "try again" rather than a generic failure.
-pub(crate) const BROKER_BUSY: &str = "process broker is busy running another helper";
 
 /// How a caller wants the single-socket transport acquired.
 ///
@@ -220,7 +217,11 @@ impl ProcessBroker {
             ExchangeWait::Immediate => match self.inner.exchange_lock.try_lock() {
                 Ok(guard) => Ok(guard),
                 Err(TryLockError::Poisoned(poisoned)) => Ok(poisoned.into_inner()),
-                Err(TryLockError::WouldBlock) => bail!(BROKER_BUSY),
+                Err(TryLockError::WouldBlock) => Err(BrokerError::new(
+                    BrokerErrorKind::Busy,
+                    "process broker is busy running another helper",
+                )
+                .into()),
             },
         }
     }
@@ -268,11 +269,14 @@ impl ProcessBroker {
             Ok(response) => response,
             Err(error) => {
                 self.inner.healthy.store(false, Ordering::Release);
-                return Err(error).context("process broker exchange failed");
+                return Err(error).context(BrokerError::new(
+                    BrokerErrorKind::Transport,
+                    "process broker exchange failed",
+                ));
             }
         };
-        if let BrokerOutcome::Error { message } = response.outcome {
-            bail!("process broker rejected request: {message}");
+        if let BrokerOutcome::Error { kind, message } = response.outcome {
+            return Err(BrokerError::new(kind, message).into());
         }
         Ok((response.outcome, descriptors))
     }
@@ -472,7 +476,7 @@ impl ProcessBroker {
         )
     }
 
-    /// Spawn without waiting for the transport, failing with [`BROKER_BUSY`]
+    /// Spawn without waiting for the transport, failing with a typed busy error
     /// when another exchange holds it.
     ///
     /// For the Wayland callback thread only. Everything else — the daemon's

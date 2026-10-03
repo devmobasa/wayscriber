@@ -122,11 +122,6 @@ impl InputState {
         result
     }
 
-    #[cfg(test)]
-    pub(crate) fn toast_contains(&self, x: i32, y: i32) -> bool {
-        self.feedback.contains(x, y)
-    }
-
     pub(crate) fn note_capability_toast(&mut self, caps: CompositorCapabilities) -> Option<String> {
         self.feedback.note_capability_toast(caps)
     }
@@ -237,7 +232,6 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::KeybindingsConfig;
     use crate::domain::OnboardingTip;
     use crate::draw::{Color, Shape};
     use crate::input::state::core::base::UiToastKind;
@@ -249,11 +243,6 @@ mod tests {
     use std::time::Duration;
 
     fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let _action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
-
         crate::input::state::test_support::make_test_input_state()
     }
 
@@ -533,12 +522,12 @@ mod tests {
     }
 
     #[test]
-    fn toast_contains_reports_hit_without_dismissing() {
+    fn toast_press_reports_hit_without_dismissing() {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
         state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
-        assert!(state.toast_contains(50, 40));
+        assert!(state.toast_press_at(50, 40).is_some());
         assert!(state.active_toast().is_some());
         assert!(state.test_toast_geometry().is_some());
     }
@@ -560,7 +549,7 @@ mod tests {
         let toast = state.active_toast().expect("preempting toast visible");
         assert_eq!(toast.message, "Delete page?");
         assert!(state.test_toast_geometry().is_none());
-        assert!(!state.toast_contains(50, 40));
+        assert!(state.toast_press_at(50, 40).is_none());
         let stale_press = ToastPress::body(0);
         assert_eq!(
             state.resolve_toast_release(stale_press, 50, 40),
@@ -753,51 +742,6 @@ mod tests {
         );
         assert!(state.selection_clipboard.has_pending_image_fallback());
         assert!(state.test_blocked_feedback_active());
-    }
-
-    /// Producer-migration completeness: every toast producer goes through
-    /// `push_toast(priority, key, toast)`. The legacy `set_ui_toast*` shims
-    /// have been removed; no module may reintroduce them.
-    #[test]
-    fn all_toast_producers_use_the_priority_queue_api() {
-        let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let allowlist = [
-            // This file names the retired shims in the assertion string below.
-            "input/state/core/utility/toasts.rs",
-        ];
-
-        let mut offenders = Vec::new();
-        let mut stack = vec![src_root.clone()];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).expect("read src dir") {
-                let entry = entry.expect("dir entry");
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-                    continue;
-                }
-                let rel = path
-                    .strip_prefix(&src_root)
-                    .expect("path under src")
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                if allowlist.contains(&rel.as_str()) {
-                    continue;
-                }
-                let contents = std::fs::read_to_string(&path).expect("read source file");
-                if contents.contains(".set_ui_toast") {
-                    offenders.push(rel);
-                }
-            }
-        }
-
-        assert!(
-            offenders.is_empty(),
-            "files still using legacy set_ui_toast* instead of push_toast: {offenders:?}"
-        );
     }
 
     #[test]

@@ -946,6 +946,17 @@ pub fn lerp_color(from: Rgba, to: Rgba, t: f64) -> Rgba {
     )
 }
 
+impl crate::config::UiTheme {
+    /// Maps the config value onto the runtime theme mode.
+    pub fn to_theme_mode(self) -> crate::ui::theme::ThemeMode {
+        match self {
+            crate::config::UiTheme::Auto => crate::ui::theme::ThemeMode::Auto,
+            crate::config::UiTheme::Dark => crate::ui::theme::ThemeMode::Dark,
+            crate::config::UiTheme::Light => crate::ui::theme::ThemeMode::Light,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

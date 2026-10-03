@@ -1,7 +1,10 @@
-use anyhow::{Context, Result, anyhow};
+use crate::backend::wayland::runtime_operation::{
+    RuntimeOperationController, RuntimeOperationIdSource, RuntimeOperationPoll,
+};
+
+use anyhow::{Result, anyhow};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 use std::time::Duration;
 
 const SESSION_FILE_EXTENSION: &str = "wayscriber-session";
@@ -24,14 +27,17 @@ pub(in crate::backend::wayland::state) struct SessionFileDialogCompletion {
     pub(in crate::backend::wayland::state) result: Result<Option<PathBuf>, String>,
 }
 
-type SessionFileDialogMessage = (u64, SessionFileDialogMode, Result<Option<PathBuf>, String>);
-
-#[derive(Debug)]
 pub(in crate::backend::wayland::state) struct SessionFileDialogController {
-    next_id: u64,
-    active: Option<(u64, SessionFileDialogMode)>,
-    receiver: Option<mpsc::Receiver<SessionFileDialogMessage>>,
-    runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+    operation: RuntimeOperationController<SessionFileDialogMode, Result<Option<PathBuf>, String>>,
+}
+
+impl std::fmt::Debug for SessionFileDialogController {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SessionFileDialogController")
+            .field("active", &self.operation.is_active())
+            .finish()
+    }
 }
 
 impl SessionFileDialogController {
@@ -39,10 +45,10 @@ impl SessionFileDialogController {
         runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
     ) -> Self {
         Self {
-            next_id: 1,
-            active: None,
-            receiver: None,
-            runtime_wake,
+            operation: RuntimeOperationController::new(
+                RuntimeOperationIdSource::new(),
+                runtime_wake,
+            ),
         }
     }
 
@@ -51,58 +57,49 @@ impl SessionFileDialogController {
         mode: SessionFileDialogMode,
         current_path: Option<PathBuf>,
     ) -> Result<()> {
-        if self.active.is_some() {
-            return Err(anyhow!("a session file dialog is already active"));
-        }
-        let id = self.next_id;
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .ok_or_else(|| anyhow!("session dialog identity exhausted"))?;
-        let (sender, receiver) = mpsc::sync_channel(1);
-        let wake = self.runtime_wake.clone();
-        std::thread::Builder::new()
-            .name(format!("wayscriber-session-dialog-{id}"))
-            .spawn(move || {
-                let result = choose_session_file(mode, current_path.as_deref())
-                    .map_err(|error| format!("{error:#}"));
-                let _ = sender.send((id, mode, result));
-                if let Err(error) = wake.wake() {
-                    log::error!("Failed to wake runtime for session dialog completion: {error}");
-                }
-            })
-            .context("failed to start session dialog worker")?;
-        self.active = Some((id, mode));
-        self.receiver = Some(receiver);
-        Ok(())
+        self.submit(mode, move || {
+            choose_session_file(mode, current_path.as_deref()).map_err(|error| format!("{error:#}"))
+        })
+    }
+
+    fn submit(
+        &mut self,
+        mode: SessionFileDialogMode,
+        chooser: impl FnOnce() -> Result<Option<PathBuf>, String> + Send + 'static,
+    ) -> Result<()> {
+        self.operation
+            .try_submit(mode, "wayscriber-session-dialog", chooser)
+            .map(|_| ())
+            .map_err(|failure| anyhow!(failure.into_parts().0))
     }
 
     pub(in crate::backend::wayland::state) fn try_receive(
         &mut self,
     ) -> Result<Option<SessionFileDialogCompletion>> {
-        let Some((expected_id, expected_mode)) = self.active else {
-            return Ok(None);
+        let completion = match self.operation.poll() {
+            RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => return Ok(None),
+            RuntimeOperationPoll::Ready {
+                context: mode,
+                outcome: result,
+                ..
+            } => SessionFileDialogCompletion { mode, result },
+            RuntimeOperationPoll::ProducerFailed {
+                context: mode,
+                reason,
+                ..
+            } => SessionFileDialogCompletion {
+                mode,
+                result: Err(reason),
+            },
+            RuntimeOperationPoll::Disconnected { context: mode, .. } => {
+                SessionFileDialogCompletion {
+                    mode,
+                    result: Err("session dialog worker exited without a completion".into()),
+                }
+            }
         };
-        let receiver = self
-            .receiver
-            .as_ref()
-            .ok_or_else(|| anyhow!("active session dialog has no completion receiver"))?;
-        let received = match receiver.try_recv() {
-            Ok(received) => received,
-            Err(mpsc::TryRecvError::Empty) => return Ok(None),
-            Err(mpsc::TryRecvError::Disconnected) => (
-                expected_id,
-                expected_mode,
-                Err("session dialog worker exited without a completion".into()),
-            ),
-        };
-        self.active = None;
-        self.receiver = None;
-        let (id, mode, result) = received;
-        if id != expected_id || mode != expected_mode {
-            return Err(anyhow!("session dialog completion identity mismatch"));
-        }
-        Ok(Some(SessionFileDialogCompletion { mode, result }))
+
+        Ok(Some(completion))
     }
 }
 
@@ -237,7 +234,12 @@ fn run_session_file_dialog_command(
         )
     }) {
         Ok(output) => output,
-        Err(err) if err.to_string().contains("No such file") => return Ok(None),
+        Err(err)
+            if crate::process_broker::error_kind(&err)
+                == Some(crate::process_broker::BrokerErrorKind::MissingExecutable) =>
+        {
+            return Ok(None);
+        }
         Err(err) => return Err(anyhow!("failed to launch {program}: {err:#}")),
     };
 
@@ -319,59 +321,75 @@ pub(in crate::backend::wayland::state::toolbar::events) fn ensure_save_as_extens
 #[cfg(test)]
 mod controller_tests {
     use super::*;
+    use crate::backend::wayland::RuntimeWakeSource;
 
-    fn controller() -> SessionFileDialogController {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        SessionFileDialogController::new(wake.handle())
+    #[test]
+    fn every_dialog_terminal_outcome_wakes_and_is_consumed_once() {
+        let outcomes = [
+            Ok(Some(PathBuf::from("/tmp/session"))),
+            Ok(None),
+            Err("chooser error".into()),
+        ];
+        for expected in outcomes {
+            let wake = RuntimeWakeSource::new().unwrap();
+            let mut controller = SessionFileDialogController::new(wake.handle());
+            let result = expected.clone();
+            controller
+                .submit(SessionFileDialogMode::SaveAs, move || result)
+                .unwrap();
+
+            assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
+            let completion = controller.try_receive().unwrap().unwrap();
+            assert_eq!(completion.mode, SessionFileDialogMode::SaveAs);
+            assert_eq!(completion.result, expected);
+            assert!(controller.try_receive().unwrap().is_none());
+            assert!(!wake.drain().unwrap());
+        }
     }
 
     #[test]
-    fn completion_identity_mismatch_is_terminal_and_consumed_once() {
-        let mut controller = controller();
-        let (sender, receiver) = mpsc::sync_channel(1);
-        controller.active = Some((7, SessionFileDialogMode::Open));
-        controller.receiver = Some(receiver);
-        sender
-            .send((
-                8,
-                SessionFileDialogMode::Open,
-                Ok(Some(PathBuf::from("/tmp/session"))),
-            ))
+    fn panicking_dialog_wakes_idle_runtime_with_one_terminal_failure() {
+        let wake = RuntimeWakeSource::new().unwrap();
+        let mut controller = SessionFileDialogController::new(wake.handle());
+        controller
+            .submit(SessionFileDialogMode::Open, || panic!("chooser panicked"))
             .unwrap();
 
-        assert!(controller.try_receive().is_err());
-        assert!(controller.try_receive().unwrap().is_none());
-    }
-
-    #[test]
-    fn worker_disconnect_produces_one_identified_failure() {
-        let mut controller = controller();
-        let (sender, receiver) = mpsc::sync_channel(1);
-        controller.active = Some((9, SessionFileDialogMode::SaveAs));
-        controller.receiver = Some(receiver);
-        drop(sender);
-
+        assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
         let completion = controller.try_receive().unwrap().unwrap();
-        assert_eq!(completion.mode, SessionFileDialogMode::SaveAs);
-        assert!(
-            completion
-                .result
-                .unwrap_err()
-                .contains("without a completion")
-        );
+        assert_eq!(completion.mode, SessionFileDialogMode::Open);
+        assert!(completion.result.unwrap_err().contains("chooser panicked"));
         assert!(controller.try_receive().unwrap().is_none());
+        assert!(!wake.drain().unwrap());
     }
 
     #[test]
     fn active_dialog_rejects_overlap_before_spawning_worker() {
-        let mut controller = controller();
-        controller.active = Some((1, SessionFileDialogMode::Open));
+        let wake = RuntimeWakeSource::new().unwrap();
+        let mut controller = SessionFileDialogController::new(wake.handle());
+        let (release, wait) = std::sync::mpsc::channel();
+        controller
+            .submit(SessionFileDialogMode::Open, move || {
+                wait.recv().unwrap();
+                Ok(None)
+            })
+            .unwrap();
+
         assert!(
             controller
                 .start(SessionFileDialogMode::SaveAs, None)
-                .unwrap_err()
-                .to_string()
-                .contains("already active")
+                .is_err()
+        );
+        release.send(()).unwrap();
+        assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
+        assert!(
+            controller
+                .try_receive()
+                .unwrap()
+                .unwrap()
+                .result
+                .unwrap()
+                .is_none()
         );
     }
 }

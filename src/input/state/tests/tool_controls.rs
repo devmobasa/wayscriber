@@ -5,6 +5,18 @@ use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
 use crate::ui::toolbar::model::{StylePillControl, StylePillSpec, TopStripPlan};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
+/// Pointer releases publish config edits through the live runtime inventory.
+fn runtime_quick_color_edits(state: &mut InputState) -> Vec<crate::input::state::QuickColorEdit> {
+    state
+        .drain_input_effects(crate::input::state::InputEffectDrain::Runtime)
+        .into_iter()
+        .filter_map(|effect| match effect {
+            crate::input::state::InputEffect::QuickColor(edit) => Some(edit),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     let mut state = create_test_input_state();
@@ -783,11 +795,11 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     assert!(!state.is_color_picker_popup_open());
     assert_eq!(state.style.quick_colors.color_for_index(2), Some(picked));
     assert_eq!(
-        state.take_pending_quick_color_edit(),
-        Some(crate::input::state::QuickColorEdit {
+        runtime_quick_color_edits(&mut state),
+        vec![crate::input::state::QuickColorEdit {
             index: 2,
             color: picked
-        })
+        }]
     );
     assert!(
         state.active_toast().is_none(),
@@ -977,11 +989,11 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     state.apply_color_picker_popup();
     assert_eq!(state.style.quick_colors.color_for_index(1), Some(shipped));
     assert_eq!(
-        state.take_pending_quick_color_edit(),
-        Some(crate::input::state::QuickColorEdit {
+        runtime_quick_color_edits(&mut state),
+        vec![crate::input::state::QuickColorEdit {
             index: 1,
             color: shipped
-        })
+        }]
     );
 }
 
@@ -1034,11 +1046,11 @@ fn accepting_a_recolor_from_the_popup_release_queues_the_durable_write() {
     assert!(!state.is_color_picker_popup_open());
     assert_eq!(state.style.quick_colors.color_for_index(0), Some(picked));
     assert_eq!(
-        state.take_pending_quick_color_edit(),
-        Some(crate::input::state::QuickColorEdit {
+        runtime_quick_color_edits(&mut state),
+        vec![crate::input::state::QuickColorEdit {
             index: 0,
             color: picked
-        })
+        }]
     );
 }
 
@@ -2355,11 +2367,11 @@ fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
 
         assert_eq!(state.style.quick_colors.color_for_index(0), Some(picked));
         assert_eq!(
-            state.take_pending_quick_color_edit(),
-            Some(crate::input::state::QuickColorEdit {
+            runtime_quick_color_edits(&mut state),
+            vec![crate::input::state::QuickColorEdit {
                 index: 0,
                 color: picked
-            })
+            }]
         );
         snapshot.assert_unchanged("accepting a quick-color recolor in InputState");
 

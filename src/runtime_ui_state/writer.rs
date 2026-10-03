@@ -37,10 +37,6 @@ pub(crate) struct RuntimeUiStateWriter {
 }
 
 impl RuntimeUiStateWriter {
-    pub(crate) fn spawn(store: RuntimeUiStateStore) -> std::io::Result<Self> {
-        Self::spawn_with_completion_notifier(store, || {})
-    }
-
     pub(crate) fn spawn_with_completion_notifier(
         store: RuntimeUiStateStore,
         notify_completion: impl Fn() + Send + 'static,

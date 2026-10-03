@@ -151,6 +151,8 @@ pub(super) enum BrokerOutcome {
     },
     Acknowledged,
     Error {
+        #[serde(default)]
+        kind: super::error::BrokerErrorKind,
         message: String,
     },
 }

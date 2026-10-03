@@ -113,10 +113,7 @@ fn validate_pdf_labels(labels: &mut PdfLabelConfig) {
 }
 
 fn sanitize_range(value: f64, min: f64, max: f64, fallback: f64, field: &str) -> f64 {
-    if !value.is_finite() {
-        log::warn!("Invalid {field}: {value}; resetting to {fallback}");
-        return fallback;
-    }
+    let value = super::float::finite_or_default(value, fallback, field);
     let clamped = value.clamp(min, max);
     if (clamped - value).abs() > f64::EPSILON {
         log::warn!("Clamping {field} from {value} to {clamped}");

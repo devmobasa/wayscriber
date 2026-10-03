@@ -6,6 +6,7 @@
 
 mod bootstrap;
 mod client;
+mod error;
 mod execution;
 mod manifest;
 mod server;
@@ -15,7 +16,8 @@ mod wire;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use client::{BROKER_BUSY, BrokerChild, ProcessBroker, current, start_for_runtime};
+pub(crate) use client::{BrokerChild, ProcessBroker, current, start_for_runtime};
+pub(crate) use error::{BrokerErrorKind, error_kind};
 pub(crate) use server::run_internal_broker_if_requested;
 pub(crate) use wire::{BrokerOutput, HelperKind, HelperLifetime, STDOUT_CAP_EXCEEDED};
 

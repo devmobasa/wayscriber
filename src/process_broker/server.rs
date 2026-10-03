@@ -95,6 +95,7 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
                 let response = BrokerResponse {
                     request_id: String::new(),
                     outcome: BrokerOutcome::Error {
+                        kind: super::error::BrokerErrorKind::Rejected,
                         message: format!("malformed broker request: {error}"),
                     },
                 };
@@ -118,6 +119,7 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
         )
         .unwrap_or_else(|error| BrokerWireResponse {
             outcome: BrokerOutcome::Error {
+                kind: super::error::error_kind(&error).unwrap_or_default(),
                 message: truncate_reason(&format!("{error:#}"), 2048),
             },
             descriptors: Vec::new(),
@@ -463,7 +465,7 @@ fn spawn_helper(
     if shutdown_requested(shutdown_fd)? {
         bail!("broker spawn cancelled during shutdown");
     }
-    let child = command.spawn().context("broker helper spawn failed")?;
+    let child = command.spawn().map_err(super::error::BrokerError::spawn)?;
     let child = if initial_detach {
         // The execed overlay calls setsid(). It must not be a process-group leader
         // at that point or setsid() deterministically fails with EPERM.

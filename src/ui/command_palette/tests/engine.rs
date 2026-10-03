@@ -312,3 +312,56 @@ fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
         "hovering a row reveals its controls"
     );
 }
+
+#[test]
+fn palette_rows_highlight_literal_label_matches_but_not_fuzzy_matches() {
+    let engine = UiTextEngine::default();
+    let mut input = crate::input::state::test_support::make_test_input_state();
+    input.toggle_command_palette();
+    input.command_palette.set_query("tool");
+    let mut view = CommandPaletteView::prepare(&input, 800, 600);
+    let CommandPaletteView::List(list) = &view else {
+        panic!("open palette");
+    };
+    let (x, y, width, height) = list.geometry;
+    let rows_top =
+        y + COMMAND_PALETTE_PADDING + COMMAND_PALETTE_INPUT_HEIGHT + COMMAND_PALETTE_LIST_GAP;
+    let mut theme = crate::ui::theme::Theme::dark();
+    theme.accent = (1.0, 0.0, 1.0, 1.0);
+
+    let count_highlight = |query_view: &CommandPaletteView| {
+        let rgba = pixels(1, |ctx| {
+            paint_command_palette(&theme, &engine, ctx, query_view, 800, 600)
+        });
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(index, pixel)| {
+                let px = (index % 800) as f64;
+                let py = (index / 800) as f64;
+                // Exclude the query box, icons and shortcut controls; only the
+                // command-label column can contribute these magenta backdrops.
+                px >= x + 44.0
+                    && px < x + width * 0.65
+                    && py >= rows_top
+                    && py < y + height - 48.0
+                    && pixel[0] > pixel[1].saturating_add(35)
+                    && pixel[2] > pixel[1].saturating_add(35)
+            })
+            .count()
+    };
+    let literal = count_highlight(&view);
+    let CommandPaletteView::List(list) = &mut view else {
+        unreachable!();
+    };
+    // Keep the exact prepared rows, selection and layout for the control.
+    // "tl" is a subsequence of "tool", but not a literal label substring.
+    list.query = "tl".to_string();
+    let fuzzy = count_highlight(&view);
+
+    assert!(
+        literal > fuzzy + 100,
+        "literal matches add visible accent pixels beyond the selected row: literal={literal}, fuzzy={fuzzy}"
+    );
+}

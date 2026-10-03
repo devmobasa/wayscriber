@@ -1884,6 +1884,7 @@ dependencies = [
  "gtk4",
  "libadwaita",
  "relm4",
+ "tempfile",
  "tokio",
  "wayscriber",
 ]

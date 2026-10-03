@@ -127,6 +127,10 @@ impl PersistencePipeline {
 
     /// Consume a terminal durability outcome after it has been delivered.
     /// Pending receipts remain registered and return `None`.
+    #[allow(
+        dead_code,
+        reason = "Receipt extraction is retained for controller flush and integration contracts"
+    )]
     pub(crate) fn take_receipt(
         &mut self,
         revision: AcceptedStateRevision,
@@ -202,6 +206,10 @@ impl PersistencePipeline {
 
     /// Consume a terminal flush outcome after it has been delivered.
     /// Pending flushes remain registered and return `None`.
+    #[allow(
+        dead_code,
+        reason = "Receipt extraction is retained for controller flush and integration contracts"
+    )]
     pub(crate) fn take_flush_outcome(&mut self, id: FlushRequestId) -> Option<FlushOutcome> {
         if !self.flushes.get(&id).is_some_and(Option::is_some) {
             return None;

@@ -82,8 +82,6 @@ fn duplicate_session_catalog_entry_sync(
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
-    use std::path::Path;
-    use std::sync::MutexGuard;
 
     use crate::models::{
         DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability,
@@ -92,50 +90,6 @@ mod tests {
     use wayscriber::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV};
 
     use super::*;
-
-    struct EnvGuard {
-        catalog_hooks: Option<OsString>,
-        xdg_data_home: Option<OsString>,
-        xdg_runtime_dir: Option<OsString>,
-        _guard: MutexGuard<'static, ()>,
-    }
-
-    impl EnvGuard {
-        fn set_roots(path: &Path) -> Self {
-            let guard = crate::test_env::lock();
-            let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
-            let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
-            let xdg_runtime_dir = std::env::var_os(XDG_RUNTIME_DIR_ENV);
-            unsafe {
-                std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
-                std::env::set_var(XDG_DATA_HOME_ENV, path);
-                std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
-            }
-            Self {
-                catalog_hooks,
-                xdg_data_home,
-                xdg_runtime_dir,
-                _guard: guard,
-            }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.catalog_hooks.take() {
-                Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
-                None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
-            }
-            match self.xdg_data_home.take() {
-                Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
-                None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
-            }
-            match self.xdg_runtime_dir.take() {
-                Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-                None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
-            }
-        }
-    }
 
     fn inactive_status() -> DaemonRuntimeStatus {
         DaemonRuntimeStatus {
@@ -158,7 +112,11 @@ mod tests {
     #[test]
     fn duplicate_session_catalog_entry_copies_primary_and_catalogs_new_entry() {
         let temp = crate::test_temp::tempdir().unwrap();
-        let _env = EnvGuard::set_roots(temp.path());
+        let _env = crate::test_env::EnvGuard::set(&[
+            (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
+            (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
+            (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
+        ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("lecture-copy.wayscriber-session");
         let source_artifacts = wayscriber::session::named_session_artifact_paths(&source);
@@ -199,7 +157,11 @@ mod tests {
     #[test]
     fn duplicate_session_catalog_entry_warns_when_catalog_update_fails_after_copy() {
         let temp = crate::test_temp::tempdir().unwrap();
-        let _env = EnvGuard::set_roots(temp.path());
+        let _env = crate::test_env::EnvGuard::set(&[
+            (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
+            (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
+            (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
+        ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("lecture-copy.wayscriber-session");
         std::fs::write(&source, b"primary").unwrap();

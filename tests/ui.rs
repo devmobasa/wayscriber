@@ -125,9 +125,8 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
 
 #[test]
 fn render_command_palette_with_query_draws_content() {
-    // Exercises the match-highlight path: an open palette with a query that
-    // literally appears in some command labels must render without panicking
-    // and draw pixels (highlight boxes + rows).
+    // Public API smoke coverage; the palette row artifact test owns highlight
+    // color and fuzzy-match behavior.
     let (mut surface, ctx) = surface_with_context(900, 700);
     let mut input = make_input_state();
     input.command_palette.open();

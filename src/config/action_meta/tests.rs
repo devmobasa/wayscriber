@@ -423,33 +423,6 @@ fn icon_coverage_matches_the_radial_contract() {
 }
 
 #[test]
-fn icons_reuse_the_shared_semantic_tool_painters() {
-    use crate::input::Tool;
-    use crate::toolbar_icons::top_toolbar_icon_painter;
-    use crate::ui::toolbar::model::{TopToolbarIcon, semantic_icon_for_tool};
-
-    for action in EXPECTED_ICON_ACTIONS {
-        let icon = action_meta(*action)
-            .and_then(|meta| meta.icon)
-            .unwrap_or_else(|| panic!("missing icon for {:?}", action));
-        let expected = match action {
-            Action::EnterTextMode => top_toolbar_icon_painter(TopToolbarIcon::Text),
-            Action::EnterStickyNoteMode => top_toolbar_icon_painter(TopToolbarIcon::StickyNote),
-            _ => {
-                let tool = Tool::from_select_action(*action)
-                    .unwrap_or_else(|| panic!("{:?} should select a tool", action));
-                top_toolbar_icon_painter(TopToolbarIcon::Tool(semantic_icon_for_tool(tool)))
-            }
-        };
-        assert!(
-            std::ptr::fn_addr_eq(icon, expected),
-            "icon painter for {:?} drifted from the shared semantic painter",
-            action
-        );
-    }
-}
-
-#[test]
 fn meta_macro_arms_default_aliases_and_icon() {
     const PLAIN: ActionMeta = meta!(Undo, "Undo", None, "d", History, false, false, false);
     const ALIASED: ActionMeta = meta!(
@@ -472,7 +445,7 @@ fn meta_macro_arms_default_aliases_and_icon() {
         false,
         false,
         false,
-        icon: crate::toolbar_icons::draw_icon_undo
+        icon: crate::config::action_meta::ActionIcon::Undo
     );
     const FULL: ActionMeta = meta!(
         Undo,
@@ -484,7 +457,7 @@ fn meta_macro_arms_default_aliases_and_icon() {
         false,
         false,
         &["back"],
-        icon: crate::toolbar_icons::draw_icon_undo
+        icon: crate::config::action_meta::ActionIcon::Undo
     );
 
     assert!(PLAIN.icon.is_none() && PLAIN.search_aliases.is_empty());

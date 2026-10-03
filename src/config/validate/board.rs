@@ -1,4 +1,4 @@
-use super::Config;
+use super::{Config, float::finite_or_default};
 
 impl Config {
     pub(super) fn validate_board(&mut self) {
@@ -12,6 +12,34 @@ impl Config {
                 self.board.default_mode
             );
             self.board.default_mode = "transparent".to_string();
+        }
+
+        let defaults = crate::config::BoardConfig::default();
+        for (field, color, fallback) in [
+            (
+                "board.whiteboard_color",
+                &mut self.board.whiteboard_color,
+                defaults.whiteboard_color,
+            ),
+            (
+                "board.blackboard_color",
+                &mut self.board.blackboard_color,
+                defaults.blackboard_color,
+            ),
+            (
+                "board.whiteboard_pen_color",
+                &mut self.board.whiteboard_pen_color,
+                defaults.whiteboard_pen_color,
+            ),
+            (
+                "board.blackboard_pen_color",
+                &mut self.board.blackboard_pen_color,
+                defaults.blackboard_pen_color,
+            ),
+        ] {
+            for (index, (component, fallback)) in color.iter_mut().zip(fallback).enumerate() {
+                *component = finite_or_default(*component, fallback, &format!("{field}[{index}]"));
+            }
         }
 
         // Validate board color RGB values (0.0-1.0)

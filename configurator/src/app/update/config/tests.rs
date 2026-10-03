@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use wayscriber::config::{Action, CURRENT_CONFIG_REVISION, Config, ConfigDocument};
 
@@ -14,17 +13,12 @@ fn status_contains(status: &StatusMessage, needle: &str) -> bool {
     status.text().is_some_and(|text| text.contains(needle))
 }
 
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-
-fn temp_config_document(name: &str, contents: &str) -> (PathBuf, Box<ConfigDocument>) {
-    let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!(
-        "wayscriber-configurator-update-config-{}-{sequence}-{name}.toml",
-        std::process::id(),
-    ));
+fn temp_config_document(name: &str, contents: &str) -> (TempDir, Box<ConfigDocument>) {
+    let temp = crate::test_temp::tempdir().expect("temporary config directory");
+    let path = temp.path().join(format!("{name}.toml"));
     std::fs::write(&path, contents).expect("write test config");
     let document = ConfigDocument::load_from_path(&path).expect("load test config document");
-    (path, Box::new(document))
+    (temp, Box::new(document))
 }
 
 #[test]
@@ -32,7 +26,7 @@ fn handle_config_loaded_success_resets_loading_and_dirty_state() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.is_dirty = true;
 
-    let (path, document) = temp_config_document("loaded", "");
+    let (_path, document) = temp_config_document("loaded", "");
     let _ = app.handle_config_loaded(Ok((document, None)));
 
     assert!(!app.document.is_loading());
@@ -42,14 +36,13 @@ fn handle_config_loaded_success_resets_loading_and_dirty_state() {
         &app.status,
         "Configuration loaded from disk."
     ));
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]
 fn handle_config_loaded_uses_startup_search_focus_fallback_once() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
 
-    let (first_path, first) = temp_config_document("focus-first", "");
+    let (_first_path, first) = temp_config_document("focus-first", "");
     let _ = app.handle_config_loaded(Ok((first, None)));
 
     assert_eq!(app.search_focus_serial, 1);
@@ -57,18 +50,16 @@ fn handle_config_loaded_uses_startup_search_focus_fallback_once() {
 
     // A reload is not a relaunch: the offer was answered by the first load,
     // so the caret stays wherever the user put it.
-    let (second_path, second) = temp_config_document("focus-second", "");
+    let (_second_path, second) = temp_config_document("focus-second", "");
     let _ = app.handle_config_loaded(Ok((second, None)));
 
     assert_eq!(app.search_focus_serial, 1);
-    let _ = std::fs::remove_file(first_path);
-    let _ = std::fs::remove_file(second_path);
 }
 
 #[test]
 fn handle_config_loaded_error_preserves_the_last_good_document_and_draft() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document("before-reload-error", "");
+    let (_path, document) = temp_config_document("before-reload-error", "");
     let destination = document.destination().to_path_buf();
     let _ = app.handle_config_loaded(Ok((document, None)));
     app.draft.capture.enabled = !app.draft.capture.enabled;
@@ -90,13 +81,12 @@ fn handle_config_loaded_error_preserves_the_last_good_document_and_draft() {
         &app.status,
         "Failed to load config from disk: broken"
     ));
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]
 fn handle_config_loaded_repair_document_allows_saving() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document("repair", "");
+    let (_path, document) = temp_config_document("repair", "");
 
     let _ = app.handle_config_loaded(Ok((
         document,
@@ -112,20 +102,18 @@ fn handle_config_loaded_repair_document_allows_saving() {
     ));
     let _ = app.handle_save_requested();
     assert!(app.document.is_saving());
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]
 fn handle_config_loaded_surfaces_preserved_unknown_settings() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document("unknown", "future_configurator_option = true\n");
+    let (_path, document) = temp_config_document("unknown", "future_configurator_option = true\n");
 
     let _ = app.handle_config_loaded(Ok((document, None)));
 
     assert!(matches!(app.status, StatusMessage::Warning(_)));
     assert!(status_contains(&app.status, "future_configurator_option"));
     assert!(status_contains(&app.status, "were preserved"));
-    let _ = std::fs::remove_file(path);
 }
 
 /// A resolved shortcut conflict is never written back, so the editor is
@@ -134,7 +122,7 @@ fn handle_config_loaded_surfaces_preserved_unknown_settings() {
 #[test]
 fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document(
+    let (_path, document) = temp_config_document(
         "shortcut-conflict",
         &format!(
             "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\"]\ncycle_toolbar_display = [\"F2\"]\n",
@@ -153,7 +141,6 @@ fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
         !status_contains(&app.status, "Unrecognized settings"),
         "a conflict is not an unknown setting"
     );
-    let _ = std::fs::remove_file(path);
 }
 
 /// A default this build added and the file never mentions gets its own
@@ -162,7 +149,7 @@ fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
 #[test]
 fn handle_config_loaded_surfaces_skipped_default_shortcuts() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document(
+    let (_path, document) = temp_config_document(
         "skipped-default",
         &format!(
             "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
@@ -184,7 +171,6 @@ fn handle_config_loaded_surfaces_skipped_default_shortcuts() {
             && !status_contains(&app.status, "Unrecognized settings"),
         "a skipped default is neither a conflict nor an unknown setting"
     );
-    let _ = std::fs::remove_file(path);
 }
 
 /// A string the parser rejects is dropped for the session and kept by the
@@ -193,7 +179,7 @@ fn handle_config_loaded_surfaces_skipped_default_shortcuts() {
 #[test]
 fn handle_config_loaded_surfaces_shortcuts_that_could_not_be_parsed() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document(
+    let (_path, document) = temp_config_document(
         "invalid-shortcut",
         &format!(
             "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\n",
@@ -212,7 +198,6 @@ fn handle_config_loaded_surfaces_shortcuts_that_could_not_be_parsed() {
             && !status_contains(&app.status, "Conflicting shortcuts"),
         "an unparseable shortcut is neither an unknown setting nor a conflict"
     );
-    let _ = std::fs::remove_file(path);
 }
 
 /// All three keybinding kinds can land in one file, and each gets its own
@@ -220,7 +205,7 @@ fn handle_config_loaded_surfaces_shortcuts_that_could_not_be_parsed() {
 #[test]
 fn handle_config_loaded_separates_every_keybinding_diagnostic_kind() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document(
+    let (_path, document) = temp_config_document(
         "invalid-and-conflicting",
         &format!(
             "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\ntoggle_toolbar = [\"F2\", \"F9\"]\nundo = [\"Ctrl+Alt+U\"]\nredo = [\"Ctrl+Alt+U\"]\n",
@@ -240,7 +225,6 @@ fn handle_config_loaded_separates_every_keybinding_diagnostic_kind() {
     assert!(status_contains(&app.status, "Ctrl+Shift"));
     assert!(status_contains(&app.status, "Ctrl+Alt+U"));
     assert!(status_contains(&app.status, "F2"));
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]
@@ -264,7 +248,7 @@ fn handle_save_requested_blocks_without_loaded_document() {
 fn handle_save_requested_sets_saving_for_valid_draft() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.document.set_saving_for_test(false);
-    let (path, document) = temp_config_document("save-request", "");
+    let (_path, document) = temp_config_document("save-request", "");
     let _ = app.handle_config_loaded(Ok((document, None)));
 
     let effects = app.handle_save_requested();
@@ -272,7 +256,6 @@ fn handle_save_requested_sets_saving_for_valid_draft() {
     assert!(matches!(effects.as_slice(), [Effect::SaveConfig { .. }]));
     assert!(app.document.is_saving());
     assert!(status_contains(&app.status, "Saving configuration..."));
-    let _ = std::fs::remove_file(path);
 }
 
 /// The document is the model's only copy, and the write needs it moved. It
@@ -868,7 +851,7 @@ fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
 #[test]
 fn save_is_refused_while_a_reload_is_in_flight() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document("save-during-reload", "");
+    let (_path, document) = temp_config_document("save-during-reload", "");
     app.document.finish_load(Some(*document));
     app.document.set_loading_for_test(true);
     app.is_dirty = true;
@@ -886,7 +869,6 @@ fn save_is_refused_while_a_reload_is_in_flight() {
         format!("{before:?}"),
         "a refused save must not claim it is saving"
     );
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]
@@ -896,7 +878,7 @@ fn handle_config_saved_success_clears_dirty_and_records_backup() {
     app.is_dirty = true;
     app.draft.capture.enabled = !app.draft.capture.enabled;
     let backup = PathBuf::from("/tmp/wayscriber-config.bak");
-    let (path, document) = temp_config_document("saved", "");
+    let (_path, document) = temp_config_document("saved", "");
 
     let _ = app.handle_config_saved(Ok((Some(backup.clone()), document)));
     assert!(app.document.loaded().is_some());
@@ -909,7 +891,6 @@ fn handle_config_saved_success_clears_dirty_and_records_backup() {
         &app.status,
         "Configuration saved successfully."
     ));
-    let _ = std::fs::remove_file(path);
 }
 
 const LEGACY_REVISION_ZERO_CONFIG: &str = "config_revision = 0\n\n[drawing]\ndefault_thickness = 3.0\n\n[keybindings]\ntoggle_command_palette = [\"Ctrl+K\"]\ncapture_full_screen = [\"Ctrl+Shift+P\"]\n";
@@ -1455,7 +1436,8 @@ fn document_operations_freeze_queued_edits_until_completion() {
     for saving in [false, true] {
         for success in [false, true] {
             let (mut app, _) = ConfiguratorApp::new_app();
-            let (path, document) = temp_config_document("busy-edits", "");
+            let (_temp, document) = temp_config_document("busy-edits", "");
+            let path = document.destination().to_path_buf();
             app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
             let original = app.draft.clone();
             let effects = app.update_message(if saving {
@@ -1505,7 +1487,6 @@ fn document_operations_freeze_queued_edits_until_completion() {
                 !original.capture.enabled,
             ));
             assert_ne!(app.draft, original);
-            std::fs::remove_file(path).unwrap();
         }
     }
 }
@@ -1522,7 +1503,7 @@ fn leave_dirty_draft_requires_a_current_decision_and_successful_save() {
 fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
     use crate::messages::{CommandMessage, Message};
     let (mut app, _) = ConfiguratorApp::new_app();
-    let (path, document) = temp_config_document("leave-draft", "");
+    let (_path, document) = temp_config_document("leave-draft", "");
     app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
     let request = if close {
         Message::CloseRequested
@@ -1580,7 +1561,6 @@ fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
             [Effect::CloseWindow] | [Effect::LoadConfig]
         ));
     }
-    std::fs::remove_file(path).unwrap();
 }
 
 #[test]
@@ -1589,7 +1569,7 @@ fn leave_protects_raw_color_and_unapplied_shortcut_input() {
 
     for shortcut in [false, true] {
         let (mut app, _) = ConfiguratorApp::new_app();
-        let (path, document) = temp_config_document("leave-editor", "");
+        let (_path, document) = temp_config_document("leave-editor", "");
         app.update_command(CommandMessage::ConfigLoaded(Ok((document, None))));
         if shortcut {
             app.update_message(Message::ShortcutTextEditStarted(
@@ -1609,6 +1589,5 @@ fn leave_protects_raw_color_and_unapplied_shortcut_input() {
         assert!(app.has_unresolved_editor());
         assert!(!app.document.is_saving());
         assert!(matches!(app.status, StatusMessage::Error(_)));
-        std::fs::remove_file(path).unwrap();
     }
 }

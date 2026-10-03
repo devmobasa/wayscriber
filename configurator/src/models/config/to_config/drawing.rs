@@ -3,8 +3,10 @@ use super::super::parse::{
     parse_field_in_range, parse_u8_in_range, parse_usize_at_least, parse_usize_in_range,
 };
 use crate::models::error::FormError;
-use wayscriber::config::Config;
 use wayscriber::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
+use wayscriber::config::{
+    ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN, Config,
+};
 use wayscriber::domain::{DragBindableTool, DragTool};
 use wayscriber::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::draw::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
@@ -135,16 +137,16 @@ impl ConfigDraft {
         parse_field_in_range(
             &self.arrow_length,
             "arrow.length",
-            5.0,
-            50.0,
+            ARROW_LENGTH_MIN,
+            ARROW_LENGTH_MAX,
             errors,
             |value| config.arrow.length = value,
         );
         parse_field_in_range(
             &self.arrow_angle,
             "arrow.angle_degrees",
-            15.0,
-            60.0,
+            ARROW_ANGLE_MIN,
+            ARROW_ANGLE_MAX,
             errors,
             |value| config.arrow.angle_degrees = value,
         );

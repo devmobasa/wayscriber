@@ -6,6 +6,7 @@ mod boards;
 mod capture;
 mod drawing;
 mod export;
+mod float;
 mod fonts;
 mod history;
 mod keybindings;

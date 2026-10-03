@@ -1824,3 +1824,50 @@ fn compiled_defaults_are_not_shown_as_authored_keybindings() {
         "Config::default() is AllExplicit for validation, not for UI source badges"
     );
 }
+
+#[test]
+fn config_draft_numeric_policy_accepts_bounds_and_rejects_invalid_values() {
+    let config = Config::default();
+    for (length, angle, radius, outline, duration) in [
+        ("5", "15", "16", "1", "150"),
+        ("50", "60", "160", "12", "1500"),
+    ] {
+        let mut draft = ConfigDraft::from_config(&config);
+        draft.arrow_length = length.into();
+        draft.arrow_angle = angle.into();
+        draft.click_highlight_radius = radius.into();
+        draft.click_highlight_outline_thickness = outline.into();
+        draft.click_highlight_duration_ms = duration.into();
+        let converted = draft.to_config(&config).unwrap();
+        assert!(converted.validate_for_save().is_ok());
+    }
+
+    for (length, angle, radius, outline, duration) in [
+        ("4.9", "14.9", "15.9", "0.9", "149"),
+        ("50.1", "60.1", "160.1", "12.1", "1501"),
+        ("NaN", "NaN", "NaN", "NaN", "NaN"),
+        ("inf", "inf", "inf", "inf", "inf"),
+        ("-inf", "-inf", "-inf", "-inf", "-inf"),
+    ] {
+        let mut draft = ConfigDraft::from_config(&config);
+        draft.arrow_length = length.into();
+        draft.arrow_angle = angle.into();
+        draft.click_highlight_radius = radius.into();
+        draft.click_highlight_outline_thickness = outline.into();
+        draft.click_highlight_duration_ms = duration.into();
+        let errors = draft.to_config(&config).unwrap_err();
+        for field in [
+            "arrow.length",
+            "arrow.angle_degrees",
+            "ui.click_highlight.radius",
+            "ui.click_highlight.outline_thickness",
+            "ui.click_highlight.duration_ms",
+        ] {
+            assert!(
+                errors.iter().any(|error| error.field == field),
+                "{field} for {radius}"
+            );
+        }
+        assert_eq!(draft.click_highlight_radius, radius);
+    }
+}

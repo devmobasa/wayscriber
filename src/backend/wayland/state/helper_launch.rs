@@ -25,7 +25,7 @@ fn spawn_detached(
 }
 
 fn launch_deferred_by_busy_broker(error: &anyhow::Error) -> bool {
-    format!("{error:#}").contains(crate::process_broker::BROKER_BUSY)
+    crate::process_broker::error_kind(error) == Some(crate::process_broker::BrokerErrorKind::Busy)
 }
 
 fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'static str {
@@ -132,19 +132,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn busy_broker_failure_is_retryable() {
-        let error = anyhow::anyhow!("transport failed: {}", crate::process_broker::BROKER_BUSY);
-
-        assert!(launch_deferred_by_busy_broker(&error));
-        assert_eq!(
-            launch_failure_message(&error, "failed"),
-            "Busy with another task. Try again in a moment."
-        );
-    }
-
-    #[test]
     fn ordinary_launch_failure_keeps_specific_notice() {
-        let error = anyhow::anyhow!("executable not found");
+        let error = anyhow::anyhow!(
+            "unrelated diagnostic: process broker is busy running another helper; No such file"
+        )
+        .context("launch context");
 
         assert!(!launch_deferred_by_busy_broker(&error));
         assert_eq!(

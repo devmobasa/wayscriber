@@ -1,6 +1,8 @@
 //! Pure normalization at configuration and persistence boundaries.
 use std::collections::HashSet;
 
+/// Clamp RGB components to [0, 1]. Callers must replace NaN before calling;
+/// range clamping alone does not turn NaN into a usable color component.
 pub fn clamp_board_rgb(mut rgb: [f64; 3]) -> ([f64; 3], bool) {
     let mut clamped = false;
     for component in &mut rgb {

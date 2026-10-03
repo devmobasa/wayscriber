@@ -2686,3 +2686,95 @@ fn a_failed_save_leaves_no_temporary_file_behind() {
         "temporary files were left behind: {strays:?}"
     );
 }
+
+#[test]
+fn maximum_admitted_image_and_create_history_fit_actual_default_session_budget() {
+    use super::save::{SaveSnapshotOutcome, estimate_snapshot_save, save_snapshot_with_report};
+    use crate::draw::EmbeddedImage;
+    use crate::screen_pixels::EmbeddedImageLimits;
+
+    let limits = EmbeddedImageLimits::default();
+    let mut seed = 0x1234_5678_u32;
+    let mut random_byte = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed as u8
+    };
+    let pixels: Vec<u8> = (0..3_000_000).map(|_| random_byte()).collect();
+    let mut bytes = Vec::new();
+    let mut encoder = png::Encoder::new(&mut bytes, 1000, 1000);
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&pixels).unwrap();
+    writer.finish().unwrap();
+    assert!(bytes.len() <= limits.max_bytes());
+    // PNG readers permit trailing bytes after IEND; use them to reach the
+    // admission cap exactly without compressible zero padding.
+    while bytes.len() < limits.max_bytes() {
+        bytes.push(random_byte());
+    }
+    assert!(limits.allows_bytes(bytes.len()));
+    crate::image_decode::decode_rgba(
+        crate::image_decode::EncodedImageFormat::Png,
+        &bytes,
+        limits.into(),
+    )
+    .unwrap();
+
+    let mut snapshot = sample_snapshot();
+    let mut frame = Frame::new();
+    let id = frame.add_shape(Shape::Image {
+        x: 0,
+        y: 0,
+        w: 1000,
+        h: 1000,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 1000,
+            height: 1000,
+            bytes: bytes.into(),
+        },
+    });
+    frame.push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(0, frame.shape(id).unwrap().clone())],
+        },
+        100,
+    );
+    snapshot.boards[0].pages.pages[0] = frame;
+    let temp = tempdir().unwrap();
+    let options = crate::session::options::options_from_config_for_named_file(
+        &crate::config::SessionConfig::default(),
+        temp.path().join("maximum-image.wayscriber-session"),
+        Some("test"),
+    );
+    assert!(options.persist_history);
+    let estimate = estimate_snapshot_save(&snapshot, &options).unwrap();
+    assert_eq!(estimate.full.limit_exceeded, None);
+    assert!(
+        estimate.full.raw_size as u64 <= options.max_file_size_bytes,
+        "full history must fit without relying on compression"
+    );
+    let report = save_snapshot_with_report(&snapshot, &options)
+        .unwrap()
+        .unwrap();
+    assert_eq!(report.outcome, SaveSnapshotOutcome::Full);
+    let mut loaded = load_snapshot(&options).unwrap().unwrap();
+    let restored = &mut loaded.boards[0].pages.pages[0];
+    let Shape::Image { data, .. } = &restored.shape(id).expect("restored image").shape else {
+        panic!("restored shape is an image");
+    };
+    assert_eq!(data.bytes.len(), limits.max_bytes());
+    assert_eq!(
+        restored.shape(id).unwrap().shape,
+        snapshot.boards[0].pages.pages[0].shape(id).unwrap().shape
+    );
+    assert_eq!(restored.undo_stack_len(), 1);
+    assert!(restored.undo_last().is_some());
+    assert!(
+        restored.shapes.is_empty(),
+        "create history survives full save/load"
+    );
+}

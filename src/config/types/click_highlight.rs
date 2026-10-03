@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// Accepted click-highlight radius in logical pixels.
+pub const CLICK_HIGHLIGHT_RADIUS_MIN: f64 = 16.0;
+pub const CLICK_HIGHLIGHT_RADIUS_MAX: f64 = 160.0;
+/// Accepted click-highlight outline thickness in logical pixels.
+pub const CLICK_HIGHLIGHT_OUTLINE_MIN: f64 = 1.0;
+pub const CLICK_HIGHLIGHT_OUTLINE_MAX: f64 = 12.0;
+/// Accepted click-highlight lifetime in milliseconds.
+pub const CLICK_HIGHLIGHT_DURATION_MIN_MS: u64 = 150;
+pub const CLICK_HIGHLIGHT_DURATION_MAX_MS: u64 = 1500;
+
 /// Click highlight configuration for mouse press indicator.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
