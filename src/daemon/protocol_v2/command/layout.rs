@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -58,23 +58,7 @@ pub(super) fn queue_path(root: &Path, order: u64, identity: &str) -> PathBuf {
     queue_dir(root).join(queue_name(order, identity))
 }
 
-pub(super) fn create_private_directory(path: &Path) -> Result<()> {
-    match fs::create_dir(path) {
-        Ok(()) => {
-            fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
-            Ok(())
-        }
-        Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-            let metadata = fs::symlink_metadata(path)?;
-            if !metadata.is_dir() || metadata.file_type().is_symlink() {
-                bail!("{} is not a no-follow protocol directory", path.display());
-            }
-            fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
-            Ok(())
-        }
-        Err(error) => Err(error.into()),
-    }
-}
+pub(super) use super::super::linux::create_private_directory;
 
 pub(crate) fn prepare_layout(root: &Path) -> Result<()> {
     if let Some(parent) = root.parent() {

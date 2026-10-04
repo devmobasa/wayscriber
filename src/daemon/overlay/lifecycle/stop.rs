@@ -10,9 +10,31 @@ use crate::daemon::protocol_v2::{
     BootClock, ReportedSession, open_overlay_pidfd, wait_for_pidfd_exit,
 };
 
+/// A stop that failed. A child forced down after its broker failed was still
+/// retired, so the session it last reported comes with the error.
+pub(in crate::daemon) struct StopFailure {
+    pub(in crate::daemon) session: Option<ReportedSession>,
+    pub(in crate::daemon) error: anyhow::Error,
+}
+
+impl From<anyhow::Error> for StopFailure {
+    fn from(error: anyhow::Error) -> Self {
+        Self {
+            session: None,
+            error,
+        }
+    }
+}
+
+impl From<std::io::Error> for StopFailure {
+    fn from(error: std::io::Error) -> Self {
+        anyhow::Error::from(error).into()
+    }
+}
+
 impl OverlayLifecycle {
     /// Stops the child, returning the session it last reported.
-    fn terminate(&mut self) -> Result<Option<ReportedSession>> {
+    fn terminate(&mut self) -> std::result::Result<Option<ReportedSession>, StopFailure> {
         let mut session = None;
         if let Some(pid) = self.child.display_pid() {
             let stop_started = Instant::now();
@@ -75,16 +97,19 @@ impl OverlayLifecycle {
                         }
                     }
                     Err(err) => {
-                        let forced = self.child.force_kill_and_wait();
-                        return match forced {
-                            Ok(_) => Err(err).context(
-                                "broker ownership failed while querying overlay; child was forced down",
-                            ),
-                            Err(force_error) => Err(anyhow::anyhow!(
+                        return Err(match self.child.force_kill_and_wait() {
+                            Ok(exit) => StopFailure {
+                                session: exit.session,
+                                error: err.context(
+                                    "broker ownership failed while querying overlay; child was forced down",
+                                ),
+                            },
+                            Err(force_error) => anyhow::anyhow!(
                                 "broker ownership failed while querying overlay: {err:#}; \
                                  forced termination also failed: {force_error:#}"
-                            )),
-                        };
+                            )
+                            .into(),
+                        });
                     }
                 }
             }
@@ -96,7 +121,9 @@ impl OverlayLifecycle {
     }
 
     /// Stops the overlay, returning the session its child last reported.
-    pub(in crate::daemon::overlay) fn hide(&mut self) -> Result<Option<ReportedSession>> {
+    pub(in crate::daemon::overlay) fn hide(
+        &mut self,
+    ) -> std::result::Result<Option<ReportedSession>, StopFailure> {
         let session = self.terminate()?;
         self.mark_hidden();
         Ok(session)

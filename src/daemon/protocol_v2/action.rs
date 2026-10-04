@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -197,19 +197,7 @@ fn action_name(order: u64, identity: &str) -> String {
     format!("{order:016x}-{identity}.action")
 }
 
-fn create_private_directory(path: &Path) -> Result<()> {
-    match fs::create_dir(path) {
-        Ok(()) => {}
-        Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
-        Err(err) => return Err(err.into()),
-    }
-    let metadata = fs::symlink_metadata(path)?;
-    if !metadata.is_dir() || metadata.file_type().is_symlink() {
-        bail!("{} is not a no-follow action directory", path.display());
-    }
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
-    Ok(())
-}
+use super::linux::create_private_directory;
 
 fn open_journal_lock(root: &Path) -> Result<File> {
     try_open_journal_lock(root, false)?

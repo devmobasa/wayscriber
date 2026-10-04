@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use super::session_target::{
-    ReportedSession, discard_session_report, read_session_report, take_final_session_report,
+    ReportedSession, discard_session_report, read_trusted_session_report, take_final_session_report,
 };
 use super::wire::fresh_id;
 
@@ -290,12 +290,7 @@ impl OverlayChildOwner {
         let owned = self.owned.as_ref()?;
         let generation = self.generation()?;
         let process_start_ticks = owned.process_start_ticks?;
-        read_session_report(generation, owned.display_pid, process_start_ticks).unwrap_or_else(
-            |error| {
-                log::warn!("Ignoring the session report of overlay child {generation}: {error:#}");
-                None
-            },
-        )
+        read_trusted_session_report(generation, owned.display_pid, process_start_ticks)
     }
 
     pub(crate) fn try_wait(&mut self) -> Result<Option<OverlayExit>> {

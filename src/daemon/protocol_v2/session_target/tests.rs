@@ -87,7 +87,7 @@ fn write_entry(name: &str, bytes: &[u8], mode: u32) -> PathBuf {
 
     // An overlay's identity proof creates this before any report is written.
     std::fs::create_dir_all(crate::paths::daemon_command_dir()).unwrap();
-    create_report_dir().unwrap();
+    super::super::linux::create_private_directory(&report_dir()).unwrap();
     let path = report_dir().join(name);
     std::fs::write(&path, bytes).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
@@ -135,6 +135,7 @@ fn an_untrusted_report_is_ignored_and_still_removed() {
         let other = super::super::ProtocolId::generate().unwrap().to_string();
         let foreign = record_bytes(&other, pid, ticks, None);
         let relative = record_bytes(generation, pid, ticks, Some("b.wayscriber-session"));
+        let directory = record_bytes(generation, pid, ticks, Some("/sessions/b/"));
         let mut newer_schema =
             String::from_utf8(record_bytes(generation, pid, ticks, None)).unwrap();
         newer_schema = newer_schema.replace(&format!("\"schema\":{REPORT_SCHEMA}"), "\"schema\":2");
@@ -145,6 +146,7 @@ fn an_untrusted_report_is_ignored_and_still_removed() {
             ("malformed", b"{".as_slice(), 0o600),
             ("another generation's record", &foreign, 0o600),
             ("relative target", &relative, 0o600),
+            ("a directory as target", &directory, 0o600),
             ("newer schema", newer_schema.as_bytes(), 0o600),
             ("oversize", &oversize, 0o600),
             ("readable by others", &valid, 0o644),
@@ -213,5 +215,23 @@ fn startup_removes_every_stale_report_and_nothing_else() {
 
         assert!(stale.iter().all(|path| !path.exists()));
         assert!(unrelated.iter().all(|path| path.exists()));
+    });
+}
+
+#[test]
+fn reports_are_never_read_or_removed_through_a_symlinked_directory() {
+    as_daemon_overlay(None, |generation| {
+        let (pid, ticks) = current_identity();
+        let elsewhere = crate::test_temp::tempdir().unwrap();
+        let report = elsewhere.path().join(format!("{generation}.target"));
+        std::fs::write(&report, record_bytes(generation, pid, ticks, None)).unwrap();
+        std::fs::create_dir_all(crate::paths::daemon_command_dir()).unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), report_dir()).unwrap();
+
+        assert!(read_session_report(generation, pid, ticks).is_err());
+        assert!(clear_stale_session_reports().is_err());
+        discard_session_report(generation);
+
+        assert!(report.exists());
     });
 }

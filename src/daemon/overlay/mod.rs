@@ -190,8 +190,13 @@ impl Daemon {
             return Ok(());
         }
 
-        let session = self.overlay.hide()?;
-        self.remember_reported_session(session);
+        match self.overlay.hide() {
+            Ok(session) => self.remember_reported_session(session),
+            Err(failure) => {
+                self.remember_reported_session(failure.session);
+                return Err(failure.error);
+            }
+        }
         self.discard_pending_launch_options();
         Ok(())
     }

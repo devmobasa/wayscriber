@@ -79,7 +79,7 @@ pub(crate) fn publish_session_from_environment(session: &ReportedSession) -> Res
         target,
     };
     let bytes = super::wire::canonical_json(&record, MAX_REPORT_BYTES)?;
-    create_report_dir()?;
+    super::linux::create_private_directory(&report_dir())?;
     crate::durable_io::write_atomic(
         &report_path(&record.generation),
         &bytes,
@@ -106,41 +106,37 @@ fn report_path_text(path: &Path) -> Result<String> {
     })
 }
 
-fn create_report_dir() -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-
+/// The report directory if it exists as a real directory private to this
+/// user. Reports are neither read nor removed through anything else, such as
+/// a symlink to another directory.
+fn private_report_dir() -> Result<Option<PathBuf>> {
     let directory = report_dir();
-    match std::fs::create_dir(&directory) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+    match std::fs::symlink_metadata(&directory) {
+        Ok(metadata) if metadata.is_dir() && super::linux::is_private(&metadata) => {
+            Ok(Some(directory))
+        }
+        Ok(_) => bail!("{} is not a private report directory", directory.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => {
-            return Err(error).with_context(|| format!("failed to create {}", directory.display()));
+            Err(error).with_context(|| format!("failed to inspect {}", directory.display()))
         }
     }
-    let metadata = std::fs::symlink_metadata(&directory)?;
-    if !metadata.is_dir() || !owned_by_this_user(&metadata) {
-        bail!("{} is not a private report directory", directory.display());
-    }
-    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
-    Ok(())
 }
 
 /// The session the child `generation` last reported, if it reported one under
 /// exactly this identity. The identity is the one the daemon owns, captured
 /// while the child ran: an exited child no longer has a `/proc` entry to ask.
-pub(crate) fn read_session_report(
+fn read_session_report(
     generation: &str,
     pid: u32,
     process_start_ticks: u64,
 ) -> Result<Option<ReportedSession>> {
     super::wire::validate_id(generation)?;
-    match std::fs::symlink_metadata(report_dir()) {
-        Ok(metadata) if metadata.is_dir() && is_private(&metadata) => {}
-        Ok(_) => bail!("the session report directory is not private"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).context("failed to inspect the session reports"),
-    }
-    let bytes = match read_private_file(&report_path(generation)) {
+    let Some(directory) = private_report_dir()? else {
+        return Ok(None);
+    };
+    let path = directory.join(format!("{generation}.target"));
+    let bytes = match super::linux::read_bounded_private_file(&path, MAX_REPORT_BYTES) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error).context("failed to read the session report"),
@@ -154,26 +150,39 @@ pub(crate) fn read_session_report(
         bail!("the session report belongs to another overlay child");
     }
 
-    match record.target.map(PathBuf::from) {
-        None => Ok(Some(ReportedSession::Home)),
-        Some(path) if path.is_absolute() => Ok(Some(ReportedSession::Named(path))),
-        Some(path) => bail!("reported session {} is not absolute", path.display()),
+    let Some(path) = record.target.map(PathBuf::from) else {
+        return Ok(Some(ReportedSession::Home));
+    };
+    if !path.is_absolute() {
+        bail!("reported session {} is not absolute", path.display());
     }
+    // The shape rules any named session file must follow.
+    crate::session::validate_named_session_file_for_info(&path)?;
+    Ok(Some(ReportedSession::Named(path)))
+}
+
+/// The session the child `generation` last reported. A report that cannot be
+/// trusted is logged and counts as none.
+pub(crate) fn read_trusted_session_report(
+    generation: &str,
+    pid: u32,
+    process_start_ticks: u64,
+) -> Option<ReportedSession> {
+    read_session_report(generation, pid, process_start_ticks).unwrap_or_else(|error| {
+        log::warn!("Ignoring the session report of overlay child {generation}: {error:#}");
+        None
+    })
 }
 
 /// Reads the final report of the exited child `generation`, then removes it
-/// along with any temporary its writer left. A report that cannot be trusted
-/// is logged and ignored, so it never stands in the way of retiring the child.
+/// along with any temporary its writer left. An untrusted report never stands
+/// in the way of retiring the child.
 pub(crate) fn take_final_session_report(
     generation: &str,
     pid: u32,
     process_start_ticks: u64,
 ) -> Option<ReportedSession> {
-    let session =
-        read_session_report(generation, pid, process_start_ticks).unwrap_or_else(|error| {
-            log::warn!("Ignoring the session report of overlay child {generation}: {error:#}");
-            None
-        });
+    let session = read_trusted_session_report(generation, pid, process_start_ticks);
     discard_session_report(generation);
     session
 }
@@ -181,14 +190,7 @@ pub(crate) fn take_final_session_report(
 /// Removes the report of child `generation` and any temporary its writer left.
 pub(crate) fn discard_session_report(generation: &str) {
     let report = format!("{generation}.target");
-    // The report itself goes by name, however full the directory is.
-    let removed = match std::fs::remove_file(report_dir().join(&report)) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(anyhow::Error::new(error).context("failed to remove the report"))
-        }
-        _ => remove_reports(|target| target == report),
-    };
-    if let Err(error) = removed {
+    if let Err(error) = remove_reports(Some(&report), |target| target == report) {
         log::warn!("Failed to remove the session report of overlay child {generation}: {error:#}");
     }
 }
@@ -196,7 +198,7 @@ pub(crate) fn discard_session_report(generation: &str) {
 /// Removes every report an earlier daemon left behind, restoring nothing from
 /// them: the session a daemon remembered ends with that daemon.
 pub(crate) fn clear_stale_session_reports() -> Result<()> {
-    remove_reports(|target| {
+    remove_reports(None, |target| {
         target
             .strip_suffix(".target")
             .is_some_and(|generation| super::wire::validate_id(generation).is_ok())
@@ -207,79 +209,38 @@ pub(crate) fn clear_stale_session_reports() -> Result<()> {
 /// a fixed amount of work.
 const MAX_CLEANUP_ENTRIES: usize = 256;
 
-/// Removes each report, and each temporary left by a report's writer, whose
-/// report name satisfies `is_removed`. Anything else in the directory is not
-/// this daemon's to remove.
-fn remove_reports(is_removed: impl Fn(&str) -> bool) -> Result<()> {
-    let directory = report_dir();
-    let entries = match std::fs::read_dir(&directory) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to list {}", directory.display()));
-        }
+/// Removes `report` by name, however full the directory is, then each report,
+/// and each temporary left by a report's writer, whose report name satisfies
+/// `is_removed`. Anything else in the directory is not this daemon's to remove.
+fn remove_reports(report: Option<&str>, is_removed: impl Fn(&str) -> bool) -> Result<()> {
+    let Some(directory) = private_report_dir()? else {
+        return Ok(());
     };
+    if let Some(report) = report {
+        remove_entry(&directory.join(report))?;
+    }
+
+    let entries = std::fs::read_dir(&directory)
+        .with_context(|| format!("failed to list {}", directory.display()))?;
     for entry in entries.take(MAX_CLEANUP_ENTRIES) {
         let entry = entry?;
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
         let report = crate::durable_io::temp_file_target(&name).unwrap_or(&name);
-        if !is_removed(report) {
-            continue;
-        }
-        match std::fs::remove_file(entry.path()) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("failed to remove {}", entry.path().display()));
-            }
+        if is_removed(report) {
+            remove_entry(&entry.path())?;
         }
     }
     Ok(())
 }
 
-/// Reads a regular file this user owns and only this user can read or write,
-/// without following a symlink.
-fn read_private_file(path: &Path) -> std::io::Result<Vec<u8>> {
-    use std::io::Read;
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
-        .open(path)?;
-    let metadata = file.metadata()?;
-    if !metadata.is_file() || !is_private(&metadata) || metadata.len() > MAX_REPORT_BYTES as u64 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "session report is not a private regular file within its size bound",
-        ));
+fn remove_entry(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to remove {}", path.display())),
     }
-    let mut bytes = Vec::new();
-    file.take(MAX_REPORT_BYTES as u64 + 1)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() > MAX_REPORT_BYTES {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "session report exceeds its size bound",
-        ));
-    }
-    Ok(bytes)
-}
-
-fn is_private(metadata: &std::fs::Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-
-    owned_by_this_user(metadata) && metadata.mode() & 0o077 == 0
-}
-
-fn owned_by_this_user(metadata: &std::fs::Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    metadata.uid() == unsafe { libc::geteuid() }
 }
 
 #[cfg(test)]
