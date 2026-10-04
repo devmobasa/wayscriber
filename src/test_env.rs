@@ -31,15 +31,33 @@ pub(crate) fn with_env_var<T>(
     value: Option<&std::ffi::OsStr>,
     body: impl FnOnce() -> T,
 ) -> T {
+    with_env_vars(&[(key, value)], body)
+}
+
+/// Sets several variables under one hold of the environment lock, restoring
+/// all of them afterwards, including when `body` panics.
+#[cfg(test)]
+pub(crate) fn with_env_vars<T>(
+    vars: &[(&'static str, Option<&std::ffi::OsStr>)],
+    body: impl FnOnce() -> T,
+) -> T {
     let _guard = lock();
-    let _saved = SavedEnv(vec![(key, std::env::var_os(key))]);
-    // SAFETY: serialized by the environment lock held above.
-    unsafe {
-        match value {
-            Some(value) => std::env::set_var(key, value),
-            None => std::env::remove_var(key),
+    let _saved = SavedEnv(
+        vars.iter()
+            .map(|(key, _)| (*key, std::env::var_os(key)))
+            .collect(),
+    );
+
+    for (key, value) in vars {
+        // SAFETY: serialized by the environment lock held above.
+        unsafe {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
         }
     }
+
     body()
 }
 

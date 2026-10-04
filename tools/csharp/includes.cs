@@ -8,9 +8,10 @@
 #:include Commands/DevelopmentCommands.cs
 #:include Commands/ChecksCommand.cs
 #:include Commands/VersionCommands.cs
+#:include Commands/VersionConsistency.cs
 #:include Commands/NativeDesktopCommands.cs
 #:include Commands/PackagingCommands.cs
 #:include Commands/ReleaseAurCommands.cs
 #:include Commands/ReportCommands.cs
 
-#:include Infrastructure/SharedDependencyGuard.cs
+#:include Infrastructure/RustSource.cs

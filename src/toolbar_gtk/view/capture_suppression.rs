@@ -489,6 +489,7 @@ fn reject_withdrawn_target(
 mod tests {
     mod presentation;
     mod process;
+    mod wayland_proxy;
 
     use super::*;
 

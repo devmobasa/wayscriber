@@ -19,12 +19,12 @@ impl Daemon {
         let Some(requested) = request.and_then(|request| request.session_file.as_ref()) else {
             return Ok(());
         };
-        if self.overlay_state != OverlayState::Visible {
+        if self.overlay.state() != OverlayState::Visible {
             return Ok(());
         }
         if self
-            .active_named_session_file
-            .as_ref()
+            .overlay
+            .active_named_session_file()
             .is_some_and(|active| named_session_paths_match(active, requested))
         {
             return Ok(());
@@ -62,41 +62,38 @@ impl Daemon {
                 return Ok(false);
             }
         }
-        if let Some(action) = request.as_ref().and_then(|request| request.overlay_action) {
-            self.pending_activation_token = activation_token;
-            self.pending_toggle_request = request.filter(|request| !request.is_empty());
-            if self.overlay_state == OverlayState::Hidden
+        let action = request.as_ref().and_then(|request| request.overlay_action);
+        self.queue_overlay_launch(
+            request.filter(|request| !request.is_empty()),
+            activation_token,
+        );
+        if let Some(action) = action {
+            if self.overlay.state() == OverlayState::Hidden
                 && matches!(action, TrayAction::LightDrawOff)
             {
-                self.pending_activation_token = None;
-                self.pending_toggle_request = None;
+                self.pending_launch = None;
                 return Ok(false);
             }
-            let was_hidden = self.overlay_state == OverlayState::Hidden;
+            let was_hidden = self.overlay.state() == OverlayState::Hidden;
             if was_hidden && let Some(retry_in) = self.overlay_start_backoff() {
                 // Queued now, the action would run whenever the overlay next
                 // starts, long after the caller was told it had happened.
-                self.pending_activation_token = None;
-                self.pending_toggle_request = None;
+                self.pending_launch = None;
                 return Err(anyhow::anyhow!(overlay_start_backoff_reason(retry_in)));
             }
 
             self.dispatch_overlay_action(action, !suppress_overlay_action_signal)?;
-            if self.overlay_state == OverlayState::Hidden {
+            if self.overlay.state() == OverlayState::Hidden {
                 self.show_overlay()?.require_shown()?;
                 return Ok(was_hidden);
             } else {
-                self.pending_activation_token = None;
-                self.pending_toggle_request = None;
+                self.pending_launch = None;
             }
             return Ok(false);
         }
 
-        self.pending_activation_token = activation_token;
-        self.pending_toggle_request = request.filter(|request| !request.is_empty());
         if let Err(err) = self.toggle_overlay() {
-            self.pending_activation_token = None;
-            self.pending_toggle_request = None;
+            self.pending_launch = None;
             return Err(err);
         }
         if plain_visibility_toggle_requested {
@@ -142,10 +139,10 @@ impl Daemon {
     ) -> Result<()> {
         let action_path = crate::tray_action::queue_action(action)?;
 
-        if signal_visible_overlay && self.overlay_state == OverlayState::Visible {
+        if signal_visible_overlay && self.overlay.state() == OverlayState::Visible {
             #[cfg(unix)]
             {
-                if let Err(error) = self.overlay_child.signal(libc::SIGUSR2) {
+                if let Err(error) = self.overlay.signal(libc::SIGUSR2) {
                     warn!(
                         "Failed to signal overlay process for action {}: {error:#}",
                         action.as_str(),
@@ -167,10 +164,10 @@ impl Daemon {
     }
 
     pub(super) fn signal_overlay_action_ready(&self, action: TrayAction) -> Result<()> {
-        if self.overlay_state != OverlayState::Visible {
+        if self.overlay.state() != OverlayState::Visible {
             return Ok(());
         }
-        self.overlay_child.signal(libc::SIGUSR2).with_context(|| {
+        self.overlay.signal(libc::SIGUSR2).with_context(|| {
             format!(
                 "failed to notify overlay about committed v2 action {}",
                 action.as_str()

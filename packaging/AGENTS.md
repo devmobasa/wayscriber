@@ -22,6 +22,6 @@
 - Packaging changes may require `tools/`, `.github/`, setup docs, `src/systemd_user_service.rs`, `src/shortcut_hint.rs`, and configurator daemon setup updates.
 
 ## Validation
-- Run `tools/check-version-consistency.sh` and `tools/test-package-repo-layout.sh` for package/version changes.
-- Run `tools/check-nixpkgs-recipe.py` when dependencies, default features, or Nix build inputs change.
+- Run `dotnet run tools/wayscriber.cs --no-build -- version check` and `tools/test-package-repo-layout.sh` for package/version changes.
+- Run `dotnet run tools/wayscriber.cs --no-build -- check nixpkgs-recipe` when dependencies, default features, or Nix build inputs change.
 - Run `git diff --check` for metadata-only edits.

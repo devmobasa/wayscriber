@@ -40,8 +40,8 @@ internal static class AssetsCommand
     {
         try
         {
-            var main = ReadAssets( root, RepositoryNames.MainPackage, "package.wayscriber.yaml" );
-            var configurator = ReadAssets( root, RepositoryNames.ConfiguratorPackage, "package.configurator.yaml" );
+            var main = ReadAssets( root, RepositoryNames.MainPackage, RepositoryNames.MainPackageConfigFile );
+            var configurator = ReadAssets( root, RepositoryNames.ConfiguratorPackage, RepositoryNames.ConfiguratorPackageConfigFile );
             return new JsonObject
             {
                 ["desktop_path_pattern"] = string.Join( "|", DesktopPrefixes.Select( Regex.Escape ) ),

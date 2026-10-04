@@ -63,7 +63,7 @@ process-start identity. The daemon does not mark that child ready until all thre
 exit is watched through the pidfd, while signals, tray intents, shortcut intents, and typed queue
 renames have owned wake descriptors; the daemon lifecycle has no periodic discovery tick.
 
-The enforced process-site inventory is `tools/check-process-sites.py`. Direct process creation is
+The enforced process-site inventory is `tests/repository_guards/process_sites.rs`. Direct process creation is
 limited to the broker, pre-runtime systemd setup, the separate configurator process, standalone
 About clipboard integration, and named test fixtures. The same check audits the raw-clone child
 stub: before `execve` it may reach only the fixed `fcntl`, `dup3`, `setpgid`, `close_range`,

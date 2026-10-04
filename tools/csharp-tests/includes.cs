@@ -4,3 +4,7 @@
 #:include ReleaseParityRegressionTests.cs
 #:include ReleaseRegressionTests.cs
 #:include SignedRepositoryIntegrationTests.cs
+#:include TestRepository.cs
+#:include VersionMetadataFixture.cs
+#:include VersionConsistencyTests.cs
+#:include VersionReleaseCommandTests.cs

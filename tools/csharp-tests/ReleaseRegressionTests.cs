@@ -48,7 +48,7 @@ release_manifest() {
     [InlineData( true )]
     public void IncompleteDesktopAssetBlockIsNormalizedWithoutRemovingPackagePayload( bool omitLastAsset )
     {
-        var recipe = AssetsCommand.CreateRecipe( FindRepository( ) )["configurator"]!.AsObject( );
+        var recipe = AssetsCommand.CreateRecipe( TestRepository.Root )["configurator"]!.AsObject( );
         var marker = recipe["marker"]!.GetValue<string>( );
         var endMarker = recipe["end_marker"]!.GetValue<string>( );
         var anchor = recipe["anchor"]!.GetValue<string>( );
@@ -68,7 +68,7 @@ release_manifest() {
     [Fact]
     public void IncompleteWayscriberAssetBlockPreservesTheConfiguratorBlock( )
     {
-        var recipes = AssetsCommand.CreateRecipe( FindRepository( ) );
+        var recipes = AssetsCommand.CreateRecipe( TestRepository.Root );
         var sourceRecipe = recipes[PackageChannels.Source]!.AsObject( );
         var configuratorRecipe = recipes[PackageChannels.Configurator]!.AsObject( );
         var sourceAnchor = sourceRecipe["anchor"]!.GetValue<string>( );
@@ -288,10 +288,9 @@ release_manifest() {
     [Theory]
     [InlineData( "tools/test-package-repo-layout.sh" )]
     [InlineData( "tools/test-release-packaging.sh" )]
-    [InlineData( "tools/test-aur-desktop-assets.sh" )]
     public async Task StandaloneReleaseContractsPassInTheCanonicalTestApp( string relativePath )
     {
-        var root = FindRepository( );
+        var root = TestRepository.Root;
         var runner = new ProcessRunner( TextWriter.Null, TextWriter.Null );
 
         var result = await runner.RunAsync(
@@ -302,7 +301,7 @@ release_manifest() {
     }
 
     private static ToolContext CreateContext( IProcessRunner runner, Func<string, string?>? environment = null ) =>
-        new( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None, environment );
+        new( TestRepository.Root, TextWriter.Null, TextWriter.Null, runner, CancellationToken.None, environment );
 
     private static ToolCommand AurUpdateCommand( ) =>
         ReleaseAurCommands.Commands.Single( item => item.Area == "aur" && item.Name == "update" );
@@ -376,12 +375,6 @@ pkgbase = wayscriber-configurator
 
 pkgname = wayscriber-configurator
 """ );
-    }
-
-    private static string FindRepository( )
-    {
-        var directory = AppContext.GetData( "EntryPointFileDirectoryPath" ) as string ?? Environment.CurrentDirectory;
-        return Path.GetFullPath( Path.Combine( directory, ".." ) );
     }
 
     private sealed class RejectingRunner : IProcessRunner

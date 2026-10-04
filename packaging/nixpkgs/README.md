@@ -7,7 +7,7 @@ We do not own that file — `nixpkgs` does. This copy exists so that:
 
 - packaging changes here (new system libraries, new installed files) are visible
   in the same commit as the change that requires them, and
-- `tools/check-nixpkgs-recipe.py` can fail CI when a default Cargo feature needs
+- `dotnet run tools/wayscriber.cs --no-build -- check nixpkgs-recipe` can fail CI when a default Cargo feature needs
   a system library the `nixpkgs` build does not declare.
 
 ## How versions reach nixpkgs

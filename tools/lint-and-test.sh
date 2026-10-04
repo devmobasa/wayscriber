@@ -12,29 +12,33 @@ run_check() {
     "$@"
 }
 
-run_check bash tools/check-version-consistency.sh
-run_check bash tools/test-package-repo-layout.sh
-run_check bash tools/test-release-packaging.sh
-run_check bash tools/test-aur-desktop-assets.sh
-
-if command -v dotnet >/dev/null 2>&1 && dotnet --version >/dev/null 2>&1; then
-    run_check dotnet build tools/wayscriber.cs --disable-build-servers --verbosity quiet
-    run_check dotnet build tools/install.cs --disable-build-servers --verbosity quiet
-    run_check dotnet build tools/wayscriber.tests.cs --disable-build-servers --verbosity quiet
-    for file_app in tools/wayscriber.cs tools/install.cs tools/wayscriber.tests.cs; do
-        run_check dotnet format style "$file_app" --no-restore --verify-no-changes
-        run_check dotnet format whitespace "$file_app" --no-restore --verify-no-changes
-    done
-    run_check dotnet run tools/wayscriber.tests.cs --no-build --verbosity quiet
-else
-    printf '\nSkipping C# repository-tool checks: the SDK selected by global.json is unavailable.\n'
+# Source invariants also run with Cargo alone, in `tests/repository_guards`.
+# The release, packaging, and build-metadata checks exist once, in the C# tool
+# CI runs, so the complete gate needs the .NET SDK that global.json selects.
+if ! { command -v dotnet >/dev/null 2>&1 && dotnet --version >/dev/null 2>&1; }; then
+    printf 'error: the complete gate needs the .NET SDK selected by global.json.\n' >&2
+    printf 'Without it, cargo test still runs the Rust source guards; that is Cargo validation only.\n' >&2
+    exit 1
 fi
-run_check ./tools/check-nixpkgs-recipe.py
-run_check ./tools/check-rust-source-coverage.py
-run_check ./tools/check-process-sites.py
-run_check ./tools/check-config-writers.py
-run_check ./tools/check-shared-dependencies.py
-run_check ./tools/test-shared-dependencies.py
+
+run_check dotnet build tools/wayscriber.cs --disable-build-servers --verbosity quiet
+run_check dotnet build tools/install.cs --disable-build-servers --verbosity quiet
+run_check dotnet build tools/wayscriber.tests.cs --disable-build-servers --verbosity quiet
+
+# From here on, the same steps in the same order as `ci lint-and-test`. The C#
+# tests also run the retained shell contracts (`test-package-repo-layout.sh`,
+# `test-release-packaging.sh`).
+for tool_check in "assets check" "version check" "check nixpkgs-recipe" \
+    "check rust-source-coverage" "check legacy-tools"; do
+    # shellcheck disable=SC2086 # Each entry is an area and a command.
+    run_check dotnet run tools/wayscriber.cs --no-build -- $tool_check
+done
+for file_app in tools/wayscriber.cs tools/install.cs tools/wayscriber.tests.cs; do
+    run_check dotnet format style "$file_app" --no-restore --verify-no-changes
+    run_check dotnet format whitespace "$file_app" --no-restore --verify-no-changes
+done
+run_check dotnet run tools/wayscriber.tests.cs --no-build --verbosity quiet
+
 run_check cargo fmt --all -- --check
 run_check cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run_check cargo build --locked --workspace --all-features --bins

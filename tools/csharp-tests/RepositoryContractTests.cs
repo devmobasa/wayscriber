@@ -7,38 +7,9 @@ namespace Wayscriber.Tools.Tests;
 public sealed class RepositoryContractTests
 {
     [Fact]
-    public async Task SharedDependencyCommandsEnforceTheSharedSyntaxCorpus( )
-    {
-        var root = FindRepository( );
-        using var corpus = JsonDocument.Parse( File.ReadAllText( Path.Combine( root, "tools/shared-dependency-fixtures.json" ) ) );
-        var command = ChecksCommand.Commands.Single( command => command.Name == CommandNames.SharedDependencies );
-        foreach ( var fixture in corpus.RootElement.EnumerateArray( ) )
-        {
-            using var directory = new TemporaryDirectory( "wayscriber-shared-dependency-test" );
-            Directory.CreateDirectory( Path.Combine( directory.Path, "src/domain" ) );
-            Directory.CreateDirectory( Path.Combine( directory.Path, "src/config/validate" ) );
-            var sourcePath = Path.Combine( directory.Path, fixture.GetProperty( "path" ).GetString( )! );
-            Directory.CreateDirectory( Path.GetDirectoryName( sourcePath )! );
-            File.WriteAllText( sourcePath, fixture.GetProperty( "source" ).GetString( ) );
-            var context = new ToolContext( directory.Path, TextWriter.Null, TextWriter.Null,
-                new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None );
-
-            var error = await Record.ExceptionAsync( ( ) => command.Handler( context, [] ) );
-            Assert.True( (error is ToolException) == fixture.GetProperty( "reject" ).GetBoolean( ),
-                $"C# fixture {fixture.GetProperty( "name" ).GetString( )}: {error}" );
-            Assert.True( error is null or ToolException );
-        }
-
-        var request = new ProcessRequest( "python3", [Path.Combine( root, "tools/test-shared-dependencies.py" )], root,
-            CaptureOutput: true, Trace: false );
-        var result = await new ProcessRunner( TextWriter.Null, TextWriter.Null ).RunAsync( request, CancellationToken.None );
-        Assert.Equal( ExitCodes.Success, result.ExitCode );
-    }
-
-    [Fact]
     public void StandaloneInstallersRemainAvailableWithoutDotnet( )
     {
-        var root = FindRepository( );
+        var root = TestRepository.Root;
         Assert.True( File.Exists( Path.Combine( root, "tools/install.sh" ) ) );
         Assert.True( File.Exists( Path.Combine( root, "tools/install-configurator.sh" ) ) );
         Assert.DoesNotContain( "dotnet", File.ReadAllText( Path.Combine( root, "tools/install.sh" ) ), StringComparison.OrdinalIgnoreCase );
@@ -48,7 +19,7 @@ public sealed class RepositoryContractTests
     [Fact]
     public void StandaloneDevelopmentRunnerUsesTheBuiltBinary( )
     {
-        var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/run.sh" ) );
+        var source = File.ReadAllText( Path.Combine( TestRepository.Root, "tools/run.sh" ) );
 
         Assert.Contains( "target/release/wayscriber", source, StringComparison.Ordinal );
         Assert.Contains( "--daemon", source, StringComparison.Ordinal );
@@ -59,7 +30,7 @@ public sealed class RepositoryContractTests
     [Fact]
     public void CsharpInstallShortcutRoutesToTheSharedAppInstaller( )
     {
-        var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/install.cs" ) );
+        var source = File.ReadAllText( Path.Combine( TestRepository.Root, "tools/install.cs" ) );
 
         Assert.StartsWith( "#!/usr/bin/env -S dotnet run --disable-build-servers --file\n", source, StringComparison.Ordinal );
         Assert.Contains( "#:include csharp/includes.cs", source, StringComparison.Ordinal );
@@ -69,46 +40,39 @@ public sealed class RepositoryContractTests
     }
 
     [Fact]
-    public void StandaloneShellToolsDoNotRedirectToDotnet( )
-    {
-        var root = Path.Combine( FindRepository( ), "tools" );
-        foreach ( var path in Directory.EnumerateFiles( root, "*.sh", SearchOption.TopDirectoryOnly ) )
-        {
-            var source = File.ReadAllText( path );
-            Assert.DoesNotContain( "dotnet run tools/wayscriber.cs", source, StringComparison.OrdinalIgnoreCase );
-            Assert.DoesNotMatch( @"(?m)^\s*(?:exec\s+)?dotnet\b", source );
-        }
-    }
-
-    [Fact]
     public void WorkflowRunStepsUseTheCsharpEntryPoint( )
     {
         foreach ( var path in new[] { ".github/workflows/ci.yml", ".github/workflows/build-packages.yml" } )
         {
-            var text = File.ReadAllText( Path.Combine( FindRepository( ), path ) );
+            var text = File.ReadAllText( Path.Combine( TestRepository.Root, path ) );
             var commands = Regex.Matches( text, @"(?m)^\s+run:\s*(.+)$" ).Select( match => match.Groups[1].Value.Trim( ) ).ToArray( );
             Assert.NotEmpty( commands );
             Assert.All( commands, command => Assert.StartsWith( "dotnet ", command ) );
             Assert.DoesNotContain( "bash", text, StringComparison.Ordinal );
-            Assert.DoesNotContain( "python", text, StringComparison.Ordinal );
         }
     }
 
     [Fact]
     public void CanonicalCsharpGateEnforcesCsharpFormatting( )
     {
-        var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/csharp/Commands/DevelopmentCommands.cs" ) );
+        var formatSteps = DevelopmentCommands.LintAndTestPlan
+            .Where( step => step.Kind == LintStepKind.Dotnet && step.Arguments[0] == "format" )
+            .Select( step => string.Join( ' ', step.Arguments ) )
+            .ToArray( );
 
-        Assert.Contains( "CsharpFileApps", source, StringComparison.Ordinal );
-        Assert.Contains( "CsharpFormatModes", source, StringComparison.Ordinal );
-        Assert.Contains( "RunCsharpFormattingChecks( context )", source, StringComparison.Ordinal );
-        Assert.Contains( "CommandLineOptions.VerifyNoChanges", source, StringComparison.Ordinal );
+        foreach ( var app in new[] { "tools/wayscriber.cs", "tools/install.cs", "tools/wayscriber.tests.cs" } )
+        {
+            foreach ( var mode in new[] { "style", "whitespace" } )
+            {
+                Assert.Contains( $"format {mode} {app} --no-restore --verify-no-changes", formatSteps );
+            }
+        }
     }
 
     [Fact]
     public void CancellationDiagnosticDoesNotReuseTheCanceledToken( )
     {
-        var source = File.ReadAllText( Path.Combine( FindRepository( ), "tools/csharp/Application/ToolApplication.cs" ) );
+        var source = File.ReadAllText( Path.Combine( TestRepository.Root, "tools/csharp/Application/ToolApplication.cs" ) );
 
         Assert.Contains( "WriteLineAsync( ToolMessages.Canceled );", source, StringComparison.Ordinal );
         Assert.DoesNotContain( "WriteLineAsync( ToolMessages.Canceled, cancellation.Token )", source, StringComparison.Ordinal );
@@ -117,7 +81,7 @@ public sealed class RepositoryContractTests
     [Fact]
     public void ToolModulesAreExplicitlyIncluded( )
     {
-        var root = FindRepository( );
+        var root = TestRepository.Root;
         var csharpRoot = Path.Combine( root, "tools/csharp" );
         var actual = Directory.EnumerateFiles( csharpRoot, "*.cs", SearchOption.AllDirectories )
             .Where( path => Path.GetFileName( path ) != "includes.cs" )
@@ -131,7 +95,7 @@ public sealed class RepositoryContractTests
     [Fact]
     public void ToolSdkIsPinnedInGlobalJson( )
     {
-        var root = FindRepository( );
+        var root = TestRepository.Root;
         using var document = JsonDocument.Parse( File.ReadAllText( Path.Combine( root, "global.json" ) ) );
         var sdk = document.RootElement.GetProperty( "sdk" );
         Assert.Equal( VersionCommands.ToolSdkVersion, sdk.GetProperty( "version" ).GetString( ) );
@@ -140,20 +104,53 @@ public sealed class RepositoryContractTests
     }
 
     [Fact]
-    public void CsharpCommandsNeverLaunchAShellOrPythonInterpreter( )
+    public async Task LegacyToolsCheckPassesOnTheRepository( )
     {
-        var root = Path.Combine( FindRepository( ), "tools/csharp" );
-        foreach ( var path in Directory.EnumerateFiles( root, "*.cs", SearchOption.AllDirectories ) )
+        using var output = new StringWriter( );
+
+        Assert.Equal( ExitCodes.Success, await RunLegacyTools( TestRepository.Root, output ) );
+        Assert.Contains( "C# does not launch a shell", output.ToString( ), StringComparison.Ordinal );
+    }
+
+    [Theory]
+    [InlineData( "csharp/Commands/Probe.cs", "await context.Run( \"bash\", [\"-c\", \"true\"] );",
+        "C# automation launches a shell: tools/csharp/Commands/Probe.cs" )]
+    [InlineData( "csharp/Infrastructure/Shells.cs", "public const string Bash = \"/usr/bin/bash\";",
+        "C# automation launches a shell: tools/csharp/Infrastructure/Shells.cs" )]
+    [InlineData( "extra.sh", "#!/usr/bin/env bash\n", "Shell tool inventory is incomplete:\n- extra.sh" )]
+    [InlineData( "build.sh", "#!/usr/bin/env bash\nexec dotnet run tools/wayscriber.cs -- dev build\n",
+        "Shell tool redirects to .NET: tools/build.sh" )]
+    public async Task LegacyToolsCheckRejectsShellLaunchesAndUnlistedOrRedirectingScripts( string tool, string source, string expected )
+    {
+        using var fixture = new TemporaryDirectory( "wayscriber-legacy-tools-test" );
+        var tools = Path.Combine( fixture.Path, "tools" );
+        Directory.CreateDirectory( Path.Combine( tools, "csharp" ) );
+        foreach ( var script in Directory.EnumerateFiles( Path.Combine( TestRepository.Root, "tools" ), "*.sh" ) )
         {
-            var source = File.ReadAllText( path );
-            Assert.DoesNotMatch( "(?:context\\.Run|ProcessRequest)\\(\\s*\"(?:(?:ba|z)?sh|python(?:3(?:\\.\\d+)?)?)\"", source );
+            File.Copy( script, Path.Combine( tools, Path.GetFileName( script ) ) );
         }
+        var path = Path.Combine( tools, tool );
+        Directory.CreateDirectory( Path.GetDirectoryName( path )! );
+        File.WriteAllText( path, source );
+
+        var error = await Assert.ThrowsAsync<ToolException>( ( ) => RunLegacyTools( fixture.Path, TextWriter.Null ) );
+
+        Assert.Contains( expected, error.Message, StringComparison.Ordinal );
+    }
+
+    private static Task<int> RunLegacyTools( string root, TextWriter output )
+    {
+        var command = ChecksCommand.Commands.Single( command => command.Name == CommandNames.LegacyTools );
+        var context = new ToolContext( root, output, TextWriter.Null, new ProcessRunner( TextWriter.Null, TextWriter.Null ),
+            CancellationToken.None );
+
+        return command.Handler( context, [] );
     }
 
     [Fact]
     public void CsharpProcessAndEnvironmentContractsUseNamedConstants( )
     {
-        var root = Path.Combine( FindRepository( ), "tools/csharp" );
+        var root = Path.Combine( TestRepository.Root, "tools/csharp" );
         foreach ( var path in Directory.EnumerateFiles( root, "*.cs", SearchOption.AllDirectories )
                      .Where( path => Path.GetFileName( path ) != "ToolConstants.cs" ) )
         {
@@ -170,7 +167,8 @@ public sealed class RepositoryContractTests
         var output = new StringWriter( );
         var error = new StringWriter( );
         var result = await new ProcessRunner( output, error ).RunAsync(
-            new ProcessRequest( "/usr/bin/printf", ["%s", "two words;$(ignored)"], FindRepository( ), CaptureOutput: true ), CancellationToken.None );
+            new ProcessRequest( "/usr/bin/printf", ["%s", "two words;$(ignored)"], TestRepository.Root, CaptureOutput: true ),
+            CancellationToken.None );
         Assert.Equal( "two words;$(ignored)", result.StandardOutput );
     }
 
@@ -178,7 +176,9 @@ public sealed class RepositoryContractTests
     public async Task ProcessRunnerAllowsDeclaredNonzeroExit( )
     {
         var runner = new ProcessRunner( TextWriter.Null, TextWriter.Null );
-        var result = await runner.RunAsync( new ProcessRequest( "/usr/bin/false", [], FindRepository( ), AllowedExitCodes: new HashSet<int> { ExitCodes.Failure } ), CancellationToken.None );
+        var request = new ProcessRequest( "/usr/bin/false", [], TestRepository.Root,
+            AllowedExitCodes: new HashSet<int> { ExitCodes.Failure } );
+        var result = await runner.RunAsync( request, CancellationToken.None );
         Assert.Equal( ExitCodes.Failure, result.ExitCode );
     }
 
@@ -187,7 +187,8 @@ public sealed class RepositoryContractTests
     {
         var runner = new ProcessRunner( TextWriter.Null, TextWriter.Null );
         var runs = Enumerable.Range( 0, 12 ).Select( value => runner.RunAsync(
-            new ProcessRequest( "/usr/bin/printf", ["%s", value.ToString( )], FindRepository( ), CaptureOutput: true ), CancellationToken.None ) );
+            new ProcessRequest( "/usr/bin/printf", ["%s", value.ToString( )], TestRepository.Root, CaptureOutput: true ),
+            CancellationToken.None ) );
         var results = await Task.WhenAll( runs );
         Assert.Equal( Enumerable.Range( 0, 12 ).Select( value => value.ToString( ) ).Order( ), results.Select( result => result.StandardOutput ).Order( ) );
     }
@@ -195,18 +196,54 @@ public sealed class RepositoryContractTests
     [Fact]
     public void AssetRecipesAreDeterministicUnderConcurrency( )
     {
-        var values = Enumerable.Range( 0, 16 ).AsParallel( ).Select( _ => AssetsCommand.CreateRecipe( FindRepository( ) ).ToJsonString( ) ).ToArray( );
+        var values = Enumerable.Range( 0, 16 ).AsParallel( )
+            .Select( _ => AssetsCommand.CreateRecipe( TestRepository.Root ).ToJsonString( ) )
+            .ToArray( );
         Assert.Single( values.Distinct( StringComparer.Ordinal ) );
     }
 
-    [Fact]
-    public async Task StandaloneAndCsharpAssetRecipesHaveExactParity( )
+    [Theory]
+    [InlineData( "0644" )]
+    [InlineData( "420" )]
+    [InlineData( "0o644" )]
+    public void EquivalentDesktopAssetModesProduceTheSameRecipe( string mode )
     {
-        var root = FindRepository( );
-        var runner = new ProcessRunner( TextWriter.Null, TextWriter.Null );
-        var result = await runner.RunAsync( new ProcessRequest( "/usr/bin/bash", [Path.Combine( root, "tools/aur-desktop-assets.sh" ), root],
-            root, CaptureOutput: true, Trace: false ), CancellationToken.None );
-        Assert.Equal( AssetsCommand.CreateRecipe( root ).ToJsonString( ), result.StandardOutput.Trim( ) );
+        using var reference = CreateAssetModeFixture( "0644" );
+        using var fixture = CreateAssetModeFixture( mode );
+
+        Assert.Equal( AssetsCommand.CreateRecipe( reference.Path ).ToJsonString( ),
+            AssetsCommand.CreateRecipe( fixture.Path ).ToJsonString( ) );
+    }
+
+    [Theory]
+    [InlineData( "nonsense" )]
+    [InlineData( "0oBAD" )]
+    [InlineData( "999999999999999999999999" )]
+    [InlineData( "\"0644\"" )]
+    [InlineData( "!!str 0644" )]
+    [InlineData( "644" )]
+    public void DesktopAssetModesOtherThanOctal644AreRejected( string mode )
+    {
+        using var fixture = CreateAssetModeFixture( mode );
+
+        var error = Assert.Throws<ToolException>( ( ) => AssetsCommand.CreateRecipe( fixture.Path ) );
+
+        Assert.Contains( "package.wayscriber.yaml: desktop asset /usr/share/applications/wayscriber.desktop must have mode 0644",
+            error.Message, StringComparison.Ordinal );
+    }
+
+    [Theory]
+    [InlineData( "contents:\n  - src: packaging/wayscriber.desktop\n    dst: /usr/share/applications/wayscriber.desktop\n",
+        "package.wayscriber.yaml: desktop asset /usr/share/applications/wayscriber.desktop has no file_info mapping" )]
+    [InlineData( "{}\n", "package.wayscriber.yaml: expected one package contents sequence" )]
+    public void MalformedDesktopAssetManifestsAreRejected( string manifest, string expected )
+    {
+        using var fixture = CreateAssetModeFixture( "0644" );
+        File.WriteAllText( Path.Combine( fixture.Path, "packaging/package.wayscriber.yaml" ), manifest );
+
+        var error = Assert.Throws<ToolException>( ( ) => AssetsCommand.CreateRecipe( fixture.Path ) );
+
+        Assert.Contains( expected, error.Message, StringComparison.Ordinal );
     }
 
     [Fact]
@@ -251,7 +288,7 @@ pkgname = wayscriber
         var manifest = Path.Combine( fixture.Path, "manifest.json" );
         File.WriteAllText( manifest, """{"version":"9.9.9","artifacts":[]}""" );
         var runner = new RecordingAurRunner( );
-        var context = new ToolContext( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
+        var context = new ToolContext( TestRepository.Root, TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
         var command = ReleaseAurCommands.Commands.Single( item => item.Area == "aur" && item.Name == "update" );
         var arguments = new[] { "--manifest", manifest, "--source-dir", source, "--bin-dir", Path.Combine( fixture.Path, "missing" ),
             "--no-configurator", "--source-sha256", new string( 'a', HashingConstants.Sha256HexLength ) };
@@ -288,7 +325,7 @@ pkgname = wayscriber
             File.WriteAllText( Path.Combine( artifacts, name ), name );
         }
         var runner = new RepositoryLayoutRunner( );
-        var context = new ToolContext( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
+        var context = new ToolContext( TestRepository.Root, TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
         var command = PackagingCommands.Commands.Single( item => item.Area == "package" && item.Name == "build-repositories" );
 
         Assert.Equal( ExitCodes.Success, await command.Handler( context, ["--artifact-root", artifacts, "--output-root", output] ) );
@@ -323,17 +360,17 @@ pkgname = wayscriber
     [Fact]
     public void VersionCheckAcceptsPackagingHotfixOfCurrentCargoVersion( )
     {
-        var current = ReleaseVersion.Parse( VersionCommands.ReadCargoVersion( Path.Combine( FindRepository( ), "Cargo.toml" ) ) );
-        var packageVersion = File.ReadAllText( Path.Combine( FindRepository( ), "packaging/PKGBUILD" ) );
+        var current = ReleaseVersion.Parse( VersionCommands.ReadCargoVersion( Path.Combine( TestRepository.Root, "Cargo.toml" ) ) );
+        var packageVersion = File.ReadAllText( Path.Combine( TestRepository.Root, "packaging/PKGBUILD" ) );
         var currentPackage = Regex.Match( packageVersion, @"(?m)^pkgver=(.+)$" ).Groups[1].Value;
         var release = currentPackage.StartsWith( current.CargoVersion + ".", StringComparison.Ordinal ) ? currentPackage : current.CargoVersion;
-        Assert.Empty( VersionCommands.Validate( FindRepository( ), release ) );
+        Assert.Empty( VersionCommands.Validate( TestRepository.Root, release ) );
     }
 
     [Fact]
     public void VersionCheckRejectsUnrelatedReleaseVersion( )
     {
-        var errors = VersionCommands.Validate( FindRepository( ), "99.98.97" );
+        var errors = VersionCommands.Validate( TestRepository.Root, "99.98.97" );
         Assert.Contains( errors, error => error.Contains( "must equal Cargo version", StringComparison.Ordinal ) );
     }
 
@@ -364,15 +401,43 @@ pkgname = wayscriber
         Directory.CreateDirectory( Path.Combine( fixture.Path, "packaging" ) );
         foreach ( var name in new[] { "package.wayscriber.yaml", "package.configurator.yaml" } )
         {
-            File.Copy( Path.Combine( FindRepository( ), "packaging", name ), Path.Combine( fixture.Path, "packaging", name ) );
+            File.Copy( Path.Combine( TestRepository.Root, "packaging", name ), Path.Combine( fixture.Path, "packaging", name ) );
         }
         return fixture;
     }
 
-    private static string FindRepository( )
+    /// <summary>The repository's packaging, with the launcher's mode written as given.</summary>
+    private static TemporaryDirectory CreateAssetModeFixture( string mode )
     {
-        var directory = AppContext.GetData( "EntryPointFileDirectoryPath" ) as string ?? Environment.CurrentDirectory;
-        return Path.GetFullPath( Path.Combine( directory, ".." ) );
+        var fixture = new TemporaryDirectory( "wayscriber-asset-mode-test" );
+        CopyDirectory( Path.Combine( TestRepository.Root, "packaging" ), Path.Combine( fixture.Path, "packaging" ) );
+        File.WriteAllText( Path.Combine( fixture.Path, "packaging/package.wayscriber.yaml" ), $"""
+contents:
+  - src: packaging/wayscriber.desktop
+    dst: /usr/share/applications/wayscriber.desktop
+    file_info:
+      mode: {mode}
+  - src: packaging/icons/wayscriber.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/wayscriber.svg
+    file_info:
+      mode: 0644
+
+""" );
+
+        return fixture;
+    }
+
+    private static void CopyDirectory( string source, string destination )
+    {
+        Directory.CreateDirectory( destination );
+        foreach ( var file in Directory.EnumerateFiles( source ) )
+        {
+            File.Copy( file, Path.Combine( destination, Path.GetFileName( file ) ) );
+        }
+        foreach ( var directory in Directory.EnumerateDirectories( source ) )
+        {
+            CopyDirectory( directory, Path.Combine( destination, Path.GetFileName( directory ) ) );
+        }
     }
 
     private sealed class RecordingAurRunner : IProcessRunner

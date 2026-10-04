@@ -60,7 +60,7 @@ public sealed class GtkGateParityTests
             Directory.CreateDirectory( _bin );
             var tools = Path.Combine( _directory.Path, "tools" );
             Directory.CreateDirectory( tools );
-            File.Copy( Path.Combine( FindRepository( ), "tools/test-gtk-widgets.sh" ), Path.Combine( tools, "test-gtk-widgets.sh" ) );
+            File.Copy( Path.Combine( TestRepository.Root, "tools/test-gtk-widgets.sh" ), Path.Combine( tools, "test-gtk-widgets.sh" ) );
 
             var socket = Path.Combine( _directory.Path, "socket" );
             _socket.Bind( new UnixDomainSocketEndPoint( socket ) );
@@ -153,11 +153,5 @@ exit "${{{FixtureExit}}:?}"
             File.WriteAllText( path, content );
             File.SetUnixFileMode( path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute );
         }
-    }
-
-    private static string FindRepository( )
-    {
-        var directory = AppContext.GetData( "EntryPointFileDirectoryPath" ) as string ?? Environment.CurrentDirectory;
-        return Path.GetFullPath( Path.Combine( directory, ".." ) );
     }
 }

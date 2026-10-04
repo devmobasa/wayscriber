@@ -39,7 +39,6 @@ internal static class CommandNames
     public const string CheckLiveArchInstaller = "check-live-arch-installer";
     public const string Clone = "clone";
     public const string CodeHealth = "code-health";
-    public const string ConfigWriters = "config-writers";
     public const string Configurator = "configurator";
     public const string ConfigureGit = "configure-git";
     public const string CreateTag = "create-tag";
@@ -59,14 +58,12 @@ internal static class CommandNames
     public const string NixVersions = "nix-versions";
     public const string PrepareGtk4LayerShell = "prepare-gtk4-layer-shell";
     public const string PrepareSsh = "prepare-ssh";
-    public const string ProcessSites = "process-sites";
     public const string PublishTag = "publish-tag";
     public const string ReloadDaemon = "reload-daemon";
     public const string RequireEnvironment = "require-environment";
     public const string ResolveVersion = "resolve-version";
     public const string RustSourceCoverage = "rust-source-coverage";
     public const string SetPortalShortcut = "set-portal-shortcut";
-    public const string SharedDependencies = "shared-dependencies";
     public const string SmokeUbuntu = "smoke-ubuntu";
     public const string SourceChecksum = "source-checksum";
     public const string Test = "test";

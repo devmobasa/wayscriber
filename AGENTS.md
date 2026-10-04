@@ -36,8 +36,8 @@
 - Daemon, service, shortcut, path, and packaging changes often need updates across `src/daemon/`, `src/paths/`, `src/systemd_user_service.rs`, `src/shortcut_hint.rs`, `configurator/src/app/daemon_setup/`, and `packaging/`.
 
 ## Validation
-- Full local CI is `./tools/lint-and-test.sh`.
-- That script runs version/package checks, `cargo fmt --all -- --check`, clippy with all targets/features, all-feature tests, and no-default-feature tests.
+- Full local CI is `./tools/lint-and-test.sh`. It needs the .NET SDK selected by `global.json`. Without it, `cargo test` still runs the Rust source guards in `tests/repository_guards` (process sites, config writers, shared dependencies, no Python), but not the C# checks, including the source-coverage check that finds `.rs` files Cargo never compiles.
+- That script runs the C# repository checks (assets, version, nixpkgs recipe, source coverage, legacy tools), the C# tool tests (which also run the packaging shell contracts), `cargo fmt --all -- --check`, clippy with all targets/features, all-feature tests, and no-default-feature tests.
 - Run `git diff --check` before handoff. When relevant files are untracked and the index must stay unchanged, check those files directly as well.
 - For docs-only `AGENTS.md` edits, make new files visible to Git before whitespace checks, for example `rg --files --hidden -g AGENTS.md -0 | xargs -0 git add -N --` followed by `git diff --check`.
 - On PowerShell, use `rg --files --hidden -g AGENTS.md | ForEach-Object { git add -N -- $_ }` followed by `git diff --check`.

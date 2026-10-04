@@ -6,10 +6,15 @@ Land tooling fixes, test routing, and release documentation as focused commits,
 then commit the version bump separately immediately before tagging. An uncommitted
 release preparation may contain these groups together; stage them separately at handoff.
 
-1. Run `./tools/bump-version.sh X.Y.Z`. It updates both workspace versions and
-   package metadata without refreshing locked dependencies. Review `Cargo.lock`:
+The version and tag steps use the C# repository tool. Build it once with
+`dotnet build tools/wayscriber.cs`; the commands below then run it with `--no-build`.
+
+1. Run `dotnet run tools/wayscriber.cs --no-build -- version bump X.Y.Z`. It updates
+   both workspace versions and package metadata without refreshing locked dependencies,
+   then runs `version check --release-version X.Y.Z`. Review `Cargo.lock`:
    a version-only release should change only the two workspace package versions.
-   Prefetch dependencies first if the local Cargo cache is empty.
+   If the local Cargo cache is empty, the bump stops before it changes a file; prefetch
+   dependencies with `dotnet run tools/wayscriber.cs --no-build -- dev fetch` first.
 2. Run `./tools/lint-and-test.sh` and `./tools/test-gtk-widgets.sh`. The canonical
    gate serializes the Rust test harness to avoid the observed parallel native-font
    crashes. It also runs each context-menu and board-picker retained-text rendering regression
@@ -27,8 +32,11 @@ release preparation may contain these groups together; stage them separately at 
 ## Publish and verify
 
 After reviewing and committing the release changes, push the branch and wait for
-its GitHub checks. Use `./tools/publish-release-tag.sh --version X.Y.Z` only when
-ready to publish. It creates and pushes the tag; the tag starts the Release workflow.
+its GitHub checks. Use
+`dotnet run tools/wayscriber.cs --no-build -- release publish-tag --version X.Y.Z`
+only when ready to publish. It repeats the version check for that release version,
+requires a clean working tree and an unused tag, and then creates and pushes the tag;
+the tag starts the Release workflow. Add `--dry-run` to run the checks without tagging.
 
 Verify the whole Release workflow, including the GitHub assets, AUR recipes, and
 apt/rpm repository deployment. AUR waits for successful GitHub asset publication.

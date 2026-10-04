@@ -3,7 +3,7 @@ use log::{info, warn};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, BorrowedFd};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -14,8 +14,6 @@ use crate::backend::wayland::RuntimeWakeSource;
 use crate::env_vars::NO_TRAY_ENV;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
-#[cfg(test)]
-use crate::session_override::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 use crate::tray_action::TrayAction;
 use crate::{decode_session_override, encode_session_override};
@@ -26,9 +24,10 @@ use super::control::read_daemon_toggle_response;
 #[cfg(test)]
 use super::control::{DaemonToggleCommand, DaemonToggleCommands};
 use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_listener};
+use super::overlay::launch::OverlayLaunchRequest;
+use super::overlay::lifecycle::OverlayLifecycle;
 use super::overlay::{ShowOutcome, overlay_start_backoff_reason};
 use super::protocol_v2::DaemonControlProtocolMode;
-use super::protocol_v2::OverlayChildOwner;
 use super::protocol_v2::{
     ActionJournal, BootClock, BootDeadline, BootDeadlineSource, CommandOwner, CommandQueueWatcher,
     DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
@@ -84,12 +83,11 @@ fn finish_action_batch(failures: Vec<String>) -> Result<()> {
 }
 
 pub struct Daemon {
-    pub(super) overlay_state: OverlayState,
+    pub(super) overlay: OverlayLifecycle,
     pub(super) should_quit: Arc<AtomicBool>,
     pub(super) visibility_intents: Arc<VisibilityIntents>,
     pub(super) initial_mode: Option<String>,
     pub(super) initial_named_session_file: Option<PathBuf>,
-    pub(super) active_named_session_file: Option<PathBuf>,
     pub(super) instance_token: String,
     pub(super) freeze_on_show: bool,
     pub(super) tray_enabled: bool,
@@ -97,16 +95,10 @@ pub struct Daemon {
     pub(super) tray_runtime: Option<TrayRuntime>,
     pub(super) update_watch_thread: Option<JoinHandle<()>>,
     pub(super) global_shortcuts_listener: Option<GlobalShortcutsListener>,
-    pub(super) overlay_child: OverlayChildOwner,
-    pub(super) overlay_active: Arc<AtomicBool>,
     pub(super) overlay_action_intents: Arc<OverlayActionIntents>,
-    pub(super) pending_activation_token: Option<String>,
-    pub(super) pending_toggle_request: Option<DaemonToggleRequest>,
+    pub(super) pending_launch: Option<OverlayLaunchRequest>,
     pub(super) session_resume_override: Arc<AtomicU8>,
     pub(super) lock_file: Option<std::fs::File>,
-    pub(super) overlay_spawn_failures: u32,
-    pub(super) overlay_spawn_next_retry: Option<std::time::Instant>,
-    pub(super) overlay_spawn_backoff_logged: bool,
     pub(super) last_plain_visibility_toggle_completed_at: Option<Instant>,
     protocol_mode: DaemonControlProtocolMode,
     v2_command_owner: Option<CommandOwner>,
@@ -131,13 +123,13 @@ impl Daemon {
         let override_state = Arc::new(AtomicU8::new(encode_session_override(
             session_resume_override,
         )));
+
         Self {
-            overlay_state: OverlayState::Hidden,
+            overlay: OverlayLifecycle::default(),
             should_quit: Arc::new(AtomicBool::new(false)),
             visibility_intents: Arc::new(VisibilityIntents::default()),
             initial_mode,
             initial_named_session_file,
-            active_named_session_file: None,
             instance_token: crate::daemon::generate_daemon_instance_token(),
             freeze_on_show: false,
             tray_enabled,
@@ -145,61 +137,10 @@ impl Daemon {
             tray_runtime: None,
             update_watch_thread: None,
             global_shortcuts_listener: None,
-            overlay_child: OverlayChildOwner::default(),
-            overlay_active: Arc::new(AtomicBool::new(false)),
             overlay_action_intents: Arc::new(OverlayActionIntents::default()),
-            pending_activation_token: None,
-            pending_toggle_request: None,
+            pending_launch: None,
             session_resume_override: override_state,
             lock_file: None,
-            overlay_spawn_failures: 0,
-            overlay_spawn_next_retry: None,
-            overlay_spawn_backoff_logged: false,
-            last_plain_visibility_toggle_completed_at: None,
-            protocol_mode: DaemonControlProtocolMode::production(),
-            v2_command_owner: None,
-            v2_command_watcher: None,
-            v2_deadline_source: None,
-            v2_action_journal: None,
-            pending_action_admission_retry: Vec::new(),
-            action_admission_retry_at: None,
-            #[cfg(unix)]
-            signal_listener: None,
-            #[cfg(feature = "tray")]
-            tray_status: Arc::new(TrayStatusShared::new()),
-        }
-    }
-
-    #[cfg(test)]
-    fn with_backend_runner_internal(
-        initial_mode: Option<String>,
-        backend_runner: Arc<BackendRunner>,
-    ) -> Self {
-        let override_state = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
-        Self {
-            overlay_state: OverlayState::Hidden,
-            should_quit: Arc::new(AtomicBool::new(false)),
-            visibility_intents: Arc::new(VisibilityIntents::default()),
-            initial_mode,
-            initial_named_session_file: None,
-            active_named_session_file: None,
-            instance_token: crate::daemon::generate_daemon_instance_token(),
-            freeze_on_show: false,
-            tray_enabled: true,
-            backend_runner: Some(backend_runner),
-            tray_runtime: None,
-            update_watch_thread: None,
-            global_shortcuts_listener: None,
-            overlay_child: OverlayChildOwner::default(),
-            overlay_active: Arc::new(AtomicBool::new(false)),
-            overlay_action_intents: Arc::new(OverlayActionIntents::default()),
-            pending_activation_token: None,
-            pending_toggle_request: None,
-            session_resume_override: override_state,
-            lock_file: None,
-            overlay_spawn_failures: 0,
-            overlay_spawn_next_retry: None,
-            overlay_spawn_backoff_logged: false,
             last_plain_visibility_toggle_completed_at: None,
             protocol_mode: DaemonControlProtocolMode::production(),
             v2_command_owner: None,
@@ -220,18 +161,14 @@ impl Daemon {
         initial_mode: Option<String>,
         backend_runner: Arc<BackendRunner>,
     ) -> Self {
-        Self::with_backend_runner_internal(initial_mode, backend_runner)
+        let mut daemon = Self::new(initial_mode, true, None, None);
+        daemon.backend_runner = Some(backend_runner);
+
+        daemon
     }
 
     pub fn set_freeze_on_show(&mut self, enabled: bool) {
         self.freeze_on_show = enabled;
-    }
-
-    pub(super) fn effective_named_session_file(&self) -> Option<PathBuf> {
-        self.pending_toggle_request
-            .as_ref()
-            .and_then(|request| request.session_file.clone())
-            .or_else(|| self.initial_named_session_file.clone())
     }
 
     pub(super) fn session_resume_override(&self) -> Option<bool> {
@@ -299,7 +236,7 @@ impl Daemon {
             return;
         }
 
-        let tray_overlay_active = self.overlay_active.clone();
+        let tray_overlay_active = self.overlay.active_flag();
         #[cfg(feature = "tray")]
         let tray_status = self.tray_status.clone();
         #[cfg(not(feature = "tray"))]
@@ -457,7 +394,7 @@ impl Daemon {
             #[cfg(not(feature = "tray"))]
             let update_sink = ();
             self.update_watch_thread =
-                start_update_watch(quit_event.clone(), self.overlay_active.clone(), update_sink);
+                start_update_watch(quit_event.clone(), self.overlay.active_flag(), update_sink);
         }
 
         match current_shortcut_runtime_backend() {
@@ -556,7 +493,7 @@ impl Daemon {
                 daemon_wake,
                 self.v2_command_watcher.as_ref(),
                 self.v2_deadline_source.as_ref(),
-                &self.overlay_child,
+                self.overlay.poll_fd(),
             )?;
             if readiness.deadline {
                 self.v2_deadline_source
@@ -649,7 +586,7 @@ impl Daemon {
         };
         let mut admitted = Vec::with_capacity(actions.len());
         let mut retry = Vec::new();
-        let mut will_be_visible = self.overlay_state == OverlayState::Visible;
+        let mut will_be_visible = self.overlay.state() == OverlayState::Visible;
         let mut actions = actions.into_iter();
         while let Some(action) = actions.next() {
             if !will_be_visible && matches!(action, crate::tray_action::TrayAction::LightDrawOff) {
@@ -676,7 +613,7 @@ impl Daemon {
         // disposition. Admission is completed for the batch before side effects
         // begin, so an early runtime failure cannot silently lose the tail.
         for (action, prepared) in admitted {
-            if self.overlay_state == OverlayState::Hidden
+            if self.overlay.state() == OverlayState::Hidden
                 && matches!(action, crate::tray_action::TrayAction::LightDrawOff)
             {
                 let reason = "overlay remained hidden before LightDrawOff delivery";
@@ -692,7 +629,7 @@ impl Daemon {
             // A start held back by the spawn backoff is a failed delivery: an
             // entry left eligible would replay whenever the overlay next
             // started, long after the click that asked for it.
-            let delivery = if self.overlay_state == OverlayState::Hidden {
+            let delivery = if self.overlay.state() == OverlayState::Hidden {
                 self.show_overlay()
                     .and_then(ShowOutcome::require_shown)
                     .and_then(|()| self.signal_overlay_action_ready(action))
@@ -765,7 +702,7 @@ impl Daemon {
             }
 
             if let Some(action) = legacy_request.overlay_action {
-                if self.overlay_state == OverlayState::Hidden
+                if self.overlay.state() == OverlayState::Hidden
                     && matches!(action, crate::tray_action::TrayAction::LightDrawOff)
                 {
                     claimed.commit(EffectKind::NoOp)?;
@@ -776,7 +713,7 @@ impl Daemon {
                     claimed.defer()?;
                     continue;
                 }
-                if self.overlay_state == OverlayState::Hidden
+                if self.overlay.state() == OverlayState::Hidden
                     && let Some(retry_in) = self.overlay_start_backoff()
                 {
                     claimed.reject(&overlay_start_backoff_reason(retry_in))?;
@@ -794,7 +731,7 @@ impl Daemon {
                     claimed.defer()?;
                     continue;
                 };
-                let was_hidden = self.overlay_state == OverlayState::Hidden;
+                let was_hidden = self.overlay.state() == OverlayState::Hidden;
                 let committed = claimed.commit(if was_hidden {
                     EffectKind::StartAndDeliverAction
                 } else {
@@ -812,7 +749,7 @@ impl Daemon {
                     continue;
                 }
 
-                self.pending_toggle_request = Some(legacy_request);
+                self.replace_pending_launch_request(legacy_request);
                 if was_hidden {
                     if let Err(error) = self.show_overlay().and_then(ShowOutcome::require_shown) {
                         let reason = format!("committed overlay start failed: {error:#}");
@@ -829,7 +766,7 @@ impl Daemon {
                         journal.abandon_command(&command_identity, &prepared, &reason)?;
                         return Err(error).context(reason);
                     }
-                    self.pending_toggle_request = None;
+                    self.discard_pending_launch_options();
                 }
                 continue;
             }
@@ -848,7 +785,7 @@ impl Daemon {
                 continue;
             }
 
-            let effect = if self.overlay_state == OverlayState::Visible {
+            let effect = if self.overlay.state() == OverlayState::Visible {
                 EffectKind::HideReady
             } else {
                 EffectKind::StartAndShow
@@ -977,7 +914,7 @@ fn wait_for_daemon_lifecycle(
     daemon_wake: &RuntimeWakeSource,
     command_watcher: Option<&CommandQueueWatcher>,
     deadline_source: Option<&BootDeadlineSource>,
-    overlay_child: &OverlayChildOwner,
+    overlay_exit_fd: Option<BorrowedFd<'_>>,
 ) -> Result<DaemonLifecycleReadiness> {
     let mut pollfds = vec![libc::pollfd {
         fd: daemon_wake.poll_fd().as_raw_fd(),
@@ -1001,7 +938,7 @@ fn wait_for_daemon_lifecycle(
         });
         index
     });
-    let child_index = overlay_child.poll_fd().map(|fd| {
+    let child_index = overlay_exit_fd.map(|fd| {
         let index = pollfds.len();
         pollfds.push(libc::pollfd {
             fd: fd.as_raw_fd(),
@@ -1075,7 +1012,7 @@ fn wait_for_daemon_lifecycle(
 #[cfg(test)]
 impl Daemon {
     pub fn test_state(&self) -> OverlayState {
-        self.overlay_state
+        self.overlay.state()
     }
 }
 

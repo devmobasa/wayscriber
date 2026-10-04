@@ -7,16 +7,19 @@ namespace Wayscriber.Tools;
 internal static class ChecksCommand
 {
     private const string LibraryFilePrefix = "lib";
-    private static readonly string[] StandaloneToolFiles =
+    // The complete local gate: it runs the C# checks, so it is the one script that needs .NET.
+    private const string GateEntryPoint = "lint-and-test.sh";
+    // C# that hands a command to bash, sh, or zsh, by name or path: passed straight to
+    // ProcessRequest or context.Run, or assigned to a constant or variable that a launch uses.
+    private const string ShellLaunchPattern =
+        "(?:(?:ProcessRequest|context\\.Run)\\s*\\(\\s*|=\\s*)\"(?:/usr)?(?:/bin/)?(?:ba|z)?sh\"";
+    private static readonly string[] ShellToolFiles =
     [
-        "build-package-repos.sh", "build.sh", "bump-version.sh", "check-arch-installer-manifest.sh",
-        "check-config-writers.py", "check-nixpkgs-recipe.py", "check-process-sites.py",
-        "check-rust-source-coverage.py", "check-shared-dependencies.py", "test-shared-dependencies.py", "check-version-consistency.sh",
-        "code-health-report.sh", "create-release-tag.sh", "fetch-all-deps.sh", "install-configurator.sh",
-        "install-gtk4-layer-shell.sh", "install.sh", "lint-and-test.sh", "package.sh",
-        "publish-release-tag.sh", "reload-daemon.sh", "run.sh", "set-portal-shortcut.sh", "test-aur-desktop-assets.sh", "test-gtk-widgets.sh",
+        "build-package-repos.sh", "build.sh", "check-arch-installer-manifest.sh", "fetch-all-deps.sh",
+        "install-configurator.sh", "install-gtk4-layer-shell.sh", "install.sh", GateEntryPoint, "package.sh",
+        "reload-daemon.sh", "run.sh", "set-portal-shortcut.sh", "test-gtk-widgets.sh",
         "test-package-repo-layout.sh", "test-release-packaging.sh", "test.sh", "update-aur-from-manifest.sh",
-        "update-aur.sh", "verify-static-gtk4-layer-shell.sh", "aur-desktop-assets.sh", "aur-desktop-assets.py",
+        "update-aur.sh", "verify-static-gtk4-layer-shell.sh",
     ];
 
     public static IReadOnlyList<ToolCommand> Commands
@@ -24,111 +27,11 @@ internal static class ChecksCommand
         get;
     } =
     [
-        new( CommandAreas.Check, CommandNames.SharedDependencies, "Guard shared-layer Rust dependencies.", SideEffect.ReadOnly, SharedDependencies ),
-        new( CommandAreas.Check, CommandNames.ProcessSites, "Audit Rust process-creation ownership.", SideEffect.ReadOnly, ProcessSites ),
         new( CommandAreas.Check, CommandNames.RustSourceCoverage, "Verify every Rust source is compiled.", SideEffect.ReadOnly, RustSourceCoverage ),
         new( CommandAreas.Check, CommandNames.NixpkgsRecipe, "Check Cargo native dependencies against Nix.", SideEffect.ReadOnly, NixpkgsRecipe ),
-        new( CommandAreas.Check, CommandNames.ConfigWriters, "Audit config write-capability ownership.", SideEffect.ReadOnly, ConfigWriters ),
-        new( CommandAreas.Check, CommandNames.LegacyTools, "Verify standalone scripts remain independent fallbacks.", SideEffect.ReadOnly, LegacyTools ),
+        new( CommandAreas.Check, CommandNames.LegacyTools, "Verify the shell tool inventory and that C# never launches a shell.",
+            SideEffect.ReadOnly, LegacyTools ),
     ];
-
-    private static Task<int> SharedDependencies( ToolContext context, string[] args )
-    {
-        new Arguments( args ).RequireEmpty( "check shared-dependencies" );
-        var errors = new List<string>( );
-        foreach ( var (directory, forbidden) in new[]
-        {
-            ("src/domain", new HashSet<string>( ["config", "input", "draw", "backend", "ui", "session"] )),
-            ("src/config/validate", new HashSet<string>( ["input", "backend"] )),
-        } )
-        {
-            foreach ( var path in Directory.EnumerateFiles( context.Path( directory.Split( '/' ) ), "*.rs", SearchOption.AllDirectories ) )
-            {
-                if ( Path.GetRelativePath( context.RepositoryRoot, path ) == "src/domain/tests.rs" )
-                {
-                    continue;
-                }
-                var relative = Path.GetRelativePath( context.RepositoryRoot, path ).Replace( Path.DirectorySeparatorChar, '/' );
-                if ( SharedDependencyGuard.HasUpwardPath( Files.Read( path ), relative, forbidden ) )
-                {
-                    errors.Add( $"{Path.GetRelativePath( context.RepositoryRoot, path )}: upward dependency in shared layer" );
-                }
-            }
-        }
-        Failures( context, errors, "Shared domain and configuration-validation dependency paths passed." );
-        return Task.FromResult( ExitCodes.Success );
-    }
-
-    private static Task<int> ProcessSites( ToolContext context, string[] args )
-    {
-        new Arguments( args ).RequireEmpty( "check process-sites" );
-        var errors = new List<string>( );
-        var allow = new HashSet<string>( StringComparer.Ordinal )
-        {
-            "configurator/src/app/session_catalog.rs",
-            "configurator/src/app/daemon_setup/command.rs",
-            "configurator/src/app/daemon_setup/service.rs",
-        };
-        Regex[] patterns =
-        [
-            new( @"\b(?:std::process::)?Command::new\b" ),
-            new( @"\bstd::process::Child\b" ),
-            new( @"\blibc::(?:fork|vfork|posix_spawn|posix_spawnp|pthread_atfork)\b" ),
-            new( @"\blibc::SYS_(?:clone|clone3|fork|vfork)\b" ),
-            new( @"\b(?:sh|bash|zsh)\s+-c\b" ),
-        ];
-        foreach ( var root in new[] { "src", "configurator/src", "tests" } )
-        {
-            foreach ( var path in Directory.EnumerateFiles( context.Path( root.Split( '/' ) ), "*.rs", SearchOption.AllDirectories ) )
-            {
-                var relative = Path.GetRelativePath( context.RepositoryRoot, path ).Replace( Path.DirectorySeparatorChar, '/' );
-                var parts = relative.Split( '/' );
-                var allowed = relative.StartsWith( "src/process_broker/", StringComparison.Ordinal ) || allow.Contains( relative ) ||
-                    parts.Contains( "tests" ) || Path.GetFileName( relative ) == "tests.rs";
-                var lines = File.ReadAllLines( path );
-                for ( var index = 0; index < lines.Length; index++ )
-                {
-                    var code = lines[index].Split( "//", 2 )[0];
-                    if ( !allowed && patterns.Any( pattern => pattern.IsMatch( code ) ) )
-                    {
-                        errors.Add( $"{relative}:{index + 1}: unclassified process site: {lines[index].Trim( )}" );
-                    }
-                }
-            }
-        }
-
-        var bootstrap = context.Path( "src", "process_broker", "bootstrap.rs" );
-        var source = Files.Read( bootstrap );
-        const string start = "    if pid == 0 {";
-        const string end = "    drop(child_socket);";
-        if ( !source.Contains( start, StringComparison.Ordinal ) || !source.Contains( end, StringComparison.Ordinal ) )
-        {
-            errors.Add( "src/process_broker/bootstrap.rs: raw-clone child-stub markers changed" );
-        }
-        else
-        {
-            var stub = source.Split( start, 2, StringSplitOptions.None )[1].Split( end, 2, StringSplitOptions.None )[0];
-            foreach ( var token in new[] { "format!(", "log::", "panic!(", ".unwrap(", ".expect(", "drop(", "Command::", "CString::", "Vec::", "String::", "Box::" } )
-            {
-                if ( stub.Contains( token, StringComparison.Ordinal ) )
-                {
-                    errors.Add( $"src/process_broker/bootstrap.rs: child stub reaches banned token '{token}'" );
-                }
-            }
-            var libcCalls = Regex.Matches( stub, @"libc::([A-Za-z0-9_]+)\s*\(" ).Select( match => match.Groups[1].Value ).ToHashSet( );
-            foreach ( var unexpected in libcCalls.Except( ["syscall", "_exit"] ).Order( ) )
-            {
-                errors.Add( $"src/process_broker/bootstrap.rs: child stub reaches unapproved libc call: {unexpected}" );
-            }
-            var syscalls = Regex.Matches( stub, @"libc::SYS_([A-Za-z0-9_]+)" ).Select( match => match.Groups[1].Value ).ToHashSet( );
-            foreach ( var unexpected in syscalls.Except( ["fcntl", "dup3", "setpgid", "exit_group", "close_range", "execve"] ).Order( ) )
-            {
-                errors.Add( $"src/process_broker/bootstrap.rs: child stub reaches unapproved syscall: {unexpected}" );
-            }
-        }
-        Failures( context, errors, "process-site audit passed", "process-site audit failed:" );
-        return Task.FromResult( ExitCodes.Success );
-    }
 
     private static async Task<int> RustSourceCoverage( ToolContext context, string[] args )
     {
@@ -308,7 +211,7 @@ internal static class ChecksCommand
         var required = enabled.SelectMany( crate => SystemLibraries.GetValueOrDefault( crate, [] ).Select( attribute => (crate, attribute) ) )
             .GroupBy( pair => pair.attribute ).ToDictionary( group => group.Key, group => group.Select( pair => pair.crate ).ToArray( ) );
         var recipe = Files.Read( context.Path( RepositoryPaths.PackagingDirectory, "nixpkgs", "package.nix" ) );
-        var flake = Files.Read( context.Path( "flake.nix" ) );
+        var flake = Files.Read( context.Path( RepositoryNames.FlakeFile ) );
         var marker = flake.IndexOf( "wayscriber = rustPlatform.buildRustPackage", StringComparison.Ordinal );
         if ( marker < 0 )
         {
@@ -367,50 +270,47 @@ internal static class ChecksCommand
         }
     }
 
-    private static Task<int> ConfigWriters( ToolContext context, string[] args )
-    {
-        new Arguments( args ).RequireEmpty( "check config-writers" );
-        var errors = ConfigWriterAudit.Run( context.RepositoryRoot );
-        Failures( context, errors, $"config-writer audit passed ({ConfigWriterAudit.LastScannedCount} sources)", "config-writer audit failed:" );
-        return Task.FromResult( ExitCodes.Success );
-    }
-
     private static Task<int> LegacyTools( ToolContext context, string[] args )
     {
         new Arguments( args ).RequireEmpty( "check legacy-tools" );
-        var expected = StandaloneToolFiles.ToHashSet( StringComparer.Ordinal );
-        var actual = Directory.EnumerateFiles( context.Path( RepositoryPaths.ToolsDirectory ), "*", SearchOption.TopDirectoryOnly )
-            .Where( path => Path.GetExtension( path ) is ".sh" or ".py" )
+        var expected = ShellToolFiles.ToHashSet( StringComparer.Ordinal );
+        var actual = Directory.EnumerateFiles( context.Path( RepositoryPaths.ToolsDirectory ), "*.sh", SearchOption.TopDirectoryOnly )
             .Select( Path.GetFileName ).ToHashSet( StringComparer.Ordinal )!;
+
         var missing = expected.Except( actual ).Order( ).ToArray( );
         if ( missing.Length > 0 )
         {
-            throw new ToolException( "Standalone fallback scripts are missing:\n" + string.Join( '\n', missing.Select( name => $"- {name}" ) ) );
+            throw new ToolException( "Shell tools are missing:\n" + string.Join( '\n', missing.Select( name => $"- {name}" ) ) );
         }
         var unlisted = actual.Except( expected ).Order( ).ToArray( );
         if ( unlisted.Length > 0 )
         {
-            throw new ToolException( "Standalone fallback inventory is incomplete:\n" + string.Join( '\n', unlisted.Select( name => $"- {name}" ) ) );
+            var names = string.Join( '\n', unlisted.Select( name => $"- {name}" ) );
+            throw new ToolException( "Shell tool inventory is incomplete:\n" + names );
         }
 
-        foreach ( var name in StandaloneToolFiles.Where( name => name.EndsWith( ".sh", StringComparison.Ordinal ) ) )
+        // The complete local gate runs the C# checks, which exist only here; every
+        // other shell tool stays usable without .NET.
+        foreach ( var name in ShellToolFiles.Where( name => name != GateEntryPoint ) )
         {
             var source = Files.Read( context.Path( RepositoryPaths.ToolsDirectory, name ) );
             var toolRedirect = $"dotnet run {RepositoryPaths.ToolsDirectory}/{RepositoryNames.ToolEntryFile}";
             if ( source.Contains( toolRedirect, StringComparison.OrdinalIgnoreCase ) || Regex.IsMatch( source, @"(?m)^\s*(?:exec\s+)?dotnet\b" ) )
             {
-                throw new ToolException( $"Standalone fallback redirects to .NET: tools/{name}" );
+                throw new ToolException( $"Shell tool redirects to .NET: tools/{name}" );
             }
         }
+
+        // Any Python spelling, an interpreter launch included, fails tests/repository_guards/no_python.rs.
         foreach ( var path in Directory.EnumerateFiles( context.Path( RepositoryPaths.ToolsDirectory, "csharp" ), "*.cs", SearchOption.AllDirectories ) )
         {
-            var source = Files.Read( path );
-            if ( Regex.IsMatch( source, "(?:ProcessRequest|context\\.Run)\\s*\\(\\s*\\\"(?:(?:ba|z)?sh|python(?:3(?:\\.\\d+)?)?)\\\"" ) )
+            if ( Regex.IsMatch( Files.Read( path ), ShellLaunchPattern ) )
             {
-                throw new ToolException( $"C# automation invokes a shell or Python interpreter: {Path.GetRelativePath( context.RepositoryRoot, path )}" );
+                throw new ToolException( $"C# automation launches a shell: {Path.GetRelativePath( context.RepositoryRoot, path )}" );
             }
         }
-        context.Output.WriteLine( "Standalone fallback scripts are inventoried and C# does not invoke a shell or Python interpreter." );
+
+        context.Output.WriteLine( "Shell tools are inventoried and usable without .NET, and C# does not launch a shell." );
         return Task.FromResult( ExitCodes.Success );
     }
 
@@ -457,256 +357,4 @@ internal static class ChecksCommand
         ["zbus"] = [],
         ["zune-jpeg"] = [],
     };
-}
-
-internal static class ConfigWriterAudit
-{
-    internal static int LastScannedCount
-    {
-        get; private set;
-    }
-
-    internal static List<string> Run( string root )
-    {
-        var errors = new List<string>( );
-        var sources = new[] { "src", "configurator/src" }.SelectMany( directory =>
-            Directory.EnumerateFiles( Path.Combine( root, directory ), "*.rs", SearchOption.AllDirectories ) ).Order( ).ToArray( );
-        LastScannedCount = sources.Length;
-        var owners = new HashSet<string>( StringComparer.Ordinal )
-        {
-            "src/config/document.rs", "src/config/io.rs", "configurator/src/app/io.rs",
-        };
-        string[] primitives = ["save_with_backup", "write_config_text_atomic", "create_config_backup", "prepare_config_parent"];
-        string[] writers = ["persist_keybinding_edit", "persist_preset_slot", "persist_quick_color"];
-        const string expectedCaller = "src/backend/wayland/config_edits.rs";
-        var callers = writers.ToDictionary( name => name, _ => new HashSet<string>( StringComparer.Ordinal ) );
-
-        ScanSources( root, sources, owners, primitives, writers, callers, errors );
-        ValidateWriterCallers( writers, expectedCaller, callers, errors );
-        ValidateWriterDefinitions( root, primitives, writers, errors );
-        return errors;
-    }
-
-    private static void ScanSources( string root, IEnumerable<string> sources, HashSet<string> owners,
-        IEnumerable<string> primitives, IEnumerable<string> writers, Dictionary<string, HashSet<string>> callers, List<string> errors )
-    {
-        foreach ( var path in sources )
-        {
-            var relative = Path.GetRelativePath( root, path ).Replace( Path.DirectorySeparatorChar, '/' );
-            if ( IsTestSource( relative ) )
-            {
-                continue;
-            }
-            var masked = RemoveCfgTestBlocks( StripRustCommentsAndStrings( Files.Read( path ) ) );
-            foreach ( var primitive in primitives )
-            {
-                if ( !owners.Contains( relative ) && Regex.IsMatch( masked, $@"\b{primitive}\b" ) )
-                {
-                    errors.Add( $"{relative}: config write capability `{primitive}` outside the reviewed writers" );
-                }
-            }
-            foreach ( var writer in writers )
-            {
-                if ( relative is not "src/config/io.rs" and not "src/config/mod.rs" && Regex.IsMatch( masked, $@"\b{writer}\b" ) )
-                {
-                    callers[writer].Add( relative );
-                }
-                if ( Regex.IsMatch( masked, $@"\b{writer}\s+as\s+\w+" ) )
-                {
-                    errors.Add( $"{relative}: renames config writer `{writer}`" );
-                }
-                if ( relative is not "src/config/io.rs" and not "src/config/mod.rs" && Regex.IsMatch( masked, $@"\b{writer}_at\b" ) )
-                {
-                    errors.Add( $"{relative}: production code names `{writer}_at`" );
-                }
-            }
-        }
-    }
-
-    private static void ValidateWriterCallers( IEnumerable<string> writers, string expectedCaller,
-        Dictionary<string, HashSet<string>> callers, List<string> errors )
-    {
-        foreach ( var writer in writers )
-        {
-            foreach ( var unexpected in callers[writer].Where( path => path != expectedCaller ) )
-            {
-                errors.Add( $"{unexpected}: unreviewed caller of `{writer}`" );
-            }
-            if ( !callers[writer].Contains( expectedCaller ) )
-            {
-                errors.Add( $"{expectedCaller}: expected to call `{writer}` but does not" );
-            }
-        }
-    }
-
-    private static void ValidateWriterDefinitions( string root, IEnumerable<string> primitives, IEnumerable<string> writers, List<string> errors )
-    {
-        var document = Files.Read( Path.Combine( root, "src/config/document.rs" ) );
-        var io = Files.Read( Path.Combine( root, "src/config/io.rs" ) );
-        if ( !document.Contains( "pub fn save_with_backup", StringComparison.Ordinal ) )
-        {
-            errors.Add( "src/config/document.rs: save_with_backup is gone or renamed" );
-        }
-        foreach ( var primitive in primitives.Where( primitive => primitive != "save_with_backup" ) )
-        {
-            if ( !io.Contains( $"pub(super) fn {primitive}", StringComparison.Ordinal ) )
-            {
-                errors.Add( $"src/config/io.rs: `{primitive}` is no longer pub(super)" );
-            }
-        }
-        foreach ( var writer in writers )
-        {
-            if ( !io.Contains( $"pub fn {writer}", StringComparison.Ordinal ) )
-            {
-                errors.Add( $"src/config/io.rs: narrow config writer `{writer}` is gone" );
-            }
-            if ( !Regex.IsMatch( io, $@"#\[cfg\(test\)\]\s*pub\(crate\) fn {writer}_at\b" ) )
-            {
-                errors.Add( $"src/config/io.rs: `{writer}_at` is no longer a #[cfg(test)] pub(crate) fn" );
-            }
-        }
-        if ( Regex.IsMatch( RemoveCfgTestBlocks( StripRustCommentsAndStrings( io ) ), @"\bauthored_config\b" ) )
-        {
-            errors.Add( "src/config/io.rs: a narrow writer reads authored_config()" );
-        }
-    }
-
-    private static bool IsTestSource( string relative ) =>
-        relative.StartsWith( "tests/", StringComparison.Ordinal ) || relative.Split( '/' ).Contains( "tests" ) ||
-        Path.GetFileName( relative ) is "tests.rs" or "test_helpers.rs" or "test_support.rs" ||
-        Path.GetFileName( relative ).StartsWith( "test_", StringComparison.Ordinal ) ||
-        Path.GetFileName( relative ).EndsWith( "_tests.rs", StringComparison.Ordinal );
-
-    internal static string RemoveCfgTestBlocks( string text )
-    {
-        var chars = text.ToCharArray( );
-        foreach ( Match marker in Regex.Matches( text, @"#\[cfg\((?!\s*not\s*\(\s*test\s*\))(?=[^]]*\btest\b)[^]]*\)\]" ) )
-        {
-            var opening = text.IndexOfAny( ['{', ';'], marker.Index + marker.Length );
-            if ( opening < 0 )
-            {
-                continue;
-            }
-            var end = opening + 1;
-            if ( text[opening] == '{' )
-            {
-                var depth = 1;
-                while ( end < text.Length && depth > 0 )
-                {
-                    if ( text[end] == '{' )
-                    {
-                        depth++;
-                    }
-                    else if ( text[end] == '}' )
-                    {
-                        depth--;
-                    }
-
-                    end++;
-                }
-            }
-            for ( var index = marker.Index; index < end; index++ )
-            {
-                if ( chars[index] != '\n' )
-                {
-                    chars[index] = ' ';
-                }
-            }
-        }
-        return new string( chars );
-    }
-
-    internal static string StripRustCommentsAndStrings( string text )
-    {
-        var output = text.ToCharArray( );
-        var index = 0;
-        var blockDepth = 0;
-        while ( index < text.Length )
-        {
-            if ( blockDepth == 0 && StartsWith( text, index, '/', '/' ) )
-            {
-                MaskLineComment( text, output, ref index );
-            }
-            else if ( StartsWith( text, index, '/', '*' ) )
-            {
-                MaskPair( output, ref index );
-                blockDepth++;
-            }
-            else if ( blockDepth > 0 )
-            {
-                MaskBlockCommentCharacter( text, output, ref index, ref blockDepth );
-            }
-            else if ( text[index] == '"' )
-            {
-                MaskString( text, output, ref index );
-            }
-            else
-            {
-                index++;
-            }
-        }
-        return new string( output );
-    }
-
-    private static bool StartsWith( string text, int index, char first, char second ) =>
-        index + 1 < text.Length && text[index] == first && text[index + 1] == second;
-
-    private static void MaskLineComment( string text, char[] output, ref int index )
-    {
-        while ( index < text.Length && text[index] != '\n' )
-        {
-            output[index++] = ' ';
-        }
-    }
-
-    private static void MaskBlockCommentCharacter( string text, char[] output, ref int index, ref int blockDepth )
-    {
-        if ( StartsWith( text, index, '*', '/' ) )
-        {
-            MaskPair( output, ref index );
-            blockDepth--;
-            return;
-        }
-
-        if ( text[index] != '\n' )
-        {
-            output[index] = ' ';
-        }
-        index++;
-    }
-
-    private static void MaskPair( char[] output, ref int index )
-    {
-        output[index++] = ' ';
-        output[index++] = ' ';
-    }
-
-    private static void MaskString( string text, char[] output, ref int index )
-    {
-        output[index++] = ' ';
-        while ( index < text.Length )
-        {
-            var character = text[index];
-            if ( character != '\n' )
-            {
-                output[index] = ' ';
-            }
-            index++;
-
-            if ( character == '\\' && index < text.Length )
-            {
-                if ( text[index] != '\n' )
-                {
-                    output[index] = ' ';
-                }
-                index++;
-                continue;
-            }
-
-            if ( character == '"' )
-            {
-                return;
-            }
-        }
-    }
 }

@@ -326,7 +326,7 @@ capture suppression operates on the paired resources without runtime pairing che
   slot, quick color), which each rewrite one key. Everything else — the overlay's other controls,
   the daemon, the tray, startup, validation, migration preview, and shutdown — reads the file and
   leaves its bytes, mode, and mtime alone, including for a missing, read-only, or old-revision
-  file. `tools/check-config-writers.py` pins that set by name.
+  file. `tests/repository_guards/config_writers.rs` pins that set by name.
 - Every one of those writes goes through `ConfigDocument::save_with_backup`, which holds an
   advisory lock on a sibling `config.toml.lock` across the whole check-copy-rename window
   (`src/config/document/lock.rs`). The revision check and the atomic rename are separate syscalls
@@ -423,7 +423,7 @@ capture suppression operates on the paired resources without runtime pairing che
   submission joins a staging queue in front of the channel and is pumped in as the worker makes
   room, so a burst that fills the channel cannot answer the newest gesture ahead of the older ones
   it was made after (which would leave their completions applying on top of it). That module is the
-  only production caller of the three editors, and is what `tools/check-config-writers.py` pins.
+  only production caller of the three editors, and is what `tests/repository_guards/config_writers.rs` pins.
 - Teardown is `finish_config_edits` (called by `shutdown_config_edits`, beside
   `shutdown_runtime_ui`). It drains `InputEffectDrain::DurableConfig` — the outbox-owned inventory
   of preset, quick-color, and recorded shortcut edits — one last time before stopping the worker,
@@ -486,7 +486,7 @@ capture suppression operates on the paired resources without runtime pairing che
   then arbitrated by traversal order instead of being filtered away as an unauthored default, and
   the configurator's save status names which action kept the key: the resolution reaches
   `config.toml`, so the reloaded document has nothing left to report.
-- Two guards keep it that way: `tools/check-config-writers.py` (in `tools/lint-and-test.sh`) fails
+- Two guards keep it that way: `tests/repository_guards/config_writers.rs` (in every `cargo test`) fails
   when any source outside `src/config/document.rs`, `src/config/io.rs`, and
   `configurator/src/app/io.rs` names a config write primitive, when an unpinned file calls one of
   the narrow editors, or when the editors' path-taking `_at` twins stop being `#[cfg(test)]`-gated

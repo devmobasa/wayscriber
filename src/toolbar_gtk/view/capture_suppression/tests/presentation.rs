@@ -1,3 +1,4 @@
+use super::wayland_proxy::{CONTROL_ENV, ProxyResponse, ProxyStatus, run_in_private_wayland};
 use super::*;
 use std::future::{Future, poll_fn};
 use std::io::{BufRead, BufReader, Write};
@@ -115,17 +116,7 @@ fn run_in_private_display(test_name: &str) -> bool {
     let test_name = test_name
         .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
         .expect("test name contains the crate prefix");
-    let fixture = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tools/test-fixtures/gtk_popup_wayland.py"
-    );
-    let output = std::process::Command::new("python3")
-        .arg(fixture)
-        .arg(std::env::current_exe().expect("test binary"))
-        .arg(test_name)
-        .env(CHILD_ENV, "1")
-        .output()
-        .expect("run private Wayland popup fixture");
+    let output = run_in_private_wayland(CHILD_ENV, test_name);
     std::io::stdout().write_all(&output.stdout).unwrap();
     std::io::stderr().write_all(&output.stderr).unwrap();
 
@@ -250,22 +241,8 @@ async fn wait_for_held_popup_callback() {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct ProxyStatus {
-    held: bool,
-    popup_commits: u64,
-    popup_callbacks_delivered: u64,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(untagged)]
-enum ProxyResponse {
-    Status(ProxyStatus),
-    Error { error: String },
-}
-
 fn control(command: &str) -> ProxyStatus {
-    let path = std::env::var_os("WAYSCRIBER_GTK_WAYLAND_CONTROL").expect("private proxy control");
+    let path = std::env::var_os(CONTROL_ENV).expect("private proxy control");
     let mut socket = UnixStream::connect(path).expect("connect proxy control");
     socket.set_read_timeout(Some(FIXTURE_WAIT)).unwrap();
 

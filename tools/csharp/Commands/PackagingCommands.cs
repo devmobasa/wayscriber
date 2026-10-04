@@ -23,7 +23,7 @@ internal static class PackagingCommands
     private const string InstallerManifestEndMarker = "# ARCH_INSTALL_MANIFEST_END";
     private const string InstallerManifestFunction = "release_manifest() {";
     private const string InstallerManifestPrint = "printf '%s\\n' \\";
-    private const string ReleaseArchiveRootPattern = @"^wayscriber-v\d+\.\d+\.\d+(?:\.\d+)?-linux-x86_64$";
+    private const string ReleaseArchiveRootPrefix = RepositoryNames.MainPackage + RepositoryNames.ReleaseArchiveVersionPrefix;
     private const string ReleaseArchivePathPattern = @"^[-A-Za-z0-9._/+]+$";
     private const string ValidServiceCommandPattern = """^ExecStart=(?:")?/usr/bin/wayscriber(?:")? --daemon$""";
     private const string SystemdExecDirectivePattern = @"^\s*Exec[A-Za-z]*=";
@@ -184,7 +184,8 @@ internal static class PackagingCommands
 
     private static async Task<string> BuildTar( ToolContext context, string output, string version, bool configurator )
     {
-        var name = configurator ? $"wayscriber-configurator-v{version}-linux-x86_64" : $"wayscriber-v{version}-linux-x86_64";
+        var package = configurator ? RepositoryNames.ConfiguratorPackage : RepositoryNames.MainPackage;
+        var name = RepositoryNames.ReleaseArchiveRoot( package, version );
         var root = Path.Combine( output, name );
         if ( Directory.Exists( root ) )
         {
@@ -216,7 +217,7 @@ internal static class PackagingCommands
                 }
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, "icons", "wayscriber-configurator.svg" ), "usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg", regular );
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, "icons", "wayscriber-configurator-128.png" ), "usr/share/pixmaps/wayscriber-configurator.png", regular );
-                Copy( context.Path( "README.md" ), "usr/share/doc/wayscriber-configurator/README.md", regular );
+                Copy( context.Path( RepositoryNames.ReadmeFile ), "usr/share/doc/wayscriber-configurator/README.md", regular );
                 Copy( context.Path( "LICENSE" ), "usr/share/doc/wayscriber-configurator/LICENSE", regular );
             }
             else
@@ -233,7 +234,7 @@ internal static class PackagingCommands
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, "icons", "wayscriber.svg" ), "usr/share/icons/hicolor/scalable/apps/wayscriber.svg", regular );
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, "icons", "wayscriber-symbolic.svg" ), "usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg", regular );
                 Copy( context.Path( RepositoryPaths.PackagingDirectory, "icons", "wayscriber-128.png" ), "usr/share/pixmaps/wayscriber.png", regular );
-                Copy( context.Path( "README.md" ), "usr/share/doc/wayscriber/README.md", regular );
+                Copy( context.Path( RepositoryNames.ReadmeFile ), "usr/share/doc/wayscriber/README.md", regular );
                 Copy( context.Path( "config.example.toml" ), "usr/share/doc/wayscriber/config.example.toml", regular );
                 Copy( context.Path( "LICENSE" ), "usr/share/doc/wayscriber/LICENSE", regular );
                 Copy( context.Path( "LICENSE" ), "usr/share/licenses/wayscriber/LICENSE", regular );
@@ -264,8 +265,8 @@ internal static class PackagingCommands
         var architecture = format == PackageFormats.Debian ? "amd64" : "x86_64";
         var target = Path.Combine( output, $"{prefix}-{architecture}.{format}" );
         var configVariable = configurator ? EnvironmentVariables.NfpmConfiguratorConfig : EnvironmentVariables.NfpmMainConfig;
-        var config = context.Environment( configVariable ) ??
-            context.Path( RepositoryPaths.PackagingDirectory, configurator ? "package.configurator.yaml" : "package.wayscriber.yaml" );
+        var configFile = configurator ? RepositoryNames.ConfiguratorPackageConfigFile : RepositoryNames.MainPackageConfigFile;
+        var config = context.Environment( configVariable ) ?? context.Path( RepositoryPaths.PackagingDirectory, configFile );
         File.Delete( target );
         await context.Run( Programs.Nfpm, ["pkg", "--packager", format, "--config", config, "--target", target], environment: environment );
         if ( !File.Exists( target ) )
@@ -385,11 +386,18 @@ internal static class PackagingCommands
 
     private static bool IsSystemdComment( string line ) => line.StartsWith( '#' ) || line.StartsWith( ';' );
 
+    // `wayscriber-v<release version>-linux-x86_64`, the version read by the one release-version parser.
+    internal static bool IsReleaseArchiveRoot( string root ) =>
+        root.StartsWith( ReleaseArchiveRootPrefix, StringComparison.Ordinal ) &&
+        root.EndsWith( RepositoryNames.ReleaseArchiveSuffix, StringComparison.Ordinal ) &&
+        root.Length > ReleaseArchiveRootPrefix.Length + RepositoryNames.ReleaseArchiveSuffix.Length &&
+        ReleaseVersion.TryParse( root[ReleaseArchiveRootPrefix.Length..^RepositoryNames.ReleaseArchiveSuffix.Length], out _ );
+
     private static string ValidateArchiveListing( string listing )
     {
         var paths = listing.Split( '\n', StringSplitOptions.RemoveEmptyEntries );
         var root = paths.Select( path => path.TrimEnd( '/' ).Split( '/', 2 )[0] ).FirstOrDefault( );
-        if ( root is null || !Regex.IsMatch( root, ReleaseArchiveRootPattern ) )
+        if ( root is null || !IsReleaseArchiveRoot( root ) )
         {
             throw new ToolException( $"Archive has an unexpected top-level directory: {root ?? "<none>"}." );
         }
@@ -542,9 +550,11 @@ internal static class PackagingCommands
             [$"glibc >= {PackagingPlatform.MaximumGlibcVersion}", $"libadwaita >= {VersionCommands.SupportedLibadwaitaFloor}"],
             "configurator rpm dependencies" );
 
-        var mainTar = await context.Run( Programs.Tar, ["-tzf", Path.Combine( root, $"wayscriber-v{version}-linux-x86_64.tar.gz" )], capture: true );
+        var mainArchive = Path.Combine( root, RepositoryNames.ReleaseArchive( RepositoryNames.MainPackage, version ) );
+        var mainTar = await context.Run( Programs.Tar, ["-tzf", mainArchive], capture: true );
         RequireSuffixes( mainTar.StandardOutput, ["/usr/bin/wayscriber", "/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"], "wayscriber tar files" );
-        var configTar = await context.Run( Programs.Tar, ["-tzf", Path.Combine( root, $"wayscriber-configurator-v{version}-linux-x86_64.tar.gz" )], capture: true );
+        var configuratorArchive = Path.Combine( root, RepositoryNames.ReleaseArchive( RepositoryNames.ConfiguratorPackage, version ) );
+        var configTar = await context.Run( Programs.Tar, ["-tzf", configuratorArchive], capture: true );
         RequireSuffixes( configTar.StandardOutput, ["/usr/bin/wayscriber-configurator"], "configurator tar files" );
         await context.Output.WriteLineAsync( $"Verified release artifacts for {version}." );
         return ExitCodes.Success;

@@ -8,6 +8,8 @@ mod runtime;
 mod wire;
 
 pub(crate) use child::OverlayChildOwner;
+#[cfg(test)]
+pub(crate) use child::{ActiveGeneration, active_generation_from_environment};
 pub(crate) use child::{
     open_daemon_watchdog, recover_stale_child_records, start_daemon_watchdog_from_environment,
 };

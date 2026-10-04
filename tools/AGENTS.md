@@ -7,11 +7,12 @@
 - `wayscriber.cs` is the C# entry point used by CI and exposes parity commands for local development, installation, packaging, and releases.
 - Keep its entry point small, command modules under `csharp/Commands/`, infrastructure under `csharp/Infrastructure/`, and module lists explicit in `csharp/includes.cs`.
 - Build the C# file apps once, then invoke them with `dotnet run tools/<app>.cs --no-build -- ...`.
-- Existing shell and Python tools remain standalone fallbacks for contributors without .NET. Production C# commands must not invoke them. The C# parity test app may execute the retained standalone release contracts so both implementations stay covered in CI.
-- Scripts support build, install, lint/test, versioning, packaging, release tags, package repository generation, daemon reload, and dependency fetching.
+- Each repository check has one implementation. Source ownership invariants (shared dependencies, process sites, config writers) are Rust tests in `tests/repository_guards` and run in every `cargo test`. Release, packaging, build-metadata, and source-coverage checks are C# commands. Do not add Python (`tests/repository_guards/no_python.rs` enforces this), and do not add another copy of a check.
+- The remaining shell tools stay usable without .NET. Production C# commands must not invoke them. The C# test app may execute the retained shell contracts (`test-package-repo-layout.sh`, `test-release-packaging.sh`) and a copy of `lint-and-test.sh` against fake `dotnet` and `cargo` commands.
+- Scripts support build, install, lint/test, packaging, package repository generation, daemon reload, and dependency fetching. Versioning and release tags are C# commands only (`version bump`, `version check`, `release create-tag`, `release publish-tag`).
 - Scripts should resolve the repository root and work from any starting directory.
-- The shell and Python fallbacks must remain usable without .NET and must not redirect to `wayscriber.cs`.
-- Version-bump regressions live in `test-release-packaging.sh` and `wayscriber.tests.cs`.
+- Shell tools must not redirect to `wayscriber.cs`, except `lint-and-test.sh`: it is the complete gate and runs the C# checks, so it requires .NET.
+- Version check, bump, and release-tag regressions live in the C# tests (`csharp-tests/VersionConsistencyTests.cs`, `VersionReleaseCommandTests.cs`).
 - C# helper formatting follows `tools/.editorconfig`: spaced parentheses and braced guards, with LF endings required by `.gitattributes`.
 - Separate logical steps in C# functions with a blank line. Keep closely related validation, setup, execution, state checks, and result mapping together, and add spacing when the purpose changes.
 - Assign or deserialize a value first, then use a separate braced null guard. Do not embed `throw` in an assignment, return, or conditional expression.
@@ -21,12 +22,12 @@
 - Keep cyclomatic complexity at or below 20 per method. `CA1502` is an error, with the threshold in `CodeMetricsConfig.txt` wired through `Directory.Build.props`.
 
 ## Invariants
-- Keep C# commands and standalone script behavior aligned. Add parity fixtures to `wayscriber.tests.cs` when either implementation changes.
+- Keep C# commands and any retained shell script behavior aligned. Add fixtures to `wayscriber.tests.cs` when either changes.
 - Invoke external programs from C# with `ProcessStartInfo.ArgumentList`; do not invoke a shell interpreter or assemble shell command strings.
 - Preserve release/version/package semantics, including packaging-only hotfix behavior.
 - Keep `tools/lint-and-test.sh` aligned with CI.
 - The canonical gate serializes Rust test harnesses as a native-font race workaround and runs the ignored context-menu and board-picker render regressions separately under both feature configurations. Preserve their assertions and document the workaround separately from any native-library fix.
-- Keep `check-rust-source-coverage.py` aligned with the workspace's all-feature and
+- Keep `check rust-source-coverage` aligned with the workspace's all-feature and
   no-default-feature target matrix; intentional exceptions must be narrow and documented.
 - Avoid platform-specific assumptions unless the script is explicitly platform-specific.
 
