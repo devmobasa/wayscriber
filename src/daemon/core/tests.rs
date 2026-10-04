@@ -184,6 +184,35 @@ fn visible_overlay_rejects_different_named_session_request() {
 }
 
 #[test]
+fn visible_overlay_is_in_the_session_it_switched_to() {
+    let switched = "/tmp/switched.wayscriber-session";
+    super::super::overlay::tests::with_reporting_overlay(switched, |daemon| {
+        let request = |session_file: &str| {
+            Some(DaemonToggleRequest {
+                session_file: Some(PathBuf::from(session_file)),
+                ..Default::default()
+            })
+        };
+
+        // Launched at home, the overlay has since switched away from it.
+        let err = daemon
+            .process_single_toggle(request("/tmp/home.wayscriber-session"), None, false)
+            .expect_err("the session the overlay left is no longer visible");
+        assert!(
+            format!("{err:#}")
+                .contains("cannot switch named session target while overlay is visible"),
+            "{err:#}"
+        );
+        assert_eq!(daemon.test_state(), OverlayState::Visible);
+
+        daemon
+            .process_single_toggle(request(switched), None, false)
+            .unwrap();
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    });
+}
+
+#[test]
 fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
     super::super::overlay::tests::with_visible_overlay(

@@ -6,10 +6,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::OverlayLifecycle;
-use crate::daemon::protocol_v2::{BootClock, open_overlay_pidfd, wait_for_pidfd_exit};
+use crate::daemon::protocol_v2::{
+    BootClock, ReportedSession, open_overlay_pidfd, wait_for_pidfd_exit,
+};
 
 impl OverlayLifecycle {
-    fn terminate(&mut self) -> Result<()> {
+    /// Stops the child, returning the session it last reported.
+    fn terminate(&mut self) -> Result<Option<ReportedSession>> {
+        let mut session = None;
         if let Some(pid) = self.child.display_pid() {
             let stop_started = Instant::now();
             let timeout = Duration::from_secs(2);
@@ -31,12 +35,13 @@ impl OverlayLifecycle {
             let deadline = BootClock::now()?.checked_add(timeout)?;
             loop {
                 match self.child.try_wait() {
-                    Ok(Some(status)) => {
+                    Ok(Some(exit)) => {
                         info!(
                             "Overlay process exited with status {:?} after {:?}",
-                            status,
+                            exit.status,
                             stop_started.elapsed()
                         );
+                        session = exit.session;
                         break;
                     }
                     Ok(None) => {
@@ -45,15 +50,16 @@ impl OverlayLifecycle {
                                 "Overlay process did not exit after {:?}, sending SIGKILL",
                                 stop_started.elapsed()
                             );
-                            let status = self
+                            let exit = self
                                 .child
                                 .force_kill_and_wait()
                                 .context("lost broker ownership while forcing overlay shutdown")?;
                             warn!(
                                 "Overlay process killed with status {:?} after {:?}",
-                                status,
+                                exit.status,
                                 stop_started.elapsed()
                             );
+                            session = exit.session;
                             break;
                         }
                         // Without a pidfd (the child raced us to exit, or the
@@ -86,24 +92,27 @@ impl OverlayLifecycle {
 
         self.active.store(false, Ordering::Release);
         self.active_named_session_file = None;
-        Ok(())
+        Ok(session)
     }
 
-    pub(in crate::daemon::overlay) fn hide(&mut self) -> Result<()> {
-        self.terminate()?;
+    /// Stops the overlay, returning the session its child last reported.
+    pub(in crate::daemon::overlay) fn hide(&mut self) -> Result<Option<ReportedSession>> {
+        let session = self.terminate()?;
         self.mark_hidden();
-        Ok(())
+        Ok(session)
     }
 
-    pub(in crate::daemon::overlay) fn poll_exit(&mut self) -> Result<()> {
+    /// Retires a child that exited on its own, returning the session it last
+    /// reported.
+    pub(in crate::daemon::overlay) fn poll_exit(&mut self) -> Result<Option<ReportedSession>> {
         match self.child.try_wait() {
-            Ok(Some(status)) => {
-                info!("Overlay process exited with status {:?}", status);
+            Ok(Some(exit)) => {
+                info!("Overlay process exited with status {:?}", exit.status);
                 self.mark_hidden();
+                Ok(exit.session)
             }
-            Ok(None) => {}
-            Err(err) => return Err(err).context("lost broker ownership of overlay child"),
+            Ok(None) => Ok(None),
+            Err(err) => Err(err).context("lost broker ownership of overlay child"),
         }
-        Ok(())
     }
 }

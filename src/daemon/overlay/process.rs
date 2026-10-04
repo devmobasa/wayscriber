@@ -8,6 +8,8 @@ impl Daemon {
             return Ok(());
         }
 
-        self.overlay.poll_exit()
+        let session = self.overlay.poll_exit()?;
+        self.remember_reported_session(session);
+        Ok(())
     }
 }

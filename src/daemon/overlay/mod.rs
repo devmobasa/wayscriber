@@ -6,6 +6,8 @@ use log::{debug, info};
 use super::core::Daemon;
 use super::types::{OverlaySpawnCandidate, OverlayState};
 use crate::daemon::control::DaemonToggleRequest;
+use crate::daemon::protocol_v2::ReportedSession;
+use crate::session::catalog::session_paths_match;
 
 pub(super) mod launch;
 pub(super) mod lifecycle;
@@ -101,6 +103,7 @@ impl Daemon {
         match self.spawn_overlay_process(&request, candidates) {
             Ok(()) => {
                 self.clear_overlay_spawn_error();
+                self.forget_remembered_session_if_started_at_home(&request);
                 Ok(ShowOutcome::Shown)
             }
             Err(failure) => {
@@ -187,8 +190,32 @@ impl Daemon {
             return Ok(());
         }
 
-        self.overlay.hide()?;
+        let session = self.overlay.hide()?;
+        self.remember_reported_session(session);
         self.discard_pending_launch_options();
         Ok(())
+    }
+
+    /// Remembers the session a retired overlay last reported, for the next
+    /// show to continue. Without a report the daemon keeps what it knew.
+    pub(super) fn remember_reported_session(&mut self, session: Option<ReportedSession>) {
+        match session {
+            None => {}
+            Some(ReportedSession::Home) => self.remembered_session_file = None,
+            Some(ReportedSession::Named(path)) => self.remembered_session_file = Some(path),
+        }
+    }
+
+    /// A request for home started an overlay at home. The overlay has no
+    /// session change to report, so the daemon forgets its remembered session
+    /// itself rather than return to it on the next show.
+    fn forget_remembered_session_if_started_at_home(&mut self, request: &OverlayLaunchRequest) {
+        if let (Some(requested), Some(home)) = (
+            request.explicit_session_file(),
+            self.initial_named_session_file.as_deref(),
+        ) && session_paths_match(requested, home)
+        {
+            self.remembered_session_file = None;
+        }
     }
 }

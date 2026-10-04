@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 
-use super::super::protocol_v2::OverlayChildOwner;
+use super::super::protocol_v2::{OverlayChildOwner, ReportedSession};
 use super::super::types::{BackendRunner, OverlaySpawnCandidate, OverlayState};
 use super::launch::{OverlayLaunchRequest, build_overlay_launch};
 
@@ -66,11 +66,17 @@ impl OverlayLifecycle {
         self.active_named_session_file.as_deref()
     }
 
+    /// The session the running child last reported, if it reported one.
+    pub(in crate::daemon) fn reported_session(&self) -> Option<ReportedSession> {
+        self.child.reported_session()
+    }
+
     pub(super) fn start(
         &mut self,
         request: &OverlayLaunchRequest,
         candidate: &OverlaySpawnCandidate,
         resume_override: &AtomicU8,
+        remembered_session_file: Option<&Path>,
         daemon_token: &str,
     ) -> std::result::Result<u32, OverlayStartFailure> {
         self.child
@@ -87,6 +93,7 @@ impl OverlayLifecycle {
             request,
             crate::decode_session_override(resume_override.load(Ordering::Acquire)),
             self.child.generation(),
+            remembered_session_file,
         );
 
         let attempt = (|| -> Result<u32> {

@@ -8,6 +8,7 @@
 - `binary_conflict.rs` warns when another Wayscriber binary exists besides the running daemon.
 - `overlay/launch.rs` owns resolved launch options and activation tokens; `overlay/mod.rs` queues and consumes them, preserving token-only retention on existing early-error paths.
 - `overlay/lifecycle.rs` owns overlay visibility, active target/flag, backoff, start and retirement; `overlay/lifecycle/stop.rs` owns graceful/forced shutdown. `protocol_v2::OverlayChildOwner` retains child identity, proof records and reaping.
+- `protocol_v2/session_target.rs` owns the session reports overlay children write to `daemon-commands/overlay-targets/`, outside the strict v2 tree. `OverlayChildOwner` reads a child's final report before releasing its identity; the daemon keeps the remembered session in memory only and clears stale reports at startup.
 - `tray/` owns tray integration and shortcut hint I/O.
 - `setup.rs` and `global_shortcuts.rs` support daemon setup workflows.
 - `update_watch.rs` owns the background update notice: it publishes to `TrayStatusShared`

@@ -25,7 +25,9 @@ pub(crate) use linux::{
 };
 pub(crate) use mode::DaemonControlProtocolMode;
 pub(crate) use runtime::{ClassifiedRuntimeRecord, read_runtime_record, write_runtime_record_v2};
-pub(crate) use session_target::{ReportedSession, publish_session_from_environment};
+pub(crate) use session_target::{
+    ReportedSession, clear_stale_session_reports, publish_session_from_environment,
+};
 pub(crate) use wire::EffectKind;
 pub(crate) use wire::{DaemonRequestV2, DaemonRuntimeRecordV2};
 

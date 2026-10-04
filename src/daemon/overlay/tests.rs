@@ -33,6 +33,19 @@ pub(in crate::daemon) fn with_visible_overlay(
     });
 }
 
+/// Like [`with_visible_overlay`], for an overlay that reports `session`, a
+/// path or `"home"`, once shown.
+pub(in crate::daemon) fn with_reporting_overlay(session: &str, body: impl FnOnce(&mut Daemon)) {
+    with_fixture(false, |daemon, _, root| {
+        instruct(root, Some(session), false);
+        show(daemon, root);
+
+        body(daemon);
+
+        daemon.hide_overlay().unwrap();
+    });
+}
+
 pub(in crate::daemon) fn assert_token_only_pending_launch(daemon: &Daemon, token: &str) {
     let retained = daemon.pending_launch.as_ref().expect("token must be kept");
 
@@ -109,6 +122,150 @@ fn assert_retired(daemon: &Daemon, generation: &str) {
     for suffix in ["active", "enabled", "ready", "signals"] {
         assert!(!proofs.join(format!("{generation}.{suffix}")).exists());
     }
+    assert!(!session_report(generation).exists());
+}
+
+fn session_report(generation: &str) -> PathBuf {
+    crate::paths::daemon_command_dir()
+        .join("overlay-targets")
+        .join(format!("{generation}.target"))
+}
+
+/// Has the next fake overlay report `report`, `"home"` or a path, and exit
+/// afterwards when `exit` is set.
+fn instruct(root: &Path, report: Option<&str>, exit: bool) {
+    fs::write(
+        root.join(fake_overlay::SESSION_INSTRUCTION),
+        serde_json::json!({ "report": report, "exit": exit }).to_string(),
+    )
+    .unwrap();
+}
+
+/// Shows the overlay and returns its launch receipt, removed so the next
+/// show's can be told apart.
+fn show(daemon: &mut Daemon, root: &Path) -> serde_json::Value {
+    daemon.show_overlay().unwrap().require_shown().unwrap();
+    let receipt = receipt(root);
+    fs::remove_file(root.join(format!(
+        "{}.receipt",
+        receipt["generation"].as_str().unwrap()
+    )))
+    .unwrap();
+    receipt
+}
+
+fn wait_until_retired(daemon: &mut Daemon) {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while daemon.overlay.state() == OverlayState::Visible {
+        daemon.update_overlay_process_state().unwrap();
+        assert!(Instant::now() < deadline, "exited child was not retired");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+const HOME: &str = "/tmp/home.wayscriber-session";
+const REMEMBERED: &str = "/tmp/remembered.wayscriber-session";
+
+#[test]
+fn the_next_show_continues_the_session_the_overlay_reported() {
+    with_fixture(false, |daemon, _, root| {
+        instruct(root, Some(REMEMBERED), false);
+        let first = show(daemon, root);
+        assert_eq!(first["reports"], "1");
+        assert_eq!(first["home"], HOME);
+        assert!(first["preferred"].is_null());
+        let generation = first["generation"].as_str().unwrap();
+        assert!(session_report(generation).exists());
+
+        daemon.hide_overlay().unwrap();
+        assert_retired(daemon, generation);
+        assert_eq!(
+            daemon.remembered_session_file.as_deref(),
+            Some(Path::new(REMEMBERED))
+        );
+
+        // An older overlay still starts at home; a current one continues.
+        instruct(root, Some("home"), false);
+        let second = show(daemon, root);
+        assert_eq!(
+            second["args"],
+            serde_json::json!(["--active", "--mode", "transparent", "--session-file", HOME])
+        );
+        assert_eq!(second["home"], HOME);
+        assert_eq!(second["preferred"], REMEMBERED);
+
+        // Back home, the overlay exits on its own and the daemon forgets.
+        daemon.overlay.signal(libc::SIGTERM).unwrap();
+        wait_until_retired(daemon);
+        assert_retired(daemon, second["generation"].as_str().unwrap());
+        assert_eq!(daemon.remembered_session_file, None);
+
+        instruct(root, None, false);
+        let third = show(daemon, root);
+        assert!(third["preferred"].is_null());
+        daemon.hide_overlay().unwrap();
+    });
+}
+
+#[test]
+fn an_overlay_that_reports_and_exits_at_once_is_still_heard() {
+    with_fixture(false, |daemon, _, root| {
+        instruct(root, Some(REMEMBERED), true);
+        let receipt = show(daemon, root);
+
+        wait_until_retired(daemon);
+
+        assert_retired(daemon, receipt["generation"].as_str().unwrap());
+        assert_eq!(
+            daemon.remembered_session_file.as_deref(),
+            Some(Path::new(REMEMBERED))
+        );
+    });
+}
+
+#[test]
+fn a_forced_stop_still_reads_the_last_report() {
+    with_fixture(true, |daemon, _, root| {
+        instruct(root, Some(REMEMBERED), false);
+        let receipt = show(daemon, root);
+
+        daemon.hide_overlay().unwrap();
+
+        assert_retired(daemon, receipt["generation"].as_str().unwrap());
+        assert_eq!(
+            daemon.remembered_session_file.as_deref(),
+            Some(Path::new(REMEMBERED))
+        );
+    });
+}
+
+#[test]
+fn a_requested_session_file_outranks_the_remembered_one_for_that_show() {
+    with_fixture(false, |daemon, _, root| {
+        daemon.remembered_session_file = Some(PathBuf::from(REMEMBERED));
+        let requested = "/tmp/requested.wayscriber-session";
+        for (session_file, remembered_after) in [(requested, Some(REMEMBERED)), (HOME, None)] {
+            daemon.queue_overlay_launch(
+                Some(DaemonToggleRequest {
+                    session_file: Some(PathBuf::from(session_file)),
+                    ..Default::default()
+                }),
+                None,
+            );
+
+            let receipt = show(daemon, root);
+
+            assert_eq!(receipt["args"][4], session_file);
+            assert!(receipt["preferred"].is_null(), "{session_file}");
+            // A request for home returns home: nothing remains to continue.
+            assert_eq!(
+                daemon.remembered_session_file.as_deref(),
+                remembered_after.map(Path::new),
+                "{session_file}"
+            );
+            daemon.hide_overlay().unwrap();
+        }
+    });
 }
 
 #[test]
@@ -311,7 +468,7 @@ fn preparation_error_keeps_only_the_token_and_does_not_replay_options() {
 
         assert!(daemon.start_launch(request, &[candidate]).is_err());
         let retained = daemon.take_pending_launch();
-        let actual = launch::build_overlay_launch(&retained, Some(true), None);
+        let actual = launch::build_overlay_launch(&retained, Some(true), None, None);
 
         assert_eq!(
             actual.arguments,

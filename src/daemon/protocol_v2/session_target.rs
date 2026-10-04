@@ -107,7 +107,7 @@ fn report_path_text(path: &Path) -> Result<String> {
 }
 
 fn create_report_dir() -> Result<()> {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
 
     let directory = report_dir();
     match std::fs::create_dir(&directory) {
@@ -118,13 +118,168 @@ fn create_report_dir() -> Result<()> {
         }
     }
     let metadata = std::fs::symlink_metadata(&directory)?;
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    let owner = unsafe { libc::geteuid() };
-    if !metadata.is_dir() || metadata.uid() != owner {
+    if !metadata.is_dir() || !owned_by_this_user(&metadata) {
         bail!("{} is not a private report directory", directory.display());
     }
     std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
     Ok(())
+}
+
+/// The session the child `generation` last reported, if it reported one under
+/// exactly this identity. The identity is the one the daemon owns, captured
+/// while the child ran: an exited child no longer has a `/proc` entry to ask.
+pub(crate) fn read_session_report(
+    generation: &str,
+    pid: u32,
+    process_start_ticks: u64,
+) -> Result<Option<ReportedSession>> {
+    super::wire::validate_id(generation)?;
+    match std::fs::symlink_metadata(report_dir()) {
+        Ok(metadata) if metadata.is_dir() && is_private(&metadata) => {}
+        Ok(_) => bail!("the session report directory is not private"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).context("failed to inspect the session reports"),
+    }
+    let bytes = match read_private_file(&report_path(generation)) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).context("failed to read the session report"),
+    };
+    let record: SessionTargetRecord = super::wire::parse_canonical_json(&bytes, MAX_REPORT_BYTES)?;
+    if record.schema != REPORT_SCHEMA
+        || record.generation != generation
+        || record.pid != pid
+        || record.process_start_ticks != process_start_ticks
+    {
+        bail!("the session report belongs to another overlay child");
+    }
+
+    match record.target.map(PathBuf::from) {
+        None => Ok(Some(ReportedSession::Home)),
+        Some(path) if path.is_absolute() => Ok(Some(ReportedSession::Named(path))),
+        Some(path) => bail!("reported session {} is not absolute", path.display()),
+    }
+}
+
+/// Reads the final report of the exited child `generation`, then removes it
+/// along with any temporary its writer left. A report that cannot be trusted
+/// is logged and ignored, so it never stands in the way of retiring the child.
+pub(crate) fn take_final_session_report(
+    generation: &str,
+    pid: u32,
+    process_start_ticks: u64,
+) -> Option<ReportedSession> {
+    let session =
+        read_session_report(generation, pid, process_start_ticks).unwrap_or_else(|error| {
+            log::warn!("Ignoring the session report of overlay child {generation}: {error:#}");
+            None
+        });
+    discard_session_report(generation);
+    session
+}
+
+/// Removes the report of child `generation` and any temporary its writer left.
+pub(crate) fn discard_session_report(generation: &str) {
+    let report = format!("{generation}.target");
+    // The report itself goes by name, however full the directory is.
+    let removed = match std::fs::remove_file(report_dir().join(&report)) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            Err(anyhow::Error::new(error).context("failed to remove the report"))
+        }
+        _ => remove_reports(|target| target == report),
+    };
+    if let Err(error) = removed {
+        log::warn!("Failed to remove the session report of overlay child {generation}: {error:#}");
+    }
+}
+
+/// Removes every report an earlier daemon left behind, restoring nothing from
+/// them: the session a daemon remembered ends with that daemon.
+pub(crate) fn clear_stale_session_reports() -> Result<()> {
+    remove_reports(|target| {
+        target
+            .strip_suffix(".target")
+            .is_some_and(|generation| super::wire::validate_id(generation).is_ok())
+    })
+}
+
+/// Bounds how many entries one cleanup looks at, so a flooded directory costs
+/// a fixed amount of work.
+const MAX_CLEANUP_ENTRIES: usize = 256;
+
+/// Removes each report, and each temporary left by a report's writer, whose
+/// report name satisfies `is_removed`. Anything else in the directory is not
+/// this daemon's to remove.
+fn remove_reports(is_removed: impl Fn(&str) -> bool) -> Result<()> {
+    let directory = report_dir();
+    let entries = match std::fs::read_dir(&directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to list {}", directory.display()));
+        }
+    };
+    for entry in entries.take(MAX_CLEANUP_ENTRIES) {
+        let entry = entry?;
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let report = crate::durable_io::temp_file_target(&name).unwrap_or(&name);
+        if !is_removed(report) {
+            continue;
+        }
+        match std::fs::remove_file(entry.path()) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to remove {}", entry.path().display()));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reads a regular file this user owns and only this user can read or write,
+/// without following a symlink.
+fn read_private_file(path: &Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || !is_private(&metadata) || metadata.len() > MAX_REPORT_BYTES as u64 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "session report is not a private regular file within its size bound",
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_REPORT_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_REPORT_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "session report exceeds its size bound",
+        ));
+    }
+    Ok(bytes)
+}
+
+fn is_private(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    owned_by_this_user(metadata) && metadata.mode() & 0o077 == 0
+}
+
+fn owned_by_this_user(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    metadata.uid() == unsafe { libc::geteuid() }
 }
 
 #[cfg(test)]

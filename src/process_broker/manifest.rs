@@ -98,6 +98,9 @@ pub(super) fn validate(
                 | "DESKTOP_STARTUP_ID"
                 | "WAYSCRIBER_RESUME_SESSION"
                 | "WAYSCRIBER_OVERLAY_CHILD_GENERATION"
+                | "WAYSCRIBER_OVERLAY_SESSION_REPORTS"
+                | "WAYSCRIBER_OVERLAY_HOME_SESSION"
+                | "WAYSCRIBER_OVERLAY_PREFERRED_SESSION"
         ) {
             bail!("environment key {name:?} is not broker-allowed");
         }
@@ -276,11 +279,14 @@ fn looks_like_uri_bytes(value: &[u8]) -> bool {
 /// spawned, and from there xdg-open's browser, the configurator, tesseract
 /// and curl. A wayscriber started anywhere in those trees then took itself
 /// for a daemon child.
-const INTERNAL_PROCESS_MARKERS: [&str; 4] = [
+const INTERNAL_PROCESS_MARKERS: [&str; 7] = [
     crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
     crate::env_vars::DETACHED_ENV,
     crate::RESUME_SESSION_ENV,
     crate::env_vars::DAEMON_WATCHDOG_FD_ENV,
+    crate::env_vars::OVERLAY_SESSION_REPORTS_ENV,
+    crate::env_vars::OVERLAY_HOME_SESSION_ENV,
+    crate::env_vars::OVERLAY_PREFERRED_SESSION_ENV,
 ];
 
 /// Whether `kind` relaunches wayscriber itself, the only helpers that keep
