@@ -317,7 +317,7 @@ mod tests {
 
         let directory = crate::test_temp::tempdir().unwrap();
         let program = directory.path().join("wayscriber-fake-ocr");
-        std::fs::write(&program, b"#!/bin/sh\n").unwrap();
+        std::fs::write(&program, b"").unwrap();
         let search_path = directory.path().as_os_str();
 
         assert!(
@@ -339,7 +339,7 @@ mod tests {
 
         let directory = crate::test_temp::tempdir().unwrap();
         let program = directory.path().join("wayscriber-fake-ocr");
-        std::fs::write(&program, b"#!/bin/sh\n").unwrap();
+        std::fs::write(&program, b"").unwrap();
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         // An empty entry means "current directory" to some shells; treating it

@@ -46,6 +46,8 @@ pub mod systemd_user_service;
 #[cfg(test)]
 pub(crate) mod test_env;
 #[cfg(test)]
+pub(crate) mod test_fake_helper;
+#[cfg(test)]
 pub(crate) mod test_temp;
 pub mod time_utils;
 mod toolbar_gtk;
