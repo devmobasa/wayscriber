@@ -9,9 +9,7 @@ use super::WaylandBackend;
 use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
 use crate::backend::wayland::portal_capture::portal_freeze_fallback;
-use crate::env_vars::{
-    DESKTOP_SESSION_ENV, XDG_ACTIVATION_TOKEN_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
-};
+use crate::env_vars::{DESKTOP_SESSION_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 use crate::{
     capture::CaptureManager,
     config::Config,
@@ -108,10 +106,9 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         portal_freeze_fallback(&backend.tokio_runtime, direct_capture_supported);
     let frozen_supported = direct_capture_supported || portal_freeze_supported;
     let tokio_handle = backend.tokio_runtime.handle().clone();
-    let startup_activation_token = env::var(XDG_ACTIVATION_TOKEN_ENV)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
+    // Read from the launch environment: a linked GTK 4.16 or later unsets the
+    // token from the live environment before `main`.
+    let startup_activation_token = crate::launch_environment::startup_activation_token();
     if startup_activation_token.is_some() {
         info!("Received startup activation token from launcher environment");
     }

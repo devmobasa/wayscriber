@@ -8,7 +8,6 @@
 //! arguments. Without both the fixture marker and an overlay generation, the
 //! constructor returns and the binary runs its tests as usual.
 
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -98,8 +97,10 @@ fn serve(ignore_term: bool) -> Result<Infallible> {
 }
 
 fn write_receipt() -> Result<()> {
-    let environment = launch_environment()?;
-    let launched_with = |name: &str| environment.get(name).cloned();
+    // As launched: GTK may already have unset the startup-notification variables.
+    let launched_with = |name: &str| {
+        crate::launch_environment::var_os(name).map(|value| value.to_string_lossy().into_owned())
+    };
     let receipt = serde_json::json!({
         "args": launch_arguments()?,
         "token": launched_with(crate::env_vars::XDG_ACTIVATION_TOKEN_ENV),
@@ -147,21 +148,6 @@ fn launch_arguments() -> Result<Vec<String>> {
         .skip(1)
         .map(|argument| String::from_utf8(argument).context("non-UTF-8 launch argument"))
         .collect()
-}
-
-/// Reads the environment as the daemon launched this process. Library
-/// constructors that run first consume startup-notification variables such
-/// as `XDG_ACTIVATION_TOKEN`, so the live environment no longer shows them.
-fn launch_environment() -> Result<HashMap<String, String>> {
-    Ok(nul_separated("/proc/self/environ")?
-        .into_iter()
-        .filter_map(|entry| String::from_utf8(entry).ok())
-        .filter_map(|entry| {
-            entry
-                .split_once('=')
-                .map(|(name, value)| (name.to_owned(), value.to_owned()))
-        })
-        .collect())
 }
 
 fn nul_separated(path: &str) -> Result<Vec<Vec<u8>>> {

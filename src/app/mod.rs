@@ -12,6 +12,7 @@ use crate::session_override::set_runtime_session_override;
 use anyhow::Context;
 use env::env_flag_enabled;
 use session::run_session_cli_commands;
+use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -48,15 +49,33 @@ fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
         return Ok(false);
     }
     let exe = std::env::current_exe()?;
-    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     crate::process_broker::current()?.spawn(
         crate::process_broker::HelperKind::InitialDetach,
         crate::process_broker::HelperLifetime::DetachedAfterExec,
         exe.as_os_str(),
         args,
-        vec![(DETACHED_ENV.into(), Some("1".into()))],
+        detach_environment(crate::launch_environment::var_os),
     )?;
     Ok(true)
+}
+
+/// The detached relaunch's environment: the detached marker and the
+/// startup-notification variables this process was launched with. The broker
+/// relaunches with the live environment, from which a linked GTK may already
+/// have unset the startup token, so the launch values are forwarded.
+fn detach_environment(
+    launched_with: impl Fn(&str) -> Option<OsString>,
+) -> Vec<(OsString, Option<OsString>)> {
+    let mut environment = vec![(DETACHED_ENV.into(), Some("1".into()))];
+
+    for name in crate::launch_environment::STARTUP_NOTIFICATION_VARIABLES {
+        if let Some(value) = launched_with(name) {
+            environment.push((name.into(), Some(value)));
+        }
+    }
+
+    environment
 }
 
 fn normalized_named_session_file(cli: &Cli) -> anyhow::Result<Option<PathBuf>> {
@@ -379,5 +398,94 @@ mod tests {
         // SAFETY: F_GETFD only inspects the descriptor the file still owns.
         assert!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } >= 0);
         assert_eq!(std::fs::read(&path).unwrap(), b"before ");
+    }
+
+    /// Names the report file, and so marks the detached child run, of the
+    /// relaunch test below.
+    const DETACH_CHILD_REPORT_ENV: &str = "WAYSCRIBER_TEST_DETACH_CHILD_REPORT";
+    const DETACH_LAUNCH_TOKEN: &str = "detach-launch-token";
+
+    fn launched_with_token(name: &str) -> Option<OsString> {
+        (name == crate::env_vars::XDG_ACTIVATION_TOKEN_ENV).then(|| DETACH_LAUNCH_TOKEN.into())
+    }
+
+    #[test]
+    fn the_detached_relaunch_forwards_the_launch_startup_notification() {
+        let detached = (OsString::from(DETACHED_ENV), Some(OsString::from("1")));
+        let token = (
+            OsString::from(crate::env_vars::XDG_ACTIVATION_TOKEN_ENV),
+            Some(OsString::from(DETACH_LAUNCH_TOKEN)),
+        );
+
+        assert_eq!(
+            detach_environment(launched_with_token),
+            vec![detached.clone(), token]
+        );
+        assert_eq!(detach_environment(|_| None), vec![detached]);
+    }
+
+    /// The broker relaunches with the live environment, which here lacks the
+    /// startup variables, as it does once GTK has unset them. Only a forwarded
+    /// token reaches the detached process.
+    #[test]
+    fn a_detached_relaunch_keeps_the_launch_token_only_when_forwarded() {
+        if let Some(report) = std::env::var_os(DETACH_CHILD_REPORT_ENV) {
+            let token = crate::launch_environment::startup_activation_token().unwrap_or_default();
+            crate::durable_io::write_atomic(
+                Path::new(&report),
+                token.as_bytes(),
+                crate::durable_io::AtomicWriteOptions::private_runtime_file(),
+            )
+            .unwrap();
+            return;
+        }
+
+        let temp = crate::test_temp::tempdir().unwrap();
+        let report = temp.path().join("detached-token");
+        let test_name = concat!(
+            module_path!(),
+            "::a_detached_relaunch_keeps_the_launch_token_only_when_forwarded"
+        )
+        .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
+        .expect("test path contains the crate prefix");
+        let removed = crate::launch_environment::STARTUP_NOTIFICATION_VARIABLES
+            .map(|name| (name, None::<&std::ffi::OsStr>));
+        let mut variables = vec![(DETACH_CHILD_REPORT_ENV, Some(report.as_os_str()))];
+        variables.extend(removed);
+
+        crate::test_env::with_env_vars(&variables, || {
+            let guard = crate::process_broker::start_for_runtime().unwrap();
+            let relaunch = |environment| {
+                let _ = std::fs::remove_file(&report);
+                guard
+                    .broker()
+                    .spawn(
+                        crate::process_broker::HelperKind::InitialDetach,
+                        crate::process_broker::HelperLifetime::DetachedAfterExec,
+                        std::env::current_exe().unwrap().as_os_str(),
+                        [test_name, "--exact", "--test-threads=1"],
+                        environment,
+                    )
+                    .unwrap();
+
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                loop {
+                    if let Ok(token) = std::fs::read_to_string(&report) {
+                        break token;
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "the detached child did not report"
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            };
+
+            let unforwarded = relaunch(vec![(DETACHED_ENV.into(), Some("1".into()))]);
+            let forwarded = relaunch(detach_environment(launched_with_token));
+
+            assert_eq!(unforwarded, "");
+            assert_eq!(forwarded, DETACH_LAUNCH_TOKEN);
+        });
     }
 }
