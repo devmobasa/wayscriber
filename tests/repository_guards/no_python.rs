@@ -26,9 +26,10 @@
 //! `github.com/python/cpython`, is reported, so such a link is reworded;
 //! an untracked directory that is not ignored and holds no `CACHEDIR.TAG`, such
 //! as `.direnv/` or `node_modules/`, is read like a source directory; other file
-//! types, such as `.csproj`, `.json`, `.spec`, or `.install`, are checked by name
-//! only; and a file that `.gitignore` re-includes only through a `!` line with a
-//! glob or a directory, such as `!packaging/*.sh`, stays skipped.
+//! types, such as `.csproj`, `.json`, `.spec`, or `.install`, are checked only by
+//! name and by their first line for a Python shebang; and a file that
+//! `.gitignore` re-includes only through a `!` line with a glob or a directory,
+//! such as `!packaging/*.sh`, stays skipped.
 
 use std::collections::BTreeMap;
 use std::fs;

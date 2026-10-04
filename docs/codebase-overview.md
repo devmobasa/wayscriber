@@ -540,7 +540,8 @@ capture suppression operates on the paired resources without runtime pairing che
 - `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
 - `src/backend/wayland/session/`: runtime Open, Save As, Clear, and saved tool-state reset transactions for the active overlay.
 - `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session popover routing for Open, Save As, return home, Info, Clear, recent sessions, and configurator launch.
-- `src/backend/wayland/session/home.rs`: the overlay's home session, the remembered session a daemon launch carries, and the session reports sent back to the daemon.
+- `src/backend/wayland/session/home.rs`: the overlay's home session, the remembered session a daemon launch carries, and loading a remembered session or home in its place. `src/backend/wayland/state/core/session_home.rs` reports the overlay's session to the daemon.
+- `src/daemon/protocol_v2/session_target.rs`: writes and reads the per-generation session reports in `daemon-commands/overlay-targets/`.
 - `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target, and remembers the session its overlay last reported across hide and show.
 
 **Flow:**

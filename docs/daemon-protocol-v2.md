@@ -69,6 +69,24 @@ About clipboard integration, and named test fixtures. The same check audits the 
 stub: before `execve` it may reach only the fixed `fcntl`, `dup3`, `setpgid`, `close_range`,
 `execve`, and `exit_group` syscall set over prebuilt buffers.
 
+## Overlay session reports
+
+A daemon launch passes three optional environment variables, so an older overlay ignores them:
+`WAYSCRIBER_OVERLAY_SESSION_REPORTS=1` says the daemon reads session reports,
+`WAYSCRIBER_OVERLAY_HOME_SESSION` names its startup session file, and
+`WAYSCRIBER_OVERLAY_PREFERRED_SESSION` names the session it remembers, omitted when the request
+carried its own `--session-file`. The command line is unchanged. The broker strips these variables
+from helpers that do not relaunch wayscriber.
+
+An overlay with a published child identity reports its session in
+`daemon-commands/overlay-targets/<generation>.target`, a private sibling of `v2/`, never inside
+it. The canonical JSON record carries a schema version, the generation, PID and process-start
+identity, and a target: an absolute session file, or null for home. It is replaced on each change.
+When the child is retired, on exit, stop or forced reap, the daemon reads the report before it
+releases the child's identity, accepts it only from a private regular file in a private directory
+with exactly the identity captured at readiness, and removes it either way. The remembered session
+lives only in daemon memory; startup removes reports an earlier daemon left without restoring them.
+
 ## Compatibility and rollback
 
 - A v2 client against a v1 daemon uses the strict legacy parser and v1 request path.
@@ -76,6 +94,8 @@ stub: before `execve` it may reach only the fixed `fcntl`, `dup3`, `setpgid`, `c
   explicitly empty visibility signal remains supported.
 - V1 cleanup removes only exact v1 request/response artifacts and never recursively removes the v2
   root.
+- Session reports sit outside the strict v2 tree, and the legacy request scan reads only plain
+  files in `daemon-commands/`, so reports left behind never reach an older daemon's parsers.
 - Restart recovery rejects prior-generation open commands with a durable no-effect response and
   records authorized commands without terminal proof as indeterminate. Foreign-generation journal
   entries are abandoned rather than replayed.
