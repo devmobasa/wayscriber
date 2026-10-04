@@ -1,24 +1,52 @@
 use super::*;
+use crate::backend::wayland::session::load_output_session;
 
 impl WaylandState {
+    /// Loads and commits `staged` as the session for the output identified as
+    /// `physical_output_identity`. Until a session has loaded, a remembered
+    /// session this run continues must still be usable; otherwise the overlay
+    /// starts at home instead, says so, and the daemon hears that it is home,
+    /// so the next show does not try that session again.
     pub(in crate::backend::wayland) fn load_configured_session_for_options(
         &mut self,
-        options: session::SessionOptions,
+        staged: session::SessionOptions,
+        physical_output_identity: Option<&str>,
         context: &str,
     ) -> anyhow::Result<()> {
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::LoadConfigured {
-                options: options.clone(),
-            },
-        )?;
-        let PersistenceOutcome::Load(load_outcome) = outcome else {
-            return Err(anyhow::anyhow!("unexpected configured-load worker outcome"));
-        };
-        let loaded_board_data = load_outcome.has_board_data();
-        self.handle_session_load_outcome_for_options(load_outcome, &options, context)?;
-        self.session
-            .commit_output_options(options, loaded_board_data);
+        let remembered = self
+            .session_home
+            .remembered()
+            .filter(|_| !self.session.is_loaded())
+            .map(std::path::Path::to_path_buf);
+        let home = self
+            .session_home
+            .options_for_output(physical_output_identity);
+
+        let load = load_output_session(staged, remembered.as_deref(), home, |operation| {
+            session_save::run_persistence_operation(self, operation)
+        })?;
+
+        match load.loaded {
+            Some((options, outcome)) => {
+                let loaded_board_data = outcome.has_board_data();
+                self.handle_session_load_outcome_for_options(outcome, &options, context)?;
+                if load.abandoned.is_some() {
+                    self.input_state
+                        .set_session_preflight_options(Some(options.clone()));
+                }
+                self.session
+                    .commit_output_options(options, loaded_board_data);
+            }
+            None => {
+                self.session.replace_options_before_load(None);
+                self.input_state.set_session_preflight_options(None);
+            }
+        }
+        if let Some((path, error)) = load.abandoned {
+            self.notify_remembered_session_abandoned(&path, &error);
+        }
+
+        self.report_session_to_daemon();
         Ok(())
     }
 

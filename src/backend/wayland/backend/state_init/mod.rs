@@ -48,11 +48,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         .as_ref()
         .is_some_and(|failure| failure.section_failed("session"));
     let launch = SessionLaunch::from_environment(backend.named_session_file.as_deref());
-    let home_options = session::session_options_for(
-        &config,
-        &config_dir,
-        launch.home.file().map(Path::to_path_buf),
-    );
+    let home_options = session::home_session_options(&config, &config_dir, &launch);
     if let Some(preferred) = &launch.preferred {
         info!("Continuing remembered session {}", preferred.display());
     }
@@ -236,6 +232,9 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         tablet_manager,
     });
 
+    // A continued remembered session is reported before the daemon sees this
+    // overlay ready, so it never mistakes the overlay for being at home.
+    state.report_session_to_daemon();
     // Decide the toolbar frontend before the first visibility sync so the
     // built-in surfaces are never created just to be torn down when the
     // GTK bars take over.

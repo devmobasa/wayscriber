@@ -52,6 +52,11 @@ pub(in crate::backend::wayland) enum PersistenceOperation {
     LoadNamedCandidate {
         options: SessionOptions,
     },
+    /// Loads a remembered session file only while it is still a usable
+    /// session file, before and after it loads.
+    LoadRemembered {
+        options: SessionOptions,
+    },
     Inspect {
         options: SessionOptions,
     },
@@ -93,6 +98,7 @@ impl PersistenceOperation {
             Self::SaveAs { .. } => "save-as",
             Self::LoadConfigured { .. } => "load-configured",
             Self::LoadNamedCandidate { .. } => "load-named-candidate",
+            Self::LoadRemembered { .. } => "load-remembered",
             Self::Inspect { .. } => "inspect",
             Self::SaveAsOverwritePreflight { .. } => "save-as-overwrite-preflight",
             Self::ValidateNamedOpen { .. } => "validate-named-open",
@@ -127,6 +133,8 @@ pub(in crate::backend::wayland) enum PersistenceOutcome {
         committed_board_data: bool,
     },
     Load(LoadSnapshotOutcome),
+    /// The remembered session file is gone or can no longer be used.
+    RememberedUnavailable(anyhow::Error),
     Inspection(SessionInspection),
     SaveAsPreflight {
         same_target: bool,

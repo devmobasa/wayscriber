@@ -9,12 +9,15 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use anyhow::{Result, bail};
+
+use super::{PersistenceOperation, PersistenceOutcome};
 use crate::daemon::protocol_v2::ReportedSession;
 use crate::env_vars::{
     OVERLAY_HOME_SESSION_ENV, OVERLAY_PREFERRED_SESSION_ENV, OVERLAY_SESSION_REPORTS_ENV,
 };
 use crate::session::catalog::session_paths_match;
-use crate::session::{SessionOptions, SessionTarget};
+use crate::session::{LoadSnapshotOutcome, SessionOptions, SessionTarget};
 use crate::ui::toolbar::session_format::session_display_name;
 
 /// The session an overlay returns home to.
@@ -41,6 +44,9 @@ pub(in crate::backend::wayland) struct SessionLaunch {
     pub(in crate::backend::wayland) home: HomeSession,
     /// A remembered session to start in instead of home, if it still exists.
     pub(in crate::backend::wayland) preferred: Option<PathBuf>,
+    /// Whether a daemon that reads reports launched the overlay, so its
+    /// resume policy is the one the daemon passed.
+    pub(in crate::backend::wayland) from_daemon: bool,
 }
 
 impl SessionLaunch {
@@ -64,6 +70,7 @@ impl SessionLaunch {
                     HomeSession::Named(path.to_path_buf())
                 }),
                 preferred: None,
+                from_daemon: false,
             };
         }
 
@@ -74,7 +81,11 @@ impl SessionLaunch {
         let preferred =
             present(OVERLAY_PREFERRED_SESSION_ENV).filter(|_| startup_file == home.file());
 
-        Self { home, preferred }
+        Self {
+            home,
+            preferred,
+            from_daemon: true,
+        }
     }
 }
 
@@ -85,14 +96,17 @@ pub(in crate::backend::wayland) struct SessionHome {
     /// Home's session options before an output identity is applied; `None`
     /// when home has persistence disabled.
     options: Option<SessionOptions>,
-    /// The preferred session, until the first load checks that it still exists.
-    unchecked_preferred: Option<PathBuf>,
-    /// The target the daemon last learned this overlay is in, by launching it
-    /// there or from a report.
-    reported: SessionTarget,
-    /// Whether `reported` is home. Kept rather than worked out when asked,
+    /// The remembered session this run was asked to continue.
+    remembered: Option<PathBuf>,
+    /// The target the overlay is in, as of the last commit.
+    current: SessionTarget,
+    /// Whether `current` is home. Kept rather than worked out when asked,
     /// since the Session menu asks on every redraw.
     at_home: bool,
+    /// The target the daemon last learned this overlay is in, by launching it
+    /// there or from a report. `None` until a continued remembered session is
+    /// reported: the daemon launched the overlay at home, not in it.
+    reported: Option<SessionTarget>,
 }
 
 impl SessionHome {
@@ -104,21 +118,27 @@ impl SessionHome {
     ) -> Self {
         Self {
             at_home: is_home(&launch.home, &startup),
+            reported: launch.preferred.is_none().then(|| startup.clone()),
             home: launch.home,
             options,
-            unchecked_preferred: launch.preferred,
-            reported: startup,
+            remembered: launch.preferred,
+            current: startup,
         }
     }
 
-    pub(in crate::backend::wayland) fn options(&self) -> Option<&SessionOptions> {
-        self.options.as_ref()
+    /// Home's options for the output identified as `output_identity`.
+    pub(in crate::backend::wayland) fn options_for_output(
+        &self,
+        output_identity: Option<&str>,
+    ) -> Option<SessionOptions> {
+        let mut options = self.options.clone()?;
+        options.set_output_identity(output_identity);
+        Some(options)
     }
 
-    /// The preferred session this run started in, once: only the first load
-    /// checks it.
-    pub(in crate::backend::wayland) fn take_unchecked_preferred(&mut self) -> Option<PathBuf> {
-        self.unchecked_preferred.take()
+    /// The remembered session this run was asked to continue.
+    pub(in crate::backend::wayland) fn remembered(&self) -> Option<&Path> {
+        self.remembered.as_deref()
     }
 
     /// The name of a named home session; `None` for the default session.
@@ -137,24 +157,32 @@ impl SessionHome {
         self.at_home
     }
 
-    /// Records that the overlay is now in `target`, returning what to report,
-    /// or `None` when the daemon already knows. Home is reported as such even
-    /// when it is a named file, so the daemon never remembers home as a
-    /// session of its own.
-    pub(in crate::backend::wayland) fn commit_target(
-        &mut self,
-        target: SessionTarget,
-    ) -> Option<ReportedSession> {
-        if target == self.reported {
+    /// Records that the overlay is now in `target`.
+    pub(in crate::backend::wayland) fn enter(&mut self, target: SessionTarget) {
+        if target != self.current {
+            self.at_home = is_home(&self.home, &target);
+            self.current = target;
+        }
+    }
+
+    /// What the daemon has yet to learn about the overlay's session. Home is
+    /// reported as such even when it is a named file, so the daemon never
+    /// remembers home as a session of its own.
+    pub(in crate::backend::wayland) fn unreported(&self) -> Option<ReportedSession> {
+        if self.reported.as_ref() == Some(&self.current) {
             return None;
         }
-        self.at_home = is_home(&self.home, &target);
-        let report = match &target {
+
+        Some(match &self.current {
             SessionTarget::NamedFile(path) if !self.at_home => ReportedSession::Named(path.clone()),
             _ => ReportedSession::Home,
-        };
-        self.reported = target;
-        Some(report)
+        })
+    }
+
+    /// The daemon now knows the overlay's session; a failed report is tried
+    /// again on the next commit instead.
+    pub(in crate::backend::wayland) fn mark_reported(&mut self) {
+        self.reported = Some(self.current.clone());
     }
 }
 
@@ -174,6 +202,64 @@ pub(in crate::backend::wayland) fn session_target(
     options: Option<&SessionOptions>,
 ) -> SessionTarget {
     options.map_or(SessionTarget::Configured, |options| options.target.clone())
+}
+
+/// What an output's session load found.
+#[derive(Debug)]
+pub(in crate::backend::wayland) struct OutputSessionLoad {
+    /// The options loaded and what loading them found: the staged options, or
+    /// home's in place of a remembered session that can no longer be used.
+    /// `None` when that home has persistence disabled, leaving nothing to load.
+    pub(in crate::backend::wayland) loaded: Option<(SessionOptions, LoadSnapshotOutcome)>,
+    /// The remembered session given up for home, and why.
+    pub(in crate::backend::wayland) abandoned: Option<(PathBuf, anyhow::Error)>,
+}
+
+/// Loads `staged`, the session an output starts in, through `run`. When it is
+/// the `remembered` session the run was asked to continue, its file must be
+/// usable as the load runs, every attempt: otherwise `home` loads instead.
+pub(in crate::backend::wayland) fn load_output_session(
+    staged: SessionOptions,
+    remembered: Option<&Path>,
+    home: Option<SessionOptions>,
+    mut run: impl FnMut(PersistenceOperation) -> Result<PersistenceOutcome>,
+) -> Result<OutputSessionLoad> {
+    let continues_remembered =
+        remembered.is_some_and(|path| staged.target == SessionTarget::NamedFile(path.into()));
+    let operation = if continues_remembered {
+        PersistenceOperation::LoadRemembered {
+            options: staged.clone(),
+        }
+    } else {
+        PersistenceOperation::LoadConfigured {
+            options: staged.clone(),
+        }
+    };
+    let abandoned = match run(operation)? {
+        PersistenceOutcome::Load(outcome) => {
+            return Ok(OutputSessionLoad {
+                loaded: Some((staged, outcome)),
+                abandoned: None,
+            });
+        }
+        PersistenceOutcome::RememberedUnavailable(error) => (staged.session_file_path(), error),
+        other => bail!("unexpected session load outcome: {other:?}"),
+    };
+
+    let loaded = match home {
+        Some(home) => match run(PersistenceOperation::LoadConfigured {
+            options: home.clone(),
+        })? {
+            PersistenceOutcome::Load(outcome) => Some((home, outcome)),
+            other => bail!("unexpected home session load outcome: {other:?}"),
+        },
+        None => None,
+    };
+
+    Ok(OutputSessionLoad {
+        loaded,
+        abandoned: Some(abandoned),
+    })
 }
 
 #[cfg(test)]

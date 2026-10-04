@@ -1,82 +1,60 @@
+use std::path::Path;
+
 use log::{info, warn};
 
 use super::super::*;
-use crate::backend::wayland::backend::event_loop::session_save;
-use crate::backend::wayland::session::{PersistenceOperation, PersistenceOutcome, session_target};
+use crate::backend::wayland::session::session_target;
 use crate::daemon::protocol_v2::publish_session_from_environment;
 use crate::input::state::{Toast, ToastPriority};
+use crate::session::MissingNamedSessionFile;
 use crate::ui::toolbar::session_format::session_display_name;
 
 impl WaylandState {
-    /// Starts at home instead of the remembered session this run was asked to
-    /// continue when that session no longer exists: it was moved or deleted
-    /// after the daemon chose it. The daemon hears that this overlay is home,
-    /// so the next show does not try the missing session again.
-    pub(in crate::backend::wayland) fn start_at_home_if_preferred_session_is_gone(&mut self) {
-        let Some(preferred) = self.session_home.take_unchecked_preferred() else {
-            return;
-        };
-        let Some(options) = self.session_options().cloned() else {
-            return;
-        };
-        match session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::HasArtifacts { options },
-        ) {
-            Ok(PersistenceOutcome::HasArtifacts(true)) => return,
-            Ok(PersistenceOutcome::HasArtifacts(false)) => {}
-            Ok(other) => {
-                warn!("Unexpected outcome checking the remembered session: {other:?}");
-                return;
-            }
-            // The load that follows reports the failure the way it would for
-            // a session file given at startup.
-            Err(error) => {
-                warn!(
-                    "Failed to check remembered session {}: {error:#}",
-                    preferred.display()
-                );
-                return;
-            }
-        }
-
+    pub(in crate::backend::wayland::state) fn notify_remembered_session_abandoned(
+        &mut self,
+        path: &Path,
+        error: &anyhow::Error,
+    ) {
         info!(
-            "Remembered session {} no longer exists; starting at home",
-            preferred.display()
+            "Remembered session {} cannot be continued; starting at home: {error:#}",
+            path.display()
         );
-        let home = self.session_home.options().cloned();
-        self.session.replace_options_before_load(home.clone());
-        self.input_state.set_session_preflight_options(home);
+        let name = session_display_name(path);
+        let message = if error.downcast_ref::<MissingNamedSessionFile>().is_some() {
+            format!("Session {name} is no longer available")
+        } else {
+            format!("Session {name} can no longer be used ({error:#})")
+        };
         self.input_state.push_toast(
             ToastPriority::Info,
             "session",
-            Toast::warning(format!(
-                "Session {} is no longer available; opened {}",
-                session_display_name(&preferred),
-                self.session_home.label()
-            )),
+            Toast::warning(format!("{message}; opened {}", self.session_home.label())),
         );
-        self.session_target_committed();
     }
 
     /// Tells the daemon that launched this overlay the session it is now in,
-    /// if that changed, so the next show starts there. A failure leaves the
-    /// daemon with what it knew before, and only that is reported: the session
-    /// switch stands.
-    pub(in crate::backend::wayland) fn session_target_committed(&mut self) {
-        let target = session_target(self.session.options());
-        let Some(session) = self.session_home.commit_target(target) else {
+    /// if the daemon does not know it yet, so the next show starts there. A
+    /// failure leaves the daemon with what it knew before, and only that is
+    /// reported: the session switch stands, and the next commit tries again.
+    pub(in crate::backend::wayland) fn report_session_to_daemon(&mut self) {
+        self.session_home
+            .enter(session_target(self.session.options()));
+        let Some(session) = self.session_home.unreported() else {
             return;
         };
-        if let Err(error) = publish_session_from_environment(&session) {
-            warn!("Failed to report the session to the daemon: {error:#}");
-            self.input_state.push_toast(
-                ToastPriority::Info,
-                "session.report",
-                Toast::warning(format!(
-                    "The overlay may not reopen in this session after it hides: {error:#}"
-                )),
-            );
+
+        match publish_session_from_environment(&session) {
+            Ok(_) => self.session_home.mark_reported(),
+            Err(error) => {
+                warn!("Failed to report the session to the daemon: {error:#}");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "session.report",
+                    Toast::warning(format!(
+                        "The overlay may not reopen in this session after it hides: {error:#}"
+                    )),
+                );
+            }
         }
     }
 }

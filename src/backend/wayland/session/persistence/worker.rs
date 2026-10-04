@@ -134,6 +134,7 @@ pub(super) fn execute(operation: PersistenceOperation) -> Result<PersistenceOutc
         PersistenceOperation::LoadNamedCandidate { options } => Ok(PersistenceOutcome::Load(
             session::load_named_session_candidate(&options)?,
         )),
+        PersistenceOperation::LoadRemembered { options } => load_remembered(&options),
         PersistenceOperation::Inspect { options } => Ok(PersistenceOutcome::Inspection(
             session::inspect_session(&options)?,
         )),
@@ -177,6 +178,23 @@ pub(super) fn execute(operation: PersistenceOperation) -> Result<PersistenceOutc
         }
         PersistenceOperation::Shutdown => Ok(PersistenceOutcome::Unit),
     }
+}
+
+/// Loads a remembered session with the startup rules of a session file, but
+/// only from that file itself. A file moved or deleted since it was remembered
+/// is not continued from a backup or recovery copy left beside it, and neither
+/// is one that went away while it loaded.
+fn load_remembered(options: &SessionOptions) -> Result<PersistenceOutcome> {
+    let path = options.session_file_path();
+    if let Err(error) = session::validate_named_session_file_for_open(&path) {
+        return Ok(PersistenceOutcome::RememberedUnavailable(error));
+    }
+    let outcome = session::load_snapshot_with_outcome(options)?;
+
+    Ok(match session::validate_named_session_file_for_open(&path) {
+        Ok(()) => PersistenceOutcome::Load(outcome),
+        Err(error) => PersistenceOutcome::RememberedUnavailable(error),
+    })
 }
 
 pub(super) fn save_as_preflight_after_validation(

@@ -16,14 +16,13 @@ impl WaylandState {
     /// Home's options for the output the overlay is on now, not those of the
     /// named session it is leaving.
     fn home_session_options(&self) -> Option<SessionOptions> {
-        let mut options = self.session_home.options()?.clone();
         let output_identity = self
             .surface
             .current_output()
             .as_ref()
             .and_then(|output| self.output_identity_for(output));
-        options.set_output_identity(output_identity.as_deref());
-        Some(options)
+        self.session_home
+            .options_for_output(output_identity.as_deref())
     }
 
     pub(super) fn finish_open_home_session(&mut self, report: RuntimeHomeSessionReport) {
@@ -45,7 +44,7 @@ impl WaylandState {
             return;
         }
 
-        self.session_target_committed();
+        self.report_session_to_daemon();
         self.set_session_toolbar_info(format!("Returned to {}", self.session_home.label()));
     }
 

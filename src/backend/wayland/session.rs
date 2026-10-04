@@ -607,7 +607,9 @@ mod runtime;
 
 #[cfg(test)]
 pub(in crate::backend::wayland) use home::HomeSession;
-pub(in crate::backend::wayland) use home::{SessionHome, SessionLaunch, session_target};
+pub(in crate::backend::wayland) use home::{
+    SessionHome, SessionLaunch, load_output_session, session_target,
+};
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,

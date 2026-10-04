@@ -637,6 +637,7 @@ mod tests {
             SessionLaunch {
                 home: crate::backend::wayland::session::HomeSession::Named(home),
                 preferred: None,
+                from_daemon: true,
             },
             None,
             SessionTarget::NamedFile("/sessions/b.wayscriber-session".into()),
