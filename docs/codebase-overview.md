@@ -539,18 +539,20 @@ capture suppression operates on the paired resources without runtime pairing che
 **Modules:**
 - `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
 - `src/backend/wayland/session/`: runtime Open, Save As, Clear, and saved tool-state reset transactions for the active overlay.
-- `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session popover routing for Open, Save As, Info, Clear, recent sessions, and configurator launch.
-- `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target.
+- `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session popover routing for Open, Save As, return home, Info, Clear, recent sessions, and configurator launch.
+- `src/backend/wayland/session/home.rs`: the overlay's home session, the remembered session a daemon launch carries, and the session reports sent back to the daemon.
+- `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target, and remembers the session its overlay last reported across hide and show.
 
 **Flow:**
 1. CLI `--session-file` creates a named target instead of using configured storage. Named targets force persistence for that run, reject `--no-resume-session`, require an existing parent directory for foreground/open flows, and reject directories, symlinks, and special files.
 2. Backend startup builds `SessionOptions` from config plus any named target, then session loading restores boards/history/tool state before rendering begins.
 3. Runtime Open first saves dirty current data when needed, loads the candidate named session without mutating it, replaces board state only after a valid load, and records the open in the named-session catalog.
 4. Runtime Save As validates the target, prompts before replacing existing artifacts, writes the snapshot, switches the active target, and records the save in the catalog.
-5. Runtime Clear writes a durable empty-session boundary so older backup or recovery artifacts do not restore stale drawings.
-6. Runtime saved tool-state reset clears the persisted tool layer for the active session and applies config-derived tool defaults in memory so autosave does not restore stale values.
-7. Offline CLI maintenance can inspect sessions, clear all saved data, or clear only persisted tool state so config defaults seed the next startup without deleting boards.
-8. The configurator reads the same catalog for inactive-session management: rename/reveal/forget metadata, duplicate primary files, move non-lock sidecars, clear saved tool state, and clear saved data when daemon/overlay locks are absent.
+5. Returning home saves dirty current data the same way, then loads the home session as a launch would. A daemon overlay reports each committed target change, so the daemon starts the next overlay in that session; a remembered session that no longer exists falls back to home.
+6. Runtime Clear writes a durable empty-session boundary so older backup or recovery artifacts do not restore stale drawings.
+7. Runtime saved tool-state reset clears the persisted tool layer for the active session and applies config-derived tool defaults in memory so autosave does not restore stale values.
+8. Offline CLI maintenance can inspect sessions, clear all saved data, or clear only persisted tool state so config defaults seed the next startup without deleting boards.
+9. The configurator reads the same catalog for inactive-session management: rename/reveal/forget metadata, duplicate primary files, move non-lock sidecars, clear saved tool state, and clear saved data when daemon/overlay locks are absent.
 
 ---
 

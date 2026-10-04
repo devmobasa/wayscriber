@@ -1931,6 +1931,13 @@ fn session_popover_re_hosts_the_session_pane_content() {
     assert_session_nodes_inside_panel(&tree);
     assert_session_popover_input_rect(&snapshot, &tree, w, h);
 
+    // Away from home, the way back is offered.
+    snapshot.home_session_name = Some("home.wayscriber-session".to_string());
+    snapshot.at_home_session = false;
+    let tree = build(&snapshot);
+    assert_session_popover_model(&tree, &snapshot);
+    assert_session_nodes_inside_panel(&tree);
+
     // A pending Save-As overwrite swaps the button grid for the
     // confirmation, exactly like the pane.
     snapshot.pending_save_as_overwrite_path =
@@ -1974,6 +1981,24 @@ fn assert_session_popover_model(tree: &WidgetTree, snapshot: &ToolbarSnapshot) {
             .expect("recent row");
         assert_eq!(node.interact.as_ref().unwrap().event, recent.event());
     }
+    let home = model.home.as_ref().expect("home row");
+    let node = tree
+        .node_by_id(&"top.menu.session.home".into())
+        .expect("home row");
+    match &node.kind {
+        WidgetKind::TextButton { label, style } => {
+            assert_eq!(
+                label.text,
+                crate::ui::toolbar::session_format::truncate_middle(&home.label, 30)
+            );
+            assert_eq!(style.disabled, !home.enabled);
+        }
+        other => panic!("home row kind, got {other:?}"),
+    }
+    assert_eq!(
+        node.interact.as_ref().map(|interact| &interact.event),
+        home.enabled.then(|| home.event()).as_ref()
+    );
     // Meta labels are decor; this popover has no collapsible header.
     assert!(tree.node_by_id(&"top.menu.session.name".into()).is_some());
     assert!(tree.node_by_id(&"top.menu.session.path".into()).is_some());

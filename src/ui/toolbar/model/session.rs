@@ -12,6 +12,7 @@ pub(crate) struct ToolbarSessionModel {
     pub(crate) active_name: String,
     pub(crate) active_path_label: String,
     pub(crate) buttons: Vec<ToolbarSessionButton>,
+    pub(crate) home: Option<ToolbarSessionHome>,
     pub(crate) recents: Vec<ToolbarSessionRecent>,
     pub(crate) overwrite_confirmation: Option<ToolbarSessionOverwriteConfirmation>,
 }
@@ -44,6 +45,8 @@ impl ToolbarSessionModel {
         .into_iter()
         .filter(|button| session_button_visible(snapshot, &button.event))
         .collect();
+        let home = (!snapshot.toolbar_item_hidden(ids::SIDE_SESSION_HOME))
+            .then(|| ToolbarSessionHome::from_snapshot(snapshot));
         let recents = if target_active {
             snapshot
                 .recent_sessions
@@ -62,10 +65,11 @@ impl ToolbarSessionModel {
                 path: path.clone(),
             });
 
-        (!buttons.is_empty() || !recents.is_empty()).then_some(Self {
+        (!buttons.is_empty() || home.is_some() || !recents.is_empty()).then_some(Self {
             active_name,
             active_path_label,
             buttons,
+            home,
             recents,
             overwrite_confirmation,
         })
@@ -106,6 +110,32 @@ impl ToolbarSessionButton {
             label,
             enabled,
         }
+    }
+}
+
+/// The way back to the home session: the daemon's startup session file, or
+/// the configured default session.
+#[derive(Debug, Clone)]
+pub(crate) struct ToolbarSessionHome {
+    /// "Back to <session>", or "Default session".
+    pub(crate) label: String,
+    /// Off while home is already active: there is nothing to return to.
+    pub(crate) enabled: bool,
+}
+
+impl ToolbarSessionHome {
+    fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
+        Self {
+            label: snapshot.home_session_name.as_ref().map_or_else(
+                || "Default session".to_owned(),
+                |name| format!("Back to {name}"),
+            ),
+            enabled: !snapshot.at_home_session,
+        }
+    }
+
+    pub(crate) fn event(&self) -> ToolbarEvent {
+        ToolbarEvent::OpenHomeSession
     }
 }
 
@@ -218,6 +248,32 @@ mod tests {
         ));
         assert!(model.recents.is_empty());
         assert_eq!(model.active_path_label, "No persisted session target");
+    }
+
+    #[test]
+    fn session_model_offers_the_way_home_only_away_from_home() {
+        let mut snapshot = app_snapshot();
+        snapshot.active_session_path = Some(PathBuf::from("/tmp/b.wayscriber-session"));
+
+        for (name, label) in [
+            (None, "Default session"),
+            (
+                Some("home.wayscriber-session"),
+                "Back to home.wayscriber-session",
+            ),
+        ] {
+            snapshot.home_session_name = name.map(str::to_owned);
+            for at_home in [false, true] {
+                snapshot.at_home_session = at_home;
+
+                let model = ToolbarSessionModel::for_popover(&snapshot).expect("session model");
+                let home = model.home.expect("home row");
+
+                assert_eq!(home.label, label);
+                assert_eq!(home.enabled, !at_home, "{label}, at home {at_home}");
+                assert_eq!(home.event(), ToolbarEvent::OpenHomeSession);
+            }
+        }
     }
 
     #[test]

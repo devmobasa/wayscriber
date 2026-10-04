@@ -57,6 +57,13 @@ impl ExplicitSessionTransaction {
                             },
                         )
                     }
+                    SessionCommand::OpenHome(_) => {
+                        cancel_pending_output_transition_for_explicit_target(
+                            context.session,
+                            "Return to the home session",
+                        );
+                        self.save_current_or_continue(context)
+                    }
                     SessionCommand::Clear => {
                         self.capture_input_generation(context);
                         self.work(
@@ -162,6 +169,27 @@ impl ExplicitSessionTransaction {
         }
         Ok(TransactionStep::Complete(Box::new(
             SessionCommandReport::Open(self.open_report()),
+        )))
+    }
+
+    /// Home is applied by the runtime, which loads it like a launch would; the
+    /// transaction only hands over what the load found.
+    pub(super) fn complete_load_home(
+        &mut self,
+        _context: &mut SessionTransaction<'_>,
+        outcome: Option<PersistenceOutcome>,
+    ) -> Result<TransactionStep> {
+        let PersistenceOutcome::Load(load) = required_outcome(outcome)? else {
+            return Err(anyhow!("unexpected home-session load outcome"));
+        };
+        let SessionCommand::OpenHome(Some(options)) = &self.command else {
+            unreachable!()
+        };
+        Ok(TransactionStep::Complete(Box::new(
+            SessionCommandReport::Home(RuntimeHomeSessionReport {
+                options: Some((**options).clone()),
+                outcome: Some(load),
+            }),
         )))
     }
 

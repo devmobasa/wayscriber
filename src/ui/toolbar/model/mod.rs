@@ -684,6 +684,20 @@ mod tests {
                 .any(|button| button.event == ToolbarEvent::SessionInfo),
             "hiding side.session.info removes the Session Info control"
         );
+        assert!(
+            ToolbarSessionModel::for_popover(&snapshot)
+                .expect("session")
+                .home
+                .is_some()
+        );
+        hide(&mut snapshot, ids::SIDE_SESSION_HOME);
+        assert!(
+            ToolbarSessionModel::for_popover(&snapshot)
+                .expect("session")
+                .home
+                .is_none(),
+            "hiding side.session.home removes the way back to the home session"
+        );
 
         snapshot = self::snapshot();
         let about_visible = |snapshot: &ToolbarSnapshot| {

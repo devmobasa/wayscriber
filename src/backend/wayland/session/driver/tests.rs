@@ -707,6 +707,104 @@ fn failed_open_and_save_as_announce_nothing() {
     }
 }
 
+fn configured_home(base: &std::path::Path) -> stored_session::SessionOptions {
+    let mut options = stored_session::SessionOptions::new(base.join("configured"), "home");
+    options.persist_transparent = true;
+    options
+}
+
+#[test]
+fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let home = configured_home(temp.path());
+    stored_session::save_snapshot(&sample_snapshot(), &home).unwrap();
+    let mut input = test_input_state();
+    add_line(&mut input, 51);
+    input.mark_session_dirty();
+    let mut session = SessionState::new(Some(current.clone()));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(
+        &mut runtime,
+        SessionCommand::OpenHome(Some(Box::new(home.clone()))),
+    )
+    .unwrap();
+    worker.complete_next(); // save the current session
+    runtime.receive();
+    assert_eq!(loaded_line_x2(&current), 51);
+    assert!(runtime.reports.is_empty());
+    worker.complete_next(); // load home
+    runtime.receive();
+
+    assert!(runtime.errors.is_empty());
+    let [SessionCommandReport::Home(report)] = runtime.reports.as_slice() else {
+        panic!(
+            "expected a home report, got {} reports",
+            runtime.reports.len()
+        );
+    };
+    assert_eq!(
+        report.options.as_ref().map(|options| &options.target),
+        Some(&home.target)
+    );
+    assert!(matches!(
+        report.outcome,
+        Some(stored_session::LoadSnapshotOutcome::Loaded(_))
+    ));
+    // The runtime applies home; until then the canvas and target stay put.
+    assert_eq!(runtime.session.options().unwrap().target, current.target);
+    assert_eq!(runtime.input.boards.active_frame().shapes.len(), 1);
+}
+
+#[test]
+fn returning_home_is_refused_when_the_canvas_changes_while_home_loads() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let home = configured_home(temp.path());
+    let mut input = test_input_state();
+    let mut session = SessionState::new(Some(current.clone()));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(&mut runtime, SessionCommand::OpenHome(Some(Box::new(home)))).unwrap();
+    add_line(runtime.input, 77);
+    runtime.input.mark_session_dirty();
+    worker.complete_next(); // load home
+    runtime.receive();
+
+    assert!(runtime.reports.is_empty());
+    assert!(
+        runtime.errors[0]
+            .to_string()
+            .contains("session was edited while the command was pending"),
+        "{:?}",
+        runtime.errors
+    );
+    assert_eq!(runtime.session.options().unwrap().target, current.target);
+}
+
+#[test]
+fn returning_to_a_home_without_persistence_loads_nothing() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut input = test_input_state();
+    let mut session = SessionState::new(Some(named_options(temp.path(), "current")));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(&mut runtime, SessionCommand::OpenHome(None)).unwrap();
+
+    assert!(!worker.has_request());
+    let [SessionCommandReport::Home(report)] = runtime.reports.as_slice() else {
+        panic!("expected a home report");
+    };
+    assert!(report.options.is_none() && report.outcome.is_none());
+}
+
 #[test]
 fn clear_completion_refreshes_consumer_seeds() {
     let temp = crate::test_temp::tempdir().unwrap();

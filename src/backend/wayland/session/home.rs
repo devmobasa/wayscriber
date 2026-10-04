@@ -90,6 +90,9 @@ pub(in crate::backend::wayland) struct SessionHome {
     /// The target the daemon last learned this overlay is in, by launching it
     /// there or from a report.
     reported: SessionTarget,
+    /// Whether `reported` is home. Kept rather than worked out when asked,
+    /// since the Session menu asks on every redraw.
+    at_home: bool,
 }
 
 impl SessionHome {
@@ -100,6 +103,7 @@ impl SessionHome {
         startup: SessionTarget,
     ) -> Self {
         Self {
+            at_home: is_home(&launch.home, &startup),
             home: launch.home,
             options,
             unchecked_preferred: launch.preferred,
@@ -117,38 +121,50 @@ impl SessionHome {
         self.unchecked_preferred.take()
     }
 
-    /// How the Session menu and notices name home.
-    pub(in crate::backend::wayland) fn label(&self) -> String {
-        match &self.home {
-            HomeSession::Default => "the default session".to_owned(),
-            HomeSession::Named(path) => session_display_name(path),
-        }
+    /// The name of a named home session; `None` for the default session.
+    pub(in crate::backend::wayland) fn name(&self) -> Option<String> {
+        self.home.file().map(session_display_name)
     }
 
-    /// What to report now that the overlay is in `target`, or `None` when the
-    /// daemon already knows. Home is reported as such even when it is a named
-    /// file, so the daemon never remembers home as a session of its own.
-    pub(in crate::backend::wayland) fn report_for(
+    /// How notices name home.
+    pub(in crate::backend::wayland) fn label(&self) -> String {
+        self.name()
+            .unwrap_or_else(|| "the default session".to_owned())
+    }
+
+    /// Whether the overlay is in its home session, as of the last commit.
+    pub(in crate::backend::wayland) fn is_at_home(&self) -> bool {
+        self.at_home
+    }
+
+    /// Records that the overlay is now in `target`, returning what to report,
+    /// or `None` when the daemon already knows. Home is reported as such even
+    /// when it is a named file, so the daemon never remembers home as a
+    /// session of its own.
+    pub(in crate::backend::wayland) fn commit_target(
         &mut self,
         target: SessionTarget,
     ) -> Option<ReportedSession> {
         if target == self.reported {
             return None;
         }
+        self.at_home = is_home(&self.home, &target);
         let report = match &target {
-            SessionTarget::NamedFile(path) if !self.is_home_file(path) => {
-                ReportedSession::Named(path.clone())
-            }
+            SessionTarget::NamedFile(path) if !self.at_home => ReportedSession::Named(path.clone()),
             _ => ReportedSession::Home,
         };
         self.reported = target;
         Some(report)
     }
+}
 
-    fn is_home_file(&self, path: &Path) -> bool {
-        self.home
-            .file()
-            .is_some_and(|home| session_paths_match(home, path))
+fn is_home(home: &HomeSession, target: &SessionTarget) -> bool {
+    match (home, target) {
+        (HomeSession::Default, SessionTarget::Configured) => true,
+        (HomeSession::Named(home), SessionTarget::NamedFile(path)) => {
+            session_paths_match(home, path)
+        }
+        _ => false,
     }
 }
 

@@ -1,6 +1,7 @@
 //! Session pane: active-session meta labels, the Open / Save As / Info /
 //! Clear / Manager grid (replaced by the Save-As overwrite confirmation
-//! while one is pending), and the recent-session list.
+//! while one is pending), the way back to the home session, and the
+//! recent-session list.
 
 use gtk4::prelude::*;
 
@@ -54,6 +55,9 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
         column.append(&grid);
     }
 
+    if let Some(home) = session.home.as_ref() {
+        column.append(&home_button(ctx, home));
+    }
     for recent in &session.recents {
         column.append(&recent_row(ctx, recent));
     }
@@ -129,6 +133,22 @@ fn overwrite_confirmation_rows(
     }
     rows.append(&buttons);
     rows
+}
+
+fn home_button(ctx: &SectionCtx, home: &model::session::ToolbarSessionHome) -> gtk4::Button {
+    let button = gtk4::Button::new();
+    button.set_size_request(-1, ctx.px(24.0));
+    let label = gtk4::Label::new(Some(&home.label));
+    label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+    button.set_child(Some(&label));
+    button.set_tooltip_text(Some(&home.label));
+    button.set_sensitive(home.enabled);
+    let sender = ctx.feedback.clone();
+    let event = home.event();
+    button.connect_clicked(move |_| {
+        send_event(&sender, event.clone());
+    });
+    button
 }
 
 fn recent_row(ctx: &SectionCtx, recent: &model::ToolbarSessionRecent) -> gtk4::Button {

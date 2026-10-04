@@ -362,6 +362,7 @@ impl InputState {
             ToolbarEvent::ClearPreset(slot) => self.apply_toolbar_clear_preset(slot),
             ToolbarEvent::OpenSession
             | ToolbarEvent::OpenRecentSession(_)
+            | ToolbarEvent::OpenHomeSession
             | ToolbarEvent::SaveSessionAs
             | ToolbarEvent::SaveSessionAsConfirm(_)
             | ToolbarEvent::SaveSessionAsCancel

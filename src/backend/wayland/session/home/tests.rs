@@ -133,14 +133,14 @@ fn only_the_first_load_checks_the_preferred_session() {
 fn only_a_changed_session_is_reported() {
     let mut home = home_session(named(HOME), Some(PREFERRED), file(PREFERRED));
 
-    assert_eq!(home.report_for(file(PREFERRED)), None);
+    assert_eq!(home.commit_target(file(PREFERRED)), None);
 
     let other = "/sessions/d.wayscriber-session";
     assert_eq!(
-        home.report_for(file(other)),
+        home.commit_target(file(other)),
         Some(ReportedSession::Named(PathBuf::from(other)))
     );
-    assert_eq!(home.report_for(file(other)), None);
+    assert_eq!(home.commit_target(file(other)), None);
 }
 
 #[test]
@@ -150,17 +150,17 @@ fn home_is_reported_as_home_even_as_a_named_file() {
     let alias = "/sessions/./home.wayscriber-session";
 
     assert_eq!(
-        named_home.report_for(file(alias)),
+        named_home.commit_target(file(alias)),
         Some(ReportedSession::Home)
     );
 
     let mut default_home = home_session(HomeSession::Default, None, file(PREFERRED));
     assert_eq!(
-        default_home.report_for(SessionTarget::Configured),
+        default_home.commit_target(SessionTarget::Configured),
         Some(ReportedSession::Home)
     );
     assert_eq!(
-        default_home.report_for(file(HOME)),
+        default_home.commit_target(file(HOME)),
         Some(ReportedSession::Named(PathBuf::from(HOME)))
     );
 }
@@ -168,4 +168,35 @@ fn home_is_reported_as_home_even_as_a_named_file() {
 #[test]
 fn a_run_without_persistence_is_in_the_default_session() {
     assert_eq!(session_target(None), SessionTarget::Configured);
+}
+
+#[test]
+fn the_overlay_knows_whether_it_is_home() {
+    let mut named_home = home_session(named(HOME), Some(PREFERRED), file(PREFERRED));
+    assert!(!named_home.is_at_home());
+    named_home.commit_target(file("/sessions/./home.wayscriber-session"));
+    assert!(named_home.is_at_home());
+    named_home.commit_target(file(PREFERRED));
+    assert!(!named_home.is_at_home());
+    assert!(home_session(named(HOME), None, file(HOME)).is_at_home());
+
+    let mut default_home = home_session(HomeSession::Default, None, file(PREFERRED));
+    assert!(!default_home.is_at_home());
+    default_home.commit_target(SessionTarget::Configured);
+    assert!(default_home.is_at_home());
+    assert!(home_session(HomeSession::Default, None, SessionTarget::Configured).is_at_home());
+}
+
+#[test]
+fn only_a_named_home_has_a_name() {
+    assert_eq!(
+        home_session(named(HOME), None, file(HOME))
+            .name()
+            .as_deref(),
+        Some("home.wayscriber-session")
+    );
+    assert_eq!(
+        home_session(HomeSession::Default, None, SessionTarget::Configured).name(),
+        None
+    );
 }

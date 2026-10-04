@@ -64,7 +64,7 @@ impl WaylandState {
             })
     }
 
-    pub(super) fn handle_session_load_outcome_for_options(
+    pub(in crate::backend::wayland::state) fn handle_session_load_outcome_for_options(
         &mut self,
         outcome: session::LoadSnapshotOutcome,
         options: &session::SessionOptions,

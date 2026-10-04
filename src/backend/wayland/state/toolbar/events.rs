@@ -110,7 +110,7 @@ impl WaylandState {
         // toolbar snapshot is built between canvas renders, and before the
         // first one, so a published value would lag or not exist yet.
         snapshot.spotlight_magnifier_source = Some(self.current_spotlight_magnifier_source());
-        populate_session_snapshot(&mut snapshot, self.session.options());
+        populate_session_snapshot(&mut snapshot, self.session.options(), &self.session_home);
         snapshot.runtime_ui_persistence = self
             .preferences
             .runtime_ui()

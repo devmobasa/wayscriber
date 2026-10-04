@@ -47,6 +47,9 @@ Open Wayscriber with any persisted session target, then use the top strip overfl
 - `Info` reports the active session file size, board shape counts, and history
   status.
 - `Clear` writes a durable empty session boundary for the active target.
+- `Back to <session>`, or `Default session` without a startup session file,
+  saves the current session and returns to the session the overlay or daemon
+  started with. It is disabled while that session is already active.
 - Recent session rows reopen other named sessions.
 - `Manager` opens the configurator.
 

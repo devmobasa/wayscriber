@@ -465,6 +465,11 @@ pub struct ToolbarSnapshot {
     pub active_session_path: Option<PathBuf>,
     /// Recent persisted sessions from the catalog.
     pub recent_sessions: Vec<SessionRecentSnapshot>,
+    /// The named session the Session menu returns home to; `None` is the
+    /// configured default session.
+    pub home_session_name: Option<String>,
+    /// Whether the active session is home, leaving nothing to return to.
+    pub at_home_session: bool,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub pending_save_as_overwrite_path: Option<PathBuf>,
     /// Generated runtime UI preference persistence and recovery state.

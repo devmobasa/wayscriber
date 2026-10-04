@@ -236,6 +236,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         // and Settings preferences: toolbar state rather than drawing actions.
         ToolbarEvent::OpenSession
         | ToolbarEvent::OpenRecentSession(_)
+        | ToolbarEvent::OpenHomeSession
         | ToolbarEvent::SaveSessionAs
         | ToolbarEvent::SaveSessionAsConfirm(_)
         | ToolbarEvent::SaveSessionAsCancel
@@ -464,6 +465,7 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         // Session hosts the session controls.
         ToolbarEvent::OpenSession
         | ToolbarEvent::OpenRecentSession(_)
+        | ToolbarEvent::OpenHomeSession
         | ToolbarEvent::SaveSessionAs
         | ToolbarEvent::SaveSessionAsConfirm(_)
         | ToolbarEvent::SaveSessionAsCancel
@@ -747,6 +749,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ClearPreset(_)
         | ToolbarEvent::OpenSession
         | ToolbarEvent::OpenRecentSession(_)
+        | ToolbarEvent::OpenHomeSession
         | ToolbarEvent::SaveSessionAs
         | ToolbarEvent::SaveSessionAsConfirm(_)
         | ToolbarEvent::SaveSessionAsCancel

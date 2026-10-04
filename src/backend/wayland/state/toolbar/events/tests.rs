@@ -210,6 +210,7 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
         ToolbarEvent::ApplyPreset(1),
         ToolbarEvent::OpenSession,
         ToolbarEvent::OpenRecentSession(std::path::PathBuf::from("/tmp/recent.wayscriber-session")),
+        ToolbarEvent::OpenHomeSession,
         ToolbarEvent::SaveSessionAs,
         ToolbarEvent::SaveSessionAsConfirm(std::path::PathBuf::from(
             "/tmp/existing.wayscriber-session",
@@ -1023,6 +1024,7 @@ fn session_popover_survives_its_own_controls_and_dismisses_on_everything_else() 
     for spared in [
         ToolbarEvent::OpenSession,
         ToolbarEvent::OpenRecentSession(PathBuf::from("/tmp/recent.wayscriber-session")),
+        ToolbarEvent::OpenHomeSession,
         ToolbarEvent::SaveSessionAs,
         ToolbarEvent::SaveSessionAsConfirm(PathBuf::from("/tmp/existing.wayscriber-session")),
         ToolbarEvent::SaveSessionAsCancel,

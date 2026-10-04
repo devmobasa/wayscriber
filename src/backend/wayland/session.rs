@@ -227,6 +227,16 @@ impl SessionState {
         self.notified_failure = false;
     }
 
+    /// Continues without persistence: home is a default session that is not
+    /// saved.
+    pub(in crate::backend::wayland) fn commit_without_persistence(&mut self) {
+        self.advance_target_epoch();
+        self.options = None;
+        self.loaded = true;
+        self.loaded_board_data = false;
+        self.mark_clean_after_load();
+    }
+
     pub(in crate::backend::wayland) fn commit_runtime_clear(&mut self, now: Instant) {
         self.loaded = true;
         self.loaded_board_data = false;
@@ -595,6 +605,8 @@ mod home;
 mod persistence;
 mod runtime;
 
+#[cfg(test)]
+pub(in crate::backend::wayland) use home::HomeSession;
 pub(in crate::backend::wayland) use home::{SessionHome, SessionLaunch, session_target};
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
@@ -602,8 +614,8 @@ pub(in crate::backend::wayland) use persistence::{
 };
 
 pub(in crate::backend::wayland) use runtime::{
-    ExplicitSessionTransaction, SessionCommand, SessionCommandReport, SessionTransaction,
-    TransactionStep,
+    ExplicitSessionTransaction, RuntimeHomeSessionReport, SessionCommand, SessionCommandReport,
+    SessionTransaction, TransactionStep,
 };
 #[cfg(test)]
 pub(in crate::backend::wayland) use runtime::{

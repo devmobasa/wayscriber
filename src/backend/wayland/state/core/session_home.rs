@@ -65,7 +65,7 @@ impl WaylandState {
     /// switch stands.
     pub(in crate::backend::wayland) fn session_target_committed(&mut self) {
         let target = session_target(self.session.options());
-        let Some(session) = self.session_home.report_for(target) else {
+        let Some(session) = self.session_home.commit_target(target) else {
             return;
         };
         if let Err(error) = publish_session_from_environment(&session) {
