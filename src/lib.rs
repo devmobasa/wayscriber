@@ -26,6 +26,7 @@ pub mod help_overlay_interaction;
 pub(crate) mod image_decode;
 pub mod input;
 mod label_format;
+pub(crate) mod launch_environment;
 mod logger;
 mod notification;
 mod ocr;
