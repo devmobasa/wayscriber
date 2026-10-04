@@ -31,14 +31,23 @@ pub(in crate::daemon) fn with_visible_overlay(
     });
 }
 
+pub(in crate::daemon) fn assert_token_only_pending_launch(daemon: &Daemon, token: &str) {
+    let retained = daemon.pending_launch.as_ref().expect("token must be kept");
+
+    assert_eq!(retained.activation_token(), Some(token));
+    assert_eq!(retained.mode(), Some("transparent"));
+    assert_eq!(retained.session_resume_override(Some(true)), Some(true));
+}
+
 fn with_fixture(ignore_term: bool, body: impl FnOnce(&mut Daemon, OverlaySpawnCandidate, &Path)) {
     let temp = crate::test_temp::tempdir().unwrap();
     crate::test_env::with_env_var(
         crate::env_vars::XDG_RUNTIME_DIR_ENV,
         Some(temp.path().as_os_str()),
         || {
-            let _broker = crate::process_broker::start_for_runtime().unwrap();
-            let program = temp.path().join("wayscriber-overlay-fixture");
+            let bin = temp.path().join("bin");
+            fs::create_dir(&bin).unwrap();
+            let program = bin.join("wayscriber");
             let proof_dir = crate::daemon::protocol_v2::command_root().join("children");
             let script = format!(
                 r#"#!/usr/bin/python3
@@ -46,36 +55,49 @@ import json, os, pathlib, signal, sys, time
 root = pathlib.Path({root})
 proof = pathlib.Path({proof})
 proof.mkdir(parents=True, exist_ok=True, mode=0o700)
-generation = os.environ["WAYSCRIBER_OVERLAY_CHILD_GENERATION"]
+generation = os.environ[{generation_env:?}]
 record = {{"protocol_version": {version}, "generation": generation, "pid": os.getpid(), "process_start_ticks": int(pathlib.Path("/proc/self/stat").read_text().split(") ", 1)[1].split()[19])}}
 def publish(path, data):
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(json.dumps(data, separators=(",", ":")))
     temp.chmod(0o600)
     temp.replace(path)
+signal.signal(signal.SIGUSR2, signal.SIG_IGN)
 if {ignore_term}:
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 for suffix in ("active", "signals", "ready"):
     publish(proof / (generation + "." + suffix), record)
 while not (proof / (generation + ".enabled")).exists():
     time.sleep(0.002)
-publish(root / (generation + ".receipt"), {{"args": sys.argv[1:], "token": os.environ.get("XDG_ACTIVATION_TOKEN"), "startup": os.environ.get("DESKTOP_STARTUP_ID"), "resume": os.environ.get("WAYSCRIBER_RESUME_SESSION"), "detach": os.environ.get("WAYSCRIBER_NO_DETACH"), "pid": os.getpid(), "generation": generation}})
+publish(root / (generation + ".receipt"), {{
+    "args": sys.argv[1:], "token": os.environ.get({token_env:?}),
+    "startup": os.environ.get({startup_env:?}), "resume": os.environ.get({resume_env:?}),
+    "detach": os.environ.get({detach_env:?}), "pid": os.getpid(), "generation": generation
+}})
 while True:
     time.sleep(0.01)
 "#,
                 root = serde_json::to_string(&temp.path().to_string_lossy()).unwrap(),
                 proof = serde_json::to_string(&proof_dir.to_string_lossy()).unwrap(),
                 version = 2,
+                generation_env = crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
+                token_env = crate::env_vars::XDG_ACTIVATION_TOKEN_ENV,
+                startup_env = crate::env_vars::DESKTOP_STARTUP_ID_ENV,
+                resume_env = crate::RESUME_SESSION_ENV,
+                detach_env = crate::env_vars::NO_DETACH_ENV,
                 ignore_term = if ignore_term { "True" } else { "False" }
             );
+
             fs::write(&program, script).unwrap();
             fs::set_permissions(&program, fs::Permissions::from_mode(0o700)).unwrap();
+
             let mut daemon = Daemon::new(
                 Some("transparent".into()),
                 false,
                 Some(true),
                 Some(PathBuf::from("/tmp/home.wayscriber-session")),
             );
+
             daemon.instance_token = crate::daemon::protocol_v2::ProtocolToken::generate()
                 .unwrap()
                 .to_string();
@@ -84,7 +106,30 @@ while True:
                 source: "fixture",
             };
 
-            body(&mut daemon, candidate, temp.path());
+            let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+                &std::env::var_os(crate::env_vars::PATH_ENV).unwrap_or_default(),
+            )))
+            .unwrap();
+
+            let previous_path = std::env::var_os(crate::env_vars::PATH_ENV);
+            // SAFETY: with_env_var holds the process environment mutex.
+            unsafe { std::env::set_var(crate::env_vars::PATH_ENV, path) };
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _broker = crate::process_broker::start_for_runtime().unwrap();
+
+                body(&mut daemon, candidate, temp.path());
+            }));
+
+            // SAFETY: the same mutex is held, including after fixture failure.
+            unsafe {
+                match previous_path {
+                    Some(path) => std::env::set_var(crate::env_vars::PATH_ENV, path),
+                    None => std::env::remove_var(crate::env_vars::PATH_ENV),
+                }
+            }
+            if let Err(panic) = result {
+                std::panic::resume_unwind(panic);
+            }
         },
     );
 }
@@ -121,7 +166,7 @@ fn assert_retired(daemon: &Daemon, generation: &str) {
 
 #[test]
 fn real_child_hide_restart_and_natural_retirement_clear_target_and_visibility() {
-    with_fixture(false, |daemon, candidate, root| {
+    with_fixture(false, |daemon, _, root| {
         daemon.queue_overlay_launch(
             Some(DaemonToggleRequest {
                 mode: Some("whiteboard".into()),
@@ -133,13 +178,7 @@ fn real_child_hide_restart_and_natural_retirement_clear_target_and_visibility() 
             }),
             Some("owned-token".into()),
         );
-        let request = daemon.take_pending_launch();
-
-        daemon
-            .start_launch(request, std::slice::from_ref(&candidate))
-            .unwrap()
-            .require_shown()
-            .unwrap();
+        daemon.show_overlay().unwrap().require_shown().unwrap();
         let first = receipt(root);
 
         assert_eq!(
@@ -165,16 +204,21 @@ fn real_child_hide_restart_and_natural_retirement_clear_target_and_visibility() 
         );
         assert!(daemon.pending_launch.is_none());
 
+        daemon.queue_overlay_launch(
+            Some(DaemonToggleRequest {
+                mode: Some("blackboard".into()),
+                freeze: true,
+                no_resume_session: true,
+                ..Default::default()
+            }),
+            Some("hide-retained-token".into()),
+        );
+
         daemon.hide_overlay().unwrap();
         assert_retired(daemon, first["generation"].as_str().unwrap());
         fs::remove_file(root.join(format!("{}.receipt", first["generation"].as_str().unwrap())))
             .unwrap();
-        let request = daemon.take_pending_launch();
-        daemon
-            .start_launch(request, &[candidate])
-            .unwrap()
-            .require_shown()
-            .unwrap();
+        daemon.show_overlay().unwrap().require_shown().unwrap();
         let second = receipt(root);
 
         assert_ne!(first["generation"], second["generation"]);
@@ -188,8 +232,10 @@ fn real_child_hide_restart_and_natural_retirement_clear_target_and_visibility() 
                 "/tmp/home.wayscriber-session"
             ])
         );
-        assert!(second["token"].is_null());
+        assert_eq!(second["token"], "hide-retained-token");
+        assert_eq!(second["startup"], "hide-retained-token");
         assert_eq!(second["resume"], "on");
+        assert!(daemon.pending_launch.is_none());
         assert_eq!(
             daemon.overlay.active_named_session_file(),
             Some(Path::new("/tmp/home.wayscriber-session"))

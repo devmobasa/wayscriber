@@ -21,8 +21,12 @@ impl OverlayLifecycle {
                 warn!("Failed to signal overlay process: {err:#}");
             }
 
-            // Prefer the pidfd wakeup; keep the existing polling fallback and
-            // synchronous two-second graceful/forced shutdown policy.
+            // Wait on the child's pidfd rather than waking every 50ms to poll
+            // it. A pidfd becomes readable exactly when its process exits, so
+            // prompt exits are observed immediately and slow exits cost no
+            // periodic wakeups. This termination path is still synchronous:
+            // the daemon event loop remains occupied until the child exits or
+            // the graceful timeout expires.
             let exit_watch = open_overlay_pidfd(pid).ok();
             let deadline = BootClock::now()?.checked_add(timeout)?;
             loop {
@@ -52,6 +56,8 @@ impl OverlayLifecycle {
                             );
                             break;
                         }
+                        // Without a pidfd (the child raced us to exit, or the
+                        // open failed) fall back to the original pacing.
                         match exit_watch.as_ref() {
                             Some(fd) => {
                                 let now = BootClock::now()?.as_nanos();
@@ -65,8 +71,13 @@ impl OverlayLifecycle {
                     Err(err) => {
                         let forced = self.child.force_kill_and_wait();
                         return match forced {
-                            Ok(_) => Err(err).context("broker ownership failed while querying overlay; child was forced down"),
-                            Err(force_error) => Err(anyhow::anyhow!("broker ownership failed while querying overlay: {err:#}; forced termination also failed: {force_error:#}")),
+                            Ok(_) => Err(err).context(
+                                "broker ownership failed while querying overlay; child was forced down",
+                            ),
+                            Err(force_error) => Err(anyhow::anyhow!(
+                                "broker ownership failed while querying overlay: {err:#}; \
+                                 forced termination also failed: {force_error:#}"
+                            )),
                         };
                     }
                 }

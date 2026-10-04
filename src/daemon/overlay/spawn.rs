@@ -102,6 +102,7 @@ impl Daemon {
         }
 
         let mut failures = Vec::new();
+
         for candidate in candidates {
             match self.overlay.start(
                 request,
@@ -130,6 +131,7 @@ impl Daemon {
             }
         }
 
+        self.overlay.abort_start();
         warn!("Overlay spawn attempts failed: {}", failures.join("; "));
         Err(OverlayStartFailure::Attempt(anyhow!(
             "Unable to launch overlay process (tried current_exe/argv0/{PATH_ENV})"

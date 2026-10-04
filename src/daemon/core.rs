@@ -914,7 +914,7 @@ fn wait_for_daemon_lifecycle(
     daemon_wake: &RuntimeWakeSource,
     command_watcher: Option<&CommandQueueWatcher>,
     deadline_source: Option<&BootDeadlineSource>,
-    overlay_child: Option<BorrowedFd<'_>>,
+    overlay_exit_fd: Option<BorrowedFd<'_>>,
 ) -> Result<DaemonLifecycleReadiness> {
     let mut pollfds = vec![libc::pollfd {
         fd: daemon_wake.poll_fd().as_raw_fd(),
@@ -938,7 +938,7 @@ fn wait_for_daemon_lifecycle(
         });
         index
     });
-    let child_index = overlay_child.map(|fd| {
+    let child_index = overlay_exit_fd.map(|fd| {
         let index = pollfds.len();
         pollfds.push(libc::pollfd {
             fd: fd.as_raw_fd(),

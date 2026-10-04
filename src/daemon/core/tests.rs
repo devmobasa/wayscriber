@@ -309,7 +309,7 @@ fn duplicate_plain_toggle_after_slow_hide_is_debounced() {
         );
         assert!(
             hide_started.elapsed() >= Duration::from_millis(1900),
-            "forced hide must preserve the two-second graceful shutdown policy"
+            "forced hide must not shorten the two-second graceful shutdown policy"
         );
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
         assert!(!daemon.overlay.active_flag().load(Ordering::Acquire));
@@ -436,6 +436,55 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
             None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
         }
     }
+}
+
+#[test]
+fn a_visible_v2_action_retains_only_the_pending_activation_token() {
+    super::super::overlay::tests::with_visible_overlay(None, false, |daemon| {
+        let owner = CommandOwner::open(&daemon.instance_token).unwrap();
+        let journal = ActionJournal::open().unwrap();
+        let mut runtime =
+            DaemonRuntimeRecordV2::current(ProtocolToken::generate().unwrap()).unwrap();
+        runtime.v2_instance_token = daemon.instance_token.clone();
+        super::super::protocol_v2::write_runtime_record_v2(
+            &crate::paths::daemon_pid_file(),
+            &runtime,
+        )
+        .unwrap();
+        let _daemon_lock = hold_daemon_lock();
+        daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
+        daemon.v2_command_owner = Some(owner);
+        daemon.v2_action_journal = Some(journal);
+        daemon.queue_overlay_launch(
+            Some(DaemonToggleRequest {
+                mode: Some("whiteboard".into()),
+                no_resume_session: true,
+                ..Default::default()
+            }),
+            Some("v2-retained-token".into()),
+        );
+
+        let request = DaemonToggleRequest {
+            overlay_action: Some(TrayAction::CaptureFull),
+            mode: Some("blackboard".into()),
+            no_resume_session: true,
+            ..Default::default()
+        };
+        // Keep the real command lease open while the daemon authorizes and
+        // delivers the action. The fixture receives the wake but does not run
+        // capture UI or provide a terminal application receipt.
+        let _client = super::super::protocol_v2::ClientCommand::publish(
+            &super::super::protocol_v2::DaemonRequestV2::from(&request),
+            &daemon.instance_token,
+        )
+        .unwrap();
+
+        daemon.process_v2_commands().unwrap();
+
+        assert_eq!(daemon.test_state(), OverlayState::Visible);
+        assert!(daemon.overlay.active_flag().load(AtomicOrdering::Acquire));
+        super::super::overlay::tests::assert_token_only_pending_launch(daemon, "v2-retained-token");
+    });
 }
 
 #[test]
@@ -710,13 +759,15 @@ fn a_failed_runner_does_not_replay_launch_options_or_leak_resume_override() {
             no_resume_session: true,
             ..Default::default()
         }),
-        None,
+        Some("runner-token".into()),
     );
 
     let failed = daemon.show_overlay();
     let after_failure = crate::runtime_session_override();
+    let token_retained_after_failure = daemon.pending_launch.is_some();
     let next = daemon.show_overlay();
     let after_success = crate::runtime_session_override();
+    let token_retained_after_success = daemon.pending_launch.is_some();
     crate::set_runtime_session_override(previous_override);
 
     assert!(failed.unwrap_err().to_string().contains("runner failed"));
@@ -724,6 +775,14 @@ fn a_failed_runner_does_not_replay_launch_options_or_leak_resume_override() {
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
     assert_eq!(after_failure, Some(true));
     assert_eq!(after_success, Some(true));
+    assert!(
+        token_retained_after_failure,
+        "failed runner must keep token"
+    );
+    assert!(
+        token_retained_after_success,
+        "successful runner must keep token"
+    );
     assert_eq!(
         *calls.lock().unwrap(),
         vec![

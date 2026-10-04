@@ -4,9 +4,10 @@
 - Applies to daemon lifecycle, toggle protocol, runtime files, tray integration, setup helpers, global shortcuts, overlay process control, and daemon tests.
 
 ## Architecture
-- `core.rs`, `control.rs`, and `types.rs` own daemon state and toggle/control behavior.
+- `core.rs` coordinates daemon control, command authorization and runtime events; `control.rs` and `types.rs` define toggle/control requests and shared types.
 - `binary_conflict.rs` warns when another Wayscriber binary exists besides the running daemon.
-- `overlay/` owns overlay process spawn/control.
+- `overlay/launch.rs` owns resolved launch options and activation tokens; `overlay/mod.rs` queues and consumes them, preserving token-only retention on existing early-error paths.
+- `overlay/lifecycle.rs` owns overlay visibility, active target/flag, backoff, start and retirement; `overlay/lifecycle/stop.rs` owns graceful/forced shutdown. `protocol_v2::OverlayChildOwner` retains child identity, proof records and reaping.
 - `tray/` owns tray integration and shortcut hint I/O.
 - `setup.rs` and `global_shortcuts.rs` support daemon setup workflows.
 - `update_watch.rs` owns the background update notice: it publishes to `TrayStatusShared`

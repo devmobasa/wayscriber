@@ -76,11 +76,13 @@ impl OverlayLifecycle {
         self.child
             .reserve()
             .map_err(OverlayStartFailure::BeforeAttempt)?;
+
         debug!(
             "Attempting overlay spawn via {} ({})",
             candidate.source,
             candidate.program.to_string_lossy()
         );
+
         let launch = build_overlay_launch(
             request,
             crate::decode_session_override(resume_override.load(Ordering::Acquire)),
@@ -102,13 +104,19 @@ impl OverlayLifecycle {
                 .wait_until_ready(Duration::from_secs(5), daemon_token)?;
             self.mark_shown(request.named_session_file().map(Path::to_path_buf))
         })();
+
         match attempt {
             Ok(pid) => Ok(pid),
             Err(error) => {
-                self.child.abort_reservation();
+                self.abort_start();
                 Err(OverlayStartFailure::Attempt(error))
             }
         }
+    }
+
+    /// Retry cleanup after exhausted candidates if the last abort could not reap.
+    pub(super) fn abort_start(&mut self) {
+        self.child.abort_reservation();
     }
 
     fn mark_shown(&mut self, named_session_file: Option<PathBuf>) -> Result<u32> {
@@ -116,9 +124,11 @@ impl OverlayLifecycle {
             .child
             .display_pid()
             .context("cannot show an overlay without an owned child")?;
+
         self.active.store(true, Ordering::Release);
         self.state = OverlayState::Visible;
         self.active_named_session_file = named_session_file;
+
         Ok(pid)
     }
 

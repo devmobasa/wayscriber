@@ -37,6 +37,7 @@ impl ShowOutcome {
     }
 }
 
+/// Why a request that needs the overlay started is refused during backoff.
 pub(super) fn overlay_start_backoff_reason(retry_in: Duration) -> String {
     format!(
         "overlay start is backing off after a spawn failure (retry in {}s)",
@@ -45,6 +46,7 @@ pub(super) fn overlay_start_backoff_reason(retry_in: Duration) -> String {
 }
 
 impl Daemon {
+    /// Toggle overlay visibility.
     pub(super) fn toggle_overlay(&mut self) -> Result<()> {
         match self.overlay.state() {
             OverlayState::Hidden => {
@@ -171,6 +173,7 @@ impl Daemon {
         self.overlay.spawn_backoff_remaining()
     }
 
+    /// Hide overlay (destroy layer surface, return to hidden state).
     pub(super) fn hide_overlay(&mut self) -> Result<()> {
         if self.overlay.state() == OverlayState::Hidden {
             debug!("Overlay already hidden");
