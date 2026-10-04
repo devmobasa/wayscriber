@@ -3,8 +3,9 @@
 //! Tools are C# or POSIX shell, and tests and fixtures are Rust. This fails on a
 //! Python file or a link to one, a Python project or lock file, a Python
 //! shebang, or a Python interpreter or package name in the sources it reads:
-//! Rust, C#, MSBuild, shell, Nix, TOML, workflow, build, service, desktop-entry,
-//! and packaging files. So neither a script embedded in a string literal, an
+//! `.rs`, `.cs`, MSBuild `.props` and `.targets`, `.sh`, `.nix`, `.toml`, YAML
+//! (workflows and package manifests), `.service` and `.desktop` files, and every
+//! extensionless file. So neither a script embedded in a string literal, an
 //! interpreter launched by the tools, nor a declared interpreter dependency can
 //! come back. Markdown is not read, so documentation can still say that the
 //! repository uses no Python, and a `python` domain label such as
@@ -13,7 +14,7 @@
 //! The walk covers every directory and file at the root except `.git`, build
 //! output (`target/` and any root directory holding a `CACHEDIR.TAG`), and the
 //! local files named by the root `.gitignore`. Inside an ignored directory such
-//! as `packaging/`, the files that `.gitignore` re-includes one by one are read.
+//! as `packaging/`, the files that a `!` line re-includes by name are read.
 //! Extensionless files, such as `PKGBUILD` or a script, are read in full. It
 //! walks the checkout rather than asking Git, so it also runs in a Nix build,
 //! which has no `.git`.
@@ -22,9 +23,12 @@
 //! not as a sandbox. Known limits: an interpreter reached under another name,
 //! such as `pypy3`, `PYTHONPATH`, or `buildPythonApplication`, is not seen; a
 //! `python` path segment that is not a domain label, as in
-//! `github.com/python/cpython`, is reported, so such a link is reworded; and
+//! `github.com/python/cpython`, is reported, so such a link is reworded;
 //! an untracked directory that is not ignored and holds no `CACHEDIR.TAG`, such
-//! as `.direnv/` or `node_modules/`, is read like a source directory.
+//! as `.direnv/` or `node_modules/`, is read like a source directory; other file
+//! types, such as `.csproj`, `.json`, `.spec`, or `.install`, are checked by name
+//! only; and a file that `.gitignore` re-includes only through a `!` line with a
+//! glob or a directory, such as `!packaging/*.sh`, stays skipped.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -77,7 +81,8 @@ struct LocalEntry {
 /// The local files and directories the root `.gitignore` names. Only plain
 /// names, which match at the root, and anchored paths with a `/` inside are
 /// read; globs are left out, so this skips no more than Git ignores. A file Git
-/// tracks despite a matching entry is skipped too, unless a `!` line names it.
+/// tracks despite a matching entry is skipped too, unless a `!` line names that
+/// one file; `!` lines with a glob or naming a directory are not honored.
 #[derive(Debug, Default, PartialEq)]
 struct LocalFiles {
     root_names: Vec<LocalEntry>,

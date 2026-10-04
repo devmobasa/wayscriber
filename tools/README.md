@@ -89,7 +89,7 @@ shell version. Run `--help` for the complete command list and options.
   - `config_writers.rs` rejects `config.toml` write capability outside the configurator's Save and the overlay's pinned narrow editors
   - `process_sites.rs` keeps process creation inside the process broker and audits the broker's post-fork child stub
   - `shared_dependencies.rs` keeps the shared domain and config validation layers free of upward crate paths, using the syntax corpus beside it
-  - `no_python.rs` rejects Python files and links to them, Python project and lock files, Python shebangs, and Python interpreter or package names in the Rust, C#, MSBuild, shell, Nix, TOML, workflow, build, service, desktop-entry, packaging, and extensionless files it reads; its known limits are listed at the top of the file
+  - `no_python.rs` rejects Python files and links to them, Python project and lock files, Python shebangs, and Python interpreter or package names in the `.rs`, `.cs`, `.props`, `.targets`, `.sh`, `.nix`, `.toml`, YAML, `.service`, `.desktop`, and extensionless files it reads; other files are checked by name, and its known limits are listed at the top of the file
   - Each guard carries regression fixtures for the escapes it forbids
   - Usage: `cargo test --test repository_guards`
 
