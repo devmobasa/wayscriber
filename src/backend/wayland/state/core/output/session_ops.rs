@@ -1,5 +1,7 @@
 use super::*;
-use crate::backend::wayland::session::{ExpandedTooLarge, apply_load_outcome, load_output_session};
+use crate::backend::wayland::session::{
+    ExpandedTooLarge, apply_load_outcome, load_output_session, may_save_before_output_load,
+};
 
 impl WaylandState {
     /// Loads and commits `staged` as the session for the output identified as
@@ -13,11 +15,7 @@ impl WaylandState {
         physical_output_identity: Option<&str>,
         context: &str,
     ) -> anyhow::Result<()> {
-        let remembered = self
-            .session_home
-            .remembered()
-            .filter(|_| !self.session.is_loaded())
-            .map(std::path::Path::to_path_buf);
+        let remembered = self.unloaded_remembered_session();
         let home = self
             .session_home
             .options_for_output(physical_output_identity);
@@ -48,6 +46,26 @@ impl WaylandState {
 
         self.report_session_to_daemon();
         Ok(())
+    }
+
+    /// The remembered session this run continues, while no session has loaded.
+    fn unloaded_remembered_session(&self) -> Option<std::path::PathBuf> {
+        self.session_home
+            .remembered()
+            .filter(|_| !self.session.is_loaded())
+            .map(std::path::Path::to_path_buf)
+    }
+
+    /// Whether `current` may be saved before an output's session loads: see
+    /// [`may_save_before_output_load`].
+    pub(super) fn may_save_before_output_load(
+        &mut self,
+        current: &session::SessionOptions,
+    ) -> anyhow::Result<bool> {
+        let remembered = self.unloaded_remembered_session();
+        may_save_before_output_load(current, remembered.as_deref(), |operation| {
+            session_save::run_persistence_operation(self, operation)
+        })
     }
 
     /// After a launch-time session load, announce ink restored onto the

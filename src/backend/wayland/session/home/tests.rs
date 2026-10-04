@@ -362,9 +362,37 @@ mod load {
         assert!(failed.is_err());
         std::fs::remove_file(&path).unwrap();
 
+        // The retry first saves the current session, as an output transition
+        // does; a save into the remembered session would recreate it.
+        let remembered = sessions.remembered.clone();
+        let may_save = may_save_before_output_load(&remembered, Some(&path), |operation| {
+            sessions.persistence.run(0, operation)
+        })
+        .unwrap();
+        if may_save {
+            stored_session::save_snapshot(&sample_snapshot(), &remembered).unwrap();
+        }
         let load = sessions.load(Some(home)).unwrap();
 
+        assert!(!may_save);
         sessions.assert_went_home(load);
+    }
+
+    #[test]
+    fn only_an_unusable_remembered_session_holds_back_the_save() {
+        let mut sessions = sessions();
+        let path = sessions.remembered.session_file_path();
+        let remembered = sessions.remembered.clone();
+        let mut run = |operation| sessions.persistence.run(0, operation);
+
+        assert!(may_save_before_output_load(&remembered, Some(&path), &mut run).unwrap());
+        // Another session is saved as before, without a check.
+        assert!(
+            may_save_before_output_load(&remembered, None, |_| {
+                panic!("no check runs for a session that is not remembered")
+            })
+            .unwrap()
+        );
     }
 
     #[test]

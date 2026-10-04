@@ -226,7 +226,9 @@ impl WaylandState {
             .session_options()
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("output transition has no active session options"))?;
-        self.persist_current_session_for_transition(&current_options, reason)?;
+        if self.may_save_before_output_load(&current_options)? {
+            self.persist_current_session_for_transition(&current_options, reason)?;
+        }
 
         self.load_configured_session_for_options(
             staged_options,

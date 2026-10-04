@@ -609,7 +609,7 @@ mod runtime;
 #[cfg(test)]
 pub(in crate::backend::wayland) use home::HomeSession;
 pub(in crate::backend::wayland) use home::{
-    SessionHome, SessionLaunch, load_output_session, session_target,
+    SessionHome, SessionLaunch, load_output_session, may_save_before_output_load, session_target,
 };
 pub(in crate::backend::wayland) use load_outcome::{
     ExpandedTooLarge, apply_load_outcome, replace_output_session_snapshot,

@@ -57,6 +57,10 @@ pub(in crate::backend::wayland) enum PersistenceOperation {
     LoadHome {
         options: SessionOptions,
     },
+    /// Whether a remembered session file is still usable, without loading it.
+    CheckRemembered {
+        path: PathBuf,
+    },
     /// Loads a remembered session file only while it is still a usable
     /// session file, before and after it loads.
     LoadRemembered {
@@ -105,6 +109,7 @@ impl PersistenceOperation {
             Self::LoadNamedCandidate { .. } => "load-named-candidate",
             Self::LoadHome { .. } => "load-home",
             Self::LoadRemembered { .. } => "load-remembered",
+            Self::CheckRemembered { .. } => "check-remembered",
             Self::Inspect { .. } => "inspect",
             Self::SaveAsOverwritePreflight { .. } => "save-as-overwrite-preflight",
             Self::ValidateNamedOpen { .. } => "validate-named-open",

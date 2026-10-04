@@ -761,17 +761,54 @@ fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
     );
 }
 
+/// A home whose session file a save could not replace, of the kind `case`
+/// names, and the error that names it.
+fn unsaveable_home(
+    base: &std::path::Path,
+    case: &str,
+) -> (stored_session::SessionOptions, &'static str) {
+    let configured = configured_home(base);
+    let saved = named_options(base, "saved");
+    stored_session::save_snapshot(&sample_snapshot(), &saved).unwrap();
+    match case {
+        // A launch would start on an empty canvas here.
+        "configured directory" => {
+            std::fs::create_dir_all(configured.session_file_path()).unwrap();
+            (configured, "is a directory")
+        }
+        // A launch would restore the recovery copy, then fail every save.
+        "configured directory beside a recovery copy" => {
+            std::fs::create_dir_all(configured.session_file_path()).unwrap();
+            std::fs::copy(saved.session_file_path(), configured.recovery_file_path()).unwrap();
+            (configured, "is a directory")
+        }
+        // A launch would follow the link, then fail every save.
+        "configured symlink" => {
+            std::fs::create_dir_all(&configured.base_dir).unwrap();
+            std::os::unix::fs::symlink(saved.session_file_path(), configured.session_file_path())
+                .unwrap();
+            (configured, "is a symlink")
+        }
+        "named directory" => {
+            let named = named_options(base, "named-home");
+            std::fs::create_dir(named.session_file_path()).unwrap();
+            (named, "directory")
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[test]
 fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let current = named_options(temp.path(), "current");
-    let configured = configured_home(temp.path());
-    // A launch would start empty on these; a return home refuses them.
-    std::fs::create_dir_all(configured.session_file_path()).unwrap();
-    let named = named_options(temp.path(), "named-home");
-    std::fs::create_dir(named.session_file_path()).unwrap();
-
-    for (home, expected) in [(configured, "not a regular file"), (named, "directory")] {
+    for case in [
+        "configured directory",
+        "configured directory beside a recovery copy",
+        "configured symlink",
+        "named directory",
+    ] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let current = named_options(temp.path(), "current");
+        let (home, expected) = unsaveable_home(temp.path(), case);
         let mut input = test_input_state();
         add_line(&mut input, 51);
         input.mark_session_dirty();
@@ -790,12 +827,12 @@ fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
         assert!(runtime.reports.is_empty());
         assert!(
             format!("{:#}", runtime.errors[0]).contains(expected),
-            "{:?}",
+            "{case}: {:?}",
             runtime.errors
         );
         assert_eq!(runtime.session.options().unwrap().target, current.target);
         let shapes = &runtime.input.boards.active_frame().shapes;
-        assert_eq!(shapes.len(), 1, "{expected}");
+        assert_eq!(shapes.len(), 1, "{case}");
         assert!(matches!(
             shapes[0].shape,
             crate::draw::Shape::Line { x2: 51, .. }
