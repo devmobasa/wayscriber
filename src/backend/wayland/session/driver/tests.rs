@@ -726,6 +726,7 @@ fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
     let measurer = TextMeasurer::default();
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+    let epoch = runtime.session.target_epoch();
 
     start_session_command(
         &mut runtime,
@@ -739,24 +740,68 @@ fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
     worker.complete_next(); // load home
     runtime.receive();
 
-    assert!(runtime.errors.is_empty());
-    let [SessionCommandReport::Home(report)] = runtime.reports.as_slice() else {
-        panic!(
-            "expected a home report, got {} reports",
-            runtime.reports.len()
-        );
-    };
-    assert_eq!(
-        report.options.as_ref().map(|options| &options.target),
-        Some(&home.target)
-    );
+    assert!(runtime.errors.is_empty(), "{:?}", runtime.errors);
     assert!(matches!(
-        report.outcome,
-        Some(stored_session::LoadSnapshotOutcome::Loaded(_))
+        runtime.reports.as_slice(),
+        [SessionCommandReport::Home]
     ));
-    // The runtime applies home; until then the canvas and target stay put.
-    assert_eq!(runtime.session.options().unwrap().target, current.target);
-    assert_eq!(runtime.input.boards.active_frame().shapes.len(), 1);
+    assert_eq!(runtime.session.options().unwrap().target, home.target);
+    assert_ne!(runtime.session.target_epoch(), epoch);
+    assert!(!runtime.session.is_dirty() && !runtime.input.is_session_dirty());
+    let shapes = &runtime.input.boards.active_frame().shapes;
+    assert_eq!(shapes.len(), 1);
+    assert!(matches!(
+        shapes[0].shape,
+        crate::draw::Shape::Line { x2: 42, .. }
+    ));
+    // The commit was announced before the terminal report.
+    assert_eq!(
+        runtime.committed_targets.last(),
+        Some(&(Some(home.target.clone()), 0))
+    );
+}
+
+#[test]
+fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let configured = configured_home(temp.path());
+    // A launch would start empty on these; a return home refuses them.
+    std::fs::create_dir_all(configured.session_file_path()).unwrap();
+    let named = named_options(temp.path(), "named-home");
+    std::fs::create_dir(named.session_file_path()).unwrap();
+
+    for (home, expected) in [(configured, "not a regular file"), (named, "directory")] {
+        let mut input = test_input_state();
+        add_line(&mut input, 51);
+        input.mark_session_dirty();
+        let mut session = SessionState::new(Some(current.clone()));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+        start_session_command(&mut runtime, SessionCommand::OpenHome(Some(Box::new(home))))
+            .unwrap();
+        worker.complete_next(); // save the current session
+        runtime.receive();
+        worker.complete_next(); // load home
+        runtime.receive();
+
+        assert!(runtime.reports.is_empty());
+        assert!(
+            format!("{:#}", runtime.errors[0]).contains(expected),
+            "{:?}",
+            runtime.errors
+        );
+        assert_eq!(runtime.session.options().unwrap().target, current.target);
+        let shapes = &runtime.input.boards.active_frame().shapes;
+        assert_eq!(shapes.len(), 1, "{expected}");
+        assert!(matches!(
+            shapes[0].shape,
+            crate::draw::Shape::Line { x2: 51, .. }
+        ));
+        assert!(runtime.committed_targets.is_empty());
+    }
 }
 
 #[test]
@@ -785,24 +830,34 @@ fn returning_home_is_refused_when_the_canvas_changes_while_home_loads() {
         runtime.errors
     );
     assert_eq!(runtime.session.options().unwrap().target, current.target);
+    assert_eq!(runtime.input.boards.active_frame().shapes.len(), 1);
 }
 
 #[test]
-fn returning_to_a_home_without_persistence_loads_nothing() {
+fn returning_to_a_home_without_persistence_leaves_an_unsaved_empty_canvas() {
     let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
     let mut input = test_input_state();
-    let mut session = SessionState::new(Some(named_options(temp.path(), "current")));
+    add_line(&mut input, 51);
+    input.mark_session_dirty();
+    let mut session = SessionState::new(Some(current.clone()));
     let measurer = TextMeasurer::default();
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
 
     start_session_command(&mut runtime, SessionCommand::OpenHome(None)).unwrap();
+    worker.complete_next(); // save the current session
+    runtime.receive();
 
-    assert!(!worker.has_request());
-    let [SessionCommandReport::Home(report)] = runtime.reports.as_slice() else {
-        panic!("expected a home report");
-    };
-    assert!(report.options.is_none() && report.outcome.is_none());
+    assert!(!worker.has_request(), "nothing to load");
+    assert_eq!(loaded_line_x2(&current), 51);
+    assert!(matches!(
+        runtime.reports.as_slice(),
+        [SessionCommandReport::Home]
+    ));
+    assert!(runtime.session.options().is_none());
+    assert!(runtime.input.boards.active_frame().shapes.is_empty());
+    assert_eq!(runtime.committed_targets.last(), Some(&(None, 0)));
 }
 
 #[test]

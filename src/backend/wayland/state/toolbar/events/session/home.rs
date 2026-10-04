@@ -1,6 +1,5 @@
 use super::*;
-use crate::backend::wayland::session::RuntimeHomeSessionReport;
-use crate::session::{SessionOptions, SessionSnapshot};
+use crate::session::SessionOptions;
 
 impl WaylandState {
     /// Returns to the home session the way Open switches session: the current
@@ -16,60 +15,23 @@ impl WaylandState {
     /// Home's options for the output the overlay is on now, not those of the
     /// named session it is leaving.
     fn home_session_options(&self) -> Option<SessionOptions> {
-        let output_identity = self
-            .surface
+        self.session_home
+            .options_for_output(self.current_output_identity().as_deref())
+    }
+
+    fn current_output_identity(&self) -> Option<String> {
+        self.surface
             .current_output()
             .as_ref()
-            .and_then(|output| self.output_identity_for(output));
-        self.session_home
-            .options_for_output(output_identity.as_deref())
+            .and_then(|output| self.output_identity_for(output))
     }
 
-    pub(super) fn finish_open_home_session(&mut self, report: RuntimeHomeSessionReport) {
-        let applied = match (report.options, report.outcome) {
-            (Some(options), Some(outcome)) => {
-                let loaded_board_data = outcome.has_board_data();
-                self.handle_session_load_outcome_for_options(outcome, &options, "home session")
-                    .map(|()| {
-                        self.input_state
-                            .set_session_preflight_options(Some(options.clone()));
-                        self.session
-                            .commit_output_options(options, loaded_board_data);
-                    })
-            }
-            _ => self.leave_persistence_for_home(),
-        };
-        if let Err(error) = applied {
-            self.report_session_command_error("Return to the home session failed", &error);
-            return;
-        }
+    /// Home is committed. The overlay may have moved to another output while
+    /// it loaded, and a per-output home follows it there.
+    pub(super) fn finish_open_home_session(&mut self) {
+        let output_identity = self.current_output_identity();
+        self.begin_session_output_transition(output_identity, "return to the home session");
 
-        self.report_session_to_daemon();
         self.set_session_toolbar_info(format!("Returned to {}", self.session_home.label()));
-    }
-
-    /// Home has persistence disabled: the run continues on an empty canvas
-    /// that is not saved, as it would have started.
-    fn leave_persistence_for_home(&mut self) -> Result<()> {
-        let current = self
-            .session_options()
-            .cloned()
-            .context("no session to return home from")?;
-        let empty = SessionSnapshot {
-            active_board_id: self.input_state.board_id().to_string(),
-            boards: Vec::new(),
-            tool_state: None,
-        };
-        crate::session::apply_snapshot_replacing_boards(
-            &mut self.input_state,
-            self.render.text_measurer(),
-            empty,
-            &current,
-        )?;
-        self.input_state.set_session_preflight_options(None);
-        self.input_state.clear_session_dirty();
-        self.session.commit_without_persistence();
-        self.refresh_runtime_ui_config_seeds();
-        Ok(())
     }
 }

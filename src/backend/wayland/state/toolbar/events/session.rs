@@ -427,7 +427,7 @@ impl WaylandState {
                     self.set_session_toolbar_info(format!("Opened session {name}"));
                 }
             }
-            SessionCommandReport::Home(report) => self.finish_open_home_session(report),
+            SessionCommandReport::Home => self.finish_open_home_session(),
             SessionCommandReport::SaveAs(report) => {
                 self.clear_toolbar_save_as_overwrite_prompt();
                 self.set_session_toolbar_info(format!(

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
 
+use super::super::session_format::session_display_name;
 use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSnapshot};
 
 const MAX_RECENT_SESSIONS: usize = 5;
@@ -45,8 +46,11 @@ impl ToolbarSessionModel {
         .into_iter()
         .filter(|button| session_button_visible(snapshot, &button.event))
         .collect();
-        let home = (!snapshot.toolbar_item_hidden(ids::SIDE_SESSION_HOME))
-            .then(|| ToolbarSessionHome::from_snapshot(snapshot));
+        // Without a persisted session the overlay is in a home that cannot be
+        // left, so there is no way back to offer.
+        let home = (target_active
+            && session_button_visible(snapshot, &ToolbarEvent::OpenHomeSession))
+        .then(|| ToolbarSessionHome::from_snapshot(snapshot));
         let recents = if target_active {
             snapshot
                 .recent_sessions
@@ -61,7 +65,7 @@ impl ToolbarSessionModel {
             .pending_save_as_overwrite_path
             .as_ref()
             .map(|path| ToolbarSessionOverwriteConfirmation {
-                label: session_path_label(path),
+                label: session_display_name(path),
                 path: path.clone(),
             });
 
@@ -158,13 +162,6 @@ impl ToolbarSessionRecent {
     }
 }
 
-fn session_path_label(path: &std::path::Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| path.display().to_string())
-}
-
 fn session_button_visible(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> bool {
     session_button_item_id(event).is_none_or(|id| !snapshot.toolbar_item_hidden(id))
 }
@@ -173,6 +170,7 @@ fn session_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
     Some(match event {
         ToolbarEvent::OpenSession => ids::SIDE_SESSION_OPEN,
         ToolbarEvent::SaveSessionAs => ids::SIDE_SESSION_SAVE_AS,
+        ToolbarEvent::OpenHomeSession => ids::SIDE_SESSION_HOME,
         ToolbarEvent::SessionInfo => ids::SIDE_SESSION_INFO,
         ToolbarEvent::ClearSession => ids::SIDE_SESSION_CLEAR,
         ToolbarEvent::OpenConfigurator => ids::SIDE_SESSION_MANAGER,
@@ -196,6 +194,7 @@ mod tests {
         for (event, expected) in [
             (ToolbarEvent::OpenSession, ids::SIDE_SESSION_OPEN),
             (ToolbarEvent::SaveSessionAs, ids::SIDE_SESSION_SAVE_AS),
+            (ToolbarEvent::OpenHomeSession, ids::SIDE_SESSION_HOME),
             (ToolbarEvent::SessionInfo, ids::SIDE_SESSION_INFO),
             (ToolbarEvent::ClearSession, ids::SIDE_SESSION_CLEAR),
             (ToolbarEvent::OpenConfigurator, ids::SIDE_SESSION_MANAGER),
@@ -247,6 +246,8 @@ mod tests {
             ToolbarEvent::OpenConfigurator
         ));
         assert!(model.recents.is_empty());
+        // A home that cannot be left offers no way back to it.
+        assert!(model.home.is_none());
         assert_eq!(model.active_path_label, "No persisted session target");
     }
 

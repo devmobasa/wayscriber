@@ -11,16 +11,6 @@ pub(in crate::backend::wayland) struct RuntimeOpenSessionReport {
     pub catalog_error: Option<anyhow::Error>,
 }
 
-/// A return to the home session that saved the current session and loaded
-/// home, for the runtime to apply.
-#[derive(Debug)]
-pub(in crate::backend::wayland) struct RuntimeHomeSessionReport {
-    /// Home's options; `None` when home has persistence disabled.
-    pub options: Option<SessionOptions>,
-    /// What loading home found; `None` without persistence.
-    pub outcome: Option<LoadSnapshotOutcome>,
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::backend::wayland) struct RuntimeSaveAsSessionReport {

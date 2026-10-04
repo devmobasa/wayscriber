@@ -602,6 +602,7 @@ fn autosave_active(options: &SessionOptions) -> bool {
 
 pub(in crate::backend::wayland) mod driver;
 mod home;
+mod load_outcome;
 mod persistence;
 mod runtime;
 
@@ -610,14 +611,17 @@ pub(in crate::backend::wayland) use home::HomeSession;
 pub(in crate::backend::wayland) use home::{
     SessionHome, SessionLaunch, load_output_session, session_target,
 };
+pub(in crate::backend::wayland) use load_outcome::{
+    ExpandedTooLarge, apply_load_outcome, replace_output_session_snapshot,
+};
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,
 };
 
 pub(in crate::backend::wayland) use runtime::{
-    ExplicitSessionTransaction, RuntimeHomeSessionReport, SessionCommand, SessionCommandReport,
-    SessionTransaction, TransactionStep,
+    ExplicitSessionTransaction, SessionCommand, SessionCommandReport, SessionTransaction,
+    TransactionStep,
 };
 #[cfg(test)]
 pub(in crate::backend::wayland) use runtime::{

@@ -684,6 +684,7 @@ mod tests {
                 .any(|button| button.event == ToolbarEvent::SessionInfo),
             "hiding side.session.info removes the Session Info control"
         );
+        snapshot.active_session_path = Some("/tmp/b.wayscriber-session".into());
         assert!(
             ToolbarSessionModel::for_popover(&snapshot)
                 .expect("session")

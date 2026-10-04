@@ -19,7 +19,8 @@ pub(in crate::backend::wayland) enum SessionCommand {
 
 pub(in crate::backend::wayland) enum SessionCommandReport {
     Open(RuntimeOpenSessionReport),
-    Home(RuntimeHomeSessionReport),
+    /// The overlay is back in its home session.
+    Home,
     SaveAs(RuntimeSaveAsSessionReport),
     Overwrite(PathBuf, bool),
     Clear(RuntimeClearSessionReport),
@@ -207,17 +208,14 @@ impl ExplicitSessionTransaction {
             SessionCommand::OpenHome(Some(options)) => {
                 let options = (**options).clone();
                 self.capture_input_generation(context);
-                self.work(
-                    Phase::LoadHome,
-                    PersistenceOperation::LoadConfigured { options },
-                )
+                self.work(Phase::LoadHome, PersistenceOperation::LoadHome { options })
             }
-            SessionCommand::OpenHome(None) => Ok(TransactionStep::Complete(Box::new(
-                SessionCommandReport::Home(RuntimeHomeSessionReport {
-                    options: None,
-                    outcome: None,
-                }),
-            ))),
+            SessionCommand::OpenHome(None) => {
+                self.leave_persistence_for_home(context)?;
+                Ok(TransactionStep::Complete(Box::new(
+                    SessionCommandReport::Home,
+                )))
+            }
             SessionCommand::SaveAs(_, _) => Ok(TransactionStep::Complete(Box::new(
                 SessionCommandReport::SaveAs(RuntimeSaveAsSessionReport {
                     previous_path: self.current_path(),

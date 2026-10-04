@@ -144,7 +144,9 @@ fn advance_session_command(
         Ok(TransactionStep::Complete(report)) => {
             if matches!(
                 *report,
-                SessionCommandReport::Open(_) | SessionCommandReport::Clear(_)
+                SessionCommandReport::Open(_)
+                    | SessionCommandReport::Home
+                    | SessionCommandReport::Clear(_)
             ) {
                 runtime.refresh_session_ui_seeds();
             }

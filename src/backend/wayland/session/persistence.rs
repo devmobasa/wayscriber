@@ -52,6 +52,11 @@ pub(in crate::backend::wayland) enum PersistenceOperation {
     LoadNamedCandidate {
         options: SessionOptions,
     },
+    /// Loads the home session as a launch would, after the startup checks a
+    /// named home file gets.
+    LoadHome {
+        options: SessionOptions,
+    },
     /// Loads a remembered session file only while it is still a usable
     /// session file, before and after it loads.
     LoadRemembered {
@@ -98,6 +103,7 @@ impl PersistenceOperation {
             Self::SaveAs { .. } => "save-as",
             Self::LoadConfigured { .. } => "load-configured",
             Self::LoadNamedCandidate { .. } => "load-named-candidate",
+            Self::LoadHome { .. } => "load-home",
             Self::LoadRemembered { .. } => "load-remembered",
             Self::Inspect { .. } => "inspect",
             Self::SaveAsOverwritePreflight { .. } => "save-as-overwrite-preflight",

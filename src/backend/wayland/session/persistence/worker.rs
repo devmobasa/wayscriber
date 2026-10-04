@@ -134,6 +134,14 @@ pub(super) fn execute(operation: PersistenceOperation) -> Result<PersistenceOutc
         PersistenceOperation::LoadNamedCandidate { options } => Ok(PersistenceOutcome::Load(
             session::load_named_session_candidate(&options)?,
         )),
+        PersistenceOperation::LoadHome { options } => {
+            if options.is_named_file() {
+                session::validate_named_session_file_for_foreground(&options.session_file_path())?;
+            }
+            Ok(PersistenceOutcome::Load(
+                session::load_snapshot_with_outcome(&options)?,
+            ))
+        }
         PersistenceOperation::LoadRemembered { options } => load_remembered(&options),
         PersistenceOperation::Inspect { options } => Ok(PersistenceOutcome::Inspection(
             session::inspect_session(&options)?,

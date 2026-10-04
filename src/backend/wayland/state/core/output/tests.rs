@@ -1,7 +1,8 @@
 use super::{
     OutputTransitionStart, live_source_reconciliation_ready, output_transition_retry_at,
-    output_transition_start, replace_output_session_snapshot,
+    output_transition_start,
 };
+use crate::backend::wayland::session::replace_output_session_snapshot;
 use crate::{
     backend::wayland::session::SessionState,
     draw::{Color, Frame, Shape},
