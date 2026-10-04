@@ -46,9 +46,7 @@ fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
                 .unwrap(),
         )
         .unwrap();
-    let readiness =
-        wait_for_daemon_lifecycle(&wake, None, Some(&deadline), &OverlayChildOwner::default())
-            .unwrap();
+    let readiness = wait_for_daemon_lifecycle(&wake, None, Some(&deadline), None).unwrap();
     assert_eq!(
         readiness,
         DaemonLifecycleReadiness {
@@ -67,13 +65,8 @@ fn action_admission_retry_uses_the_existing_v2_deadline_source() {
     daemon.action_admission_retry_at = Some(BootDeadline::from_nanos(1));
     daemon.arm_v2_lifecycle_deadline().unwrap();
 
-    let readiness = wait_for_daemon_lifecycle(
-        &wake,
-        None,
-        daemon.v2_deadline_source.as_ref(),
-        &OverlayChildOwner::default(),
-    )
-    .unwrap();
+    let readiness =
+        wait_for_daemon_lifecycle(&wake, None, daemon.v2_deadline_source.as_ref(), None).unwrap();
     assert_eq!(
         readiness,
         DaemonLifecycleReadiness {
@@ -105,7 +98,7 @@ fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
     )
     .unwrap();
     listener.inject_read_error(libc::EIO);
-    wait_for_daemon_lifecycle(&wake, None, None, &OverlayChildOwner::default()).unwrap();
+    wait_for_daemon_lifecycle(&wake, None, None, None).unwrap();
 
     let mut daemon = Daemon::new(None, false, None, None);
     daemon.protocol_mode = DaemonControlProtocolMode::rollback_compatibility();
@@ -156,69 +149,74 @@ fn light_draw_off_request_does_not_show_hidden_overlay() {
 
     assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    assert!(daemon.pending_toggle_request.is_none());
-    assert!(daemon.pending_activation_token.is_none());
+    assert!(daemon.pending_launch.is_none());
 }
 
 #[test]
 fn visible_overlay_rejects_different_named_session_request() {
-    let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
-    let mut daemon = Daemon::with_backend_runner(None, runner);
-    daemon.overlay_state = OverlayState::Visible;
-    daemon.active_named_session_file =
-        Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+    super::super::overlay::tests::with_visible_overlay(
+        Some(PathBuf::from("/tmp/current.wayscriber-session")),
+        false,
+        |daemon| {
+            let err = daemon
+                .process_single_toggle(
+                    Some(DaemonToggleRequest {
+                        session_file: Some(PathBuf::from("/tmp/other.wayscriber-session")),
+                        ..Default::default()
+                    }),
+                    None,
+                    false,
+                )
+                .expect_err("different visible named target should be rejected");
 
-    let err = daemon
-        .process_single_toggle(
-            Some(DaemonToggleRequest {
-                session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
-                ..Default::default()
-            }),
-            None,
-            false,
-        )
-        .expect_err("different visible named target should be rejected");
-
-    assert!(
-        format!("{err:#}").contains("cannot switch named session target while overlay is visible"),
-        "{err:#}"
-    );
-    assert_eq!(daemon.test_state(), OverlayState::Visible);
-    assert_eq!(
-        daemon.active_named_session_file.as_deref(),
-        Some(std::path::Path::new("/tmp/current.wayscriber-session"))
+            assert!(
+                format!("{err:#}")
+                    .contains("cannot switch named session target while overlay is visible"),
+                "{err:#}"
+            );
+            assert_eq!(daemon.test_state(), OverlayState::Visible);
+            assert_eq!(
+                daemon.overlay.active_named_session_file(),
+                Some(std::path::Path::new("/tmp/current.wayscriber-session"))
+            );
+        },
     );
 }
 
 #[test]
 fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
-    let mut daemon = Daemon::with_backend_runner(None, runner);
-    daemon.overlay_state = OverlayState::Visible;
-    daemon.active_named_session_file =
-        Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
-    let command = DaemonToggleCommand {
-        daemon_token: "daemon-token".into(),
-        request: DaemonToggleRequest {
-            session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
-            ..Default::default()
+    super::super::overlay::tests::with_visible_overlay(
+        Some(PathBuf::from("/tmp/current.wayscriber-session")),
+        false,
+        |daemon| {
+            let command = DaemonToggleCommand {
+                daemon_token: "daemon-token".into(),
+                request: DaemonToggleRequest {
+                    session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
+                    ..Default::default()
+                },
+                request_path: temp.path().join("request.json"),
+                response_path: temp.path().join("responses").join("request.json"),
+            };
+
+            let mut suppress_overlay_action_signal = false;
+            daemon.process_queued_toggle_command(
+                command.clone(),
+                &mut suppress_overlay_action_signal,
+            );
+
+            let err = read_daemon_toggle_response(&command.response_path)
+                .expect_err("visible target mismatch should be written to response");
+            assert!(
+                format!("{err:#}")
+                    .contains("cannot switch named session target while overlay is visible"),
+                "{err:#}"
+            );
+            assert_eq!(daemon.test_state(), OverlayState::Visible);
+            assert!(!suppress_overlay_action_signal);
         },
-        request_path: temp.path().join("request.json"),
-        response_path: temp.path().join("responses").join("request.json"),
-    };
-
-    let mut suppress_overlay_action_signal = false;
-    daemon.process_queued_toggle_command(command.clone(), &mut suppress_overlay_action_signal);
-
-    let err = read_daemon_toggle_response(&command.response_path)
-        .expect_err("visible target mismatch should be written to response");
-    assert!(
-        format!("{err:#}").contains("cannot switch named session target while overlay is visible"),
-        "{err:#}"
     );
-    assert_eq!(daemon.test_state(), OverlayState::Visible);
-    assert!(!suppress_overlay_action_signal);
 }
 
 #[test]
@@ -300,69 +298,38 @@ fn typed_visibility_toggle_request_is_not_debounced() {
 #[cfg(unix)]
 #[test]
 fn duplicate_plain_toggle_after_slow_hide_is_debounced() {
-    let broker = crate::process_broker::start_for_runtime().unwrap();
-    let mut daemon = Daemon::new(None, false, None, None);
-    let child = broker
-        .broker()
-        .spawn(
-            crate::process_broker::HelperKind::TestSleep,
-            crate::process_broker::HelperLifetime::OwnedChild,
-            std::ffi::OsStr::new("sleep"),
-            [std::ffi::OsStr::new("10")],
-            Vec::new(),
-        )
-        .expect("spawn slow-terminating test process");
-    let child_pid = child.id();
-    assert_eq!(unsafe { libc::kill(child_pid as i32, libc::SIGSTOP) }, 0);
-    let mut stopped = false;
-    for _ in 0..20 {
-        let mut status = 0;
-        let result = unsafe {
-            libc::waitpid(
-                child_pid as i32,
-                &mut status,
-                libc::WNOHANG | libc::WUNTRACED,
-            )
-        };
-        if result == child_pid as i32 && libc::WIFSTOPPED(status) {
-            stopped = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    assert!(stopped, "test child should stop before hide starts");
-    daemon.overlay_child.reserve().unwrap();
-    daemon.overlay_child.start(child).unwrap();
-    daemon.overlay_child.mark_committing().unwrap();
-    daemon.overlay_child.mark_ready().unwrap();
-    daemon
-        .overlay_active
-        .store(true, std::sync::atomic::Ordering::Release);
-    daemon.overlay_state = OverlayState::Visible;
+    super::super::overlay::tests::with_visible_overlay(None, true, |daemon| {
+        let hide_started = Instant::now();
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+        assert!(
+            hide_started.elapsed() >= DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW,
+            "test setup should keep hide slow enough to cross the debounce window"
+        );
+        assert!(
+            hide_started.elapsed() >= Duration::from_millis(1900),
+            "forced hide must preserve the two-second graceful shutdown policy"
+        );
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+        assert!(!daemon.overlay.active_flag().load(Ordering::Acquire));
+        assert!(daemon.overlay.active_named_session_file().is_none());
+        assert!(daemon.overlay.poll_fd().is_none());
 
-    let hide_started = Instant::now();
-    daemon
-        .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-        .unwrap();
-    assert!(
-        hide_started.elapsed() >= DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW,
-        "test setup should keep hide slow enough to cross the debounce window"
-    );
-    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        daemon.backend_runner = Some(Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        }));
 
-    let called = Arc::new(AtomicUsize::new(0));
-    let called_clone = Arc::clone(&called);
-    daemon.backend_runner = Some(Arc::new(move |_| {
-        called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-        Ok(())
-    }));
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
 
-    daemon
-        .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-        .unwrap();
-
-    assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
-    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    });
 }
 
 #[test]
@@ -602,8 +569,12 @@ fn hold_daemon_lock() -> std::fs::File {
 /// inside the backoff window after a spawn failure, so it attempts no start.
 fn daemon_in_spawn_backoff() -> Daemon {
     let mut daemon = Daemon::new(None, false, None, None);
-    daemon.overlay_spawn_failures = 1;
-    daemon.overlay_spawn_next_retry = Some(Instant::now() + Duration::from_secs(60));
+
+    // Use the production cap rather than injecting a private retry deadline.
+    for _ in 0..6 {
+        daemon.overlay.record_spawn_failure();
+    }
+
     daemon
 }
 
@@ -653,7 +624,7 @@ fn typed_v2_requests_during_spawn_backoff_fail_without_an_effect() {
         }
 
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
-        assert!(daemon.pending_toggle_request.is_none());
+        assert!(daemon.pending_launch.is_none());
         assert!(
             journal
                 .claim_next(&token_text, |_, _| Ok(true))
@@ -709,25 +680,74 @@ fn legacy_action_during_spawn_backoff_fails_without_queueing_it() {
             .unwrap_err();
 
         assert!(format!("{error:#}").contains("backing off"), "{error:#}");
-        assert!(daemon.pending_toggle_request.is_none());
+        assert!(daemon.pending_launch.is_none());
         assert!(crate::tray_action::take_pending_actions().is_empty());
     });
 }
 
 #[test]
+fn a_failed_runner_does_not_replay_launch_options_or_leak_resume_override() {
+    let _env_guard = crate::test_env::lock();
+    let previous_override = crate::runtime_session_override();
+    crate::set_runtime_session_override(Some(true));
+
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let runner_calls = Arc::clone(&calls);
+    let runner: Arc<BackendRunner> = Arc::new(move |mode| {
+        let mut calls = runner_calls.lock().unwrap();
+        let fail = calls.is_empty();
+        calls.push((mode, crate::runtime_session_override()));
+
+        if fail {
+            anyhow::bail!("runner failed before opening overlay");
+        }
+        Ok(())
+    });
+    let mut daemon = Daemon::with_backend_runner(Some("transparent".into()), runner);
+    daemon.queue_overlay_launch(
+        Some(DaemonToggleRequest {
+            mode: Some("whiteboard".into()),
+            no_resume_session: true,
+            ..Default::default()
+        }),
+        None,
+    );
+
+    let failed = daemon.show_overlay();
+    let after_failure = crate::runtime_session_override();
+    let next = daemon.show_overlay();
+    let after_success = crate::runtime_session_override();
+    crate::set_runtime_session_override(previous_override);
+
+    assert!(failed.unwrap_err().to_string().contains("runner failed"));
+    assert_eq!(next.unwrap(), ShowOutcome::Shown);
+    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    assert_eq!(after_failure, Some(true));
+    assert_eq!(after_success, Some(true));
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            (Some("whiteboard".into()), Some(false)),
+            (Some("transparent".into()), None),
+        ]
+    );
+}
+
+#[test]
 fn a_deferred_overlay_start_does_not_keep_its_request_for_a_later_start() {
     let mut daemon = daemon_in_spawn_backoff();
-    daemon.pending_toggle_request = Some(DaemonToggleRequest {
-        mode: Some("whiteboard".into()),
-        session_file: Some(PathBuf::from("/tmp/stale.wayscriber-session")),
-        ..Default::default()
-    });
-    daemon.pending_activation_token = Some("stale-token".into());
+    daemon.queue_overlay_launch(
+        Some(DaemonToggleRequest {
+            mode: Some("whiteboard".into()),
+            session_file: Some(PathBuf::from("/tmp/stale.wayscriber-session")),
+            ..Default::default()
+        }),
+        Some("stale-token".into()),
+    );
 
     let outcome = daemon.show_overlay().unwrap();
 
     assert!(matches!(outcome, ShowOutcome::BackingOff { .. }));
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    assert!(daemon.pending_toggle_request.is_none());
-    assert!(daemon.pending_activation_token.is_none());
+    assert!(daemon.pending_launch.is_none());
 }

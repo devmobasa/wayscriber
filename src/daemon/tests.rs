@@ -67,9 +67,11 @@ fn hide_overlay_is_idempotent() {
     daemon.hide_overlay().unwrap();
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
 
-    daemon.overlay_state = OverlayState::Visible;
-    daemon.toggle_overlay().unwrap();
-    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    super::overlay::tests::with_visible_overlay(None, false, |daemon| {
+        daemon.toggle_overlay().unwrap();
+        daemon.hide_overlay().unwrap();
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    });
 }
 
 #[cfg(feature = "tray")]
