@@ -4,8 +4,9 @@
 //! [`environment`] for that link while it launches the helper. When this binary
 //! starts under exactly that path, the constructor below plays the requested
 //! [`Role`] and exits before libtest runs. Any other start, such as another
-//! test's child launched while the variables are set, runs the tests as usual,
-//! so no test writes a script or relies on a system program.
+//! test's child launched while the variables are set, runs the tests as usual.
+//! A test that needs a helper program therefore writes no script and relies on
+//! no system program for it.
 
 use std::ffi::OsStr;
 use std::io::Read;
@@ -146,9 +147,10 @@ fn play(arguments: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// The arguments this process was launched with, `argv[0]` first: std's own
-/// argument capture may not have run before this constructor.
-fn launch_arguments() -> Result<Vec<String>> {
+/// The arguments this process was launched with, `argv[0]` first, for a
+/// constructor that runs before `main`: std's own argument capture may not have
+/// run yet.
+pub(crate) fn launch_arguments() -> Result<Vec<String>> {
     let raw = std::fs::read("/proc/self/cmdline").context("read /proc/self/cmdline")?;
     let raw = raw.strip_suffix(b"\0").unwrap_or(&raw);
 

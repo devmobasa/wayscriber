@@ -11,7 +11,6 @@
 
 use std::convert::Infallible;
 use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
@@ -172,27 +171,16 @@ fn runtime_root() -> Result<std::path::PathBuf> {
 /// Whether this process was started as `name`: the broker passes the program
 /// path it was given as `argv[0]`, which for a link is the link's own path.
 fn launched_as(name: &str) -> bool {
-    nul_separated("/proc/self/cmdline")
+    crate::test_fake_helper::launch_arguments()
         .ok()
         .and_then(|arguments| arguments.into_iter().next())
-        .is_some_and(|program| {
-            Path::new(OsStr::from_bytes(&program)).file_name() == Some(OsStr::new(name))
-        })
+        .is_some_and(|program| Path::new(&program).file_name() == Some(OsStr::new(name)))
 }
 
-/// Reads the kernel's copy of argv: std's own argument capture is not
-/// guaranteed to have run before this constructor.
+/// The overlay arguments this process was launched with, after `argv[0]`.
 fn launch_arguments() -> Result<Vec<String>> {
-    nul_separated("/proc/self/cmdline")?
+    Ok(crate::test_fake_helper::launch_arguments()?
         .into_iter()
         .skip(1)
-        .map(|argument| String::from_utf8(argument).context("non-UTF-8 launch argument"))
-        .collect()
-}
-
-fn nul_separated(path: &str) -> Result<Vec<Vec<u8>>> {
-    let raw = std::fs::read(path).with_context(|| format!("failed to read {path}"))?;
-    let raw = raw.strip_suffix(b"\0").unwrap_or(&raw);
-
-    Ok(raw.split(|byte| *byte == 0).map(<[u8]>::to_vec).collect())
+        .collect())
 }
