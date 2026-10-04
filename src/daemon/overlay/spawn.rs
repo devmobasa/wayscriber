@@ -132,12 +132,41 @@ impl Daemon {
         }
 
         self.overlay.abort_start();
-        warn!("Overlay spawn attempts failed: {}", failures.join("; "));
-        Err(OverlayStartFailure::Attempt(anyhow!(
-            "Unable to launch overlay process (tried current_exe/argv0/{PATH_ENV})"
-        )))
+        let failed = SpawnAttemptsFailed { attempts: failures };
+        warn!(
+            "Overlay spawn attempts failed: {}",
+            failed.attempts.join("; ")
+        );
+
+        Err(OverlayStartFailure::Attempt(anyhow::Error::new(failed)))
     }
 }
+
+/// Every spawn candidate failed. It displays only the summary that callers
+/// report, as `{:#}` too, since it has no source; the per-candidate failures go
+/// to the log and stay on the error for inspection.
+#[derive(Debug)]
+pub(super) struct SpawnAttemptsFailed {
+    attempts: Vec<String>,
+}
+
+impl SpawnAttemptsFailed {
+    #[cfg(test)]
+    pub(super) fn attempts(&self) -> &[String] {
+        &self.attempts
+    }
+}
+
+impl std::fmt::Display for SpawnAttemptsFailed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Unable to launch overlay process (tried current_exe/argv0/{PATH_ENV})"
+        )
+    }
+}
+
+impl std::error::Error for SpawnAttemptsFailed {}
 
 #[cfg(test)]
 mod tests {

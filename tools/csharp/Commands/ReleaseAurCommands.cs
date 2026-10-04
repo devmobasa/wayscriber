@@ -72,7 +72,9 @@ internal static class ReleaseAurCommands
         _ = ReleaseVersion.Parse( version );
         await EnsureVersionAndCleanTree( context, version );
         var tag = "v" + version;
-        var local = await context.Run( Programs.Git, ["rev-parse", "-q", "--verify", $"refs/tags/{tag}"], capture: true, allowedExitCodes: new HashSet<int> { ExitCodes.Success, ExitCodes.Failure } );
+        // Any local ref with the tag's name, such as a branch, would make the pushed tag ambiguous.
+        var local = await context.Run( Programs.Git, ["rev-parse", "-q", "--verify", tag], capture: true,
+            allowedExitCodes: new HashSet<int> { ExitCodes.Success, ExitCodes.Failure } );
         if ( local.ExitCode == ExitCodes.Success )
         {
             throw new ToolException( $"Tag {tag} already exists locally; aborting." );
@@ -82,12 +84,14 @@ internal static class ReleaseAurCommands
         {
             throw new ToolException( $"Tag {tag} already exists on origin; aborting." );
         }
+        await context.Output.WriteLineAsync( $"Creating annotated tag {tag}" );
         if ( dryRun )
         {
             await context.Output.WriteLineAsync( $"[dry-run] git tag -a {tag} -m 'Release {tag}'\n[dry-run] git push origin {tag}" );
             return ExitCodes.Success;
         }
         await context.Run( Programs.Git, ["tag", "-a", tag, "-m", $"Release {tag}"] );
+        await context.Output.WriteLineAsync( $"Pushing {tag} to origin" );
         try
         {
             await context.Run( Programs.Git, ["push", "origin", tag] );
@@ -96,13 +100,17 @@ internal static class ReleaseAurCommands
         return ExitCodes.Success;
     }
 
+    // `<archive>::<download URL>`: the binary AUR package's source entry for a release.
+    private static string BinaryArchiveSource( string version )
+    {
+        var archive = RepositoryNames.ReleaseArchive( RepositoryNames.MainPackage, version );
+        return $"{archive}::https://github.com/devmobasa/wayscriber/releases/download/v{version}/{archive}";
+    }
+
     private static async Task EnsureVersionAndCleanTree( ToolContext context, string version )
     {
-        var errors = VersionCommands.Validate( context.RepositoryRoot, version );
-        if ( errors.Count > 0 )
-        {
-            throw new ToolException( string.Join( '\n', errors ) );
-        }
+        VersionCommands.EnsureConsistent( context.RepositoryRoot, version );
+
         var status = await context.Run( Programs.Git, ["status", "--porcelain", "--untracked-files=all"], capture: true );
         if ( status.StandardOutput.Length > 0 )
         {
@@ -174,7 +182,10 @@ internal static class ReleaseAurCommands
         var selections = SelectAurCheckouts( options.SourceDirectory, options.BinaryDirectory, options.ConfiguratorDirectory, options.NoConfigurator );
         await ValidateAurCheckouts( context, selections );
 
-        var binarySha = selections.Any( item => item.Channel == PackageChannels.Binary ) ? ArtifactSha( manifest.RootElement, $"wayscriber-v{version}-linux-x86_64.tar.gz" ) : string.Empty;
+        var binaryArchive = RepositoryNames.ReleaseArchive( RepositoryNames.MainPackage, version );
+        var binarySha = selections.Any( item => item.Channel == PackageChannels.Binary )
+            ? ArtifactSha( manifest.RootElement, binaryArchive )
+            : string.Empty;
         var sourceSha = selections.Any( item => item.Channel is PackageChannels.Source or PackageChannels.Configurator ) ? await ResolveSourceChecksum( context, version, options.SourceChecksum ) : string.Empty;
         var recipe = AssetsCommand.CreateRecipe( context.RepositoryRoot );
         await PreflightAurUpdates( context, selections, version, sourceSha, binarySha, recipe );
@@ -497,7 +508,7 @@ internal static class ReleaseAurCommands
         {
             text = EnsureDependency( text, "gtk4", "wl-clipboard" );
             text = RemoveDependency( text, RepositoryNames.Gtk4LayerShell );
-            text = ReplaceArray( text, "source_x86_64", $"source_x86_64=(\"wayscriber-v{version}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v{version}/wayscriber-v{version}-linux-x86_64.tar.gz\")" );
+            text = ReplaceArray( text, "source_x86_64", $"source_x86_64=(\"{BinaryArchiveSource( version )}\")" );
             text = ReplaceArray( text, "sha256sums_x86_64", $"sha256sums_x86_64=('{binarySha}')" );
             if ( !text.Contains( "usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell", StringComparison.Ordinal ) )
             {
@@ -550,7 +561,7 @@ internal static class ReleaseAurCommands
         {
             text = EnsureSrcInfoDependency( text, "gtk4", "wl-clipboard" );
             text = RemoveSrcInfoValue( text, "depends", RepositoryNames.Gtk4LayerShell );
-            text = SetSrcInfoField( text, "source_x86_64", $"wayscriber-v{version}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v{version}/wayscriber-v{version}-linux-x86_64.tar.gz" );
+            text = SetSrcInfoField( text, "source_x86_64", BinaryArchiveSource( version ) );
             text = SetSrcInfoField( text, "sha256sums_x86_64", binarySha );
         }
         else

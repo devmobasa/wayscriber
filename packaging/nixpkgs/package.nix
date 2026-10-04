@@ -37,7 +37,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   # Keep in sync with the default feature set in Cargo.toml; the GTK inputs are
   # required by the `toolbar-gtk` default feature.
-  # Checked by tools/check-nixpkgs-recipe.py.
+  # Checked by `dotnet run tools/wayscriber.cs --no-build -- check nixpkgs-recipe`.
   buildInputs = [
     cairo
     gtk4

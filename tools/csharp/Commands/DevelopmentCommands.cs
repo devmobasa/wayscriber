@@ -4,8 +4,14 @@ internal static class DevelopmentCommands
 {
     private const int WestonStartupAttempts = 100;
     private const int WestonPollDelayMilliseconds = 100;
-    private static readonly string[] CsharpFileApps = ["tools/wayscriber.cs", "tools/install.cs", "tools/wayscriber.tests.cs"];
+    private const string CsharpTestApp = "tools/wayscriber.tests.cs";
+    private static readonly string[] CsharpFileApps = ["tools/wayscriber.cs", "tools/install.cs", CsharpTestApp];
     private static readonly string[] CsharpFormatModes = ["style", "whitespace"];
+    private static readonly string[] IsolatedRenderTests =
+    [
+        "ui::context_menu::engine_tests::retained_context_menu_owner_preserves_layout_pixels_and_row_hits",
+        "ui::board_picker::tests::retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts",
+    ];
 
     public static IReadOnlyList<ToolCommand> Commands
     {
@@ -89,37 +95,85 @@ internal static class DevelopmentCommands
     private static async Task<int> LintAndTest( ToolContext context, string[] args )
     {
         new Arguments( args ).RequireEmpty( "ci lint-and-test" );
-        await RunTool( context, CommandAreas.Assets, CommandNames.Check );
-        await RunTool( context, CommandAreas.Version, CommandNames.Check );
-        await RunTool( context, CommandAreas.Check, CommandNames.NixpkgsRecipe );
-        await RunTool( context, CommandAreas.Check, CommandNames.RustSourceCoverage );
-        await RunTool( context, CommandAreas.Check, CommandNames.ProcessSites );
-        await RunTool( context, CommandAreas.Check, CommandNames.ConfigWriters );
-        await RunTool( context, CommandAreas.Check, CommandNames.SharedDependencies );
-        await RunTool( context, CommandAreas.Check, CommandNames.LegacyTools );
-        await RunCsharpFormattingChecks( context );
-        await context.Run( Programs.Dotnet, ["run", "tools/wayscriber.tests.cs", "--no-build", CommandLineOptions.EndOfOptions] );
-        await RunCargo( context, ["fmt", "--all", CommandLineOptions.EndOfOptions, "--check"] );
-        await RunCargo( context, ["clippy", CommandLineOptions.Locked, CommandLineOptions.Workspace, CommandLineOptions.AllTargets, CommandLineOptions.AllFeatures, CommandLineOptions.EndOfOptions, "-D", "warnings"] );
-        await RunCargo( context, ["build", CommandLineOptions.Locked, CommandLineOptions.Workspace, CommandLineOptions.AllFeatures, CommandLineOptions.Binaries] );
-        await RunCargo( context, ["test", CommandLineOptions.Locked, CommandLineOptions.Workspace, CommandLineOptions.AllFeatures, CommandLineOptions.EndOfOptions, CommandLineOptions.SingleTestThread] );
-        await RunIsolatedRenderTests( context, CommandLineOptions.AllFeatures );
-        await RunCargo( context, ["clippy", CommandLineOptions.Locked, CommandLineOptions.Workspace, CommandLineOptions.AllTargets, CommandLineOptions.NoDefaultFeatures, CommandLineOptions.EndOfOptions, "-D", "warnings"] );
-        await RunCargo( context, ["build", CommandLineOptions.Locked, CommandLineOptions.Workspace, CommandLineOptions.NoDefaultFeatures, CommandLineOptions.Binaries] );
-        await RunCargo( context, ["test", CommandLineOptions.Locked, CommandLineOptions.Workspace, CommandLineOptions.NoDefaultFeatures, CommandLineOptions.EndOfOptions, CommandLineOptions.SingleTestThread] );
-        await RunIsolatedRenderTests( context, CommandLineOptions.NoDefaultFeatures );
+
+        foreach ( var step in LintAndTestPlan )
+        {
+            await RunLintStep( context, step );
+        }
+
         return ExitCodes.Success;
     }
 
-    private static async Task RunCsharpFormattingChecks( ToolContext context )
+    // `ci lint-and-test`, in order. After building the C# apps, `tools/lint-and-test.sh`
+    // runs the same steps, and the C# tests compare its commands with this list.
+    internal static IReadOnlyList<LintStep> LintAndTestPlan
     {
+        get;
+    } = BuildLintAndTestPlan( );
+
+    private static List<LintStep> BuildLintAndTestPlan( )
+    {
+        List<LintStep> plan =
+        [
+            new( LintStepKind.RepositoryCheck, [CommandAreas.Assets, CommandNames.Check] ),
+            new( LintStepKind.RepositoryCheck, [CommandAreas.Version, CommandNames.Check] ),
+            new( LintStepKind.RepositoryCheck, [CommandAreas.Check, CommandNames.NixpkgsRecipe] ),
+            new( LintStepKind.RepositoryCheck, [CommandAreas.Check, CommandNames.RustSourceCoverage] ),
+            new( LintStepKind.RepositoryCheck, [CommandAreas.Check, CommandNames.LegacyTools] ),
+        ];
+
         foreach ( var fileApp in CsharpFileApps )
         {
             foreach ( var formatMode in CsharpFormatModes )
             {
-                await context.Run( Programs.Dotnet,
-                    ["format", formatMode, fileApp, CommandLineOptions.NoRestore, CommandLineOptions.VerifyNoChanges] );
+                plan.Add( new( LintStepKind.Dotnet,
+                    ["format", formatMode, fileApp, CommandLineOptions.NoRestore, CommandLineOptions.VerifyNoChanges] ) );
             }
+        }
+
+        plan.Add( new( LintStepKind.Dotnet, ["run", CsharpTestApp, "--no-build", "--verbosity", "quiet"] ) );
+        plan.Add( new( LintStepKind.Cargo, ["fmt", "--all", CommandLineOptions.EndOfOptions, "--check"] ) );
+
+        foreach ( var features in new[] { CommandLineOptions.AllFeatures, CommandLineOptions.NoDefaultFeatures } )
+        {
+            string[] workspace = [CommandLineOptions.Locked, CommandLineOptions.Workspace];
+            plan.Add( new( LintStepKind.Cargo,
+                ["clippy", .. workspace, CommandLineOptions.AllTargets, features, CommandLineOptions.EndOfOptions, "-D", "warnings"] ) );
+            plan.Add( new( LintStepKind.Cargo, ["build", .. workspace, features, CommandLineOptions.Binaries] ) );
+            plan.Add( new( LintStepKind.Cargo,
+                ["test", .. workspace, features, CommandLineOptions.EndOfOptions, CommandLineOptions.SingleTestThread] ) );
+
+            foreach ( var test in IsolatedRenderTests )
+            {
+                plan.Add( new( LintStepKind.IsolatedRenderTest,
+                    ["test", CommandLineOptions.Locked, "-p", RepositoryNames.MainPackage, features, "--lib", test,
+                        CommandLineOptions.EndOfOptions, "--exact", "--ignored", CommandLineOptions.SingleTestThread],
+                    $"{test} ({features})" ) );
+            }
+        }
+
+        return plan;
+    }
+
+    internal static async Task RunLintStep( ToolContext context, LintStep step )
+    {
+        switch ( step.Kind )
+        {
+            case LintStepKind.RepositoryCheck:
+                await RunTool( context, step.Arguments[0], step.Arguments[1] );
+                break;
+            case LintStepKind.Dotnet:
+                await context.Run( step.Program!, step.Arguments );
+                break;
+            case LintStepKind.Cargo:
+                await context.Output.WriteLineAsync( $"\nRunning: {ProcessRunner.FormatCommand( step.Program!, step.Arguments )}" );
+                await context.Run( step.Program!, step.Arguments, trace: false );
+                break;
+            case LintStepKind.IsolatedRenderTest:
+                await RunIsolatedRenderTest( context, step );
+                break;
+            default:
+                throw new ToolException( $"Unknown lint step: {step.Kind}" );
         }
     }
 
@@ -133,28 +187,16 @@ internal static class DevelopmentCommands
         }
     }
 
-    private static async Task RunCargo( ToolContext context, IReadOnlyList<string> arguments )
+    // Parallel font tests can trigger an upstream Cairo/FreeType race, so these
+    // regressions run in their own processes and must each report one passing test.
+    private static async Task RunIsolatedRenderTest( ToolContext context, LintStep step )
     {
-        await context.Output.WriteLineAsync( $"\nRunning: {ProcessRunner.FormatCommand( Programs.Cargo, arguments )}" );
-        await context.Run( Programs.Cargo, arguments, trace: false );
-    }
+        var result = await context.Run( step.Program!, step.Arguments, capture: true );
+        await context.Output.WriteAsync( result.StandardOutput );
 
-    private static async Task RunIsolatedRenderTests( ToolContext context, string feature )
-    {
-        string[] tests =
-        [
-            "ui::context_menu::engine_tests::retained_context_menu_owner_preserves_layout_pixels_and_row_hits",
-            "ui::board_picker::tests::retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts",
-        ];
-        foreach ( var test in tests )
+        if ( !result.StandardOutput.Contains( "test result: ok. 1 passed; 0 failed;", StringComparison.Ordinal ) )
         {
-            var result = await context.Run( Programs.Cargo, ["test", CommandLineOptions.Locked, "-p", RepositoryNames.MainPackage, feature, "--lib", test,
-                CommandLineOptions.EndOfOptions, "--exact", "--ignored", CommandLineOptions.SingleTestThread], capture: true );
-            await context.Output.WriteAsync( result.StandardOutput );
-            if ( !result.StandardOutput.Contains( "test result: ok. 1 passed; 0 failed;", StringComparison.Ordinal ) )
-            {
-                throw new ToolException( $"Expected exactly one passing isolated render test: {test} ({feature})" );
-            }
+            throw new ToolException( $"Expected exactly one passing isolated render test: {step.Description}" );
         }
     }
 
@@ -235,7 +277,11 @@ internal static class DevelopmentCommands
         {
             "checks" => common.Concat( ["poppler-utils", "dbus-daemon", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] )
                 .Concat( repositoryPackages ),
-            "widgets" => common.Concat( ["weston", "dbus-x11", "python3", "libgl1-mesa-dri", "fonts-dejavu-core", "clang", "cmake", "libxkbcommon-x11-dev", "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev", "libxcb-randr0-dev"] ),
+            "widgets" => common.Concat( [
+                "weston", "dbus-x11", "libgl1-mesa-dri", "fonts-dejavu-core", "clang", "cmake", "libxkbcommon-x11-dev",
+                "libegl1-mesa-dev", "libgles2-mesa-dev", "libdbus-1-dev", "libinput-dev", "libudev-dev", "libpixman-1-dev",
+                "libxcb-randr0-dev",
+            ] ),
             "package" => common.Concat( ["rpm"] ),
             "repositories" => repositoryPackages,
             _ => null,
@@ -320,4 +366,25 @@ internal static class DevelopmentCommands
         await context.Run( Programs.Nix, ["build", ".#wayscriber", ".#wayscriber-configurator", ".#devShells.x86_64-linux.default", "--no-link", "--dry-run"] );
         return ExitCodes.Success;
     }
+}
+
+internal enum LintStepKind
+{
+    // An in-process repository command: area, then command.
+    RepositoryCheck,
+    Dotnet,
+    Cargo,
+    // A Cargo test that must report exactly one passing test.
+    IsolatedRenderTest,
+}
+
+internal sealed record LintStep( LintStepKind Kind, IReadOnlyList<string> Arguments, string? Description = null )
+{
+    // The program a process step runs; a repository check runs in process.
+    public string? Program => Kind switch
+    {
+        LintStepKind.Dotnet => Programs.Dotnet,
+        LintStepKind.Cargo or LintStepKind.IsolatedRenderTest => Programs.Cargo,
+        _ => null,
+    };
 }

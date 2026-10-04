@@ -40,10 +40,13 @@ Git hash, and tells Cargo which Git metadata should trigger a rebuild. Cargo fea
 
 GitHub CI uses the C# file app. To run that route locally, build it once with
 `dotnet build tools/wayscriber.cs`, then run commands with
-`dotnet run tools/wayscriber.cs --no-build -- ...`. The standalone scripts remain
-available for development and installation on machines without .NET. Nix does
+`dotnet run tools/wayscriber.cs --no-build -- ...`. Repository, release, and
+packaging checks exist only there, so the complete local gate needs .NET. Nix does
 not provide .NET; `global.json` selects the required SDK when it is installed
-separately.
+separately. Without it, `cargo test` still runs the ownership guards in
+`tests/repository_guards`, and the build, run, and install scripts stay usable;
+the C# checks, including source coverage, need .NET.
+The repository uses no Python.
 
 Build both packages without launching a window:
 
@@ -128,12 +131,13 @@ Before submitting a broad or cross-package change, run the local CI entry point:
 ./tools/lint-and-test.sh
 ```
 
-It checks release/package metadata, all three retained release contracts, package layout, Rust
-source coverage, formatting, strict all-feature Clippy, all-feature tests, and no-default-feature
-tests. When the pinned .NET SDK is installed, it also builds and runs the C# repository-tool tests;
-otherwise it reports that optional local check as skipped. The source-coverage gate uses current
-rustc dep-info and rejects tracked or unignored `.rs` files that are outside the supported Cargo
-target/feature matrix.
+It needs the pinned .NET SDK and stops without it. It checks release/package metadata, Rust
+source coverage, and the shell-tool inventory; builds and runs the C# repository-tool tests,
+which also run the package-layout and release-packaging shell contracts; then checks
+formatting, strict all-feature Clippy, all-feature tests, and no-default-feature tests. The
+Rust tests include the repository guards in `tests/repository_guards`. The source-coverage
+gate uses current rustc dep-info and rejects tracked or unignored `.rs` files that are outside
+the supported Cargo target/feature matrix.
 
 The all-feature portal transport tests require `dbus-daemon`. Each fixture owns a private
 session bus and connects through its explicit address, leaving the desktop session bus alone.
@@ -216,7 +220,8 @@ while preserving the original output identity and request. A second change durin
 active-output switch is terminal. Board PDF desktop captures retain a full-desktop generation check,
 including changes to other monitors even when the screenshot dimensions stay the same.
 
-`./tools/code-health-report.sh` reports navigational maintainability metrics. Its CI artifact is
+`dotnet run tools/wayscriber.cs --no-build -- report code-health` reports navigational
+maintainability metrics. Its CI artifact is
 observational, not a global file/function-size gate; use the report to find code worth understanding,
 not as a reason for mechanical splitting.
 
@@ -226,32 +231,33 @@ not as a reason for mechanical splitting.
 - Installation, service, and shortcut behavior belongs in `docs/SETUP.md` and packaging docs.
 - Main-crate architecture belongs in `docs/codebase-overview.md`.
 - Drafts under `docs/temp/` are planning material unless explicitly promoted.
-- Version changes must go through `tools/bump-version.sh`; keep both package manifests, root
-  `Cargo.lock`, packaging metadata, and tag/release policy aligned.
+- Version changes must go through the C# `version bump` command; keep both package manifests,
+  root `Cargo.lock`, packaging metadata, and tag/release policy aligned.
 - Close a user-visible "I don't have that setting / this build" report only after the change is in
   a tagged GitHub release. `main` is not what `arch-install.sh`, AUR `wayscriber-bin`, or other
   packaged installs ship. `--version` reports the crate version, not the git hash, so bump with
-  `tools/bump-version.sh` in the same change as a user-visible overlay, settings, or config toggle
+  `version bump` in the same change as a user-visible overlay, settings, or config toggle
   (or immediately before tagging that release). Otherwise two binaries can print the same
   `wayscriber 0.9.x` and look identical.
 
 See [tools/README.md](tools/README.md) for build, install, packaging, version, and release helpers.
 
-Run `./tools/lint-and-test.sh` for the standalone local gate. It lints, builds
-binaries, and tests the whole workspace with all features and with no default
-features, alongside source, packaging, retained release-contract, and C# tool
-checks when .NET is installed. CI runs the equivalent C# command and additionally checks dynamic
+Run `./tools/lint-and-test.sh` for the complete local gate; it needs the .NET SDK
+selected by `global.json`. It builds the C# tools, then runs the same steps as CI's
+`ci lint-and-test`: the C# repository checks, C# formatting, and the C# tests
+(which run the retained packaging shell contracts), then lints, builds binaries,
+and tests the whole workspace with all features and with no default features. CI runs the equivalent C# command and additionally checks dynamic
 and static gtk4-layer-shell linkage and uploads its code-health report.
 
 GTK widget coverage runs separately with `./tools/test-gtk-widgets.sh` (Weston,
-`dbus-run-session`, Python 3, `pkg-config`, Mesa software OpenGL, and Wayland
-protocol XML required). It creates a private headless display and requires GTK
-initialization; an unavailable display fails this check. The native popup tests
-use another private Weston with software OpenGL and a protocol proxy to hold one
-popup frame callback while its shared clock paints, then require capture to finish
-after the popup's fresh render is acknowledged. They cover a plain `GtkPopover`
-and `GtkPopoverMenu`'s empty proof overlay and menu restoration. Successful bodies
-print `EXECUTED` markers. Ordinary widget tests without a display report an
+`dbus-run-session`, and Mesa software OpenGL required). It creates a private
+headless display and requires GTK initialization; an unavailable display fails
+this check. The native popup tests use another private Weston with software
+OpenGL and a Rust protocol proxy to hold one popup frame callback while its
+shared clock paints, then require capture to finish after the popup's fresh
+render is acknowledged. They cover a plain `GtkPopover` and `GtkPopoverMenu`'s
+empty proof overlay and menu restoration. Successful bodies print `EXECUTED`
+markers. Ordinary widget tests without a display report an
 optional skip; when a display is available, their GTK assertions run. The native
 popup tests require the dedicated GTK gate. Neither route proves layer-shell
 focus or screen capture behavior on a user's compositor.

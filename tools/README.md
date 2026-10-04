@@ -4,10 +4,11 @@ Helper scripts for development, installation, packaging, and release workflows.
 
 ## C# automation
 
-CI uses the file-based app at `tools/wayscriber.cs`. It also provides C# versions
-of the local commands below, while the standalone shell and Python tools remain
-available for contributors who do not have .NET installed. Production C# commands
-never call those scripts.
+CI uses the file-based app at `tools/wayscriber.cs`. Some commands below exist
+only there (the repository checks, the code-health report, and the version and
+release-tag commands); the shell tools listed remain available for contributors
+who do not have .NET installed. Production C# commands never call those scripts.
+The repository uses no Python.
 
 The exact SDK is pinned by `global.json` and installed by GitHub Actions through
 `actions/setup-dotnet`. Nix does not provide .NET. Local users who choose the C#
@@ -41,19 +42,24 @@ available when .NET is not installed. Use `./tools/install.cs help` to show the
 C# installation commands; `--help` is reserved by `dotnet run` when the file is
 launched through its shebang.
 
-The regression suite also executes the retained package-repository, release-packaging,
-and AUR desktop-asset shell contracts. Production C# commands do not invoke those
-fallback scripts.
+The regression suite also executes the retained package-repository and
+release-packaging shell contracts, and a copy of `lint-and-test.sh` against fake
+`dotnet` and `cargo` commands. Production C# commands do not invoke those shell
+scripts.
 
-`./tools/lint-and-test.sh` always runs those three retained shell contracts. When
-the pinned .NET SDK is available, it also builds and runs the C# regression suite;
-without .NET, it reports that optional local check as skipped and continues with
-the standalone checks.
+`./tools/lint-and-test.sh` is the complete local gate and needs the .NET SDK pinned
+by `global.json`; without it the gate stops before running anything. It builds the
+C# apps, then runs the same steps as `ci lint-and-test`: the C# repository checks,
+C# formatting, the C# regression suite (with the two retained shell contracts), then
+the Cargo format, lint, build, and test steps.
+Without .NET, `cargo test --workspace --all-features` still runs the Rust source
+guards in `tests/repository_guards`, but it is not the complete gate.
 
-Common equivalents are `dev build`, `dev test`, `dev fetch`, `ci lint-and-test`,
-`ci gtk-widgets`, `install app`, `install configurator`, `version bump`,
-`package build`, `release publish-tag`, and `aur update`. Run `--help` for the
-complete command list and options.
+C# equivalents of the shell tools include `dev build`, `dev test`, `dev fetch`,
+`ci gtk-widgets`, `install app`, `install configurator`, `package build`, and
+`aur update`. `ci lint-and-test` is what `tools/lint-and-test.sh` runs after building
+the C# apps. `version bump`, `version check`, and the `release` tag commands have no
+shell version. Run `--help` for the complete command list and options.
 
 ## Development
 
@@ -69,22 +75,23 @@ complete command list and options.
   - Runs `cargo test --workspace`
   - Usage: `./tools/test.sh`
 
-- **code-health-report.sh** - Report local maintainability metrics
+- **report code-health** - Report local maintainability metrics
   - Reports Rust files over 500 lines, functions over 120 lines, production unwrap/expect/panic/unsafe markers, selected allowances, and direct `fs::write` usage
   - Does not fail on reported findings; intended for baseline visibility before adding quality gates
-  - Usage: `./tools/code-health-report.sh`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- report code-health`
 
-- **check-rust-source-coverage.py** - Reject Rust sources outside the supported Cargo module graph
+- **check rust-source-coverage** - Reject Rust sources outside the supported Cargo module graph
   - Uses current rustc dep-info from all-target/all-feature and no-default-feature checks
   - Runs as a hard gate in local and GitHub CI
-  - Usage: `./tools/check-rust-source-coverage.py`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- check rust-source-coverage`
 
-- **check-config-writers.py** - Reject config-write capability outside the configurator's Save
-  - Scans `src/` and `configurator/src/` for the `config.toml` write primitives, exempting test sources and inline `#[cfg(test)]` items
-  - Allows only `src/config/document.rs`, `src/config/io.rs`, and `configurator/src/app/io.rs`
-  - Also checks those files keep the capability narrow (one public save, `pub(super)` primitives)
-  - Runs as a hard gate in `tools/lint-and-test.sh`
-  - Usage: `./tools/check-config-writers.py`
+- **tests/repository_guards** - Rust source guards that run in every `cargo test`
+  - `config_writers.rs` rejects `config.toml` write capability outside the configurator's Save and the overlay's pinned narrow editors
+  - `process_sites.rs` keeps process creation inside the process broker and audits the broker's post-fork child stub
+  - `shared_dependencies.rs` keeps the shared domain and config validation layers free of upward crate paths, using the syntax corpus beside it
+  - `no_python.rs` rejects Python files and links to them, Python project and lock files, Python shebangs, and Python interpreter or package names in the Rust, C#, MSBuild, shell, Nix, TOML, workflow, build, service, desktop-entry, packaging, and extensionless files it reads; its known limits are listed at the top of the file
+  - Each guard carries regression fixtures for the escapes it forbids
+  - Usage: `cargo test --test repository_guards`
 
 - **reload-daemon.sh** - Restart running daemon
   - Kills and restarts the daemon to pick up config/code changes
@@ -111,8 +118,8 @@ complete command list and options.
 
 ## Version & Release
 
-- **bump-version.sh** - Bump version numbers
-  - Checks offline dependency resolution before changing version files; run `./tools/fetch-all-deps.sh` if the cache is incomplete.
+- **version bump** - Bump version numbers
+  - Checks offline dependency resolution before changing version files; run `dev fetch` (or `./tools/fetch-all-deps.sh`) if the cache is incomplete.
   - Updates Cargo.toml, configurator/Cargo.toml, the workspace Cargo.lock, PKGBUILD, and .SRCINFO
   - Updates only workspace packages in the lockfile, offline; existing dependency versions stay locked
   - flake.nix package version follows Cargo.toml automatically
@@ -120,13 +127,14 @@ complete command list and options.
   - Use this in the same change as a user-visible overlay/settings/config toggle, or immediately
     before tagging that release, so `--version` is not identical to the last shipped crate
   - Supports MAJOR.MINOR.PATCH.HOTFIX for packaging-only hotfix releases
-  - Usage: `./tools/bump-version.sh [--dry-run] [new_version]`
+  - Rolls every version file back if the result fails `version check`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- version bump [--dry-run] [X.Y.Z[.N]]`
 
-- **check-version-consistency.sh** - Check release metadata alignment
+- **version check** - Check release metadata alignment
   - Verifies Cargo manifests, the workspace lockfile, packaging metadata, flake version sourcing, and that the flake compares the selected Rust toolchain to Cargo.toml rust-version
   - Keeps the configurator's libadwaita 1.4 floor aligned across Cargo, deb, rpm, PKGBUILD, and `.SRCINFO`
   - With `--release-version X.Y.Z[.N]`, rejects tags that do not match Cargo or an explicit packaging hotfix of Cargo
-  - Usage: `bash tools/check-version-consistency.sh [--release-version X.Y.Z[.N]]`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- version check [--release-version X.Y.Z[.N]]`
 
 Packaging-only hotfix policy:
 - Normal releases use one version everywhere: Cargo, package metadata, Git tags, and artifacts all use `X.Y.Z`.
@@ -134,17 +142,17 @@ Packaging-only hotfix policy:
 - Repo `packaging/PKGBUILD` and `packaging/.SRCINFO` are templates and keep `sha256sums=('SKIP')` because the final GitHub tag archive checksum can only be computed after the tag exists. AUR automation writes the real checksum into external AUR metadata.
 - Release builds set `WAYSCRIBER_RELEASE_VERSION`, so packaged binaries report the release artifact version. Nix builds follow Cargo and report `X.Y.Z` unless the Cargo version itself is bumped.
 
-- **create-release-tag.sh** - Create git tag (local only)
+- **release create-tag** - Create git tag (local only)
   - Creates annotated tag `v<version>` without pushing
   - Requires clean working tree
   - Runs version consistency checks before tagging
-  - Usage: `./tools/create-release-tag.sh <version>` (X.Y.Z or X.Y.Z.N)
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- release create-tag X.Y.Z[.N]`
 
-- **publish-release-tag.sh** - Create and push git tag
+- **release publish-tag** - Create and push git tag
   - Creates annotated tag and pushes to origin
   - Auto-detects version from Cargo.toml if not specified
   - Runs version consistency checks before tagging
-  - Usage: `./tools/publish-release-tag.sh [--version X.Y.Z[.N]] [--dry-run]`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- release publish-tag [--version X.Y.Z[.N]] [--dry-run]`
 
 See [Releasing](../docs/RELEASING.md) for validation, website release notes, and the
 final update-manifest publication step. Pushing a tag does not update the website notice.
@@ -185,24 +193,19 @@ automatically by the nixpkgs-update bot. The bot only rewrites the version and
 hashes, so build-level changes still need a pull request from us. See
 `packaging/nixpkgs/README.md`.
 
-- **check-nixpkgs-recipe.py** - Check the nixpkgs build declares what the default features need
-  - Uses locked Cargo metadata, so it works with Python 3.10 without an extra TOML parser
+- **check nixpkgs-recipe** - Check the nixpkgs build declares what the default features need
+  - Uses locked Cargo metadata
   - Maps every direct normal Cargo dependency, including target-specific dependencies, to the nixpkgs system packages it links
   - Keeps required native inputs, including the GTK application wrapper, aligned between the recipe and flake
   - Fails when a Linux default-feature dependency is missing from `packaging/nixpkgs/package.nix` or `flake.nix`
   - Fails on any new direct normal dependency until its system requirements are declared
   - Runs as a hard gate in GitHub CI and before release packaging
-  - Usage: `./tools/check-nixpkgs-recipe.py`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- check nixpkgs-recipe`
 
 ## AUR (Arch User Repository)
 
-- **aur-desktop-assets.sh** / **aur-desktop-assets.py** - Standalone asset recipe generator
-  - Reads and validates the package manifests without .NET.
-  - Usage: `bash tools/aur-desktop-assets.sh REPO_ROOT`.
-
-- **wayscriber assets emit** - C# asset recipe generator used by CI
-  - Reads both package YAML manifests and validates asset paths and integer permissions.
-  - Standalone shell tools keep their own implementation and do not require .NET.
+- **wayscriber assets emit** - Desktop asset recipe generator used by CI
+  - Reads both package YAML manifests, validates asset paths, and requires mode 0644 as a plain YAML integer.
 
 - **update-aur.sh** - Interactive AUR update
   - Updates PKGBUILD, tests build locally, pushes to AUR
@@ -228,7 +231,7 @@ All scripts work from any location in the project.
 
 ### Potential Overlaps
 
-The release/tag scripts have overlapping functionality:
-- `create-release-tag.sh` + push = `publish-release-tag.sh`
+The release tag commands have overlapping functionality:
+- `release create-tag` + push = `release publish-tag`
 
-Use the individual scripts in sequence for full releases when you need explicit control over each step.
+Use the individual commands in sequence for full releases when you need explicit control over each step.

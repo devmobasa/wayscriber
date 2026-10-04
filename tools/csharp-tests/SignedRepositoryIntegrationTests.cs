@@ -32,7 +32,7 @@ public sealed class SignedRepositoryIntegrationTests
             [EnvironmentVariables.GpgPassphrase] = KeyPassphrase,
             [EnvironmentVariables.SignRpms] = "1",
         };
-        var context = new ToolContext( FindRepository( ), TextWriter.Null, TextWriter.Null,
+        var context = new ToolContext( TestRepository.Root, TextWriter.Null, TextWriter.Null,
             new ProcessRunner( TextWriter.Null, TextWriter.Null ), CancellationToken.None,
             name => environment.GetValueOrDefault( name ) );
         var command = PackagingCommands.Commands.Single( item => item.Area == "package" && item.Name == "build-repositories" );
@@ -120,11 +120,5 @@ echo fixture > %{buildroot}/usr/share/wayscriber/fixture
         var request = new ProcessRequest( fileName, arguments, workingDirectory, environment, CaptureOutput: true,
             Trace: false, AllowedExitCodes: allowedExitCodes );
         return runner.RunAsync( request, CancellationToken.None );
-    }
-
-    private static string FindRepository( )
-    {
-        var directory = AppContext.GetData( "EntryPointFileDirectoryPath" ) as string ?? Environment.CurrentDirectory;
-        return Path.GetFullPath( Path.Combine( directory, ".." ) );
     }
 }

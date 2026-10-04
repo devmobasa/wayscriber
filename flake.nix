@@ -33,7 +33,6 @@
         developmentInputs = with pkgs; [
           rustToolchain
           util-linux
-          python3
           pkg-config
           cairo
           pango
@@ -62,8 +61,6 @@
               pkg-config
               wrapGAppsHook4
             ];
-
-            nativeCheckInputs = with pkgs; [ python3 ];
 
             buildInputs = with pkgs; [
               cairo

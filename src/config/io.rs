@@ -359,7 +359,7 @@ pub(crate) fn is_stale_source_error(error: &anyhow::Error) -> bool {
 /// non-idempotent validation step appears. Two things defend it in place of a
 /// behavioural test: `document_config_is_a_fixed_point_of_validation` below,
 /// which fails the moment validation stops being idempotent, and the
-/// `authored_config()` check in `tools/check-config-writers.py`.
+/// `authored_config()` check in `tests/repository_guards/config_writers.rs`.
 ///
 /// `verify` runs afterwards against the document the save parsed from the bytes
 /// it wrote — the merge output, not a re-read of the file — so a value that
@@ -465,7 +465,7 @@ pub fn persist_keybinding_edit(action: Action, bindings: &[String]) -> Result<Co
 /// Test-only, and gated rather than merely `pub(crate)`: production has no use
 /// for a config path that did not come from the environment, and a build that
 /// cannot name this cannot acquire one by accident. The name is still pinned in
-/// `tools/check-config-writers.py`, which fails a production caller with a
+/// `tests/repository_guards/config_writers.rs`, which fails a production caller with a
 /// message about the gesture rather than a resolution error.
 #[cfg(test)]
 pub(crate) fn persist_keybinding_edit_at(

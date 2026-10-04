@@ -1,9 +1,11 @@
 use super::*;
+use std::ffi::OsStr;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::Instant;
+
+mod fake_overlay;
 
 pub(in crate::daemon) fn with_visible_overlay(
     named_file: Option<PathBuf>,
@@ -39,70 +41,26 @@ pub(in crate::daemon) fn assert_token_only_pending_launch(daemon: &Daemon, token
     assert_eq!(retained.session_resume_override(Some(true)), Some(true));
 }
 
+/// Runs `body` with a broker whose overlay launches of this test binary act
+/// as [`fake_overlay`] children. Receipts land in the runtime root passed to `body`.
 fn with_fixture(ignore_term: bool, body: impl FnOnce(&mut Daemon, OverlaySpawnCandidate, &Path)) {
     let temp = crate::test_temp::tempdir().unwrap();
-    crate::test_env::with_env_var(
-        crate::env_vars::XDG_RUNTIME_DIR_ENV,
-        Some(temp.path().as_os_str()),
+    let behavior = if ignore_term {
+        fake_overlay::IGNORES_TERM
+    } else {
+        fake_overlay::STOPS_ON_TERM
+    };
+
+    crate::test_env::with_env_vars(
+        &[
+            (
+                crate::env_vars::XDG_RUNTIME_DIR_ENV,
+                Some(temp.path().as_os_str()),
+            ),
+            (fake_overlay::FAKE_OVERLAY_ENV, Some(OsStr::new(behavior))),
+        ],
         || {
-            let search_path = std::env::var_os(crate::env_vars::PATH_ENV).unwrap_or_default();
-            let python = std::env::split_paths(&search_path)
-                .map(|directory| directory.join("python3"))
-                .find(|candidate| {
-                    fs::metadata(candidate).is_ok_and(|metadata| {
-                        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-                    })
-                })
-                .expect("daemon overlay fixtures require python3 on PATH");
-            let python = fs::canonicalize(python).unwrap();
-
-            let bin = temp.path().join("bin");
-            fs::create_dir(&bin).unwrap();
-            let program = bin.join("wayscriber");
-            let proof_dir = crate::daemon::protocol_v2::command_root().join("children");
-            let script = format!(
-                r#"#!{python}
-import json, os, pathlib, signal, sys, time
-root = pathlib.Path({root})
-proof = pathlib.Path({proof})
-proof.mkdir(parents=True, exist_ok=True, mode=0o700)
-generation = os.environ[{generation_env:?}]
-record = {{"protocol_version": {version}, "generation": generation, "pid": os.getpid(), "process_start_ticks": int(pathlib.Path("/proc/self/stat").read_text().split(") ", 1)[1].split()[19])}}
-def publish(path, data):
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(data, separators=(",", ":")))
-    temp.chmod(0o600)
-    temp.replace(path)
-signal.signal(signal.SIGUSR2, signal.SIG_IGN)
-if {ignore_term}:
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-for suffix in ("active", "signals", "ready"):
-    publish(proof / (generation + "." + suffix), record)
-while not (proof / (generation + ".enabled")).exists():
-    time.sleep(0.002)
-publish(root / (generation + ".receipt"), {{
-    "args": sys.argv[1:], "token": os.environ.get({token_env:?}),
-    "startup": os.environ.get({startup_env:?}), "resume": os.environ.get({resume_env:?}),
-    "detach": os.environ.get({detach_env:?}), "pid": os.getpid(), "generation": generation
-}})
-while True:
-    time.sleep(0.01)
-"#,
-                python = python.display(),
-                root = serde_json::to_string(&temp.path().to_string_lossy()).unwrap(),
-                proof = serde_json::to_string(&proof_dir.to_string_lossy()).unwrap(),
-                version = 2,
-                generation_env = crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
-                token_env = crate::env_vars::XDG_ACTIVATION_TOKEN_ENV,
-                startup_env = crate::env_vars::DESKTOP_STARTUP_ID_ENV,
-                resume_env = crate::RESUME_SESSION_ENV,
-                detach_env = crate::env_vars::NO_DETACH_ENV,
-                ignore_term = if ignore_term { "True" } else { "False" }
-            );
-
-            fs::write(&program, script).unwrap();
-            fs::set_permissions(&program, fs::Permissions::from_mode(0o700)).unwrap();
-
+            let _broker = crate::process_broker::start_for_runtime().unwrap();
             let mut daemon = Daemon::new(
                 Some("transparent".into()),
                 false,
@@ -114,34 +72,11 @@ while True:
                 .unwrap()
                 .to_string();
             let candidate = OverlaySpawnCandidate {
-                program: program.into_os_string(),
-                source: "fixture",
+                program: std::env::current_exe().unwrap().into_os_string(),
+                source: "test binary",
             };
 
-            let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
-                &std::env::var_os(crate::env_vars::PATH_ENV).unwrap_or_default(),
-            )))
-            .unwrap();
-
-            let previous_path = std::env::var_os(crate::env_vars::PATH_ENV);
-            // SAFETY: with_env_var holds the process environment mutex.
-            unsafe { std::env::set_var(crate::env_vars::PATH_ENV, path) };
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let _broker = crate::process_broker::start_for_runtime().unwrap();
-
-                body(&mut daemon, candidate, temp.path());
-            }));
-
-            // SAFETY: the same mutex is held, including after fixture failure.
-            unsafe {
-                match previous_path {
-                    Some(path) => std::env::set_var(crate::env_vars::PATH_ENV, path),
-                    None => std::env::remove_var(crate::env_vars::PATH_ENV),
-                }
-            }
-            if let Err(panic) = result {
-                std::panic::resume_unwind(panic);
-            }
+            body(&mut daemon, candidate, temp.path());
         },
     );
 }
@@ -267,9 +202,9 @@ fn real_child_hide_restart_and_natural_retirement_clear_target_and_visibility() 
 #[test]
 fn real_spawn_failure_drops_options_and_token_before_retry() {
     with_fixture(false, |daemon, candidate, root| {
-        let failed_program = root.join("wayscriber-failing-fixture");
-        fs::write(&failed_program, "#!/bin/sh\nexit 7\n").unwrap();
-        fs::set_permissions(&failed_program, fs::Permissions::from_mode(0o700)).unwrap();
+        // A real child that starts and exits before publishing readiness.
+        let failed_program = root.join(fake_overlay::EXITS_BEFORE_READY);
+        std::os::unix::fs::symlink(&candidate.program, &failed_program).unwrap();
         daemon.queue_overlay_launch(
             Some(DaemonToggleRequest {
                 mode: Some("whiteboard".into()),
@@ -286,15 +221,41 @@ fn real_spawn_failure_drops_options_and_token_before_retry() {
                 request,
                 &[OverlaySpawnCandidate {
                     program: failed_program.into_os_string(),
-                    source: "failed fixture",
+                    source: "exits before readiness",
                 }],
             )
             .unwrap_err();
 
+        // Callers report the summary alone, even with `{:#}`; the attempts stay
+        // on the error for inspection.
+        assert_eq!(
+            format!("{failure:#}"),
+            format!(
+                "Unable to launch overlay process (tried current_exe/argv0/{})",
+                crate::env_vars::PATH_ENV
+            )
+        );
+        let attempts = failure
+            .downcast_ref::<super::spawn::SpawnAttemptsFailed>()
+            .expect("every candidate failed")
+            .attempts();
         assert!(
-            failure
-                .to_string()
-                .contains("Unable to launch overlay process")
+            attempts.iter().any(|attempt| {
+                attempt.contains("overlay child exited before publishing readiness")
+            }),
+            "{attempts:?}"
+        );
+        assert!(
+            fs::read_dir(root)
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == fake_overlay::STARTED_THEN_EXITED)
+                }),
+            "the failing candidate never started"
         );
         assert!(daemon.pending_launch.is_none());
         assert_eq!(daemon.overlay.state(), OverlayState::Hidden);

@@ -11,7 +11,7 @@ public sealed class ReleaseParityRegressionTests
     private const string SyntheticPassphrase = "synthetic-passphrase";
     private const string RepositoryDeployKey = "repository-deploy-key";
     private const string TestDotnetSdk = "11.0.100-rc.1.26425.128";
-    private const string DotnetLogVariable = "WAYSCRIBER_DOTNET_LOG";
+    private const string CommandLogVariable = "WAYSCRIBER_COMMAND_LOG";
 
     [Fact]
     public async Task AurAskpassEnvironmentIsScopedToSshAdd( )
@@ -148,7 +148,7 @@ public sealed class ReleaseParityRegressionTests
     [Fact]
     public void ManagedDesktopAssetBlocksReplaceAndRejectStaleEntries( )
     {
-        var recipe = AssetsCommand.CreateRecipe( FindRepository( ) )["source"]!.AsObject( );
+        var recipe = AssetsCommand.CreateRecipe( TestRepository.Root )["source"]!.AsObject( );
         var marker = recipe["marker"]!.GetValue<string>( );
         var end = recipe["end_marker"]!.GetValue<string>( );
         var anchor = recipe["anchor"]!.GetValue<string>( );
@@ -170,7 +170,7 @@ public sealed class ReleaseParityRegressionTests
     [InlineData( PackageChannels.Configurator )]
     public void CompleteMarkerlessDesktopAssetsAreMigratedAndStaleEntriesAreRemoved( string channel )
     {
-        var recipe = AssetsCommand.CreateRecipe( FindRepository( ) )[channel]!.AsObject( );
+        var recipe = AssetsCommand.CreateRecipe( TestRepository.Root )[channel]!.AsObject( );
         var anchor = recipe["anchor"]!.GetValue<string>( );
         var expectedLines = recipe["lines"]!.AsArray( ).Select( item => item!.GetValue<string>( ) ).ToArray( );
         var staleName = channel == PackageChannels.Configurator ? "retired-legacy-icon" : "retired-icon";
@@ -191,7 +191,7 @@ public sealed class ReleaseParityRegressionTests
     [InlineData( PackageChannels.Configurator )]
     public void MarkerlessPreviousManifestSubsetsAreMigrated( string channel )
     {
-        var recipe = AssetsCommand.CreateRecipe( FindRepository( ) )[channel]!.AsObject( );
+        var recipe = AssetsCommand.CreateRecipe( TestRepository.Root )[channel]!.AsObject( );
         var anchor = recipe["anchor"]!.GetValue<string>( );
         var previousManifestLines = recipe["lines"]!.AsArray( ).Select( item => item!.GetValue<string>( ) ).SkipLast( 1 );
         var input = anchor + "\n\n" + string.Join( '\n', previousManifestLines );
@@ -207,50 +207,104 @@ public sealed class ReleaseParityRegressionTests
         Assert.Equal( Path.GetPathRoot( Environment.CurrentDirectory ), NativeDesktopCommands.NormalizeBinDirectory( "/" ) );
     }
 
+    // The local gate builds the C# apps, then runs `ci lint-and-test`'s steps in the same order.
     [Fact]
-    public async Task StandaloneGateUsesSdkResolutionAndRunsEveryCsharpBuild( )
+    public async Task LocalGateBuildsTheCsharpAppsThenRunsTheCiPlan( )
     {
         if ( !OperatingSystem.IsLinux( ) )
         {
             return;
         }
 
-        using var fixture = CreateStandaloneGateFixture( dotnetSdkAvailable: true );
-        var dotnetLog = Path.Combine( fixture.Path, "dotnet.log" );
+        using var fixture = CreateLocalGateFixture( dotnetSdkAvailable: true );
+        var commandLog = Path.Combine( fixture.Path, "commands.log" );
 
-        var result = await RunStandaloneGate( fixture.Path, dotnetLog, new HashSet<int> { ExitCodes.Success } );
+        var result = await RunLocalGate( fixture.Path, commandLog, new HashSet<int> { ExitCodes.Success } );
 
         Assert.Equal( ExitCodes.Success, result.ExitCode );
-        var invocations = File.ReadAllText( dotnetLog );
-        Assert.Contains( "build tools/wayscriber.cs --disable-build-servers --verbosity quiet", invocations, StringComparison.Ordinal );
-        Assert.Contains( "build tools/install.cs --disable-build-servers --verbosity quiet", invocations, StringComparison.Ordinal );
-        Assert.Contains( "build tools/wayscriber.tests.cs --disable-build-servers --verbosity quiet", invocations, StringComparison.Ordinal );
-        Assert.Contains( "format style tools/wayscriber.cs --no-restore --verify-no-changes", invocations, StringComparison.Ordinal );
-        Assert.Contains( "format whitespace tools/install.cs --no-restore --verify-no-changes", invocations, StringComparison.Ordinal );
-        Assert.Contains( "format whitespace tools/wayscriber.tests.cs --no-restore --verify-no-changes", invocations, StringComparison.Ordinal );
-        Assert.Contains( "run tools/wayscriber.tests.cs --no-build --verbosity quiet", invocations, StringComparison.Ordinal );
+        var commands = File.ReadAllLines( commandLog );
+        var builds = new[] { "tools/wayscriber.cs", "tools/install.cs", "tools/wayscriber.tests.cs" }
+            .Select( app => $"{Programs.Dotnet} build {app} --disable-build-servers --verbosity quiet" );
+        // The gate runs a repository check through the built tool; C# runs it in process.
+        var plan = DevelopmentCommands.LintAndTestPlan.Select( step => step.Program is { } program
+            ? $"{program} {string.Join( ' ', step.Arguments )}"
+            : $"{Programs.Dotnet} run tools/wayscriber.cs --no-build -- {string.Join( ' ', step.Arguments )}" );
+        Assert.Equal( [.. builds, .. plan], commands );
     }
 
     [Fact]
-    public async Task StandaloneGateSkipsOnlyCsharpChecksWhenPinnedSdkIsUnavailable( )
+    public async Task LocalGateRequiresEachIsolatedRenderTestToPassExactlyOnce( )
     {
         if ( !OperatingSystem.IsLinux( ) )
         {
             return;
         }
 
-        using var fixture = CreateStandaloneGateFixture( dotnetSdkAvailable: false );
-        var dotnetLog = Path.Combine( fixture.Path, "dotnet.log" );
+        using var fixture = CreateLocalGateFixture( dotnetSdkAvailable: true, cargoOutput: "test result: ok. 0 passed; 0 failed;" );
+        var commandLog = Path.Combine( fixture.Path, "commands.log" );
 
-        var result = await RunStandaloneGate( fixture.Path, dotnetLog, new HashSet<int> { ExitCodes.Success } );
+        var result = await RunLocalGate( fixture.Path, commandLog, new HashSet<int> { ExitCodes.Failure } );
 
-        Assert.Equal( ExitCodes.Success, result.ExitCode );
-        Assert.Contains( "SDK selected by global.json is unavailable", result.StandardOutput, StringComparison.Ordinal );
-        Assert.False( File.Exists( dotnetLog ) );
+        Assert.Equal( ExitCodes.Failure, result.ExitCode );
+        Assert.Contains( "Expected exactly one passing isolated render test", result.StandardError, StringComparison.Ordinal );
+    }
+
+    // Each kind of `ci lint-and-test` step runs what it names: repository checks in
+    // process, the others as dotnet or cargo with the step's arguments.
+    [Fact]
+    public async Task LintStepsRunTheProgramTheirKindNames( )
+    {
+        var runner = new LintStepRunner( "test result: ok. 1 passed; 0 failed;\n" );
+        using var output = new StringWriter( );
+        var context = new ToolContext( TestRepository.Root, output, TextWriter.Null, runner, CancellationToken.None );
+
+        await DevelopmentCommands.RunLintStep( context, new( LintStepKind.RepositoryCheck, [CommandAreas.Version, CommandNames.Check] ) );
+        await DevelopmentCommands.RunLintStep( context, new( LintStepKind.Dotnet, ["format", "style", "tools/wayscriber.cs"] ) );
+        await DevelopmentCommands.RunLintStep( context, new( LintStepKind.Cargo, ["fmt", "--all"] ) );
+        await DevelopmentCommands.RunLintStep( context, new( LintStepKind.IsolatedRenderTest, ["test", "--lib", "probe"], "probe" ) );
+
+        Assert.Equal(
+            [$"{Programs.Dotnet} format style tools/wayscriber.cs", $"{Programs.Cargo} fmt --all", $"{Programs.Cargo} test --lib probe"],
+            runner.Requests.Select( request => $"{request.FileName} {string.Join( ' ', request.Arguments )}" ) );
+        Assert.Contains( "Running: wayscriber version check", output.ToString( ), StringComparison.Ordinal );
+        Assert.Contains( "Version consistency OK:", output.ToString( ), StringComparison.Ordinal );
+    }
+
+    [Fact]
+    public async Task AnIsolatedRenderTestMustReportExactlyOnePassingTest( )
+    {
+        var runner = new LintStepRunner( "test result: ok. 0 passed; 0 failed;\n" );
+        var context = new ToolContext( TestRepository.Root, TextWriter.Null, TextWriter.Null, runner, CancellationToken.None );
+
+        var step = new LintStep( LintStepKind.IsolatedRenderTest, ["test", "--lib", "probe"], "probe (--all-features)" );
+
+        var error = await Assert.ThrowsAsync<ToolException>( ( ) => DevelopmentCommands.RunLintStep( context, step ) );
+
+        Assert.Contains( "Expected exactly one passing isolated render test: probe (--all-features)", error.Message,
+            StringComparison.Ordinal );
+    }
+
+    [Fact]
+    public async Task LocalGateFailsBeforeAnyCheckWhenPinnedSdkIsUnavailable( )
+    {
+        if ( !OperatingSystem.IsLinux( ) )
+        {
+            return;
+        }
+
+        using var fixture = CreateLocalGateFixture( dotnetSdkAvailable: false );
+        var commandLog = Path.Combine( fixture.Path, "commands.log" );
+
+        var result = await RunLocalGate( fixture.Path, commandLog, new HashSet<int> { ExitCodes.Failure } );
+
+        Assert.Equal( ExitCodes.Failure, result.ExitCode );
+        Assert.Contains( "the complete gate needs the .NET SDK selected by global.json", result.StandardError, StringComparison.Ordinal );
+        Assert.DoesNotContain( "Running:", result.StandardOutput, StringComparison.Ordinal );
+        Assert.False( File.Exists( commandLog ) );
     }
 
     private static ToolContext CreateContext( IProcessRunner runner, Func<string, string?>? environment = null ) =>
-        new( FindRepository( ), TextWriter.Null, TextWriter.Null, runner, CancellationToken.None, environment );
+        new( TestRepository.Root, TextWriter.Null, TextWriter.Null, runner, CancellationToken.None, environment );
 
     private static TemporaryDirectory CreateArchiveFixture( )
     {
@@ -300,33 +354,38 @@ release_manifest() {
     }
 
     [SupportedOSPlatform( "linux" )]
-    private static TemporaryDirectory CreateStandaloneGateFixture( bool dotnetSdkAvailable )
+    private static TemporaryDirectory CreateLocalGateFixture( bool dotnetSdkAvailable,
+        string cargoOutput = "test result: ok. 1 passed; 0 failed;" )
     {
-        var fixture = new TemporaryDirectory( "wayscriber-standalone-gate-test" );
+        var fixture = new TemporaryDirectory( "wayscriber-local-gate-test" );
         var tools = Path.Combine( fixture.Path, "tools" );
         var fakeBin = Path.Combine( fixture.Path, "fake-bin" );
         Directory.CreateDirectory( tools );
         Directory.CreateDirectory( fakeBin );
-        File.Copy( Path.Combine( FindRepository( ), "tools/lint-and-test.sh" ), Path.Combine( tools, "lint-and-test.sh" ) );
-        File.Copy( Path.Combine( FindRepository( ), "global.json" ), Path.Combine( fixture.Path, "global.json" ) );
-        File.CreateSymbolicLink( Path.Combine( fakeBin, "bash" ), "/usr/bin/true" );
-        WriteExecutable( Path.Combine( fakeBin, "cargo" ), "#!/usr/bin/bash\nprintf 'test result: ok. 1 passed; 0 failed;\\n'\n" );
-        WriteExecutable( Path.Combine( fakeBin, "dotnet" ), $$"""
+        File.Copy( Path.Combine( TestRepository.Root, "tools/lint-and-test.sh" ), Path.Combine( tools, "lint-and-test.sh" ) );
+        File.Copy( Path.Combine( TestRepository.Root, "global.json" ), Path.Combine( fixture.Path, "global.json" ) );
+        // Only `tools/lint-and-test.sh` is copied, so any other script the gate runs fails it.
+        WriteExecutable( Path.Combine( fakeBin, Programs.Cargo ), $$"""
+#!/usr/bin/bash
+{{LogInvocation( Programs.Cargo )}}
+printf '%s\n' '{{cargoOutput}}'
+""" );
+        WriteExecutable( Path.Combine( fakeBin, Programs.Dotnet ), $$"""
 #!/usr/bin/bash
 if [[ "$1" == "--version" ]]; then
     {{(dotnetSdkAvailable ? $"printf '%s\\n' '{TestDotnetSdk}'" : "exit 1")}}
 else
-    printf '%s\n' "$*" >> "${WAYSCRIBER_DOTNET_LOG:?}"
+    {{LogInvocation( Programs.Dotnet )}}
 fi
 """ );
-        foreach ( var check in new[] { "check-nixpkgs-recipe.py", "check-rust-source-coverage.py", "check-process-sites.py",
-            "check-config-writers.py", "check-shared-dependencies.py", "test-shared-dependencies.py" } )
-        {
-            WriteExecutable( Path.Combine( tools, check ), "#!/usr/bin/true\n" );
-        }
 
         return fixture;
     }
+
+    // Logs one line per invocation: the program, then each argument as `printf %q` quotes
+    // it, so an argument the gate splits or joins differently changes the line.
+    private static string LogInvocation( string program ) =>
+        $"printf '%s%s\\n' '{program}' \"$(printf ' %q' \"$@\")\" >> \"${{{CommandLogVariable}:?}}\"";
 
     [SupportedOSPlatform( "linux" )]
     private static void WriteExecutable( string path, string content )
@@ -335,23 +394,30 @@ fi
         File.SetUnixFileMode( path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute );
     }
 
-    private static Task<ProcessResult> RunStandaloneGate( string repository, string dotnetLog, IReadOnlySet<int> allowedExitCodes )
+    private static Task<ProcessResult> RunLocalGate( string repository, string commandLog, IReadOnlySet<int> allowedExitCodes )
     {
         var environment = new Dictionary<string, string?>
         {
             [EnvironmentVariables.Path] = Path.Combine( repository, "fake-bin" ) + Path.PathSeparator +
                 Environment.GetEnvironmentVariable( EnvironmentVariables.Path ),
-            [DotnetLogVariable] = dotnetLog,
+            [CommandLogVariable] = commandLog,
         };
         var request = new ProcessRequest( "/usr/bin/bash", [Path.Combine( repository, "tools/lint-and-test.sh" )], repository,
             environment, CaptureOutput: true, Trace: false, AllowedExitCodes: allowedExitCodes );
         return new ProcessRunner( TextWriter.Null, TextWriter.Null ).RunAsync( request, CancellationToken.None );
     }
 
-    private static string FindRepository( )
+    // Records each launch and answers it with a fixed standard output.
+    private sealed class LintStepRunner( string output ) : IProcessRunner
     {
-        var directory = AppContext.GetData( "EntryPointFileDirectoryPath" ) as string ?? Environment.CurrentDirectory;
-        return Path.GetFullPath( Path.Combine( directory, ".." ) );
+        public List<ProcessRequest> Requests { get; } = [];
+
+        public Task<ProcessResult> RunAsync( ProcessRequest request, CancellationToken cancellationToken )
+        {
+            Requests.Add( request );
+
+            return Task.FromResult( new ProcessResult( ExitCodes.Success, output, string.Empty ) );
+        }
     }
 
     private sealed class AskpassAurRunner : IProcessRunner

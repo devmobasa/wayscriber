@@ -8,6 +8,10 @@ internal static class ReportCommands
     private const int MaximumFunctionLines = 120;
     private const int LargeFileLineCount = 500;
     private const int OffsetNotFound = -1;
+    private const int ExitCodeLimit = 256;
+
+    // `git ls-files` reports its own failures; the report records them instead of stopping.
+    private static readonly IReadOnlySet<int> AnyExitCode = Enumerable.Range( 0, ExitCodeLimit ).ToHashSet( );
 
     public static IReadOnlyList<ToolCommand> Commands
     {
@@ -25,11 +29,10 @@ internal static class ReportCommands
 
         parsed.RequireEmpty( "report code-health [--output FILE] [--github-summary]" );
 
-        var git = await context.Run( Programs.Git, ["ls-files", "-co", "--exclude-standard", CommandLineOptions.EndOfOptions, "*.rs"], capture: true, trace: false );
-        var paths = git.StandardOutput.Split( '\n', StringSplitOptions.RemoveEmptyEntries ).Distinct( )
-            .Where( relative => File.Exists( context.Path( relative.Split( '/' ) ) ) )
-            .ToArray( );
+        var discovery = await DiscoverRustFiles( context );
+        var paths = discovery.Paths;
 
+        var readErrors = new List<string>( );
         var files = new List<(int Lines, string Path)>( );
         var functions = new List<(int Lines, string Path, int Line, string Name)>( );
         var directWrites = new List<string>( );
@@ -40,11 +43,21 @@ internal static class ReportCommands
 
         foreach ( var relative in paths )
         {
-            var text = Files.Read( context.Path( relative.Split( '/' ) ) );
+            string text;
+            try
+            {
+                text = Files.Read( context.Path( relative.Split( '/' ) ) );
+            }
+            catch ( Exception error ) when ( error is IOException or UnauthorizedAccessException )
+            {
+                readErrors.Add( $"{relative}\t{error.Message}" );
+                continue;
+            }
+
             var lines = text.Length == 0 ? 0 : text.Count( character => character == '\n' ) + (text.EndsWith( '\n' ) ? 0 : 1);
             total += lines;
             files.Add( (lines, relative) );
-            var code = ConfigWriterAudit.StripRustCommentsAndStrings( text );
+            var code = RustSource.StripRustCommentsAndStrings( text );
             foreach ( Match match in Regex.Matches( code, @"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{;]*>)?\s*\(" ) )
             {
                 var opening = FindBody( code, match.Index + match.Length );
@@ -73,7 +86,7 @@ internal static class ReportCommands
                 continue;
             }
 
-            var production = ConfigWriterAudit.RemoveCfgTestBlocks( code );
+            var production = RustSource.RemoveCfgTestBlocks( code );
 
             counts["unwrap"] += Regex.Matches( production, @"\.\s*unwrap\s*\(" ).Count;
             counts["expect"] += Regex.Matches( production, @"\.\s*expect\s*\(" ).Count;
@@ -117,19 +130,22 @@ internal static class ReportCommands
         directWrites.Sort( StringComparer.Ordinal );
         var report = new StringBuilder( );
 
-        report.AppendLine( "report=wayscriber-code-health" ).AppendLine( "status=ok" ).AppendLine( $"repo_root={context.RepositoryRoot}" )
+        report.AppendLine( "report=wayscriber-code-health" );
+        AppendStatus( report, discovery, readErrors.Count > 0 );
+        report.AppendLine( $"repo_root={context.RepositoryRoot}" )
             .AppendLine( $"rust_files={paths.Length}" ).AppendLine( $"rust_physical_lines={total}" )
             .AppendLine( $"files_over_{LargeFileLineCount}={files.Count( item => item.Lines > LargeFileLineCount )}" )
             .AppendLine( $"functions_over_120={functions.Count}" ).AppendLine( $"production_unwrap={counts["unwrap"]}" ).AppendLine( $"production_expect={counts["expect"]}" )
             .AppendLine( $"production_panic={counts["panic"]}" ).AppendLine( $"production_unsafe={counts["unsafe"]}" ).AppendLine( $"allow_dead_code={allowDead}" )
-            .AppendLine( $"allow_unused_imports={allowUnused}" ).AppendLine( $"direct_fs_write_files={directWrites.Count}" ).AppendLine( "read_errors=0" );
+            .AppendLine( $"allow_unused_imports={allowUnused}" ).AppendLine( $"direct_fs_write_files={directWrites.Count}" )
+            .AppendLine( $"read_errors={readErrors.Count}" );
 
         var filesOverLimit = files.Where( item => item.Lines > LargeFileLineCount ).Select( item => $"{item.Lines}\t{item.Path}" );
 
         Section( report, $"files_over_{LargeFileLineCount}", filesOverLimit );
         Section( report, "functions_over_120", functions.Select( item => $"{item.Lines}\t{item.Path}:{item.Line}\t{item.Name}" ) );
         Section( report, "direct_fs_write_files", directWrites );
-        Section( report, "read_errors", [] );
+        Section( report, "read_errors", readErrors );
 
         if ( outputPath is not null )
         {
@@ -154,6 +170,83 @@ internal static class ReportCommands
         }
         return ExitCodes.Success;
     }
+
+    // The report is observational: a discovery or read problem is reported in its
+    // status lines, and the report still describes whatever it could read.
+    private static async Task<RustFileDiscovery> DiscoverRustFiles( ToolContext context )
+    {
+        ProcessResult git;
+        try
+        {
+            git = await context.Run( Programs.Git, ["ls-files", "-co", "--exclude-standard", CommandLineOptions.EndOfOptions, "*.rs"],
+                capture: true, trace: false, allowedExitCodes: AnyExitCode );
+        }
+        catch ( ToolException error ) when ( error.ExitCode == ExitCodes.CommandNotFound )
+        {
+            return new( [], new( "git_unavailable", error.Message ), null );
+        }
+
+        var stderr = git.StandardError.Trim( );
+        if ( !git.IsSuccess )
+        {
+            return new( [], new( "git_ls_files_failed", stderr ), null );
+        }
+
+        var paths = git.StandardOutput.Split( '\n', StringSplitOptions.RemoveEmptyEntries ).Distinct( )
+            .Where( relative => File.Exists( context.Path( relative.Split( '/' ) ) ) )
+            .ToArray( );
+        return new( paths, null, stderr.Length > 0 ? new ReportProblem( "git_ls_files_stderr", stderr ) : null );
+    }
+
+    private static void AppendStatus( StringBuilder report, RustFileDiscovery discovery, bool readFailed )
+    {
+        var errors = new List<string>( );
+        var warnings = new List<string>( );
+        if ( discovery.Error is not null )
+        {
+            errors.Add( "discovery" );
+        }
+        if ( readFailed )
+        {
+            errors.Add( "read" );
+        }
+        if ( discovery.Warning is not null )
+        {
+            warnings.Add( "discovery" );
+        }
+
+        var status = errors.Count > 0 ? "error" : warnings.Count > 0 ? "warning" : "ok";
+        report.AppendLine( $"status={status}" );
+        if ( errors.Count > 0 )
+        {
+            report.AppendLine( $"errors={string.Join( ',', errors )}" );
+        }
+        if ( warnings.Count > 0 )
+        {
+            report.AppendLine( $"warnings={string.Join( ',', warnings )}" );
+        }
+        AppendProblem( report, "error", discovery.Error );
+        AppendProblem( report, "warning", discovery.Warning );
+    }
+
+    private static void AppendProblem( StringBuilder report, string kind, ReportProblem? problem )
+    {
+        if ( problem is not { } found )
+        {
+            return;
+        }
+
+        report.AppendLine( $"{kind}={found.Name}" );
+        if ( found.Detail.Length > 0 )
+        {
+            report.AppendLine( $"{kind}_detail={found.Detail}" );
+        }
+    }
+
+    private sealed record RustFileDiscovery( string[] Paths, ReportProblem? Error, ReportProblem? Warning );
+
+    // A named problem and its detail, printed as `error=`/`warning=` lines.
+    private sealed record ReportProblem( string Name, string Detail );
 
     private static void Section( StringBuilder report, string name, IEnumerable<string> rows )
     {
