@@ -45,12 +45,23 @@ fn with_fixture(ignore_term: bool, body: impl FnOnce(&mut Daemon, OverlaySpawnCa
         crate::env_vars::XDG_RUNTIME_DIR_ENV,
         Some(temp.path().as_os_str()),
         || {
+            let search_path = std::env::var_os(crate::env_vars::PATH_ENV).unwrap_or_default();
+            let python = std::env::split_paths(&search_path)
+                .map(|directory| directory.join("python3"))
+                .find(|candidate| {
+                    fs::metadata(candidate).is_ok_and(|metadata| {
+                        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+                    })
+                })
+                .expect("daemon overlay fixtures require python3 on PATH");
+            let python = fs::canonicalize(python).unwrap();
+
             let bin = temp.path().join("bin");
             fs::create_dir(&bin).unwrap();
             let program = bin.join("wayscriber");
             let proof_dir = crate::daemon::protocol_v2::command_root().join("children");
             let script = format!(
-                r#"#!/usr/bin/python3
+                r#"#!{python}
 import json, os, pathlib, signal, sys, time
 root = pathlib.Path({root})
 proof = pathlib.Path({proof})
@@ -77,6 +88,7 @@ publish(root / (generation + ".receipt"), {{
 while True:
     time.sleep(0.01)
 "#,
+                python = python.display(),
                 root = serde_json::to_string(&temp.path().to_string_lossy()).unwrap(),
                 proof = serde_json::to_string(&proof_dir.to_string_lossy()).unwrap(),
                 version = 2,
