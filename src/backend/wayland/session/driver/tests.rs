@@ -28,6 +28,9 @@ pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
     config_failed: bool,
     reports: Vec<SessionCommandReport>,
     errors: Vec<anyhow::Error>,
+    /// The target at each commit notice, in order, with the number of
+    /// terminal reports published before it.
+    pub committed_targets: Vec<(Option<stored_session::SessionTarget>, usize)>,
     ui: Option<ToolbarRuntimeState>,
     ui_engine: crate::ui_text::UiTextEngine,
     chrome: ToolbarChrome,
@@ -54,6 +57,7 @@ impl<'a> CommandRuntime<'a> {
             config_failed: false,
             reports: Vec::new(),
             errors: Vec::new(),
+            committed_targets: Vec::new(),
             ui: None,
             ui_engine: crate::ui_text::UiTextEngine::default(),
             chrome: ToolbarChrome::new(true, (0.0, 0.0)),
@@ -159,6 +163,13 @@ impl SessionCommandRuntime for CommandRuntime<'_> {
 
     fn refresh_session_ui_seeds(&mut self) {
         refresh_runtime_ui_config_seeds(self);
+    }
+
+    fn session_target_committed(&mut self) {
+        self.committed_targets.push((
+            self.session.options().map(|options| options.target.clone()),
+            self.reports.len(),
+        ));
     }
 
     fn finish_session_command(&mut self, report: SessionCommandReport) {
@@ -570,6 +581,129 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
         }
 
         catalog.assert_terminal_report(&runtime, &target, temp.path());
+    }
+}
+
+#[test]
+fn committed_open_announces_its_target_before_the_terminal_report() {
+    for catalog in [
+        CatalogOutcome::Success,
+        CatalogOutcome::Failure,
+        CatalogOutcome::Rejected,
+    ] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let current = named_options(temp.path(), "current");
+        let target = named_options(temp.path(), "target");
+        stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+        let _env = EnvGuard::set_xdg_data_home(temp.path());
+        if catalog == CatalogOutcome::Failure {
+            std::fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
+        }
+        let mut input = test_input_state();
+        let mut session = SessionState::new(Some(current));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+        let committed = (Some(target.target.clone()), 0);
+
+        start_session_command(
+            &mut runtime,
+            SessionCommand::Open(target.session_file_path()),
+        )
+        .unwrap();
+        worker.complete_next(); // open preflight
+        runtime.receive();
+        assert!(runtime.committed_targets.is_empty());
+
+        worker.complete_next(); // candidate load
+        let completion = runtime.persistence.wait_for_completion().unwrap().unwrap();
+        let worker = (catalog != CatalogOutcome::Rejected).then_some(worker);
+        runtime.apply_session_completion(completion).unwrap();
+        // Announced at commit, before the catalog work.
+        assert_eq!(runtime.committed_targets.first(), Some(&committed));
+
+        if let Some(worker) = worker {
+            worker.complete_next();
+            runtime.receive();
+        }
+        catalog.assert_terminal_report(&runtime, &target, temp.path());
+        assert!(
+            runtime
+                .committed_targets
+                .iter()
+                .all(|notice| *notice == committed),
+            "{catalog:?}: {:?}",
+            runtime.committed_targets
+        );
+    }
+}
+
+#[test]
+fn committed_save_as_announces_its_target_before_the_terminal_report() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let target = named_options(temp.path(), "target");
+    let mut input = test_input_state();
+    add_line(&mut input, 51);
+    let mut session = SessionState::new(Some(current));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(
+        &mut runtime,
+        SessionCommand::SaveAs(
+            target.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+        ),
+    )
+    .unwrap();
+    worker.complete_next(); // overwrite preflight
+    runtime.receive();
+    assert!(runtime.committed_targets.is_empty());
+    worker.complete_next(); // save as
+    runtime.receive();
+
+    assert!(runtime.errors.is_empty());
+    assert!(matches!(
+        runtime.reports.as_slice(),
+        [SessionCommandReport::SaveAs(_)]
+    ));
+    assert_eq!(
+        runtime.committed_targets,
+        [(Some(target.target.clone()), 0)]
+    );
+}
+
+#[test]
+fn failed_open_and_save_as_announce_nothing() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let existing = named_options(temp.path(), "existing");
+    stored_session::save_snapshot(&sample_snapshot(), &existing).unwrap();
+    let missing = temp.path().join("missing.wayscriber-session");
+    for command in [
+        SessionCommand::Open(missing),
+        SessionCommand::SaveAs(
+            existing.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+        ),
+    ] {
+        let mut input = test_input_state();
+        add_line(&mut input, 51);
+        let mut session = SessionState::new(Some(current.clone()));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+        start_session_command(&mut runtime, command).unwrap();
+        worker.complete_next(); // preflight
+        runtime.receive();
+
+        assert_eq!(runtime.errors.len(), 1);
+        assert!(runtime.reports.is_empty());
+        assert!(runtime.committed_targets.is_empty());
+        assert_eq!(runtime.session.options().unwrap().target, current.target);
     }
 }
 

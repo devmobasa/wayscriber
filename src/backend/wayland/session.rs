@@ -93,6 +93,18 @@ impl SessionState {
         self.options.as_ref()
     }
 
+    /// Starts this run in `options` instead, before any session was loaded.
+    pub(in crate::backend::wayland) fn replace_options_before_load(
+        &mut self,
+        options: Option<SessionOptions>,
+    ) {
+        debug_assert!(
+            !self.loaded,
+            "a loaded session changes target through a commit"
+        );
+        self.options = options;
+    }
+
     /// Returns mutable access to the session options, if present.
     #[allow(dead_code)]
     pub fn options_mut(&mut self) -> Option<&mut SessionOptions> {
@@ -579,9 +591,11 @@ fn autosave_active(options: &SessionOptions) -> bool {
 }
 
 pub(in crate::backend::wayland) mod driver;
+mod home;
 mod persistence;
 mod runtime;
 
+pub(in crate::backend::wayland) use home::{SessionHome, SessionLaunch, session_target};
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,

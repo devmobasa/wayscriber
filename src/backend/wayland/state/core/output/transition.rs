@@ -6,6 +6,7 @@ impl WaylandState {
         physical_output_identity: Option<String>,
         reason: &str,
     ) {
+        self.start_at_home_if_preferred_session_is_gone();
         let Some(mut staged_options) = self.session_options().cloned() else {
             return;
         };

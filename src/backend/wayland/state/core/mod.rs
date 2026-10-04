@@ -3,3 +3,4 @@ mod init;
 mod output;
 pub(in crate::backend::wayland::state) mod overlay;
 mod session;
+mod session_home;

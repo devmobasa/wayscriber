@@ -2,6 +2,7 @@ use super::*;
 use crate::backend::wayland::session::{SessionCommand, SessionCommandReport};
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::catalog;
+use crate::ui::toolbar::session_format::session_display_name;
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
 use wayland_client::{Connection, QueueHandle};
@@ -20,13 +21,6 @@ pub(super) fn populate_session_snapshot(
         Vec::new()
     };
     snapshot.active_session_path = active_path;
-}
-
-fn session_display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| path.display().to_string())
 }
 
 pub(super) fn session_info_summary(inspection: &crate::session::SessionInspection) -> String {

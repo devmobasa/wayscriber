@@ -8,7 +8,20 @@ use crate::{RESUME_SESSION_ENV, paths, session};
 
 use super::super::helpers::resume_override_from_env;
 
+/// The options this run starts with, logged.
 pub(super) fn build_session_options(
+    config: &Config,
+    config_dir: &Path,
+    named_session_file: Option<PathBuf>,
+) -> Option<session::SessionOptions> {
+    let session_options = session_options_for(config, config_dir, named_session_file);
+    log_session_options(session_options.as_ref());
+    session_options
+}
+
+/// The options for a run in `named_session_file`, or in the configured
+/// default session without one; `None` when that has persistence disabled.
+pub(super) fn session_options_for(
     config: &Config,
     config_dir: &Path,
     named_session_file: Option<PathBuf>,
@@ -76,7 +89,11 @@ pub(super) fn build_session_options(
         None => {}
     }
 
-    if let Some(ref opts) = session_options {
+    session_options
+}
+
+fn log_session_options(session_options: Option<&session::SessionOptions>) {
+    if let Some(opts) = session_options {
         info!(
             "Session persistence: base_dir={}, per_output={}, display_id='{}', output_identity={:?}, boards[T/W/B]={}/{}/{}, history={}, max_persisted_history={:?}, restore_tool_state={}, autosave_enabled={}, autosave_idle_ms={}, autosave_interval_ms={}, autosave_failure_backoff_ms={}, max_file_size={} bytes, compression={:?}",
             opts.base_dir.display(),
@@ -99,8 +116,6 @@ pub(super) fn build_session_options(
     } else {
         info!("Session persistence disabled (no session options available)");
     }
-
-    session_options
 }
 
 #[cfg(test)]

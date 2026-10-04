@@ -138,6 +138,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
+    pub session_home: crate::backend::wayland::session::SessionHome,
     pub session_config_failed: bool,
     pub persistence: crate::backend::wayland::session::PersistenceController,
     pub runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
@@ -235,6 +236,7 @@ pub(super) struct WaylandState {
 
     // Session persistence
     pub(super) session: SessionState,
+    pub(super) session_home: crate::backend::wayland::session::SessionHome,
     pub(super) persistence: crate::backend::wayland::session::PersistenceController,
     pub(super) session_transaction:
         Option<crate::backend::wayland::session::ExplicitSessionTransaction>,
