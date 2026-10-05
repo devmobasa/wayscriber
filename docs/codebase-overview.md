@@ -77,7 +77,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Communicate with `capture::CaptureManager` for screenshot actions.
    - Exit when `InputState.should_exit` is set (Escape, tray close, etc.).
 
-`WaylandState` coordinates the runtime owners handlers need. `FocusState` owns activation, focus, and startup acquisition; `ProtocolGlobals` owns bound globals and toolkit handler state; `PointerRuntime` owns pointer position, board-pan and chrome gestures, cursor, pointer-lock, and single-contact touch protocol lifecycles; `ToolbarChrome` owns toolbar placement, inline interaction, and fade state; `ToolbarDrag` owns built-in and GTK drag lifecycles; `RegionCaptureRuntime` owns region selection generations, active/review/window-snap state, and the window-query and cut-preview workers; `AcquisitionRuntime` owns the capacity-one screen-acquisition and zoom-waiter registries plus eyedropper source correlation; `FrozenState` owns its availability and one-shot startup gate; `SurfaceState` owns output/fullscreen/layer placement and frozen-fullscreen transitions; `OverlaySuppressionState` owns suppression reason, keyboard policy, capture barrier, and clickthrough state; `RenderRuntime` owns the canvas layer cache, reusable image and blur caches, resolved theme, UI paint caches, render-profile baseline, and per-effect damage history; `InputHudRuntime` owns system-reader lifecycle and reconciliation; `SpotlightRuntime` owns render memory, warning latches, and wheel timing; `ClipboardRuntime` owns single-flight clipboard workers and queue policy; `PreferenceStores` groups durable preference stores and workers; `UiAnimationClock` owns animation scheduling; and `FontCatalogPrewarm` owns the one-shot font scan. The root retains cross-owner coordination. `handlers::route::SurfaceRouter` is the single classifier for pointer, touch, and stylus surfaces and supplies overlay screen coordinates before modality-specific dispatch.
+`WaylandState` coordinates the runtime owners handlers need. `FocusState` owns activation, focus, and startup acquisition; `ProtocolGlobals` owns bound globals and toolkit handler state; `PointerRuntime` owns pointer position, board-pan and chrome gestures, cursor, pointer-lock, and single-contact touch protocol lifecycles; `ToolbarChrome` owns toolbar placement, inline interaction, and fade state; `ToolbarDrag` owns built-in and GTK drag lifecycles; `RegionCaptureRuntime` owns region selection generations, active/review/window-snap state, and the window-query and cut-preview workers; `AcquisitionRuntime` owns the capacity-one screen-acquisition and zoom-waiter registries plus eyedropper source correlation; `FrozenState` owns its availability and one-shot startup gate; `SurfaceState` owns output/fullscreen/layer placement and frozen-fullscreen transitions; `OverlaySuppressionState` owns suppression reason, keyboard policy, capture barrier, and clickthrough state; `RenderRuntime` owns the canvas layer cache, reusable image and blur caches, resolved theme, UI paint caches, render-profile baseline, and per-effect damage history; `InputHudRuntime` owns system-reader lifecycle and reconciliation; `SpotlightRuntime` owns render memory, warning latches, and wheel timing; `ClipboardRuntime` owns single-flight clipboard workers and queue policy; `PreferenceStores` groups durable preference stores and workers; `UiAnimationClock` owns animation scheduling; and `FontCatalogPrewarm` owns the one-shot font scan. Mouse buttons and tablet tips retain the owner that accepted their press, while `TouchTarget` binds touch sequences. Canvas motion and release keep that owner when crossing an inline toolbar; strip gaps consume presses and pen strip hover stays separate from layer-shell proximity. Each inline press refreshes hover geometry before claiming a control or gap. Strip pressure cannot change canvas thickness; a palette-consumed pen contact consumes its release even if the palette closes. A pen tap on the onboarding card, a toast, or an open popover acts on that chrome and never starts a stroke, and pen-up keeps a pressure thickness only for a stroke. Canceled canvas and pan gestures reconcile pointer ownership, while live held contacts keep their routing across Leave/Enter. The root retains cross-owner coordination. `handlers::route::SurfaceRouter` is the single classifier for pointer, touch, and stylus surfaces and supplies overlay screen coordinates before modality-specific dispatch.
 
 Within `PointerRuntime`, pending chrome targets and device-owned release suppression have separate lifecycles. Clearing a toast, HUD, or zoom-chip press preserves mouse and touch suppression; cancelling a touch clears only its own release latch.
 
@@ -544,9 +544,54 @@ capture suppression operates on the paired resources without runtime pairing che
 - `src/daemon/protocol_v2/session_target.rs`: writes and reads the per-generation session reports in `daemon-commands/overlay-targets/`.
 - `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target, and remembers the session its overlay last reported across hide and show.
 
+The first startup load blocks once in the surface callback. Earlier input can
+already exist; unresolved ink stays visible and cannot overwrite a saved file.
+A per-output session first loads a placeholder without an output name. Leaving
+it for the first output's own session also runs to completion in the callback,
+after saving ink drawn on the placeholder to the placeholder's file. Later
+retries and output switches use the shared session driver without waiting in
+protocol dispatch. Unresolved sources cannot autosave or save before replacing
+the canvas; at exit, their new drawings go to a `.unsaved-<time>` session beside
+the file (into its recovery file when they exceed the size limit), and the exit
+notice names it. The pending transition keeps its revision until commit;
+changed destinations, source epochs, and live edits
+reject late completions. Guard aborts retry on the short interaction interval;
+I/O failures use the failure backoff. Explicit session commands queue in order,
+with a bounded, deduplicated queue tied to the visible source epoch. A changed
+target refuses those commands, and a queued Clear or tool reset also refuses if
+the session changed after it was requested. Commands that will not run are
+reported together. Shutdown cancels queued commands, names them in a desktop
+notification, and finishes the running command and its daemon report before
+canceling a remaining staged switch and saving the committed target.
+
+Corrupt payloads are preserved as independent `.corrupt-N` side files, retaining up to
+three regular copies per artifact. A corrupt primary can restore a valid backup or
+eligible recovery without overwriting the backup. Named candidates and remembered
+session loads retain their separate validation and fallback rules. Corruption
+restoration atomically repairs a named primary before returning the snapshot,
+replacing only the exact corrupt file it read, and only with bytes within the
+session size limit; larger restored data waits for the next save. A remembered
+primary must remain a usable regular file before and after loading, including
+corruption restoration; while it does,
+normal startup rules select newer recovery or marked backup data. If corruption
+cannot be preserved, automatic writes are blocked to keep the good backup intact.
+A successful reload releases that block. Dirty blocked sources cannot switch
+outputs; Save As can preserve new drawings elsewhere. If a corruption restore
+leaves no primary, the remembered session falls back to home and its recovered
+data remains in the backup or recovery file.
+Offline tool-state clears report preserved corruption rather than silently rewriting
+restored data.
+
+Format 7 now writes an optional `save_generation` immediately after `version`.
+Normal saves allocate a counter under the session lock using bounded payload and
+marker probes. Save As prepares before locking, then quarantines target sidecars.
+Marker format 1 records kind, generation, and a diagnostic timestamp. Load precedence
+and stale-artifact cleanup still use the legacy timestamp rules; the counter is
+writer groundwork for a later change. Legacy or invalid metadata remains unknown.
+
 **Flow:**
 1. CLI `--session-file` creates a named target instead of using configured storage. Named targets force persistence for that run, reject `--no-resume-session`, require an existing parent directory for foreground/open flows, and reject directories, symlinks, and special files.
-2. Backend startup builds `SessionOptions` from config plus any named target, then session loading restores boards/history/tool state before rendering begins.
+2. Backend startup builds `SessionOptions` from config plus any named target. The first load runs once, blocking, when the surface is configured; it restores boards/history/tool state, and ink drawn before it stays on screen.
 3. Runtime Open first saves dirty current data when needed, loads the candidate named session without mutating it, replaces board state only after a valid load, and records the open in the named-session catalog.
 4. Runtime Save As validates the target, prompts before replacing existing artifacts, writes the snapshot, switches the active target, and records the save in the catalog.
 5. Returning home saves dirty current data the same way, then loads the home session as a launch would. A daemon overlay reports each committed target change, so the daemon starts the next overlay in that session; a remembered session that no longer exists falls back to home.

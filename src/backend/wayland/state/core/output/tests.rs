@@ -182,74 +182,7 @@ fn unloaded_dirty_source_with_nonmatching_pending_transition_resolves_before_loa
 }
 
 #[test]
-fn unloaded_dirty_return_to_current_target_blocks_followup_configure_load() {
-    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "source-output");
-    options.per_output = true;
-    let mut destination = options.clone();
-    destination.set_output_identity(Some("output-a"));
-    let mut session = SessionState::new(Some(options.clone()));
-    session.stage_output_transition(destination, Some("output-a".to_string()), Instant::now());
-    session.record_input_dirty(Instant::now(), true);
-    let source_epoch = session.target_epoch();
-    let edit_generation = session.edit_generation();
-
-    let incoming_identity = None;
-    let mut incoming = options.clone();
-    let changed = incoming.set_output_identity(incoming_identity);
-    let same_epoch_pending = session
-        .pending_output_transition()
-        .is_some_and(|pending| pending.source_epoch == source_epoch);
-    let matching_pending = same_epoch_pending
-        && session
-            .pending_output_transition()
-            .is_some_and(|pending| pending.physical_output_identity.is_none());
-    let start = output_transition_start(
-        session.is_loaded(),
-        changed,
-        matching_pending,
-        same_epoch_pending,
-        false,
-        false,
-    );
-
-    assert!(!session.is_loaded());
-    assert!(!changed);
-    assert!(!matching_pending);
-    assert_eq!(start, OutputTransitionStart::IgnoreCurrentTarget);
-    assert!(
-        session
-            .cancel_output_transition_for_live_source(false)
-            .is_some()
-    );
-    assert!(session.pending_output_transition().is_none());
-    assert!(session.is_loaded());
-    assert!(session.is_dirty());
-    assert!(session.prepare_autosave_submission().is_ok());
-    assert_eq!(session.target_epoch(), source_epoch);
-    assert_eq!(session.edit_generation(), edit_generation);
-
-    let mut configure_options = options;
-    let configure_changed = configure_options.set_output_identity(None);
-    let followup = output_transition_start(
-        session.is_loaded(),
-        configure_changed,
-        false,
-        false,
-        false,
-        false,
-    );
-
-    assert!(!configure_changed);
-    assert_eq!(followup, OutputTransitionStart::IgnoreCurrentTarget);
-    assert_ne!(followup, OutputTransitionStart::LoadInitial);
-    assert!(session.is_dirty());
-    assert!(session.prepare_autosave_submission().is_ok());
-    assert_eq!(session.target_epoch(), source_epoch);
-    assert_eq!(session.edit_generation(), edit_generation);
-}
-
-#[test]
-fn active_stroke_return_resolves_to_dirty_live_source_or_clean_initial_load() {
+fn active_stroke_return_keeps_an_unloaded_dirty_source_protected() {
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "source-output");
     options.per_output = true;
     let mut destination = options.clone();
@@ -268,7 +201,7 @@ fn active_stroke_return_resolves_to_dirty_live_source_or_clean_initial_load() {
     );
     assert!(
         committed
-            .cancel_output_transition_for_live_source(false)
+            .cancel_output_transition_for_live_source()
             .is_some()
     );
     assert!(!committed.is_loaded());
@@ -279,9 +212,9 @@ fn active_stroke_return_resolves_to_dirty_live_source_or_clean_initial_load() {
     );
 
     committed.record_input_dirty(Instant::now(), true);
-    assert!(committed.is_loaded());
+    assert!(!committed.is_loaded());
     assert!(committed.is_dirty());
-    assert!(!committed.resolve_live_source_resolution(false, false));
+    assert!(committed.resolve_live_source_resolution(false, false));
     assert_eq!(committed.target_epoch(), committed_epoch);
     assert_eq!(
         output_transition_start(true, false, false, false, false, false),
@@ -296,18 +229,18 @@ fn active_stroke_return_resolves_to_dirty_live_source_or_clean_initial_load() {
     );
     assert!(
         configure_first
-            .cancel_output_transition_for_live_source(false)
+            .cancel_output_transition_for_live_source()
             .is_some()
     );
-    assert!(!configure_first.resolve_live_source_resolution(true, false));
-    assert!(configure_first.is_loaded());
+    assert!(configure_first.resolve_live_source_resolution(true, false));
+    assert!(!configure_first.is_loaded());
 
     let mut canceled = SessionState::new(Some(options));
     canceled.stage_output_transition(destination, Some("output-a".to_string()), Instant::now());
     let canceled_epoch = canceled.target_epoch();
     assert!(
         canceled
-            .cancel_output_transition_for_live_source(false)
+            .cancel_output_transition_for_live_source()
             .is_some()
     );
     assert!(!canceled.resolve_live_source_resolution(false, false));
@@ -335,11 +268,7 @@ fn clean_unloaded_cancellation_arms_immediate_source_resolution() {
     let mut session = SessionState::new(Some(options.clone()));
     session.stage_output_transition(options, Some("output-a".to_string()), Instant::now());
 
-    assert!(
-        session
-            .cancel_output_transition_for_live_source(false)
-            .is_some()
-    );
+    assert!(session.cancel_output_transition_for_live_source().is_some());
     assert!(session.has_pending_live_source_resolution());
     assert!(live_source_reconciliation_ready(true, false, false, true));
     assert!(!session.resolve_live_source_resolution(false, false));
@@ -354,18 +283,14 @@ fn clean_unloaded_cancellation_arms_immediate_source_resolution() {
 #[test]
 fn loaded_source_cancellation_does_not_arm_provisional_resolution() {
     let mut session = SessionState::new(None);
-    session.mark_loaded(false);
+    session.commit_without_persistence();
     session.stage_output_transition(
         SessionOptions::new(PathBuf::from("/tmp"), "loaded-destination"),
         Some("output-a".to_string()),
         Instant::now(),
     );
 
-    assert!(
-        session
-            .cancel_output_transition_for_live_source(false)
-            .is_some()
-    );
+    assert!(session.cancel_output_transition_for_live_source().is_some());
     assert!(session.is_loaded());
     assert!(!session.has_pending_live_source_resolution());
 }

@@ -190,6 +190,13 @@ fn default_polygon_sides_for_snapshot() -> u8 {
 pub(super) struct SessionFile {
     #[serde(default = "default_file_version")]
     pub version: u32,
+    // Keep immediately after version so bounded probes find the header.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_save_generation"
+    )]
+    pub save_generation: Option<u64>,
     pub last_modified: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_board_id: Option<String>,
@@ -234,4 +241,13 @@ pub(super) struct BoardFile {
 
 fn default_file_version() -> u32 {
     1
+}
+
+fn deserialize_save_generation<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_u64()
+        .filter(|g| (1..=super::generation::MAX_GENERATION).contains(g)))
 }

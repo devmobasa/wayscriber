@@ -1,14 +1,14 @@
 use super::payload::{log_payload_candidate, snapshot_without_history};
 use super::*;
+use crate::session::snapshot::generation::{ArtifactStamp, MarkerKind, cleared_by};
 
 pub(super) fn save_recovery_snapshot(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
     max_expanded_size: u64,
-    last_modified: &str,
+    stamp: payload::PayloadStamp<'_>,
 ) -> Result<Option<SaveSnapshotReport>> {
-    let Some((payload, outcome)) =
-        recovery_payload(snapshot, options, max_expanded_size, last_modified)?
+    let Some((payload, outcome)) = recovery_payload(snapshot, options, max_expanded_size, stamp)?
     else {
         return Ok(None);
     };
@@ -43,6 +43,7 @@ pub(super) fn save_recovery_snapshot(
     );
 
     Ok(Some(SaveSnapshotReport {
+        generation: stamp.generation,
         path: recovery_path,
         outcome,
         raw_size: payload.raw_size,
@@ -56,14 +57,14 @@ fn recovery_payload(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
     max_expanded_size: u64,
-    last_modified: &str,
+    stamp: payload::PayloadStamp<'_>,
 ) -> Result<Option<(PayloadCandidate, SaveSnapshotOutcome)>> {
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         return Ok(None);
     }
 
     let full_started = Instant::now();
-    let full_payload = payload_candidate(snapshot, options, last_modified)?;
+    let full_payload = payload_candidate(snapshot, options, stamp)?;
     log_payload_candidate("recovery full", &full_payload, full_started.elapsed());
     let Some(full_limit) = full_payload.expanded_limit_exceeded(max_expanded_size) else {
         return Ok(Some((full_payload, SaveSnapshotOutcome::Full)));
@@ -81,7 +82,7 @@ fn recovery_payload(
         return Ok(None);
     }
     let visible_started = Instant::now();
-    let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
+    let visible_payload = payload_candidate(&visible_only, options, stamp)?;
     log_payload_candidate(
         "recovery visible-only",
         &visible_payload,
@@ -172,21 +173,31 @@ fn artifact_is_newer_than_marker(
     artifact_metadata: &fs::Metadata,
     marker_metadata: &fs::Metadata,
 ) -> bool {
-    match (artifact_metadata.modified(), marker_metadata.modified()) {
-        (Ok(artifact_modified), Ok(marker_modified)) => artifact_modified > marker_modified,
-        _ => false,
-    }
+    !cleared_by(
+        ArtifactStamp::without_generation(artifact_metadata),
+        ArtifactStamp::without_generation(marker_metadata),
+    )
 }
 
 /// Writes a marker file through `durable_io`, which owns the whole
 /// temp-write/fsync/rename/parent-sync dance and removes its temporary file on
-/// every failure path. Markers hold only a timestamp, but the load side decides
-/// what to restore from whether they exist, so their durability is part of the
-/// save contract.
-fn write_session_marker(marker_path: &Path, label: &str) -> Result<()> {
+/// every failure path. Markers carry a format-1 generation record, or a legacy
+/// timestamp at the counter ceiling. Loaders still use marker presence and
+/// modification times, so marker durability remains part of the save contract.
+fn write_session_marker(
+    marker_path: &Path,
+    kind: MarkerKind,
+    generation: Option<u64>,
+    label: &str,
+) -> Result<()> {
+    let written = now_rfc3339();
+    let content = match generation {
+        Some(g) => super::super::generation::marker_record_bytes(kind, g, written)?,
+        None => written.into_bytes(),
+    };
     crate::durable_io::write_atomic(
         marker_path,
-        now_rfc3339().as_bytes(),
+        &content,
         crate::durable_io::AtomicWriteOptions {
             overwrite: crate::durable_io::OverwriteMode::Replace,
             permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
@@ -198,9 +209,17 @@ fn write_session_marker(marker_path: &Path, label: &str) -> Result<()> {
     .with_context(|| format!("failed to write {label} {}", marker_path.display()))
 }
 
-pub(super) fn write_backup_recovery_marker(options: &SessionOptions) -> Result<()> {
+pub(super) fn write_backup_recovery_marker(
+    options: &SessionOptions,
+    generation: Option<u64>,
+) -> Result<()> {
     let marker_path = options.backup_recovery_marker_file_path();
-    write_session_marker(&marker_path, "backup recovery marker")?;
+    write_session_marker(
+        &marker_path,
+        MarkerKind::BackupRecoverable,
+        generation,
+        "backup recovery marker",
+    )?;
     info!(
         "Wrote backup recovery marker {} for contentless non-clear session save",
         marker_path.display()
@@ -208,9 +227,17 @@ pub(super) fn write_backup_recovery_marker(options: &SessionOptions) -> Result<(
     Ok(())
 }
 
-pub(super) fn write_recovery_recoverable_marker(options: &SessionOptions) -> Result<()> {
+pub(super) fn write_recovery_recoverable_marker(
+    options: &SessionOptions,
+    generation: Option<u64>,
+) -> Result<()> {
     let marker_path = options.recovery_recoverable_marker_file_path();
-    write_session_marker(&marker_path, "recovery recoverable marker")?;
+    write_session_marker(
+        &marker_path,
+        MarkerKind::RecoveryRecoverable,
+        generation,
+        "recovery recoverable marker",
+    )?;
     info!(
         "Wrote recovery recoverable marker {} for contentless non-clear session save",
         marker_path.display()
@@ -218,9 +245,14 @@ pub(super) fn write_recovery_recoverable_marker(options: &SessionOptions) -> Res
     Ok(())
 }
 
-pub(super) fn write_clear_marker(options: &SessionOptions) -> Result<()> {
+pub(super) fn write_clear_marker(options: &SessionOptions, generation: Option<u64>) -> Result<()> {
     let marker_path = options.clear_marker_file_path();
-    write_session_marker(&marker_path, "session clear marker")?;
+    write_session_marker(
+        &marker_path,
+        MarkerKind::Cleared,
+        generation,
+        "session clear marker",
+    )?;
     info!(
         "Wrote session clear marker {} for empty saved session",
         marker_path.display()
@@ -374,6 +406,39 @@ pub(super) fn remove_recovery_file(options: &SessionOptions) {
             "Failed to remove session recovery artifact {} after successful normal save: {}",
             recovery_path.display(),
             err
+        ),
+    }
+}
+
+pub(super) fn preserve_oversized_recovery(
+    error: &mut anyhow::Error,
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    stamp: payload::PayloadStamp<'_>,
+) {
+    if error.downcast_ref::<SavePayloadTooLarge>().is_none() {
+        return;
+    }
+    match save_recovery_snapshot(snapshot, options, max_expanded_size, stamp) {
+        Ok(Some(report)) => {
+            if let Some(limit) = error.downcast_mut::<SavePayloadTooLarge>() {
+                limit.recovery_path = Some(report.path.clone());
+            }
+            warn!(
+                "Wrote oversized session recovery artifact to {} ({} bytes written, raw={} bytes, compression={}, outcome={:?})",
+                report.path.display(),
+                report.written_size,
+                report.raw_size,
+                report.compressed,
+                report.outcome
+            );
+        }
+        Ok(None) => {}
+        Err(recovery_err) => warn!(
+            "Failed to write oversized session recovery artifact {}: {}",
+            options.recovery_file_path().display(),
+            recovery_err
         ),
     }
 }

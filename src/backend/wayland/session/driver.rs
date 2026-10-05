@@ -1,27 +1,59 @@
-//! Live explicit-command orchestration, shared by Wayland and headless runtime tests.
+//! Live session-command orchestration, shared by Wayland and headless runtime tests.
 use anyhow::{Result, anyhow};
 use std::time::{Duration, Instant};
 
 use super::{
-    ExplicitSessionTransaction, PersistenceCompletion, PersistenceController, PersistenceOutcome,
-    SaveCompletion, SessionCommand, SessionCommandReport, SessionTransaction, TransactionStep,
+    PersistenceCompletion, PersistenceController, PersistenceOutcome, QueuedSessionCommand,
+    SaveCompletion, SessionCommand, SessionCommandReport, SessionCommandTransaction,
+    SessionTransaction, TransactionStep,
 };
 
 /// The driver owns ordering and identity; adapters own UI publication and autosave feedback.
 pub(in crate::backend::wayland) trait SessionCommandRuntime {
     fn session_context(&mut self) -> SessionTransaction<'_>;
-    fn pending_command(&mut self) -> &mut Option<ExplicitSessionTransaction>;
+    fn pending_command(&mut self) -> &mut Option<SessionCommandTransaction>;
     fn persistence(&mut self) -> &mut PersistenceController;
     fn session_config_failed(&self) -> bool;
     fn refresh_session_ui_seeds(&mut self);
     /// An explicit command committed its target, or finished without changing
     /// it. Called before the command's terminal report.
     fn session_target_committed(&mut self);
+    fn session_command_queued(&mut self);
     fn finish_session_command(&mut self, report: SessionCommandReport);
     fn fail_session_command(&mut self, command: &SessionCommand, error: &anyhow::Error);
+    /// Queued commands that will not run, reported together so that one
+    /// refusal does not hide another. `closing` says Wayscriber is exiting.
+    fn fail_queued_commands(
+        &mut self,
+        failures: Vec<(SessionCommand, anyhow::Error)>,
+        _closing: bool,
+    ) {
+        for (command, error) in &failures {
+            self.fail_session_command(command, error);
+        }
+    }
     fn autosave_succeeded(&mut self, save: SaveCompletion, execution_time: Duration);
     fn autosave_failed(&mut self, error: &anyhow::Error);
     fn session_transport_failed(&mut self, error: &anyhow::Error);
+}
+
+/// Guard aborts retain the latest destination without treating normal input as an I/O failure.
+pub(in crate::backend::wayland) fn defer_failed_output(
+    session: &mut super::SessionState,
+    error: &anyhow::Error,
+    now: Instant,
+    failure_backoff: Duration,
+) -> bool {
+    let guard_abort = error
+        .downcast_ref::<super::SessionCommandAborted>()
+        .is_some();
+    let delay = if guard_abort {
+        super::interaction_defer_interval()
+    } else {
+        failure_backoff
+    };
+    session.defer_output_transition(now, delay);
+    !guard_abort
 }
 
 pub(in crate::backend::wayland) fn observe_input_dirty(
@@ -37,9 +69,6 @@ pub(in crate::backend::wayland) fn start_session_command(
     runtime: &mut impl SessionCommandRuntime,
     command: SessionCommand,
 ) -> Result<()> {
-    if runtime.pending_command().is_some() {
-        return Err(anyhow!("another session command is already pending"));
-    }
     if matches!(
         command,
         SessionCommand::Clear | SessionCommand::ClearTools(_)
@@ -49,12 +78,44 @@ pub(in crate::backend::wayland) fn start_session_command(
             "config.toml [session] could not be read; refusing to modify saved session data that default settings may mistarget - fix the section and retry"
         ));
     }
+
+    // Edits made before the request are part of what it was asked over.
+    observe_input_dirty(runtime, Instant::now());
+    let context = runtime.session_context();
+    let epoch = context.session.target_epoch();
+    let generation = context.session.edit_generation();
+
+    if let Some(pending) = runtime.pending_command().as_mut() {
+        if matches!(pending.command(), SessionCommand::Output { .. })
+            && !matches!(command, SessionCommand::Output { .. })
+        {
+            if !pending
+                .queued_commands
+                .iter()
+                .any(|queued| queued.epoch == epoch && queued.command.matches_request(&command))
+            {
+                if pending.queued_commands.len() >= 8 {
+                    return Err(anyhow!(
+                        "session command queue is full; wait for the output load and retry"
+                    ));
+                }
+                pending.queued_commands.push_back(QueuedSessionCommand {
+                    command,
+                    epoch,
+                    generation,
+                });
+            }
+            runtime.session_command_queued();
+            return Ok(());
+        }
+        return Err(anyhow!("another session command is already pending"));
+    }
     if !runtime.persistence().is_healthy() {
         return Err(anyhow!("session persistence worker is unhealthy"));
     }
 
     let context = runtime.session_context();
-    let transaction = ExplicitSessionTransaction::new(
+    let transaction = SessionCommandTransaction::new(
         command,
         context.session.target_epoch(),
         context.input_state.session_interaction_state(),
@@ -82,7 +143,7 @@ pub(in crate::backend::wayland) fn complete_session_command(
     runtime: &mut impl SessionCommandRuntime,
     completion: PersistenceCompletion,
 ) {
-    let Some(transaction) = runtime.pending_command().take() else {
+    let Some(mut transaction) = runtime.pending_command().take() else {
         return;
     };
     if transaction.request_id != Some(completion.id) {
@@ -90,6 +151,7 @@ pub(in crate::backend::wayland) fn complete_session_command(
             transaction.command(),
             &anyhow!("explicit session completion identity mismatch"),
         );
+        start_queued_commands(runtime, std::mem::take(&mut transaction.queued_commands));
         return;
     }
 
@@ -98,10 +160,16 @@ pub(in crate::backend::wayland) fn complete_session_command(
 
 fn advance_session_command(
     runtime: &mut impl SessionCommandRuntime,
-    mut transaction: ExplicitSessionTransaction,
+    mut transaction: SessionCommandTransaction,
     result: Option<Result<PersistenceOutcome>>,
 ) {
     observe_input_dirty(runtime, Instant::now());
+    if let Some(result) = &result {
+        runtime
+            .session_context()
+            .session
+            .observe_load_failure(result);
+    }
 
     // A submitted board or tool-state clear can change disk before its receipt fails.
     let clear_attempted = matches!(
@@ -138,6 +206,10 @@ fn advance_session_command(
                     } else {
                         runtime.fail_session_command(transaction.command(), &error);
                     }
+                    start_queued_commands(
+                        runtime,
+                        std::mem::take(&mut transaction.queued_commands),
+                    );
                 }
             }
         }
@@ -145,6 +217,7 @@ fn advance_session_command(
             if matches!(
                 *report,
                 SessionCommandReport::Open(_)
+                    | SessionCommandReport::Output { .. }
                     | SessionCommandReport::Home
                     | SessionCommandReport::Clear(_)
             ) {
@@ -153,6 +226,7 @@ fn advance_session_command(
 
             runtime.session_target_committed();
             runtime.finish_session_command(*report);
+            start_queued_commands(runtime, std::mem::take(&mut transaction.queued_commands));
         }
         Err(error) => {
             // Resave retained state if a clear may have changed disk, without postponing
@@ -164,6 +238,91 @@ fn advance_session_command(
                 .record_input_dirty(Instant::now(), needs_recovery);
 
             runtime.fail_session_command(transaction.command(), &error);
+            start_queued_commands(runtime, std::mem::take(&mut transaction.queued_commands));
+        }
+    }
+}
+
+fn start_queued_commands(
+    runtime: &mut impl SessionCommandRuntime,
+    mut commands: std::collections::VecDeque<QueuedSessionCommand>,
+) {
+    if let Some(pending) = runtime.pending_command().as_mut() {
+        pending.queued_commands.extend(commands);
+        return;
+    }
+
+    let mut refused = Vec::new();
+    while let Some(queued) = commands.pop_front() {
+        if let Some(refusal) = queued_command_refusal(runtime, &queued) {
+            refused.push((queued.command, refusal));
+            continue;
+        }
+
+        let context = runtime.session_context();
+        let mut transaction = SessionCommandTransaction::new(
+            queued.command,
+            context.session.target_epoch(),
+            context.input_state.session_interaction_state(),
+        );
+        transaction.queued_commands = commands;
+        *runtime.pending_command() = Some(transaction);
+
+        if !refused.is_empty() {
+            runtime.fail_queued_commands(refused, false);
+        }
+        poll_pending_session_command(runtime);
+        return;
+    }
+
+    if !refused.is_empty() {
+        runtime.fail_queued_commands(refused, false);
+    }
+}
+
+fn queued_command_refusal(
+    runtime: &mut impl SessionCommandRuntime,
+    queued: &QueuedSessionCommand,
+) -> Option<anyhow::Error> {
+    if queued.epoch != runtime.session_context().session.target_epoch() {
+        return Some(anyhow!(
+            "the visible session changed while this command was queued; no queued edit was performed; retry on the intended session"
+        ));
+    }
+
+    if matches!(
+        queued.command,
+        SessionCommand::Clear | SessionCommand::ClearTools(_)
+    ) {
+        observe_input_dirty(runtime, Instant::now());
+        if runtime.session_context().session.edit_generation() != queued.generation {
+            return Some(anyhow!(
+                "the session changed while this command was queued; nothing was cleared; run it again to include the newer changes"
+            ));
+        }
+    }
+
+    if !runtime.persistence().is_healthy() {
+        return Some(anyhow!("session persistence worker is unhealthy"));
+    }
+
+    None
+}
+
+pub(in crate::backend::wayland) fn fail_pending_commands(
+    runtime: &mut impl SessionCommandRuntime,
+    error: &anyhow::Error,
+) {
+    if let Some(mut transaction) = runtime.pending_command().take() {
+        runtime.fail_session_command(transaction.command(), error);
+
+        let queued = transaction
+            .queued_commands
+            .drain(..)
+            .map(|queued| (queued.command, anyhow!("{error:#}")))
+            .collect::<Vec<_>>();
+        if !queued.is_empty() {
+            runtime.fail_queued_commands(queued, false);
         }
     }
 }
@@ -223,7 +382,8 @@ pub(in crate::backend::wayland) fn apply_session_completion(
     Ok(())
 }
 
-/// Deliberate durability barrier, never called from normal dispatch.
+/// Deliberate durability barrier for startup and shutdown; event-loop output
+/// switches and explicit commands advance through nonblocking transactions.
 pub(in crate::backend::wayland) fn persistence_barrier(
     runtime: &mut impl SessionCommandRuntime,
 ) -> Result<()> {
@@ -264,12 +424,32 @@ pub(in crate::backend::wayland) fn persist_after_pending_commands<R: SessionComm
     runtime: &mut R,
     persist: impl FnOnce(&mut R) -> Result<T>,
 ) -> Result<T> {
-    if let Err(error) = finish_pending_session_command(runtime) {
-        if let Some(transaction) = runtime.pending_command().take() {
-            runtime.fail_session_command(transaction.command(), &error);
+    if let Some(transaction) = runtime.pending_command().as_mut() {
+        let canceled = std::mem::take(&mut transaction.queued_commands)
+            .into_iter()
+            .map(|queued| {
+                (
+                    queued.command,
+                    anyhow!("queued session command canceled because Wayscriber is shutting down"),
+                )
+            })
+            .collect::<Vec<_>>();
+        if !canceled.is_empty() {
+            runtime.fail_queued_commands(canceled, true);
         }
+    }
+
+    if let Err(error) = finish_pending_session_command(runtime) {
+        fail_pending_commands(runtime, &error);
         log::warn!("Explicit session command failed during shutdown: {error:#}");
     }
+
+    // A running remembered-home fallback must finish and publish its target
+    // before cancellation, or the final save could recreate the old file.
+    runtime
+        .session_context()
+        .session
+        .cancel_pending_output_transition();
 
     persist(runtime)
 }

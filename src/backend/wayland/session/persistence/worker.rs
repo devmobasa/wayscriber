@@ -231,16 +231,39 @@ fn require_replaceable_session_file(path: &Path) -> Result<()> {
 }
 
 /// Loads a remembered session with the startup rules of a session file, but
-/// only from that file itself. A file moved or deleted since it was remembered
-/// is not continued from a backup or recovery copy left beside it, and neither
-/// is one that went away while it loaded.
+/// only while its primary still exists. Its own newer recovery and marked
+/// backup use normal startup precedence. Sidecars cannot continue a file that
+/// was moved, deleted, or became non-regular before or during the load.
 fn load_remembered(options: &SessionOptions) -> Result<PersistenceOutcome> {
     let path = options.session_file_path();
     if let Err(error) = session::validate_named_session_file_for_open(&path) {
         return Ok(PersistenceOutcome::RememberedUnavailable(error));
     }
-    let outcome = session::load_snapshot_with_outcome(options)?;
+    let outcome = match session::load_snapshot_with_outcome(options) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            if error
+                .downcast_ref::<session::CorruptArtifactPreservationFailed>()
+                .is_some()
+            {
+                return Ok(PersistenceOutcome::RememberedUnavailable(error));
+            }
+            return match session::validate_named_session_file_for_open(&path) {
+                Ok(()) => Err(error),
+                Err(unavailable) => Ok(PersistenceOutcome::RememberedUnavailable(unavailable)),
+            };
+        }
+    };
+    if let LoadSnapshotOutcome::EmptyAfterCorruption { corrupt_copy } = outcome {
+        return Ok(PersistenceOutcome::RememberedUnavailable(anyhow!(
+            "remembered session {} is corrupt; its bytes are preserved at {}",
+            path.display(),
+            corrupt_copy.display()
+        )));
+    }
 
+    // A corruption restore can leave the primary absent when quarantine moved
+    // it aside and recovered bytes exceed the size limit for primary repair.
     Ok(match session::validate_named_session_file_for_open(&path) {
         Ok(()) => PersistenceOutcome::Load(outcome),
         Err(error) => PersistenceOutcome::RememberedUnavailable(error),

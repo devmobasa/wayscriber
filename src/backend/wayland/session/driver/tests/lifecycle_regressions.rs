@@ -163,7 +163,7 @@ fn assert_rejected_disk_clear_recovers_after_canceled_gesture(command: SessionCo
     stored_session::save_snapshot(&snapshot, &options).unwrap();
     input.clear_session_dirty();
     let mut session = SessionState::new(Some(options.clone()));
-    session.mark_loaded(true);
+    session.commit_output_options(session.options().unwrap().clone(), true);
     session.mark_saved(Instant::now(), true);
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
@@ -275,6 +275,7 @@ fn autosave_ownership_errors_do_not_publish_failures_or_delay_retry() {
         let started = Instant::now();
         let mut input = test_input_state();
         let mut session = SessionState::new(Some(options.clone()));
+        session.commit_output_options(session.options().unwrap().clone(), false);
         session.record_input_dirty(started, true);
         let measurer = TextMeasurer::default();
         let (persistence, worker) = PersistenceController::controlled_for_test();

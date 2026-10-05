@@ -187,6 +187,36 @@ fn clear_session_removes_all_variants_for_prefix() {
 }
 
 #[test]
+fn clear_session_removes_every_outputs_unreadable_copies_and_no_neighbors() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-1");
+    options.per_output = true;
+    let base_dir = &options.base_dir;
+    let removed = [
+        "session-display_1-DP_1.json.corrupt-1",
+        "session-display_1-DP_1.json.bak.corrupt-2",
+    ];
+    let kept = [
+        "session-display_10-DP_1.json.corrupt-1",
+        "session-display_1-DP_1.json.corrupt-01",
+    ];
+    for name in removed.iter().chain(&kept) {
+        std::fs::write(base_dir.join(name), b"unreadable").unwrap();
+    }
+
+    let outcome = clear_session(&options).unwrap();
+
+    assert!(outcome.removed_session);
+    assert!(outcome.removed_backup);
+    for name in removed {
+        assert!(!base_dir.join(name).exists(), "{name}");
+    }
+    for name in kept {
+        assert!(base_dir.join(name).exists(), "{name}");
+    }
+}
+
+#[test]
 fn clear_session_keeps_neighbor_display_prefix_variants() {
     let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "wayland-1");

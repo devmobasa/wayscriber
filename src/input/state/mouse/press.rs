@@ -152,7 +152,7 @@ impl InputState {
         screen_y: i32,
         canvas_x: i32,
         canvas_y: i32,
-    ) {
+    ) -> super::super::interaction::RoutingOutcome {
         // Any press ends a wheel adjustment of a loupe, so the burst lands in
         // history as its own entry rather than merging with what follows.
         self.flush_spotlight_magnification_gesture();
@@ -161,8 +161,9 @@ impl InputState {
             CanvasPoint::new(canvas_x, canvas_y),
         );
         self.note_session_interaction_activity();
-        let _ = route_pointer_press(self, resources, PointerPress::new(button, points));
+        let outcome = route_pointer_press(self, resources, PointerPress::new(button, points));
         self.note_session_interaction_activity();
+        outcome
     }
 
     pub(in crate::input::state) fn tool_for_button_press(

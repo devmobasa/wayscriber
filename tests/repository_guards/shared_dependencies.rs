@@ -9,12 +9,48 @@ use std::path::Path;
 
 use super::source::{Tree, is_word_char, mask_non_code};
 
-const BOUNDARIES: [(&str, &[&str]); 2] = [
+const BOUNDARIES: [(&str, &[&str]); 3] = [
     (
         "src/domain",
         &["config", "input", "draw", "backend", "ui", "session"],
     ),
     ("src/config/validate", &["input", "backend"]),
+    ("src/config", &["draw", "ui"]),
+];
+
+// Stable drawing values have not all moved to domain yet. Exact spellings
+// keep the exception narrow: another runtime import still fails the guard.
+const CONFIG_DRAW_VALUES: &[(&str, &str)] = &[
+    ("src/config/types/arrow.rs", "crate::draw::ArrowStyle"),
+    ("src/config/types/presets.rs", "crate::draw::EraserKind"),
+    (
+        "src/config/types/drawing.rs",
+        "crate::draw::shape::{BlurStyle, REGULAR_POLYGON_DEFAULT_SIDES}",
+    ),
+    (
+        "src/config/validate/presets.rs",
+        "crate::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides}",
+    ),
+    (
+        "src/config/validate/drawing.rs",
+        "crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES}",
+    ),
+    (
+        "src/config/types/spotlight.rs",
+        "crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION",
+    ),
+    (
+        "src/config/validate/spotlight.rs",
+        "crate::draw::MIN_SPOTLIGHT_MAGNIFICATION",
+    ),
+    (
+        "src/config/validate/spotlight.rs",
+        "crate::draw::MAX_SPOTLIGHT_MAGNIFICATION",
+    ),
+    (
+        "src/config/validate/spotlight.rs",
+        "crate::draw::normalize_spotlight_magnification",
+    ),
 ];
 
 /// Public-path compatibility assertions only.
@@ -30,7 +66,35 @@ fn check(tree: &Tree) -> Vec<String> {
             }
 
             let source = tree.read(path).expect("listed path");
-            if has_upward_path(source, path, forbidden) {
+            // Config integration tests deliberately construct runtime consumers.
+            if directory == "src/config"
+                && (path.starts_with("src/config/tests") || path.ends_with("tests.rs"))
+            {
+                continue;
+            }
+            let mut checked = tokens(source);
+            if directory == "src/config" {
+                for (owner, allowed) in CONFIG_DRAW_VALUES {
+                    if path == Path::new(owner) {
+                        let allowed = tokens(allowed);
+                        let mut index = 0;
+                        while index + allowed.len() <= checked.len() {
+                            if checked[index..index + allowed.len()] == allowed
+                                && checked
+                                    .get(index + allowed.len())
+                                    .is_none_or(|token| token != "::")
+                            {
+                                checked.splice(
+                                    index..index + allowed.len(),
+                                    ["domain_value".to_owned()],
+                                );
+                            }
+                            index += 1;
+                        }
+                    }
+                }
+            }
+            if has_upward_path(&checked, path, forbidden) {
                 errors.push(format!(
                     "{}: upward dependency in shared layer",
                     path.display()
@@ -96,14 +160,13 @@ fn module_path(path: &Path) -> Vec<String> {
     parts
 }
 
-fn has_upward_path(source: &str, path: &Path, forbidden: &[&str]) -> bool {
-    let tokens = tokens(source);
+fn has_upward_path(tokens: &[String], path: &Path, forbidden: &[&str]) -> bool {
     let module = module_path(path);
 
     (0..tokens.len().saturating_sub(1)).any(|index| {
         matches!(tokens[index].as_str(), "crate" | "super" | "self")
             && tokens[index + 1] == "::"
-            && use_tree(&tokens, index, module.clone(), forbidden).0
+            && use_tree(tokens, index, module.clone(), forbidden).0
     })
 }
 
@@ -196,6 +259,20 @@ fn shared_dependency_syntax_corpus_matches_its_expectations() {
             rejected,
             fixture["reject"].as_bool().expect("reject"),
             "{name}"
+        );
+    }
+}
+
+#[test]
+fn config_draw_value_exceptions_are_still_used_in_code() {
+    let tree = Tree::checkout(&["src"]);
+    for (owner, allowed) in CONFIG_DRAW_VALUES {
+        let code = tokens(tree.read(Path::new(owner)).expect("exception owner"));
+        let allowed_tokens = tokens(allowed);
+        assert!(
+            code.windows(allowed_tokens.len())
+                .any(|window| window == allowed_tokens),
+            "stale config exception: {owner}: {allowed}"
         );
     }
 }

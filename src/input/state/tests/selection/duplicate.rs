@@ -210,158 +210,6 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
 }
 
 #[test]
-fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
-    let test_text_resources = crate::input::state::InputTextResources {
-        measurer: &test_text_measurer,
-        ui_engine: &test_ui_engine,
-    };
-
-    let mut state = create_test_input_state();
-    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 10,
-        y: 20,
-        w: 100,
-        h: 80,
-        fill: false,
-        fill_color: None,
-        color: state.style.current_color,
-        thick: state.style.current_thickness,
-    });
-    state.set_selection(vec![original_id]);
-    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
-    let publish = state
-        .take_pending_selection_clipboard_publish()
-        .expect("pending private clipboard publish");
-    let initial_fingerprint = ClipboardFingerprint {
-        offered_mime_types: vec!["image/png".to_string()],
-        selected_mime_type: Some("image/png".to_string()),
-        bounded_content_hash: Some(1),
-        bounded_content_len: Some(4096),
-        bounded_content_truncated: true,
-    };
-    state.complete_selection_clipboard_publish(
-        publish.generation,
-        Some(initial_fingerprint.clone()),
-        false,
-    );
-
-    assert!(
-        state
-            .failed_local_selection_after_fingerprint_probe(
-                Some(publish.generation),
-                Some(initial_fingerprint),
-            )
-            .is_some()
-    );
-
-    let changed_fingerprint = ClipboardFingerprint {
-        offered_mime_types: vec!["image/png".to_string()],
-        selected_mime_type: Some("image/png".to_string()),
-        bounded_content_hash: Some(2),
-        bounded_content_len: Some(4096),
-        bounded_content_truncated: true,
-    };
-    assert!(
-        state
-            .failed_local_selection_after_fingerprint_probe(
-                Some(publish.generation),
-                Some(changed_fingerprint),
-            )
-            .is_none()
-    );
-    assert!(!state.selection_clipboard_snapshot().fallback_allowed());
-    assert_eq!(
-        state.selection_clipboard_snapshot().fallback_generation(),
-        None
-    );
-}
-
-#[test]
-fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is_readable() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
-    let test_text_resources = crate::input::state::InputTextResources {
-        measurer: &test_text_measurer,
-        ui_engine: &test_ui_engine,
-    };
-
-    let mut state = create_test_input_state();
-    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 10,
-        y: 20,
-        w: 100,
-        h: 80,
-        fill: false,
-        fill_color: None,
-        color: state.style.current_color,
-        thick: state.style.current_thickness,
-    });
-    state.set_selection(vec![original_id]);
-    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
-    let publish = state
-        .take_pending_selection_clipboard_publish()
-        .expect("pending private clipboard publish");
-    state.complete_selection_clipboard_publish(publish.generation, None, false);
-
-    let current_fingerprint = ClipboardFingerprint {
-        offered_mime_types: vec!["image/png".to_string()],
-        selected_mime_type: Some("image/png".to_string()),
-        bounded_content_hash: Some(1),
-        bounded_content_len: Some(4096),
-        bounded_content_truncated: true,
-    };
-    assert!(
-        state
-            .failed_local_selection_after_fingerprint_probe(
-                Some(publish.generation),
-                Some(current_fingerprint),
-            )
-            .is_none()
-    );
-    assert!(!state.selection_clipboard_snapshot().fallback_allowed());
-}
-
-#[test]
-fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
-    let test_text_resources = crate::input::state::InputTextResources {
-        measurer: &test_text_measurer,
-        ui_engine: &test_ui_engine,
-    };
-
-    let mut state = create_test_input_state();
-    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 10,
-        y: 20,
-        w: 100,
-        h: 80,
-        fill: false,
-        fill_color: None,
-        color: state.style.current_color,
-        thick: state.style.current_thickness,
-    });
-    state.set_selection(vec![original_id]);
-    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
-    let publish = state
-        .take_pending_selection_clipboard_publish()
-        .expect("pending private clipboard publish");
-    state.complete_selection_clipboard_publish(publish.generation, None, false);
-
-    assert!(
-        state
-            .failed_local_selection_after_fingerprint_probe(Some(publish.generation), None)
-            .is_none()
-    );
-    assert!(
-        state.selection_clipboard_snapshot().fallback_allowed(),
-        "transport failure fallback remains available after normal resolution"
-    );
-}
-
-#[test]
 fn published_selection_allows_local_fallback_until_superseded() {
     let test_text_measurer = crate::draw::TextMeasurer::default();
     let test_ui_engine = crate::ui_text::UiTextEngine::default();
@@ -400,7 +248,7 @@ fn published_selection_allows_local_fallback_until_superseded() {
             .is_some()
     );
 
-    state.mark_selection_clipboard_superseded();
+    state.mark_selection_clipboard_superseded_for_generation(Some(generation));
     assert!(!state.selection_clipboard_snapshot().fallback_allowed());
     assert!(
         state
@@ -596,7 +444,7 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
     let payload: WayscriberClipboardSelection =
         serde_json::from_str(&publish.payload_json).expect("payload json");
 
-    state.mark_selection_clipboard_superseded();
+    state.mark_selection_clipboard_superseded_for_generation(Some(publish.generation));
     state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
@@ -670,87 +518,6 @@ fn request_generation_supersede_ignores_newer_local_copy() {
         Some(current_generation)
     );
     assert!(state.selection_clipboard_snapshot().fallback_allowed());
-}
-
-#[test]
-fn failed_local_fast_path_rejects_newer_generation() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
-    let test_text_resources = crate::input::state::InputTextResources {
-        measurer: &test_text_measurer,
-        ui_engine: &test_ui_engine,
-    };
-
-    let mut state = create_test_input_state();
-    let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 10,
-        y: 20,
-        w: 100,
-        h: 80,
-        fill: false,
-        fill_color: None,
-        color: state.style.current_color,
-        thick: state.style.current_thickness,
-    });
-    state.set_selection(vec![first_id]);
-    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
-    let first_publish = state
-        .take_pending_selection_clipboard_publish()
-        .expect("pending first private clipboard publish");
-    let fingerprint = ClipboardFingerprint {
-        offered_mime_types: vec!["image/png".to_string()],
-        selected_mime_type: Some("image/png".to_string()),
-        bounded_content_hash: Some(1),
-        bounded_content_len: Some(4096),
-        bounded_content_truncated: true,
-    };
-    state.complete_selection_clipboard_publish(
-        first_publish.generation,
-        Some(fingerprint.clone()),
-        false,
-    );
-    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
-    let request = state
-        .take_pending_clipboard_paste_request()
-        .expect("pending paste request");
-    let request_generation = request.local_selection_fallback_generation;
-
-    let second_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 200,
-        y: 220,
-        w: 90,
-        h: 70,
-        fill: false,
-        fill_color: None,
-        color: state.style.current_color,
-        thick: state.style.current_thickness,
-    });
-    state.set_selection(vec![second_id]);
-    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
-    let second_publish = state
-        .take_pending_selection_clipboard_publish()
-        .expect("pending second private clipboard publish");
-    state.complete_selection_clipboard_publish(
-        second_publish.generation,
-        Some(fingerprint.clone()),
-        false,
-    );
-
-    assert!(
-        state
-            .selection_clipboard_snapshot()
-            .failed_probe(request_generation)
-            .is_none()
-    );
-    assert!(
-        state
-            .failed_local_selection_after_fingerprint_probe(request_generation, Some(fingerprint))
-            .is_none()
-    );
-    assert_eq!(
-        state.selection_clipboard_snapshot().fallback_generation(),
-        Some(second_publish.generation)
-    );
 }
 
 #[test]
@@ -845,9 +612,9 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
     assert_eq!(state.copy_selection(), 1);
 
     state.update_pointer_positions(100, 120, 100, 120);
-    assert_eq!(state.paste_selection_with(&measurer), 1);
+    assert_eq!(paste_local_clipboard(&mut state, &measurer), 1);
     state.update_pointer_positions(200, 220, 200, 220);
-    assert_eq!(state.paste_selection_with(&measurer), 1);
+    assert_eq!(paste_local_clipboard(&mut state, &measurer), 1);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 3);
@@ -877,7 +644,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
     assert_eq!(state.copy_selection(), 1);
     state.set_max_shapes_per_frame_for_test(1);
 
-    assert_eq!(state.paste_selection_with(&measurer), 0);
+    assert_eq!(paste_local_clipboard(&mut state, &measurer), 0);
     assert_eq!(
         state.active_toast().map(|toast| toast.message.as_str()),
         Some("Shape limit reached; nothing pasted.")
@@ -912,11 +679,23 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
     assert_eq!(state.copy_selection(), 2);
     state.set_max_shapes_per_frame_for_test(3);
 
-    assert_eq!(state.paste_selection_with(&measurer), 1);
+    assert_eq!(paste_local_clipboard(&mut state, &measurer), 1);
     assert_eq!(state.boards.active_frame().shapes.len(), 3);
     assert_eq!(state.selected_shape_ids().len(), 1);
     assert_eq!(
         state.active_toast().map(|toast| toast.message.as_str()),
         Some("Shape limit reached; pasted 1 of 2.")
     );
+}
+
+fn paste_local_clipboard(
+    state: &mut crate::input::InputState,
+    measurer: &crate::draw::TextMeasurer,
+) -> usize {
+    let request = state.request_clipboard_paste();
+    let shapes = state
+        .selection_clipboard_snapshot()
+        .shapes_for_pending_publish(Some(request.selection_clipboard_generation_at_request))
+        .unwrap();
+    state.paste_clipboard_shapes_from_request_with(measurer, &request, shapes)
 }

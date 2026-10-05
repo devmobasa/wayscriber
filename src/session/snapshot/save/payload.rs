@@ -1,4 +1,22 @@
 use super::*;
+use crate::session::snapshot::generation::{MAX_GENERATION, payload_prefix_generation};
+
+#[derive(Clone, Copy)]
+pub(super) struct PayloadStamp<'a> {
+    pub(super) last_modified: &'a str,
+    pub(super) generation: Option<u64>,
+}
+
+impl<'a> PayloadStamp<'a> {
+    /// The widest stamp a save can write, for estimates made before a
+    /// generation is allocated.
+    pub(super) fn widest(last_modified: &'a str) -> Self {
+        Self {
+            last_modified,
+            generation: Some(MAX_GENERATION),
+        }
+    }
+}
 
 const NEAR_LIMIT_PERCENT: u64 = 90;
 
@@ -82,7 +100,7 @@ impl PreparedPayload {
 pub(super) fn payload_within_limit(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
-    last_modified: &str,
+    stamp: PayloadStamp<'_>,
     max_expanded_size: u64,
     history_fallback: HistoryFallbackStrategy,
 ) -> Result<PreparedPayload> {
@@ -91,7 +109,7 @@ pub(super) fn payload_within_limit(
     }
 
     let full_started = Instant::now();
-    let full_payload = payload_candidate(snapshot, options, last_modified)?;
+    let full_payload = payload_candidate(snapshot, options, stamp)?;
     log_payload_candidate("full", &full_payload, full_started.elapsed());
     let Some(full_limit) = full_payload.limit_exceeded(options, max_expanded_size) else {
         return Ok(PreparedPayload::write(
@@ -118,10 +136,11 @@ pub(super) fn payload_within_limit(
     }
 
     let visible_started = Instant::now();
-    let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
+    let visible_payload = payload_candidate(&visible_only, options, stamp)?;
     log_payload_candidate("visible-only", &visible_payload, visible_started.elapsed());
     if let Some(visible_limit) = visible_payload.limit_exceeded(options, max_expanded_size) {
         return Err(SavePayloadTooLarge {
+            recovery_path: None,
             limit: visible_limit,
             written_size: visible_payload.final_size(),
             raw_size: visible_payload.raw_size,
@@ -138,7 +157,7 @@ pub(super) fn payload_within_limit(
         );
         let depth_one_started = Instant::now();
         let depth_one_candidate = snapshot_with_history_depth(snapshot, 1);
-        let depth_one_payload = payload_candidate(&depth_one_candidate, options, last_modified)?;
+        let depth_one_payload = payload_candidate(&depth_one_candidate, options, stamp)?;
         log_payload_candidate(
             "history-depth 1",
             &depth_one_payload,
@@ -169,7 +188,7 @@ pub(super) fn payload_within_limit(
                     snapshot,
                     history_depth,
                     options,
-                    last_modified,
+                    stamp,
                     max_expanded_size,
                     history_fallback,
                 )?
@@ -216,7 +235,7 @@ fn fitting_history_payload(
     snapshot: &SessionSnapshot,
     history_depth: usize,
     options: &SessionOptions,
-    last_modified: &str,
+    stamp: PayloadStamp<'_>,
     max_expanded_size: u64,
     history_fallback: HistoryFallbackStrategy,
 ) -> Result<Option<(usize, PayloadCandidate)>> {
@@ -226,7 +245,7 @@ fn fitting_history_payload(
             2,
             history_depth,
             options,
-            last_modified,
+            stamp,
             max_expanded_size,
         ),
         HistoryFallbackStrategy::Bounded { max_depth } => {
@@ -244,7 +263,7 @@ fn fitting_history_payload(
                 2,
                 max_depth,
                 options,
-                last_modified,
+                stamp,
                 max_expanded_size,
             )
         }
@@ -256,7 +275,7 @@ fn largest_fitting_history_payload(
     min_depth: usize,
     max_depth: usize,
     options: &SessionOptions,
-    last_modified: &str,
+    stamp: PayloadStamp<'_>,
     max_expanded_size: u64,
 ) -> Result<Option<(usize, PayloadCandidate)>> {
     if min_depth > max_depth {
@@ -269,7 +288,7 @@ fn largest_fitting_history_payload(
         attempts += 1;
         let candidate_started = Instant::now();
         let candidate = snapshot_with_history_depth(snapshot, depth);
-        let payload = payload_candidate(&candidate, options, last_modified)?;
+        let payload = payload_candidate(&candidate, options, stamp)?;
         debug!(
             "Prepared history-depth session payload candidate depth={} in {:?}: written={} bytes, raw={} bytes, compression={}",
             depth,
@@ -314,9 +333,9 @@ pub(super) fn log_payload_candidate(label: &str, payload: &PayloadCandidate, ela
 pub(super) fn payload_candidate(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
-    last_modified: &str,
+    stamp: PayloadStamp<'_>,
 ) -> Result<PayloadCandidate> {
-    let raw_bytes = serialize_payload(snapshot, last_modified)?;
+    let raw_bytes = serialize_payload(snapshot, stamp)?;
     let raw_size = raw_bytes.len();
     let compressed = should_compress_payload(raw_size, options);
     let bytes = if compressed {
@@ -324,6 +343,15 @@ pub(super) fn payload_candidate(
     } else {
         raw_bytes
     };
+
+    debug_assert_eq!(
+        payload_prefix_generation(&bytes),
+        stamp.generation.map_or(
+            super::super::generation::Generation::Unknown,
+            super::super::generation::Generation::from_raw
+        ),
+        "written payload must expose its generation within the probe window"
+    );
 
     Ok(PayloadCandidate {
         bytes,
@@ -340,10 +368,11 @@ fn should_compress_payload(raw_size: usize, options: &SessionOptions) -> bool {
     }
 }
 
-fn serialize_payload(snapshot: &SessionSnapshot, last_modified: &str) -> Result<Vec<u8>> {
+fn serialize_payload(snapshot: &SessionSnapshot, stamp: PayloadStamp<'_>) -> Result<Vec<u8>> {
     let file_payload = SessionFile {
         version: CURRENT_VERSION,
-        last_modified: last_modified.to_string(),
+        save_generation: stamp.generation,
+        last_modified: stamp.last_modified.to_string(),
         active_board_id: Some(snapshot.active_board_id.clone()),
         active_mode: None,
         boards: snapshot

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub const APP_ID_ENV: &str = "WAYSCRIBER_APP_ID";
 pub const PORTAL_APP_ID_ENV: &str = "WAYSCRIBER_PORTAL_APP_ID";
 pub const PORTAL_SHORTCUT_ENV: &str = "WAYSCRIBER_PORTAL_SHORTCUT";

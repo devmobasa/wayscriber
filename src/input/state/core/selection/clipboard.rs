@@ -127,14 +127,6 @@ impl SelectionClipboard {
             .is_none_or(|clipboard| clipboard.is_empty())
     }
 
-    pub(in crate::input::state::core) fn shapes(&self) -> Option<Vec<Shape>> {
-        self.shapes.clone().filter(|shapes| !shapes.is_empty())
-    }
-
-    pub(in crate::input::state::core) fn generation(&self) -> u64 {
-        self.generation
-    }
-
     pub(in crate::input::state::core) fn active_paste_request_id(&self) -> Option<u64> {
         self.active_paste_request_id
     }
@@ -202,35 +194,6 @@ impl SelectionClipboard {
         if self.active_paste_request_id == Some(id) {
             self.active_paste_request_id = None;
         }
-    }
-
-    pub(in crate::input::state::core) fn failed_after_fingerprint_probe(
-        &mut self,
-        request_generation: Option<u64>,
-        current: Option<ClipboardFingerprint>,
-    ) -> Option<Vec<Shape>> {
-        let request_generation = request_generation?;
-        let SelectionPublishState::Failed {
-            generation,
-            clipboard_fingerprint_at_failure,
-        } = &self.publish_state
-        else {
-            return None;
-        };
-        if *generation != request_generation || *generation != self.generation {
-            return None;
-        }
-
-        match (clipboard_fingerprint_at_failure.as_ref(), current.as_ref()) {
-            (Some(previous), Some(current)) if previous == current => {}
-            (None, None) => return None,
-            _ => {
-                self.mark_superseded(Some(*generation));
-                return None;
-            }
-        }
-
-        self.shapes()
     }
 
     pub(in crate::input::state::core) fn mark_superseded(&mut self, generation: Option<u64>) {
@@ -491,39 +454,5 @@ mod tests {
         assert_eq!(clipboard.active_paste_request_id(), Some(second.id));
         clipboard.finish_paste_request(second.id);
         assert_eq!(clipboard.active_paste_request_id(), None);
-    }
-
-    #[test]
-    fn changed_failure_fingerprint_supersedes_the_local_fallback() {
-        let mut clipboard = SelectionClipboard::default();
-        let publish = clipboard.copy_shapes(vec![rectangle(10)]).expect("publish");
-        let original = ClipboardFingerprint {
-            offered_mime_types: vec!["image/png".to_string()],
-            selected_mime_type: Some("image/png".to_string()),
-            bounded_content_hash: Some(1),
-            bounded_content_len: Some(128),
-            bounded_content_truncated: false,
-        };
-        assert!(clipboard.complete_publish(publish.generation, Some(original.clone()), false,));
-        assert!(
-            clipboard
-                .failed_after_fingerprint_probe(Some(publish.generation), Some(original))
-                .is_some()
-        );
-
-        let changed = ClipboardFingerprint {
-            bounded_content_hash: Some(2),
-            ..clipboard
-                .snapshot()
-                .failed_probe(Some(publish.generation))
-                .and_then(|(_, fingerprint)| fingerprint)
-                .expect("failed fingerprint")
-        };
-        assert!(
-            clipboard
-                .failed_after_fingerprint_probe(Some(publish.generation), Some(changed))
-                .is_none()
-        );
-        assert!(!clipboard.snapshot().fallback_allowed());
     }
 }

@@ -3,6 +3,58 @@ use std::path::{Path, PathBuf};
 use super::*;
 
 #[test]
+fn corrupt_copies_move_with_session_and_clear_without_touching_siblings() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let source = temp.path().join("board.wayscriber-session");
+    let target = temp.path().join("archive.wayscriber-session");
+    std::fs::write(&source, b"primary").unwrap();
+    let suffixes = [".corrupt-1", ".bak.corrupt-2", ".recovery.corrupt-3"];
+    for suffix in suffixes {
+        std::fs::write(append_path_suffix(&source, suffix), suffix.as_bytes()).unwrap();
+    }
+    let invalid_suffixes = [
+        ".corrupt-0",
+        ".corrupt-01",
+        ".corrupt-",
+        ".corrupt-+1",
+        ".corrupt--1",
+        ".corrupt-18446744073709551616",
+        ".other.corrupt-1",
+        ".bak.corrupt-2-more",
+    ];
+    for suffix in invalid_suffixes {
+        std::fs::write(append_path_suffix(&source, suffix), b"not our name").unwrap();
+    }
+
+    move_named_session_non_lock_artifacts(&source, &target).unwrap();
+    for suffix in suffixes {
+        assert!(!append_path_suffix(&source, suffix).exists());
+        assert_eq!(
+            std::fs::read(append_path_suffix(&target, suffix)).unwrap(),
+            suffix.as_bytes()
+        );
+    }
+
+    assert!(duplicate_named_session_primary(&target, &source).is_ok());
+    std::fs::remove_file(&source).unwrap();
+    std::fs::write(append_path_suffix(&source, ".corrupt-4"), b"old diagnostic").unwrap();
+    assert!(duplicate_named_session_primary(&target, &source).is_err());
+
+    clear_named_session_non_lock_artifacts(&target).unwrap();
+    for suffix in suffixes {
+        assert!(!append_path_suffix(&target, suffix).exists());
+    }
+    for suffix in invalid_suffixes {
+        assert_eq!(
+            std::fs::read(append_path_suffix(&source, suffix)).unwrap(),
+            b"not our name",
+            "{suffix}"
+        );
+        assert!(!append_path_suffix(&target, suffix).exists());
+    }
+}
+
+#[test]
 fn named_session_artifact_paths_use_exact_primary_suffixes() {
     let path = Path::new("/tmp/lecture.wayscriber-session");
     let artifacts = named_session_artifact_paths(path);
@@ -188,4 +240,44 @@ fn duplicate_named_session_primary_rejects_symlink_source() {
 
     assert!(format!("{err:#}").contains("symlink"));
     assert!(!target.exists());
+}
+
+#[test]
+fn non_utf8_diagnostics_are_reused_pruned_moved_and_removed_by_core_clear() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let temp = crate::test_temp::tempdir().unwrap();
+    let source = temp
+        .path()
+        .join(OsStr::from_bytes(b"board-\xff.wayscriber-session"));
+    let target = temp
+        .path()
+        .join(OsStr::from_bytes(b"archive-\xfe.wayscriber-session"));
+    let mut options = crate::session::SessionOptions::new(temp.path().to_path_buf(), "nonutf");
+    options.set_named_file_target(source.clone());
+    for index in 0..5 {
+        std::fs::write(&source, format!("broken {index}")).unwrap();
+        let outcome = crate::session::load_snapshot_with_outcome(&options).unwrap();
+        assert!(matches!(
+            outcome,
+            crate::session::LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+        ));
+        // The same unreadable primary reuses its diagnostic, rather than allocating again.
+        crate::session::load_snapshot_with_outcome(&options).unwrap();
+        assert_eq!(
+            corrupt_copies_of(&source).unwrap().len(),
+            (index + 1).min(3)
+        );
+    }
+    for suffix in [".bak.corrupt-1", ".recovery.corrupt-1"] {
+        std::fs::write(append_path_suffix(&source, suffix), b"side diagnostic").unwrap();
+    }
+    let before = named_session_non_lock_artifact_paths(&source).unwrap();
+    move_named_session_non_lock_artifacts(&source, &target).unwrap();
+    assert!(before.iter().all(|path| !path.exists()));
+    options.set_named_file_target(target.clone());
+    let moved = named_session_non_lock_artifact_paths(&target).unwrap();
+    assert_eq!(moved.len(), before.len());
+    crate::session::clear_session(&options).unwrap();
+    assert!(moved.iter().all(|path| !path.exists()));
 }

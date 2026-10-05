@@ -1,11 +1,28 @@
-//! Explicit session commands advance only when their disk phase completes.
+//! Session commands advance only when their disk phase completes.
 use super::*;
 
+mod output;
 mod phases;
+
+#[derive(Debug)]
+pub(in crate::backend::wayland) struct SessionCommandAborted(&'static str);
+
+impl std::fmt::Display for SessionCommandAborted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for SessionCommandAborted {}
 
 #[derive(Debug)]
 pub(in crate::backend::wayland) enum SessionCommand {
     Open(PathBuf),
+    Output {
+        transition: Box<super::super::PendingOutputTransition>,
+        remembered: Option<PathBuf>,
+        home: Option<Box<SessionOptions>>,
+    },
     /// Return to the home session, whose options for the current output this
     /// carries; `None` when home has persistence disabled.
     OpenHome(Option<Box<SessionOptions>>),
@@ -21,6 +38,11 @@ pub(in crate::backend::wayland) enum SessionCommandReport {
     Open(RuntimeOpenSessionReport),
     /// The overlay is back in its home session.
     Home,
+    Output {
+        abandoned: Option<(PathBuf, anyhow::Error)>,
+        too_large: Option<super::super::ExpandedTooLarge>,
+        first_output_resolved: bool,
+    },
     SaveAs(RuntimeSaveAsSessionReport),
     Overwrite(PathBuf, bool),
     Clear(RuntimeClearSessionReport),
@@ -37,6 +59,10 @@ pub(in crate::backend::wayland) enum TransactionStep {
 #[derive(Debug, Clone, Copy)]
 enum Phase {
     Start,
+    OutputCheckSource,
+    OutputArtifacts,
+    OutputLoad,
+    OutputHome,
     OpenPreflight,
     SaveCurrent,
     Load,
@@ -50,8 +76,35 @@ enum Phase {
     Forget,
 }
 
-pub(in crate::backend::wayland) struct ExplicitSessionTransaction {
+pub(in crate::backend::wayland) struct QueuedSessionCommand {
+    pub command: SessionCommand,
+    pub epoch: u64,
+    /// The edit generation the command was requested over.
+    pub generation: u64,
+}
+
+impl SessionCommand {
+    pub(in crate::backend::wayland::session) fn matches_request(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Open(a), Self::Open(b))
+            | (Self::CheckOverwrite(a), Self::CheckOverwrite(b))
+            | (Self::Forget(a), Self::Forget(b)) => a == b,
+            (Self::SaveAs(a, policy), Self::SaveAs(b, other_policy)) => {
+                a == b && policy == other_policy
+            }
+            (Self::OpenHome(_), Self::OpenHome(_))
+            | (Self::Clear, Self::Clear)
+            | (Self::ClearTools(_), Self::ClearTools(_))
+            | (Self::Inspect, Self::Inspect) => true,
+            _ => false,
+        }
+    }
+}
+
+pub(in crate::backend::wayland) struct SessionCommandTransaction {
     command: SessionCommand,
+    pub(in crate::backend::wayland::session) queued_commands:
+        std::collections::VecDeque<QueuedSessionCommand>,
     phase: Phase,
     current: Option<SessionOptions>,
     target: Option<SessionOptions>,
@@ -60,13 +113,16 @@ pub(in crate::backend::wayland) struct ExplicitSessionTransaction {
     interaction: Option<(u64, bool)>,
     saved_current: bool,
     loaded_board_data: bool,
+    output_snapshot: Option<SessionSnapshot>,
+    abandoned: Option<(PathBuf, anyhow::Error)>,
     pub request_id: Option<RequestId>,
 }
 
-impl ExplicitSessionTransaction {
+impl SessionCommandTransaction {
     pub fn new(command: SessionCommand, epoch: u64, interaction: (u64, bool)) -> Self {
         Self {
             command,
+            queued_commands: std::collections::VecDeque::new(),
             phase: Phase::Start,
             current: None,
             target: None,
@@ -75,6 +131,8 @@ impl ExplicitSessionTransaction {
             interaction: Some(interaction),
             saved_current: false,
             loaded_board_data: false,
+            output_snapshot: None,
+            abandoned: None,
             request_id: None,
         }
     }
@@ -93,31 +151,47 @@ impl ExplicitSessionTransaction {
         result: Option<Result<PersistenceOutcome>>,
     ) -> Result<TransactionStep> {
         if self.epoch != context.session.target_epoch() {
-            return Err(anyhow!(
-                "session target changed while the command was pending"
-            ));
+            return Err(SessionCommandAborted(
+                "session target changed while the command was pending",
+            )
+            .into());
+        }
+        if let SessionCommand::Output { transition, .. } = &self.command
+            && !context
+                .session
+                .pending_output_transition()
+                .is_some_and(|pending| {
+                    pending.revision == transition.revision && pending.source_epoch == self.epoch
+                })
+        {
+            return Err(SessionCommandAborted(
+                "output destination changed while persistence was pending",
+            )
+            .into());
         }
         let outcome = result.transpose()?;
         if self
             .generation
             .is_some_and(|generation| generation != context.session.edit_generation())
         {
-            return Err(anyhow!(
-                "session was edited while the command was pending; retry the command"
-            ));
+            return Err(SessionCommandAborted(
+                "session was edited while the command was pending; retry the command",
+            )
+            .into());
         }
 
         if let Some((revision, active)) = self.interaction {
             let (current_revision, current_active) =
                 context.input_state.session_interaction_state();
             if revision != current_revision || (!active && current_active) {
-                return Err(anyhow!(
-                    "input interaction changed while the session command was pending; retry the command"
-                ));
+                return Err(SessionCommandAborted("input interaction changed while the session command was pending; retry the command").into());
             }
         }
 
         match self.phase {
+            Phase::OutputCheckSource => self.complete_output_check_source(context, outcome),
+            Phase::OutputArtifacts => self.complete_output_artifacts(context, outcome),
+            Phase::OutputLoad | Phase::OutputHome => self.complete_output_load(context, outcome),
             Phase::Start => self.complete_start(context, outcome),
             Phase::OpenPreflight => self.complete_open_preflight(context, outcome),
             Phase::SaveCurrent => self.complete_save_current(context, outcome),
@@ -163,6 +237,12 @@ impl ExplicitSessionTransaction {
             .as_ref()
             .expect("target change has current options")
             .clone();
+        if !context
+            .session
+            .validate_source_write(context.input_state.is_session_dirty())?
+        {
+            return self.after_current_save(context);
+        }
         let snapshot = context
             .input_state
             .with_active_interaction_canceled_for_capture_with(context.measurer, |input| {
@@ -194,6 +274,7 @@ impl ExplicitSessionTransaction {
         context: &mut SessionTransaction<'_>,
     ) -> Result<TransactionStep> {
         match &self.command {
+            SessionCommand::Output { .. } => self.load_output_target(),
             SessionCommand::Open(_) => {
                 self.capture_input_generation(context);
                 self.work(

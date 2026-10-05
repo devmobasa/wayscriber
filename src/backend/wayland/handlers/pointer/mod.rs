@@ -16,6 +16,9 @@ mod motion;
 mod press;
 mod release;
 
+#[cfg(test)]
+mod tests;
+
 impl PointerHandler for WaylandState {
     fn pointer_frame(
         &mut self,
@@ -59,7 +62,7 @@ impl PointerHandler for WaylandState {
                 }
                 PointerEventKind::Release { button, .. } => {
                     let modal_before = self.input_state.screen_modal_is_active();
-                    self.handle_pointer_release(event, routed, button);
+                    self.handle_pointer_release(conn, event, routed, button);
                     self.refresh_screen_modal_cursor(modal_before, routed, conn);
                 }
                 PointerEventKind::Axis {

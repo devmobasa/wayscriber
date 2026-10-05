@@ -128,7 +128,7 @@ impl WaylandState {
             return;
         }
 
-        if self.tablet.tip_down {
+        if self.tablet.is_canvas_gesture() {
             self.record_stylus_peak(self.input_state.style.current_thickness);
         } else {
             self.tablet.peak_thickness = None;

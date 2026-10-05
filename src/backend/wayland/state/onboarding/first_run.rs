@@ -195,7 +195,7 @@ impl WaylandState {
             && self.first_run_onboarding_card_visible()
     }
 
-    pub(super) fn first_run_onboarding_card_visible(&self) -> bool {
+    pub(in crate::backend::wayland) fn first_run_onboarding_card_visible(&self) -> bool {
         if !self.first_run_guidance_allowed()
             || !self.surface.is_configured()
             || self.suppression.suppressed()

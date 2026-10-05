@@ -5,10 +5,6 @@ use super::super::{BoardPickerLayout, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING, PAGE_
 pub(super) struct PagePanelInfo {
     pub page_count: usize,
     pub cols: usize,
-    pub rows: usize,
-    pub total_rows: usize,
-    pub scroll_row: usize,
-    pub max_scroll_row: usize,
     pub first_visible_page: usize,
     pub visible_pages: usize,
     pub visible_slots: usize,
@@ -42,10 +38,6 @@ impl InputState {
         Some(PagePanelInfo {
             page_count,
             cols,
-            rows,
-            total_rows: layout.page_total_rows,
-            scroll_row: layout.page_scroll_row,
-            max_scroll_row: layout.page_max_scroll_row,
             first_visible_page,
             visible_pages,
             visible_slots: layout.page_visible_slots.min(slot_count),
@@ -69,31 +61,6 @@ impl InputState {
         }
         let page_index = info.first_visible_page + slot;
         (page_index < info.page_count).then_some(page_index)
-    }
-
-    pub(super) fn board_picker_page_index_to_slot(
-        &self,
-        layout: &BoardPickerLayout,
-        board_index: usize,
-        page_index: usize,
-    ) -> Option<usize> {
-        let info = self.board_picker_page_panel_info(layout, board_index)?;
-        if page_index < info.first_visible_page {
-            return None;
-        }
-        let slot = page_index - info.first_visible_page;
-        (slot < info.visible_slots && page_index < info.page_count).then_some(slot)
-    }
-
-    pub(super) fn board_picker_page_thumb_origin(
-        &self,
-        layout: &BoardPickerLayout,
-        board_index: usize,
-        page_index: usize,
-    ) -> Option<(PagePanelInfo, usize, usize, f64, f64)> {
-        let info = self.board_picker_page_panel_info(layout, board_index)?;
-        let slot = self.board_picker_page_index_to_slot(layout, board_index, page_index)?;
-        self.board_picker_page_thumb_origin_for_slot(layout, info, slot)
     }
 
     pub(super) fn board_picker_page_thumb_origin_for_slot(

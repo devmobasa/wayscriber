@@ -15,8 +15,9 @@ mod storage;
 #[allow(unused_imports)]
 pub use artifacts::{
     NamedSessionClearOutcome, NamedSessionDuplicateOutcome, NamedSessionMoveOutcome,
-    NamedSessionMovedArtifact, SessionArtifactPaths, clear_named_session_non_lock_artifacts,
-    duplicate_named_session_primary, move_named_session_non_lock_artifacts,
+    NamedSessionMovedArtifact, SessionArtifactKind, SessionArtifactPaths,
+    clear_named_session_non_lock_artifacts, duplicate_named_session_primary,
+    move_named_session_non_lock_artifacts, named_session_artifact_kind,
     named_session_artifact_paths, named_session_non_lock_artifact_paths,
     rollback_named_session_non_lock_artifacts_move,
 };
@@ -36,19 +37,19 @@ pub use snapshot::{
     BoardAppearanceSnapshot, BoardPagesSnapshot, BoardSnapshot, SessionSnapshot, ToolStateSnapshot,
     apply_snapshot, load_snapshot, save_snapshot, snapshot_from_input,
 };
-#[allow(unused_imports)]
 pub(crate) use snapshot::{
-    DEFAULT_MAX_EXPANDED_SESSION_BYTES, SaveAsOverwrite, SaveLimitExceeded, SaveSnapshotOutcome,
-    SaveSnapshotReport, SnapshotPayloadEstimate, SnapshotSaveEstimate, estimate_snapshot_payload,
-    estimate_snapshot_save, estimate_snapshot_without_history_payload,
-    save_snapshot_as_requires_overwrite, save_snapshot_as_with_report,
-    save_snapshot_autosave_with_report, save_snapshot_autosave_with_report_and_clear_boundary,
-    save_snapshot_with_report, save_snapshot_with_report_and_clear_boundary,
+    CorruptArtifactPreservationFailed, LoadSnapshotOutcome, RestoredArtifact,
+    apply_snapshot_replacing_boards, apply_tool_state_snapshot, load_named_session_candidate,
+    load_snapshot_with_outcome,
 };
 #[allow(unused_imports)]
 pub(crate) use snapshot::{
-    LoadSnapshotOutcome, apply_snapshot_replacing_boards, apply_tool_state_snapshot,
-    load_named_session_candidate, load_snapshot_with_outcome,
+    DEFAULT_MAX_EXPANDED_SESSION_BYTES, SaveAsOverwrite, SaveLimitExceeded, SavePayloadTooLarge,
+    SaveSnapshotOutcome, SaveSnapshotReport, SnapshotPayloadEstimate, SnapshotSaveEstimate,
+    estimate_snapshot_payload, estimate_snapshot_save, estimate_snapshot_without_history_payload,
+    save_snapshot_as_requires_overwrite, save_snapshot_as_with_report,
+    save_snapshot_autosave_with_report, save_snapshot_autosave_with_report_and_clear_boundary,
+    save_snapshot_with_report, save_snapshot_with_report_and_clear_boundary,
 };
 #[allow(unused_imports)]
 pub use storage::{ClearOutcome, FrameCounts, SessionInspection, clear_session, inspect_session};

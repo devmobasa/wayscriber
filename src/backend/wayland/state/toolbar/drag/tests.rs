@@ -147,6 +147,42 @@ fn local_and_screen_events_remain_continuous_as_the_toolbar_moves() {
     );
 }
 
+#[cfg(feature = "tablet-input")]
+#[test]
+fn lifting_an_inline_pen_drag_does_not_replay_its_press_position() {
+    use crate::backend::wayland::state::contact_owner::{ContactOwner, ReleaseRoute};
+    use crate::backend::wayland::state::tablet_runtime::TabletState;
+    use crate::input::tablet::TabletSettings;
+
+    let start = (100.0, 20.0);
+    let moved = (140.0, 40.0);
+    let mut tablet = TabletState::new(None, TabletSettings::default());
+    tablet.on_overlay = true;
+    tablet.last_pos = Some(start);
+    tablet.bind_tip(ContactOwner::InlineToolbar);
+    let mut drag = ToolbarDrag::new();
+    drag.begin_move(MoveDragKind::Top, start, true, (24.0, 12.0));
+
+    let kind = drag.kind().unwrap();
+    tablet.record_immediate_motion(moved);
+    let delta = drag
+        .move_to(kind, MoveSample::Screen(moved), (0.0, 0.0))
+        .unwrap();
+    let mut offset = (24.0 + delta.0, 12.0 + delta.1);
+    assert_eq!(offset, (64.0, 32.0));
+
+    assert_eq!(tablet.take_up_route(true), ReleaseRoute::InlineToolbar);
+    let release = tablet.current_or_pending_position((140, 40));
+    let delta = drag
+        .move_to(kind, MoveSample::Screen(release), (0.0, 0.0))
+        .unwrap();
+    assert_eq!(delta, (0.0, 0.0), "lifting must preserve the moved toolbar");
+    offset = (offset.0 + delta.0, offset.1 + delta.1);
+    assert_eq!(offset, (64.0, 32.0));
+    assert!(drag.end_move().is_some());
+    assert!(!drag.is_moving());
+}
+
 #[test]
 fn local_motion_normalizes_the_initial_sample_before_applying_offsets() {
     let mut drag = moving(false);

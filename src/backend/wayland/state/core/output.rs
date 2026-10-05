@@ -5,15 +5,8 @@ use std::time::{Duration, Instant};
 
 use super::super::*;
 use crate::{
-    backend::wayland::{
-        backend::event_loop::session_save,
-        session::{
-            self as runtime_session, PersistenceOperation, PersistenceOutcome, SaveStrategy,
-        },
-    },
-    input::state::OutputFocusAction,
-    notification,
-    session::{self, SessionSnapshot},
+    backend::wayland::backend::event_loop::session_save, input::state::OutputFocusAction,
+    notification, session,
 };
 
 mod focus;

@@ -3,11 +3,14 @@ mod apply;
 pub use appearance::BoardAppearanceSnapshot;
 mod capture;
 mod compression;
+mod generation;
 mod history;
 mod load;
 mod save;
 mod types;
 
+#[cfg(test)]
+mod compat_tests;
 #[cfg(test)]
 mod tests;
 
@@ -17,13 +20,14 @@ pub use capture::snapshot_from_input;
 pub(crate) use compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES;
 pub use load::load_snapshot;
 pub(crate) use load::{
-    LoadSnapshotOutcome, LoadedSnapshot, load_named_session_candidate,
-    load_snapshot_for_offline_edit, load_snapshot_inner, load_snapshot_with_outcome,
+    CorruptArtifactPreservationFailed, LoadSnapshotOutcome, LoadedSnapshot, RestoredArtifact,
+    load_named_session_candidate, load_snapshot_for_offline_edit, load_snapshot_inner,
+    load_snapshot_with_outcome,
 };
 pub use save::save_snapshot;
 pub(crate) use save::{
-    SaveAsOverwrite, SaveLimitExceeded, SaveSnapshotOutcome, SaveSnapshotReport,
-    SnapshotPayloadEstimate, SnapshotSaveEstimate, estimate_snapshot_payload,
+    SaveAsOverwrite, SaveLimitExceeded, SavePayloadTooLarge, SaveSnapshotOutcome,
+    SaveSnapshotReport, SnapshotPayloadEstimate, SnapshotSaveEstimate, estimate_snapshot_payload,
     estimate_snapshot_save, estimate_snapshot_without_history_payload,
     save_snapshot_as_requires_overwrite, save_snapshot_as_with_report,
     save_snapshot_autosave_with_report, save_snapshot_autosave_with_report_and_clear_boundary,

@@ -562,7 +562,7 @@ fn runtime_clear_persists_boundary_then_clears_live_session() {
     add_line(&mut input, 77);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
-    session_state.mark_loaded(true);
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
     session_state.record_input_dirty(Instant::now(), true);
 
     let report = clear_current_session_runtime(
@@ -603,7 +603,7 @@ fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session(
     add_line(&mut input, 83);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
-    session_state.mark_loaded(true);
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
     session_state.record_input_dirty(Instant::now(), true);
 
     let report = clear_current_session_runtime(
@@ -639,7 +639,7 @@ fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
     add_line(&mut input, 91);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
-    session_state.mark_loaded(true);
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
     session_state.record_input_dirty(Instant::now(), true);
 
     let err = clear_current_session_runtime(
@@ -674,7 +674,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     input.style.arrow_head_at_end = false;
     input.ui_visibility.show_status_bar = false;
     let mut session_state = SessionState::new(Some(current_options.clone()));
-    session_state.mark_loaded(true);
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let mut config = Config::default();
     config.drawing.default_thickness = 7.0;
@@ -894,6 +894,7 @@ fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
     add_line(&mut input, 77);
     assert_eq!(board_shape_count(&input, BOARD_ID_WHITEBOARD), 1);
     let mut session_state = SessionState::new(Some(current_options));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     open_named_session_runtime(
         &mut input,
@@ -927,6 +928,7 @@ fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
     input.update_pointer_position(30, 40);
     assert_eq!(input.canvas_pointer_position(), (30, 40));
     let mut session_state = SessionState::new(Some(current_options));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     open_named_session_runtime(
         &mut input,
@@ -1109,6 +1111,7 @@ fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
     assert_eq!(input.page_delete(), PageDeleteOutcome::Removed);
     assert_eq!(input.boards.page_count(), 1);
     let mut session_state = SessionState::new(Some(current_options));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     open_named_session_runtime(
         &mut input,
@@ -1245,6 +1248,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
     };
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     open_named_session_runtime(
         &mut input,
@@ -1309,6 +1313,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
     buffer.push_str(" unsaved edit");
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     open_named_session_runtime(
         &mut input,
@@ -1353,6 +1358,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
     assert_ne!(input.color_for_tool(Tool::Pen), original);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     open_named_session_runtime(
         &mut input,
@@ -1403,6 +1409,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
     };
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let err = open_named_session_runtime(
         &mut input,
@@ -1473,6 +1480,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
     };
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let err = open_named_session_runtime(
         &mut input,
@@ -1551,6 +1559,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
     add_line(&mut input, 7);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let err = open_named_session_runtime(
         &mut input,
@@ -1651,6 +1660,7 @@ fn runtime_open_current_save_failure_aborts_before_candidate_load() {
     add_line(&mut input, 9);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let err = open_named_session_runtime(
         &mut input,
@@ -1685,6 +1695,7 @@ fn autosave_failure_backoff_delays_retry() {
     options.autosave_failure_backoff = Duration::from_millis(50);
 
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), false);
     let now = Instant::now();
     state.record_input_dirty(now, true);
     state.mark_autosave_failure(now, options.autosave_failure_backoff);
@@ -1712,6 +1723,7 @@ fn autosave_deferral_delays_due_without_clearing_dirty() {
     options.autosave_interval = Duration::from_millis(1);
 
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), false);
     let now = Instant::now();
     state.record_input_dirty(now, true);
     let due_at = now + Duration::from_millis(2);
@@ -1909,6 +1921,7 @@ fn autosave_completion_does_not_clear_newer_generation() {
     options.autosave_idle = Duration::from_millis(1);
     options.autosave_interval = Duration::from_millis(1);
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), false);
     let started = Instant::now();
     state.record_input_dirty(started, true);
     let request_id = RequestId {
@@ -1922,6 +1935,7 @@ fn autosave_completion_does_not_clear_newer_generation() {
     state.record_input_dirty(newer_edit, true);
     let result = Ok(SaveCompletion {
         report: Some(crate::session::SaveSnapshotReport {
+            generation: None,
             path: PathBuf::from("/tmp/generation-test.json"),
             outcome: crate::session::SaveSnapshotOutcome::Full,
             raw_size: 1,
@@ -1948,6 +1962,7 @@ fn failed_autosave_restores_original_dirty_window() {
     options.autosave_idle = Duration::from_millis(1);
     options.autosave_interval = Duration::from_millis(1);
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), false);
     let started = Instant::now();
     state.record_input_dirty(started, true);
     let request_id = RequestId {
@@ -2124,7 +2139,7 @@ fn explicit_clear_keeps_dispatch_available_and_preserves_edits_during_blocked_di
     let measurer = crate::draw::TextMeasurer::default();
     let mut session = SessionState::new(Some(options.clone()));
     let mut persistence = PersistenceController::start_for_test().unwrap();
-    let mut transaction = ExplicitSessionTransaction::new(
+    let mut transaction = SessionCommandTransaction::new(
         SessionCommand::Clear,
         session.target_epoch(),
         input.session_interaction_state(),
@@ -2205,7 +2220,7 @@ fn explicit_open_rejects_a_completion_after_target_epoch_changes() {
     let measurer = crate::draw::TextMeasurer::default();
     let mut session = SessionState::new(Some(options));
     let mut persistence = PersistenceController::start_for_test().unwrap();
-    let mut transaction = ExplicitSessionTransaction::new(
+    let mut transaction = SessionCommandTransaction::new(
         SessionCommand::Open(target.session_file_path()),
         session.target_epoch(),
         input.session_interaction_state(),
@@ -2337,7 +2352,7 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
                     stored_session::SaveAsOverwrite::Deny,
                 ),
             };
-            let mut transaction = ExplicitSessionTransaction::new(
+            let mut transaction = SessionCommandTransaction::new(
                 command,
                 session.target_epoch(),
                 input.session_interaction_state(),
@@ -2415,6 +2430,61 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
                     matches!(&input.state, DrawingState::TextInput { buffer, .. } if buffer == "x")
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn actual_corrupt_load_outcomes_publish_critical_preservation_notices() {
+    for restore in [false, true] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let mut options =
+            stored_session::SessionOptions::new(temp.path().to_path_buf(), "corrupt-toast");
+        options.persist_transparent = true;
+        if restore {
+            stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
+            std::fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
+        }
+        std::fs::write(options.session_file_path(), b"unreadable primary").unwrap();
+        let outcome = stored_session::load_snapshot_with_outcome(&options).unwrap();
+        if restore {
+            assert!(matches!(
+                outcome,
+                stored_session::LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+            ));
+        } else {
+            assert!(matches!(
+                outcome,
+                stored_session::LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+            ));
+        }
+        let mut input = test_input_state();
+        apply_load_outcome(
+            &mut input,
+            &crate::draw::TextMeasurer::default(),
+            outcome,
+            &options,
+            "regression",
+        )
+        .unwrap();
+        let toast = input.active_toast().unwrap();
+        assert_eq!(toast.priority, crate::input::state::ToastPriority::Critical);
+        assert_eq!(toast.duration_ms, 20_000);
+        assert!(
+            toast.message.contains(
+                &stored_session::append_path_suffix(&options.session_file_path(), ".corrupt-1")
+                    .display()
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            input.boards.active_frame().shapes.len(),
+            usize::from(restore)
+        );
+        if restore {
+            assert!(toast.message.contains("Recent changes may be missing"));
+        } else {
+            assert!(toast.message.contains("no backup could be restored"));
         }
     }
 }

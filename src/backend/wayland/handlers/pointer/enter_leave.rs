@@ -13,6 +13,11 @@ impl WaylandState {
         event: &PointerEvent,
         routed: RoutedInput,
     ) {
+        self.pointer.reconcile_contacts(
+            &self.input_state,
+            self.zoom.panning,
+            self.toolbar_drag.is_moving() || self.toolbar_drag.item_dragging(),
+        );
         let on_toolbar = routed.surface == InputSurface::Toolbar;
         let preview_was_eligible = self.mouse_tool_preview_eligible();
         debug!(
@@ -59,7 +64,10 @@ impl WaylandState {
             self.input_state.clear_chrome_hover();
         }
         self.update_pointer_cursor(on_toolbar, conn);
-        if routed.inline_toolbars && routed.surface == InputSurface::Canvas {
+        if routed.inline_toolbars
+            && routed.surface == InputSurface::Canvas
+            && !self.pointer.contact_motion().skips_inline_strip()
+        {
             self.inline_toolbar_motion(event.position);
         }
         if preview_was_eligible != self.mouse_tool_preview_eligible() {

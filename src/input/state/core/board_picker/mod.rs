@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub(crate) mod appearance;
 mod layout;
 mod panel;
@@ -9,7 +7,6 @@ mod state;
 use std::time::Duration;
 
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
-use crate::input::runtime_contrast_pen_color;
 
 pub use panel::BoardPickerPanel;
 
@@ -65,7 +62,6 @@ const PAGE_PANEL_MAX_ROWS: usize = 3;
 const PAGE_PANEL_HEADER_HEIGHT: f64 = 32.0;
 const PAGE_PANEL_ADD_BUTTON_HEIGHT: f64 = 24.0;
 const PAGE_PANEL_ADD_BUTTON_GAP: f64 = 8.0;
-pub(crate) const PAGE_HEADER_ICON_SIZE: f64 = 12.0;
 pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 14.0;
 pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 5.0;
 pub(crate) const PAGE_NAME_HEIGHT: f64 = 14.0;
@@ -236,10 +232,6 @@ fn color_to_hex(color: Color) -> String {
     )
 }
 
-fn contrast_color(background: Color) -> Color {
-    runtime_contrast_pen_color(background)
-}
-
 const BOARD_PALETTE: [Color; 11] = [
     RED,
     GREEN,
@@ -347,29 +339,5 @@ mod tests {
         };
 
         assert_eq!(color_to_hex(color), "#336699");
-    }
-
-    #[test]
-    fn contrast_color_prefers_black_for_light_backgrounds() {
-        let contrast = contrast_color(Color {
-            r: 0.9,
-            g: 0.9,
-            b: 0.9,
-            a: 1.0,
-        });
-
-        assert_eq!(contrast, crate::domain::color::PALETTE_BLACK);
-    }
-
-    #[test]
-    fn contrast_color_prefers_white_for_dark_backgrounds() {
-        let contrast = contrast_color(Color {
-            r: 0.1,
-            g: 0.1,
-            b: 0.1,
-            a: 1.0,
-        });
-
-        assert_eq!(contrast, crate::domain::color::PALETTE_WHITE);
     }
 }

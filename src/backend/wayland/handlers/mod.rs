@@ -42,3 +42,6 @@ mod tablet;
 mod text_input;
 mod touch;
 mod xdg;
+
+#[cfg(test)]
+pub(in crate::backend::wayland) mod test_support;

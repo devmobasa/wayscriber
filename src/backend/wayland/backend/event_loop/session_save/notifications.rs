@@ -156,10 +156,7 @@ pub(in crate::backend::wayland::backend::event_loop) fn notify_session_failure(
     notification::send_notification_with_timeout_async(
         &state.tokio_handle,
         "Failed to Save Session".to_string(),
-        format!(
-            "Drawings may not persist. Raise Session > Max file size, remove images, or disable persisted history. Details: {}",
-            err
-        ),
+        session_failure_text(err, true),
         Some("dialog-error".to_string()),
         SESSION_SAVE_NOTIFICATION_TIMEOUT_MS,
     );
@@ -177,11 +174,11 @@ pub(super) fn notify_persistence_worker_failure(state: &WaylandState, err: &anyh
     );
 }
 
-pub(super) fn show_session_failure_toast(state: &mut WaylandState) {
+pub(super) fn show_session_failure_toast(state: &mut WaylandState, error: &anyhow::Error) {
     state.input_state.push_toast(
         ToastPriority::Action,
         "session.save",
-        Toast::warning("Session save failed; drawings may not restore. Check max_file_size_mb.")
+        Toast::warning(session_failure_text(error, false))
             .action("Settings", Action::OpenConfigurator)
             .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
     );
@@ -199,6 +196,51 @@ pub(super) fn show_persistence_worker_failure_toast(state: &mut WaylandState) {
     );
 }
 
+/// Advice follows the typed storage error and whether shutdown wrote recovery.
+pub(super) fn session_failure_text(error: &anyhow::Error, shutdown: bool) -> String {
+    if let Some(saved) = error.downcast_ref::<super::final_save::RefusedDrawingsSaved>() {
+        let kept = match &saved.recovery {
+            Some(recovery) => format!(
+                "were saved to {} instead, in its recovery file {} because they exceed the session size limit",
+                saved.saved_to.display(),
+                recovery.display()
+            ),
+            None => format!("were saved to {} instead", saved.saved_to.display()),
+        };
+        return format!(
+            "New drawings were not written to {} and {kept}. Open that file to continue them.",
+            saved.session.display()
+        );
+    }
+    if let Some(failure) = error.downcast_ref::<session::SavePayloadTooLarge>() {
+        let advice = match failure.limit {
+            session::SaveLimitExceeded::WrittenSize { .. } => {
+                "Raise Settings > Session > Max file size, or remove images."
+            }
+            session::SaveLimitExceeded::ExpandedSize { .. } => {
+                "Reduce images or undo history to fit the expanded session safety limit."
+            }
+        };
+        let saved = failure
+            .recovery_path
+            .as_ref()
+            .map(|path| {
+                format!(
+                    "Drawings were preserved in the recovery file {}. ",
+                    path.display()
+                )
+            })
+            .unwrap_or_default();
+        return format!("{saved}Session exceeds its size limit. {advice} Details: {error}");
+    }
+    let advice = if shutdown {
+        "Check session files, disk space and permissions."
+    } else {
+        "Check session files, disk space and permissions, or use Save As to keep the current drawings."
+    };
+    format!("Session save failed. {advice} Details: {error}")
+}
+
 fn suggested_limit_mb(projected_written_size: u64, current_limit_bytes: u64) -> u64 {
     const MIB: u64 = 1024 * 1024;
     let projected_mb = projected_written_size.div_ceil(MIB);
@@ -214,4 +256,54 @@ fn config_path_display() -> String {
     Config::get_config_path()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn real_size_failures_name_the_limit_and_durable_recovery_without_save_as_advice() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let mut options = session::SessionOptions::new(temp.path().to_path_buf(), "size-notice");
+        options.persist_transparent = true;
+        options.max_file_size_bytes = 1;
+        let measurer = crate::draw::TextMeasurer::default();
+        let mut input = crate::input::InputState::from_config(&Config::default());
+        input.on_mouse_press(crate::input::MouseButton::Left, 300, 300);
+        input.on_mouse_motion(400, 400);
+        input.on_mouse_release(crate::input::MouseButton::Left, 400, 400);
+        let snapshot = input
+            .snapshot_for_persistence_with(&measurer, &options)
+            .unwrap();
+        let autosave =
+            session::save_snapshot_autosave_with_report(&snapshot, &options).unwrap_err();
+        let notice = session_failure_text(&autosave, false);
+        assert!(notice.contains("Max file size"));
+        assert!(!notice.contains("Save As"));
+        let shutdown = session::save_snapshot_with_report(&snapshot, &options).unwrap_err();
+        assert!(options.recovery_file_path().is_file());
+        let notice = session_failure_text(&shutdown, true);
+        assert!(notice.contains("preserved in the recovery file"));
+        assert!(!notice.contains("may not persist"));
+        assert!(!notice.contains("Save As"));
+        let expanded: anyhow::Error = session::SavePayloadTooLarge {
+            limit: session::SaveLimitExceeded::ExpandedSize {
+                raw_size: 200,
+                max_expanded_size: 100,
+            },
+            recovery_path: None,
+            raw_size: 200,
+            written_size: 10,
+            compressed: true,
+        }
+        .into();
+        let notice = session_failure_text(&expanded, false);
+        assert!(notice.contains("Reduce images or undo history"));
+        assert!(!notice.contains("Max file size"));
+        assert!(!notice.contains("Save As"));
+        let generic = anyhow::anyhow!("disk full");
+        assert!(session_failure_text(&generic, false).contains("Save As"));
+        assert!(!session_failure_text(&generic, true).contains("Save As"));
+    }
 }

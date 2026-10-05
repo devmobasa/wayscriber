@@ -240,6 +240,20 @@ mod load {
     }
 
     /// A saved remembered session and a saved configured home.
+    /// A session file as this build writes one with tool settings and no ink.
+    fn blank_session_bytes(dir: &std::path::Path) -> Vec<u8> {
+        let scratch = named_options(dir, "blank");
+        let snapshot = stored_session::SessionSnapshot {
+            active_board_id: "transparent".to_string(),
+            boards: Vec::new(),
+            tool_state: Some(stored_session::ToolStateSnapshot::from_config(
+                &crate::config::Config::default(),
+            )),
+        };
+        stored_session::save_snapshot(&snapshot, &scratch).unwrap();
+        std::fs::read(scratch.session_file_path()).unwrap()
+    }
+
     fn sessions() -> Sessions {
         let temp = crate::test_temp::tempdir().unwrap();
         let remembered = named_options(temp.path(), "remembered");
@@ -355,54 +369,6 @@ mod load {
     }
 
     #[test]
-    fn a_session_deleted_before_a_retry_is_checked_again() {
-        let mut sessions = sessions();
-        let path = sessions.remembered.session_file_path();
-        let home = sessions.home.clone();
-        // The first attempt fails as an I/O error would, before the file goes.
-        let failed = load_output_session(
-            sessions.remembered.clone(),
-            Some(&path),
-            Some(home.clone()),
-            |_| Err(anyhow::anyhow!("session load failed")),
-        );
-        assert!(failed.is_err());
-        std::fs::remove_file(&path).unwrap();
-
-        // The retry first saves the current session, as an output transition
-        // does; a save into the remembered session would recreate it.
-        let remembered = sessions.remembered.clone();
-        let may_save = may_save_before_output_load(&remembered, Some(&path), |operation| {
-            sessions.persistence.run(0, operation)
-        })
-        .unwrap();
-        if may_save {
-            stored_session::save_snapshot(&sample_snapshot(), &remembered).unwrap();
-        }
-        let load = sessions.load(Some(home)).unwrap();
-
-        assert!(!may_save);
-        sessions.assert_went_home(load);
-    }
-
-    #[test]
-    fn only_an_unusable_remembered_session_holds_back_the_save() {
-        let mut sessions = sessions();
-        let path = sessions.remembered.session_file_path();
-        let remembered = sessions.remembered.clone();
-        let mut run = |operation| sessions.persistence.run(0, operation);
-
-        assert!(may_save_before_output_load(&remembered, Some(&path), &mut run).unwrap());
-        // Another session is saved as before, without a check.
-        assert!(
-            may_save_before_output_load(&remembered, None, |_| {
-                panic!("no check runs for a session that is not remembered")
-            })
-            .unwrap()
-        );
-    }
-
-    #[test]
     fn without_persistence_home_has_nothing_to_load() {
         let mut sessions = sessions();
         std::fs::remove_file(sessions.remembered.session_file_path()).unwrap();
@@ -433,5 +399,267 @@ mod load {
         };
         assert_eq!(options.target, remembered.target);
         assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    }
+
+    #[test]
+    fn a_cleared_remembered_primary_cannot_revive_ink_or_quarantine_suppressed_bytes() {
+        for primary_kind in ["ink", "corrupt", "blank"] {
+            let mut sessions = sessions();
+            let options = sessions.remembered.clone();
+            let primary = options.session_file_path();
+            let ink = std::fs::read(&primary).unwrap();
+            let blank = blank_session_bytes(sessions.temp.path());
+            let bytes = match primary_kind {
+                "ink" => ink.as_slice(),
+                "corrupt" => b"suppressed corrupt primary".as_slice(),
+                "blank" => blank.as_slice(),
+                _ => unreachable!(),
+            };
+            std::fs::write(&primary, bytes).unwrap();
+            std::fs::write(options.backup_file_path(), &ink).unwrap();
+            std::fs::write(options.recovery_file_path(), &ink).unwrap();
+            let clear = options.clear_marker_file_path();
+            std::fs::write(&clear, b"cleared").unwrap();
+            let modified = |seconds| {
+                std::fs::FileTimes::new().set_modified(
+                    std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds),
+                )
+            };
+            std::fs::File::open(&primary)
+                .unwrap()
+                .set_times(modified(10))
+                .unwrap();
+            std::fs::File::open(&clear)
+                .unwrap()
+                .set_times(modified(20))
+                .unwrap();
+            for sidecar in [options.backup_file_path(), options.recovery_file_path()] {
+                std::fs::File::open(sidecar)
+                    .unwrap()
+                    .set_times(modified(10))
+                    .unwrap();
+            }
+            let home = sessions.home.clone();
+
+            let load = sessions.load(Some(home)).unwrap();
+
+            let OutputSessionLoad::Loaded(_, outcome) = load else {
+                panic!("cleared {primary_kind} must stay on the remembered target: {load:?}");
+            };
+            assert!(
+                !outcome.has_board_data(),
+                "cleared {primary_kind}: {outcome:?}"
+            );
+            if primary_kind == "blank" {
+                assert!(matches!(outcome, LoadSnapshotOutcome::Loaded(_)));
+            } else {
+                assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+            }
+            assert_eq!(std::fs::read(&primary).unwrap(), bytes);
+            assert_eq!(std::fs::read(options.backup_file_path()).unwrap(), ink);
+            assert_eq!(std::fs::read(options.recovery_file_path()).unwrap(), ink);
+            assert!(!stored_session::append_path_suffix(&primary, ".corrupt-1").exists());
+        }
+    }
+
+    #[test]
+    fn a_corrupt_remembered_primary_restores_its_backup_and_keeps_diagnostics() {
+        let mut sessions = sessions();
+        let options = &sessions.remembered;
+        let primary = options.session_file_path();
+        let saved = std::fs::read(&primary).unwrap();
+        std::fs::write(options.backup_file_path(), &saved).unwrap();
+        std::fs::write(options.recovery_file_path(), &saved).unwrap();
+        std::fs::write(options.backup_recovery_marker_file_path(), b"recoverable").unwrap();
+        std::fs::write(
+            options.recovery_recoverable_marker_file_path(),
+            b"recoverable",
+        )
+        .unwrap();
+        let bytes = b"broken primary".as_slice();
+        std::fs::write(&primary, bytes).unwrap();
+        let modified = |seconds| {
+            std::fs::FileTimes::new().set_modified(
+                std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds),
+            )
+        };
+        std::fs::File::open(options.recovery_file_path())
+            .unwrap()
+            .set_times(modified(10))
+            .unwrap();
+        std::fs::File::open(&primary)
+            .unwrap()
+            .set_times(modified(20))
+            .unwrap();
+        let home = sessions.home.clone();
+
+        let load = sessions.load(Some(home)).unwrap();
+        let OutputSessionLoad::Loaded(
+            loaded_options,
+            LoadSnapshotOutcome::RestoredAfterCorruption { snapshot, .. },
+        ) = load
+        else {
+            panic!("expected restored remembered session");
+        };
+        assert_eq!(loaded_options.target, sessions.remembered.target);
+        assert!(snapshot.has_board_data());
+        assert_eq!(
+            std::fs::read(stored_session::append_path_suffix(&primary, ".corrupt-1")).unwrap(),
+            bytes
+        );
+        let options = &sessions.remembered;
+        assert_eq!(std::fs::read(options.session_file_path()).unwrap(), saved);
+        assert_eq!(std::fs::read(options.backup_file_path()).unwrap(), saved);
+        assert_eq!(std::fs::read(options.recovery_file_path()).unwrap(), saved);
+    }
+
+    #[test]
+    fn a_remembered_session_goes_home_when_oversized_corruption_restore_leaves_no_primary() {
+        let mut sessions = sessions();
+        let mut snapshot = sample_snapshot();
+        snapshot.boards[0].pages.pages[0].add_shape(crate::draw::Shape::Freehand {
+            points: (0..40_000)
+                .map(|index| (index % 1000, (index * 17) % 800))
+                .collect(),
+            color: crate::draw::WHITE,
+            thick: 2.0,
+        });
+        let mut scratch = named_options(sessions.temp.path(), "large-recovery");
+        scratch.compression = stored_session::CompressionMode::Off;
+        stored_session::save_snapshot(&snapshot, &scratch).unwrap();
+        let saved = std::fs::read(scratch.session_file_path()).unwrap();
+
+        // This valid filename leaves room for the sidecars, but not the atomic
+        // diagnostic copy's temporary name. Its failed copy moves the corrupt
+        // primary aside, exercising the real fallback without filling the disk.
+        let long_name = format!("{}.wayscriber-session", "a".repeat(203));
+        sessions
+            .remembered
+            .set_named_file_target(sessions.temp.path().join(long_name));
+        sessions.remembered.max_file_size_bytes = 1024 * 1024;
+        assert!(saved.len() as u64 > sessions.remembered.max_file_size_bytes);
+        let primary = sessions.remembered.session_file_path();
+        let recovery = sessions.remembered.recovery_file_path();
+        let corrupt_bytes = b"broken primary";
+        std::fs::write(&primary, corrupt_bytes).unwrap();
+        std::fs::write(&recovery, &saved).unwrap();
+        std::fs::write(
+            sessions.remembered.recovery_recoverable_marker_file_path(),
+            b"recoverable",
+        )
+        .unwrap();
+        // Older marked recovery forces the corrupt-primary restoration path,
+        // rather than loading a newer recovery before examining the primary.
+        for (path, seconds) in [(&primary, 20), (&recovery, 10)] {
+            std::fs::File::open(path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(
+                    std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds),
+                ))
+                .unwrap();
+        }
+        let home = sessions.home.clone();
+
+        let load = sessions.load(Some(home)).unwrap();
+
+        let error = sessions.assert_went_home(load);
+        assert!(
+            error
+                .downcast_ref::<stored_session::MissingNamedSessionFile>()
+                .is_some(),
+            "{error:#}"
+        );
+        assert!(!primary.exists());
+        assert_eq!(std::fs::read(&recovery).unwrap(), saved);
+        assert_eq!(
+            std::fs::read(stored_session::append_path_suffix(&primary, ".corrupt-1")).unwrap(),
+            corrupt_bytes
+        );
+    }
+
+    #[test]
+    fn remembered_recovery_and_marked_backup_survive_the_next_fitting_save() {
+        for source in ["newer recovery", "marked backup"] {
+            let mut sessions = sessions();
+            let mut options = sessions.remembered.clone();
+            let mut newest = sample_snapshot();
+            newest.boards[0].pages.pages[0].add_shape(crate::draw::Shape::Line {
+                x1: 10,
+                y1: 10,
+                x2: 71,
+                y2: 20,
+                color: crate::draw::Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                thick: 2.0,
+            });
+            if source == "newer recovery" {
+                options.max_file_size_bytes = 64;
+                stored_session::save_snapshot(&newest, &options).unwrap_err();
+                let modified = |seconds| {
+                    std::fs::FileTimes::new().set_modified(
+                        std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds),
+                    )
+                };
+                std::fs::File::open(options.session_file_path())
+                    .unwrap()
+                    .set_times(modified(10))
+                    .unwrap();
+                std::fs::File::open(options.recovery_file_path())
+                    .unwrap()
+                    .set_times(modified(20))
+                    .unwrap();
+                options.max_file_size_bytes = sessions.remembered.max_file_size_bytes;
+            } else {
+                stored_session::save_snapshot(&newest, &options).unwrap();
+                let blank = stored_session::SessionSnapshot {
+                    active_board_id: "transparent".into(),
+                    boards: Vec::new(),
+                    tool_state: None,
+                };
+                // Tool-state-only blank retains a live accidental-blank marker.
+                let mut blank = blank;
+                blank.tool_state = Some(stored_session::ToolStateSnapshot::from_config(
+                    &crate::config::Config::default(),
+                ));
+                stored_session::save_snapshot(&blank, &options).unwrap();
+            }
+            let home = sessions.home.clone();
+
+            let load = sessions.load(Some(home)).unwrap();
+
+            let OutputSessionLoad::Loaded(_, outcome) = load else {
+                panic!("{source} must continue the remembered session: {load:?}");
+            };
+            let snapshot = match outcome {
+                LoadSnapshotOutcome::LoadedFromRecovery(snapshot) if source == "newer recovery" => {
+                    snapshot
+                }
+                LoadSnapshotOutcome::LoadedFromBackup(snapshot) if source == "marked backup" => {
+                    snapshot
+                }
+                other => panic!("{source} must be restored, got {other:?}"),
+            };
+            assert_eq!(
+                snapshot.boards[0].pages.pages[0].shapes.len(),
+                2,
+                "{source}"
+            );
+            stored_session::save_snapshot(&snapshot, &options).unwrap();
+            let OutputSessionLoad::Loaded(_, outcome) = sessions.load(None).unwrap() else {
+                panic!("the fitting save must still continue the remembered file");
+            };
+            let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+                panic!("{outcome:?}");
+            };
+            assert_eq!(
+                snapshot.boards[0].pages.pages[0].shapes.len(),
+                2,
+                "{source} ink survived recovery cleanup"
+            );
+        }
     }
 }

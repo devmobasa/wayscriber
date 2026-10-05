@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use std::collections::BTreeSet;
 use std::fs;
 
@@ -16,14 +16,22 @@ pub fn clear_tool_state(options: &SessionOptions) -> Result<ClearToolStateOutcom
     let mut found_session = false;
     let mut cleared = false;
     let mut preserved_board_data = false;
+    let mut edited_paths = Vec::new();
 
     for edit_options in targets {
-        match clear_tool_state_for_target(&edit_options)? {
+        match clear_tool_state_for_target(&edit_options).with_context(|| {
+            format!(
+                "Saved tool-state edit stopped at {}; targets already edited: {:?}",
+                edit_options.session_file_path().display(),
+                edited_paths
+            )
+        })? {
             ClearToolStateOutcome::NoSession => {}
             ClearToolStateOutcome::NoToolState => found_session = true,
             ClearToolStateOutcome::Cleared {
                 preserved_board_data: target_preserved_board_data,
             } => {
+                edited_paths.push(edit_options.session_file_path());
                 found_session = true;
                 cleared = true;
                 preserved_board_data |= target_preserved_board_data;
@@ -47,7 +55,14 @@ fn clear_tool_state_for_target(edit_options: &SessionOptions) -> Result<ClearToo
         LoadSnapshotOutcome::Loaded(snapshot)
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => *snapshot,
-        LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => {
+        LoadSnapshotOutcome::RestoredAfterCorruption { corrupt_copy, .. }
+        | LoadSnapshotOutcome::EmptyAfterCorruption { corrupt_copy } => {
+            return Err(anyhow!(
+                "the session was unreadable; diagnostic bytes were preserved at {}. No saved tool-state edit was performed for this target",
+                corrupt_copy.display()
+            ));
+        }
+        LoadSnapshotOutcome::Empty => {
             return Ok(ClearToolStateOutcome::NoSession);
         }
         LoadSnapshotOutcome::NonRegularArtifact { path } => {

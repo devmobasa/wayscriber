@@ -108,6 +108,7 @@ fn recent_session_snapshots(
 
 mod dialog;
 mod home;
+mod queued;
 
 pub(in crate::backend::wayland::state) use dialog::SessionFileDialogController;
 pub(super) use dialog::{SessionFileDialogMode, ensure_save_as_extension};
@@ -427,6 +428,19 @@ impl WaylandState {
                     self.set_session_toolbar_info(format!("Opened session {name}"));
                 }
             }
+            SessionCommandReport::Output {
+                abandoned,
+                too_large,
+                first_output_resolved,
+            } => {
+                if let Some(too_large) = too_large {
+                    self.protect_too_large_session(too_large);
+                }
+                if let Some((remembered, reason)) = abandoned {
+                    self.notify_remembered_session_abandoned(&remembered, &reason);
+                }
+                self.announce_launch_restore(first_output_resolved);
+            }
             SessionCommandReport::Home => self.finish_open_home_session(),
             SessionCommandReport::SaveAs(report) => {
                 self.clear_toolbar_save_as_overwrite_prompt();
@@ -511,6 +525,7 @@ impl WaylandState {
             return;
         }
         let prefix = match command {
+            SessionCommand::Output { .. } => return self.fail_output_session_command(error),
             SessionCommand::Open(_) => "Open session failed",
             SessionCommand::OpenHome(_) => "Return to the home session failed",
             SessionCommand::SaveAs(..) | SessionCommand::CheckOverwrite(_) => "Save session failed",
@@ -520,6 +535,39 @@ impl WaylandState {
             SessionCommand::Forget(_) => "Session file missing and recent-session cleanup failed",
         };
         self.report_session_command_error(prefix, error);
+    }
+
+    fn fail_output_session_command(&mut self, error: &AnyhowError) {
+        let preservation_failed = error
+            .downcast_ref::<crate::session::CorruptArtifactPreservationFailed>()
+            .is_some();
+        let source_unwritable = error
+            .downcast_ref::<crate::backend::wayland::session::SourceWriteRefused>()
+            .is_some();
+        let backoff = self.output_transition_failure_backoff();
+        if !crate::backend::wayland::session::driver::defer_failed_output(
+            &mut self.session,
+            error,
+            std::time::Instant::now(),
+            backoff,
+        ) {
+            log::debug!("Output session transition requeued after guard abort: {error:#}");
+            return;
+        }
+        log::warn!("Output session transition deferred after persistence failure: {error:#}");
+        if preservation_failed {
+            self.notify_session_load_failure(error);
+        } else if source_unwritable {
+            if self.session.mark_output_transition_notified() {
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "session.save",
+                    Toast::error(format!("Drawings kept on screen: {error:#}")).duration_ms(20_000),
+                );
+            }
+        } else if self.session.is_loaded() {
+            self.notify_output_transition_deferred();
+        }
     }
 
     pub(in crate::backend::wayland) fn report_session_command_error(
@@ -621,74 +669,4 @@ fn dialog_frame_accepted(phase: DialogFramePhase, outcome: RenderOutcome) -> boo
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{DialogFramePhase, dialog_frame_accepted, populate_session_snapshot};
-    use crate::backend::wayland::session::{SessionHome, SessionLaunch};
-    use crate::backend::wayland::state::RenderOutcome;
-    use crate::backend::wayland::state::toolbar::ToolbarSnapshot;
-    use crate::session::SessionTarget;
-
-    #[test]
-    fn the_session_menu_learns_home_and_whether_it_is_active() {
-        let input = crate::input::state::test_support::make_test_input_state();
-        let mut snapshot = ToolbarSnapshot::from_input_with_bindings(&input, Default::default());
-        let home = std::path::PathBuf::from("/sessions/home.wayscriber-session");
-        let away = SessionHome::new(
-            SessionLaunch {
-                home: crate::backend::wayland::session::HomeSession::Named(home),
-                preferred: None,
-                from_daemon: true,
-            },
-            None,
-            SessionTarget::NamedFile("/sessions/b.wayscriber-session".into()),
-        );
-
-        populate_session_snapshot(&mut snapshot, None, &away);
-
-        assert_eq!(
-            snapshot.home_session_name.as_deref(),
-            Some("home.wayscriber-session")
-        );
-        assert!(!snapshot.at_home_session);
-    }
-
-    #[test]
-    fn dialog_entry_requires_a_committed_frame() {
-        assert!(dialog_frame_accepted(
-            DialogFramePhase::Entry,
-            RenderOutcome::Committed {
-                keep_rendering: false
-            }
-        ));
-        assert!(dialog_frame_accepted(
-            DialogFramePhase::Entry,
-            RenderOutcome::Committed {
-                keep_rendering: true
-            }
-        ));
-        assert!(!dialog_frame_accepted(
-            DialogFramePhase::Entry,
-            RenderOutcome::BuffersInFlight
-        ));
-    }
-
-    #[test]
-    fn dialog_restoration_accepts_a_deferred_frame() {
-        assert!(dialog_frame_accepted(
-            DialogFramePhase::Restoration,
-            RenderOutcome::Committed {
-                keep_rendering: false
-            }
-        ));
-        assert!(dialog_frame_accepted(
-            DialogFramePhase::Restoration,
-            RenderOutcome::Committed {
-                keep_rendering: true
-            }
-        ));
-        assert!(dialog_frame_accepted(
-            DialogFramePhase::Restoration,
-            RenderOutcome::BuffersInFlight
-        ));
-    }
-}
+mod tests;

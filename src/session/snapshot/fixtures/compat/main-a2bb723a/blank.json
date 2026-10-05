@@ -1,0 +1,29 @@
+{
+  "version": 7,
+  "last_modified": "2026-10-05T12:32:40Z",
+  "active_board_id": "transparent",
+  "tool_state": {
+    "current_color": {
+      "r": 0.0,
+      "g": 0.0,
+      "b": 1.0,
+      "a": 1.0
+    },
+    "current_thickness": 3.0,
+    "eraser_size": 12.0,
+    "eraser_kind": "Circle",
+    "eraser_mode": "brush",
+    "blur_style": "gaussian",
+    "marker_opacity": null,
+    "fill_enabled": null,
+    "tool_override": null,
+    "current_font_size": 24.0,
+    "text_background_enabled": false,
+    "arrow_length": 20.0,
+    "arrow_angle": 30.0,
+    "arrow_head_at_end": null,
+    "arrow_label_enabled": null,
+    "polygon_sides": 5,
+    "board_previous_color": null
+  }
+}

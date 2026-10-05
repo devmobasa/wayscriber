@@ -633,13 +633,15 @@ impl InputState {
         true
     }
 
-    pub(crate) fn board_appearance_drag_to(&mut self, x: i32, y: i32) -> bool {
-        let dragging = self
-            .board_picker
+    pub(crate) fn board_appearance_is_size_dragging(&self) -> bool {
+        self.board_picker
             .appearance
             .as_ref()
-            .is_some_and(|edit| edit.size_dragging);
-        if !dragging {
+            .is_some_and(|edit| edit.size_dragging)
+    }
+
+    pub(crate) fn board_appearance_drag_to(&mut self, x: i32, y: i32) -> bool {
+        if !self.board_appearance_is_size_dragging() {
             return false;
         }
         let (Some(frame), Some(row)) = (
@@ -682,11 +684,6 @@ impl InputState {
             self.mark_board_appearance_region();
         }
         true
-    }
-
-    pub(crate) fn board_appearance_click(&mut self, x: i32, y: i32) -> bool {
-        let measurer = TextMeasurer::default();
-        self.board_appearance_click_with_measurer(&measurer, x, y)
     }
 
     pub(crate) fn board_appearance_click_with_measurer(

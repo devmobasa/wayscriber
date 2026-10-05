@@ -1,8 +1,47 @@
 use std::time::Instant;
 
 use super::*;
+use crate::backend::wayland::state::contact_owner::{InlinePress, inline_primary_press};
 
 impl WaylandState {
+    /// Clears hover while a canvas contact crosses the inline strip.
+    pub(in crate::backend::wayland) fn clear_inline_contact_hover(&mut self) {
+        let changed = self.toolbar_chrome.clear_inline_hover();
+        self.toolbar_chrome.set_pointer_over_toolbar(false);
+        if changed {
+            self.mark_inline_toolbar_full_damage();
+        }
+    }
+
+    pub(in crate::backend::wayland) fn inline_toolbar_contains(
+        &self,
+        position: (f64, f64),
+    ) -> bool {
+        self.toolbar_chrome.inline_toolbars()
+            && self.toolbar.is_visible()
+            && self.toolbar.is_top_visible()
+            && self.toolbar_chrome.inline_contains(position)
+    }
+
+    pub(in crate::backend::wayland) fn inline_toolbar_primary_press_or_strip(
+        &mut self,
+        position: (f64, f64),
+        conn: Option<&wayland_client::Connection>,
+        qh: Option<&wayland_client::QueueHandle<Self>>,
+    ) -> bool {
+        let control = self.inline_toolbar_press(position, conn, qh);
+        let over_strip = self.inline_toolbar_contains(position);
+        let card = self
+            .onboarding_card_press_at(position.0, position.1)
+            .is_some();
+        let press = inline_primary_press(control, over_strip, card);
+        if press == Some(InlinePress::Strip) {
+            self.toolbar_chrome.set_pointer_over_toolbar(true);
+            self.dismiss_top_toolbar_menus();
+        }
+        press.is_some()
+    }
+
     pub(in crate::backend::wayland) fn inline_toolbar_hit_at(
         &self,
         position: (f64, f64),

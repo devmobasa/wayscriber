@@ -9,11 +9,14 @@ use crate::backend::wayland::{
         transfer,
     },
 };
-use crate::input::state::ClipboardPasteRequest;
+use crate::input::InputState;
+use crate::input::state::{ClipboardFingerprint, ClipboardPasteRequest};
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
 mod fallback_save;
+#[cfg(test)]
+mod probe_tests;
 mod session_paste;
 
 use session_paste::{PastePersistenceDecision, SessionPasteWarning};
@@ -161,16 +164,7 @@ impl WaylandState {
         self.focus
             .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
 
-        let local_selection = self.input_state.selection_clipboard_snapshot();
-        let pending_shapes =
-            local_selection.shapes_for_pending_publish(request.local_selection_fallback_generation);
-        let failed_probe = local_selection
-            .failed_probe(request.local_selection_fallback_generation)
-            .map(|(generation, expected)| FailedLocalSelectionProbe {
-                generation,
-                expected,
-            });
-        let plan = transfer::plan_paste_start(request, pending_shapes, failed_probe);
+        let plan = plan_clipboard_paste_start(&self.input_state, request);
         self.apply_paste_plan(plan);
     }
 
@@ -183,9 +177,8 @@ impl WaylandState {
             active_request_id,
             completion.result.summary()
         );
-        // A fingerprint probe continues the paste decision here, where the
-        // local fallback shapes live — they must be fetched fresh, not
-        // captured before the probe ran.
+        // A fingerprint probe continues the paste decision with the local
+        // fallback as it is now.
         if let ClipboardPasteResult::SystemFingerprintProbe {
             generation,
             expected,
@@ -199,15 +192,14 @@ impl WaylandState {
                 );
                 return;
             }
-            let local_shapes = local_selection.shapes_for_fallback(generation);
-            let plan = transfer::plan_after_fingerprint_probe(
+            let action = continue_after_fingerprint_probe(
+                &mut self.input_state,
                 completion.request,
                 generation,
                 expected,
                 current,
-                local_shapes,
             );
-            self.apply_paste_plan(plan);
+            self.apply_paste_action(action);
             return;
         }
         let private_payload = match &completion.result {
@@ -232,11 +224,12 @@ impl WaylandState {
     }
 
     fn apply_paste_plan(&mut self, plan: TransferPlan<PasteAction>) {
-        for effect in plan.effects {
-            self.apply_transfer_effect(effect);
-        }
+        apply_transfer_effects(&mut self.input_state, plan.effects);
+        self.apply_paste_action(plan.action);
+    }
 
-        match plan.action {
+    fn apply_paste_action(&mut self, action: PasteAction) {
+        match action {
             PasteAction::UseLocalShapes {
                 request,
                 shapes,
@@ -437,14 +430,6 @@ impl WaylandState {
         }
     }
 
-    fn apply_transfer_effect(&mut self, effect: TransferEffect) {
-        match effect {
-            TransferEffect::SupersedeLocalGeneration { generation } => self
-                .input_state
-                .mark_selection_clipboard_superseded_for_generation(Some(generation)),
-        }
-    }
-
     fn paste_fresh_local_fallback_or_warn(
         &mut self,
         request: &ClipboardPasteRequest,
@@ -590,6 +575,61 @@ fn failed_clipboard_paste_completion(
     ClipboardPasteCompletion {
         request,
         result: ClipboardPasteResult::ClipboardError(reason.to_string()),
+    }
+}
+
+/// The first step of a paste: shapes still being published are pasted
+/// directly, a failed publish is probed first, and anything else reads the
+/// system clipboard.
+fn plan_clipboard_paste_start(
+    input_state: &InputState,
+    request: ClipboardPasteRequest,
+) -> TransferPlan<PasteAction> {
+    let local_selection = input_state.selection_clipboard_snapshot();
+    let pending_shapes =
+        local_selection.shapes_for_pending_publish(request.local_selection_fallback_generation);
+    let failed_probe = local_selection
+        .failed_probe(request.local_selection_fallback_generation)
+        .map(|(generation, expected)| FailedLocalSelectionProbe {
+            generation,
+            expected,
+        });
+
+    transfer::plan_paste_start(request, pending_shapes, failed_probe)
+}
+
+/// Finishes the paste decision after a fingerprint probe, with the local
+/// fallback shapes as they are now; they must not be captured before the
+/// probe ran. A changed clipboard supersedes that fallback.
+fn continue_after_fingerprint_probe(
+    input_state: &mut InputState,
+    request: ClipboardPasteRequest,
+    generation: u64,
+    expected: Option<ClipboardFingerprint>,
+    current: Option<ClipboardFingerprint>,
+) -> PasteAction {
+    let local_shapes = input_state
+        .selection_clipboard_snapshot()
+        .shapes_for_fallback(generation);
+    let plan = transfer::plan_after_fingerprint_probe(
+        request,
+        generation,
+        expected,
+        current,
+        local_shapes,
+    );
+
+    apply_transfer_effects(input_state, plan.effects);
+    plan.action
+}
+
+fn apply_transfer_effects(input_state: &mut InputState, effects: Vec<TransferEffect>) {
+    for effect in effects {
+        match effect {
+            TransferEffect::SupersedeLocalGeneration { generation } => {
+                input_state.mark_selection_clipboard_superseded_for_generation(Some(generation))
+            }
+        }
     }
 }
 

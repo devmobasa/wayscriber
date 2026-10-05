@@ -181,20 +181,6 @@ impl SessionOptions {
         }
     }
 
-    pub(crate) fn recovery_backup_file_path(&self) -> PathBuf {
-        append_path_suffix(&self.recovery_file_path(), ".bak")
-    }
-
-    pub(crate) fn corrupt_artifact_backup_file_path(&self, artifact_path: &Path) -> PathBuf {
-        if artifact_path == self.session_file_path().as_path() {
-            return self.backup_file_path();
-        }
-        if artifact_path == self.recovery_file_path().as_path() {
-            return self.recovery_backup_file_path();
-        }
-        replace_path_extension(artifact_path, "recovery.bak")
-    }
-
     pub fn file_prefix(&self) -> String {
         format!("session-{}", self.display_id)
     }
@@ -240,10 +226,4 @@ pub(crate) fn append_path_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut raw = OsString::from(path.as_os_str());
     raw.push(suffix);
     PathBuf::from(raw)
-}
-
-fn replace_path_extension(path: &Path, extension: &str) -> PathBuf {
-    let mut path = path.to_path_buf();
-    path.set_extension(extension);
-    path
 }

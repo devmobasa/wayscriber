@@ -1,4 +1,5 @@
 use super::compression::{DEFAULT_MAX_EXPANDED_SESSION_BYTES, compress_bytes, temp_path};
+use super::generation::{ArtifactSetView, UnreadablePolicy};
 use super::types::{
     BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
 };
@@ -7,6 +8,7 @@ use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
+use payload::PayloadStamp;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
@@ -15,26 +17,31 @@ use std::time::{Duration, Instant};
 
 const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
 
+mod estimate;
 mod payload;
 mod recovery;
 mod save_as;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use estimate::{
+    estimate_snapshot_payload, estimate_snapshot_save, estimate_snapshot_without_history_payload,
+};
 pub(super) use payload::snapshot_without_history;
 use payload::{PayloadCandidate, estimate_from_candidate, payload_candidate, payload_within_limit};
 use recovery::{
-    remove_backup_file, remove_backup_recovery_marker_file, remove_clear_marker_file,
-    remove_recoverable_artifacts_suppressed_by_clear_marker, remove_recovery_file,
-    remove_recovery_files, remove_recovery_recoverable_marker_file,
-    remove_session_file_after_clear_marker, save_recovery_snapshot, write_backup_recovery_marker,
-    write_clear_marker, write_recovery_recoverable_marker,
+    preserve_oversized_recovery, remove_backup_file, remove_backup_recovery_marker_file,
+    remove_clear_marker_file, remove_recoverable_artifacts_suppressed_by_clear_marker,
+    remove_recovery_file, remove_recovery_files, remove_recovery_recoverable_marker_file,
+    remove_session_file_after_clear_marker, write_backup_recovery_marker, write_clear_marker,
+    write_recovery_recoverable_marker,
 };
 pub(crate) use save_as::{save_snapshot_as_requires_overwrite, save_snapshot_as_with_report};
 
 mod model;
 
-use model::{HistoryFallbackStrategy, SavePayloadTooLarge, log_near_limit};
+pub(crate) use model::SavePayloadTooLarge;
+use model::{HistoryFallbackStrategy, log_near_limit};
 pub use model::{
     SaveAsOverwrite, SaveLimitExceeded, SaveSnapshotOutcome, SaveSnapshotReport,
     SnapshotPayloadEstimate, SnapshotSaveEstimate,
@@ -93,75 +100,6 @@ pub(crate) fn save_snapshot_autosave_with_report_and_clear_boundary(
 }
 
 #[allow(dead_code)]
-pub(crate) fn estimate_snapshot_save(
-    snapshot: &SessionSnapshot,
-    options: &SessionOptions,
-) -> Result<SnapshotSaveEstimate> {
-    estimate_snapshot_save_with_expanded_limit(
-        snapshot,
-        options,
-        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
-    )
-}
-
-#[allow(dead_code)]
-pub(super) fn estimate_snapshot_save_with_expanded_limit(
-    snapshot: &SessionSnapshot,
-    options: &SessionOptions,
-    max_expanded_size: u64,
-) -> Result<SnapshotSaveEstimate> {
-    let last_modified = now_rfc3339();
-    let full = payload_candidate(snapshot, options, &last_modified)?;
-    let visible_only = snapshot_without_history(snapshot);
-    let visible_without_history = payload_candidate(&visible_only, options, &last_modified)?;
-
-    Ok(SnapshotSaveEstimate {
-        full: estimate_from_candidate(&full, options, max_expanded_size),
-        visible_without_history: estimate_from_candidate(
-            &visible_without_history,
-            options,
-            max_expanded_size,
-        ),
-    })
-}
-
-#[allow(dead_code)]
-pub(crate) fn estimate_snapshot_payload(
-    snapshot: &SessionSnapshot,
-    options: &SessionOptions,
-) -> Result<SnapshotPayloadEstimate> {
-    estimate_snapshot_payload_with_expanded_limit(
-        snapshot,
-        options,
-        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
-    )
-}
-
-#[allow(dead_code)]
-pub(crate) fn estimate_snapshot_without_history_payload(
-    snapshot: &SessionSnapshot,
-    options: &SessionOptions,
-) -> Result<SnapshotPayloadEstimate> {
-    let visible_only = snapshot_without_history(snapshot);
-    estimate_snapshot_payload(&visible_only, options)
-}
-
-#[allow(dead_code)]
-pub(super) fn estimate_snapshot_payload_with_expanded_limit(
-    snapshot: &SessionSnapshot,
-    options: &SessionOptions,
-    max_expanded_size: u64,
-) -> Result<SnapshotPayloadEstimate> {
-    let last_modified = now_rfc3339();
-    let candidate = payload_candidate(snapshot, options, &last_modified)?;
-    Ok(estimate_from_candidate(
-        &candidate,
-        options,
-        max_expanded_size,
-    ))
-}
-
-#[allow(dead_code)]
 pub(super) fn save_snapshot_with_expanded_limit(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
@@ -212,13 +150,14 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     );
     match &result {
         Ok(Some(report)) => info!(
-            "Session save pipeline finished for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}",
+            "Session save pipeline finished for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}, generation={:?}",
             report.path.display(),
             save_started.elapsed(),
             report.outcome,
             report.written_size,
             report.raw_size,
-            report.compressed
+            report.compressed,
+            report.generation
         ),
         Ok(None) => info!(
             "Session save pipeline finished in {:?}: no file write needed",
@@ -342,42 +281,30 @@ fn save_snapshot_inner(
     let snapshot_has_board_data = snapshot.has_board_data();
     let contentless_clear_boundary = !snapshot_has_board_data && contentless_clear_boundary;
     let last_modified = now_rfc3339();
+    let generation = allocate_save_generation(options, history_fallback)?;
+    let stamp = PayloadStamp {
+        last_modified: &last_modified,
+        generation,
+    };
 
     let prepare_started = Instant::now();
     let prepared = match payload_within_limit(
         snapshot,
         options,
-        &last_modified,
+        stamp,
         max_expanded_size,
         history_fallback,
     ) {
         Ok(prepared) => prepared,
-        Err(err) => {
+        Err(mut err) => {
             if session_path.exists() {
                 warn!(
                     "Session save failed before replacing {}; existing session file is unchanged",
                     session_path.display()
                 );
             }
-            if err.downcast_ref::<SavePayloadTooLarge>().is_some()
-                && matches!(history_fallback, HistoryFallbackStrategy::LargestFitting)
-            {
-                match save_recovery_snapshot(snapshot, options, max_expanded_size, &last_modified) {
-                    Ok(Some(report)) => warn!(
-                        "Wrote oversized session recovery artifact to {} ({} bytes written, raw={} bytes, compression={}, outcome={:?})",
-                        report.path.display(),
-                        report.written_size,
-                        report.raw_size,
-                        report.compressed,
-                        report.outcome
-                    ),
-                    Ok(None) => {}
-                    Err(recovery_err) => warn!(
-                        "Failed to write oversized session recovery artifact {}: {}",
-                        options.recovery_file_path().display(),
-                        recovery_err
-                    ),
-                }
+            if matches!(history_fallback, HistoryFallbackStrategy::LargestFitting) {
+                preserve_oversized_recovery(&mut err, snapshot, options, max_expanded_size, stamp);
             }
             return Err(err);
         }
@@ -398,6 +325,7 @@ fn save_snapshot_inner(
 
     let Some(payload) = prepared.payload else {
         let report = SaveSnapshotReport {
+            generation,
             path: session_path.clone(),
             outcome: prepared.outcome,
             raw_size: prepared.raw_size,
@@ -406,7 +334,7 @@ fn save_snapshot_inner(
             compressed: prepared.compressed,
         };
         if matches!(prepared.outcome, SaveSnapshotOutcome::ClearedEmpty) {
-            write_clear_marker(options)?;
+            write_clear_marker(options, generation)?;
             remove_session_file_after_clear_marker(&session_path);
             remove_backup_file(options);
             remove_backup_recovery_marker_file(options);
@@ -451,7 +379,7 @@ fn save_snapshot_inner(
     let write_elapsed = write_started.elapsed();
 
     if contentless_clear_boundary {
-        write_clear_marker(options)?;
+        write_clear_marker(options, generation)?;
     }
 
     let replace_started = Instant::now();
@@ -500,10 +428,10 @@ fn save_snapshot_inner(
     }
 
     if should_mark_backup_recoverable {
-        write_backup_recovery_marker(options)?;
+        write_backup_recovery_marker(options, generation)?;
     }
     if should_mark_recovery_recoverable {
-        write_recovery_recoverable_marker(options)?;
+        write_recovery_recoverable_marker(options, generation)?;
     }
 
     replace_session_file(&tmp_path, &session_path).with_context(|| {
@@ -534,6 +462,7 @@ fn save_snapshot_inner(
     );
 
     let report = SaveSnapshotReport {
+        generation,
         path: session_path,
         outcome: prepared.outcome,
         raw_size,
@@ -580,4 +509,18 @@ fn cleanup_snapshot_artifacts_after_save(
         remove_recovery_file(options);
         remove_recovery_recoverable_marker_file(options);
     }
+}
+
+/// Called under the exclusive normal-save lock, before touching any artifact.
+fn allocate_save_generation(
+    options: &SessionOptions,
+    strategy: HistoryFallbackStrategy,
+) -> Result<Option<u64>> {
+    // Autosave can retain drawings and retry. A final save must not lose them
+    // solely because another artifact could not be read.
+    let policy = match strategy {
+        HistoryFallbackStrategy::Bounded { .. } => UnreadablePolicy::Refuse,
+        HistoryFallbackStrategy::LargestFitting => UnreadablePolicy::Warn,
+    };
+    ArtifactSetView::probe(options).next_generation(policy)
 }

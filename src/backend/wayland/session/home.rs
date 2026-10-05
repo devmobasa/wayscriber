@@ -209,28 +209,6 @@ fn is_remembered(options: &SessionOptions, remembered: Option<&Path>) -> bool {
     remembered.is_some_and(|path| options.target == SessionTarget::NamedFile(path.into()))
 }
 
-/// Whether `current` may be saved before an output's session loads. A
-/// remembered session that has not loaded and can no longer be used may not:
-/// the save would recreate it, and the load would then continue it in place
-/// of home.
-pub(in crate::backend::wayland) fn may_save_before_output_load(
-    current: &SessionOptions,
-    remembered: Option<&Path>,
-    mut run: impl FnMut(PersistenceOperation) -> Result<PersistenceOutcome>,
-) -> Result<bool> {
-    if !is_remembered(current, remembered) {
-        return Ok(true);
-    }
-
-    match run(PersistenceOperation::CheckRemembered {
-        path: current.session_file_path(),
-    })? {
-        PersistenceOutcome::Unit => Ok(true),
-        PersistenceOutcome::RememberedUnavailable(_) => Ok(false),
-        other => bail!("unexpected remembered session check outcome: {other:?}"),
-    }
-}
-
 /// What an output's session load found.
 #[derive(Debug)]
 pub(in crate::backend::wayland) enum OutputSessionLoad {

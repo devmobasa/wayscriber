@@ -1,9 +1,11 @@
 use log::{debug, info};
 
-use crate::backend::wayland::state::{PerfInputSource, WaylandState};
+use crate::backend::wayland::state::{
+    ContactOwner, PerfInputSource, StylusDownAdmission, WaylandState,
+};
 use crate::config::keybindings::{StylusButton, linux};
-use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
+use crate::input::{DrawingState, MouseButton};
 
 fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) -> bool {
     input_state.modal_owns_pointer_shortcuts()
@@ -53,8 +55,8 @@ impl WaylandState {
 
     /// Commit coalesced tablet tool state.
     ///
-    /// Invariant: drawing samples are appended only after applying the pressure
-    /// update from the same committed tablet frame.
+    /// The real press router admits a contact before pressure mutates it. The
+    /// first drawing sample is then replaced with this frame's pressure.
     pub(super) fn commit_pending_stylus_frame(&mut self) {
         let pending = std::mem::take(&mut self.tablet.pending_frame);
         if pending.is_empty() {
@@ -65,22 +67,46 @@ impl WaylandState {
         // help was visible must still not dispatch behind it.
         let modal_blocks_barrel_actions = modal_blocks_stylus_barrel_actions(&self.input_state);
 
-        if let Some(pressure) = pending.pressure {
-            self.apply_committed_stylus_pressure(pressure);
+        if pending.down
+            && let Some((x, y)) = pending.motion
+        {
+            self.tablet.last_pos = Some((x, y));
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
+        }
+        let canvas_down = pending.down && self.prepare_stylus_down();
+
+        if let Some(pressure) = pending.pressure
+            && !pending.down
+        {
+            self.tablet.apply_canvas_pressure(
+                self.render.text_measurer(),
+                &mut self.input_state,
+                pressure,
+            );
         }
 
-        if let Some((x, y)) = pending.motion {
+        if let Some((x, y)) = pending.motion
+            && (!pending.down || canvas_down)
+        {
             self.commit_stylus_motion_sample(x, y, pending.pressure.is_some());
         }
 
-        if pending.down {
-            self.commit_stylus_down();
+        if canvas_down {
+            self.commit_stylus_canvas_down();
+            if let Some(pressure) = pending.pressure {
+                self.tablet.apply_canvas_pressure(
+                    self.render.text_measurer(),
+                    &mut self.input_state,
+                    pressure,
+                );
+            }
         }
 
         if pending.pressure.is_some()
             && pending.motion.is_none()
             && !pending.down
-            && self.tablet.tip_down
+            && self.tablet.is_canvas_gesture()
         {
             self.commit_stylus_motion_sample_at_current_position(true);
         }
@@ -100,41 +126,7 @@ impl WaylandState {
 
     pub(super) fn current_or_pending_stylus_position(&self) -> (f64, f64) {
         self.tablet
-            .pending_frame
-            .motion
-            .or(self.tablet.last_pos)
-            .unwrap_or_else(|| {
-                let (x, y) = self.pointer.position();
-                (x as f64, y as f64)
-            })
-    }
-
-    fn apply_committed_stylus_pressure(&mut self, pressure: u32) {
-        if pressure == 0 {
-            debug!("Stylus pressure reported 0; deferring to peak/base");
-            return;
-        }
-
-        let first_pressure_sample =
-            self.tablet.tip_down && self.tablet.pressure_thickness.is_none();
-        let p01 = (pressure as f64) / 65535.0;
-        if !crate::input::tablet::try_apply_pressure_to_state_with(
-            self.render.text_measurer(),
-            p01,
-            &mut self.input_state,
-            self.tablet.settings,
-        ) {
-            return;
-        }
-        if first_pressure_sample {
-            self.input_state
-                .replace_active_drawing_pressure_samples_with(
-                    self.render.text_measurer(),
-                    self.input_state.style.current_thickness,
-                );
-        }
-        self.tablet.pressure_thickness = Some(self.input_state.style.current_thickness);
-        self.record_stylus_peak(self.input_state.style.current_thickness);
+            .current_or_pending_position(self.pointer.position())
     }
 
     fn commit_stylus_motion_sample(&mut self, x: f64, y: f64, pressure_sample: bool) {
@@ -162,7 +154,7 @@ impl WaylandState {
         );
         let next_hover_cursor_pos = self.stylus_hover_cursor_position();
         self.mark_stylus_hover_cursor_dirty(previous_hover_cursor_pos, next_hover_cursor_pos);
-        if self.tablet.tip_down {
+        if self.tablet.is_canvas_gesture() {
             self.record_stylus_motion_thickness();
         }
     }
@@ -172,9 +164,9 @@ impl WaylandState {
         self.commit_stylus_motion_sample(x, y, pressure_sample);
     }
 
-    fn commit_stylus_down(&mut self) {
+    fn prepare_stylus_down(&mut self) -> bool {
         if !self.tablet.on_overlay {
-            return;
+            return false;
         }
 
         if !self.input_state.help_overlay.is_visible() {
@@ -187,13 +179,13 @@ impl WaylandState {
         if self.input_state.region_is_active() {
             let (x, y) = self.current_stylus_position();
             self.begin_region_selection(crate::input::state::RegionInputSource::Stylus, x, y);
-            return;
+            return false;
         }
 
         if self.input_state.eyedropper_is_active() {
             let (x, y) = self.current_stylus_position();
             self.sample_eyedropper(x, y);
-            return;
+            return false;
         }
 
         // Help owns stylus tip input just as it owns mouse and touch input.
@@ -207,28 +199,33 @@ impl WaylandState {
                 x.round() as i32,
                 y.round() as i32,
             );
-            return;
+            return false;
         }
 
-        // The onboarding card owns a pen tap on it just as it owns a click:
-        // no stroke starts, so none can tick off its "Draw a stroke" step.
-        let (x, y) = self.current_stylus_position();
-        if let Some(press) = self.onboarding_card_press_at(x, y) {
-            self.pointer
-                .set_position((x.round() as i32, y.round() as i32));
-            self.onboarding_card.set_stylus_press(press);
-            return;
+        let position = self.current_stylus_position();
+        let card_visible = self.first_run_onboarding_card_visible();
+        match self.tablet.prepare_chrome_down(
+            &mut self.input_state,
+            &mut self.onboarding_card,
+            position,
+            card_visible,
+        ) {
+            StylusDownAdmission::Canvas => {}
+            StylusDownAdmission::Onboarding | StylusDownAdmission::Toast => return false,
+            StylusDownAdmission::Popover => {
+                if self.toolbar_chrome.inline_toolbars() {
+                    self.mark_inline_toolbar_full_damage();
+                } else {
+                    self.toolbar.mark_dirty();
+                }
+                self.input_state.needs_redraw = true;
+                return false;
+            }
         }
+        true
+    }
 
-        // Canvas click-away: a pen-down on the canvas with a top popover open
-        // (Canvas/Session/Settings) dismisses it and swallows the pen-down,
-        // matching the mouse and touch paths — otherwise the pen-down would
-        // start a stray stroke instead of closing the popover.
-        if self.dismiss_top_toolbar_menus() {
-            self.input_state.needs_redraw = true;
-            return;
-        }
-
+    fn commit_stylus_canvas_down(&mut self) {
         // Report the pen tip to the input HUD alongside the mouse buttons; the
         // pen is a pointer device, so it gets the same pill chrome.
         self.input_state
@@ -237,7 +234,7 @@ impl WaylandState {
         let hover_cursor_pos = self.stylus_hover_cursor_position();
         let (x, y) = self.current_stylus_position();
         self.pointer.set_position((x as i32, y as i32));
-        self.tablet.tip_down = true;
+        self.tablet.bind_tip(ContactOwner::Canvas);
         self.mark_stylus_hover_cursor_dirty(hover_cursor_pos, None);
         info!(
             "Stylus DOWN at ({}, {})",
@@ -258,8 +255,6 @@ impl WaylandState {
             wx,
             wy,
         );
-        let base_thickness = self.input_state.style.current_thickness;
-        self.tablet.base_thickness = Some(base_thickness);
         self.record_stylus_motion_thickness();
         self.input_state.needs_redraw = true;
     }
@@ -272,25 +267,45 @@ impl WaylandState {
         if let Some(press) = self.onboarding_card.take_stylus_press() {
             // The tap never became a contact, so there is no stroke to end
             // and no pressure thickness to commit.
-            self.tablet.tip_down = false;
+            self.tablet.lift_tip();
             self.tablet.pressure_thickness = None;
             self.tablet.peak_thickness = None;
             let (x, y) = self.current_stylus_position();
+            self.tablet
+                .set_over_inline_strip(self.inline_toolbar_contains((x, y)));
             self.release_onboarding_card_press(press, x, y);
             self.input_state.needs_redraw = true;
             return;
         }
 
-        self.tablet.tip_down = false;
+        if let Some(pressed) = self.tablet.toast_press.take() {
+            // Like a card tap, a toast tap never became a stroke.
+            self.tablet.lift_tip();
+            self.tablet.pressure_thickness = None;
+            self.tablet.peak_thickness = None;
+
+            let (x, y) = self.current_stylus_position();
+            let (hit, action) =
+                self.input_state
+                    .resolve_toast_release(pressed, x.round() as i32, y.round() as i32);
+            if hit && let Some(command) = action {
+                self.handle_toast_command(command);
+            }
+            return;
+        }
+
+        self.tablet.lift_tip();
+        // Only a stroke keeps the thickness its pressure reached. A contact
+        // that did not draw, such as a size-ring drag or a tap that closed a
+        // menu, leaves the thickness as that contact set it.
+        let drawing = matches!(self.input_state.state, DrawingState::Drawing { .. });
         let final_thick = self
             .tablet
             .peak_thickness
-            .or(self.tablet.pressure_thickness)
-            .or(self.tablet.base_thickness);
-        if let Some(thick) = final_thick {
+            .or(self.tablet.pressure_thickness);
+        if let Some(thick) = final_thick.filter(|_| drawing) {
             self.input_state
                 .set_pressure_thickness_for_active_tool_with(self.render.text_measurer(), thick);
-            self.tablet.base_thickness = Some(thick);
         }
         self.tablet.pressure_thickness = None;
         self.tablet.peak_thickness = None;
@@ -301,6 +316,8 @@ impl WaylandState {
         );
         let (x, y) = self.current_stylus_position();
         self.pointer.set_position((x as i32, y as i32));
+        self.tablet
+            .set_over_inline_strip(self.inline_toolbar_contains((x, y)));
         let screen_x = self.pointer.position().0;
         let screen_y = self.pointer.position().1;
         if self.handle_help_overlay_release(HelpOverlayPressSource::Stylus, screen_x, screen_y) {
@@ -355,92 +372,4 @@ impl WaylandState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{modal_blocks_stylus_barrel_actions, stylus_barrel_action};
-    use crate::input::state::test_support::make_test_input_state;
-
-    #[test]
-    fn help_blocks_stylus_barrel_actions() {
-        let mut state = make_test_input_state();
-        assert!(!modal_blocks_stylus_barrel_actions(&state));
-
-        state.toggle_help_overlay();
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-    }
-
-    /// Both screen-region modals swallow pointer and keyboard input, so a
-    /// barrel button must not run its bound action on the canvas behind them —
-    /// including while they are still waiting on a capture.
-    #[test]
-    fn screen_region_modals_block_stylus_barrel_actions() {
-        use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
-
-        let mut state = make_test_input_state();
-        assert!(!modal_blocks_stylus_barrel_actions(&state));
-
-        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.activate_region_with(
-            &crate::draw::TextMeasurer::default(),
-            RegionPurposeTag::Ocr,
-            1,
-        );
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.cancel_region_ui_only();
-        assert!(!modal_blocks_stylus_barrel_actions(&state));
-
-        state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
-        assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.cancel_eyedropper();
-        assert!(!modal_blocks_stylus_barrel_actions(&state));
-    }
-
-    #[test]
-    fn canonical_stylus_shortcut_wins_over_legacy_tablet_binding() {
-        use crate::config::keybindings::linux;
-        use crate::config::{Action, KeybindingsConfig};
-
-        let mut keybindings = KeybindingsConfig::default();
-        keybindings.core.undo = vec!["StylusPrimary".to_string()];
-        let action_map = keybindings.build_action_map().expect("map");
-        let action_bindings = keybindings.build_action_bindings().expect("bindings");
-        let mut state = crate::input::state::test_support::make_test_input_state();
-        state.set_keybinding_maps(action_map, action_bindings);
-
-        let mut tablet = crate::config::TabletInputConfig::default();
-        tablet.stylus_button.action = Some(Action::ToggleRadialMenu);
-
-        assert_eq!(
-            stylus_barrel_action(&state, linux::BTN_STYLUS, &tablet),
-            Some(Action::Undo)
-        );
-        tablet.stylus_button2.action = Some(Action::Redo);
-        assert_eq!(
-            stylus_barrel_action(&state, linux::BTN_STYLUS2, &tablet),
-            Some(Action::Redo)
-        );
-    }
-
-    #[test]
-    fn unbound_stylus_falls_back_to_legacy_tablet_action() {
-        use crate::config::Action;
-        use crate::config::keybindings::linux;
-
-        let state = crate::input::state::test_support::make_test_input_state();
-        let mut tablet = crate::config::TabletInputConfig::default();
-        tablet.stylus_button.action = Some(Action::ToggleRadialMenu);
-        tablet.stylus_button2.action = None;
-
-        assert_eq!(
-            stylus_barrel_action(&state, linux::BTN_STYLUS, &tablet),
-            Some(Action::ToggleRadialMenu)
-        );
-        assert_eq!(
-            stylus_barrel_action(&state, linux::BTN_STYLUS2, &tablet),
-            None
-        );
-        assert_eq!(stylus_barrel_action(&state, 0, &tablet), None);
-    }
-}
+mod tests;

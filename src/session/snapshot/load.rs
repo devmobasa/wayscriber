@@ -26,13 +26,16 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+mod artifact_outcome;
 mod corrupt;
 mod fallback;
 mod markers;
 mod named_candidate;
 mod payload;
 
-use corrupt::{backup_corrupt_session, preserve_newer_version_session};
+pub(crate) use artifact_outcome::CorruptArtifactPreservationFailed;
+use artifact_outcome::{CorruptLoadAction, artifact_load_outcome};
+use corrupt::{preserve_newer_version_session, quarantine_corrupt_artifact};
 use fallback::load_normal_session_or_empty;
 use markers::{
     backup_is_newer_than_primary, clear_marker_metadata, clear_marker_suppresses_artifact,
@@ -56,12 +59,17 @@ pub(crate) enum LoadSnapshotOutcome {
     Loaded(Box<SessionSnapshot>),
     LoadedFromBackup(Box<SessionSnapshot>),
     LoadedFromRecovery(Box<SessionSnapshot>),
+    RestoredAfterCorruption {
+        snapshot: Box<SessionSnapshot>,
+        source: RestoredArtifact,
+        corrupt_copy: PathBuf,
+    },
     Empty,
     /// Nothing was restored because the stored session could not be read. Its
-    /// bytes are preserved at `backup_path`; the caller is expected to say so
+    /// bytes are preserved at `corrupt_copy`; the caller is expected to say so
     /// rather than let a silent empty canvas stand in for lost drawings.
     EmptyAfterCorruption {
-        backup_path: PathBuf,
+        corrupt_copy: PathBuf,
     },
     NonRegularArtifact {
         path: PathBuf,
@@ -70,6 +78,12 @@ pub(crate) enum LoadSnapshotOutcome {
         path: PathBuf,
         max_expanded_size: u64,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RestoredArtifact {
+    Backup,
+    Recovery,
 }
 
 /// A too-new session could be read, but no durable copy could be established.
@@ -103,6 +117,7 @@ impl LoadSnapshotOutcome {
         match self {
             Self::Loaded(snapshot)
             | Self::LoadedFromBackup(snapshot)
+            | Self::RestoredAfterCorruption { snapshot, .. }
             | Self::LoadedFromRecovery(snapshot) => snapshot.has_board_data(),
             Self::Empty
             | Self::EmptyAfterCorruption { .. }
@@ -117,6 +132,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
     match load_snapshot_with_outcome(options)? {
         LoadSnapshotOutcome::Loaded(snapshot)
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
+        | LoadSnapshotOutcome::RestoredAfterCorruption { snapshot, .. }
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(Some(*snapshot)),
         LoadSnapshotOutcome::Empty
         | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
@@ -132,7 +148,7 @@ pub(crate) fn load_snapshot_with_outcome(options: &SessionOptions) -> Result<Loa
 pub(crate) fn load_snapshot_for_offline_edit(
     options: &SessionOptions,
 ) -> Result<LoadSnapshotOutcome> {
-    load_snapshot_with_expanded_limit_inner(options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
+    load_snapshot_with_expanded_limit_inner(options, DEFAULT_MAX_EXPANDED_SESSION_BYTES, false)
 }
 
 #[allow(dead_code)]
@@ -200,7 +216,7 @@ pub(super) fn load_snapshot_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<LoadSnapshotOutcome> {
-    let outcome = load_snapshot_with_expanded_limit_inner(options, max_expanded_size)?;
+    let outcome = load_snapshot_with_expanded_limit_inner(options, max_expanded_size, true)?;
     record_named_session_opened_for_outcome(options, &outcome);
     Ok(outcome)
 }
@@ -208,6 +224,7 @@ pub(super) fn load_snapshot_with_expanded_limit(
 fn load_snapshot_with_expanded_limit_inner(
     options: &SessionOptions,
     max_expanded_size: u64,
+    restore_named_primary: bool,
 ) -> Result<LoadSnapshotOutcome> {
     if !options.any_enabled() && !options.restore_tool_state {
         info!(
@@ -262,6 +279,7 @@ fn load_snapshot_with_expanded_limit_inner(
                 clear_marker_metadata.as_ref(),
                 backup_recovery_marker_metadata.as_ref(),
                 recovery_recoverable_marker_metadata.as_ref(),
+                restore_named_primary,
             );
         }
         info!(
@@ -275,12 +293,13 @@ fn load_snapshot_with_expanded_limit_inner(
             max_expanded_size,
             false,
             "session recovery",
-            CorruptLoadAction::Backup,
+            CorruptLoadAction::Quarantine,
         )?;
         match recovery_outcome {
             LoadSnapshotOutcome::Loaded(snapshot) => {
                 return Ok(LoadSnapshotOutcome::LoadedFromRecovery(snapshot));
             }
+            loaded @ LoadSnapshotOutcome::RestoredAfterCorruption { .. } => return Ok(loaded),
             loaded @ LoadSnapshotOutcome::LoadedFromBackup(_) => return Ok(loaded),
             loaded @ LoadSnapshotOutcome::LoadedFromRecovery(_) => return Ok(loaded),
             LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => {
@@ -321,6 +340,7 @@ fn load_snapshot_with_expanded_limit_inner(
         clear_marker_metadata.as_ref(),
         backup_recovery_marker_metadata.as_ref(),
         recovery_recoverable_marker_metadata.as_ref(),
+        restore_named_primary,
     )
 }
 
@@ -377,107 +397,34 @@ fn load_snapshot_path_with_outcome(
         return Ok(outcome);
     }
 
+    with_shared_session_lock(options, || {
+        let result =
+            load_snapshot_inner_with_expanded_limit(session_path, options, max_expanded_size);
+        artifact_load_outcome(
+            result,
+            session_path,
+            options,
+            max_expanded_size,
+            label,
+            corrupt_load_action,
+        )
+    })
+}
+
+fn with_shared_session_lock<T>(
+    options: &SessionOptions,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
     let lock_path = options.lock_file_path();
-    let lock_file = open_runtime_lock_file(&lock_path, options.is_named_file())
+    let file = open_runtime_lock_file(&lock_path, options.is_named_file())
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-    lock_shared(&lock_file)
+    lock_shared(&file)
         .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
-
-    let result = load_snapshot_inner_with_expanded_limit(session_path, options, max_expanded_size);
-
-    if let Err(err) = unlock(&lock_file) {
-        warn!(
-            "failed to unlock session file {}: {}",
-            lock_path.display(),
-            err
-        );
+    let result = operation();
+    if let Err(err) = unlock(&file) {
+        warn!("failed to unlock session {}: {err}", lock_path.display());
     }
-
-    match result {
-        Ok(Some(loaded)) => {
-            let tool_state = loaded.snapshot.tool_state.is_some();
-            info!(
-                "Loaded {} from {} (version {}, compressed={}, boards={}, active_board={}, tool_state={})",
-                label,
-                session_path.display(),
-                loaded.version,
-                loaded.compressed,
-                loaded.snapshot.boards.len(),
-                loaded.snapshot.active_board_id,
-                tool_state
-            );
-            Ok(LoadSnapshotOutcome::Loaded(Box::new(loaded.snapshot)))
-        }
-        Ok(None) => {
-            info!(
-                "{} file {} contained no usable data; continuing with defaults",
-                label,
-                session_path.display()
-            );
-            Ok(LoadSnapshotOutcome::Empty)
-        }
-        Err(err) if err.downcast_ref::<ExpandedSessionTooLarge>().is_some() => {
-            warn!(
-                "Refusing to load session {}; expanded payload exceeds safety limit ({} bytes). The session file is left unchanged; clear the session or move the file if it is no longer needed: {}",
-                session_path.display(),
-                max_expanded_size,
-                err
-            );
-            Ok(LoadSnapshotOutcome::ExpandedTooLarge {
-                path: session_path.to_path_buf(),
-                max_expanded_size,
-            })
-        }
-        Err(err) if is_non_regular_session_artifact(&err) => {
-            warn!(
-                "Refusing to load non-regular {} {}; continuing with defaults: {}",
-                label,
-                session_path.display(),
-                err
-            );
-            Ok(LoadSnapshotOutcome::NonRegularArtifact {
-                path: session_path.to_path_buf(),
-            })
-        }
-        Err(err)
-            if err
-                .downcast_ref::<NewerVersionPreservationFailed>()
-                .is_some() =>
-        {
-            // Fail closed. Treating this as corruption would back it up and
-            // then continue with an empty, saveable session — exactly the
-            // destructive downgrade path this error reports.
-            Err(err)
-        }
-        Err(err) => {
-            warn!(
-                "Failed to load {} {}; continuing with defaults: {}",
-                label,
-                session_path.display(),
-                err
-            );
-            match corrupt_load_action {
-                CorruptLoadAction::Backup => match backup_corrupt_session(session_path, options) {
-                    Ok(backup_path) => {
-                        return Ok(LoadSnapshotOutcome::EmptyAfterCorruption { backup_path });
-                    }
-                    Err(backup_err) => warn!(
-                        "Failed to back up corrupt session {}: {}",
-                        session_path.display(),
-                        backup_err
-                    ),
-                },
-                CorruptLoadAction::Preserve => {
-                    debug!(
-                        "Leaving unloadable {} {} in place because it is suppressed by the session clear marker",
-                        label,
-                        session_path.display()
-                    );
-                }
-            }
-            Ok(LoadSnapshotOutcome::Empty)
-        }
-    }
+    result
 }
 
 fn reject_oversized_snapshot(
@@ -532,16 +479,11 @@ fn record_named_session_opened_for_outcome(
             LoadSnapshotOutcome::Loaded(_)
                 | LoadSnapshotOutcome::LoadedFromBackup(_)
                 | LoadSnapshotOutcome::LoadedFromRecovery(_)
+                | LoadSnapshotOutcome::RestoredAfterCorruption { .. }
         )
     {
         crate::session::catalog::record_named_session_opened(options);
     }
-}
-
-#[derive(Clone, Copy)]
-enum CorruptLoadAction {
-    Backup,
-    Preserve,
 }
 
 /// What to do with a session file written by a newer wayscriber than this one.

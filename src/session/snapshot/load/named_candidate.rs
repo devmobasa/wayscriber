@@ -3,7 +3,8 @@ use super::*;
 pub(super) fn log_named_candidate_outcome(session_path: &Path, outcome: &LoadSnapshotOutcome) {
     let (source, snapshot) = match outcome {
         LoadSnapshotOutcome::Loaded(snapshot) => ("primary", snapshot),
-        LoadSnapshotOutcome::LoadedFromBackup(snapshot) => ("backup", snapshot),
+        LoadSnapshotOutcome::RestoredAfterCorruption { snapshot, .. }
+        | LoadSnapshotOutcome::LoadedFromBackup(snapshot) => ("backup", snapshot),
         LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => ("recovery", snapshot),
         LoadSnapshotOutcome::Empty
         | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
@@ -71,7 +72,8 @@ pub(super) fn load_named_candidate_with_fallbacks(
             LoadSnapshotOutcome::Empty
             | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
             | LoadSnapshotOutcome::NonRegularArtifact { .. } => {}
-            LoadSnapshotOutcome::LoadedFromBackup(_)
+            LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+            | LoadSnapshotOutcome::LoadedFromBackup(_)
             | LoadSnapshotOutcome::LoadedFromRecovery(_) => {}
         }
     }
@@ -246,7 +248,9 @@ fn load_named_candidate_suppressed_primary(
             | LoadSnapshotOutcome::ExpandedTooLarge { .. },
         ) => Ok(None),
         Ok(
-            LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_),
+            LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+            | LoadSnapshotOutcome::LoadedFromBackup(_)
+            | LoadSnapshotOutcome::LoadedFromRecovery(_),
         ) => Ok(None),
         Err(err) => {
             warn!(
@@ -316,9 +320,9 @@ fn load_named_candidate_contentful_backup(
             "named session backup is too large to open without mutating candidate artifacts: {}",
             path.display()
         )),
-        LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_) => {
-            Ok(None)
-        }
+        LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+        | LoadSnapshotOutcome::LoadedFromBackup(_)
+        | LoadSnapshotOutcome::LoadedFromRecovery(_) => Ok(None),
     }
 }
 
@@ -362,9 +366,9 @@ fn load_named_candidate_contentful_recovery(
             "named session recovery is too large to open without mutating candidate artifacts: {}",
             path.display()
         )),
-        LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_) => {
-            Ok(None)
-        }
+        LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+        | LoadSnapshotOutcome::LoadedFromBackup(_)
+        | LoadSnapshotOutcome::LoadedFromRecovery(_) => Ok(None),
     }
 }
 

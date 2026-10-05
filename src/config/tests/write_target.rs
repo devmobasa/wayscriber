@@ -27,7 +27,7 @@
 
 use super::super::io::{is_stale_source_error, persist_preset_slot_at};
 use super::super::{ColorSpec, ConfigDocument, ToolPresetConfig};
-use crate::draw::Color;
+use crate::domain::Color;
 use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::{MetadataExt, symlink};
 use std::path::{Path, PathBuf};

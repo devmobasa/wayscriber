@@ -1,6 +1,6 @@
 use super::*;
 
-impl ExplicitSessionTransaction {
+impl SessionCommandTransaction {
     pub(super) fn complete_start(
         &mut self,
         context: &mut SessionTransaction<'_>,
@@ -33,6 +33,7 @@ impl ExplicitSessionTransaction {
                     .clone()
                     .ok_or_else(|| anyhow!("no active persisted session target"))?;
                 match &self.command {
+                    SessionCommand::Output { .. } => self.start_output(context),
                     SessionCommand::Open(path) => {
                         let mut target = options;
                         target.set_named_file_target(path.clone());
@@ -219,6 +220,9 @@ impl ExplicitSessionTransaction {
             .input_state
             .set_session_preflight_options(Some(options.clone()));
         context.input_state.clear_session_dirty();
+        context
+            .session
+            .confirm_successful_load(&options.session_file_path());
         context
             .session
             .commit_output_options(options, loaded_board_data);

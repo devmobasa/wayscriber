@@ -194,6 +194,7 @@ fn session_artifact_status_reports_size_when_present() {
             primary_exists: true,
             backup_exists: false,
             recovery_exists: false,
+            unreadable_copy_exists: false,
             clear_marker_exists: false,
             lock_exists: false,
             non_lock_size_bytes: 4096,
