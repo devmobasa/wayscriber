@@ -222,6 +222,8 @@ struct SessionMenuContentKey {
     active_session_name: Option<String>,
     active_session_path: Option<std::path::PathBuf>,
     recent_sessions: Vec<crate::ui::toolbar::SessionRecentSnapshot>,
+    home_session_name: Option<String>,
+    at_home_session: bool,
     pending_save_as_overwrite_path: Option<std::path::PathBuf>,
     use_icons: bool,
 }
@@ -233,6 +235,8 @@ impl SessionMenuContentKey {
             active_session_name: snapshot.active_session_name.clone(),
             active_session_path: snapshot.active_session_path.clone(),
             recent_sessions: snapshot.recent_sessions.clone(),
+            home_session_name: snapshot.home_session_name.clone(),
+            at_home_session: snapshot.at_home_session,
             pending_save_as_overwrite_path: snapshot.pending_save_as_overwrite_path.clone(),
             use_icons: snapshot.use_icons,
         }

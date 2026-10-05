@@ -3,21 +3,22 @@
 //! Spawn candidate discovery tries `current_exe()` first, which under
 //! `cargo test` is this test binary. A fixture marks the environment of the
 //! broker it starts; when the daemon then launches this binary as an overlay
-//! child, the constructor below runs the production child handshake and
-//! records how it was launched, before libtest would parse the overlay
-//! arguments. Without both the fixture marker and an overlay generation, the
-//! constructor returns and the binary runs its tests as usual.
+//! child, the constructor below runs the production child handshake, reports a
+//! session when the test asks for one, and records how it was launched, before
+//! libtest would parse the overlay arguments. Without both the fixture marker
+//! and an overlay generation, the constructor returns and the binary runs its
+//! tests as usual.
 
 use std::convert::Infallible;
 use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 
 use crate::daemon::protocol_v2::{
-    ActiveGeneration, active_generation_from_environment, publish_ready_from_environment,
+    ActiveGeneration, ReportedSession, active_generation_from_environment,
+    publish_ready_from_environment, publish_session_from_environment,
     publish_signal_ready_from_environment,
 };
 
@@ -35,6 +36,10 @@ pub(super) const EXITS_BEFORE_READY: &str = "wayscriber-exits-before-ready";
 /// Written to the fixture's runtime directory as that child starts, so a test
 /// can tell a child that ran and exited from one that never started.
 pub(super) const STARTED_THEN_EXITED: &str = "started-then-exited";
+/// A test writes this JSON object to the fixture's runtime directory before a
+/// show to direct the next fake overlay: `report` is the session it reports
+/// once enabled, `"home"` or a path, and `exit` makes it exit after that.
+pub(super) const SESSION_INSTRUCTION: &str = "fake-overlay-session.json";
 const EXIT_BEFORE_READY_STATUS: i32 = 7;
 /// The fake overlay could not serve; the test that launched it then fails.
 const FAILURE_STATUS: i32 = 1;
@@ -89,11 +94,38 @@ fn serve(ignore_term: bool) -> Result<Infallible> {
         std::thread::sleep(Duration::from_millis(2));
     }
 
+    // Reported before the receipt, so a test that has the receipt can rely on
+    // the report.
+    let exit = report_session()?;
     write_receipt()?;
+    if exit {
+        std::process::exit(0);
+    }
 
     loop {
         std::thread::sleep(Duration::from_secs(60));
     }
+}
+
+/// Follows the test's [`SESSION_INSTRUCTION`], returning whether to exit.
+fn report_session() -> Result<bool> {
+    let instruction = match std::fs::read(runtime_root()?.join(SESSION_INSTRUCTION)) {
+        Ok(bytes) => serde_json::from_slice::<serde_json::Value>(&bytes)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error).context("failed to read the session instruction"),
+    };
+    if let Some(report) = instruction["report"].as_str() {
+        let session = match report {
+            "home" => ReportedSession::Home,
+            path => ReportedSession::Named(path.into()),
+        };
+        anyhow::ensure!(
+            publish_session_from_environment(&session)?,
+            "the daemon did not ask for session reports"
+        );
+    }
+
+    Ok(instruction["exit"].as_bool().unwrap_or(false))
 }
 
 fn write_receipt() -> Result<()> {
@@ -107,6 +139,9 @@ fn write_receipt() -> Result<()> {
         "startup": launched_with(crate::env_vars::DESKTOP_STARTUP_ID_ENV),
         "resume": launched_with(crate::RESUME_SESSION_ENV),
         "detach": launched_with(crate::env_vars::NO_DETACH_ENV),
+        "reports": launched_with(crate::env_vars::OVERLAY_SESSION_REPORTS_ENV),
+        "home": launched_with(crate::env_vars::OVERLAY_HOME_SESSION_ENV),
+        "preferred": launched_with(crate::env_vars::OVERLAY_PREFERRED_SESSION_ENV),
         "pid": std::process::id(),
         "generation": std::env::var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV)?,
     });
@@ -117,11 +152,9 @@ fn write_receipt() -> Result<()> {
 /// Writes `<generation>.<kind>` into the fixture's runtime directory.
 fn record(kind: &str, contents: &[u8]) -> Result<()> {
     let generation = std::env::var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV)?;
-    let root = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV)
-        .context("fake overlay needs the fixture's runtime directory")?;
 
     crate::durable_io::write_atomic(
-        &Path::new(&root).join(format!("{generation}.{kind}")),
+        &runtime_root()?.join(format!("{generation}.{kind}")),
         contents,
         crate::durable_io::AtomicWriteOptions::private_runtime_file(),
     )?;
@@ -129,30 +162,30 @@ fn record(kind: &str, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
+fn runtime_root() -> Result<std::path::PathBuf> {
+    std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV)
+        .map(Into::into)
+        .context("fake overlay needs the fixture's runtime directory")
+}
+
 /// Whether this process was started as `name`: the broker passes the program
 /// path it was given as `argv[0]`, which for a link is the link's own path.
 fn launched_as(name: &str) -> bool {
-    nul_separated("/proc/self/cmdline")
+    crate::test_fake_helper::launch_arguments()
         .ok()
         .and_then(|arguments| arguments.into_iter().next())
-        .is_some_and(|program| {
-            Path::new(OsStr::from_bytes(&program)).file_name() == Some(OsStr::new(name))
-        })
+        .is_some_and(|program| Path::new(&program).file_name() == Some(OsStr::new(name)))
 }
 
-/// Reads the kernel's copy of argv: std's own argument capture is not
-/// guaranteed to have run before this constructor.
+/// The overlay arguments this process was launched with, after `argv[0]`.
 fn launch_arguments() -> Result<Vec<String>> {
-    nul_separated("/proc/self/cmdline")?
+    crate::test_fake_helper::launch_arguments()?
         .into_iter()
         .skip(1)
-        .map(|argument| String::from_utf8(argument).context("non-UTF-8 launch argument"))
+        .map(|argument| {
+            argument
+                .into_string()
+                .map_err(|_| anyhow::anyhow!("non-UTF-8 launch argument"))
+        })
         .collect()
-}
-
-fn nul_separated(path: &str) -> Result<Vec<Vec<u8>>> {
-    let raw = std::fs::read(path).with_context(|| format!("failed to read {path}"))?;
-    let raw = raw.strip_suffix(b"\0").unwrap_or(&raw);
-
-    Ok(raw.split(|byte| *byte == 0).map(<[u8]>::to_vec).collect())
 }

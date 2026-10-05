@@ -60,6 +60,11 @@ impl Proxy {
 impl Drop for Proxy {
     fn drop(&mut self) {
         self.shared.stopping.store(true, Ordering::SeqCst);
+        // Close the connections before joining the listeners: a forwarder
+        // blocked on a hung peer holds its connection's state lock, and a
+        // control command waiting for that lock would never let its listener
+        // finish. Closing the socket wakes the forwarder.
+        self.shared.shutdown_connections();
         for (path, listener) in self.listeners.drain(..) {
             // A connection wakes the blocking accept so the thread sees `stopping`.
             let wake = UnixStream::connect(&path);
@@ -67,10 +72,9 @@ impl Drop for Proxy {
             drop(wake);
         }
 
-        // No listener runs now, so the connection list is final.
-        for connection in lock(&self.shared.connections).iter() {
-            connection.shutdown();
-        }
+        // No listener runs now, so the connection list is final; close any
+        // accepted while the listeners were stopping.
+        self.shared.shutdown_connections();
         let forwarders = std::mem::take(&mut *lock(&self.shared.forwarders));
         for forwarder in forwarders {
             let _ = forwarder.join();
@@ -79,6 +83,12 @@ impl Drop for Proxy {
 }
 
 impl Shared {
+    fn shutdown_connections(&self) {
+        for connection in lock(&self.connections).iter() {
+            connection.shutdown();
+        }
+    }
+
     fn accept_clients(&self, listener: UnixListener) {
         for client in listener.incoming() {
             if self.stopping.load(Ordering::SeqCst) {

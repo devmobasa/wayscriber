@@ -93,6 +93,18 @@ impl SessionState {
         self.options.as_ref()
     }
 
+    /// Starts this run in `options` instead, before any session was loaded.
+    pub(in crate::backend::wayland) fn replace_options_before_load(
+        &mut self,
+        options: Option<SessionOptions>,
+    ) {
+        debug_assert!(
+            !self.loaded,
+            "a loaded session changes target through a commit"
+        );
+        self.options = options;
+    }
+
     /// Returns mutable access to the session options, if present.
     #[allow(dead_code)]
     pub fn options_mut(&mut self) -> Option<&mut SessionOptions> {
@@ -213,6 +225,16 @@ impl SessionState {
         self.autosave_deferred_until = None;
         self.in_flight_autosave = None;
         self.notified_failure = false;
+    }
+
+    /// Continues without persistence: home is a default session that is not
+    /// saved.
+    pub(in crate::backend::wayland) fn commit_without_persistence(&mut self) {
+        self.advance_target_epoch();
+        self.options = None;
+        self.loaded = true;
+        self.loaded_board_data = false;
+        self.mark_clean_after_load();
     }
 
     pub(in crate::backend::wayland) fn commit_runtime_clear(&mut self, now: Instant) {
@@ -579,9 +601,20 @@ fn autosave_active(options: &SessionOptions) -> bool {
 }
 
 pub(in crate::backend::wayland) mod driver;
+mod home;
+mod load_outcome;
 mod persistence;
 mod runtime;
 
+#[cfg(test)]
+pub(in crate::backend::wayland) use home::HomeSession;
+pub(in crate::backend::wayland) use home::{
+    OutputSessionLoad, SessionHome, SessionLaunch, load_output_session,
+    may_save_before_output_load, session_target,
+};
+pub(in crate::backend::wayland) use load_outcome::{
+    ExpandedTooLarge, apply_load_outcome, replace_output_session_snapshot,
+};
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,

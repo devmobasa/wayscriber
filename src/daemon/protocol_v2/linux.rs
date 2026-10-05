@@ -186,6 +186,47 @@ impl NamespaceIdentity {
 }
 
 pub(crate) fn read_bounded_regular_file(path: &Path, cap: usize) -> io::Result<Vec<u8>> {
+    read_bounded_file(path, cap, |_| true)
+}
+
+/// Like [`read_bounded_regular_file`], for a file this user owns and only this
+/// user can read or write.
+pub(crate) fn read_bounded_private_file(path: &Path, cap: usize) -> io::Result<Vec<u8>> {
+    read_bounded_file(path, cap, is_private)
+}
+
+/// Whether this user owns the file or directory and nobody else may use it.
+pub(crate) fn is_private(metadata: &std::fs::Metadata) -> bool {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    metadata.uid() == unsafe { libc::geteuid() } && metadata.mode() & 0o077 == 0
+}
+
+/// Creates `path` as a directory only this user may use, or makes an existing
+/// directory this user owns so. A symlink, anything but a directory, or a
+/// directory another user owns is refused.
+pub(crate) fn create_private_directory(path: &Path) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    match std::fs::create_dir(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    let metadata = std::fs::symlink_metadata(path)?;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if !metadata.is_dir() || metadata.uid() != unsafe { libc::geteuid() } {
+        anyhow::bail!("{} is not a no-follow private directory", path.display());
+    }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
+    Ok(())
+}
+
+fn read_bounded_file(
+    path: &Path,
+    cap: usize,
+    trusted: impl Fn(&std::fs::Metadata) -> bool,
+) -> io::Result<Vec<u8>> {
     let mut options = OpenOptions::new();
     options
         .read(true)
@@ -196,6 +237,12 @@ pub(crate) fn read_bounded_regular_file(path: &Path, cap: usize) -> io::Result<V
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "protocol path is not a bounded regular file",
+        ));
+    }
+    if !trusted(&metadata) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "protocol file is not private to this user",
         ));
     }
     let expected = usize::try_from(metadata.len())

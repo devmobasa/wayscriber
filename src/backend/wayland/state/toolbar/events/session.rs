@@ -2,6 +2,7 @@ use super::*;
 use crate::backend::wayland::session::{SessionCommand, SessionCommandReport};
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::catalog;
+use crate::ui::toolbar::session_format::session_display_name;
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
 use wayland_client::{Connection, QueueHandle};
@@ -9,7 +10,10 @@ use wayland_client::{Connection, QueueHandle};
 pub(super) fn populate_session_snapshot(
     snapshot: &mut ToolbarSnapshot,
     options: Option<&crate::session::SessionOptions>,
+    home: &crate::backend::wayland::session::SessionHome,
 ) {
+    snapshot.home_session_name = home.name();
+    snapshot.at_home_session = home.is_at_home();
     let active_path = options.map(|options| options.session_file_path());
     snapshot.active_session_name = active_path.as_deref().map(session_display_name);
     // Recents are only read (from the catalog on disk) while the top strip's
@@ -20,13 +24,6 @@ pub(super) fn populate_session_snapshot(
         Vec::new()
     };
     snapshot.active_session_path = active_path;
-}
-
-fn session_display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| path.display().to_string())
 }
 
 pub(super) fn session_info_summary(inspection: &crate::session::SessionInspection) -> String {
@@ -110,6 +107,7 @@ fn recent_session_snapshots(
 }
 
 mod dialog;
+mod home;
 
 pub(in crate::backend::wayland::state) use dialog::SessionFileDialogController;
 pub(super) use dialog::{SessionFileDialogMode, ensure_save_as_extension};
@@ -132,6 +130,10 @@ impl WaylandState {
             }
             ToolbarEvent::OpenRecentSession(path) => {
                 self.handle_toolbar_open_session_path(path);
+                true
+            }
+            ToolbarEvent::OpenHomeSession => {
+                self.handle_toolbar_open_home_session();
                 true
             }
             ToolbarEvent::SaveSessionAs => {
@@ -425,6 +427,7 @@ impl WaylandState {
                     self.set_session_toolbar_info(format!("Opened session {name}"));
                 }
             }
+            SessionCommandReport::Home => self.finish_open_home_session(),
             SessionCommandReport::SaveAs(report) => {
                 self.clear_toolbar_save_as_overwrite_prompt();
                 self.set_session_toolbar_info(format!(
@@ -509,6 +512,7 @@ impl WaylandState {
         }
         let prefix = match command {
             SessionCommand::Open(_) => "Open session failed",
+            SessionCommand::OpenHome(_) => "Return to the home session failed",
             SessionCommand::SaveAs(..) | SessionCommand::CheckOverwrite(_) => "Save session failed",
             SessionCommand::Clear => "Clear session failed",
             SessionCommand::ClearTools(_) => "Failed to reset tool defaults",
@@ -618,8 +622,35 @@ fn dialog_frame_accepted(phase: DialogFramePhase, outcome: RenderOutcome) -> boo
 
 #[cfg(test)]
 mod tests {
-    use super::{DialogFramePhase, dialog_frame_accepted};
+    use super::{DialogFramePhase, dialog_frame_accepted, populate_session_snapshot};
+    use crate::backend::wayland::session::{SessionHome, SessionLaunch};
     use crate::backend::wayland::state::RenderOutcome;
+    use crate::backend::wayland::state::toolbar::ToolbarSnapshot;
+    use crate::session::SessionTarget;
+
+    #[test]
+    fn the_session_menu_learns_home_and_whether_it_is_active() {
+        let input = crate::input::state::test_support::make_test_input_state();
+        let mut snapshot = ToolbarSnapshot::from_input_with_bindings(&input, Default::default());
+        let home = std::path::PathBuf::from("/sessions/home.wayscriber-session");
+        let away = SessionHome::new(
+            SessionLaunch {
+                home: crate::backend::wayland::session::HomeSession::Named(home),
+                preferred: None,
+                from_daemon: true,
+            },
+            None,
+            SessionTarget::NamedFile("/sessions/b.wayscriber-session".into()),
+        );
+
+        populate_session_snapshot(&mut snapshot, None, &away);
+
+        assert_eq!(
+            snapshot.home_session_name.as_deref(),
+            Some("home.wayscriber-session")
+        );
+        assert!(!snapshot.at_home_session);
+    }
 
     #[test]
     fn dialog_entry_requires_a_committed_frame() {

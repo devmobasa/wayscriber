@@ -224,60 +224,38 @@ fn tray_menu_offers_session_settings_instead_of_a_session_toggle() {
 #[cfg(feature = "tray")]
 #[test]
 fn tray_session_settings_item_opens_the_configurator_at_the_session_screen() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let _environment = crate::test_env::lock();
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let recorded = temp.path().join("arguments");
-    let recorder = temp.path().join("recording-configurator");
-    std::fs::write(
-        &recorder,
-        // Written under a scratch name and renamed so a read either sees the
-        // whole argument list or no file at all.
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}.part'\nmv '{0}.part' '{0}'\n",
-            recorded.display()
+    let recorder = crate::test_fake_helper::link(temp.path(), "recording-configurator");
+    // The configurator override makes the broker accept the stand-in; the
+    // config home keeps the launch failure path away from the developer's own
+    // file. The previous values come back before the assertion.
+    let mut variables = vec![
+        (
+            crate::env_vars::CONFIGURATOR_ENV,
+            Some(recorder.as_os_str()),
         ),
-    )
-    .expect("the recording configurator should be written");
-    let mut permissions = std::fs::metadata(&recorder)
-        .expect("the recording configurator should exist")
-        .permissions();
-    permissions.set_mode(0o700);
-    std::fs::set_permissions(&recorder, permissions)
-        .expect("the recording configurator should be executable");
+        (
+            crate::env_vars::XDG_CONFIG_HOME_ENV,
+            Some(temp.path().as_os_str()),
+        ),
+    ];
+    variables.extend(crate::test_fake_helper::environment(
+        &recorder,
+        crate::test_fake_helper::Role::RecordArguments,
+        &recorded,
+    ));
 
-    let previous_configurator = std::env::var_os(crate::env_vars::CONFIGURATOR_ENV);
-    let previous_config_home = std::env::var_os(crate::env_vars::XDG_CONFIG_HOME_ENV);
-    // SAFETY: access to the process environment is serialized by test_env. The
-    // configurator override makes the broker accept the stand-in; the config
-    // home keeps the launch failure path away from the developer's own file.
-    unsafe {
-        std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, &recorder);
-        std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, temp.path());
-    }
-
-    let toggle = Arc::new(AtomicBool::new(false));
-    let quit = Arc::new(AtomicBool::new(false));
-    let mut tray = WayscriberTray::new_for_tests_with_configurator(
-        toggle,
-        quit,
-        recorder.to_string_lossy().into_owned(),
-    );
-    let launched = record_session_settings_launch(&mut tray, &recorded);
-
-    // SAFETY: as above; the previous values are restored before the assertion
-    // so a failure cannot leak this test's environment into the next one.
-    unsafe {
-        match previous_configurator {
-            Some(value) => std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::CONFIGURATOR_ENV),
-        }
-        match previous_config_home {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_CONFIG_HOME_ENV),
-        }
-    }
+    let launched = crate::test_env::with_env_vars(&variables, || {
+        let toggle = Arc::new(AtomicBool::new(false));
+        let quit = Arc::new(AtomicBool::new(false));
+        let mut tray = WayscriberTray::new_for_tests_with_configurator(
+            toggle,
+            quit,
+            recorder.to_string_lossy().into_owned(),
+        );
+        record_session_settings_launch(&mut tray, &recorded)
+    });
 
     assert_eq!(
         launched.as_deref(),

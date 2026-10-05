@@ -6,6 +6,9 @@ mod phases;
 #[derive(Debug)]
 pub(in crate::backend::wayland) enum SessionCommand {
     Open(PathBuf),
+    /// Return to the home session, whose options for the current output this
+    /// carries; `None` when home has persistence disabled.
+    OpenHome(Option<Box<SessionOptions>>),
     SaveAs(PathBuf, SaveAsOverwrite),
     CheckOverwrite(PathBuf),
     Clear,
@@ -16,6 +19,8 @@ pub(in crate::backend::wayland) enum SessionCommand {
 
 pub(in crate::backend::wayland) enum SessionCommandReport {
     Open(RuntimeOpenSessionReport),
+    /// The overlay is back in its home session.
+    Home,
     SaveAs(RuntimeSaveAsSessionReport),
     Overwrite(PathBuf, bool),
     Clear(RuntimeClearSessionReport),
@@ -36,6 +41,7 @@ enum Phase {
     SaveCurrent,
     Load,
     RecordOpen,
+    LoadHome,
     SaveAsPreflight,
     SaveAs,
     Clear,
@@ -117,6 +123,7 @@ impl ExplicitSessionTransaction {
             Phase::SaveCurrent => self.complete_save_current(context, outcome),
             Phase::Load => self.complete_load(context, outcome),
             Phase::RecordOpen => self.complete_record_open(context, outcome),
+            Phase::LoadHome => self.complete_load_home(context, outcome),
             Phase::SaveAsPreflight => self.complete_save_as_preflight(context, outcome),
             Phase::SaveAs => self.complete_save_as(context, outcome),
             Phase::Clear => self.complete_clear(context, outcome),
@@ -195,6 +202,19 @@ impl ExplicitSessionTransaction {
                         options: self.target.as_ref().expect("open target").clone(),
                     },
                 )
+            }
+            // Home loads the way a launch would, so its recovery, clear and
+            // tool-restore rules apply rather than those of a runtime Open.
+            SessionCommand::OpenHome(Some(options)) => {
+                let options = (**options).clone();
+                self.capture_input_generation(context);
+                self.work(Phase::LoadHome, PersistenceOperation::LoadHome { options })
+            }
+            SessionCommand::OpenHome(None) => {
+                self.leave_persistence_for_home(context)?;
+                Ok(TransactionStep::Complete(Box::new(
+                    SessionCommandReport::Home,
+                )))
             }
             SessionCommand::SaveAs(_, _) => Ok(TransactionStep::Complete(Box::new(
                 SessionCommandReport::SaveAs(RuntimeSaveAsSessionReport {

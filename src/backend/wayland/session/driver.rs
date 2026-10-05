@@ -14,6 +14,9 @@ pub(in crate::backend::wayland) trait SessionCommandRuntime {
     fn persistence(&mut self) -> &mut PersistenceController;
     fn session_config_failed(&self) -> bool;
     fn refresh_session_ui_seeds(&mut self);
+    /// An explicit command committed its target, or finished without changing
+    /// it. Called before the command's terminal report.
+    fn session_target_committed(&mut self);
     fn finish_session_command(&mut self, report: SessionCommandReport);
     fn fail_session_command(&mut self, command: &SessionCommand, error: &anyhow::Error);
     fn autosave_succeeded(&mut self, save: SaveCompletion, execution_time: Duration);
@@ -118,6 +121,7 @@ fn advance_session_command(
         Ok(TransactionStep::Work(operation)) => {
             if transaction.has_committed_open() {
                 runtime.refresh_session_ui_seeds();
+                runtime.session_target_committed();
             }
 
             let epoch = runtime.session_context().session.target_epoch();
@@ -140,11 +144,14 @@ fn advance_session_command(
         Ok(TransactionStep::Complete(report)) => {
             if matches!(
                 *report,
-                SessionCommandReport::Open(_) | SessionCommandReport::Clear(_)
+                SessionCommandReport::Open(_)
+                    | SessionCommandReport::Home
+                    | SessionCommandReport::Clear(_)
             ) {
                 runtime.refresh_session_ui_seeds();
             }
 
+            runtime.session_target_committed();
             runtime.finish_session_command(*report);
         }
         Err(error) => {

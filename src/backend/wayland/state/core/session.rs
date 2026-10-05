@@ -37,6 +37,10 @@ impl SessionCommandRuntime for WaylandState {
         self.refresh_runtime_ui_config_seeds();
     }
 
+    fn session_target_committed(&mut self) {
+        self.report_session_to_daemon();
+    }
+
     fn finish_session_command(&mut self, report: SessionCommandReport) {
         WaylandState::finish_session_command(self, report);
     }

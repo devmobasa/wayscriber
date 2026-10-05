@@ -362,6 +362,23 @@ fn session_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
         y += grid.height;
     }
 
+    if let Some(home) = model.home.as_ref() {
+        y += MENU_GAP;
+        nodes.push(text_button(
+            "top.menu.session.home".to_owned(),
+            (0.0, y, MENU_CONTENT_W, MENU_BUTTON_H),
+            LabelSpec::new(truncate_middle(&home.label, 30), MENU_LABEL_FONT, true),
+            if home.enabled {
+                ButtonStyle::plain()
+            } else {
+                ButtonStyle::disabled()
+            },
+            home.enabled
+                .then(|| Interaction::click(home.event(), Some(home.label.clone()))),
+        ));
+        y += MENU_BUTTON_H;
+    }
+
     for (index, recent) in model.recents.iter().enumerate() {
         y += MENU_GAP;
         let tooltip_path = recent.path.display().to_string();

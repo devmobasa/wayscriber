@@ -88,6 +88,9 @@ pub struct Daemon {
     pub(super) visibility_intents: Arc<VisibilityIntents>,
     pub(super) initial_mode: Option<String>,
     pub(super) initial_named_session_file: Option<PathBuf>,
+    /// The session the last overlay reported, which the next one continues;
+    /// `None` is home. It lives only as long as this daemon.
+    pub(super) remembered_session_file: Option<PathBuf>,
     pub(super) instance_token: String,
     pub(super) freeze_on_show: bool,
     pub(super) tray_enabled: bool,
@@ -130,6 +133,7 @@ impl Daemon {
             visibility_intents: Arc::new(VisibilityIntents::default()),
             initial_mode,
             initial_named_session_file,
+            remembered_session_file: None,
             instance_token: crate::daemon::generate_daemon_instance_token(),
             freeze_on_show: false,
             tray_enabled,
@@ -222,6 +226,9 @@ impl Daemon {
                 "Failed to clear stale daemon toggle request on startup: {}",
                 err
             );
+        }
+        if let Err(err) = super::protocol_v2::clear_stale_session_reports() {
+            warn!("Failed to clear stale overlay session reports on startup: {err:#}");
         }
     }
 

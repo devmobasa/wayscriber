@@ -108,6 +108,7 @@ impl Daemon {
                 request,
                 candidate,
                 &self.session_resume_override,
+                self.remembered_session_file.as_deref(),
                 &self.instance_token,
             ) {
                 Ok(pid) => {
@@ -175,7 +176,7 @@ mod tests {
 
     fn build_test_launch(daemon: &mut Daemon) -> OverlayLaunch {
         let request = daemon.take_pending_launch();
-        build_overlay_launch(&request, daemon.session_resume_override(), None)
+        build_overlay_launch(&request, daemon.session_resume_override(), None, None)
     }
 
     fn launch_args(launch: &OverlayLaunch) -> Vec<String> {

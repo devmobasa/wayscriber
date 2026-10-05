@@ -15,6 +15,7 @@ impl WaylandState {
             palette_recents,
             capture_manager,
             session_options,
+            session_home,
             session_config_failed,
             persistence,
             runtime_ui,
@@ -157,6 +158,7 @@ impl WaylandState {
             #[cfg(feature = "tablet-input")]
             tablet: super::super::tablet_runtime::TabletState::new(tablet_manager, tablet_settings),
             session: SessionState::new(session_options),
+            session_home,
             session_config_failed,
             session_transaction: None,
             persistence,

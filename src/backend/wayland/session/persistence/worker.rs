@@ -134,6 +134,14 @@ pub(super) fn execute(operation: PersistenceOperation) -> Result<PersistenceOutc
         PersistenceOperation::LoadNamedCandidate { options } => Ok(PersistenceOutcome::Load(
             session::load_named_session_candidate(&options)?,
         )),
+        PersistenceOperation::LoadHome { options } => load_home(&options),
+        PersistenceOperation::LoadRemembered { options } => load_remembered(&options),
+        PersistenceOperation::CheckRemembered { path } => {
+            Ok(match session::validate_named_session_file_for_open(&path) {
+                Ok(()) => PersistenceOutcome::Unit,
+                Err(error) => PersistenceOutcome::RememberedUnavailable(error),
+            })
+        }
         PersistenceOperation::Inspect { options } => Ok(PersistenceOutcome::Inspection(
             session::inspect_session(&options)?,
         )),
@@ -177,6 +185,66 @@ pub(super) fn execute(operation: PersistenceOperation) -> Result<PersistenceOutc
         }
         PersistenceOperation::Shutdown => Ok(PersistenceOutcome::Unit),
     }
+}
+
+/// Loads home as a launch would, but only from a session file that later saves
+/// can replace, checked before and after the load: a named home passes the
+/// startup checks of a session file, and a configured home's file must be a
+/// regular file or not exist yet. A launch would follow a symlink or start
+/// from a recovery copy beside a directory, then fail every save.
+fn load_home(options: &SessionOptions) -> Result<PersistenceOutcome> {
+    let path = options.session_file_path();
+    let check = || {
+        if options.is_named_file() {
+            session::validate_named_session_file_for_foreground(&path)
+        } else {
+            require_replaceable_session_file(&path)
+        }
+    };
+
+    check()?;
+    let outcome = session::load_snapshot_with_outcome(options)?;
+    check()?;
+    Ok(PersistenceOutcome::Load(outcome))
+}
+
+/// A session file that a save can replace: a regular file, or none yet.
+fn require_replaceable_session_file(path: &Path) -> Result<()> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect session file {}", path.display()));
+        }
+    };
+    let kind = if metadata.is_file() {
+        return Ok(());
+    } else if metadata.file_type().is_symlink() {
+        "a symlink"
+    } else if metadata.is_dir() {
+        "a directory"
+    } else {
+        "not a regular file"
+    };
+    Err(anyhow!("session file {} is {kind}", path.display()))
+}
+
+/// Loads a remembered session with the startup rules of a session file, but
+/// only from that file itself. A file moved or deleted since it was remembered
+/// is not continued from a backup or recovery copy left beside it, and neither
+/// is one that went away while it loaded.
+fn load_remembered(options: &SessionOptions) -> Result<PersistenceOutcome> {
+    let path = options.session_file_path();
+    if let Err(error) = session::validate_named_session_file_for_open(&path) {
+        return Ok(PersistenceOutcome::RememberedUnavailable(error));
+    }
+    let outcome = session::load_snapshot_with_outcome(options)?;
+
+    Ok(match session::validate_named_session_file_for_open(&path) {
+        Ok(()) => PersistenceOutcome::Load(outcome),
+        Err(error) => PersistenceOutcome::RememberedUnavailable(error),
+    })
 }
 
 pub(super) fn save_as_preflight_after_validation(

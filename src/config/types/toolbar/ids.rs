@@ -126,6 +126,7 @@ pub const SIDE_SETTINGS_ABOUT: ToolbarItemId = ToolbarItemId::from_known("side.s
 
 pub const SIDE_SESSION_OPEN: ToolbarItemId = ToolbarItemId::from_known("side.session.open");
 pub const SIDE_SESSION_SAVE_AS: ToolbarItemId = ToolbarItemId::from_known("side.session.save-as");
+pub const SIDE_SESSION_HOME: ToolbarItemId = ToolbarItemId::from_known("side.session.home");
 pub const SIDE_SESSION_INFO: ToolbarItemId = ToolbarItemId::from_known("side.session.info");
 pub const SIDE_SESSION_CLEAR: ToolbarItemId = ToolbarItemId::from_known("side.session.clear");
 pub const SIDE_SESSION_MANAGER: ToolbarItemId = ToolbarItemId::from_known("side.session.manager");

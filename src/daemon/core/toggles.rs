@@ -3,6 +3,7 @@ use super::super::control::{
     write_daemon_toggle_command_error, write_daemon_toggle_command_success,
 };
 use super::super::overlay::overlay_start_backoff_reason;
+use super::super::protocol_v2::ReportedSession;
 use super::super::types::OverlayState;
 use super::{DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW, Daemon};
 use crate::tray_action::TrayAction;
@@ -22,11 +23,16 @@ impl Daemon {
         if self.overlay.state() != OverlayState::Visible {
             return Ok(());
         }
-        if self
-            .overlay
-            .active_named_session_file()
-            .is_some_and(|active| named_session_paths_match(active, requested))
-        {
+        // The overlay may have switched session since it was launched.
+        let active = match self.overlay.reported_session() {
+            Some(ReportedSession::Home) => self.initial_named_session_file.clone(),
+            Some(ReportedSession::Named(path)) => Some(path),
+            None => self
+                .overlay
+                .active_named_session_file()
+                .map(Path::to_path_buf),
+        };
+        if active.is_some_and(|active| named_session_paths_match(&active, requested)) {
             return Ok(());
         }
 

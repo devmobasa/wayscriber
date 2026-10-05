@@ -7,6 +7,9 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
+use super::session_target::{
+    ReportedSession, discard_session_report, read_trusted_session_report, take_final_session_report,
+};
 use super::wire::fresh_id;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,6 +28,17 @@ struct OwnedOverlayChild {
     display_pid: u32,
     pidfd: OwnedFd,
     child: crate::process_broker::BrokerChild,
+    /// Captured when its readiness proved its identity, so its reports can be
+    /// checked after it exits.
+    process_start_ticks: Option<u64>,
+}
+
+/// How an owned overlay child ended.
+#[derive(Debug)]
+pub(crate) struct OverlayExit {
+    pub(crate) status: i32,
+    /// The session it last reported, read before its identity was released.
+    pub(crate) session: Option<ReportedSession>,
 }
 
 #[derive(Debug)]
@@ -127,6 +141,7 @@ impl OverlayChildOwner {
             display_pid,
             pidfd,
             child,
+            process_start_ticks: None,
         });
         self.phase = OverlayChildPhase::Starting;
         Ok(())
@@ -171,6 +186,9 @@ impl OverlayChildOwner {
                             != record.process_start_ticks
                     {
                         bail!("overlay readiness identity mismatch");
+                    }
+                    if let Some(owned) = self.owned.as_mut() {
+                        owned.process_start_ticks = Some(record.process_start_ticks);
                     }
                     let signals_bytes = match super::linux::read_bounded_regular_file(
                         &signals_path(&generation),
@@ -243,6 +261,7 @@ impl OverlayChildOwner {
     pub(crate) fn abort_reservation(&mut self) {
         if let Some(generation) = self.generation().map(str::to_owned) {
             clear_generation_records(&generation);
+            discard_session_report(&generation);
         }
         if self.display_pid().is_some_and(|pid| pid != 0) {
             let _ = self.force_kill_and_wait();
@@ -265,26 +284,24 @@ impl OverlayChildOwner {
         owned.child.signal(signal)
     }
 
-    pub(crate) fn try_wait(&mut self) -> Result<Option<i32>> {
+    /// The session the running child last reported. A report that cannot be
+    /// trusted counts as none.
+    pub(crate) fn reported_session(&self) -> Option<ReportedSession> {
+        let owned = self.owned.as_ref()?;
+        let generation = self.generation()?;
+        let process_start_ticks = owned.process_start_ticks?;
+        read_trusted_session_report(generation, owned.display_pid, process_start_ticks)
+    }
+
+    pub(crate) fn try_wait(&mut self) -> Result<Option<OverlayExit>> {
         let Some(owned) = self.owned.as_mut() else {
             return Ok(None);
         };
-        match owned
+        let status = owned
             .child
             .try_wait()
-            .context("failed to query overlay child")?
-        {
-            Some(status) => {
-                if let Some(generation) = self.generation().map(str::to_owned) {
-                    clear_generation_records(&generation);
-                }
-                self.owned = None;
-                self.generation = None;
-                self.phase = OverlayChildPhase::Stopped;
-                Ok(Some(status))
-            }
-            None => Ok(None),
-        }
+            .context("failed to query overlay child")?;
+        Ok(status.map(|status| self.retire(status)))
     }
 
     pub(crate) fn begin_stop(&mut self) -> Result<()> {
@@ -297,7 +314,7 @@ impl OverlayChildOwner {
         self.signal(libc::SIGTERM)
     }
 
-    pub(crate) fn force_kill_and_wait(&mut self) -> Result<i32> {
+    pub(crate) fn force_kill_and_wait(&mut self) -> Result<OverlayExit> {
         let owned = self
             .owned
             .as_mut()
@@ -306,13 +323,29 @@ impl OverlayChildOwner {
             .child
             .kill_wait()
             .context("broker failed to kill and reap overlay child")?;
-        if let Some(generation) = self.generation().map(str::to_owned) {
+        Ok(self.retire(status))
+    }
+
+    /// Ends ownership of the reaped child: reads its final session report while
+    /// its identity is still held, then clears its proofs and releases it.
+    fn retire(&mut self, status: i32) -> OverlayExit {
+        let session = match (self.generation(), self.owned.as_ref()) {
+            (Some(generation), Some(owned)) => match owned.process_start_ticks {
+                Some(ticks) => take_final_session_report(generation, owned.display_pid, ticks),
+                None => {
+                    discard_session_report(generation);
+                    None
+                }
+            },
+            _ => None,
+        };
+        if let Some(generation) = self.generation.take() {
             clear_generation_records(&generation);
         }
         self.owned = None;
-        self.generation = None;
         self.phase = OverlayChildPhase::Stopped;
-        Ok(status)
+
+        OverlayExit { status, session }
     }
 }
 

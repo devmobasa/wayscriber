@@ -36,42 +36,43 @@ fn release_test_provider(
 
 #[test]
 fn configurator_manifest_preserves_arbitrary_explicit_override_name() {
-    let _guard = crate::test_env::lock();
-    let variable = crate::env_vars::CONFIGURATOR_ENV;
-    let previous = std::env::var_os(variable);
     let temp = crate::test_temp::tempdir().unwrap();
-    let configured = temp.path().join("open-wayscriber-settings");
-    std::fs::write(&configured, "#!/bin/sh\nexit 0\n").unwrap();
-    let mut permissions = std::fs::metadata(&configured).unwrap().permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
-    std::fs::set_permissions(&configured, permissions).unwrap();
-    // SAFETY: access to the process environment is serialized by test_env.
-    unsafe { std::env::set_var(variable, &configured) };
+    let configured = crate::test_fake_helper::link(temp.path(), "open-wayscriber-settings");
+    let output = temp.path().join("unused");
+    let mut variables = vec![(
+        crate::env_vars::CONFIGURATOR_ENV,
+        Some(configured.as_os_str()),
+    )];
+    variables.extend(crate::test_fake_helper::environment(
+        &configured,
+        crate::test_fake_helper::Role::Exit,
+        &output,
+    ));
 
-    let program = super::wire::OsWire::from_os(configured.as_os_str()).unwrap();
-    let result = super::manifest::validate(HelperKind::Configurator, &program, &[], &[], &[]);
-    let broker_result = (|| -> anyhow::Result<()> {
-        let guard = start_for_runtime()?;
-        guard.broker().spawn(
-            HelperKind::Configurator,
-            HelperLifetime::DetachedAfterExec,
-            configured.as_os_str(),
-            std::iter::empty::<&OsStr>(),
-            Vec::new(),
-        )?;
-        Ok(())
-    })();
-    let unexpected = super::wire::OsWire::from_os(OsStr::new("/tmp/unrelated-program")).unwrap();
-    let unexpected_result =
-        super::manifest::validate(HelperKind::Configurator, &unexpected, &[], &[], &[]);
+    let (result, broker_result, unexpected_result) =
+        crate::test_env::with_env_vars(&variables, || {
+            let program = super::wire::OsWire::from_os(configured.as_os_str()).unwrap();
+            let result =
+                super::manifest::validate(HelperKind::Configurator, &program, &[], &[], &[]);
+            let broker_result = (|| -> anyhow::Result<()> {
+                let guard = start_for_runtime()?;
+                guard.broker().spawn(
+                    HelperKind::Configurator,
+                    HelperLifetime::DetachedAfterExec,
+                    configured.as_os_str(),
+                    std::iter::empty::<&OsStr>(),
+                    Vec::new(),
+                )?;
+                Ok(())
+            })();
+            let unexpected =
+                super::wire::OsWire::from_os(OsStr::new("/tmp/unrelated-program")).unwrap();
+            let unexpected_result =
+                super::manifest::validate(HelperKind::Configurator, &unexpected, &[], &[], &[]);
 
-    if let Some(previous) = previous {
-        // SAFETY: access to the process environment is serialized by test_env.
-        unsafe { std::env::set_var(variable, previous) };
-    } else {
-        // SAFETY: access to the process environment is serialized by test_env.
-        unsafe { std::env::remove_var(variable) };
-    }
+            (result, broker_result, unexpected_result)
+        });
+
     result.unwrap();
     broker_result.unwrap();
     assert!(unexpected_result.is_err());
@@ -548,46 +549,37 @@ fn process_group_guard_cleans_up_before_ownership_transfer() {
 #[test]
 fn initial_detach_child_remains_eligible_to_create_a_session() {
     let temp = crate::test_temp::tempdir().unwrap();
-    let helper = temp.path().join("wayscriber-detach-probe");
+    let helper = crate::test_fake_helper::link(temp.path(), "wayscriber-detach-probe");
     let proof = temp.path().join("detach-state");
-    std::fs::write(
+    let variables = crate::test_fake_helper::environment(
         &helper,
-        r#"#!/bin/sh
-read -r pid comm state ppid pgrp rest < "/proc/$$/stat"
-if [ "$pid" = "$pgrp" ]; then
-    printf process-group-leader > "$1"
-else
-    printf session-eligible > "$1"
-fi
-"#,
-    )
-    .unwrap();
-    let mut permissions = std::fs::metadata(&helper).unwrap().permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
-    std::fs::set_permissions(&helper, permissions).unwrap();
+        crate::test_fake_helper::Role::ReportProcessGroup,
+        &proof,
+    );
 
-    let guard = start_for_runtime().unwrap();
-    let _child = guard
-        .broker()
-        .spawn(
-            HelperKind::InitialDetach,
-            HelperLifetime::DetachedAfterExec,
-            helper.as_os_str(),
-            [proof.as_os_str()],
-            Vec::new(),
-        )
-        .unwrap();
+    let observed = crate::test_env::with_env_vars(&variables, || {
+        let guard = start_for_runtime().unwrap();
+        let _child = guard
+            .broker()
+            .spawn(
+                HelperKind::InitialDetach,
+                HelperLifetime::DetachedAfterExec,
+                helper.as_os_str(),
+                std::iter::empty::<&OsStr>(),
+                Vec::new(),
+            )
+            .unwrap();
 
-    let deadline = Instant::now() + Duration::from_secs(1);
-    let observed = loop {
-        if let Ok(value) = std::fs::read_to_string(&proof)
-            && matches!(value.as_str(), "session-eligible" | "process-group-leader")
-        {
-            break value;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Ok(value) = std::fs::read_to_string(&proof) {
+                break value;
+            }
+            assert!(Instant::now() < deadline, "detach probe did not complete");
+            std::thread::sleep(Duration::from_millis(5));
         }
-        assert!(Instant::now() < deadline, "detach probe did not complete");
-        std::thread::yield_now();
-    };
+    });
+
     assert_eq!(observed, "session-eligible");
 }
 
@@ -1335,25 +1327,28 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
 #[test]
 fn wl_copy_publication_accepts_capture_sized_input() {
     const PUBLICATION_BYTES: usize = 16 * 1024 * 1024 + 1;
-    let guard = start_for_runtime().unwrap();
     let temp = crate::test_temp::tempdir().unwrap();
-    let helper = temp.path().join("wl-copy");
+    let helper = crate::test_fake_helper::link(temp.path(), "wl-copy");
     let count_path = temp.path().join("published-bytes");
-    std::fs::write(&helper, "#!/bin/sh\nwc -c > \"$1\"\n").unwrap();
-    let mut permissions = std::fs::metadata(&helper).unwrap().permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
-    std::fs::set_permissions(&helper, permissions).unwrap();
+    let variables = crate::test_fake_helper::environment(
+        &helper,
+        crate::test_fake_helper::Role::CountInput,
+        &count_path,
+    );
 
-    let output = guard
-        .broker()
-        .publish(
-            HelperKind::WlCopy,
-            helper.as_os_str(),
-            [count_path.as_os_str()],
-            vec![b'x'; PUBLICATION_BYTES],
-            Duration::from_secs(30),
-        )
-        .unwrap();
+    let output = crate::test_env::with_env_vars(&variables, || {
+        let guard = start_for_runtime().unwrap();
+        guard
+            .broker()
+            .publish(
+                HelperKind::WlCopy,
+                helper.as_os_str(),
+                std::iter::empty::<&OsStr>(),
+                vec![b'x'; PUBLICATION_BYTES],
+                Duration::from_secs(30),
+            )
+            .unwrap()
+    });
 
     assert_eq!(output.status, 0);
     assert!(!output.timed_out);

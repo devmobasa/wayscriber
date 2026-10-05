@@ -28,6 +28,9 @@ pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
     config_failed: bool,
     reports: Vec<SessionCommandReport>,
     errors: Vec<anyhow::Error>,
+    /// The target at each commit notice, in order, with the number of
+    /// terminal reports published before it.
+    pub committed_targets: Vec<(Option<stored_session::SessionTarget>, usize)>,
     ui: Option<ToolbarRuntimeState>,
     ui_engine: crate::ui_text::UiTextEngine,
     chrome: ToolbarChrome,
@@ -54,6 +57,7 @@ impl<'a> CommandRuntime<'a> {
             config_failed: false,
             reports: Vec::new(),
             errors: Vec::new(),
+            committed_targets: Vec::new(),
             ui: None,
             ui_engine: crate::ui_text::UiTextEngine::default(),
             chrome: ToolbarChrome::new(true, (0.0, 0.0)),
@@ -159,6 +163,13 @@ impl SessionCommandRuntime for CommandRuntime<'_> {
 
     fn refresh_session_ui_seeds(&mut self) {
         refresh_runtime_ui_config_seeds(self);
+    }
+
+    fn session_target_committed(&mut self) {
+        self.committed_targets.push((
+            self.session.options().map(|options| options.target.clone()),
+            self.reports.len(),
+        ));
     }
 
     fn finish_session_command(&mut self, report: SessionCommandReport) {
@@ -571,6 +582,319 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
 
         catalog.assert_terminal_report(&runtime, &target, temp.path());
     }
+}
+
+#[test]
+fn committed_open_announces_its_target_before_the_terminal_report() {
+    for catalog in [
+        CatalogOutcome::Success,
+        CatalogOutcome::Failure,
+        CatalogOutcome::Rejected,
+    ] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let current = named_options(temp.path(), "current");
+        let target = named_options(temp.path(), "target");
+        stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
+        let _env = EnvGuard::set_xdg_data_home(temp.path());
+        if catalog == CatalogOutcome::Failure {
+            std::fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
+        }
+        let mut input = test_input_state();
+        let mut session = SessionState::new(Some(current));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+        let committed = (Some(target.target.clone()), 0);
+
+        start_session_command(
+            &mut runtime,
+            SessionCommand::Open(target.session_file_path()),
+        )
+        .unwrap();
+        worker.complete_next(); // open preflight
+        runtime.receive();
+        assert!(runtime.committed_targets.is_empty());
+
+        worker.complete_next(); // candidate load
+        let completion = runtime.persistence.wait_for_completion().unwrap().unwrap();
+        let worker = (catalog != CatalogOutcome::Rejected).then_some(worker);
+        runtime.apply_session_completion(completion).unwrap();
+        // Announced at commit, before the catalog work.
+        assert_eq!(runtime.committed_targets.first(), Some(&committed));
+
+        if let Some(worker) = worker {
+            worker.complete_next();
+            runtime.receive();
+        }
+        catalog.assert_terminal_report(&runtime, &target, temp.path());
+        assert!(
+            runtime
+                .committed_targets
+                .iter()
+                .all(|notice| *notice == committed),
+            "{catalog:?}: {:?}",
+            runtime.committed_targets
+        );
+    }
+}
+
+#[test]
+fn committed_save_as_announces_its_target_before_the_terminal_report() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let target = named_options(temp.path(), "target");
+    let mut input = test_input_state();
+    add_line(&mut input, 51);
+    let mut session = SessionState::new(Some(current));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(
+        &mut runtime,
+        SessionCommand::SaveAs(
+            target.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+        ),
+    )
+    .unwrap();
+    worker.complete_next(); // overwrite preflight
+    runtime.receive();
+    assert!(runtime.committed_targets.is_empty());
+    worker.complete_next(); // save as
+    runtime.receive();
+
+    assert!(runtime.errors.is_empty());
+    assert!(matches!(
+        runtime.reports.as_slice(),
+        [SessionCommandReport::SaveAs(_)]
+    ));
+    assert_eq!(
+        runtime.committed_targets,
+        [(Some(target.target.clone()), 0)]
+    );
+}
+
+#[test]
+fn failed_open_and_save_as_announce_nothing() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let existing = named_options(temp.path(), "existing");
+    stored_session::save_snapshot(&sample_snapshot(), &existing).unwrap();
+    let missing = temp.path().join("missing.wayscriber-session");
+    for command in [
+        SessionCommand::Open(missing),
+        SessionCommand::SaveAs(
+            existing.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+        ),
+    ] {
+        let mut input = test_input_state();
+        add_line(&mut input, 51);
+        let mut session = SessionState::new(Some(current.clone()));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+        start_session_command(&mut runtime, command).unwrap();
+        worker.complete_next(); // preflight
+        runtime.receive();
+
+        assert_eq!(runtime.errors.len(), 1);
+        assert!(runtime.reports.is_empty());
+        assert!(runtime.committed_targets.is_empty());
+        assert_eq!(runtime.session.options().unwrap().target, current.target);
+    }
+}
+
+fn configured_home(base: &std::path::Path) -> stored_session::SessionOptions {
+    let mut options = stored_session::SessionOptions::new(base.join("configured"), "home");
+    options.persist_transparent = true;
+    options
+}
+
+#[test]
+fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let home = configured_home(temp.path());
+    stored_session::save_snapshot(&sample_snapshot(), &home).unwrap();
+    let mut input = test_input_state();
+    add_line(&mut input, 51);
+    input.mark_session_dirty();
+    let mut session = SessionState::new(Some(current.clone()));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+    let epoch = runtime.session.target_epoch();
+
+    start_session_command(
+        &mut runtime,
+        SessionCommand::OpenHome(Some(Box::new(home.clone()))),
+    )
+    .unwrap();
+    worker.complete_next(); // save the current session
+    runtime.receive();
+    assert_eq!(loaded_line_x2(&current), 51);
+    assert!(runtime.reports.is_empty());
+    worker.complete_next(); // load home
+    runtime.receive();
+
+    assert!(runtime.errors.is_empty(), "{:?}", runtime.errors);
+    assert!(matches!(
+        runtime.reports.as_slice(),
+        [SessionCommandReport::Home]
+    ));
+    assert_eq!(runtime.session.options().unwrap().target, home.target);
+    assert_ne!(runtime.session.target_epoch(), epoch);
+    assert!(!runtime.session.is_dirty() && !runtime.input.is_session_dirty());
+    let shapes = &runtime.input.boards.active_frame().shapes;
+    assert_eq!(shapes.len(), 1);
+    assert!(matches!(
+        shapes[0].shape,
+        crate::draw::Shape::Line { x2: 42, .. }
+    ));
+    // The commit was announced before the terminal report.
+    assert_eq!(
+        runtime.committed_targets.last(),
+        Some(&(Some(home.target.clone()), 0))
+    );
+}
+
+/// A home whose session file a save could not replace, of the kind `case`
+/// names, and the error that names it.
+fn unsaveable_home(
+    base: &std::path::Path,
+    case: &str,
+) -> (stored_session::SessionOptions, &'static str) {
+    let configured = configured_home(base);
+    let saved = named_options(base, "saved");
+    stored_session::save_snapshot(&sample_snapshot(), &saved).unwrap();
+    match case {
+        // A launch would start on an empty canvas here.
+        "configured directory" => {
+            std::fs::create_dir_all(configured.session_file_path()).unwrap();
+            (configured, "is a directory")
+        }
+        // A launch would restore the recovery copy, then fail every save.
+        "configured directory beside a recovery copy" => {
+            std::fs::create_dir_all(configured.session_file_path()).unwrap();
+            std::fs::copy(saved.session_file_path(), configured.recovery_file_path()).unwrap();
+            (configured, "is a directory")
+        }
+        // A launch would follow the link, then fail every save.
+        "configured symlink" => {
+            std::fs::create_dir_all(&configured.base_dir).unwrap();
+            std::os::unix::fs::symlink(saved.session_file_path(), configured.session_file_path())
+                .unwrap();
+            (configured, "is a symlink")
+        }
+        "named directory" => {
+            let named = named_options(base, "named-home");
+            std::fs::create_dir(named.session_file_path()).unwrap();
+            (named, "directory")
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
+    for case in [
+        "configured directory",
+        "configured directory beside a recovery copy",
+        "configured symlink",
+        "named directory",
+    ] {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let current = named_options(temp.path(), "current");
+        let (home, expected) = unsaveable_home(temp.path(), case);
+        let mut input = test_input_state();
+        add_line(&mut input, 51);
+        input.mark_session_dirty();
+        let mut session = SessionState::new(Some(current.clone()));
+        let measurer = TextMeasurer::default();
+        let (persistence, worker) = PersistenceController::controlled_for_test();
+        let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+        start_session_command(&mut runtime, SessionCommand::OpenHome(Some(Box::new(home))))
+            .unwrap();
+        worker.complete_next(); // save the current session
+        runtime.receive();
+        worker.complete_next(); // load home
+        runtime.receive();
+
+        assert!(runtime.reports.is_empty());
+        assert!(
+            format!("{:#}", runtime.errors[0]).contains(expected),
+            "{case}: {:?}",
+            runtime.errors
+        );
+        assert_eq!(runtime.session.options().unwrap().target, current.target);
+        let shapes = &runtime.input.boards.active_frame().shapes;
+        assert_eq!(shapes.len(), 1, "{case}");
+        assert!(matches!(
+            shapes[0].shape,
+            crate::draw::Shape::Line { x2: 51, .. }
+        ));
+        assert!(runtime.committed_targets.is_empty());
+    }
+}
+
+#[test]
+fn returning_home_is_refused_when_the_canvas_changes_while_home_loads() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let home = configured_home(temp.path());
+    let mut input = test_input_state();
+    let mut session = SessionState::new(Some(current.clone()));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(&mut runtime, SessionCommand::OpenHome(Some(Box::new(home)))).unwrap();
+    add_line(runtime.input, 77);
+    runtime.input.mark_session_dirty();
+    worker.complete_next(); // load home
+    runtime.receive();
+
+    assert!(runtime.reports.is_empty());
+    assert!(
+        runtime.errors[0]
+            .to_string()
+            .contains("session was edited while the command was pending"),
+        "{:?}",
+        runtime.errors
+    );
+    assert_eq!(runtime.session.options().unwrap().target, current.target);
+    assert_eq!(runtime.input.boards.active_frame().shapes.len(), 1);
+}
+
+#[test]
+fn returning_to_a_home_without_persistence_leaves_an_unsaved_empty_canvas() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let current = named_options(temp.path(), "current");
+    let mut input = test_input_state();
+    add_line(&mut input, 51);
+    input.mark_session_dirty();
+    let mut session = SessionState::new(Some(current.clone()));
+    let measurer = TextMeasurer::default();
+    let (persistence, worker) = PersistenceController::controlled_for_test();
+    let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
+
+    start_session_command(&mut runtime, SessionCommand::OpenHome(None)).unwrap();
+    worker.complete_next(); // save the current session
+    runtime.receive();
+
+    assert!(!worker.has_request(), "nothing to load");
+    assert_eq!(loaded_line_x2(&current), 51);
+    assert!(matches!(
+        runtime.reports.as_slice(),
+        [SessionCommandReport::Home]
+    ));
+    assert!(runtime.session.options().is_none());
+    assert!(runtime.input.boards.active_frame().shapes.is_empty());
+    assert_eq!(runtime.committed_targets.last(), Some(&(None, 0)));
 }
 
 #[test]

@@ -166,6 +166,9 @@ pub enum ToolbarEvent {
     ClearPreset(usize),
     OpenSession,
     OpenRecentSession(PathBuf),
+    /// Return to the home session: the daemon's startup session file, or the
+    /// configured default session.
+    OpenHomeSession,
     SaveSessionAs,
     SaveSessionAsConfirm(PathBuf),
     SaveSessionAsCancel,

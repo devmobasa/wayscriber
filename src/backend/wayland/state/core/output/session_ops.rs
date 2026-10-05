@@ -1,25 +1,89 @@
 use super::*;
+use crate::backend::wayland::session::{
+    ExpandedTooLarge, OutputSessionLoad, apply_load_outcome, load_output_session,
+    may_save_before_output_load,
+};
 
 impl WaylandState {
+    /// Loads and commits `staged` as the session for the output identified as
+    /// `physical_output_identity`. Until a session has loaded, a remembered
+    /// session this run continues must still be usable; otherwise the overlay
+    /// starts at home instead, says so, and the daemon hears that it is home,
+    /// so the next show does not try that session again.
     pub(in crate::backend::wayland) fn load_configured_session_for_options(
         &mut self,
-        options: session::SessionOptions,
+        staged: session::SessionOptions,
+        physical_output_identity: Option<&str>,
         context: &str,
     ) -> anyhow::Result<()> {
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::LoadConfigured {
-                options: options.clone(),
-            },
-        )?;
-        let PersistenceOutcome::Load(load_outcome) = outcome else {
-            return Err(anyhow::anyhow!("unexpected configured-load worker outcome"));
-        };
-        let loaded_board_data = load_outcome.has_board_data();
-        self.handle_session_load_outcome_for_options(load_outcome, &options, context)?;
+        let remembered = self.unloaded_remembered_session();
+        let home = self
+            .session_home
+            .options_for_output(physical_output_identity);
+
+        let load = load_output_session(staged, remembered.as_deref(), home, |operation| {
+            session_save::run_persistence_operation(self, operation)
+        })?;
+
+        match load {
+            OutputSessionLoad::Loaded(options, outcome) => {
+                self.commit_output_session(options, outcome, context)?;
+            }
+            OutputSessionLoad::WentHome {
+                remembered,
+                reason,
+                home,
+            } => {
+                match home {
+                    Some((options, outcome)) => {
+                        self.commit_output_session(options.clone(), outcome, context)?;
+                        self.input_state
+                            .set_session_preflight_options(Some(options));
+                    }
+                    None => {
+                        self.session.replace_options_before_load(None);
+                        self.input_state.set_session_preflight_options(None);
+                    }
+                }
+                self.notify_remembered_session_abandoned(&remembered, &reason);
+            }
+        }
+
+        self.report_session_to_daemon();
+        Ok(())
+    }
+
+    fn commit_output_session(
+        &mut self,
+        options: session::SessionOptions,
+        outcome: session::LoadSnapshotOutcome,
+        context: &str,
+    ) -> anyhow::Result<()> {
+        let loaded_board_data = outcome.has_board_data();
+        self.handle_session_load_outcome_for_options(outcome, &options, context)?;
         self.session
             .commit_output_options(options, loaded_board_data);
         Ok(())
+    }
+
+    /// The remembered session this run continues, while no session has loaded.
+    fn unloaded_remembered_session(&self) -> Option<std::path::PathBuf> {
+        self.session_home
+            .remembered()
+            .filter(|_| !self.session.is_loaded())
+            .map(std::path::Path::to_path_buf)
+    }
+
+    /// Whether `current` may be saved before an output's session loads: see
+    /// [`may_save_before_output_load`].
+    pub(super) fn may_save_before_output_load(
+        &mut self,
+        current: &session::SessionOptions,
+    ) -> anyhow::Result<bool> {
+        let remembered = self.unloaded_remembered_session();
+        may_save_before_output_load(current, remembered.as_deref(), |operation| {
+            session_save::run_persistence_operation(self, operation)
+        })
     }
 
     /// After a launch-time session load, announce ink restored onto the
@@ -64,134 +128,44 @@ impl WaylandState {
             })
     }
 
-    pub(super) fn handle_session_load_outcome_for_options(
+    pub(in crate::backend::wayland::state) fn handle_session_load_outcome_for_options(
         &mut self,
         outcome: session::LoadSnapshotOutcome,
         options: &session::SessionOptions,
         context: &str,
     ) -> anyhow::Result<()> {
-        match outcome {
-            session::LoadSnapshotOutcome::Loaded(snapshot) => {
-                debug!(
-                    "Restoring session {} from {}",
-                    context,
-                    options.session_file_path().display()
-                );
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    Some(*snapshot),
-                    options,
-                )?;
-            }
-            session::LoadSnapshotOutcome::LoadedFromBackup(snapshot) => {
-                warn!(
-                    "Restoring session {} from backup {} because the primary session had no board data",
-                    context,
-                    options.backup_file_path().display()
-                );
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    Some(*snapshot),
-                    options,
-                )?;
-                self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored drawings from the session backup; the primary session had no board data."));
-            }
-            session::LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => {
-                debug!(
-                    "Restoring session {} from recovery artifact {}",
-                    context,
-                    options.recovery_file_path().display()
-                );
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    Some(*snapshot),
-                    options,
-                )?;
-                self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored session from recovery file; normal save previously exceeded the size limit."));
-            }
-            session::LoadSnapshotOutcome::Empty => {
-                debug!(
-                    "No session data found for {} ({})",
-                    options.session_file_path().display(),
-                    context
-                );
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    None,
-                    options,
-                )?;
-            }
-            session::LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => {
-                // An empty canvas here is indistinguishable from "no session
-                // yet", so without this the user's drawings appear to have
-                // vanished and only the log says the bytes were kept.
-                warn!(
-                    "Session {} could not be read for {}; its bytes were preserved at {}",
-                    options.session_file_path().display(),
-                    context,
-                    backup_path.display()
-                );
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    None,
-                    options,
-                )?;
-                self.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "session.corrupt",
-                    Toast::error(format!(
-                        "Previous session could not be read; a copy was saved to {}",
-                        backup_path.display()
-                    ))
-                    .duration_ms(20_000),
-                );
-            }
-            session::LoadSnapshotOutcome::NonRegularArtifact { path } => {
-                debug!(
-                    "Skipping non-regular session artifact {} for {}",
-                    path.display(),
-                    context
-                );
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    None,
-                    options,
-                )?;
-            }
-            session::LoadSnapshotOutcome::ExpandedTooLarge {
-                path,
-                max_expanded_size,
-            } => {
-                replace_output_session_snapshot(
-                    &mut self.input_state,
-                    self.render.text_measurer(),
-                    None,
-                    options,
-                )?;
-                self.session.protect_session_path(path.clone());
-                if self.session.mark_expanded_load_notified(&path) {
-                    notification::send_notification_async(
-                        &self.tokio_handle,
-                        "Session Too Large to Restore".to_string(),
-                        format!(
-                            "The saved session was left unchanged because it expands beyond the {} MiB safety cap. Clear the session or move {} if it is no longer needed.",
-                            max_expanded_size / 1024 / 1024,
-                            path.display()
-                        ),
-                        Some("dialog-warning".to_string()),
-                    );
-                }
-            }
+        if let Some(too_large) = apply_load_outcome(
+            &mut self.input_state,
+            self.render.text_measurer(),
+            outcome,
+            options,
+            context,
+        )? {
+            self.protect_too_large_session(too_large);
         }
         self.refresh_runtime_ui_config_seeds();
         self.mark_clean_after_session_load();
         Ok(())
+    }
+
+    fn protect_too_large_session(&mut self, too_large: ExpandedTooLarge) {
+        let ExpandedTooLarge {
+            path,
+            max_expanded_size,
+        } = too_large;
+        self.session.protect_session_path(path.clone());
+        if self.session.mark_expanded_load_notified(&path) {
+            notification::send_notification_async(
+                &self.tokio_handle,
+                "Session Too Large to Restore".to_string(),
+                format!(
+                    "The saved session was left unchanged because it expands beyond the {} MiB safety cap. Clear the session or move {} if it is no longer needed.",
+                    max_expanded_size / 1024 / 1024,
+                    path.display()
+                ),
+                Some("dialog-warning".to_string()),
+            );
+        }
     }
 
     fn mark_clean_after_session_load(&mut self) {

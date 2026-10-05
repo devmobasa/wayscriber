@@ -57,6 +57,13 @@ impl ExplicitSessionTransaction {
                             },
                         )
                     }
+                    SessionCommand::OpenHome(_) => {
+                        cancel_pending_output_transition_for_explicit_target(
+                            context.session,
+                            "Return to the home session",
+                        );
+                        self.save_current_or_continue(context)
+                    }
                     SessionCommand::Clear => {
                         self.capture_input_generation(context);
                         self.work(
@@ -163,6 +170,80 @@ impl ExplicitSessionTransaction {
         Ok(TransactionStep::Complete(Box::new(
             SessionCommandReport::Open(self.open_report()),
         )))
+    }
+
+    /// Commits home once it has loaded the way a launch would load it. What a
+    /// launch would only start empty on, a session that is not a regular file
+    /// or one too large to restore, leaves the current session in place.
+    pub(super) fn complete_load_home(
+        &mut self,
+        context: &mut SessionTransaction<'_>,
+        outcome: Option<PersistenceOutcome>,
+    ) -> Result<TransactionStep> {
+        let PersistenceOutcome::Load(load) = required_outcome(outcome)? else {
+            return Err(anyhow!("unexpected home-session load outcome"));
+        };
+        let SessionCommand::OpenHome(Some(options)) = &self.command else {
+            unreachable!()
+        };
+        let options = (**options).clone();
+        match &load {
+            LoadSnapshotOutcome::NonRegularArtifact { path } => {
+                return Err(anyhow!(
+                    "home session {} is not a regular file",
+                    path.display()
+                ));
+            }
+            LoadSnapshotOutcome::ExpandedTooLarge {
+                path,
+                max_expanded_size,
+            } => {
+                return Err(anyhow!(
+                    "home session {} expands beyond the {max_expanded_size} byte safety limit",
+                    path.display()
+                ));
+            }
+            _ => {}
+        }
+
+        let loaded_board_data = load.has_board_data();
+        let too_large = apply_load_outcome(
+            context.input_state,
+            context.measurer,
+            load,
+            &options,
+            "home session",
+        )?;
+        debug_assert!(too_large.is_none(), "a home too large to load was refused");
+        context
+            .input_state
+            .set_session_preflight_options(Some(options.clone()));
+        context.input_state.clear_session_dirty();
+        context
+            .session
+            .commit_output_options(options, loaded_board_data);
+
+        Ok(TransactionStep::Complete(Box::new(
+            SessionCommandReport::Home,
+        )))
+    }
+
+    /// Home has persistence disabled: the run continues on an empty canvas
+    /// that is not saved, as it would have started.
+    pub(super) fn leave_persistence_for_home(
+        &mut self,
+        context: &mut SessionTransaction<'_>,
+    ) -> Result<()> {
+        let current = self
+            .current
+            .as_ref()
+            .expect("return home has current options");
+        replace_output_session_snapshot(context.input_state, context.measurer, None, current)?;
+
+        context.input_state.set_session_preflight_options(None);
+        context.input_state.clear_session_dirty();
+        context.session.commit_without_persistence();
+        Ok(())
     }
 
     pub(super) fn complete_save_as_preflight(

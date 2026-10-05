@@ -453,6 +453,13 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Some(ToolbarGroupId::Session),
     ),
     item(
+        ids::SIDE_SESSION_HOME,
+        "Return to home session",
+        Popover,
+        Session,
+        Some(ToolbarGroupId::Session),
+    ),
+    item(
         ids::SIDE_SESSION_INFO,
         "Session info",
         Popover,

@@ -9,6 +9,7 @@ use super::WaylandBackend;
 use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
 use crate::backend::wayland::portal_capture::portal_freeze_fallback;
+use crate::backend::wayland::session::{SessionHome, SessionLaunch, session_target};
 use crate::env_vars::{DESKTOP_SESSION_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 use crate::{
     capture::CaptureManager,
@@ -46,8 +47,24 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let session_config_failed = load_failure
         .as_ref()
         .is_some_and(|failure| failure.section_failed("session"));
-    let session_options =
-        session::build_session_options(&config, &config_dir, backend.named_session_file.clone());
+    let launch = SessionLaunch::from_environment(backend.named_session_file.as_deref());
+    let home_options = session::home_session_options(&config, &config_dir, &launch);
+    if let Some(preferred) = &launch.preferred {
+        info!("Continuing remembered session {}", preferred.display());
+    }
+    let session_options = session::build_session_options(
+        &config,
+        &config_dir,
+        launch
+            .preferred
+            .clone()
+            .or_else(|| backend.named_session_file.clone()),
+    );
+    let session_home = SessionHome::new(
+        launch,
+        home_options,
+        session_target(session_options.as_ref()),
+    );
     let runtime_wake = RuntimeWakeSource::new()
         .map_err(|err| anyhow::anyhow!("failed to create runtime wake descriptor: {err}"))?;
     let persistence =
@@ -194,6 +211,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         palette_recents,
         capture_manager,
         session_options,
+        session_home,
         session_config_failed,
         persistence,
         runtime_ui,
@@ -214,6 +232,9 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         tablet_manager,
     });
 
+    // A continued remembered session is reported before the daemon sees this
+    // overlay ready, so it never mistakes the overlay for being at home.
+    state.report_session_to_daemon();
     // Decide the toolbar frontend before the first visibility sync so the
     // built-in surfaces are never created just to be torn down when the
     // GTK bars take over.

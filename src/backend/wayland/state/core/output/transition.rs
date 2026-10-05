@@ -66,6 +66,7 @@ impl WaylandState {
             OutputTransitionStart::LoadInitial => {
                 match self.load_configured_session_for_options(
                     staged_options.clone(),
+                    physical_output_identity.as_deref(),
                     "initial output load",
                 ) {
                     // A load that already knows its output is the output's
@@ -225,21 +226,15 @@ impl WaylandState {
             .session_options()
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("output transition has no active session options"))?;
-        self.persist_current_session_for_transition(&current_options, reason)?;
+        if self.may_save_before_output_load(&current_options)? {
+            self.persist_current_session_for_transition(&current_options, reason)?;
+        }
 
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::LoadConfigured {
-                options: staged_options.clone(),
-            },
+        self.load_configured_session_for_options(
+            staged_options,
+            physical_output_identity.as_deref(),
+            "output load",
         )?;
-        let PersistenceOutcome::Load(load_outcome) = outcome else {
-            return Err(anyhow::anyhow!("unexpected output-load worker outcome"));
-        };
-        let loaded_board_data = load_outcome.has_board_data();
-        self.handle_session_load_outcome_for_options(load_outcome, &staged_options, "output load")?;
-        self.session
-            .commit_output_options(staged_options, loaded_board_data);
         info!(
             "Committed logical session output transition after {} (physical_output_identity={:?}, epoch={})",
             reason,

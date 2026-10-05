@@ -284,10 +284,17 @@ pub(super) fn dispatch_with_timeout(
     dispatch_runtime_cycle(&mut ops, timeout)
 }
 
+/// The resume override this run follows: its own, such as the one a named
+/// session file forces on, else the policy the launch environment passed.
 pub(super) fn resume_override_from_env() -> Option<bool> {
-    if let Some(runtime) = runtime_session_override() {
-        return Some(runtime);
-    }
+    runtime_session_override().or_else(launched_resume_policy)
+}
+
+/// The resume policy the launch environment passed in
+/// `WAYSCRIBER_RESUME_SESSION`. Unlike [`resume_override_from_env`], it leaves
+/// out the override this run applies for itself, such as the one a named
+/// session file forces on.
+pub(super) fn launched_resume_policy() -> Option<bool> {
     match env::var(RESUME_SESSION_ENV) {
         Ok(raw) => {
             let normalized = raw.trim().to_ascii_lowercase();
@@ -309,21 +316,14 @@ pub(super) fn resume_override_from_env() -> Option<bool> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::capture::CaptureError;
+    use crate::set_runtime_session_override;
     use std::collections::VecDeque;
     use std::io::Write;
     use std::os::unix::net::UnixStream;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Mutex, OnceLock};
-
-    use super::*;
-    use crate::capture::CaptureError;
-    use crate::set_runtime_session_override;
-
-    fn env_mutex() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
 
     #[test]
     fn timeout_to_poll_ms_supports_none_and_caps_large_values() {
@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn resume_override_from_env_prefers_runtime_override() {
-        let _guard = env_mutex().lock().unwrap();
+        let _guard = crate::test_env::lock();
 
         // SAFETY: test serialized by env mutex.
         unsafe {
@@ -826,7 +826,7 @@ mod tests {
 
     #[test]
     fn resume_override_from_env_parses_expected_values() {
-        let _guard = env_mutex().lock().unwrap();
+        let _guard = crate::test_env::lock();
         set_runtime_session_override(None);
 
         // SAFETY: test serialized by env mutex.

@@ -4,6 +4,17 @@
 //! popover also uses the fixed character-count truncators below, while GTK
 //! delegates visible ellipsization to Pango.
 
+use std::path::Path;
+
+/// How a session file is named to the user: its file name, or the whole path
+/// when it has none that is UTF-8.
+pub fn session_display_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 /// Middle-ellipsize so both the head and the distinguishing tail survive.
 /// Tail truncation made e.g. two different "lecture-05-…" files render
 /// identically in the recents list.

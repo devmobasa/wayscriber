@@ -21,6 +21,8 @@ pub(super) fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {
         display_name: "recent-0.wayscriber-session".to_string(),
         path: std::path::PathBuf::from("/tmp/recent-0.wayscriber-session"),
     }];
+    session_snapshot.home_session_name = Some("home.wayscriber-session".to_string());
+    session_snapshot.at_home_session = false;
     let (tx, menu_rx) = std::sync::mpsc::channel();
     let mut menu_top = TopBar::new_for_test(FeedbackSender::new(tx));
     // Building the strip creates the two overflow-anchored native popovers.
@@ -52,9 +54,10 @@ fn assert_session_popover_contract(
         find_widget_named(&content, "top.menu.session.panel").expect("session popover panel box");
     let mut buttons: Vec<gtk4::Button> = Vec::new();
     collect_descendants(&panel, &mut buttons);
+    let home = model.home.as_ref().expect("home row");
     assert_eq!(
         buttons.len(),
-        model.buttons.len() + model.recents.len(),
+        model.buttons.len() + 1 + model.recents.len(),
         "the popover exposes exactly the pane's controls"
     );
     for (button, button_model) in buttons.iter().zip(model.buttons.iter()) {
@@ -67,6 +70,21 @@ fn assert_session_popover_contract(
             .expect("GTK session open event"),
         GtkToolbarFeedback::Event {
             event: model.buttons[0].event.clone(),
+            rebind_requested: false,
+        }
+    );
+    let home_button = &buttons[model.buttons.len()];
+    assert_eq!(
+        home_button.tooltip_text().as_deref(),
+        Some(home.label.as_str())
+    );
+    assert_eq!(home_button.is_sensitive(), home.enabled);
+    home_button.emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK home event"),
+        GtkToolbarFeedback::Event {
+            event: home.event(),
             rebind_requested: false,
         }
     );
