@@ -83,9 +83,12 @@ An overlay with a published child identity reports its session in
 it. The canonical JSON record carries a schema version, the generation, PID and process-start
 identity, and a target: an absolute session file, or null for home. It is replaced on each change.
 When the child is retired, on exit, stop or forced reap, the daemon reads the report before it
-releases the child's identity, accepts it only from a private regular file in a private directory
-with exactly the identity captured at readiness, and removes it either way. The remembered session
-lives only in daemon memory; startup removes reports an earlier daemon left without restoring them.
+releases the child's identity and removes it, along with any temporary its writer left. While the
+child runs, the visible-target guard reads the current report without removing it. Either read
+accepts a report only from a private regular file in a real private directory, with exactly the
+identity captured at readiness; anything else is ignored. If the directory itself is not private,
+nothing in it is read or removed. The remembered session lives only in daemon memory; startup
+removes reports an earlier daemon left without restoring them.
 
 ## Compatibility and rollback
 
