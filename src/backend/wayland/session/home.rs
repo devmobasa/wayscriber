@@ -42,7 +42,8 @@ impl HomeSession {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::backend::wayland) struct SessionLaunch {
     pub(in crate::backend::wayland) home: HomeSession,
-    /// A remembered session to start in instead of home, if it still exists.
+    /// A remembered session to start in instead of home, while it is still a
+    /// usable session file.
     pub(in crate::backend::wayland) preferred: Option<PathBuf>,
     /// Whether a daemon that reads reports launched the overlay, so its
     /// resume policy is the one the daemon passed.
@@ -232,13 +233,17 @@ pub(in crate::backend::wayland) fn may_save_before_output_load(
 
 /// What an output's session load found.
 #[derive(Debug)]
-pub(in crate::backend::wayland) struct OutputSessionLoad {
-    /// The options loaded and what loading them found: the staged options, or
-    /// home's in place of a remembered session that can no longer be used.
-    /// `None` when that home has persistence disabled, leaving nothing to load.
-    pub(in crate::backend::wayland) loaded: Option<(SessionOptions, LoadSnapshotOutcome)>,
-    /// The remembered session given up for home, and why.
-    pub(in crate::backend::wayland) abandoned: Option<(PathBuf, anyhow::Error)>,
+pub(in crate::backend::wayland) enum OutputSessionLoad {
+    /// The staged session loaded.
+    Loaded(SessionOptions, LoadSnapshotOutcome),
+    /// A remembered session that can no longer be used was given up for home.
+    WentHome {
+        remembered: PathBuf,
+        reason: anyhow::Error,
+        /// Home's options and what loading them found; `None` when home has
+        /// persistence disabled, leaving nothing to load.
+        home: Option<(SessionOptions, LoadSnapshotOutcome)>,
+    },
 }
 
 /// Loads `staged`, the session an output starts in, through `run`. When it is
@@ -250,27 +255,20 @@ pub(in crate::backend::wayland) fn load_output_session(
     home: Option<SessionOptions>,
     mut run: impl FnMut(PersistenceOperation) -> Result<PersistenceOutcome>,
 ) -> Result<OutputSessionLoad> {
+    let options = staged.clone();
     let operation = if is_remembered(&staged, remembered) {
-        PersistenceOperation::LoadRemembered {
-            options: staged.clone(),
-        }
+        PersistenceOperation::LoadRemembered { options }
     } else {
-        PersistenceOperation::LoadConfigured {
-            options: staged.clone(),
-        }
+        PersistenceOperation::LoadConfigured { options }
     };
-    let abandoned = match run(operation)? {
-        PersistenceOutcome::Load(outcome) => {
-            return Ok(OutputSessionLoad {
-                loaded: Some((staged, outcome)),
-                abandoned: None,
-            });
-        }
-        PersistenceOutcome::RememberedUnavailable(error) => (staged.session_file_path(), error),
+
+    let reason = match run(operation)? {
+        PersistenceOutcome::Load(outcome) => return Ok(OutputSessionLoad::Loaded(staged, outcome)),
+        PersistenceOutcome::RememberedUnavailable(reason) => reason,
         other => bail!("unexpected session load outcome: {other:?}"),
     };
 
-    let loaded = match home {
+    let home = match home {
         Some(home) => match run(PersistenceOperation::LoadConfigured {
             options: home.clone(),
         })? {
@@ -279,10 +277,10 @@ pub(in crate::backend::wayland) fn load_output_session(
         },
         None => None,
     };
-
-    Ok(OutputSessionLoad {
-        loaded,
-        abandoned: Some(abandoned),
+    Ok(OutputSessionLoad::WentHome {
+        remembered: staged.session_file_path(),
+        reason,
+        home,
     })
 }
 

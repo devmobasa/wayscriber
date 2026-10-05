@@ -1,6 +1,7 @@
 use super::*;
 use crate::backend::wayland::session::{
-    ExpandedTooLarge, apply_load_outcome, load_output_session, may_save_before_output_load,
+    ExpandedTooLarge, OutputSessionLoad, apply_load_outcome, load_output_session,
+    may_save_before_output_load,
 };
 
 impl WaylandState {
@@ -24,27 +25,44 @@ impl WaylandState {
             session_save::run_persistence_operation(self, operation)
         })?;
 
-        match load.loaded {
-            Some((options, outcome)) => {
-                let loaded_board_data = outcome.has_board_data();
-                self.handle_session_load_outcome_for_options(outcome, &options, context)?;
-                if load.abandoned.is_some() {
-                    self.input_state
-                        .set_session_preflight_options(Some(options.clone()));
+        match load {
+            OutputSessionLoad::Loaded(options, outcome) => {
+                self.commit_output_session(options, outcome, context)?;
+            }
+            OutputSessionLoad::WentHome {
+                remembered,
+                reason,
+                home,
+            } => {
+                match home {
+                    Some((options, outcome)) => {
+                        self.commit_output_session(options.clone(), outcome, context)?;
+                        self.input_state
+                            .set_session_preflight_options(Some(options));
+                    }
+                    None => {
+                        self.session.replace_options_before_load(None);
+                        self.input_state.set_session_preflight_options(None);
+                    }
                 }
-                self.session
-                    .commit_output_options(options, loaded_board_data);
+                self.notify_remembered_session_abandoned(&remembered, &reason);
             }
-            None => {
-                self.session.replace_options_before_load(None);
-                self.input_state.set_session_preflight_options(None);
-            }
-        }
-        if let Some((path, error)) = load.abandoned {
-            self.notify_remembered_session_abandoned(&path, &error);
         }
 
         self.report_session_to_daemon();
+        Ok(())
+    }
+
+    fn commit_output_session(
+        &mut self,
+        options: session::SessionOptions,
+        outcome: session::LoadSnapshotOutcome,
+        context: &str,
+    ) -> anyhow::Result<()> {
+        let loaded_board_data = outcome.has_board_data();
+        self.handle_session_load_outcome_for_options(outcome, &options, context)?;
+        self.session
+            .commit_output_options(options, loaded_board_data);
         Ok(())
     }
 

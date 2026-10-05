@@ -179,8 +179,13 @@ fn launched_as(name: &str) -> bool {
 
 /// The overlay arguments this process was launched with, after `argv[0]`.
 fn launch_arguments() -> Result<Vec<String>> {
-    Ok(crate::test_fake_helper::launch_arguments()?
+    crate::test_fake_helper::launch_arguments()?
         .into_iter()
         .skip(1)
-        .collect())
+        .map(|argument| {
+            argument
+                .into_string()
+                .map_err(|_| anyhow::anyhow!("non-UTF-8 launch argument"))
+        })
+        .collect()
 }

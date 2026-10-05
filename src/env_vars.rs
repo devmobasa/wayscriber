@@ -17,8 +17,8 @@ pub(crate) const OVERLAY_SESSION_REPORTS_ENV: &str = "WAYSCRIBER_OVERLAY_SESSION
 /// The daemon's startup session file, which its overlays return home to.
 /// Absent, home is the configured default session.
 pub(crate) const OVERLAY_HOME_SESSION_ENV: &str = "WAYSCRIBER_OVERLAY_HOME_SESSION";
-/// The session file a daemon overlay continues in place of home, if it still
-/// exists.
+/// The session file a daemon overlay continues in place of home, while it is
+/// still a usable session file.
 pub(crate) const OVERLAY_PREFERRED_SESSION_ENV: &str = "WAYSCRIBER_OVERLAY_PREFERRED_SESSION";
 pub const CATALOG_HOOKS_TEST_ENV: &str = "WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS";
 /// Disables the periodic update check regardless of `[updates] check`.

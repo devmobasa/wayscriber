@@ -8,8 +8,9 @@
 //! A test that needs a helper program therefore writes no script and relies on
 //! no system program for it.
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::io::Read;
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -92,7 +93,7 @@ extern "C" fn play_fake_helper() {
     let Ok(mut arguments) = launch_arguments() else {
         return;
     };
-    if arguments.is_empty() || OsStr::new(&arguments.remove(0)) != link {
+    if arguments.is_empty() || arguments.remove(0) != link {
         return;
     }
 
@@ -106,7 +107,7 @@ extern "C" fn play_fake_helper() {
     std::process::exit(status);
 }
 
-fn play(arguments: &[String]) -> Result<()> {
+fn play(arguments: &[OsString]) -> Result<()> {
     let role = std::env::var(ROLE_ENV).context("fake helper role")?;
     let role = Role::ALL
         .into_iter()
@@ -114,7 +115,7 @@ fn play(arguments: &[String]) -> Result<()> {
         .with_context(|| format!("unknown fake helper role {role:?}"))?;
     let output = std::env::var_os(OUTPUT_ENV).context("fake helper output")?;
 
-    let report = match role {
+    let report: Vec<u8> = match role {
         Role::Exit => return Ok(()),
         Role::ReportProcessGroup => {
             // SAFETY: getpgrp has no preconditions and cannot fail.
@@ -124,24 +125,24 @@ fn play(arguments: &[String]) -> Result<()> {
             } else {
                 "session-eligible"
             }
-            .to_owned()
+            .into()
         }
         Role::CountInput => {
             let mut input = Vec::new();
             std::io::stdin()
                 .read_to_end(&mut input)
                 .context("read the helper's input")?;
-            format!("{}\n", input.len())
+            format!("{}\n", input.len()).into()
         }
         Role::RecordArguments => arguments
             .iter()
-            .map(|argument| format!("{argument}\n"))
+            .flat_map(|argument| [argument.as_bytes(), b"\n"].concat())
             .collect(),
     };
 
     crate::durable_io::write_atomic(
         Path::new(&output),
-        report.as_bytes(),
+        &report,
         crate::durable_io::AtomicWriteOptions::private_runtime_file(),
     )?;
     Ok(())
@@ -149,12 +150,14 @@ fn play(arguments: &[String]) -> Result<()> {
 
 /// The arguments this process was launched with, `argv[0]` first, for a
 /// constructor that runs before `main`: std's own argument capture may not have
-/// run yet.
-pub(crate) fn launch_arguments() -> Result<Vec<String>> {
+/// run yet. They are kept as bytes, so an argument that is not UTF-8 cannot
+/// stop a helper start from recognising itself.
+pub(crate) fn launch_arguments() -> Result<Vec<OsString>> {
     let raw = std::fs::read("/proc/self/cmdline").context("read /proc/self/cmdline")?;
     let raw = raw.strip_suffix(b"\0").unwrap_or(&raw);
 
-    raw.split(|byte| *byte == 0)
-        .map(|argument| String::from_utf8(argument.to_vec()).context("non-UTF-8 argument"))
-        .collect()
+    Ok(raw
+        .split(|byte| *byte == 0)
+        .map(|argument| OsString::from_vec(argument.to_vec()))
+        .collect())
 }

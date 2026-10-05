@@ -9,6 +9,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use super::digest::sha256_hex;
+use super::linux::create_private_directory;
 use super::wire::{
     ACTION_ENVELOPE_PROTOCOL_VERSION, MAX_ACTION_ENVELOPE_BYTES, bounded_reason, canonical_json,
     fresh_id, parse_canonical_json, validate_digest, validate_id, validate_reason, validate_token,
@@ -196,8 +197,6 @@ fn quarantine_action(root: &Path, path: &Path, expected: InodeIdentity) -> Resul
 fn action_name(order: u64, identity: &str) -> String {
     format!("{order:016x}-{identity}.action")
 }
-
-use super::linux::create_private_directory;
 
 fn open_journal_lock(root: &Path) -> Result<File> {
     try_open_journal_lock(root, false)?

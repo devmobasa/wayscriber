@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
 use crate::{RESUME_SESSION_ENV, paths, session};
 
-use super::super::helpers::{resume_override_from_env, resume_override_from_env_var};
+use super::super::helpers::{launched_resume_policy, resume_override_from_env};
 
 /// The options this run starts with, logged.
 pub(super) fn build_session_options(
@@ -34,7 +34,7 @@ pub(super) fn home_session_options(
     launch: &SessionLaunch,
 ) -> Option<session::SessionOptions> {
     let resume_override = if launch.from_daemon {
-        resume_override_from_env_var()
+        launched_resume_policy()
     } else {
         resume_override_from_env()
     };

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 
+pub(super) use super::super::linux::create_private_directory;
 use super::super::wire::{
     AdmissionRecord, CommandControl, DAEMON_COMMAND_PROTOCOL_VERSION, MAX_ADMISSION_RECORD_BYTES,
     MAX_CONTROL_RECORD_BYTES, NamespaceIdentityV2, canonical_json, fresh_id, parse_canonical_json,
@@ -57,8 +58,6 @@ pub(super) fn queue_name(order: u64, identity: &str) -> String {
 pub(super) fn queue_path(root: &Path, order: u64, identity: &str) -> PathBuf {
     queue_dir(root).join(queue_name(order, identity))
 }
-
-pub(super) use super::super::linux::create_private_directory;
 
 pub(crate) fn prepare_layout(root: &Path) -> Result<()> {
     if let Some(parent) = root.parent() {

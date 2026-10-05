@@ -7,6 +7,7 @@
 //! know, and an older daemon reads only the plain files directly in
 //! `daemon-commands/`.
 
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -43,8 +44,12 @@ fn report_dir() -> PathBuf {
     crate::paths::daemon_command_dir().join("overlay-targets")
 }
 
+fn report_name(generation: &str) -> String {
+    format!("{generation}.target")
+}
+
 fn report_path(generation: &str) -> PathBuf {
-    report_dir().join(format!("{generation}.target"))
+    report_dir().join(report_name(generation))
 }
 
 /// Reports `session` to the daemon that launched this overlay, replacing any
@@ -135,7 +140,7 @@ fn read_session_report(
     let Some(directory) = private_report_dir()? else {
         return Ok(None);
     };
-    let path = directory.join(format!("{generation}.target"));
+    let path = directory.join(report_name(generation));
     let bytes = match super::linux::read_bounded_private_file(&path, MAX_REPORT_BYTES) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -156,8 +161,11 @@ fn read_session_report(
     if !path.is_absolute() {
         bail!("reported session {} is not absolute", path.display());
     }
-    // The shape rules any named session file must follow.
-    crate::session::validate_named_session_file_for_info(&path)?;
+    // Only its shape: the file may change before the next show, and the
+    // overlay that continues it checks it then and goes home if it must.
+    if path.file_name().is_none() || path.as_os_str().as_bytes().ends_with(b"/") {
+        bail!("reported session {} does not name a file", path.display());
+    }
     Ok(Some(ReportedSession::Named(path)))
 }
 
@@ -189,7 +197,7 @@ pub(crate) fn take_final_session_report(
 
 /// Removes the report of child `generation` and any temporary its writer left.
 pub(crate) fn discard_session_report(generation: &str) {
-    let report = format!("{generation}.target");
+    let report = report_name(generation);
     if let Err(error) = remove_reports(Some(&report), |target| target == report) {
         log::warn!("Failed to remove the session report of overlay child {generation}: {error:#}");
     }

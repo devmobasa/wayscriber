@@ -284,13 +284,17 @@ pub(super) fn dispatch_with_timeout(
     dispatch_runtime_cycle(&mut ops, timeout)
 }
 
+/// The resume override this run follows: its own, such as the one a named
+/// session file forces on, else the policy the launch environment passed.
 pub(super) fn resume_override_from_env() -> Option<bool> {
-    runtime_session_override().or_else(resume_override_from_env_var)
+    runtime_session_override().or_else(launched_resume_policy)
 }
 
-/// The resume policy the launch environment passed, without the override
-/// this run applies for itself, such as the one a named session file forces.
-pub(super) fn resume_override_from_env_var() -> Option<bool> {
+/// The resume policy the launch environment passed in
+/// `WAYSCRIBER_RESUME_SESSION`. Unlike [`resume_override_from_env`], it leaves
+/// out the override this run applies for itself, such as the one a named
+/// session file forces on.
+pub(super) fn launched_resume_policy() -> Option<bool> {
     match env::var(RESUME_SESSION_ENV) {
         Ok(raw) => {
             let normalized = raw.trim().to_ascii_lowercase();

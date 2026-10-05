@@ -207,13 +207,14 @@ impl ExplicitSessionTransaction {
         }
 
         let loaded_board_data = load.has_board_data();
-        apply_load_outcome(
+        let too_large = apply_load_outcome(
             context.input_state,
             context.measurer,
             load,
             &options,
             "home session",
         )?;
+        debug_assert!(too_large.is_none(), "a home too large to load was refused");
         context
             .input_state
             .set_session_preflight_options(Some(options.clone()));

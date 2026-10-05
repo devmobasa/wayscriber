@@ -265,12 +265,18 @@ mod load {
         }
 
         fn assert_went_home(&mut self, load: OutputSessionLoad) -> anyhow::Error {
-            let (options, outcome) = load.loaded.expect("home loads");
+            let OutputSessionLoad::WentHome {
+                remembered,
+                reason,
+                home: Some((options, outcome)),
+            } = load
+            else {
+                panic!("expected home to load in place of the remembered session: {load:?}");
+            };
             assert_eq!(options.target, self.home.target);
             assert!(matches!(outcome, LoadSnapshotOutcome::Loaded(_)));
-            let (path, error) = load.abandoned.expect("the remembered session is given up");
-            assert_eq!(path, self.remembered.session_file_path());
-            error
+            assert_eq!(remembered, self.remembered.session_file_path());
+            reason
         }
     }
 
@@ -281,10 +287,11 @@ mod load {
 
         let load = sessions.load(Some(home)).unwrap();
 
-        let (options, outcome) = load.loaded.unwrap();
+        let OutputSessionLoad::Loaded(options, outcome) = load else {
+            panic!("expected the remembered session to load: {load:?}");
+        };
         assert_eq!(options.target, sessions.remembered.target);
         assert!(matches!(outcome, LoadSnapshotOutcome::Loaded(_)));
-        assert!(load.abandoned.is_none());
     }
 
     #[test]
@@ -402,8 +409,10 @@ mod load {
 
         let load = sessions.load(None).unwrap();
 
-        assert!(load.loaded.is_none());
-        assert!(load.abandoned.is_some());
+        assert!(matches!(
+            load,
+            OutputSessionLoad::WentHome { home: None, .. }
+        ));
     }
 
     #[test]
@@ -419,9 +428,10 @@ mod load {
         })
         .unwrap();
 
-        let (options, outcome) = load.loaded.unwrap();
+        let OutputSessionLoad::Loaded(options, outcome) = load else {
+            panic!("expected the startup session to load: {load:?}");
+        };
         assert_eq!(options.target, remembered.target);
         assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
-        assert!(load.abandoned.is_none());
     }
 }

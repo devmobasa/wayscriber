@@ -202,7 +202,8 @@ pub(crate) fn is_private(metadata: &std::fs::Metadata) -> bool {
 }
 
 /// Creates `path` as a directory only this user may use, or makes an existing
-/// directory so. A symlink or anything but a directory is refused.
+/// directory this user owns so. A symlink, anything but a directory, or a
+/// directory another user owns is refused.
 pub(crate) fn create_private_directory(path: &Path) -> anyhow::Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
@@ -211,8 +212,10 @@ pub(crate) fn create_private_directory(path: &Path) -> anyhow::Result<()> {
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
         Err(error) => return Err(error.into()),
     }
+
     let metadata = std::fs::symlink_metadata(path)?;
-    if !metadata.is_dir() {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if !metadata.is_dir() || metadata.uid() != unsafe { libc::geteuid() } {
         anyhow::bail!("{} is not a no-follow private directory", path.display());
     }
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
