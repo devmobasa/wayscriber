@@ -128,6 +128,12 @@ impl WaylandState {
         vertical: AxisScroll,
         source: Option<wl_pointer::AxisSource>,
     ) {
+        self.pointer.reconcile_contacts(
+            &self.input_state,
+            self.zoom.panning,
+            self.toolbar_drag.is_moving() || self.toolbar_drag.item_dragging(),
+        );
+
         let stopped = vertical.stop;
         self.handle_pointer_axis_inner(event, routed, vertical, source);
         // A finished scroll leaves no half notch waiting on a meter.
@@ -360,8 +366,7 @@ impl WaylandState {
         if !eraser_active
             && (self.input_state.style.current_thickness - prev_thickness).abs() > f64::EPSILON
         {
-            self.tablet.base_thickness = Some(self.input_state.style.current_thickness);
-            if self.tablet.tip_down {
+            if self.tablet.is_canvas_gesture() {
                 self.tablet.pressure_thickness = Some(self.input_state.style.current_thickness);
                 self.record_stylus_peak(self.input_state.style.current_thickness);
             } else {

@@ -27,12 +27,17 @@ pub(crate) fn save_snapshot_as_with_report(
     let initial_artifacts = collect_save_as_artifacts(options)?;
     ensure_save_as_overwrite_allowed(&initial_artifacts, overwrite, &session_path)?;
 
+    // Prepared before locking; commit quarantines all target sidecars.
+    let generation = ArtifactSetView::probe(options).next_generation(UnreadablePolicy::Warn)?;
     let last_modified = now_rfc3339();
     let prepare_started = Instant::now();
     let prepared = payload_within_limit(
         snapshot,
         options,
-        &last_modified,
+        PayloadStamp {
+            last_modified: &last_modified,
+            generation,
+        },
         DEFAULT_MAX_EXPANDED_SESSION_BYTES,
         HistoryFallbackStrategy::LargestFitting,
     )?;
@@ -144,6 +149,7 @@ pub(crate) fn save_snapshot_as_with_report(
     }
 
     let report = SaveSnapshotReport {
+        generation,
         path: session_path,
         outcome: prepared.outcome,
         raw_size,

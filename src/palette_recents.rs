@@ -64,7 +64,7 @@ impl PaletteRecentsStore {
         Self::load_from_path(path)
     }
 
-    fn load_from_path(path: PathBuf) -> Self {
+    pub(crate) fn load_from_path(path: PathBuf) -> Self {
         let (recents, persisted) = match fs::read_to_string(&path) {
             // Loaded (or absent): the in-memory view matches disk, so a later
             // identical `set_recents` can early-return without rewriting.

@@ -95,3 +95,43 @@ pub(crate) enum ActionRoute {
     CaptureZoom,
     Preset,
 }
+
+impl RoutingOutcome {
+    pub(crate) fn owns_pointer_motion(self, state: &crate::input::InputState) -> bool {
+        match self {
+            Self::Started(_) | Self::Continued(_) => state.has_active_pointer_interaction(),
+            Self::Consumed(ConsumedBy::RadialMenu | ConsumedBy::RadialMenuToggle) => {
+                state.is_radial_menu_open()
+            }
+            Self::Consumed(ConsumedBy::ColorPickerPopup) => state.color_picker_popup_is_dragging(),
+            Self::Consumed(ConsumedBy::BoardPicker) => {
+                state.board_picker_is_dragging()
+                    || state.board_picker_is_page_dragging()
+                    || state.board_appearance_is_size_dragging()
+            }
+            Self::Consumed(ConsumedBy::PropertiesPanel) => state.is_properties_slider_dragging(),
+            _ => false,
+        }
+    }
+
+    /// A popup button can own a release without owning motion. Its ownership
+    /// ends if that popup closes, so a late Up cannot finish a later stroke.
+    pub(crate) fn owns_pointer_release(self, state: &crate::input::InputState) -> bool {
+        match self {
+            Self::Started(_) | Self::Continued(_) => state.has_active_pointer_interaction(),
+            Self::Consumed(ConsumedBy::RadialMenu | ConsumedBy::RadialMenuToggle) => {
+                state.is_radial_menu_open()
+            }
+            Self::Consumed(ConsumedBy::ColorPickerPopup) => state.is_color_picker_popup_open(),
+            Self::Consumed(ConsumedBy::BoardPicker) => state.is_board_picker_open(),
+            Self::Consumed(ConsumedBy::PropertiesPanel) => state.is_properties_panel_open(),
+            Self::Consumed(ConsumedBy::FontPicker) => state.is_font_picker_open(),
+            Self::Consumed(ConsumedBy::ContextMenu | ConsumedBy::RightClickContextMenu) => {
+                state.is_context_menu_open()
+            }
+            Self::Consumed(ConsumedBy::StatusHud) => state.status_hud.press_pending,
+            Self::Consumed(ConsumedBy::ZoomChip) => state.zoom_chip.press_pending.is_pending(),
+            _ => false,
+        }
+    }
+}

@@ -1,5 +1,7 @@
 use super::*;
 
+// These arguments carry the loader artifact view and its preservation/size policy.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn load_normal_session_or_empty(
     options: &SessionOptions,
     session_path: &Path,
@@ -8,6 +10,7 @@ pub(super) fn load_normal_session_or_empty(
     clear_marker_metadata: Option<&fs::Metadata>,
     backup_recovery_marker_metadata: Option<&fs::Metadata>,
     recovery_recoverable_marker_metadata: Option<&fs::Metadata>,
+    restore_named_primary: bool,
 ) -> Result<LoadSnapshotOutcome> {
     let Some(primary_metadata) = session_metadata.as_ref() else {
         if let Some(backup) = load_contentful_backup(
@@ -49,7 +52,8 @@ pub(super) fn load_normal_session_or_empty(
             | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
             | LoadSnapshotOutcome::NonRegularArtifact { .. }
             | LoadSnapshotOutcome::ExpandedTooLarge { .. } => {}
-            LoadSnapshotOutcome::LoadedFromBackup(_)
+            LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+            | LoadSnapshotOutcome::LoadedFromBackup(_)
             | LoadSnapshotOutcome::LoadedFromRecovery(_) => {}
         }
 
@@ -72,10 +76,22 @@ pub(super) fn load_normal_session_or_empty(
         max_expanded_size,
         true,
         "session",
-        CorruptLoadAction::Backup,
+        CorruptLoadAction::Quarantine,
     )?;
-    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
-        return Ok(outcome);
+    let snapshot = match outcome {
+        LoadSnapshotOutcome::Loaded(snapshot) => snapshot,
+        LoadSnapshotOutcome::EmptyAfterCorruption { corrupt_copy } => {
+            return load_after_corrupt_primary(
+                options,
+                max_expanded_size,
+                clear_marker_metadata,
+                backup_recovery_marker_metadata,
+                recovery_recoverable_marker_metadata,
+                corrupt_copy,
+                restore_named_primary,
+            );
+        }
+        other => return Ok(other),
     };
 
     if snapshot.has_board_data() {
@@ -147,7 +163,7 @@ fn load_contentful_backup(
         );
     } else {
         warn!(
-            "Primary session {} is missing; checking backup {} for recoverable board data",
+            "Checking recoverable backup for primary {} at {}",
             options.session_file_path().display(),
             backup_path.display()
         );
@@ -159,7 +175,7 @@ fn load_contentful_backup(
         max_expanded_size,
         true,
         "session backup",
-        CorruptLoadAction::Backup,
+        CorruptLoadAction::Quarantine,
     )? {
         LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => {
             warn!(
@@ -186,14 +202,14 @@ fn load_contentful_backup(
             );
             Ok(None)
         }
-        LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_) => {
-            load_contentful_recovery(
-                options,
-                max_expanded_size,
-                clear_marker_metadata,
-                recovery_recoverable_marker_metadata,
-            )
-        }
+        LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+        | LoadSnapshotOutcome::LoadedFromBackup(_)
+        | LoadSnapshotOutcome::LoadedFromRecovery(_) => load_contentful_recovery(
+            options,
+            max_expanded_size,
+            clear_marker_metadata,
+            recovery_recoverable_marker_metadata,
+        ),
     }
 }
 
@@ -226,7 +242,7 @@ fn load_contentful_recovery(
         max_expanded_size,
         false,
         "session recovery",
-        CorruptLoadAction::Backup,
+        CorruptLoadAction::Quarantine,
     )? {
         LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => Ok(Some(snapshot)),
         LoadSnapshotOutcome::Loaded(_)
@@ -237,8 +253,54 @@ fn load_contentful_recovery(
             preserve_unloadable_recovery(&path, "too-large");
             Ok(None)
         }
-        LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_) => {
-            Ok(None)
-        }
+        LoadSnapshotOutcome::RestoredAfterCorruption { .. }
+        | LoadSnapshotOutcome::LoadedFromBackup(_)
+        | LoadSnapshotOutcome::LoadedFromRecovery(_) => Ok(None),
     }
+}
+
+/// An unreadable primary is not an intentional blank: try older usable artifacts.
+fn load_after_corrupt_primary(
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    clear_marker: Option<&fs::Metadata>,
+    backup_marker: Option<&fs::Metadata>,
+    recovery_marker: Option<&fs::Metadata>,
+    corrupt_copy: PathBuf,
+    restore_named_primary: bool,
+) -> Result<LoadSnapshotOutcome> {
+    let restored = match load_contentful_backup(
+        options,
+        max_expanded_size,
+        None,
+        clear_marker,
+        backup_marker,
+        recovery_marker,
+    )? {
+        Some(snapshot) => Some((snapshot, RestoredArtifact::Backup)),
+        None => {
+            load_contentful_recovery(options, max_expanded_size, clear_marker, recovery_marker)?
+                .map(|snapshot| (snapshot, RestoredArtifact::Recovery))
+        }
+    };
+    let Some((mut snapshot, source)) = restored else {
+        return Ok(LoadSnapshotOutcome::EmptyAfterCorruption { corrupt_copy });
+    };
+
+    if options.is_named_file() && restore_named_primary {
+        snapshot = corrupt::restore_named_primary_after_corruption(
+            options,
+            &corrupt_copy,
+            source,
+            max_expanded_size,
+        )?
+        .ok_or_else(|| {
+            anyhow!("named primary changed during restoration; retry the load without replacing it")
+        })?;
+    }
+    Ok(LoadSnapshotOutcome::RestoredAfterCorruption {
+        snapshot,
+        source,
+        corrupt_copy,
+    })
 }

@@ -1,4 +1,7 @@
 use super::*;
+use crate::backend::wayland::session::{
+    SessionCommand, SourceWriteRefused, interaction_defer_interval,
+};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn begin_session_output_transition(
@@ -36,12 +39,12 @@ impl WaylandState {
             interaction_active,
         );
 
-        let retry_at = Instant::now() + session_save::interaction_defer_interval();
+        let retry_at = Instant::now() + interaction_defer_interval();
         match start {
             OutputTransitionStart::IgnoreCurrentTarget => {
                 if self
                     .session
-                    .cancel_output_transition_for_live_source(input_dirty)
+                    .cancel_output_transition_for_live_source()
                     .is_some()
                 {
                     log::info!(
@@ -61,31 +64,48 @@ impl WaylandState {
                     physical_output_identity,
                     retry_at,
                 );
-                self.notify_output_transition_deferred();
+                if self.session.is_loaded() {
+                    self.notify_output_transition_deferred();
+                }
             }
-            OutputTransitionStart::LoadInitial => {
-                match self.load_configured_session_for_options(
+            OutputTransitionStart::LoadInitial if self.session.begin_initial_load() => {
+                // This callback blocks one initial load, but earlier callbacks
+                // may have delivered ink. Keep that ink instead of replacing it.
+                if self.session.is_dirty() || self.input_state.is_session_dirty() {
+                    self.session.stage_output_transition(
+                        staged_options,
+                        physical_output_identity,
+                        output_transition_retry_at(self.output_transition_failure_backoff()),
+                    );
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "session.load",
+                        Toast::warning(format!(
+                            "Drawings kept on screen: {}",
+                            SourceWriteRefused::NotLoaded
+                        )),
+                    );
+                    return;
+                }
+                let first_output_resolved =
+                    !staged_options.per_output || staged_options.output_identity().is_some();
+                if let Err(err) = self.load_configured_session_for_options(
                     staged_options.clone(),
                     physical_output_identity.as_deref(),
                     "initial output load",
                 ) {
-                    // A load that already knows its output is the output's
-                    // own session, so it settles the launch notice as well.
-                    Ok(()) => {
-                        self.announce_launch_restore(staged_options.output_identity().is_some())
-                    }
-                    Err(err) => {
-                        warn!("Failed to load initial output session: {err:#}");
-                        self.session.stage_output_transition(
-                            staged_options,
-                            physical_output_identity,
-                            output_transition_retry_at(self.output_transition_failure_backoff()),
-                        );
-                        self.notify_output_transition_deferred();
-                    }
+                    warn!("Initial session load failed: {err:#}");
+                    self.session.stage_output_transition(
+                        staged_options,
+                        physical_output_identity,
+                        output_transition_retry_at(self.output_transition_failure_backoff()),
+                    );
+                    self.notify_session_load_failure(&err);
+                } else {
+                    self.announce_launch_restore(first_output_resolved);
                 }
             }
-            OutputTransitionStart::ResolveTransition => {
+            OutputTransitionStart::LoadInitial | OutputTransitionStart::ResolveTransition => {
                 if let Err(err) = self.run_output_transition(
                     staged_options.clone(),
                     physical_output_identity.clone(),
@@ -126,12 +146,12 @@ impl WaylandState {
         }
         if self.session_transaction.is_some() || session_save::should_defer_for_interaction(self) {
             self.session
-                .defer_output_transition(now, session_save::interaction_defer_interval());
+                .defer_output_transition(now, interaction_defer_interval());
             log::debug!("Deferring pending output transition while interaction is active");
             return Ok(true);
         }
 
-        let Some(pending) = self.session.take_pending_output_transition() else {
+        let Some(pending) = self.session.pending_output_transition().cloned() else {
             return Ok(false);
         };
         if let Err(err) = self.run_output_transition(
@@ -192,6 +212,23 @@ impl WaylandState {
             return false;
         }
 
+        if self.session.is_dirty() || self.input_state.is_session_dirty() {
+            if let Some(mut options) = self.session.options().cloned() {
+                let identity = self
+                    .surface
+                    .current_output()
+                    .as_ref()
+                    .and_then(|output| self.output_identity_for(output));
+                options.set_output_identity(identity.as_deref());
+                self.session.stage_output_transition(
+                    options,
+                    identity,
+                    Instant::now() + self.output_transition_failure_backoff(),
+                );
+            }
+            return false;
+        }
+
         log::info!(
             "Resolving live source after output-transition cancellation ({reason}, epoch={})",
             self.session.target_epoch()
@@ -221,75 +258,54 @@ impl WaylandState {
         // instead of being dropped with the frame it belonged to.
         self.input_state.flush_spotlight_magnification_gesture();
         self.spotlight.clear_wheel_idle_deadline();
-        session_save::persistence_barrier(self)?;
-        let current_options = self
-            .session_options()
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("output transition has no active session options"))?;
-        if self.may_save_before_output_load(&current_options)? {
-            self.persist_current_session_for_transition(&current_options, reason)?;
+        if !self
+            .session
+            .pending_output_transition()
+            .is_some_and(|pending| {
+                pending.physical_output_identity == physical_output_identity
+                    && pending.staged_options.session_file_path()
+                        == staged_options.session_file_path()
+            })
+        {
+            self.session.stage_output_transition(
+                staged_options,
+                physical_output_identity.clone(),
+                Instant::now(),
+            );
         }
-
-        self.load_configured_session_for_options(
-            staged_options,
-            physical_output_identity.as_deref(),
-            "output load",
-        )?;
-        info!(
-            "Committed logical session output transition after {} (physical_output_identity={:?}, epoch={})",
-            reason,
-            physical_output_identity,
-            self.session.target_epoch()
-        );
-        self.announce_launch_restore(true);
-        Ok(())
-    }
-
-    fn persist_current_session_for_transition(
-        &mut self,
-        options: &session::SessionOptions,
-        reason: &str,
-    ) -> anyhow::Result<()> {
-        if self.should_skip_protected_session_save(options) {
+        let transition = self
+            .session
+            .pending_output_transition()
+            .expect("staged output transition")
+            .clone();
+        let remembered = self.unloaded_remembered_session();
+        let home = self
+            .session_home
+            .options_for_output(physical_output_identity.as_deref())
+            .map(Box::new);
+        let leaves_placeholder = physical_output_identity.is_some()
+            && self.session_options().is_some_and(|current| {
+                current.per_output
+                    && current.output_identity().is_none()
+                    && !current.is_named_file()
+            });
+        self.start_session_command(SessionCommand::Output {
+            transition: Box::new(transition),
+            remembered,
+            home,
+        })?;
+        if self.session_transaction.is_none() {
             return Ok(());
         }
-        let snapshot = self
-            .input_state
-            .snapshot_for_persistence_with(self.render.text_measurer(), options);
-        if self.should_skip_unloaded_contentless_session_save(options, snapshot.as_ref())? {
-            return Ok(());
+        if leaves_placeholder {
+            // A per-output session loads a placeholder without an output name
+            // until the surface enters one. Leaving it is part of startup, so
+            // it runs to completion as the first load does: the user never
+            // draws into a placeholder whose output session is still loading.
+            info!("Resolving the first output session after {reason}");
+            return self.finish_session_command_blocking();
         }
-        let snapshot = if let Some(snapshot) = snapshot {
-            snapshot
-        } else if Self::session_persistence_enabled(options) {
-            SessionSnapshot {
-                active_board_id: self.input_state.board_id().to_string(),
-                boards: Vec::new(),
-                tool_state: None,
-            }
-        } else {
-            return Ok(());
-        };
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::Save {
-                snapshot,
-                options: options.clone(),
-                strategy: SaveStrategy::Normal,
-                contentless_clear_boundary: self.session.has_loaded_board_data(),
-            },
-        )?;
-        let PersistenceOutcome::Save(save) = outcome else {
-            return Err(anyhow::anyhow!("unexpected output-save worker outcome"));
-        };
-        if !save.committed() {
-            return Err(anyhow::anyhow!(
-                "required session save before {reason} produced no committed write"
-            ));
-        }
-        self.session
-            .mark_saved(Instant::now(), save.committed_board_data);
-        info!("Persisted active logical target before {reason}");
+        info!("Started nonblocking output transition after {reason}");
         Ok(())
     }
 }

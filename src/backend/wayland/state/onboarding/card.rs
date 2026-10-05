@@ -67,8 +67,16 @@ impl OnboardingCardChrome {
     }
 
     #[cfg(feature = "tablet-input")]
-    pub(in crate::backend::wayland) fn set_stylus_press(&mut self, press: OnboardingCardPress) {
+    pub(in crate::backend::wayland) fn accept_stylus_press(
+        &mut self,
+        visible: bool,
+        position: (f64, f64),
+    ) -> bool {
+        let Some(press) = self.press_at(visible, position.0, position.1) else {
+            return false;
+        };
         self.stylus_press = Some(press);
+        true
     }
 
     #[cfg(feature = "tablet-input")]
@@ -259,7 +267,7 @@ mod tests {
     #[test]
     fn the_stylus_press_is_taken_once() {
         let mut chrome = chrome_with_card();
-        chrome.set_stylus_press(OnboardingCardPress::Body);
+        assert!(chrome.accept_stylus_press(true, (110.0, 60.0)));
 
         assert_eq!(chrome.take_stylus_press(), Some(OnboardingCardPress::Body));
         assert_eq!(chrome.take_stylus_press(), None);

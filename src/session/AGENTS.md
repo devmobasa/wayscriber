@@ -15,6 +15,11 @@
 - Preserve lock behavior, backup/recovery behavior, clear boundaries, rollback on artifact moves, and named-session catalog identity.
 - Reject symlinks, directories, and special files where forbidden by named-session rules.
 - Runtime session open/save-as/clear behavior must validate paths before mutating active state.
+- Corrupt artifacts use independent `.corrupt-N` copies (up to three regular files per artifact); never overwrite a rotation backup with corrupt bytes.
+- Restoring a corrupt named primary replaces only the exact corrupt file that was read, and never writes bytes above `max_file_size_bytes` into the primary.
+- Keep all artifact ordering in `snapshot/generation.rs`. Loaders and cleanup still pass unknown generations and preserve their legacy mtime rules until generation-aware loading is deliberately introduced.
+- Session format 7's optional `save_generation` must remain immediately after `version` for bounded header probes. Normal saves allocate under the exclusive session lock; Save As prepares before locking and quarantines target sidecars on commit.
+- Marker format 1 and the 1..=2^53-1 counter range are persistence contracts. Malformed or legacy generation metadata stays unknown; it does not make valid drawings corrupt.
 
 ## Coupled Changes
 - Session changes may affect `src/backend/wayland/session.rs`, input session preflight, daemon named-session switching, configurator session catalog operations, and `src/paths/`.

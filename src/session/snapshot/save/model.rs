@@ -24,6 +24,8 @@ pub enum SaveSnapshotOutcome {
 /// Details about a completed session save.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveSnapshotReport {
+    /// Generation written into this save's artifacts; absent at the ceiling.
+    pub generation: Option<u64>,
     pub path: PathBuf,
     pub outcome: SaveSnapshotOutcome,
     pub raw_size: usize,
@@ -59,7 +61,6 @@ pub struct SnapshotPayloadEstimate {
     pub limit_exceeded: Option<SaveLimitExceeded>,
 }
 
-#[allow(dead_code)]
 impl SnapshotPayloadEstimate {
     pub fn is_near_limit(&self) -> bool {
         is_near_limit(self.written_size as u64, self.max_file_size_bytes)
@@ -107,11 +108,12 @@ impl SaveLimitExceeded {
 }
 
 #[derive(Debug)]
-pub(super) struct SavePayloadTooLarge {
-    pub(super) limit: SaveLimitExceeded,
-    pub(super) written_size: usize,
-    pub(super) raw_size: usize,
-    pub(super) compressed: bool,
+pub(crate) struct SavePayloadTooLarge {
+    pub(crate) limit: SaveLimitExceeded,
+    pub(crate) recovery_path: Option<PathBuf>,
+    pub(crate) written_size: usize,
+    pub(crate) raw_size: usize,
+    pub(crate) compressed: bool,
 }
 
 impl fmt::Display for SavePayloadTooLarge {

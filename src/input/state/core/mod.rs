@@ -61,6 +61,8 @@ mod view;
 mod zoom_chip;
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod top_menu_tests;
 
 pub(crate) use top_menu::TopMenuState;

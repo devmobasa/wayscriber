@@ -5,8 +5,8 @@ use crate::backend::wayland::backend::event_loop::session_save::{
     handle_autosave_failure, handle_persistence_transport_failure, report_autosave_success,
 };
 use crate::backend::wayland::session::{
-    ExplicitSessionTransaction, PersistenceController, SaveCompletion, SessionCommand,
-    SessionCommandReport, SessionTransaction,
+    PersistenceController, SaveCompletion, SessionCommand, SessionCommandReport,
+    SessionCommandTransaction, SessionTransaction,
     driver::{self, SessionCommandRuntime},
 };
 use crate::session::ToolStateSnapshot;
@@ -21,7 +21,7 @@ impl SessionCommandRuntime for WaylandState {
         }
     }
 
-    fn pending_command(&mut self) -> &mut Option<ExplicitSessionTransaction> {
+    fn pending_command(&mut self) -> &mut Option<SessionCommandTransaction> {
         &mut self.session_transaction
     }
 
@@ -37,6 +37,10 @@ impl SessionCommandRuntime for WaylandState {
         self.refresh_runtime_ui_config_seeds();
     }
 
+    fn session_command_queued(&mut self) {
+        self.input_state.push_toast(crate::input::state::ToastPriority::Action, "session.command", crate::input::state::Toast::info("Session command queued for the visible session. If the session changes, retry it on the intended session."));
+    }
+
     fn session_target_committed(&mut self) {
         self.report_session_to_daemon();
     }
@@ -47,6 +51,14 @@ impl SessionCommandRuntime for WaylandState {
 
     fn fail_session_command(&mut self, command: &SessionCommand, error: &anyhow::Error) {
         WaylandState::fail_session_command(self, command, error);
+    }
+
+    fn fail_queued_commands(
+        &mut self,
+        failures: Vec<(SessionCommand, anyhow::Error)>,
+        closing: bool,
+    ) {
+        WaylandState::fail_queued_session_commands(self, failures, closing);
     }
 
     fn session_transport_failed(&mut self, error: &anyhow::Error) {
@@ -73,6 +85,16 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn poll_pending_session_command(&mut self) {
         driver::poll_pending_session_command(self);
+    }
+
+    /// Runs the pending command and any queued behind it to completion,
+    /// blocking dispatch, as startup and shutdown do.
+    pub(in crate::backend::wayland) fn finish_session_command_blocking(&mut self) -> Result<()> {
+        let finished = driver::finish_pending_session_command(self);
+        if let Err(error) = &finished {
+            driver::fail_pending_commands(self, error);
+        }
+        finished
     }
 
     pub(in crate::backend::wayland) fn handle_clear_saved_tool_state_action(&mut self) {

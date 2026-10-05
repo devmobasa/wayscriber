@@ -281,7 +281,7 @@ impl WaylandState {
     ) -> Option<TouchTarget> {
         if routed.surface == InputSurface::Canvas
             && routed.inline_toolbars
-            && self.inline_toolbar_press(routed.screen?, Some(conn), Some(qh))
+            && self.inline_toolbar_primary_press_or_strip(routed.screen?, Some(conn), Some(qh))
         {
             return Some(TouchTarget::InlineToolbar);
         }

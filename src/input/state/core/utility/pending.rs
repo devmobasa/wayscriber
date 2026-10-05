@@ -1,15 +1,11 @@
 use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputEffect, InputEffectDrain, InputEffectKind,
-    InputState, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
-    PendingSelectionClipboardPublish, PendingToolbarPersistence, PresetAction, QuickColorEdit,
-    ZoomAction, ZoomAnchor, ZoomRequest,
+    InputState, OutputFocusAction, PendingBackendAction, PendingSelectionClipboardPublish,
+    PendingToolbarPersistence, ZoomAction, ZoomAnchor, ZoomRequest,
 };
-use super::super::base::{TextClipboardRequest, TextPasteTarget};
 use crate::draw::Color;
-use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::HexPasteTarget;
 
-#[allow(dead_code)]
 impl InputState {
     pub(crate) fn emit_input_effect(&mut self, effect: InputEffect) {
         self.input_effects.emit(effect);
@@ -132,23 +128,6 @@ impl InputState {
             .contains(InputEffectKind::ToolbarPersistence)
     }
 
-    /// Takes every shortcut edit recorded since the last drain, oldest first.
-    ///
-    /// The backend hands each one to the config-edit worker, which answers them
-    /// in the same order. They are drained together rather than one per pass
-    /// because two edits can be recorded from a single batch of input events,
-    /// and the second must not cost the first its write or its toast.
-    pub(crate) fn take_pending_keybinding_edits(&mut self) -> Vec<KeybindingEditRequest> {
-        self.input_effects
-            .drain_all(InputEffectKind::KeybindingEdit)
-            .into_iter()
-            .filter_map(|effect| match effect {
-                InputEffect::KeybindingEdit(request) => Some(request),
-                _ => None,
-            })
-            .collect()
-    }
-
     /// Stores an output focus action for retrieval by the backend.
     pub(crate) fn request_output_focus_action(&mut self, action: OutputFocusAction) {
         self.emit_input_effect(InputEffect::OutputFocus(action));
@@ -189,36 +168,6 @@ impl InputState {
             Some(InputEffect::Zoom(request)) => Some(request),
             _ => None,
         }
-    }
-
-    /// Takes and clears any pending preset save/clear action.
-    pub fn take_pending_preset_action(&mut self) -> Option<PresetAction> {
-        match self.input_effects.drain_one(InputEffectKind::Preset) {
-            Some(InputEffect::Preset(action)) => Some(action),
-            _ => None,
-        }
-    }
-
-    /// Takes and clears any accepted quick-color recolor awaiting its config
-    /// write. The runtime palette already shows the new color.
-    pub fn take_pending_quick_color_edit(&mut self) -> Option<QuickColorEdit> {
-        match self.input_effects.drain_one(InputEffectKind::QuickColor) {
-            Some(InputEffect::QuickColor(edit)) => Some(edit),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn take_pending_board_runtime_ui_actions(
-        &mut self,
-    ) -> Vec<PendingBoardRuntimeUiAction> {
-        self.input_effects
-            .drain_all(InputEffectKind::BoardRuntimeUi)
-            .into_iter()
-            .filter_map(|effect| match effect {
-                InputEffect::BoardRuntimeUi(action) => Some(action),
-                _ => None,
-            })
-            .collect()
     }
 
     pub(crate) fn take_pending_selection_clipboard_publish(
@@ -269,20 +218,6 @@ impl InputState {
         self.input_effects.contains(InputEffectKind::FrozenToggle)
     }
 
-    pub(crate) fn take_pending_eyedropper_toggle(&mut self) -> bool {
-        self.input_effects
-            .drain_one(InputEffectKind::EyedropperToggle)
-            .is_some()
-    }
-
-    pub(crate) fn take_pending_ocr_request(&mut self) -> bool {
-        match self.input_effects.drain_one(InputEffectKind::OcrPass) {
-            Some(InputEffect::OcrPass { requested, .. }) => requested,
-            Some(effect) => unreachable!("OCR drain returned {effect:?}"),
-            None => false,
-        }
-    }
-
     pub(crate) fn take_pending_copy_hex_request(&mut self) -> Option<Color> {
         match self.input_effects.drain_one(InputEffectKind::CopyHex) {
             Some(InputEffect::CopyHex(color)) => Some(color),
@@ -293,20 +228,6 @@ impl InputState {
     pub(crate) fn take_pending_paste_hex_request(&mut self) -> Option<HexPasteTarget> {
         match self.input_effects.drain_one(InputEffectKind::PasteHex) {
             Some(InputEffect::PasteHex(target)) => Some(target),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn take_pending_text_copy(&mut self) -> Option<TextClipboardRequest> {
-        match self.input_effects.drain_one(InputEffectKind::TextCopy) {
-            Some(InputEffect::TextCopy(request)) => Some(request),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn take_pending_text_paste(&mut self) -> Option<TextPasteTarget> {
-        match self.input_effects.drain_one(InputEffectKind::TextPaste) {
-            Some(InputEffect::TextPaste(target)) => Some(target),
             _ => None,
         }
     }
@@ -344,6 +265,7 @@ mod tests {
     use crate::draw::{BLACK, WHITE};
     use crate::input::state::KeybindingEditOperation;
     use crate::input::state::core::base::{InputEffect, InputEffectDrain};
+    use crate::input::state::core::base::{KeybindingEditRequest, PresetAction, QuickColorEdit};
 
     fn make_state() -> InputState {
         crate::input::state::test_support::make_test_input_state()

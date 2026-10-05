@@ -2,10 +2,6 @@ use super::super::super::base::InputState;
 use super::super::BoardPickerMode;
 
 impl InputState {
-    fn board_picker_board_order(&self) -> Vec<usize> {
-        self.board_picker_board_order_for_mode(self.board_picker_mode())
-    }
-
     fn board_picker_board_order_for_mode(&self, _mode: BoardPickerMode) -> Vec<usize> {
         let board_count = self.boards.board_count();
         let mut order = Vec::with_capacity(board_count);

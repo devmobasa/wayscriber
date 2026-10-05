@@ -399,7 +399,7 @@ impl OnboardingStore {
         Self::load_from_path(path)
     }
 
-    fn load_from_path(path: PathBuf) -> Self {
+    pub(crate) fn load_from_path(path: PathBuf) -> Self {
         match fs::read_to_string(&path) {
             Ok(raw) => match toml::from_str::<OnboardingState>(&raw) {
                 Ok(mut state) => {

@@ -1758,7 +1758,11 @@ fn exact_revision_detects_same_timestamp_content_replacement() {
     let error = document
         .save_with_backup(document.config().clone())
         .expect_err("same-time content replacement must conflict");
-    assert!(error.to_string().contains("changed on disk"));
+    assert!(
+        error
+            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .is_some()
+    );
     assert!(fs::read_to_string(&temp.path).unwrap().contains("144"));
 }
 
@@ -1778,8 +1782,8 @@ fn exact_revision_detects_content_replacement_with_rolled_back_timestamp() {
         document
             .save_with_backup(document.config().clone())
             .expect_err("older timestamp must not hide changed content")
-            .to_string()
-            .contains("changed on disk")
+            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .is_some()
     );
 }
 
@@ -1810,8 +1814,8 @@ fn exact_revision_detects_deletion_creation_and_unsupported_replacement() {
         deleted_document
             .save_with_backup(deleted_document.config().clone())
             .expect_err("deletion must conflict")
-            .to_string()
-            .contains("changed on disk")
+            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .is_some()
     );
 
     let created = TempConfig::new("created");
@@ -1822,8 +1826,8 @@ fn exact_revision_detects_deletion_creation_and_unsupported_replacement() {
         created_document
             .save_with_backup(created_document.config().clone())
             .expect_err("creation must conflict")
-            .to_string()
-            .contains("changed on disk")
+            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .is_some()
     );
 
     let replaced = TempConfig::new("directory-replacement");
@@ -1860,8 +1864,8 @@ fn exact_revision_detects_changed_symlink_target_with_identical_content() {
         document
             .save_with_backup(document.config().clone())
             .expect_err("symlink target replacement must conflict")
-            .to_string()
-            .contains("changed on disk")
+            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .is_some()
     );
 }
 

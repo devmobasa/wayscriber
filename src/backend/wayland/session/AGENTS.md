@@ -12,6 +12,7 @@
 - Preserve save-before-open behavior, target validation, user prompt boundaries, rollback behavior, and catalog updates.
 - Do not replace active board state until a runtime open has validated and loaded successfully.
 - Keep named-session safety aligned with `src/session/` and `src/paths/`.
+- A queued Clear or tool reset runs only on the epoch and edit generation it was requested over. Queued commands that will not run are reported together through `fail_queued_commands`.
 
 ## Coupled Changes
 - Runtime session changes may affect `src/session/`, `src/input/state/core/session_preflight*`, daemon named-session switching, and configurator session catalog code.

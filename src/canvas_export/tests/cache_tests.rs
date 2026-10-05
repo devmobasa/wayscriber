@@ -128,9 +128,6 @@ fn pdf_pages_keep_distinct_blurred_backdrops_when_rasterized() {
         resolve_pdf_page_layout,
     };
     use std::process::Command;
-    if Command::new("pdftoppm").arg("-v").output().is_err() {
-        return;
-    }
     let mut frame = Frame::new();
     frame.add_shape(Shape::BlurRect {
         x: 2,
@@ -204,7 +201,7 @@ fn pdf_pages_keep_distinct_blurred_backdrops_when_rasterized() {
         .arg(&path)
         .arg(&prefix)
         .output()
-        .unwrap();
+        .expect("pdftoppm is required for PDF raster assertions; install poppler and retry");
     assert!(
         result.status.success(),
         "{}",

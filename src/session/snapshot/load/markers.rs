@@ -1,10 +1,12 @@
 use super::*;
+use crate::session::snapshot::generation::{ArtifactStamp, LegacyOrder, cleared_by, written_after};
 
 pub(super) fn backup_is_newer_than_primary(backup: &fs::Metadata, primary: &fs::Metadata) -> bool {
-    match (backup.modified(), primary.modified()) {
-        (Ok(backup_modified), Ok(primary_modified)) => backup_modified > primary_modified,
-        _ => false,
-    }
+    written_after(
+        ArtifactStamp::without_generation(backup),
+        ArtifactStamp::without_generation(primary),
+        LegacyOrder::Strict,
+    )
 }
 
 pub(super) fn recoverable_backup_marker_metadata(
@@ -85,14 +87,11 @@ pub(super) fn clear_marker_suppresses_artifact(
     let Some(clear_marker_metadata) = clear_marker_metadata else {
         return false;
     };
-    let artifact_newer_than_marker = match (
-        artifact_metadata.modified(),
-        clear_marker_metadata.modified(),
-    ) {
-        (Ok(artifact_modified), Ok(marker_modified)) => artifact_modified > marker_modified,
-        _ => false,
-    };
-    if artifact_newer_than_marker {
+    let cleared = cleared_by(
+        ArtifactStamp::without_generation(artifact_metadata),
+        ArtifactStamp::without_generation(clear_marker_metadata),
+    );
+    if !cleared {
         return false;
     }
     info!(
@@ -144,8 +143,9 @@ pub(super) fn should_prefer_recovery(
     let Some(session_metadata) = session_metadata else {
         return true;
     };
-    match (recovery_metadata.modified(), session_metadata.modified()) {
-        (Ok(recovery_modified), Ok(session_modified)) => recovery_modified >= session_modified,
-        _ => true,
-    }
+    written_after(
+        ArtifactStamp::without_generation(recovery_metadata),
+        ArtifactStamp::without_generation(session_metadata),
+        LegacyOrder::NonStrictTrue,
+    )
 }

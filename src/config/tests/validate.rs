@@ -991,7 +991,7 @@ fn drawing_drag_tool_defaults_match_legacy_mapping() {
 #[test]
 fn opaque_colors_still_serialize_without_an_alpha_component() {
     use crate::config::ColorSpec;
-    use crate::draw::Color;
+    use crate::domain::Color;
 
     let opaque = Color {
         r: 1.0,

@@ -15,6 +15,7 @@
 - Keep pending chrome targets separate from device-owned release suppression; target cleanup preserves both latches, and touch cancellation clears only Touch suppression.
 - Route protocol surfaces through `SurfaceRouter`; do not add modality-specific canvas/toolbar classifiers.
 - Avoid blocking protocol callback paths.
+- Preserve press ownership across inline-strip crossings, toolbar visibility changes, unrelated releases, and tablet-frame coalescing. Consume matching pointer ownership before early release exits, and clear it on device detach.
 
 ## Coupled Changes
 - Input event changes may require `src/input/` state tests.

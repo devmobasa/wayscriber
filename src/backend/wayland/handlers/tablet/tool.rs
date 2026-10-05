@@ -10,7 +10,7 @@ use crate::{
 
 use crate::backend::wayland::{
     handlers::route::InputSurface,
-    state::{RegionReviewPress, WaylandState},
+    state::{ContactOwner, RegionReviewPress, ReleaseRoute, StylusMotionRoute, WaylandState},
 };
 use crate::input::state::RegionInputSource;
 
@@ -143,8 +143,7 @@ impl WaylandState {
         self.finish_toolbar_item_drag(false);
         self.toolbar_drag.set_item_dragging(false);
         self.cancel_toolbar_move_drag();
-        self.tablet.tip_down = false;
-        self.tablet.base_thickness = Some(self.input_state.style.current_thickness);
+        self.tablet.reset_contact();
         self.tablet.pressure_thickness = None;
         self.tablet.last_pos = None;
         self.tablet.pending_frame = Default::default();
@@ -190,7 +189,11 @@ impl WaylandState {
         self.cancel_region_selection_from(RegionInputSource::Stylus);
         self.take_retired_stylus_contact();
         let hover_cursor_pos = self.stylus_hover_cursor_pos();
-        self.tablet.tip_down = false;
+        let left_strip = self.tablet.on_inline_strip();
+        self.tablet.reset_contact();
+        if left_strip {
+            self.inline_toolbar_leave();
+        }
         self.tablet.on_overlay = false;
         self.tablet.on_toolbar = false;
         self.finish_toolbar_item_drag(false);
@@ -228,12 +231,30 @@ impl WaylandState {
         if self.tablet.contact_retired {
             return;
         }
+        if self.input_state.command_palette_is_engaged() {
+            let position = self.current_or_pending_stylus_position();
+            self.input_state
+                .handle_command_palette_click_with_resources(
+                    crate::input::state::InputTextResources {
+                        measurer: self.render.text_measurer(),
+                        ui_engine: self.render.ui_text(),
+                    },
+                    position.0 as i32,
+                    position.1 as i32,
+                    self.surface.width(),
+                    self.surface.height(),
+                );
+            self.tablet.consume_contact();
+            self.input_state.needs_redraw = true;
+            return;
+        }
         self.input_state.dismiss_ocr_scan_result();
         if self.handle_stylus_region_down() || self.handle_stylus_eyedropper_down() {
             return;
         }
         if self.toolbar_chrome.inline_toolbars()
             && self.toolbar.is_visible()
+            && !self.input_state.help_overlay.is_visible()
             && self.handle_inline_stylus_down(conn, qh)
         {
             return;
@@ -248,14 +269,14 @@ impl WaylandState {
         if !self.input_state.region_is_active() {
             return false;
         }
-        if self.tablet.on_toolbar {
+        let (x, y) = self.current_or_pending_stylus_position();
+        if self.tablet.on_toolbar || self.inline_toolbar_contains((x, y)) {
             self.cancel_region_for_toolbar_interaction();
             return false;
         }
         if !self.tablet.on_overlay {
             return false;
         }
-        let (x, y) = self.current_or_pending_stylus_position();
         match self.consume_region_review_press(RegionInputSource::Stylus, (x, y)) {
             RegionReviewPress::NotReview | RegionReviewPress::Fallthrough => {
                 self.begin_region_selection(RegionInputSource::Stylus, x, y);
@@ -271,26 +292,24 @@ impl WaylandState {
         if !self.input_state.eyedropper_is_active() {
             return false;
         }
-        if self.tablet.on_toolbar {
+        let (x, y) = self.current_or_pending_stylus_position();
+        if self.tablet.on_toolbar || self.inline_toolbar_contains((x, y)) {
             self.cancel_eyedropper();
             return false;
         }
         if !self.tablet.on_overlay {
             return false;
         }
-        let (x, y) = self.current_or_pending_stylus_position();
         self.sample_eyedropper(x, y);
         true
     }
 
     fn handle_inline_stylus_down(&mut self, conn: &Connection, qh: &QueueHandle<Self>) -> bool {
         let position = self.current_or_pending_stylus_position();
-        if !self.inline_toolbar_press(position, Some(conn), Some(qh)) {
+        if !self.inline_toolbar_primary_press_or_strip(position, Some(conn), Some(qh)) {
             return false;
         }
-        self.tablet.on_toolbar = true;
-        self.toolbar_drag
-            .set_item_dragging(self.toolbar_drag.item_dragging());
+        self.tablet.bind_tip(ContactOwner::InlineToolbar);
         true
     }
 
@@ -315,6 +334,26 @@ impl WaylandState {
 
     fn handle_stylus_up(&mut self) {
         let retired_contact = self.take_retired_stylus_contact();
+        if retired_contact {
+            return;
+        }
+        let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
+        let previous_hover = self.stylus_hover_cursor_pos();
+        let route = self.tablet.take_up_route(inline_active);
+        // A strip contact must clean up even if a modal opened during its drag.
+        if route == ReleaseRoute::InlineToolbar {
+            let position = self.current_or_pending_stylus_position();
+            if inline_active {
+                self.inline_toolbar_release(position);
+            }
+            self.finish_toolbar_item_drag(true);
+            self.toolbar_drag.set_item_dragging(false);
+            self.end_toolbar_move_drag();
+            self.tablet
+                .set_over_inline_strip(self.inline_toolbar_contains(position));
+            self.mark_stylus_hover_cursor_dirty(previous_hover, self.stylus_hover_cursor_pos());
+            return;
+        }
         if self.input_state.region_is_active() {
             if self.tablet.on_overlay {
                 let (x, y) = self.current_or_pending_stylus_position();
@@ -322,15 +361,6 @@ impl WaylandState {
             } else {
                 self.cancel_region_selection_from(RegionInputSource::Stylus);
             }
-            return;
-        }
-        let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
-        if inline_active && self.tablet.on_toolbar {
-            let (x, y) = self.pointer.position();
-            self.inline_toolbar_release((x as f64, y as f64));
-            self.tablet.on_toolbar = false;
-            self.toolbar_drag.set_item_dragging(false);
-            self.end_toolbar_move_drag();
             return;
         }
         if self.tablet.on_toolbar {
@@ -345,39 +375,68 @@ impl WaylandState {
     }
 
     fn handle_stylus_motion(&mut self, conn: &Connection, qh: &QueueHandle<Self>, x: f64, y: f64) {
+        self.pointer.reconcile_contacts(
+            &self.input_state,
+            self.zoom.panning,
+            self.toolbar_drag.is_moving() || self.toolbar_drag.item_dragging(),
+        );
         if self.handle_modal_stylus_motion(x, y) || self.handle_stylus_move_drag(x, y) {
             return;
         }
         let previous_hover = self.stylus_hover_cursor_pos();
-        if self.handle_toolbar_stylus_motion(conn, qh, x, y) {
-            return;
-        }
-        if self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible() {
-            self.tablet.last_pos = Some((x, y));
-            if self.inline_toolbar_motion((x, y)) {
-                self.commit_pending_stylus_frame();
-                self.tablet.last_pos = Some((x, y));
-                self.tablet.on_toolbar = true;
-                self.mark_stylus_hover_cursor_dirty(previous_hover, None);
-                return;
+        let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
+        match self.tablet.motion_route(inline_active) {
+            StylusMotionRoute::LayerShellToolbar => {
+                self.handle_toolbar_stylus_motion(conn, qh, x, y);
             }
-            self.tablet.on_toolbar = false;
-        }
-        if self.tablet.on_overlay {
-            self.queue_stylus_motion(x, y);
+            StylusMotionRoute::InlineStrip => {
+                self.tablet.record_immediate_motion((x, y));
+                let over_strip = self.inline_toolbar_motion((x, y));
+                self.tablet.set_over_inline_strip(over_strip);
+            }
+            StylusMotionRoute::InlineHover
+                if self.pointer.contact_motion().skips_inline_strip() =>
+            {
+                // Hover from another device cannot replace the mouse's held canvas contact.
+                self.tablet.record_immediate_motion((x, y));
+                self.tablet
+                    .set_over_inline_strip(self.inline_toolbar_contains((x, y)));
+                self.clear_inline_contact_hover();
+            }
+            StylusMotionRoute::InlineHover => {
+                self.tablet.record_immediate_motion((x, y));
+                let over_strip = self.inline_toolbar_motion((x, y));
+                self.tablet.set_over_inline_strip(over_strip);
+                if over_strip {
+                    self.commit_pending_stylus_frame();
+                    self.tablet.record_immediate_motion((x, y));
+                    self.mark_stylus_hover_cursor_dirty(previous_hover, None);
+                } else if self.tablet.on_overlay {
+                    self.queue_stylus_motion(x, y);
+                }
+            }
+            StylusMotionRoute::Canvas => {
+                self.tablet.set_over_inline_strip(false);
+                if inline_active {
+                    self.clear_inline_contact_hover();
+                }
+                if self.tablet.on_overlay {
+                    self.queue_stylus_motion(x, y);
+                }
+            }
         }
     }
 
     fn handle_modal_stylus_motion(&mut self, x: f64, y: f64) -> bool {
         if self.input_state.region_is_active() && self.tablet.on_overlay {
-            self.tablet.last_pos = Some((x, y));
+            self.tablet.record_immediate_motion((x, y));
             self.pointer
                 .set_position((x.round() as i32, y.round() as i32));
             self.update_region_selection(RegionInputSource::Stylus, x, y);
             return true;
         }
         if self.input_state.eyedropper_is_active() && self.tablet.on_overlay {
-            self.tablet.last_pos = Some((x, y));
+            self.tablet.record_immediate_motion((x, y));
             self.pointer
                 .set_position((x.round() as i32, y.round() as i32));
             self.update_eyedropper_hover(x, y);
@@ -387,12 +446,10 @@ impl WaylandState {
     }
 
     fn handle_stylus_move_drag(&mut self, x: f64, y: f64) -> bool {
-        if !self.toolbar_drag.is_moving() {
-            return false;
-        }
         let Some(kind) = self.toolbar_drag.kind() else {
             return false;
         };
+        self.tablet.record_immediate_motion((x, y));
         if self.tablet.on_toolbar {
             self.handle_toolbar_move(kind, (x, y));
         } else {
@@ -414,7 +471,7 @@ impl WaylandState {
         if !self.tablet.on_toolbar {
             return false;
         }
-        self.tablet.last_pos = Some((x, y));
+        self.tablet.record_immediate_motion((x, y));
         if let Some(surface) = self.tablet.surface.as_ref() {
             let event = self.toolbar.pointer_motion(surface, (x, y));
             if self.toolbar_drag.item_dragging() {
@@ -508,101 +565,4 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The modal term stops exactly where the tip and motion guards stop: once
-    /// the selector is on screen. While a capture is still pending the canvas
-    /// keeps the pen, so a stroke drawn then must keep its pressure — otherwise
-    /// a capture that fails would leave a silently flat stroke behind.
-    #[test]
-    fn stylus_pressure_stops_at_the_selector_not_at_the_request() {
-        use crate::input::state::test_support::make_test_input_state;
-        use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
-
-        let fresh_contact = |state: &_| drop_stylus_pressure(true, false, state);
-
-        let mut state = make_test_input_state();
-        assert!(!fresh_contact(&state));
-
-        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
-        assert!(
-            !fresh_contact(&state),
-            "a stroke drawn while the capture is pending is still a real stroke"
-        );
-        state.activate_region_with(
-            &crate::draw::TextMeasurer::default(),
-            RegionPurposeTag::Ocr,
-            1,
-        );
-        assert!(fresh_contact(&state));
-        state.start_region_selection(RegionInputSource::Stylus, (10.0, 10.0));
-        assert!(fresh_contact(&state));
-        state.cancel_region_ui_only();
-        assert!(!fresh_contact(&state));
-
-        state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-        assert!(!fresh_contact(&state));
-        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
-        assert!(fresh_contact(&state));
-        state.cancel_eyedropper();
-        assert!(!fresh_contact(&state));
-    }
-
-    /// A contact disowned by a modal keeps arriving until the pen lifts, and the
-    /// pending-capture allowance above must not readmit it: the canvas holds the
-    /// pen again during the wait, but this contact is not the user drawing.
-    #[test]
-    fn a_retired_contact_never_reaches_the_tool_whatever_the_modal_is_doing() {
-        use crate::input::state::test_support::make_test_input_state;
-        use crate::input::state::{RegionPurposeTag, ScreenCaptureSource};
-
-        let mut state = make_test_input_state();
-
-        // The window the previous test allows, and the one that matters here.
-        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
-        assert!(!drop_stylus_pressure(true, false, &state));
-        assert!(drop_stylus_pressure(true, true, &state));
-
-        // And it outlives the modal: cancelling before activation leaves the pen
-        // physically down with no modal to blame.
-        state.cancel_region_ui_only();
-        assert!(!drop_stylus_pressure(true, false, &state));
-        assert!(drop_stylus_pressure(true, true, &state));
-
-        // Off the overlay nothing is ours either way.
-        assert!(drop_stylus_pressure(false, false, &state));
-    }
-
-    #[test]
-    fn stylus_cursor_damage_rect_covers_cursor_area() {
-        let rect = stylus_cursor_damage_rect((100.2, 80.7), 400, 300).expect("rect");
-
-        assert_eq!(
-            rect,
-            Rect::new(
-                100 - STYLUS_CURSOR_DAMAGE_RADIUS,
-                81 - STYLUS_CURSOR_DAMAGE_RADIUS,
-                STYLUS_CURSOR_DAMAGE_RADIUS * 2,
-                STYLUS_CURSOR_DAMAGE_RADIUS * 2,
-            )
-            .unwrap()
-        );
-    }
-
-    #[test]
-    fn stylus_cursor_damage_rect_clamps_to_surface() {
-        let rect = stylus_cursor_damage_rect((4.0, 3.0), 400, 300).expect("rect");
-
-        assert_eq!(rect.x, 0);
-        assert_eq!(rect.y, 0);
-        assert_eq!(rect.width, 68);
-        assert_eq!(rect.height, 67);
-    }
-
-    #[test]
-    fn stylus_cursor_damage_rect_ignores_empty_surface() {
-        assert_eq!(stylus_cursor_damage_rect((10.0, 10.0), 0, 300), None);
-        assert_eq!(stylus_cursor_damage_rect((10.0, 10.0), 400, 0), None);
-    }
-}
+mod tests;

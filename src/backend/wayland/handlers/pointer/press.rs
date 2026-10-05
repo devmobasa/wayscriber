@@ -2,7 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 use wayland_client::QueueHandle;
 
-use crate::backend::wayland::state::{RegionReviewPress, drag_log};
+use crate::backend::wayland::state::{ContactOwner, RegionReviewPress, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
@@ -24,6 +24,12 @@ impl WaylandState {
         routed: RoutedInput,
         button: u32,
     ) {
+        self.pointer.reconcile_contacts(
+            &self.input_state,
+            self.zoom.panning,
+            self.toolbar_drag.is_moving() || self.toolbar_drag.item_dragging(),
+        );
+
         let on_toolbar = routed.surface == InputSurface::Toolbar;
         let inline_active = routed.inline_toolbars;
         // Report the physical button to the input HUD before any modal or
@@ -46,6 +52,8 @@ impl WaylandState {
             self.input_state
                 .clear_help_overlay_press_for(help_press_source);
         }
+
+        self.pointer.take_contact(button, &self.input_state);
 
         if routed.surface == InputSurface::Foreign {
             return;
@@ -73,28 +81,7 @@ impl WaylandState {
             return;
         }
 
-        if debug_toolbar_drag_logging_enabled() {
-            debug!(
-                "pointer press: button={}, on_toolbar={}, inline_active={}, drag_active={}",
-                button,
-                on_toolbar,
-                inline_active,
-                self.toolbar_drag.is_moving()
-            );
-        }
-        if inline_active && self.handle_inline_pointer_press(conn, qh, event, button) {
-            return;
-        }
-        if on_toolbar {
-            self.handle_toolbar_pointer_press(conn, qh, event, button);
-            return;
-        } else if self.toolbar_chrome.pointer_over_toolbar() {
-            self.finish_toolbar_item_drag(false);
-            self.toolbar_drag.set_item_dragging(false);
-            return;
-        }
-
-        if button == BTN_LEFT && self.dismiss_top_toolbar_menus() {
+        if self.route_toolbar_pointer_press(conn, qh, event, button, on_toolbar, inline_active) {
             return;
         }
 
@@ -111,16 +98,7 @@ impl WaylandState {
             "Button {} pressed at ({}, {})",
             button, event.position.0, event.position.1
         );
-        if self.zoom.active && button == BTN_MIDDLE && !self.zoom.locked {
-            self.zoom.start_pan(event.position.0, event.position.1);
-            self.input_state.dirty_tracker.mark_full();
-            self.input_state.needs_redraw = true;
-            return;
-        }
-        if button == BTN_LEFT && self.pointer.board_pan_key_held() && self.can_start_board_pan() {
-            self.pointer
-                .start_board_pan((event.position.0, event.position.1));
-            self.input_state.needs_redraw = true;
+        if self.start_pointer_pan(event, button) {
             return;
         }
 
@@ -131,21 +109,49 @@ impl WaylandState {
             _ => return,
         };
 
+        if inline_active {
+            self.clear_inline_contact_hover();
+        }
+
         let screen_x = event.position.0.round() as i32;
         let screen_y = event.position.1.round() as i32;
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-        self.input_state.on_mouse_press_with_canvas_and_resources(
+        self.pointer.route_canvas_press(
+            &mut self.input_state,
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
                 ui_engine: self.render.ui_text(),
             },
+            button,
             mb,
-            screen_x,
-            screen_y,
-            wx,
-            wy,
+            [screen_x, screen_y, wx, wy],
+        );
+        self.pointer.reconcile_contacts(
+            &self.input_state,
+            self.zoom.panning,
+            self.toolbar_drag.is_moving() || self.toolbar_drag.item_dragging(),
         );
         self.input_state.needs_redraw = true;
+    }
+
+    /// A middle press pans an unlocked zoom, and a left press with the pan key
+    /// held pans the board.
+    fn start_pointer_pan(&mut self, event: &PointerEvent, button: u32) -> bool {
+        if self.zoom.active && button == BTN_MIDDLE && !self.zoom.locked {
+            self.zoom.start_pan(event.position.0, event.position.1);
+            self.pointer.bind_contact(button, ContactOwner::ZoomPan);
+            self.input_state.dirty_tracker.mark_full();
+            self.input_state.needs_redraw = true;
+            return true;
+        }
+        if button == BTN_LEFT && self.pointer.board_pan_key_held() && self.can_start_board_pan() {
+            self.pointer
+                .start_board_pan((event.position.0, event.position.1));
+            self.pointer.bind_contact(button, ContactOwner::BoardPan);
+            self.input_state.needs_redraw = true;
+            return true;
+        }
+        false
     }
 
     fn handle_region_pointer_press(
@@ -284,100 +290,6 @@ impl WaylandState {
         true
     }
 
-    fn handle_inline_pointer_press(
-        &mut self,
-        conn: &wayland_client::Connection,
-        qh: &QueueHandle<Self>,
-        event: &PointerEvent,
-        button: u32,
-    ) -> bool {
-        if button == BTN_RIGHT
-            && self.inline_toolbar_secondary_press(event.position, Some(conn), Some(qh))
-        {
-            self.refresh_keyboard_interactivity();
-            return true;
-        }
-        if button == BTN_LEFT && self.inline_toolbar_press(event.position, Some(conn), Some(qh)) {
-            drag_log(|| {
-                format!(
-                    "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
-                    self.toolbar_drag.item_dragging(),
-                    event.position.0,
-                    event.position.1,
-                    surface_id(&event.surface)
-                )
-            });
-            if self.toolbar_drag.is_moving() {
-                self.lock_pointer_for_drag(qh, &event.surface);
-            }
-            return true;
-        }
-        if !self.toolbar_chrome.pointer_over_toolbar() {
-            return false;
-        }
-        if button == BTN_LEFT {
-            self.dismiss_top_toolbar_menus();
-        }
-        true
-    }
-
-    fn handle_toolbar_pointer_press(
-        &mut self,
-        conn: &wayland_client::Connection,
-        qh: &QueueHandle<Self>,
-        event: &PointerEvent,
-        button: u32,
-    ) {
-        if button == BTN_RIGHT
-            && let Some(index) = self
-                .toolbar
-                .quick_color_slot_at(&event.surface, event.position)
-        {
-            self.handle_toolbar_event(ToolbarEvent::EditQuickColor { index }, Some(conn), Some(qh));
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
-            self.refresh_keyboard_interactivity();
-            return;
-        }
-        let handled = if button == BTN_LEFT {
-            self.handle_primary_toolbar_pointer_press(conn, qh, event)
-        } else {
-            false
-        };
-        if button == BTN_LEFT && !handled {
-            self.dismiss_top_toolbar_menus();
-        }
-    }
-
-    fn handle_primary_toolbar_pointer_press(
-        &mut self,
-        conn: &wayland_client::Connection,
-        qh: &QueueHandle<Self>,
-        event: &PointerEvent,
-    ) -> bool {
-        let Some((intent, drag)) = self.toolbar.pointer_press(&event.surface, event.position)
-        else {
-            return false;
-        };
-        let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
-        if matches!(toolbar_event, ToolbarEvent::MoveTopToolbar { .. }) && drag {
-            self.lock_pointer_for_drag(qh, &event.surface);
-        }
-        log::info!(
-            "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
-            drag,
-            surface_id(&event.surface),
-            self.focus.current_seat_id(),
-            self.toolbar_chrome.inline_toolbars()
-        );
-        self.toolbar_drag.set_item_dragging(drag);
-        self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
-        self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
-        self.refresh_keyboard_interactivity();
-        true
-    }
-
     pub(in crate::backend::wayland) fn press_overlay_chrome(
         &mut self,
         screen_x: i32,
@@ -453,29 +365,6 @@ impl WaylandState {
         self.dispatch_input_action(action);
         true
     }
-
-    /// Click-away dismissal for the top-strip menus/popovers. Defers to the
-    /// canonical [`InputState::close_top_toolbar_menus`] so the click-away set
-    /// stays in lockstep with the keyboard Escape route and the apply-action
-    /// callers — the Canvas popover in particular must dismiss here exactly
-    /// like the Session/Settings popovers, else a canvas click would leak
-    /// through and start a stray stroke. Returns whether a menu was open so the
-    /// press handler early-returns instead of drawing.
-    ///
-    /// Shared with the touch-down and tablet pen-down paths so every canvas
-    /// down modality dismisses the Canvas (and Session/Settings) popover and
-    /// swallows the interaction identically.
-    pub(in crate::backend::wayland) fn dismiss_top_toolbar_menus(&mut self) -> bool {
-        let changed = self.input_state.close_top_toolbar_menus();
-        if changed {
-            if self.toolbar_chrome.inline_toolbars() {
-                self.mark_inline_toolbar_full_damage();
-            } else {
-                self.toolbar.mark_dirty();
-            }
-        }
-        changed
-    }
 }
 
 /// Input HUD label for a raw pointer button code. The three primary buttons
@@ -492,23 +381,7 @@ fn input_hud_button_label(button: u32) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::review_action_suppresses_next_release;
-    use crate::ui::RegionAction;
+mod toolbar;
 
-    #[test]
-    fn retained_review_toggle_does_not_arm_the_post_modal_release_latch() {
-        assert!(!review_action_suppresses_next_release(
-            RegionAction::ToggleIncludeDrawings
-        ));
-        for terminal in [
-            RegionAction::Copy,
-            RegionAction::Save,
-            RegionAction::Both,
-            RegionAction::Board,
-        ] {
-            assert!(review_action_suppresses_next_release(terminal));
-        }
-    }
-}
+#[cfg(test)]
+mod tests;

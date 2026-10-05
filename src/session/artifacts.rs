@@ -1,3 +1,5 @@
+mod corrupt_copies;
+mod kind;
 mod move_file;
 mod save_as_quarantine;
 
@@ -17,6 +19,12 @@ use super::primary::open_session_artifact_for_read;
 pub(crate) const PRESERVED_SESSION_MARKER: &str = "-preserved-";
 pub(crate) const PRESERVED_SESSION_MOVED_SUFFIX: &str = "-moved";
 
+pub(crate) use corrupt_copies::{
+    MAX_CORRUPT_COPIES_PER_ARTIFACT, corrupt_copies_of, corrupt_copy_path, parse_corrupt_copy_name,
+    remove_corrupt_copies,
+};
+pub(crate) use kind::is_recovery_variant;
+pub use kind::{SessionArtifactKind, named_session_artifact_kind};
 pub(crate) use move_file::rename_artifact_no_replace;
 pub use move_file::{
     NamedSessionMoveOutcome, NamedSessionMovedArtifact, move_named_session_non_lock_artifacts,
@@ -117,6 +125,7 @@ pub fn named_session_non_lock_artifact_paths(path: &Path) -> Result<Vec<PathBuf>
     ];
     collect_recovery_variants(&artifacts.recovery, &mut paths)?;
     collect_preserved_newer_version_copies(path, &mut paths)?;
+    corrupt_copies::collect_corrupt_copies(path, &mut paths)?;
     dedupe_paths(&mut paths);
     Ok(paths)
 }
@@ -206,8 +215,11 @@ pub fn clear_named_session_non_lock_artifacts(path: &Path) -> Result<NamedSessio
     let mut preserved_newer_versions = Vec::new();
     collect_preserved_newer_version_copies(path, &mut preserved_newer_versions)?;
     let removed_preserved_newer_versions = remove_artifacts(&preserved_newer_versions)?;
-    let removed_primary =
-        remove_artifact_if_exists(&artifacts.primary)? || removed_preserved_newer_versions;
+    let removed_primary_copies = remove_corrupt_copies(&artifacts.primary)?;
+    let removed_backup_copies = remove_corrupt_copies(&artifacts.backup)?;
+    let removed_primary = remove_artifact_if_exists(&artifacts.primary)?
+        || removed_preserved_newer_versions
+        || removed_primary_copies;
     let removed_clear_marker = remove_artifact_if_exists(&artifacts.clear_marker)?;
     let removed_backup = remove_artifact_if_exists(&artifacts.backup)?;
     let removed_backup_marker = remove_artifact_if_exists(&artifacts.backup_recovery_marker)?;
@@ -217,7 +229,7 @@ pub fn clear_named_session_non_lock_artifacts(path: &Path) -> Result<NamedSessio
 
     Ok(NamedSessionClearOutcome {
         removed_primary,
-        removed_backup: removed_backup || removed_backup_marker,
+        removed_backup: removed_backup || removed_backup_marker || removed_backup_copies,
         removed_recovery: removed_recovery || removed_recovery_marker,
         removed_clear_marker,
     })
@@ -294,7 +306,7 @@ pub fn duplicate_named_session_primary(
 
 #[allow(dead_code)]
 fn collect_recovery_variants(recovery_path: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
-    let Some(recovery_name) = recovery_path.file_name().and_then(|name| name.to_str()) else {
+    let Some(recovery_name) = recovery_path.file_name() else {
         return Ok(());
     };
     let Some(parent) = recovery_path.parent() else {
@@ -313,7 +325,6 @@ fn collect_recovery_variants(recovery_path: &Path, paths: &mut Vec<PathBuf>) -> 
         }
     };
 
-    let recovery_prefix = format!("{recovery_name}.");
     for entry in entries {
         let entry = entry.with_context(|| {
             format!(
@@ -322,10 +333,10 @@ fn collect_recovery_variants(recovery_path: &Path, paths: &mut Vec<PathBuf>) -> 
             )
         })?;
         let path = entry.path();
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        let Some(name) = path.file_name() else {
             continue;
         };
-        if name == recovery_name || name.starts_with(&recovery_prefix) {
+        if is_recovery_variant(name, recovery_name) {
             paths.push(path);
         }
     }
@@ -334,7 +345,7 @@ fn collect_recovery_variants(recovery_path: &Path, paths: &mut Vec<PathBuf>) -> 
 
 #[allow(dead_code)]
 fn removable_recovery_artifact_paths(recovery_path: &Path) -> Result<Vec<PathBuf>> {
-    let Some(recovery_name) = recovery_path.file_name().and_then(|name| name.to_str()) else {
+    let Some(recovery_name) = recovery_path.file_name() else {
         return removable_artifact_path(recovery_path).map(|path| path.into_iter().collect());
     };
     let Some(parent) = recovery_path.parent() else {
@@ -356,7 +367,6 @@ fn removable_recovery_artifact_paths(recovery_path: &Path) -> Result<Vec<PathBuf
         }
     };
 
-    let recovery_prefix = format!("{recovery_name}.");
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.with_context(|| {
@@ -366,10 +376,10 @@ fn removable_recovery_artifact_paths(recovery_path: &Path) -> Result<Vec<PathBuf
             )
         })?;
         let path = entry.path();
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        let Some(name) = path.file_name() else {
             continue;
         };
-        if (name == recovery_name || name.starts_with(&recovery_prefix))
+        if is_recovery_variant(name, recovery_name)
             && let Some(path) = removable_artifact_path(&path)?
         {
             paths.push(path);

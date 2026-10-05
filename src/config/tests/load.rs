@@ -813,7 +813,7 @@ fn drawing_quick_colors_parse_ordered_entries_with_hex_and_rgb() {
     let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
     assert!(color_approx_eq(
         &palette.color_for_index(0).unwrap(),
-        &crate::draw::Color {
+        &crate::domain::Color {
             r: 1.0,
             g: 179.0 / 255.0,
             b: 186.0 / 255.0,
@@ -822,7 +822,7 @@ fn drawing_quick_colors_parse_ordered_entries_with_hex_and_rgb() {
     ));
     assert!(color_approx_eq(
         &palette.color_for_index(1).unwrap(),
-        &crate::draw::Color {
+        &crate::domain::Color {
             r: 1.0 / 255.0,
             g: 2.0 / 255.0,
             b: 3.0 / 255.0,
@@ -873,7 +873,7 @@ fn quick_colors_set_color_at_keeps_labels_and_materializes_defaults() {
     let mut config: Config =
         toml::from_str("[[drawing.quick_colors]]\nlabel = 'Only'\ncolor = 'blue'\n")
             .expect("short quick color list should parse");
-    let crimson = crate::draw::Color {
+    let crimson = crate::domain::Color {
         r: 220.0 / 255.0,
         g: 20.0 / 255.0,
         b: 60.0 / 255.0,
@@ -917,7 +917,7 @@ fn quick_colors_set_color_at_keeps_labels_and_materializes_defaults() {
 fn quick_colors_set_color_at_starts_from_defaults_when_unconfigured() {
     let mut config = Config::default();
     assert!(config.drawing.quick_colors.is_implicit_default());
-    let teal = crate::draw::Color {
+    let teal = crate::domain::Color {
         r: 0.0,
         g: 128.0 / 255.0,
         b: 128.0 / 255.0,
@@ -969,7 +969,7 @@ fn shipped_quick_color_defaults_cover_only_the_built_in_palette() {
 fn palette_set_color_for_index_recolors_in_place() {
     let mut palette = QuickColorPalette::default();
     let label = palette.entry(1).map(|entry| entry.label.clone());
-    let color = crate::draw::Color {
+    let color = crate::domain::Color {
         r: 0.25,
         g: 0.5,
         b: 0.75,
@@ -993,7 +993,7 @@ fn palette_set_color_for_index_recolors_in_place() {
 #[test]
 fn palette_cache_key_changes_when_only_a_slot_alpha_changes() {
     let mut palette = QuickColorPalette::default();
-    let opaque = crate::draw::Color {
+    let opaque = crate::domain::Color {
         r: 0.25,
         g: 0.5,
         b: 0.75,
@@ -1002,7 +1002,7 @@ fn palette_cache_key_changes_when_only_a_slot_alpha_changes() {
     assert!(palette.set_color_for_index(1, opaque));
     let before = palette.cache_key();
 
-    assert!(palette.set_color_for_index(1, crate::draw::Color { a: 0.4, ..opaque }));
+    assert!(palette.set_color_for_index(1, crate::domain::Color { a: 0.4, ..opaque }));
 
     assert_ne!(palette.cache_key(), before);
 }
@@ -1036,7 +1036,7 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     );
     assert!(color_approx_eq(
         &palette.color_for_index(8).unwrap(),
-        &crate::draw::Color {
+        &crate::domain::Color {
             r: 0.0,
             g: 1.0,
             b: 1.0,
@@ -1045,7 +1045,7 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     ));
     assert!(color_approx_eq(
         &palette.color_for_index(9).unwrap(),
-        &crate::draw::Color {
+        &crate::domain::Color {
             r: 153.0 / 255.0,
             g: 102.0 / 255.0,
             b: 204.0 / 255.0,
@@ -1054,7 +1054,7 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     ));
     assert!(color_approx_eq(
         &palette.color_for_index(10).unwrap(),
-        &crate::draw::Color {
+        &crate::domain::Color {
             r: 102.0 / 255.0,
             g: 102.0 / 255.0,
             b: 102.0 / 255.0,
@@ -1166,7 +1166,7 @@ fn drawing_quick_color_rendered_entries_are_capped_without_dropping_config() {
     let entries = (0..QUICK_COLOR_RENDER_LIMIT + 3)
         .map(|index| QuickColorPaletteEntry {
             label: format!("Color {index}"),
-            color: crate::draw::Color {
+            color: crate::domain::Color {
                 r: 0.0,
                 g: 0.0,
                 b: 0.0,
@@ -1245,11 +1245,11 @@ fn pdf_transparent_background_defaults_to_none() {
 
 /// Resolves one of the tuned built-in palette hex values exactly like
 /// `ColorSpec::to_color`, so assertions can compare with `==`.
-fn tuned_default(hex: &str) -> crate::draw::Color {
+fn tuned_default(hex: &str) -> crate::domain::Color {
     crate::util::parse_config_hex_color(hex).expect("tuned default hex is valid")
 }
 
-fn color_approx_eq(a: &crate::draw::Color, b: &crate::draw::Color) -> bool {
+fn color_approx_eq(a: &crate::domain::Color, b: &crate::domain::Color) -> bool {
     (a.r - b.r).abs() < 0.001
         && (a.g - b.g).abs() < 0.001
         && (a.b - b.b).abs() < 0.001

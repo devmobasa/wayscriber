@@ -21,6 +21,7 @@ fn catalog_item(id: &str, display_name: &str) -> SessionCatalogItem {
             primary_exists: false,
             backup_exists: false,
             recovery_exists: false,
+            unreadable_copy_exists: false,
             clear_marker_exists: false,
             lock_exists: false,
             non_lock_size_bytes: 0,

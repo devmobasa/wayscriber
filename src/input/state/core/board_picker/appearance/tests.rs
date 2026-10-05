@@ -223,7 +223,28 @@ fn dragging_the_size_slider_updates_the_draft_until_release() {
     let (track_x, track_y, track_width, track_height) = track;
     let middle_y = (track_y + track_height / 2.0) as i32;
 
-    assert!(input.board_appearance_press(track_x as i32 + 1, middle_y));
+    use crate::input::state::interaction::{
+        CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press,
+    };
+    let measurer = crate::draw::TextMeasurer::default();
+    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let start = (track_x as i32 + 1, middle_y);
+    let slider_press = route_pointer_press(
+        &mut input,
+        crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        },
+        PointerPress::new(
+            crate::input::MouseButton::Left,
+            PointerPoints::new(
+                ScreenPoint::new(start.0, start.1),
+                CanvasPoint::new(start.0, start.1),
+            ),
+        ),
+    );
+    // The drag keeps the pointer even where the inline strip would take hover.
+    assert!(slider_press.owns_pointer_motion(&input));
     assert_eq!(input.board_appearance_edit().unwrap().spacing, "8");
     assert!(input.board_appearance_drag_to((track_x + track_width) as i32, middle_y));
     assert_eq!(input.board_appearance_edit().unwrap().spacing, "200");
@@ -232,6 +253,7 @@ fn dragging_the_size_slider_updates_the_draft_until_release() {
     assert!(input.board_appearance_click(1, 1));
     let draft = input.board_appearance_edit().unwrap();
     assert!(!draft.size_dragging);
+    assert!(!slider_press.owns_pointer_motion(&input));
     assert_eq!(draft.spacing, "200");
     assert!(!input.board_appearance_drag_to(track_x as i32, middle_y));
     assert!(!input.is_session_dirty());

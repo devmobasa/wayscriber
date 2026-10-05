@@ -243,9 +243,9 @@ fn corrupt_session_is_backed_up_and_reset() {
     let loaded = load_snapshot(&options).expect("load should not error");
     assert!(loaded.is_none());
 
-    let backup_path = options.backup_file_path();
-    let backup = fs::read(&backup_path).expect("backup file present");
-    assert_eq!(backup, b"not json");
+    let copy = crate::session::append_path_suffix(&session_path, ".corrupt-1");
+    assert_eq!(fs::read(copy).expect("corrupt copy present"), b"not json");
+    assert!(!options.backup_file_path().exists());
     assert!(
         !session_path.exists(),
         "corrupt session file should be removed after backup"

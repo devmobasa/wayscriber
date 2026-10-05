@@ -27,6 +27,7 @@ struct InFlightAutosave {
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) struct PendingOutputTransition {
     pub(in crate::backend::wayland) source_epoch: u64,
+    pub(in crate::backend::wayland) revision: u64,
     pub(in crate::backend::wayland) staged_options: SessionOptions,
     pub(in crate::backend::wayland) physical_output_identity: Option<String>,
     pub(in crate::backend::wayland) retry_at: Instant,
@@ -37,6 +38,7 @@ pub(in crate::backend::wayland) struct PendingOutputTransition {
 pub struct SessionState {
     options: Option<SessionOptions>,
     loaded: bool,
+    initial_load_attempted: bool,
     loaded_board_data: bool,
     target_epoch: u64,
     edit_generation: u64,
@@ -48,6 +50,7 @@ pub struct SessionState {
     autosave_deferred_until: Option<Instant>,
     in_flight_autosave: Option<InFlightAutosave>,
     pending_output_transition: Option<PendingOutputTransition>,
+    output_transition_revision: u64,
     live_source_resolution_pending: bool,
     notified_failure: bool,
     notified_worker_failure: bool,
@@ -55,6 +58,7 @@ pub struct SessionState {
     notified_trimmed_history: bool,
     notified_visible_only: bool,
     protected_session_paths: HashSet<PathBuf>,
+    blocked_session_paths: HashSet<PathBuf>,
     notified_expanded_load_paths: HashSet<PathBuf>,
     launch_restore_notice_settled: bool,
 }
@@ -65,6 +69,7 @@ impl SessionState {
         Self {
             options,
             loaded: false,
+            initial_load_attempted: false,
             loaded_board_data: false,
             target_epoch: 0,
             edit_generation: 0,
@@ -76,6 +81,7 @@ impl SessionState {
             autosave_deferred_until: None,
             in_flight_autosave: None,
             pending_output_transition: None,
+            output_transition_revision: 0,
             live_source_resolution_pending: false,
             notified_failure: false,
             notified_worker_failure: false,
@@ -83,6 +89,7 @@ impl SessionState {
             notified_trimmed_history: false,
             notified_visible_only: false,
             protected_session_paths: HashSet::new(),
+            blocked_session_paths: HashSet::new(),
             notified_expanded_load_paths: HashSet::new(),
             launch_restore_notice_settled: false,
         }
@@ -93,35 +100,15 @@ impl SessionState {
         self.options.as_ref()
     }
 
-    /// Starts this run in `options` instead, before any session was loaded.
-    pub(in crate::backend::wayland) fn replace_options_before_load(
-        &mut self,
-        options: Option<SessionOptions>,
-    ) {
-        debug_assert!(
-            !self.loaded,
-            "a loaded session changes target through a commit"
-        );
-        self.options = options;
+    /// Allow one synchronous initial load from the surface callback. Drawing
+    /// may already exist; the caller must retain it instead of replacing it.
+    pub(in crate::backend::wayland) fn begin_initial_load(&mut self) -> bool {
+        !std::mem::replace(&mut self.initial_load_attempted, true)
     }
 
-    /// Returns mutable access to the session options, if present.
-    #[allow(dead_code)]
-    pub fn options_mut(&mut self) -> Option<&mut SessionOptions> {
-        self.options.as_mut()
-    }
-
-    /// Returns true if the active logical session source has been resolved this run.
+    /// Whether the active logical session source has been resolved this run.
     pub fn is_loaded(&self) -> bool {
         self.loaded
-    }
-
-    /// Marks the session as loaded and records whether board data is now on disk.
-    #[allow(dead_code)]
-    pub fn mark_loaded(&mut self, loaded_board_data: bool) {
-        self.loaded = true;
-        self.loaded_board_data = loaded_board_data;
-        self.live_source_resolution_pending = false;
     }
 
     pub fn has_loaded_board_data(&self) -> bool {
@@ -153,10 +140,6 @@ impl SessionState {
     pub fn record_input_dirty(&mut self, now: Instant, input_dirty: bool) {
         if !input_dirty {
             return;
-        }
-        if self.live_source_resolution_pending {
-            self.loaded = true;
-            self.live_source_resolution_pending = false;
         }
         self.edit_generation = self.edit_generation.wrapping_add(1);
         if !self.dirty {
@@ -193,6 +176,7 @@ impl SessionState {
         options: SessionOptions,
         loaded_board_data: bool,
     ) {
+        self.confirm_successful_load(&options.session_file_path());
         self.advance_target_epoch();
         self.options = Some(options);
         self.loaded = true;
@@ -213,6 +197,7 @@ impl SessionState {
         now: Instant,
         saved_board_data: bool,
     ) {
+        self.confirm_successful_load(&options.session_file_path());
         self.advance_target_epoch();
         self.options = Some(options);
         self.loaded = true;
@@ -238,6 +223,11 @@ impl SessionState {
     }
 
     pub(in crate::backend::wayland) fn commit_runtime_clear(&mut self, now: Instant) {
+        if let Some(options) = &self.options {
+            self.blocked_session_paths
+                .remove(&options.session_file_path());
+        }
+
         self.loaded = true;
         self.loaded_board_data = false;
         self.dirty = false;
@@ -309,11 +299,17 @@ impl SessionState {
     }
 
     pub fn should_skip_save_for_protected_path(&self, path: &Path, input_dirty: bool) -> bool {
-        self.protected_session_paths.contains(path) && !self.dirty && !input_dirty
+        self.refuses_source_write(path)
+            || (self.protected_session_paths.contains(path) && !self.dirty && !input_dirty)
     }
 
     pub fn autosave_due(&self, now: Instant, options: &SessionOptions) -> bool {
-        if !autosave_active(options) || !self.dirty || self.in_flight_autosave.is_some() {
+        if !self.loaded
+            || self.refuses_source_write(&options.session_file_path())
+            || !autosave_active(options)
+            || !self.dirty
+            || self.in_flight_autosave.is_some()
+        {
             return false;
         }
         if let Some(retry_at) = self.autosave_retry_at
@@ -340,7 +336,12 @@ impl SessionState {
     }
 
     pub fn autosave_timeout(&self, now: Instant, options: &SessionOptions) -> Option<Duration> {
-        if !autosave_active(options) || !self.dirty || self.in_flight_autosave.is_some() {
+        if !self.loaded
+            || self.refuses_source_write(&options.session_file_path())
+            || !autosave_active(options)
+            || !self.dirty
+            || self.in_flight_autosave.is_some()
+        {
             return None;
         }
         let last_dirty_at = self.last_dirty_at?;
@@ -458,10 +459,13 @@ impl SessionState {
             .pending_output_transition
             .as_ref()
             .is_some_and(|pending| {
-                pending.source_epoch == self.target_epoch
+                pending.failure_notified
+                    && pending.source_epoch == self.target_epoch
                     && pending.physical_output_identity == physical_output_identity
             });
+        self.output_transition_revision = self.output_transition_revision.wrapping_add(1);
         self.pending_output_transition = Some(PendingOutputTransition {
+            revision: self.output_transition_revision,
             source_epoch: self.target_epoch,
             staged_options,
             physical_output_identity,
@@ -476,12 +480,6 @@ impl SessionState {
         self.pending_output_transition.as_ref()
     }
 
-    pub(in crate::backend::wayland) fn take_pending_output_transition(
-        &mut self,
-    ) -> Option<PendingOutputTransition> {
-        self.pending_output_transition.take()
-    }
-
     pub(in crate::backend::wayland) fn cancel_pending_output_transition(
         &mut self,
     ) -> Option<PendingOutputTransition> {
@@ -492,33 +490,18 @@ impl SessionState {
         self.live_source_resolution_pending
     }
 
-    /// Cancels a superseded destination while retaining dirty live source data.
-    ///
-    /// A dirty source becomes authoritative for this run so a later configure
-    /// fallback cannot reload over it. A clean unloaded source remains pending
-    /// until the controller can perform its initial load. The dirty window and
-    /// target epoch remain unchanged.
+    /// Cancel the destination without making an unresolved source writable.
     pub(in crate::backend::wayland) fn cancel_output_transition_for_live_source(
         &mut self,
-        input_dirty: bool,
     ) -> Option<PendingOutputTransition> {
         let pending = self.pending_output_transition.take();
         if pending.is_some() {
-            if self.is_dirty() || input_dirty {
-                self.loaded = true;
-                self.live_source_resolution_pending = false;
-            } else {
-                self.live_source_resolution_pending = !self.loaded;
-            }
+            self.live_source_resolution_pending = !self.loaded;
         }
         pending
     }
 
-    /// Resolves provisional protection after an output transition was canceled.
-    ///
-    /// Returns true while an interaction still blocks resolution. A committed
-    /// mutation makes the live source authoritative; a clean idle source remains
-    /// unloaded so the controller can perform the configured initial load.
+    /// Protect early ink from replacement while the source is still unresolved.
     pub(in crate::backend::wayland) fn resolve_live_source_resolution(
         &mut self,
         input_dirty: bool,
@@ -527,12 +510,7 @@ impl SessionState {
         if !self.live_source_resolution_pending {
             return false;
         }
-        if self.is_dirty() || input_dirty {
-            self.loaded = true;
-            self.live_source_resolution_pending = false;
-            return false;
-        }
-        if interaction_active {
+        if !self.loaded && (self.is_dirty() || input_dirty || interaction_active) {
             return true;
         }
         self.live_source_resolution_pending = false;
@@ -600,20 +578,24 @@ fn autosave_active(options: &SessionOptions) -> bool {
         && (options.any_enabled() || options.restore_tool_state || options.persist_history)
 }
 
+pub(in crate::backend::wayland) fn interaction_defer_interval() -> Duration {
+    Duration::from_millis(500)
+}
+
 pub(in crate::backend::wayland) mod driver;
 mod home;
 mod load_outcome;
 mod persistence;
 mod runtime;
+mod write_policy;
 
 #[cfg(test)]
 pub(in crate::backend::wayland) use home::HomeSession;
 pub(in crate::backend::wayland) use home::{
-    OutputSessionLoad, SessionHome, SessionLaunch, load_output_session,
-    may_save_before_output_load, session_target,
+    OutputSessionLoad, SessionHome, SessionLaunch, load_output_session, session_target,
 };
 pub(in crate::backend::wayland) use load_outcome::{
-    ExpandedTooLarge, apply_load_outcome, replace_output_session_snapshot,
+    ExpandedTooLarge, apply_load_outcome, commit_output_load, replace_output_session_snapshot,
 };
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
@@ -621,8 +603,8 @@ pub(in crate::backend::wayland) use persistence::{
 };
 
 pub(in crate::backend::wayland) use runtime::{
-    ExplicitSessionTransaction, SessionCommand, SessionCommandReport, SessionTransaction,
-    TransactionStep,
+    QueuedSessionCommand, SessionCommand, SessionCommandAborted, SessionCommandReport,
+    SessionCommandTransaction, SessionTransaction, TransactionStep,
 };
 #[cfg(test)]
 pub(in crate::backend::wayland) use runtime::{
@@ -630,6 +612,7 @@ pub(in crate::backend::wayland) use runtime::{
     RuntimeSaveAsSessionReport,
 };
 pub(super) use runtime::{has_session_artifact, should_skip_unloaded_contentless_save};
+pub(in crate::backend::wayland) use write_policy::SourceWriteRefused;
 
 #[cfg(test)]
 mod tests;

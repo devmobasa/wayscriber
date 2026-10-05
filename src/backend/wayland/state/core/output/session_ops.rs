@@ -1,7 +1,6 @@
 use super::*;
 use crate::backend::wayland::session::{
-    ExpandedTooLarge, OutputSessionLoad, apply_load_outcome, load_output_session,
-    may_save_before_output_load,
+    ExpandedTooLarge, OutputSessionLoad, commit_output_load, load_output_session,
 };
 
 impl WaylandState {
@@ -41,7 +40,7 @@ impl WaylandState {
                             .set_session_preflight_options(Some(options));
                     }
                     None => {
-                        self.session.replace_options_before_load(None);
+                        self.session.commit_without_persistence();
                         self.input_state.set_session_preflight_options(None);
                     }
                 }
@@ -59,31 +58,28 @@ impl WaylandState {
         outcome: session::LoadSnapshotOutcome,
         context: &str,
     ) -> anyhow::Result<()> {
-        let loaded_board_data = outcome.has_board_data();
-        self.handle_session_load_outcome_for_options(outcome, &options, context)?;
-        self.session
-            .commit_output_options(options, loaded_board_data);
+        if let Some(too_large) = commit_output_load(
+            &mut self.input_state,
+            self.render.text_measurer(),
+            &mut self.session,
+            options,
+            outcome,
+            context,
+        )? {
+            self.protect_too_large_session(too_large);
+        }
+        self.refresh_runtime_ui_config_seeds();
         Ok(())
     }
 
     /// The remembered session this run continues, while no session has loaded.
-    fn unloaded_remembered_session(&self) -> Option<std::path::PathBuf> {
+    pub(in crate::backend::wayland) fn unloaded_remembered_session(
+        &self,
+    ) -> Option<std::path::PathBuf> {
         self.session_home
             .remembered()
             .filter(|_| !self.session.is_loaded())
             .map(std::path::Path::to_path_buf)
-    }
-
-    /// Whether `current` may be saved before an output's session loads: see
-    /// [`may_save_before_output_load`].
-    pub(super) fn may_save_before_output_load(
-        &mut self,
-        current: &session::SessionOptions,
-    ) -> anyhow::Result<bool> {
-        let remembered = self.unloaded_remembered_session();
-        may_save_before_output_load(current, remembered.as_deref(), |operation| {
-            session_save::run_persistence_operation(self, operation)
-        })
     }
 
     /// After a launch-time session load, announce ink restored onto the
@@ -92,7 +88,10 @@ impl WaylandState {
     /// initial load, so both report here; later output or named-session
     /// switches stay quiet. Overlays the daemon reopens on a toggle show what
     /// the user just had on screen, so they stay quiet too.
-    pub(super) fn announce_launch_restore(&mut self, first_output_resolved: bool) {
+    pub(in crate::backend::wayland::state) fn announce_launch_restore(
+        &mut self,
+        first_output_resolved: bool,
+    ) {
         if self.session.launch_restore_notice_settled() {
             return;
         }
@@ -113,7 +112,16 @@ impl WaylandState {
         }
     }
 
-    pub(super) fn notify_output_transition_deferred(&mut self) {
+    pub(in crate::backend::wayland) fn notify_session_load_failure(
+        &mut self,
+        error: &anyhow::Error,
+    ) {
+        if self.session.mark_output_transition_notified() {
+            self.input_state.push_toast(ToastPriority::Critical, "session.load", Toast::error(format!("Session could not be loaded: {error:#}. Repair the session files or use Save As to keep new drawings elsewhere.")).duration_ms(20_000));
+        }
+    }
+
+    pub(in crate::backend::wayland::state) fn notify_output_transition_deferred(&mut self) {
         if !self.session.mark_output_transition_notified() {
             return;
         }
@@ -121,34 +129,17 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
-    pub(super) fn output_transition_failure_backoff(&self) -> Duration {
+    pub(in crate::backend::wayland::state) fn output_transition_failure_backoff(&self) -> Duration {
         self.session_options()
             .map_or(Duration::from_secs(1), |options| {
                 options.autosave_failure_backoff
             })
     }
 
-    pub(in crate::backend::wayland::state) fn handle_session_load_outcome_for_options(
+    pub(in crate::backend::wayland::state) fn protect_too_large_session(
         &mut self,
-        outcome: session::LoadSnapshotOutcome,
-        options: &session::SessionOptions,
-        context: &str,
-    ) -> anyhow::Result<()> {
-        if let Some(too_large) = apply_load_outcome(
-            &mut self.input_state,
-            self.render.text_measurer(),
-            outcome,
-            options,
-            context,
-        )? {
-            self.protect_too_large_session(too_large);
-        }
-        self.refresh_runtime_ui_config_seeds();
-        self.mark_clean_after_session_load();
-        Ok(())
-    }
-
-    fn protect_too_large_session(&mut self, too_large: ExpandedTooLarge) {
+        too_large: ExpandedTooLarge,
+    ) {
         let ExpandedTooLarge {
             path,
             max_expanded_size,
@@ -166,71 +157,6 @@ impl WaylandState {
                 Some("dialog-warning".to_string()),
             );
         }
-    }
-
-    fn mark_clean_after_session_load(&mut self) {
-        self.input_state.clear_session_dirty();
-        self.session.mark_clean_after_load();
-    }
-
-    pub(super) fn should_skip_protected_session_save(
-        &self,
-        options: &session::SessionOptions,
-    ) -> bool {
-        let session_path = options.session_file_path();
-        let skip = self.session.should_skip_save_for_protected_path(
-            &session_path,
-            self.input_state.is_session_dirty(),
-        );
-        if skip {
-            info!(
-                "Skipping session save to {} because a previous oversized compressed session was left protected and no session changes have been made",
-                session_path.display()
-            );
-        }
-        skip
-    }
-
-    pub(super) fn should_skip_unloaded_contentless_session_save(
-        &mut self,
-        options: &session::SessionOptions,
-        snapshot: Option<&SessionSnapshot>,
-    ) -> anyhow::Result<bool> {
-        let has_board_data = snapshot.is_some_and(SessionSnapshot::has_board_data);
-        if has_board_data
-            || self.session.has_loaded_board_data()
-            || self.session.is_dirty()
-            || self.input_state.is_session_dirty()
-        {
-            return Ok(false);
-        }
-        let outcome = session_save::run_persistence_operation(
-            self,
-            PersistenceOperation::HasArtifacts {
-                options: options.clone(),
-            },
-        )?;
-        let PersistenceOutcome::HasArtifacts(has_artifacts) = outcome else {
-            return Err(anyhow::anyhow!("unexpected artifact-inspection outcome"));
-        };
-        let skip = runtime_session::should_skip_unloaded_contentless_save(
-            self.session.has_loaded_board_data(),
-            self.session.is_dirty(),
-            self.input_state.is_session_dirty(),
-            has_board_data,
-            has_artifacts,
-        );
-        if skip {
-            info!(
-                "Skipping session save to {} because no session was loaded, no session changes were recorded, and the current snapshot has no board data",
-                options.session_file_path().display()
-            );
-        }
-        Ok(skip)
-    }
-
-    pub(super) fn session_persistence_enabled(options: &session::SessionOptions) -> bool {
-        options.any_enabled() || options.restore_tool_state || options.persist_history
     }
 }
 

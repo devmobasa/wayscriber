@@ -15,6 +15,8 @@
 - Preserve snapshot boundaries for export and session actions.
 - Keep render order, damage assumptions, buffer lifecycle, output identity, and toolbar visibility behavior explicit.
 - State helpers may coordinate subsystems, but durable config, drawing, capture, session, and input rules should remain with their owning modules.
+- `contact_owner.rs`, pointer contacts, tablet tip ownership, and `TouchTarget` bind motion/release to the press owner. Inline-strip hover never steals a held canvas contact; tablet `on_toolbar` describes layer-shell proximity only.
+- Output switches retain their pending revision until the shared session driver commits. Dispatch paths must not wait for persistence receipts; stale output revisions, source epochs, and live edits reject late receipts.
 
 ## Coupled Changes
 - Render changes may affect `src/draw/`, `src/ui/`, `src/input/state/render.rs`, backend toolbar rendering, and visual tests.

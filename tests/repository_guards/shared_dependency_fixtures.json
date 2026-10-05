@@ -172,5 +172,41 @@
     "path": "src/domain/probe.rs",
     "source": "use crate::domain::{r#input};",
     "reject": false
+  },
+  {
+    "name": "config grouped draw import",
+    "path": "src/config/types/probe.rs",
+    "source": "use crate::{draw::Frame};",
+    "reject": true
+  },
+  {
+    "name": "config relative UI import",
+    "path": "src/config/types/probe.rs",
+    "source": "use super::super::super::ui::Toolbar;",
+    "reject": true
+  },
+  {
+    "name": "config named value exception stays narrow",
+    "path": "src/config/types/arrow.rs",
+    "source": "use crate::draw::ArrowStyle; use crate::draw::Frame;",
+    "reject": true
+  },
+  {
+    "name": "config shared domain values",
+    "path": "src/config/types/probe.rs",
+    "source": "use crate::domain::Color;",
+    "reject": false
+  },
+  {
+    "name": "config exception does not hide an identifier prefix",
+    "path": "src/config/types/arrow.rs",
+    "source": "use crate::draw::ArrowStyleFactory;",
+    "reject": true
+  },
+  {
+    "name": "config exception does not hide a longer path",
+    "path": "src/config/types/arrow.rs",
+    "source": "use crate::draw::ArrowStyle::runtime;",
+    "reject": true
   }
 ]

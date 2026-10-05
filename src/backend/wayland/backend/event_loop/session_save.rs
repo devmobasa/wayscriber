@@ -9,9 +9,23 @@ use crate::{
 };
 use std::time::{Duration, Instant};
 
-const AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS: u64 = 500;
-
+mod diagnostics;
+mod final_save;
+mod interaction;
 mod notifications;
+use diagnostics::{SessionSaveReason, log_session_save_result, log_snapshot_capture};
+
+use final_save::persist_final_session_and_shutdown;
+pub(in crate::backend::wayland) use interaction::should_defer_for_interaction;
+use interaction::{
+    defer_autosave_for_active_interaction, finalize_spotlight_wheel_for_shutdown_persistence,
+    min_optional_timeout,
+};
+#[cfg(test)]
+use interaction::{
+    defer_pending_autosave_for_interaction, input_persistence_interaction_active,
+    persistence_interaction_active,
+};
 
 pub(super) use notifications::notify_session_failure;
 #[cfg(test)]
@@ -34,167 +48,10 @@ pub(super) fn persist_session(state: &mut WaylandState) -> Result<(), anyhow::Er
         &mut state.input_state,
         state.spotlight.wheel_idle_deadline_mut(),
     );
-    if let Some(pending) = state.session.cancel_pending_output_transition() {
-        log::info!(
-            "Canceling staged output transition to {:?} during shutdown; persisting active epoch {}",
-            pending.physical_output_identity,
-            state.session.target_epoch()
-        );
-    }
     runtime_session::driver::persist_after_pending_commands(
         state,
         persist_final_session_and_shutdown,
     )
-}
-
-fn persist_final_session_and_shutdown(state: &mut WaylandState) -> Result<(), anyhow::Error> {
-    let save_result = persist_final_session(state);
-    let worker_failed = !state.persistence.is_healthy();
-    let shutdown_result = state.persistence.shutdown(state.session.target_epoch());
-    if save_result.is_err() && worker_failed && state.persistence.is_stopped() {
-        log::warn!(
-            "Persistence worker failed before the final save; attempting joined event-thread fallback"
-        );
-        match persist_final_session_direct(state) {
-            Ok(()) => {
-                if let Err(shutdown) = shutdown_result {
-                    log::warn!(
-                        "Persistence worker shutdown failed before successful direct fallback: {shutdown:#}"
-                    );
-                }
-                return Ok(());
-            }
-            Err(fallback) => {
-                let original = save_result.expect_err("fallback requires failed worker save");
-                return Err(anyhow::anyhow!(
-                    "worker final save failed: {original:#}; joined direct fallback also failed: {fallback:#}"
-                ));
-            }
-        }
-    }
-    match (save_result, shutdown_result) {
-        (Err(save), Err(shutdown)) => Err(anyhow::anyhow!(
-            "final session save failed: {save:#}; persistence worker shutdown also failed: {shutdown:#}"
-        )),
-        (Err(save), Ok(())) => Err(save),
-        (Ok(()), Err(shutdown)) => Err(shutdown),
-        (Ok(()), Ok(())) => Ok(()),
-    }
-}
-
-fn persist_final_session_direct(state: &mut WaylandState) -> Result<(), anyhow::Error> {
-    observe_input_dirty(state, Instant::now());
-    let Some(options) = state.session_options().cloned() else {
-        return Ok(());
-    };
-    if should_skip_disabled_final_save(&options) {
-        return Ok(());
-    }
-    if should_skip_protected_session_save(state, &options) {
-        return Ok(());
-    }
-    let snapshot = state
-        .input_state
-        .snapshot_for_persistence_with(state.render.text_measurer(), &options);
-    let has_board_data = snapshot
-        .as_ref()
-        .is_some_and(session::SessionSnapshot::has_board_data);
-    if runtime_session::should_skip_unloaded_contentless_save(
-        state.session.has_loaded_board_data(),
-        state.session.is_dirty(),
-        state.input_state.is_session_dirty(),
-        has_board_data,
-        runtime_session::has_session_artifact(&options),
-    ) {
-        return Ok(());
-    }
-    let snapshot = snapshot_or_empty(state, &options, snapshot)?;
-    let snapshot_board_data = snapshot.has_board_data();
-    let report = session::save_snapshot_with_report_and_clear_boundary(
-        &snapshot,
-        &options,
-        state.session.has_loaded_board_data(),
-    )?;
-    let Some(report) = report else {
-        return Err(anyhow::anyhow!(
-            "joined direct fallback produced no committed session write"
-        ));
-    };
-    let committed_board_data =
-        !matches!(report.outcome, session::SaveSnapshotOutcome::ClearedEmpty)
-            && snapshot_board_data;
-    log_session_save_result(SessionSaveReason::Shutdown, Some(&report), Duration::ZERO);
-    state
-        .session
-        .mark_saved(Instant::now(), committed_board_data);
-    Ok(())
-}
-
-fn persist_final_session(state: &mut WaylandState) -> Result<(), anyhow::Error> {
-    let barrier_result = persistence_barrier(state);
-    if let Some(err) = final_save_barrier_policy(barrier_result, state.persistence.is_healthy())? {
-        log::warn!(
-            "Autosave failed while preparing the final session save; retrying the current live state with the normal save strategy: {err:#}"
-        );
-    }
-    let Some(options) = state.session_options().cloned() else {
-        return Ok(());
-    };
-    if should_skip_disabled_final_save(&options) {
-        return Ok(());
-    }
-
-    if should_skip_protected_session_save(state, &options) {
-        return Ok(());
-    }
-
-    let started = Instant::now();
-    log::info!(
-        "Starting {} session persistence to {}",
-        SessionSaveReason::Shutdown.label(),
-        options.session_file_path().display()
-    );
-    let snapshot_started = Instant::now();
-    let snapshot = state
-        .input_state
-        .snapshot_for_persistence_with(state.render.text_measurer(), &options);
-    log_snapshot_capture(
-        SessionSaveReason::Shutdown,
-        &options,
-        snapshot.as_ref(),
-        snapshot_started.elapsed(),
-    );
-    if should_skip_unloaded_contentless_save(state, &options, snapshot.as_ref())? {
-        return Ok(());
-    }
-    let snapshot = snapshot_or_empty(state, &options, snapshot)?;
-    let outcome = run_persistence_operation(
-        state,
-        PersistenceOperation::Save {
-            snapshot,
-            options,
-            strategy: SaveStrategy::Normal,
-            contentless_clear_boundary: state.session.has_loaded_board_data(),
-        },
-    )?;
-    let PersistenceOutcome::Save(save) = outcome else {
-        return Err(anyhow::anyhow!("unexpected final-save worker outcome"));
-    };
-    if !save.committed() {
-        return Err(anyhow::anyhow!(
-            "final session save produced no committed write"
-        ));
-    }
-    log_session_save_result(
-        SessionSaveReason::Shutdown,
-        save.report.as_ref(),
-        started.elapsed(),
-    );
-    notify_session_save_report(state, save.report.as_ref());
-    state
-        .session
-        .mark_saved(Instant::now(), save.committed_board_data);
-    Ok(())
 }
 
 pub(super) fn autosave_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
@@ -266,6 +123,12 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
         return Ok(());
     }
 
+    if !state
+        .session
+        .validate_source_write(state.input_state.is_session_dirty())?
+    {
+        return Ok(());
+    }
     let started = Instant::now();
     let snapshot_started = Instant::now();
     let snapshot = state
@@ -316,7 +179,7 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
             if !state.persistence.is_healthy() {
                 handle_persistence_transport_failure(state, failed_at, &err);
             } else if record_autosave_failure(&mut state.session, failed_at, &options) {
-                show_session_failure_toast(state);
+                show_session_failure_toast(state, &err);
                 notify_session_failure(state, &err);
             }
             return Err(err);
@@ -370,6 +233,7 @@ pub(in crate::backend::wayland) fn run_persistence_operation(
     let result = state
         .persistence
         .run(state.session.target_epoch(), operation);
+    state.session.observe_load_failure(&result);
     if let Err(err) = &result
         && !state.persistence.is_healthy()
     {
@@ -408,10 +272,8 @@ impl PersistenceCompletionRuntime for WaylandState {
         &mut self,
     ) -> Result<Option<PersistenceCompletion>, anyhow::Error> {
         let result = self.persistence.try_receive();
-        if let Err(error) = &result
-            && let Some(transaction) = self.session_transaction.take()
-        {
-            self.fail_session_command(transaction.command(), error);
+        if let Err(error) = &result {
+            runtime_session::driver::fail_pending_commands(self, error);
         }
         result
     }
@@ -478,7 +340,7 @@ pub(in crate::backend::wayland) fn handle_autosave_failure(
         return;
     };
     if record_autosave_failure(&mut state.session, now, &options) {
-        show_session_failure_toast(state);
+        show_session_failure_toast(state, err);
         notify_session_failure(state, err);
     }
 }
@@ -518,159 +380,6 @@ fn record_persistence_transport_failure(
     session.mark_worker_failure_notified()
 }
 
-pub(in crate::backend::wayland) fn should_defer_for_interaction(state: &WaylandState) -> bool {
-    persistence_interaction_active(
-        input_persistence_interaction_active(&state.input_state),
-        state.toolbar_drag.item_dragging(),
-        state.toolbar_drag.is_moving(),
-        state.pointer.board_pan_active(),
-        state.zoom_panning_active(),
-        stylus_tip_down(state),
-    )
-}
-
-fn persistence_interaction_active(
-    input: bool,
-    toolbar_drag: bool,
-    move_drag: bool,
-    board_pan: bool,
-    zoom_pan: bool,
-    stylus_tip: bool,
-) -> bool {
-    input || toolbar_drag || move_drag || board_pan || zoom_pan || stylus_tip
-}
-
-fn input_persistence_interaction_active(input_state: &crate::input::InputState) -> bool {
-    input_state.has_active_pointer_interaction()
-        || matches!(
-            input_state.state,
-            crate::input::DrawingState::TextInput { .. }
-        )
-        || input_state.has_pending_spotlight_magnification_gesture()
-}
-
-pub(in crate::backend::wayland) fn interaction_defer_interval() -> Duration {
-    Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS)
-}
-
-fn min_optional_timeout(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (Some(value), None) | (None, Some(value)) => Some(value),
-        (None, None) => None,
-    }
-}
-
-fn defer_pending_autosave_for_interaction(
-    session: &mut SessionState,
-    now: Instant,
-    options: &session::SessionOptions,
-) -> bool {
-    if session.autosave_timeout(now, options).is_none() {
-        return false;
-    }
-
-    let delay = Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
-    session.defer_autosave(now, delay);
-    log::debug!(
-        "Deferring autosave for {:?} while an input interaction is active",
-        delay
-    );
-    true
-}
-
-fn defer_autosave_for_active_interaction(
-    session: &mut SessionState,
-    now: Instant,
-    options: &session::SessionOptions,
-    interaction_active: bool,
-) -> bool {
-    interaction_active && defer_pending_autosave_for_interaction(session, now, options)
-}
-
-fn finalize_spotlight_wheel_for_shutdown_persistence(
-    input_state: &mut crate::input::InputState,
-    spotlight_wheel_idle_deadline: &mut Option<Instant>,
-) {
-    input_state.flush_spotlight_magnification_gesture();
-    *spotlight_wheel_idle_deadline = None;
-}
-
-#[cfg(feature = "tablet-input")]
-fn stylus_tip_down(state: &WaylandState) -> bool {
-    state.tablet.tip_down
-}
-
-#[cfg(not(feature = "tablet-input"))]
-fn stylus_tip_down(_state: &WaylandState) -> bool {
-    false
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SessionSaveReason {
-    Autosave,
-    Shutdown,
-}
-
-impl SessionSaveReason {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Autosave => "autosave",
-            Self::Shutdown => "shutdown",
-        }
-    }
-}
-
-fn log_snapshot_capture(
-    reason: SessionSaveReason,
-    options: &session::SessionOptions,
-    snapshot: Option<&session::SessionSnapshot>,
-    elapsed: Duration,
-) {
-    let Some(_snapshot) = snapshot else {
-        log::info!(
-            "Captured {} session snapshot for {} in {:?}: no persistable data",
-            reason.label(),
-            options.session_file_path().display(),
-            elapsed
-        );
-        return;
-    };
-
-    log::info!(
-        "Captured {} session snapshot for {} in {:?}; diagnostics and payload preparation will run on the persistence worker",
-        reason.label(),
-        options.session_file_path().display(),
-        elapsed
-    );
-}
-
-fn log_session_save_result(
-    reason: SessionSaveReason,
-    report: Option<&SaveSnapshotReport>,
-    elapsed: Duration,
-) {
-    let Some(report) = report else {
-        log::info!(
-            "Finished {} session persistence in {:?}: no file write needed",
-            reason.label(),
-            elapsed
-        );
-        return;
-    };
-
-    log::info!(
-        "Finished {} session persistence in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}, path={}",
-        reason.label(),
-        elapsed,
-        report.outcome,
-        report.written_size,
-        report.raw_size,
-        report.compressed,
-        report.path.display()
-    );
-}
-
 fn persistence_enabled(options: &session::SessionOptions) -> bool {
     options.any_enabled() || options.restore_tool_state || options.persist_history
 }
@@ -694,10 +403,17 @@ fn should_skip_protected_session_save(
         .session
         .should_skip_save_for_protected_path(&session_path, state.input_state.is_session_dirty());
     if skip {
-        log::info!(
-            "Skipping session save to {} because a previous oversized compressed session was left protected and no session changes have been made",
-            session_path.display()
-        );
+        if state.session.refuses_source_write(&session_path) {
+            log::warn!(
+                "Skipping session save to {} because unreadable data could not be preserved; repair and reload the session or use Save As",
+                session_path.display()
+            );
+        } else {
+            log::info!(
+                "Skipping session save to {} because an oversized session is protected and no session changes have been made",
+                session_path.display()
+            );
+        }
     }
     skip
 }

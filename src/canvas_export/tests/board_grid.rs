@@ -160,9 +160,6 @@ fn board_grid_pdf_stays_vector_without_erasers_and_leaves_margins_plain() {
 
 fn check_pdf_pixels(pdf: &[u8], expected: &cairo::ImageSurface) {
     use std::process::Command;
-    if Command::new("pdftoppm").arg("-v").output().is_err() {
-        return;
-    }
     let folder = crate::test_temp::tempdir().unwrap();
     let path = folder.path().join("paper.pdf");
     let prefix = folder.path().join("paper");
@@ -172,7 +169,7 @@ fn check_pdf_pixels(pdf: &[u8], expected: &cairo::ImageSurface) {
         .arg(&path)
         .arg(&prefix)
         .output()
-        .unwrap();
+        .expect("pdftoppm is required for PDF raster assertions; install poppler and retry");
     assert!(
         output.status.success(),
         "{}",

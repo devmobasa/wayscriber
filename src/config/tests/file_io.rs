@@ -403,7 +403,7 @@ color = "#00FF00"
         .unwrap();
 
         Config::update_file(|config| {
-            let crimson = crate::draw::Color {
+            let crimson = crate::domain::Color {
                 r: 220.0 / 255.0,
                 g: 20.0 / 255.0,
                 b: 60.0 / 255.0,
@@ -423,7 +423,7 @@ color = "#00FF00"
         let palette = QuickColorPalette::from_config(&reloaded.drawing.quick_colors);
         assert_eq!(
             palette.color_for_index(1),
-            Some(crate::draw::Color {
+            Some(crate::domain::Color {
                 r: 220.0 / 255.0,
                 g: 20.0 / 255.0,
                 b: 60.0 / 255.0,
@@ -438,7 +438,7 @@ color = "#00FF00"
         );
         assert_eq!(
             palette.color_for_index(0),
-            Some(crate::draw::Color {
+            Some(crate::domain::Color {
                 r: 1.0,
                 g: 0.0,
                 b: 0.0,

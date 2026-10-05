@@ -508,6 +508,21 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
         SaveSnapshotOutcome::TrimmedHistory { depth: 2 }
     );
 
+    assert_eq!(report.generation, Some(1));
+    let written = fs::read(options.session_file_path()).unwrap();
+    let json = if written.starts_with(&[0x1f, 0x8b]) {
+        use std::io::Read;
+        let mut decoded = Vec::new();
+        flate2::read::GzDecoder::new(written.as_slice())
+            .read_to_end(&mut decoded)
+            .unwrap();
+        decoded
+    } else {
+        written
+    };
+    let payload: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    assert_eq!(payload["save_generation"], 1);
+
     let loaded = load_snapshot(&options)
         .expect("load_snapshot should succeed")
         .expect("snapshot should be present");
@@ -729,6 +744,7 @@ fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
 #[test]
 fn save_snapshot_report_marks_near_limit_at_ninety_percent() {
     let report = SaveSnapshotReport {
+        generation: None,
         path: Path::new("/tmp/session.json").to_path_buf(),
         outcome: SaveSnapshotOutcome::Full,
         raw_size: 90,

@@ -16,6 +16,7 @@ fn session_catalog_state_replaces_items_and_inputs() {
             primary_exists: false,
             backup_exists: false,
             recovery_exists: false,
+            unreadable_copy_exists: false,
             clear_marker_exists: false,
             lock_exists: false,
             non_lock_size_bytes: 0,
@@ -89,4 +90,33 @@ fn format_byte_count_uses_compact_units() {
     assert_eq!(format_byte_count(14), "14 B");
     assert_eq!(format_byte_count(4096), "4.0 KiB");
     assert_eq!(format_byte_count(2 * 1024 * 1024), "2.0 MiB");
+}
+
+#[test]
+fn artifact_summary_counts_diagnostic_copies_without_counting_similar_foreign_files() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let primary = temp.path().join("board.wayscriber-session");
+    std::fs::write(&primary, b"primary").unwrap();
+    for suffix in [".corrupt-1", ".bak.corrupt-2", ".recovery.corrupt-3"] {
+        std::fs::write(format!("{}{suffix}", primary.display()), b"diagnostic").unwrap();
+    }
+    std::fs::write(
+        format!("{}.corrupt-01", primary.display()),
+        b"foreign similar name",
+    )
+    .unwrap();
+    let summary = SessionArtifactSummary::from_primary_path(&primary).unwrap();
+    assert!(summary.primary_exists);
+    // Unreadable copies restore nothing, so they are not shown as a backup
+    // or recovery file.
+    assert!(!summary.backup_exists);
+    assert!(!summary.recovery_exists);
+    assert!(summary.unreadable_copy_exists);
+    assert_eq!(summary.non_lock_size_bytes, 7 + 3 * 10);
+    assert_eq!(summary.status_label(), "primary, unreadable copy · 37 B");
+
+    // A primary moved aside still leaves something to show.
+    std::fs::remove_file(&primary).unwrap();
+    let summary = SessionArtifactSummary::from_primary_path(&primary).unwrap();
+    assert_eq!(summary.status_label(), "unreadable copy · 30 B");
 }

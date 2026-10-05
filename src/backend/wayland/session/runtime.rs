@@ -45,7 +45,8 @@ pub(in crate::backend::wayland) struct SessionTransaction<'a> {
 
 mod transaction;
 pub(in crate::backend::wayland) use transaction::{
-    ExplicitSessionTransaction, SessionCommand, SessionCommandReport, TransactionStep,
+    QueuedSessionCommand, SessionCommand, SessionCommandAborted, SessionCommandReport,
+    SessionCommandTransaction, TransactionStep,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,15 +112,16 @@ fn named_candidate_snapshot(
     match outcome {
         LoadSnapshotOutcome::Loaded(snapshot)
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
+        | LoadSnapshotOutcome::RestoredAfterCorruption { snapshot, .. }
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(*snapshot),
         LoadSnapshotOutcome::Empty => Err(anyhow!(
             "named session file contains no usable session data: {}",
             options.session_file_path().display()
         )),
-        LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => Err(anyhow!(
+        LoadSnapshotOutcome::EmptyAfterCorruption { corrupt_copy } => Err(anyhow!(
             "named session file could not be read: {}; a copy of it was saved to {}",
             options.session_file_path().display(),
-            backup_path.display()
+            corrupt_copy.display()
         )),
         LoadSnapshotOutcome::NonRegularArtifact { path } => Err(anyhow!(
             "named session file is not a regular file: {}",

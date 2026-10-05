@@ -1,5 +1,7 @@
+use crate::backend::wayland::state::{ReleaseRoute, release_route};
 use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
+use wayland_client::Connection;
 
 use crate::backend::wayland::state::drag_log;
 use crate::input::state::HelpOverlayPressSource;
@@ -11,10 +13,16 @@ use super::*;
 impl WaylandState {
     pub(super) fn handle_pointer_release(
         &mut self,
+        conn: &Connection,
         event: &PointerEvent,
         routed: RoutedInput,
         button: u32,
     ) {
+        let owner = match self.pointer.take_contact(button, &self.input_state) {
+            Some((_, false)) => return,
+            Some((owner, true)) => Some(owner),
+            None => None,
+        };
         let on_toolbar = routed.surface == InputSurface::Toolbar;
         let inline_active = routed.inline_toolbars;
         if self
@@ -83,6 +91,34 @@ impl WaylandState {
         if self.handle_radial_pointer_release(routed, button) {
             return;
         }
+        match release_route(owner, inline_active) {
+            ReleaseRoute::InlineToolbar => {
+                if !inline_active || !self.handle_inline_pointer_release(event, button) {
+                    self.handle_toolbar_pointer_release(event, button);
+                }
+            }
+            ReleaseRoute::CanvasSurface => {
+                self.finish_canvas_surface_release(event, button);
+                if routed.surface == InputSurface::Canvas
+                    && !self.pointer.contact_motion().skips_inline_strip()
+                {
+                    let over_strip = self.inline_toolbar_motion(event.position);
+                    self.update_pointer_cursor(over_strip, conn);
+                }
+            }
+            ReleaseRoute::Unowned => {
+                self.release_by_toolbar_state(event, on_toolbar, inline_active, button)
+            }
+        }
+    }
+
+    fn release_by_toolbar_state(
+        &mut self,
+        event: &PointerEvent,
+        on_toolbar: bool,
+        inline_active: bool,
+        button: u32,
+    ) {
         if inline_active && self.handle_inline_pointer_release(event, button) {
             return;
         }
@@ -90,6 +126,10 @@ impl WaylandState {
             self.handle_toolbar_pointer_release(event, button);
             return;
         }
+        self.finish_canvas_surface_release(event, button);
+    }
+
+    fn finish_canvas_surface_release(&mut self, event: &PointerEvent, button: u32) {
         // End move drag if released on the main surface
         if button == BTN_LEFT && self.toolbar_drag.is_moving() {
             self.finish_main_surface_drag(event);

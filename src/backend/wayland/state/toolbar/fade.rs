@@ -119,10 +119,7 @@ impl WaylandState {
     /// either does. The toolbar surfaces report their own hover.
     fn canvas_hover_point(&self) -> Option<(f64, f64)> {
         #[cfg(feature = "tablet-input")]
-        if self.tablet.on_overlay
-            && !self.tablet.on_toolbar
-            && let Some(point) = self.tablet.last_pos
-        {
+        if let Some(point) = self.tablet.canvas_point() {
             return Some(point);
         }
         if !self.focus.pointer_focused() || self.toolbar_chrome.pointer_over_toolbar() {

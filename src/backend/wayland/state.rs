@@ -67,6 +67,10 @@ pub(in crate::backend::wayland) use clipboard_runtime::{
     HexCopyOutcome, TextCopyOutcome, TextPasteOutcome,
 };
 mod color_picker;
+mod contact_owner;
+pub(in crate::backend::wayland) use contact_owner::{
+    ContactMotion, ContactOwner, ReleaseRoute, release_route,
+};
 mod core;
 mod desktop_open;
 mod eyedropper;
@@ -101,6 +105,8 @@ mod screen_image;
 mod spotlight_runtime;
 #[cfg(feature = "tablet-input")]
 mod tablet_runtime;
+#[cfg(feature = "tablet-input")]
+pub(in crate::backend::wayland) use tablet_runtime::{StylusDownAdmission, StylusMotionRoute};
 mod text_clipboard;
 mod text_input;
 mod toolbar;
@@ -239,7 +245,7 @@ pub(super) struct WaylandState {
     pub(super) session_home: crate::backend::wayland::session::SessionHome,
     pub(super) persistence: crate::backend::wayland::session::PersistenceController,
     pub(super) session_transaction:
-        Option<crate::backend::wayland::session::ExplicitSessionTransaction>,
+        Option<crate::backend::wayland::session::SessionCommandTransaction>,
     session_dialog: self::toolbar::SessionFileDialogController,
     pub(super) durable_action_finish: Option<crate::daemon::protocol_v2::ClaimedAction>,
     pub(super) durable_action_retry_at: Option<Instant>,

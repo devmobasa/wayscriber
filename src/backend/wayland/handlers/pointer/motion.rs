@@ -6,6 +6,7 @@ use crate::backend::wayland::state::{PerfInputSource, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 
 use super::*;
+use crate::backend::wayland::state::ContactMotion;
 
 impl WaylandState {
     pub(super) fn handle_pointer_motion(
@@ -14,6 +15,11 @@ impl WaylandState {
         event: &PointerEvent,
         routed: RoutedInput,
     ) {
+        self.pointer.reconcile_contacts(
+            &self.input_state,
+            self.zoom.panning,
+            self.toolbar_drag.is_moving() || self.toolbar_drag.item_dragging(),
+        );
         if self.motion_owned_by_screen_modal(conn, routed)
             || self.motion_owned_by_move_drag(conn, event, routed)
             || self.motion_owned_by_radial_menu(conn, routed)
@@ -143,12 +149,17 @@ impl WaylandState {
         routed: RoutedInput,
     ) -> bool {
         self.forget_meter_wheel_off_meter(&event.surface, event.position);
-        if routed.surface == InputSurface::Canvas
-            && routed.inline_toolbars
-            && self.inline_toolbar_motion(event.position)
-        {
-            self.update_pointer_cursor(true, conn);
-            return true;
+        if routed.surface == InputSurface::Canvas && routed.inline_toolbars {
+            let held = self.pointer.contact_motion();
+            if held.skips_inline_strip() {
+                self.clear_inline_contact_hover();
+                return false;
+            }
+            let over_strip = self.inline_toolbar_motion(event.position);
+            if over_strip || held == ContactMotion::Toolbar {
+                self.update_pointer_cursor(over_strip, conn);
+                return true;
+            }
         }
         let toolbar_surface = routed.surface == InputSurface::Toolbar;
         if !toolbar_surface && !self.toolbar_chrome.pointer_over_toolbar() {

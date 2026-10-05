@@ -1,0 +1,58 @@
+{
+  "version": 6,
+  "last_modified": "2026-10-05T12:32:20Z",
+  "active_board_id": "transparent",
+  "boards": [
+    {
+      "id": "transparent",
+      "pages": [
+        {
+          "shapes": [
+            {
+              "id": 1,
+              "shape": {
+                "Line": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 100,
+                  "y2": 0,
+                  "color": {
+                    "r": 1.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 1.0
+                  },
+                  "thick": 2.0
+                }
+              },
+              "created_at": 1791203540999,
+              "locked": false
+            },
+            {
+              "id": 2,
+              "shape": {
+                "Line": {
+                  "x1": 0,
+                  "y1": 10,
+                  "x2": 100,
+                  "y2": 10,
+                  "color": {
+                    "r": 1.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 1.0
+                  },
+                  "thick": 2.0
+                }
+              },
+              "created_at": 1791203540999,
+              "locked": false
+            }
+          ]
+        }
+      ],
+      "active_page": 0
+    }
+  ],
+  "tool_state": null
+}

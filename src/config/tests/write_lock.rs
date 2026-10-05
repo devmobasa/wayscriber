@@ -13,7 +13,7 @@
 
 use super::super::io::{persist_preset_slot_at, persist_quick_color_at};
 use super::super::{ColorSpec, ToolPresetConfig};
-use crate::draw::Color;
+use crate::domain::Color;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::Barrier;

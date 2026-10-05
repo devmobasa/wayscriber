@@ -7,6 +7,118 @@ use crate::session::SaveSnapshotOutcome;
 use std::path::PathBuf;
 
 #[test]
+fn clean_failed_initial_load_exits_without_a_save_failure_or_a_source_write() {
+    use crate::backend::wayland::handlers::test_support::HandlerFixture;
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = session::SessionOptions::new(temp.path().to_path_buf(), "failed-startup");
+    options.persist_transparent = true;
+    options.set_named_file_target(temp.path().join("failed.wayscriber-session"));
+    std::fs::write(options.session_file_path(), b"unreadable").unwrap();
+    std::fs::write(
+        session::append_path_suffix(
+            &options.session_file_path(),
+            ".corrupt-18446744073709551615",
+        ),
+        b"occupied",
+    )
+    .unwrap();
+    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    fixture.state.session = SessionState::new(Some(options.clone()));
+    fixture
+        .state
+        .begin_session_output_transition(None, "initial load failure");
+    assert!(!fixture.state.session.is_loaded());
+    assert!(!fixture.state.session.is_dirty());
+    persist_session(&mut fixture.state).unwrap();
+    assert_eq!(
+        std::fs::read(options.session_file_path()).unwrap(),
+        b"unreadable"
+    );
+    assert!(!options.backup_file_path().exists());
+}
+
+#[test]
+fn drawings_a_never_loaded_session_refuses_are_saved_beside_it_at_exit() {
+    // With the worker and through the joined fallback after it died, for
+    // drawings that fit the size limit and for drawings that do not.
+    for worker_lost in [false, true] {
+        for oversized in [false, true] {
+            assert_refused_drawings_are_saved_beside_the_session(worker_lost, oversized);
+        }
+    }
+}
+
+fn assert_refused_drawings_are_saved_beside_the_session(worker_lost: bool, oversized: bool) {
+    use crate::backend::wayland::handlers::test_support::HandlerFixture;
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = session::SessionOptions::new(temp.path().to_path_buf(), "failed-startup");
+    options.persist_transparent = true;
+    options.set_named_file_target(temp.path().join("failed.wayscriber-session"));
+    options.compression = session::CompressionMode::Off;
+    options.max_file_size_bytes = 4096;
+    std::fs::write(options.session_file_path(), b"unreadable").unwrap();
+    std::fs::write(
+        session::append_path_suffix(
+            &options.session_file_path(),
+            ".corrupt-18446744073709551615",
+        ),
+        b"occupied",
+    )
+    .unwrap();
+    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    fixture.state.session = SessionState::new(Some(options.clone()));
+    fixture
+        .state
+        .begin_session_output_transition(None, "initial load failure");
+    assert!(!fixture.state.session.is_loaded());
+    let strokes = if oversized { 200 } else { 1 };
+    for stroke in 0..strokes {
+        let y = 100 + stroke;
+        let input = &mut fixture.state.input_state;
+        input.on_mouse_press(crate::input::MouseButton::Left, 600, y);
+        input.on_mouse_motion(620, y + 20);
+        input.on_mouse_release(crate::input::MouseButton::Left, 620, y + 20);
+    }
+    if worker_lost {
+        fixture
+            .state
+            .persistence
+            .try_submit(0, PersistenceOperation::PanicForTest)
+            .unwrap();
+        assert!(fixture.state.persistence.wait_for_completion().is_err());
+    }
+
+    let error = persist_session(&mut fixture.state).unwrap_err();
+
+    let saved = error
+        .downcast_ref::<final_save::RefusedDrawingsSaved>()
+        .unwrap_or_else(|| {
+            panic!("worker lost {worker_lost}, oversized {oversized}: drawings were not kept: {error:#}")
+        });
+    assert_eq!(saved.session, options.session_file_path());
+    let mut side = options.clone();
+    side.set_named_file_target(saved.saved_to.clone());
+    // Opened the way the Open command opens it.
+    let kept = match session::load_named_session_candidate(&side).unwrap() {
+        session::LoadSnapshotOutcome::Loaded(kept) if !oversized => kept,
+        session::LoadSnapshotOutcome::LoadedFromRecovery(kept) if oversized => kept,
+        other => panic!("oversized {oversized}: unexpected {other:?}"),
+    };
+    assert_eq!(kept.boards[0].pages.pages[0].shapes.len(), strokes as usize);
+    assert_eq!(saved.recovery, oversized.then(|| side.recovery_file_path()));
+    assert_eq!(
+        std::fs::read(options.session_file_path()).unwrap(),
+        b"unreadable",
+        "the session that never loaded is not written"
+    );
+    let notice = notifications::session_failure_text(&error, true);
+    assert!(
+        notice.contains(&saved.saved_to.display().to_string()),
+        "{notice}"
+    );
+}
+
+#[test]
 fn final_save_retries_after_failed_autosave_while_worker_is_healthy() {
     let error = anyhow::anyhow!("autosave failed");
     let recovered = final_save_barrier_policy(Err(error), true)
@@ -60,6 +172,7 @@ fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
     options.autosave_interval = Duration::from_millis(1);
     let started = Instant::now();
     let mut session = SessionState::new(Some(options.clone()));
+    session.commit_output_options(session.options().unwrap().clone(), true);
     session.record_input_dirty(started, true);
     let due_at = started + Duration::from_millis(2);
     assert!(session.autosave_due(due_at, &options));
@@ -129,6 +242,7 @@ fn unhealthy_worker_removes_dirty_session_from_automatic_schedule() {
     options.autosave_interval = Duration::from_millis(1);
     let now = Instant::now();
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), true);
     state.record_input_dirty(now, true);
     let due = now + Duration::from_millis(2);
 
@@ -282,6 +396,7 @@ fn record_autosave_success_clears_dirty_state_when_saved() {
     options.autosave_interval = Duration::from_millis(1);
 
     let mut state = crate::backend::wayland::session::SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), true);
     let now = Instant::now();
     state.record_input_dirty(now, true);
     assert!(state.autosave_due(now + Duration::from_millis(2), &options));
@@ -316,6 +431,7 @@ fn record_autosave_success_without_saved_report_keeps_dirty_state() {
     options.autosave_interval = Duration::from_millis(1);
 
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), true);
     let now = Instant::now();
     state.record_input_dirty(now, true);
     let due_at = now + Duration::from_millis(2);
@@ -336,6 +452,7 @@ fn autosave_failure_after_deferral_respects_backoff() {
     options.autosave_failure_backoff = Duration::from_millis(75);
 
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), true);
     let now = Instant::now();
     state.record_input_dirty(now, true);
     let due_at = now + Duration::from_millis(2);
@@ -343,7 +460,7 @@ fn autosave_failure_after_deferral_respects_backoff() {
         &mut state, due_at, &options
     ));
 
-    let after_deferral = due_at + Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
+    let after_deferral = due_at + runtime_session::interaction_defer_interval();
     assert!(state.autosave_due(after_deferral, &options));
 
     assert!(record_autosave_failure(
@@ -368,12 +485,13 @@ fn interaction_deferral_refreshes_existing_autosave_deferral() {
     options.autosave_interval = Duration::from_millis(1);
 
     let mut state = SessionState::new(Some(options.clone()));
+    state.commit_output_options(state.options().unwrap().clone(), true);
     let now = Instant::now();
     state.record_input_dirty(now, true);
     let due_at = now + Duration::from_millis(2);
     assert!(state.autosave_due(due_at, &options));
 
-    let defer_for = Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
+    let defer_for = runtime_session::interaction_defer_interval();
     assert!(defer_pending_autosave_for_interaction(
         &mut state, due_at, &options
     ));
@@ -526,6 +644,7 @@ fn save_report(
     max_file_size_bytes: u64,
 ) -> SaveSnapshotReport {
     SaveSnapshotReport {
+        generation: None,
         path,
         outcome,
         raw_size: written_size,

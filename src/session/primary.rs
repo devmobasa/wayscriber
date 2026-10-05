@@ -137,6 +137,41 @@ pub(crate) fn open_session_artifact_for_read(path: &Path, no_follow: bool) -> Re
     Ok(file)
 }
 
+/// Bounded probes never block on a FIFO raced into a session slot.
+pub(crate) fn open_session_artifact_for_probe(
+    path: &Path,
+    no_follow: bool,
+) -> Result<Option<File>> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NONBLOCK | if no_follow { libc::O_NOFOLLOW } else { 0 });
+    let file = match options.open(path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(err) if no_follow && open_error_is_symlink(&err) => {
+            return Err(NonRegularSessionArtifact::new(path, PrimaryTargetKind::Symlink).into());
+        }
+        Err(err) => {
+            if let Ok(metadata) =
+                raw_metadata(path, no_follow).or_else(|_| fs::symlink_metadata(path))
+            {
+                let kind = classify_metadata(&metadata);
+                if kind != PrimaryTargetKind::Regular && kind != PrimaryTargetKind::Symlink {
+                    return Err(NonRegularSessionArtifact::new(path, kind).into());
+                }
+                if kind == PrimaryTargetKind::Symlink && open_error_is_symlink(&err) {
+                    return Err(NonRegularSessionArtifact::new(path, kind).into());
+                }
+            }
+            return Err(err)
+                .with_context(|| format!("failed to probe session artifact {}", path.display()));
+        }
+    };
+    ensure_regular_session_artifact(path, file.metadata()?)?;
+    Ok(Some(file))
+}
+
 /// Restrict an existing regular session artifact to its owner without
 /// following a symlink that raced into its path.
 #[cfg(unix)]

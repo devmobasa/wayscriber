@@ -202,6 +202,11 @@ pub(crate) fn handle_tool_button_press(
     let after = active_interaction_kind(state);
     match (before, after) {
         (None, Some(kind)) => Some(RoutingOutcome::Started(kind)),
+        (Some(ActiveInteractionKind::TextInput), Some(ActiveInteractionKind::TextInput))
+            if state.pointer_drag_active() =>
+        {
+            Some(RoutingOutcome::Continued(ActiveInteractionKind::TextInput))
+        }
         (Some(ActiveInteractionKind::TextInput), Some(ActiveInteractionKind::TextInput)) => {
             Some(RoutingOutcome::Consumed(ConsumedBy::TextInput))
         }

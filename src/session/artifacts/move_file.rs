@@ -1,8 +1,9 @@
 use anyhow::{Context, Result, anyhow};
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io;
 use std::io::ErrorKind;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::session::lock::{lock_exclusive, open_runtime_lock_file, unlock};
@@ -234,8 +235,19 @@ fn target_path_for_source_artifact(
     }
 
     if source.parent() == source_artifacts.primary.parent() {
-        let source_name = source.file_name()?.to_str()?;
-        if let Some(suffix) = preserved_newer_version_suffix(&source_artifacts.primary, source_name)
+        let source_name = source.file_name()?;
+        for (source_slot, target_slot) in [
+            (&source_artifacts.primary, &target_artifacts.primary),
+            (&source_artifacts.backup, &target_artifacts.backup),
+        ] {
+            if let Some((artifact, seq)) = super::parse_corrupt_copy_name(source_name)
+                && Some(artifact) == source_slot.file_name()
+            {
+                return Some(super::corrupt_copy_path(target_slot, seq));
+            }
+        }
+        if let Some(name) = source_name.to_str()
+            && let Some(suffix) = preserved_newer_version_suffix(&source_artifacts.primary, name)
         {
             return Some(crate::session::append_path_suffix(
                 &target_artifacts.primary,
@@ -259,16 +271,15 @@ fn target_recovery_variant_path(
     if source.parent() != source_recovery.parent() {
         return None;
     }
-    let source_name = source.file_name()?.to_str()?;
-    let source_recovery_name = source_recovery.file_name()?.to_str()?;
-    if !source_name.starts_with(&format!("{source_recovery_name}.")) {
+    let source_name = source.file_name()?.as_bytes();
+    let source_recovery_name = source_recovery.file_name()?.as_bytes();
+    let suffix = source_name.strip_prefix(source_recovery_name)?;
+    if !suffix.starts_with(b".") {
         return None;
     }
 
-    let target_recovery_name = target_recovery.file_name()?.to_str()?;
-    let suffix = &source_name[source_recovery_name.len()..];
-    let mut target_name = OsString::from(target_recovery_name);
-    target_name.push(suffix);
+    let mut target_name = OsString::from(target_recovery.file_name()?);
+    target_name.push(OsStr::from_bytes(suffix));
     Some(match target_recovery.parent() {
         Some(parent) => parent.join(target_name),
         None => PathBuf::from(target_name),

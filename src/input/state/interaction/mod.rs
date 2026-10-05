@@ -12,6 +12,7 @@ pub(crate) use event::{
     CanvasPoint, PointerMotion, PointerPoints, PointerPress, PointerRelease, ScreenPoint,
 };
 pub(crate) use keyboard::{route_key_press_with_resources, route_key_repeat_with_resources};
+pub(crate) use outcome::RoutingOutcome;
 pub(crate) use pointer::{route_pointer_motion, route_pointer_press, route_pointer_release};
 
 #[cfg(test)]

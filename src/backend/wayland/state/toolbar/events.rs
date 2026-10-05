@@ -293,7 +293,7 @@ impl WaylandState {
 
             #[cfg(feature = "tablet-input")]
             if thickness_event && self.sync_stylus_thickness_cache(prev_thickness) {
-                if self.tablet.tip_down {
+                if self.tablet.is_canvas_gesture() {
                     self.record_stylus_peak(self.input_state.style.current_thickness);
                 } else {
                     self.tablet.peak_thickness = None;
@@ -439,8 +439,7 @@ impl WaylandState {
             return false;
         }
 
-        self.tablet.base_thickness = Some(cur);
-        if self.tablet.tip_down {
+        if self.tablet.is_canvas_gesture() {
             self.tablet.pressure_thickness = Some(cur);
         } else {
             self.tablet.pressure_thickness = None;

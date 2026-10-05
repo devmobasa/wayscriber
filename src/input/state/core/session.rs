@@ -6,7 +6,6 @@ use crate::input::BoardManager;
 use crate::input::state::highlight::ClickHighlightState;
 use std::path::{Path, PathBuf};
 
-#[allow(dead_code)]
 struct ActiveInteractionRollback {
     boards: BoardManager,
     state: DrawingState,
@@ -28,7 +27,6 @@ struct ActiveInteractionRollback {
     canvas_index: super::CanvasIndex,
 }
 
-#[allow(dead_code)]
 impl ActiveInteractionRollback {
     fn capture(input: &InputState) -> Self {
         Self {
@@ -88,19 +86,16 @@ impl InputState {
     }
 
     /// Returns true if session data was marked dirty since the last check.
-    #[allow(dead_code)]
     pub(crate) fn take_session_dirty(&mut self) -> bool {
         self.session_flags.take_dirty()
     }
 
     /// Clears session dirtiness after loading persisted state into memory.
-    #[allow(dead_code)]
     pub(crate) fn clear_session_dirty(&mut self) {
         self.session_flags.clear_dirty();
     }
 
     /// Returns whether session data is dirty without clearing the dirty flag.
-    #[allow(dead_code)]
     pub(crate) fn is_session_dirty(&self) -> bool {
         self.session_flags.is_dirty()
     }
@@ -109,18 +104,15 @@ impl InputState {
         self.session_flags.set_dirty(dirty);
     }
 
-    #[allow(dead_code)]
     pub(crate) fn pending_save_as_overwrite(&self) -> Option<&Path> {
         self.session_flags.pending_save_as_overwrite()
     }
 
-    #[allow(dead_code)]
     pub(crate) fn set_pending_save_as_overwrite(&mut self, path: PathBuf) {
         self.session_flags.set_pending_save_as_overwrite(path);
         self.needs_redraw = true;
     }
 
-    #[allow(dead_code)]
     pub(crate) fn clear_pending_save_as_overwrite(&mut self) -> Option<PathBuf> {
         let previous = self.session_flags.take_pending_save_as_overwrite();
         if previous.is_some() {
@@ -130,7 +122,6 @@ impl InputState {
     }
 
     /// Returns true while pointer-driven work is in progress and autosave should wait.
-    #[allow(dead_code)]
     pub(crate) fn has_active_pointer_interaction(&self) -> bool {
         self.keymap.pointer_drag_active()
             || matches!(
@@ -173,7 +164,6 @@ impl InputState {
             || self.is_color_picker_popup_open()
     }
 
-    #[allow(dead_code)]
     pub(crate) fn with_active_interaction_canceled_for_capture_with<T>(
         &mut self,
         measurer: &crate::draw::TextMeasurer,

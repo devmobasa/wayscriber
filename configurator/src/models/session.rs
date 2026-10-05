@@ -242,6 +242,7 @@ pub struct SessionArtifactSummary {
     pub primary_exists: bool,
     pub backup_exists: bool,
     pub recovery_exists: bool,
+    pub unreadable_copy_exists: bool,
     pub clear_marker_exists: bool,
     pub lock_exists: bool,
     pub non_lock_size_bytes: u64,
@@ -252,34 +253,35 @@ impl SessionArtifactSummary {
         let artifacts = wayscriber::session::named_session_artifact_paths(path);
         let non_lock_paths = wayscriber::session::named_session_non_lock_artifact_paths(path)
             .map_err(|err| err.to_string())?;
-        let recovery_name = artifacts
-            .recovery
-            .file_name()
-            .and_then(|name| name.to_str())
-            .map(str::to_string);
 
         let mut summary = Self {
             primary_exists: artifact_exists(&artifacts.primary)?,
             backup_exists: artifact_exists(&artifacts.backup)?
                 || artifact_exists(&artifacts.backup_recovery_marker)?,
             recovery_exists: false,
+            unreadable_copy_exists: false,
             clear_marker_exists: artifact_exists(&artifacts.clear_marker)?,
             lock_exists: artifact_exists(&artifacts.lock)?,
             non_lock_size_bytes: 0,
         };
 
-        for path in non_lock_paths {
-            let Some(metadata) = artifact_metadata(&path)? else {
+        for artifact in non_lock_paths {
+            let Some(metadata) = artifact_metadata(&artifact)? else {
                 continue;
             };
             summary.non_lock_size_bytes =
                 summary.non_lock_size_bytes.saturating_add(metadata.len());
-            if recovery_name.as_deref().is_some_and(|name| {
-                path.file_name()
-                    .and_then(|value| value.to_str())
-                    .is_some_and(|value| value == name || value.starts_with(&format!("{name}.")))
-            }) {
-                summary.recovery_exists = true;
+            match wayscriber::session::named_session_artifact_kind(path, &artifact) {
+                Some(wayscriber::session::SessionArtifactKind::Backup) => {
+                    summary.backup_exists = true
+                }
+                Some(wayscriber::session::SessionArtifactKind::Recovery) => {
+                    summary.recovery_exists = true
+                }
+                Some(wayscriber::session::SessionArtifactKind::UnreadableCopy) => {
+                    summary.unreadable_copy_exists = true
+                }
+                _ => {}
             }
         }
 
@@ -296,6 +298,9 @@ impl SessionArtifactSummary {
         }
         if self.recovery_exists {
             parts.push("recovery");
+        }
+        if self.unreadable_copy_exists {
+            parts.push("unreadable copy");
         }
         if self.clear_marker_exists {
             parts.push("cleared");

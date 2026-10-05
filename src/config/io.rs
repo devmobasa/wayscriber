@@ -6,7 +6,7 @@ use super::salvage::deserialize_salvaging;
 use super::types::{PRESET_SLOTS_MAX, ToolPresetConfig};
 use super::validate::ConfigValidationReport;
 use super::{Config, ConfigDocument};
-use crate::draw::Color;
+use crate::domain::Color;
 use crate::durable_io::{
     AtomicWriteOptions, DestinationExpectation, DurableIoError, FileIdentity, OverwriteMode,
     SymlinkPolicy,

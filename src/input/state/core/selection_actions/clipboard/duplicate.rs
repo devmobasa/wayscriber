@@ -4,7 +4,6 @@ use crate::draw::frame::UndoAction;
 
 const DUPLICATE_OFFSET: i32 = 12;
 
-#[allow(dead_code)]
 impl InputState {
     pub(crate) fn duplicate_selection_with(&mut self, measurer: &TextMeasurer) -> bool {
         let ids_len = self.selected_shape_ids().len();

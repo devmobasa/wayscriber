@@ -44,7 +44,7 @@ fn sample_frame() -> Frame {
     frame
 }
 
-fn sample_snapshot() -> SessionSnapshot {
+pub(super) fn sample_snapshot() -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
@@ -59,7 +59,142 @@ fn sample_snapshot() -> SessionSnapshot {
     }
 }
 
-fn sample_tool_state() -> ToolStateSnapshot {
+#[test]
+fn corrupt_primary_restores_backup_without_destroying_its_bytes() {
+    for named in [false, true] {
+        let temp = tempdir().unwrap();
+        let mut options = SessionOptions::new(temp.path().to_path_buf(), "corrupt-restore");
+        options.persist_transparent = true;
+        options.compression = CompressionMode::Off;
+        if named {
+            options.set_named_file_target(temp.path().join("board.wayscriber-session"));
+        }
+
+        save_snapshot(&sample_snapshot(), &options).unwrap();
+        let good_bytes = std::fs::read(options.session_file_path()).unwrap();
+        std::fs::copy(options.session_file_path(), options.backup_file_path()).unwrap();
+        std::fs::write(options.session_file_path(), b"{broken primary").unwrap();
+
+        let restored = load_snapshot(&options)
+            .unwrap()
+            .expect("restore the backup");
+        assert!(restored.has_board_data());
+        assert_eq!(
+            std::fs::read(options.backup_file_path()).unwrap(),
+            good_bytes
+        );
+        if named {
+            assert_eq!(
+                std::fs::read(options.session_file_path()).unwrap(),
+                good_bytes
+            );
+        } else {
+            assert!(!options.session_file_path().exists());
+        }
+
+        save_snapshot(&restored, &options).unwrap();
+        assert_eq!(
+            std::fs::read(options.backup_file_path()).unwrap(),
+            good_bytes
+        );
+    }
+}
+
+#[test]
+fn corrupt_artifacts_have_separate_copies_and_only_marked_recovery_restores() {
+    for recoverable in [false, true] {
+        let temp = tempdir().unwrap();
+        let mut options = SessionOptions::new(temp.path().to_path_buf(), "corrupt-recovery");
+        options.persist_transparent = true;
+        save_snapshot(&sample_snapshot(), &options).unwrap();
+        std::fs::rename(options.session_file_path(), options.recovery_file_path()).unwrap();
+        set_modified(
+            &options.recovery_file_path(),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(10),
+        );
+        if recoverable {
+            std::fs::write(
+                options.recovery_recoverable_marker_file_path(),
+                b"recoverable",
+            )
+            .unwrap();
+        }
+        std::fs::write(options.backup_file_path(), b"broken backup").unwrap();
+        std::fs::write(options.session_file_path(), b"broken primary").unwrap();
+        set_modified(
+            &options.session_file_path(),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(20),
+        );
+
+        let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024).unwrap();
+        if recoverable {
+            assert!(matches!(
+                outcome,
+                LoadSnapshotOutcome::RestoredAfterCorruption {
+                    source: super::load::RestoredArtifact::Recovery,
+                    ..
+                }
+            ));
+        } else {
+            assert!(matches!(
+                outcome,
+                LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+            ));
+        }
+        for (slot, expected) in [
+            (options.session_file_path(), b"broken primary".as_slice()),
+            (options.backup_file_path(), b"broken backup".as_slice()),
+        ] {
+            assert_eq!(
+                std::fs::read(crate::session::append_path_suffix(&slot, ".corrupt-1")).unwrap(),
+                expected
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn corrupt_copy_retention_skips_foreign_entries_and_named_loads_reuse_bytes() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "copy-retention");
+    let primary = temp.path().join("board.wayscriber-session");
+    options.set_named_file_target(primary.clone());
+    options.persist_transparent = true;
+    let copy = |n| crate::session::append_path_suffix(&primary, &format!(".corrupt-{n}"));
+    std::fs::create_dir(copy(1)).unwrap();
+    let foreign = temp.path().join("foreign");
+    std::fs::write(&foreign, b"unrelated").unwrap();
+    symlink(&foreign, copy(2)).unwrap();
+
+    for n in 3..=7 {
+        std::fs::write(&primary, format!("broken {n}")).unwrap();
+        let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024).unwrap();
+        assert!(matches!(
+            outcome,
+            LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+        ));
+        load_snapshot_with_expanded_limit(&options, 64 * 1024).unwrap();
+        assert_eq!(
+            std::fs::read(copy(n)).unwrap(),
+            format!("broken {n}").as_bytes()
+        );
+        assert!(!copy(n + 1).exists());
+    }
+    assert!(!copy(3).exists());
+    assert!(!copy(4).exists());
+    assert!(copy(5).exists() && copy(6).exists() && copy(7).exists());
+    assert!(copy(1).is_dir());
+    assert!(
+        std::fs::symlink_metadata(copy(2))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(std::fs::read(foreign).unwrap(), b"unrelated");
+}
+
+pub(super) fn sample_tool_state() -> ToolStateSnapshot {
     ToolStateSnapshot {
         current_color: Color {
             r: 1.0,
@@ -95,6 +230,7 @@ fn sample_tool_state() -> ToolStateSnapshot {
 
 fn contentless_session_file() -> SessionFile {
     SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_board_id: Some("transparent".to_string()),
@@ -115,6 +251,7 @@ fn contentless_session_file() -> SessionFile {
 
 fn sample_session_file() -> SessionFile {
     SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_board_id: Some("transparent".to_string()),
@@ -147,7 +284,7 @@ fn write_contentless_session(path: &Path) {
 }
 
 #[cfg(unix)]
-fn make_fifo(path: &Path) {
+pub(super) fn make_fifo(path: &Path) {
     let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
     // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
     let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
@@ -160,7 +297,7 @@ fn make_fifo(path: &Path) {
     );
 }
 
-fn set_modified(path: &Path, modified: SystemTime) {
+pub(super) fn set_modified(path: &Path, modified: SystemTime) {
     std::fs::File::options()
         .write(true)
         .open(path)
@@ -657,7 +794,7 @@ fn load_named_primary_rejects_symlink_without_following_target() {
 }
 
 #[test]
-fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
+fn load_named_corrupt_primary_preserves_diagnostics_without_removing_selected_file() {
     use std::os::unix::fs::PermissionsExt;
 
     let temp = tempdir().unwrap();
@@ -678,12 +815,12 @@ fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("corrupt named primary should be handled");
 
-    let LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } = &outcome else {
+    let LoadSnapshotOutcome::EmptyAfterCorruption { corrupt_copy } = &outcome else {
         panic!("an unreadable session must report where its bytes went, got {outcome:?}");
     };
     assert_eq!(
-        backup_path,
-        &options.backup_file_path(),
+        corrupt_copy,
+        &crate::session::append_path_suffix(&named_path, ".corrupt-1"),
         "the reported path is the one holding the preserved bytes"
     );
     assert_eq!(
@@ -692,13 +829,13 @@ fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
         "named corrupt backup must not remove the selected primary path"
     );
     assert_eq!(
-        std::fs::read(options.backup_file_path()).expect("backup bytes"),
+        std::fs::read(corrupt_copy).expect("corrupt copy bytes"),
         b"{not valid json",
         "named corrupt primary should still be backed up for diagnostics"
     );
     assert_eq!(
-        std::fs::metadata(options.backup_file_path())
-            .expect("backup metadata")
+        std::fs::metadata(corrupt_copy)
+            .expect("corrupt copy metadata")
             .permissions()
             .mode()
             & 0o777,
@@ -1341,7 +1478,7 @@ fn load_snapshot_falls_back_to_normal_when_recovery_is_corrupt() {
         "corrupt recovery should be moved out of the recovery path"
     );
     assert!(
-        recovery_path.with_extension("recovery.bak").exists(),
+        crate::session::append_path_suffix(&recovery_path, ".corrupt-1").exists(),
         "corrupt recovery should be backed up for inspection"
     );
 }
@@ -1356,6 +1493,7 @@ fn load_snapshot_falls_back_to_normal_when_recovery_is_empty() {
     save_snapshot(&snapshot, &options).expect("normal session should save");
 
     let empty_file = SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_board_id: Some("transparent".to_string()),
@@ -2025,6 +2163,7 @@ fn load_snapshot_inner_skips_newer_versions() {
     let session_path = temp.path().join("session.json");
 
     let file = SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION + 1,
         last_modified: now_rfc3339(),
         active_board_id: Some("transparent".to_string()),
@@ -2513,6 +2652,7 @@ fn load_snapshot_inner_migrates_legacy_frame_to_pages() {
     });
 
     let file = SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_board_id: None,
@@ -2553,6 +2693,7 @@ fn load_snapshot_inner_falls_back_when_active_board_is_missing() {
     let session_path = temp.path().join("session.json");
 
     let file = SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_board_id: Some("missing".to_string()),
@@ -2591,6 +2732,7 @@ fn load_snapshot_inner_normalizes_empty_legacy_page_lists() {
     let session_path = temp.path().join("session.json");
 
     let file = SessionFile {
+        save_generation: None,
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_board_id: None,
@@ -2777,4 +2919,40 @@ fn maximum_admitted_image_and_create_history_fit_actual_default_session_budget()
         restored.shapes.is_empty(),
         "create history survives full save/load"
     );
+}
+
+#[test]
+fn offline_tool_clear_reports_corruption_instead_of_silently_rewriting_restored_ink() {
+    for named in [false, true] {
+        let temp = tempdir().unwrap();
+        let mut options = SessionOptions::new(temp.path().to_path_buf(), "offline-corrupt");
+        options.persist_transparent = true;
+        if named {
+            options.set_named_file_target(temp.path().join("named.wayscriber-session"));
+        }
+        let snapshot = sample_snapshot();
+        save_snapshot(&snapshot, &options).unwrap();
+        std::fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
+        let backup = std::fs::read(options.backup_file_path()).unwrap();
+        std::fs::write(options.session_file_path(), b"unreadable primary").unwrap();
+        let error = crate::session::clear_tool_state(&options).unwrap_err();
+        assert!(format!("{error:#}").contains("diagnostic bytes were preserved"));
+        assert_eq!(std::fs::read(options.backup_file_path()).unwrap(), backup);
+        assert_eq!(
+            std::fs::read(crate::session::append_path_suffix(
+                &options.session_file_path(),
+                ".corrupt-1"
+            ))
+            .unwrap(),
+            b"unreadable primary"
+        );
+        if named {
+            assert_eq!(
+                std::fs::read(options.session_file_path()).unwrap(),
+                b"unreadable primary"
+            );
+        } else {
+            assert!(!options.session_file_path().exists());
+        }
+    }
 }

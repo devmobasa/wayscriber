@@ -2,6 +2,7 @@ use super::*;
 use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
 
 mod lifecycle_regressions;
+mod output;
 use crate::backend::wayland::session::{
     PersistenceOperation, RequestId, SaveStrategy, SessionState,
     persistence::SubmitError,
@@ -23,11 +24,14 @@ pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
     measurer: &'a TextMeasurer,
     pub session: &'a mut SessionState,
     pub persistence: PersistenceController,
-    pending: Option<ExplicitSessionTransaction>,
+    pending: Option<SessionCommandTransaction>,
     config: Config,
     config_failed: bool,
     reports: Vec<SessionCommandReport>,
     errors: Vec<anyhow::Error>,
+    /// Size of each batch of queued commands that did not run, and whether
+    /// Wayscriber was closing.
+    pub queued_failures: Vec<(usize, bool)>,
     /// The target at each commit notice, in order, with the number of
     /// terminal reports published before it.
     pub committed_targets: Vec<(Option<stored_session::SessionTarget>, usize)>,
@@ -57,6 +61,7 @@ impl<'a> CommandRuntime<'a> {
             config_failed: false,
             reports: Vec::new(),
             errors: Vec::new(),
+            queued_failures: Vec::new(),
             committed_targets: Vec::new(),
             ui: None,
             ui_engine: crate::ui_text::UiTextEngine::default(),
@@ -149,7 +154,7 @@ impl SessionCommandRuntime for CommandRuntime<'_> {
         }
     }
 
-    fn pending_command(&mut self) -> &mut Option<ExplicitSessionTransaction> {
+    fn pending_command(&mut self) -> &mut Option<SessionCommandTransaction> {
         &mut self.pending
     }
 
@@ -165,6 +170,8 @@ impl SessionCommandRuntime for CommandRuntime<'_> {
         refresh_runtime_ui_config_seeds(self);
     }
 
+    fn session_command_queued(&mut self) {}
+
     fn session_target_committed(&mut self) {
         self.committed_targets.push((
             self.session.options().map(|options| options.target.clone()),
@@ -176,8 +183,22 @@ impl SessionCommandRuntime for CommandRuntime<'_> {
         self.reports.push(report);
     }
 
-    fn fail_session_command(&mut self, _: &SessionCommand, error: &anyhow::Error) {
+    fn fail_session_command(&mut self, command: &SessionCommand, error: &anyhow::Error) {
+        if matches!(command, SessionCommand::Output { .. }) {
+            defer_failed_output(self.session, error, Instant::now(), Duration::from_secs(5));
+        }
         self.errors.push(anyhow!("{error:#}"));
+    }
+
+    fn fail_queued_commands(
+        &mut self,
+        failures: Vec<(SessionCommand, anyhow::Error)>,
+        closing: bool,
+    ) {
+        self.queued_failures.push((failures.len(), closing));
+        for (command, error) in &failures {
+            self.fail_session_command(command, error);
+        }
     }
 
     fn session_transport_failed(&mut self, _: &anyhow::Error) {
@@ -723,6 +744,7 @@ fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
     add_line(&mut input, 51);
     input.mark_session_dirty();
     let mut session = SessionState::new(Some(current.clone()));
+    session.commit_output_options(session.options().unwrap().clone(), true);
     let measurer = TextMeasurer::default();
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
@@ -789,6 +811,20 @@ fn unsaveable_home(
                 .unwrap();
             (configured, "is a symlink")
         }
+        "expanded primary" => {
+            use std::io::Read;
+            std::fs::create_dir_all(&configured.base_dir).unwrap();
+            let file = std::fs::File::create(configured.session_file_path()).unwrap();
+            let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
+            std::io::copy(
+                &mut std::io::repeat(b' ')
+                    .take(stored_session::DEFAULT_MAX_EXPANDED_SESSION_BYTES + 1),
+                &mut encoder,
+            )
+            .unwrap();
+            encoder.finish().unwrap();
+            (configured, "expands beyond")
+        }
         "named directory" => {
             let named = named_options(base, "named-home");
             std::fs::create_dir(named.session_file_path()).unwrap();
@@ -805,6 +841,7 @@ fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
         "configured directory beside a recovery copy",
         "configured symlink",
         "named directory",
+        "expanded primary",
     ] {
         let temp = crate::test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
@@ -813,6 +850,7 @@ fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
         add_line(&mut input, 51);
         input.mark_session_dirty();
         let mut session = SessionState::new(Some(current.clone()));
+        session.commit_output_options(session.options().unwrap().clone(), true);
         let measurer = TextMeasurer::default();
         let (persistence, worker) = PersistenceController::controlled_for_test();
         let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
@@ -878,6 +916,7 @@ fn returning_to_a_home_without_persistence_leaves_an_unsaved_empty_canvas() {
     add_line(&mut input, 51);
     input.mark_session_dirty();
     let mut session = SessionState::new(Some(current.clone()));
+    session.commit_output_options(session.options().unwrap().clone(), true);
     let measurer = TextMeasurer::default();
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
@@ -961,6 +1000,7 @@ fn shutdown_drains_save_as_and_open_at_every_disk_phase_before_final_save() {
             add_line(&mut input, 51);
             input.mark_session_dirty();
             let mut session = SessionState::new(Some(current.clone()));
+            session.commit_output_options(session.options().unwrap().clone(), true);
             let measurer = TextMeasurer::default();
             let (persistence, worker) = PersistenceController::controlled_for_test();
             let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
@@ -1102,6 +1142,7 @@ fn shutdown_reports_open_and_save_as_phase_failures_before_final_persistence() {
             add_line(&mut input, 51);
             input.mark_session_dirty();
             let mut session = SessionState::new(Some(current.clone()));
+            session.commit_output_options(session.options().unwrap().clone(), true);
             let measurer = TextMeasurer::default();
             let (persistence, worker) = PersistenceController::controlled_for_test();
             let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
