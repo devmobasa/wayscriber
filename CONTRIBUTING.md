@@ -215,10 +215,14 @@ not collected by CI.
 
 Freeze and Zoom fail when the active output does not advertise a current `wl_output` mode.
 Changes confined to another monitor preserve direct captures and installed active-output sources.
-Portal captures discard stale desktop snapshots and retry once after complete geometry settles,
-while preserving the original output identity and request. A second change during the retry or an
-active-output switch is terminal. Board PDF desktop captures retain a full-desktop generation check,
-including changes to other monitors even when the screenshot dimensions stay the same.
+Capture preflight retries once on the selected backend after its required geometry settles,
+while preserving the original request and keyboard policy. Direct backends require only active-output
+geometry; portal captures require complete desktop geometry and also retry stale desktop snapshots.
+Known output identities stay bound; requests started before
+output discovery bind to the first output observed during the bounded wait. A second stale capture,
+loss of a bound output, or an active-output switch is terminal. Board PDF desktop captures retain a
+full-desktop generation check, including changes to other monitors even when the screenshot
+dimensions stay the same.
 
 `dotnet run tools/wayscriber.cs --no-build -- report code-health` reports navigational
 maintainability metrics. Its CI artifact is

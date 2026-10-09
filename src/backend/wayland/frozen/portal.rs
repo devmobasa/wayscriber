@@ -345,7 +345,7 @@ mod tests {
             Some(2),
         );
 
-        assert!(frozen.has_portal_layout_retry());
+        assert!(frozen.has_layout_retry());
         assert!(frozen.has_acquisition_attempt());
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_acquisition_completion().is_none());

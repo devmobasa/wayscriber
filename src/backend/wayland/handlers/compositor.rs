@@ -114,47 +114,20 @@ impl CompositorHandler for WaylandState {
             return;
         }
 
-        debug!("Surface entered output");
-
         let previous_output = self.surface.current_output();
-        let output_changed = previous_output.as_ref() != Some(output);
-        self.surface.set_current_output(output.clone());
-        if output_changed {
-            // Keep layer-shell toolbars pinned to the monitor that owns the drawing surface.
-            self.toolbar_chrome.set_needs_recreate(true);
-        }
-        self.refresh_active_output_label();
-
-        if let Some(info) = self.protocol.output().info(output) {
-            let scale = info.scale_factor.max(1);
-            self.surface.set_scale(scale);
-            // Mark full damage when entering output - scale may have changed, pool may be new
-            self.buffer_damage
-                .mark_all_full(FullDamageReason::OutputChanged);
-            self.toolbar.maybe_update_scale(Some(output), scale);
-            self.toolbar.mark_dirty();
-        }
-        self.refresh_freeze_zoom_geometry();
-        self.frozen.unfreeze(&mut self.input_state);
-        self.zoom.deactivate(&mut self.input_state);
-
-        // Update frozen buffer dimensions in case this output's scale differs
-        let (phys_w, phys_h) = self.surface.physical_dimensions();
-        self.frozen
-            .handle_resize(phys_w, phys_h, &mut self.input_state);
-        self.zoom
-            .handle_resize(phys_w, phys_h, &mut self.input_state);
-        self.cancel_screen_modals_if_source_changed();
+        self.surface.enter_output(output.clone());
+        self.refresh_surface_output(previous_output.as_ref(), None);
+        self.log_capture_output_event(
+            super::output::CaptureOutputEvent::SurfaceEnter,
+            output,
+            previous_output.as_ref(),
+        );
 
         // If freeze-on-start was requested, trigger it once the surface is configured and active.
         if self.frozen.take_pending_on_start() {
             info!("Applying freeze-on-start after initial configure");
             self.input_state.request_frozen_toggle();
         }
-
-        let identity = self.output_identity_for(output);
-        self.begin_session_output_transition(identity, "surface output change");
-        self.input_state.needs_redraw = true;
     }
 
     fn surface_leave(
@@ -168,14 +141,56 @@ impl CompositorHandler for WaylandState {
             return;
         }
 
-        debug!("Surface left output");
+        let previous_output = self.surface.current_output();
         self.surface.clear_output(output);
-        self.refresh_active_output_label();
-        self.frozen.set_active_output(None, None);
-        self.zoom.set_active_output(None, None);
-        self.set_freeze_zoom_geometry(None);
-        self.frozen.unfreeze(&mut self.input_state);
-        self.zoom.deactivate(&mut self.input_state);
-        self.cancel_screen_modals_if_source_changed();
+        self.refresh_surface_output(previous_output.as_ref(), None);
+        self.log_capture_output_event(
+            super::output::CaptureOutputEvent::SurfaceLeave,
+            output,
+            previous_output.as_ref(),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::wayland::frozen::FrozenImage;
+    use crate::backend::wayland::handlers::test_support::HandlerFixture;
+
+    #[test]
+    fn reenter_and_neighbour_leave_preserve_installed_freeze_and_zoom() {
+        let mut fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 2);
+        let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
+        let qh = fixture.queue.handle();
+        let surface = fixture.state.surface.wl_surface().unwrap().clone();
+        let state = &mut fixture.state;
+        state.surface_enter(&fixture.conn, &qh, &surface, &outputs[0]);
+        state.frozen.set_image(FrozenImage {
+            width: 1,
+            height: 1,
+            stride: 4,
+            data: vec![7; 4],
+        });
+        state.input_state.set_frozen_active(true);
+        state.zoom.activate_without_capture();
+        state.toolbar_chrome.set_needs_recreate(false);
+
+        state.surface_enter(&fixture.conn, &qh, &surface, &outputs[0]);
+        state.surface_enter(&fixture.conn, &qh, &surface, &outputs[1]);
+        state.surface_leave(&fixture.conn, &qh, &surface, &outputs[1]);
+
+        assert_eq!(state.surface.current_output(), Some(outputs[0].clone()));
+        assert_eq!(state.frozen.image().unwrap().data, vec![7; 4]);
+        assert!(state.input_state.frozen_active());
+        assert!(state.zoom.active);
+        assert!(!state.toolbar_chrome.needs_recreate());
+
+        state.surface_leave(&fixture.conn, &qh, &surface, &outputs[0]);
+
+        assert!(state.surface.current_output().is_none());
+        assert!(state.frozen.image().is_none());
+        assert!(!state.input_state.frozen_active());
+        assert!(!state.zoom.active);
     }
 }

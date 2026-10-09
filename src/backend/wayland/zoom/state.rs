@@ -1,6 +1,8 @@
 use crate::backend::wayland::capture_preflight::{
-    CaptureLayoutGenerations, CapturePreflight, CapturePreflightError, PortalLayoutRetry,
+    CaptureBackend, CaptureLayoutGenerations, CaptureLayoutRetry, CaptureLayoutScope,
+    CapturePreflight, CapturePreflightError,
 };
+use crate::backend::wayland::state::OverlaySuppression;
 use std::sync::Arc;
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
@@ -27,6 +29,19 @@ pub(in crate::backend::wayland) enum ZoomCaptureBackend {
     Portal,
 }
 
+impl CaptureBackend for ZoomCaptureBackend {
+    fn layout_scope(self) -> CaptureLayoutScope {
+        match self {
+            Self::Portal => CaptureLayoutScope::Desktop,
+            Self::WlrScreencopy => CaptureLayoutScope::ActiveOutput,
+        }
+    }
+
+    fn suppression_reason(self) -> OverlaySuppression {
+        OverlaySuppression::Zoom
+    }
+}
+
 /// Zoom state, capture logic, and pan/lock bookkeeping.
 pub struct ZoomState {
     pub(super) manager: Option<ZwlrScreencopyManagerV1>,
@@ -44,7 +59,7 @@ pub struct ZoomState {
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight: CapturePreflight<ZoomCaptureBackend>,
     pub(super) capture_done: bool,
-    pub(super) layout_retry: PortalLayoutRetry,
+    pub(super) layout_retry: CaptureLayoutRetry<ZoomCaptureBackend>,
     next_capture_id: u64,
     current_capture_id: Option<ZoomCaptureId>,
     pub(super) source_terminal: Option<ZoomSourceTerminal>,
@@ -89,7 +104,7 @@ impl ZoomState {
             runtime_wake,
             preflight: CapturePreflight::Idle,
             capture_done: false,
-            layout_retry: PortalLayoutRetry::default(),
+            layout_retry: CaptureLayoutRetry::default(),
             next_capture_id: 1,
             current_capture_id: None,
             source_terminal: None,
@@ -224,20 +239,33 @@ impl ZoomState {
     }
 
     pub(super) fn capture_layout_generation(&self, backend: ZoomCaptureBackend) -> u64 {
-        match backend {
-            ZoomCaptureBackend::Portal => self.layout_generations.desktop,
-            ZoomCaptureBackend::WlrScreencopy => self.layout_generations.active_output,
-        }
+        backend.layout_generation(self.layout_generations)
     }
 
+    #[cfg(test)]
     pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), CapturePreflightError> {
         self.preflight.ensure_layout_current(
             self.active_output_id,
-            self.preflight
-                .backend()
-                .map(|backend| self.capture_layout_generation(backend))
-                .unwrap_or(self.layout_generations.active_output),
+            self.preflight.generation(self.layout_generations),
         )
+    }
+
+    /// Admission needs a known active output and the layout saved when the
+    /// request began; an unknown output is retried, never captured.
+    pub(super) fn ensure_preflight_admission(&self) -> Result<(), CapturePreflightError> {
+        self.preflight.ensure_admission_current(
+            self.active_output_id,
+            self.preflight.generation(self.layout_generations),
+        )
+    }
+
+    pub(in crate::backend::wayland) fn log_preflight_layout(&self, barrier_id: Option<u64>) {
+        self.preflight.log_layout(
+            "snapshot",
+            barrier_id,
+            self.active_output_id,
+            self.layout_generations,
+        );
     }
 
     #[cfg(test)]
@@ -280,7 +308,7 @@ impl ZoomState {
             changed = true;
         }
         self.preflight = CapturePreflight::Idle;
-        self.layout_retry = PortalLayoutRetry::default();
+        self.layout_retry = CaptureLayoutRetry::default();
         self.portal.finish();
         self.pending_activation = false;
         if changed {
@@ -292,6 +320,25 @@ impl ZoomState {
 
     pub fn deactivate(&mut self, input_state: &mut InputState) {
         self.cancel_with_outcome(input_state, true, ZoomSourceOutcome::Deactivated);
+    }
+
+    /// Keep an unbound request alive through admission and the settling wait.
+    /// Bound requests and installed images are invalidated by an output change.
+    pub(in crate::backend::wayland) fn handle_output_change(
+        &mut self,
+        input_state: &mut InputState,
+    ) {
+        if self.preflight.awaiting_output() {
+            self.preflight.log_layout(
+                "output-change-retained",
+                None,
+                self.active_output_id,
+                self.layout_generations,
+            );
+            return;
+        }
+
+        self.deactivate(input_state);
     }
 
     pub fn reset_view(&mut self) {

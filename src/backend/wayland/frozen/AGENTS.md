@@ -7,8 +7,8 @@
 - `capture.rs` coordinates frozen capture setup.
 - `image.rs` owns frozen image data handling.
 - `portal.rs` provides portal-based fallback behavior.
-- `state.rs` tracks frozen-mode state and acquisition ownership. `state/activation.rs` validates and installs completed output images and owns their resize, unfreeze, and cancellation lifecycle; `state/direct.rs` owns direct attempt resources and deadlines.
-- `retry.rs` retains the original Freeze acquisition through the shared portal settling policy and fresh preflight.
+- `state.rs` tracks frozen-mode state and acquisition ownership. `state/admission.rs` owns backend-specific admission and diagnostics; `state/activation.rs` validates and installs completed output images and owns their resize, unfreeze, and cancellation lifecycle; `state/direct.rs` owns direct attempt resources and deadlines.
+- `retry.rs` retains the original Freeze acquisition and selected backend through the shared layout settling policy and fresh preflight.
 
 ## Invariants
 - Preserve overlay-hide, capture, restore, and render ordering.

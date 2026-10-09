@@ -163,8 +163,9 @@ impl FrozenState {
             + Dispatch<ExtOutputImageCaptureSourceManagerV1, ()>
             + 'static,
     {
-        self.ensure_preflight_layout_current()
+        self.ensure_preflight_admission()
             .map_err(anyhow::Error::msg)?;
+
         let mut backend = Some(first_backend);
         let mut last_error = None;
 

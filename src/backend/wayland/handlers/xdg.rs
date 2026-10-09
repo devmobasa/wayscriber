@@ -89,7 +89,7 @@ impl WindowHandler for WaylandState {
         if self.surface.current_output().is_none()
             && let Some(output) = self.protocol.output().outputs().next()
         {
-            self.surface.set_current_output(output);
+            self.surface.assume_output(output);
         }
         self.refresh_active_output_label();
 
@@ -143,5 +143,38 @@ impl WindowHandler for WaylandState {
         // Fallback: xdg may not emit surface_enter before configure. Use the same epoch-bound,
         // interaction-safe transition path as surface_enter instead of loading directly.
         self.begin_configure_fallback_session_transition("xdg configure fallback");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use smithay_client_toolkit::compositor::CompositorHandler;
+
+    use crate::backend::wayland::handlers::test_support::HandlerFixture;
+
+    #[test]
+    fn configure_output_guess_yields_to_the_compositor_enter() {
+        let mut fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 2);
+        let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
+        for (output, name) in outputs.iter().zip(["DP-1", "DP-2"]) {
+            fixture.complete_output_metadata_for(output.clone(), name);
+        }
+        let qh = fixture.queue.handle();
+        let surface = fixture.state.surface.wl_surface().unwrap().clone();
+
+        fixture.configure_xdg_window();
+        assert_eq!(
+            fixture.state.surface.current_output(),
+            Some(outputs[0].clone())
+        );
+
+        fixture
+            .state
+            .surface_enter(&fixture.conn, &qh, &surface, &outputs[1]);
+
+        assert_eq!(
+            fixture.state.surface.current_output(),
+            Some(outputs[1].clone())
+        );
     }
 }

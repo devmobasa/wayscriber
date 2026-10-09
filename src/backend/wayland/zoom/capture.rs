@@ -157,8 +157,9 @@ impl ZoomState {
         State:
             Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
     {
-        self.ensure_preflight_layout_current()
+        self.ensure_preflight_admission()
             .map_err(anyhow::Error::msg)?;
+
         if backend == ZoomCaptureBackend::Portal {
             info!("capture.preflight component=zoom phase=portal-start suppression_ready=true");
             self.capture_via_portal(tokio_handle)
