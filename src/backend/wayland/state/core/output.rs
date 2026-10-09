@@ -16,6 +16,55 @@ mod transition;
 
 const OUTPUT_BADGE_MAX_LEN: usize = 28;
 
+impl WaylandState {
+    /// Publish compositor membership changes once, using the selected output's scale.
+    pub(in crate::backend::wayland) fn refresh_surface_output(
+        &mut self,
+        previous: Option<&wl_output::WlOutput>,
+        exclude: Option<&wl_output::WlOutput>,
+    ) {
+        let active = self.surface.current_output();
+        let changed = previous != active.as_ref();
+        if changed {
+            if active.is_some() {
+                self.toolbar_chrome.set_needs_recreate(true);
+            }
+            if let Some(info) = active
+                .as_ref()
+                .and_then(|output| self.protocol.output().info(output))
+            {
+                let scale = info.scale_factor.max(1);
+                self.surface.set_scale(scale);
+                self.toolbar.maybe_update_scale(active.as_ref(), scale);
+            }
+            self.buffer_damage
+                .mark_all_full(FullDamageReason::OutputChanged);
+            self.toolbar.mark_dirty();
+        }
+
+        self.refresh_active_output_label_excluding(exclude);
+        self.refresh_freeze_zoom_geometry_excluding(exclude);
+
+        if changed {
+            self.frozen.unfreeze(&mut self.input_state);
+            self.zoom.handle_output_change(&mut self.input_state);
+            let (width, height) = self.surface.physical_dimensions();
+            self.frozen
+                .handle_resize(width, height, &mut self.input_state);
+            self.zoom
+                .handle_resize(width, height, &mut self.input_state);
+
+            if let Some(output) = active.as_ref() {
+                let identity = self.output_identity_for(output);
+                self.begin_session_output_transition(identity, "surface output change");
+            }
+            self.input_state.needs_redraw = true;
+        }
+
+        self.cancel_screen_modals_if_source_changed();
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputTransitionStart {
     IgnoreCurrentTarget,

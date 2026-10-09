@@ -38,7 +38,7 @@ pub(super) fn create_overlay_surface(
         // Commit the surface
         layer_surface.commit();
 
-        state.surface.set_layer_surface(layer_surface);
+        state.surface.set_layer_surface(layer_surface, None);
         state
             .focus
             .set_keyboard_interactivity(Some(desired_keyboard_mode));

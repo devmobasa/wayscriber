@@ -110,7 +110,7 @@ impl ZoomState {
             .checked_add(1)
             .expect("zoom capture id space exhausted");
         self.current_capture_id = Some(id);
-        self.layout_retry = PortalLayoutRetry::default();
+        self.layout_retry = CaptureLayoutRetry::default();
 
         id
     }
@@ -127,7 +127,7 @@ impl ZoomState {
         outcome: ZoomSourceOutcome,
         report: Option<ZoomTerminalReport>,
     ) {
-        self.layout_retry = PortalLayoutRetry::default();
+        self.layout_retry = CaptureLayoutRetry::default();
         let Some(id) = self.current_capture_id.take() else {
             return;
         };
@@ -187,7 +187,7 @@ impl ZoomState {
             capture.frame.destroy();
         }
         self.preflight = CapturePreflight::Idle;
-        self.layout_retry = PortalLayoutRetry::default();
+        self.layout_retry = CaptureLayoutRetry::default();
         self.capture_done = true;
         self.portal.finish();
         self.pending_activation = false;

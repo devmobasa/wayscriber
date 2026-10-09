@@ -116,13 +116,6 @@ impl WaylandState {
         Some(count)
     }
 
-    pub(in crate::backend::wayland) fn set_freeze_zoom_geometry(
-        &mut self,
-        geometry: Option<OutputGeometry>,
-    ) {
-        self.set_freeze_zoom_geometry_excluding(geometry, None);
-    }
-
     pub(in crate::backend::wayland) fn set_freeze_zoom_geometry_excluding(
         &mut self,
         geometry: Option<OutputGeometry>,

@@ -1,17 +1,17 @@
-//! Re-admission of portal requests after a bounded layout settling period.
+//! Re-admission on the retained backend after a bounded layout settling period.
 use super::super::core::overlay::OverlaySuppressionState;
 use super::super::*;
 use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use std::time::Instant;
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn poll_portal_layout_retries(&mut self, now: Instant) {
-        if !self.frozen.has_portal_layout_retry() && !self.zoom.has_portal_layout_retry() {
+    pub(in crate::backend::wayland) fn poll_layout_retries(&mut self, now: Instant) {
+        if !self.frozen.has_layout_retry() && !self.zoom.has_layout_retry() {
             return;
         }
 
         self.refresh_freeze_zoom_geometry();
-        if advance_portal_layout_retries(
+        if advance_layout_retries(
             &mut self.frozen,
             &mut self.zoom,
             &mut self.suppression,
@@ -28,7 +28,7 @@ impl WaylandState {
 
 /// Keep eligibility, domain terminals and barrier admission together. The
 /// runtime publishes redraw damage and GTK updates before it renders again.
-fn advance_portal_layout_retries(
+fn advance_layout_retries(
     frozen: &mut FrozenState,
     zoom: &mut ZoomState,
     suppression: &mut OverlaySuppressionState,
@@ -38,31 +38,28 @@ fn advance_portal_layout_retries(
 ) -> bool {
     let mut restarted = false;
 
-    if frozen.has_portal_layout_retry() {
-        match restart_suppressed_portal_retry(
+    if frozen.has_layout_retry() {
+        match restart_suppressed_retry(
             suppression,
             OverlaySuppression::Frozen,
             wait_for_gtk,
-            || frozen.restart_portal_preflight(now),
+            || frozen.restart_preflight(now),
         ) {
             Ok(ready) => restarted |= ready,
             Err(error) => {
-                log::warn!("Portal Freeze retry preflight failed: {error}");
+                log::warn!("Freeze retry preflight failed: {error}");
                 frozen.finish_preflight_failure(error, input);
             }
         }
     }
 
-    if zoom.has_portal_layout_retry() {
-        match restart_suppressed_portal_retry(
-            suppression,
-            OverlaySuppression::Zoom,
-            wait_for_gtk,
-            || zoom.restart_portal_preflight(now),
-        ) {
+    if zoom.has_layout_retry() {
+        match restart_suppressed_retry(suppression, OverlaySuppression::Zoom, wait_for_gtk, || {
+            zoom.restart_preflight(now)
+        }) {
             Ok(ready) => restarted |= ready,
             Err(error) => {
-                log::warn!("Portal Zoom retry preflight failed: {error}");
+                log::warn!("Zoom retry preflight failed: {error}");
                 zoom.finish_preflight_failure(input, error);
             }
         }
@@ -72,7 +69,7 @@ fn advance_portal_layout_retries(
     restarted
 }
 
-fn restart_suppressed_portal_retry(
+fn restart_suppressed_retry(
     suppression: &mut OverlaySuppressionState,
     reason: OverlaySuppression,
     wait_for_gtk: bool,
@@ -93,12 +90,198 @@ fn restart_suppressed_portal_retry(
 mod tests {
     use super::*;
     use crate::backend::wayland::acquisition::{
-        ScreenAcquisitionOutcome, ScreenAcquisitionOwner, ScreenAcquisitionRegistry,
+        ScreenAcquisitionId, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
     };
-    use crate::backend::wayland::frozen::FrozenCaptureBackend;
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
-    use crate::backend::wayland::zoom::{ZoomCaptureBackend, ZoomSourceOutcome};
+    use crate::backend::wayland::state::acquisition::AcquisitionRuntime;
+    use crate::backend::wayland::zoom::{ZoomCaptureBackend, ZoomCaptureId, ZoomSourceOutcome};
     use std::time::Duration;
+
+    #[derive(Clone, Copy)]
+    enum RetainedRequest {
+        Freeze {
+            id: ScreenAcquisitionId,
+            owner: ScreenAcquisitionOwner,
+        },
+        Zoom(ZoomCaptureId),
+    }
+
+    impl RetainedRequest {
+        fn is_freeze(self) -> bool {
+            matches!(self, Self::Freeze { .. })
+        }
+
+        fn assert_terminal(self, frozen: &mut FrozenState, zoom: &mut ZoomState, stale: bool) {
+            match self {
+                Self::Freeze { id, owner } => {
+                    let terminal = frozen.take_acquisition_completion().unwrap();
+                    assert_eq!((terminal.id, terminal.owner), (id, owner));
+                    assert_eq!(
+                        terminal.outcome == ScreenAcquisitionOutcome::StaleLayout,
+                        stale
+                    );
+                    if !stale {
+                        assert!(matches!(
+                            terminal.outcome,
+                            ScreenAcquisitionOutcome::Failed(_)
+                        ));
+                    }
+
+                    assert!(frozen.take_acquisition_completion().is_none());
+                    assert!(frozen.take_capture_done());
+                    assert!(!frozen.is_in_progress());
+                }
+                Self::Zoom(id) => {
+                    let terminal = zoom.take_source_terminal().unwrap();
+                    assert_eq!(terminal.id, id);
+                    assert_eq!(terminal.outcome == ZoomSourceOutcome::StaleLayout, stale);
+                    if !stale {
+                        assert!(matches!(terminal.outcome, ZoomSourceOutcome::Failed(_)));
+                    }
+
+                    assert!(zoom.take_source_terminal().is_none());
+                    assert!(zoom.take_capture_done());
+                    assert!(!zoom.is_in_progress());
+                }
+            }
+        }
+    }
+
+    fn start_request(
+        reason: OverlaySuppression,
+        frozen: &mut FrozenState,
+        zoom: &mut ZoomState,
+        registry: &mut AcquisitionRuntime,
+        owner: ScreenAcquisitionOwner,
+    ) -> RetainedRequest {
+        match reason {
+            OverlaySuppression::Frozen => {
+                let id = registry.request(owner).unwrap();
+                frozen.start_capture_for(id, owner).unwrap();
+                registry.mark_started(id, owner);
+
+                RetainedRequest::Freeze { id, owner }
+            }
+            OverlaySuppression::Zoom => {
+                zoom.start_capture(ZoomCaptureBackend::Portal).unwrap();
+                zoom.request_activation();
+
+                RetainedRequest::Zoom(zoom.current_capture_id().unwrap())
+            }
+            _ => panic!("unexpected capture suppression"),
+        }
+    }
+
+    #[test]
+    fn output_discovery_during_preflight_retains_the_request_and_repeats_suppression() {
+        use crate::backend::wayland::handlers::test_support::{
+            CaptureFixtureBackend, HandlerFixture,
+        };
+        use smithay_client_toolkit::compositor::CompositorHandler;
+
+        for reason in [OverlaySuppression::Frozen, OverlaySuppression::Zoom] {
+            let mut fixture = HandlerFixture::with_capture_output(
+                crate::config::Config::default(),
+                CaptureFixtureBackend::Portal,
+            );
+            let output = fixture.complete_output_metadata("DP-3");
+            let state = &mut fixture.state;
+            assert!(state.surface.current_output().is_none());
+
+            let request = start_request(
+                reason,
+                &mut state.frozen,
+                &mut state.zoom,
+                &mut state.acquisition,
+                ScreenAcquisitionOwner::UserFreeze,
+            );
+            state
+                .suppression
+                .enter(reason, OverlaySuppressionKeyboardPolicy::Release, true)
+                .unwrap();
+            let first_gtk = state.suppression.barrier.gtk_paint_generation().unwrap();
+            let qh = fixture.queue.handle();
+            let surface = state.surface.wl_surface().unwrap().clone();
+
+            state.surface_enter(&fixture.conn, &qh, &surface, &output);
+            assert_preflight_request_retained(state, request);
+
+            state.acknowledge_gtk_capture_suppression(first_gtk);
+            assert_eq!(
+                state.suppression.barrier.begin_main_surface_submission(),
+                Some(first_gtk)
+            );
+            state.mark_overlay_capture_frame_ready(first_gtk, &qh);
+
+            assert_eq!(state.frozen.has_layout_retry(), request.is_freeze());
+            assert_eq!(state.zoom.has_layout_retry(), !request.is_freeze());
+            assert_preflight_request_retained(state, request);
+
+            state.surface_enter(&fixture.conn, &qh, &surface, &output);
+            assert_preflight_request_retained(state, request);
+
+            let now = Instant::now();
+            assert!(!advance_layout_retries(
+                &mut state.frozen,
+                &mut state.zoom,
+                &mut state.suppression,
+                &mut state.input_state,
+                true,
+                now,
+            ));
+            assert!(advance_layout_retries(
+                &mut state.frozen,
+                &mut state.zoom,
+                &mut state.suppression,
+                &mut state.input_state,
+                true,
+                now + Duration::from_millis(150),
+            ));
+
+            assert_eq!(state.suppression.reason(), reason);
+            let retry_gtk = state.suppression.barrier.gtk_paint_generation().unwrap();
+            assert_ne!(retry_gtk, first_gtk);
+
+            state.acknowledge_gtk_capture_suppression(first_gtk);
+            assert_eq!(
+                state.suppression.barrier.begin_main_surface_submission(),
+                None
+            );
+
+            state.acknowledge_gtk_capture_suppression(retry_gtk);
+            assert_eq!(
+                state.suppression.barrier.begin_main_surface_submission(),
+                Some(retry_gtk)
+            );
+            state.mark_overlay_capture_frame_ready(retry_gtk, &qh);
+            assert_preflight_request_retained(state, request);
+            assert!(!state.frozen.preflight_pending());
+            assert!(!state.zoom.preflight_pending());
+
+            state.frozen.cancel(&mut state.input_state);
+            state.zoom.abort_capture();
+        }
+    }
+
+    fn assert_preflight_request_retained(state: &WaylandState, request: RetainedRequest) {
+        let freezing = request.is_freeze();
+        assert_eq!(state.frozen.has_acquisition_attempt(), freezing);
+        assert_eq!(state.frozen.is_in_progress(), freezing);
+        assert_eq!(state.acquisition.slot().is_some(), freezing);
+        assert_eq!(state.zoom.is_engaged(), !freezing);
+        assert_eq!(state.zoom.is_in_progress(), !freezing);
+
+        match request {
+            RetainedRequest::Freeze { id, owner } => {
+                assert_eq!(
+                    state.acquisition.slot().map(|slot| (slot.id, slot.owner)),
+                    Some((id, owner))
+                );
+                assert!(state.zoom.current_capture_id().is_none());
+            }
+            RetainedRequest::Zoom(id) => assert_eq!(state.zoom.current_capture_id(), Some(id)),
+        }
+    }
 
     #[tokio::test]
     async fn retry_coordinator_preserves_suppression_and_finishes_failure_once() {
@@ -125,26 +308,24 @@ mod tests {
                 zoom.set_active_output(None, Some(1));
                 zoom.set_active_geometry(Some(geometry.clone()));
 
-                let mut registry = ScreenAcquisitionRegistry::default();
-                let owner = ScreenAcquisitionOwner::Ocr;
-                let id = registry.request(owner).unwrap();
-                let mut zoom_id = None;
+                let mut registry = AcquisitionRuntime::default();
+                let request = start_request(
+                    reason,
+                    &mut frozen,
+                    &mut zoom,
+                    &mut registry,
+                    ScreenAcquisitionOwner::Ocr,
+                );
+                frozen.take_preflight_pending();
+                zoom.take_preflight_pending();
 
                 let mut changed = geometry;
                 changed.logical_x = 8;
-                if reason == OverlaySuppression::Frozen {
-                    frozen.start_capture_for(id, owner).unwrap();
-                    frozen.take_preflight_pending();
-                    frozen.set_active_geometry(Some(changed));
-                    assert!(frozen.retry_stale_portal_preflight(FrozenCaptureBackend::Portal));
-                } else {
-                    zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::Portal)
-                        .unwrap();
-                    zoom_id = zoom.current_capture_id();
-                    zoom.take_preflight_pending();
-                    zoom.set_active_geometry(Some(changed));
-                    assert!(zoom.retry_stale_portal_preflight(ZoomCaptureBackend::Portal));
-                }
+                frozen.set_active_geometry(Some(changed.clone()));
+                zoom.set_active_geometry(Some(changed));
+
+                assert_eq!(frozen.retry_stale_preflight(), request.is_freeze());
+                assert_eq!(zoom.retry_stale_preflight(), !request.is_freeze());
 
                 let mut suppression = OverlaySuppressionState::default();
                 let active_reason = if failure == Some("suppression") {
@@ -155,7 +336,7 @@ mod tests {
                 suppression
                     .enter(
                         active_reason,
-                        OverlaySuppressionKeyboardPolicy::Release,
+                        OverlaySuppressionKeyboardPolicy::Retain,
                         true,
                     )
                     .unwrap();
@@ -173,7 +354,7 @@ mod tests {
                 let now = Instant::now();
 
                 if failure.is_none() {
-                    assert!(!advance_portal_layout_retries(
+                    assert!(!advance_layout_retries(
                         &mut frozen,
                         &mut zoom,
                         &mut suppression,
@@ -184,7 +365,7 @@ mod tests {
                     assert_eq!(suppression.barrier.gtk_paint_generation(), first_gtk);
                 }
 
-                let admitted = advance_portal_layout_retries(
+                let admitted = advance_layout_retries(
                     &mut frozen,
                     &mut zoom,
                     &mut suppression,
@@ -198,10 +379,12 @@ mod tests {
                 );
 
                 assert_eq!(suppression.reason(), active_reason);
-                assert!(!frozen.has_portal_layout_retry());
-                assert!(!zoom.has_portal_layout_retry());
+                assert!(!frozen.has_layout_retry());
+                assert!(!zoom.has_layout_retry());
+
                 if failure.is_none() {
                     assert!(admitted);
+                    assert!(!suppression.keyboard_passthrough_requested(false));
                     assert_ne!(suppression.barrier.gtk_paint_generation(), first_gtk);
                     assert!(input.needs_redraw);
                     assert!(frozen.take_acquisition_completion().is_none());
@@ -209,32 +392,11 @@ mod tests {
                 } else {
                     assert!(!admitted);
                     assert_eq!(suppression.barrier.gtk_paint_generation(), first_gtk);
-                    if reason == OverlaySuppression::Frozen {
-                        let terminal = frozen.take_acquisition_completion().unwrap();
-                        assert_eq!((terminal.id, terminal.owner), (id, owner));
-                        if matches!(failure, Some("output" | "metadata")) {
-                            assert_eq!(terminal.outcome, ScreenAcquisitionOutcome::StaleLayout);
-                        } else {
-                            assert!(matches!(
-                                terminal.outcome,
-                                ScreenAcquisitionOutcome::Failed(_)
-                            ));
-                        }
-                        assert!(frozen.take_acquisition_completion().is_none());
-                        assert!(frozen.take_capture_done());
-                        assert!(!frozen.is_in_progress());
-                    } else {
-                        let terminal = zoom.take_source_terminal().unwrap();
-                        assert_eq!(terminal.id, zoom_id.unwrap());
-                        if matches!(failure, Some("output" | "metadata")) {
-                            assert_eq!(terminal.outcome, ZoomSourceOutcome::StaleLayout);
-                        } else {
-                            assert!(matches!(terminal.outcome, ZoomSourceOutcome::Failed(_)));
-                        }
-                        assert!(zoom.take_source_terminal().is_none());
-                        assert!(zoom.take_capture_done());
-                        assert!(!zoom.is_in_progress());
-                    }
+                    request.assert_terminal(
+                        &mut frozen,
+                        &mut zoom,
+                        matches!(failure, Some("output" | "metadata")),
+                    );
                 }
             }
         }

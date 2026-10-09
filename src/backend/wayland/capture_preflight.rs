@@ -1,11 +1,58 @@
 //! Capture admission and the layout identity retained through fallback.
-use std::time::{Duration, Instant};
+mod retry;
+
+pub(super) use retry::{CaptureLayoutRetry, LayoutRetryError};
 
 use super::frozen_geometry::OutputGeometry;
+use super::state::OverlaySuppression;
 
-const PORTAL_LAYOUT_QUIET_PERIOD: Duration = Duration::from_millis(100);
-const PORTAL_LAYOUT_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
-const INCOMPLETE_LAYOUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// Stable target for capture diagnostics. It stays under the crate-wide
+/// `wayscriber` filter without matching the `wayscriber::capture` module filter.
+pub(super) const CAPTURE_LOG_TARGET: &str = "wayscriber::capture_diagnostics";
+
+#[derive(Clone, Copy)]
+pub(super) enum CaptureLayoutScope {
+    ActiveOutput,
+    Desktop,
+}
+
+impl CaptureLayoutScope {
+    pub(super) fn generation(self, generations: CaptureLayoutGenerations) -> u64 {
+        match self {
+            Self::ActiveOutput => generations.active_output,
+            Self::Desktop => generations.desktop,
+        }
+    }
+
+    fn is_complete(self, geometry: &OutputGeometry) -> bool {
+        match self {
+            Self::ActiveOutput => geometry.verified_pixel_size().is_some(),
+            Self::Desktop => geometry.portal_layout_is_complete(),
+        }
+    }
+}
+
+pub(super) trait CaptureBackend: Copy + std::fmt::Debug {
+    fn layout_scope(self) -> CaptureLayoutScope;
+    fn suppression_reason(self) -> OverlaySuppression;
+
+    fn layout_generation(self, generations: CaptureLayoutGenerations) -> u64 {
+        self.layout_scope().generation(generations)
+    }
+}
+
+/// Formats an optional log value as the bare value or `none`, keeping
+/// `key=value` diagnostics free of `Some(..)` wrappers.
+pub(super) struct LogField<T>(pub(super) Option<T>);
+
+impl<T: std::fmt::Display> std::fmt::Display for LogField<T> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Some(value) => value.fmt(formatter),
+            None => formatter.write_str("none"),
+        }
+    }
+}
 
 /// Direct/installed pixels depend on the active viewport; desktop captures also
 /// depend on other outputs and the screenshot's crop bounds.
@@ -21,11 +68,20 @@ impl CaptureLayoutGenerations {
         before: Option<&OutputGeometry>,
         after: Option<&OutputGeometry>,
     ) {
-        if before != after {
+        let desktop_changed = before != after;
+        if desktop_changed {
             self.desktop = self.desktop.wrapping_add(1);
         }
         if !OutputGeometry::same_active_output(before, after) {
             self.active_output = self.active_output.wrapping_add(1);
+        }
+
+        if desktop_changed {
+            log::trace!(target: CAPTURE_LOG_TARGET,
+                "capture.layout phase=changed active_output_generation={} desktop_generation={} before={before:?} after={after:?}",
+                self.active_output,
+                self.desktop
+            );
         }
     }
 }
@@ -74,11 +130,11 @@ impl std::fmt::Display for CapturePreflightError {
 
 impl std::error::Error for CapturePreflightError {}
 
-impl From<PortalRetryError> for CapturePreflightError {
-    fn from(error: PortalRetryError) -> Self {
+impl From<LayoutRetryError> for CapturePreflightError {
+    fn from(error: LayoutRetryError) -> Self {
         match error {
-            PortalRetryError::OutputChanged => Self::StaleLayout,
-            PortalRetryError::LayoutDidNotSettle => Self::LayoutDidNotSettle,
+            LayoutRetryError::OutputChanged => Self::StaleLayout,
+            LayoutRetryError::LayoutDidNotSettle => Self::LayoutDidNotSettle,
         }
     }
 }
@@ -118,6 +174,18 @@ impl<B: Copy> CapturePreflight<B> {
         matches!(self, Self::Pending { .. })
     }
 
+    pub(super) fn awaiting_output(&self) -> bool {
+        self.layout()
+            .is_some_and(|layout| layout.output_id.is_none())
+    }
+
+    fn layout(&self) -> Option<&CaptureLayout> {
+        match self {
+            Self::Idle => None,
+            Self::Pending { layout, .. } | Self::Capturing { layout, .. } => Some(layout),
+        }
+    }
+
     pub(super) fn take_pending(&mut self) -> Option<B> {
         let Self::Pending { backend, layout } = *self else {
             return None;
@@ -135,21 +203,55 @@ impl<B: Copy> CapturePreflight<B> {
         }
     }
 
-    pub(super) fn changed_on_output(&self, output_id: Option<u32>, generation: u64) -> bool {
-        let layout = match self {
-            Self::Idle => return false,
-            Self::Pending { layout, .. } | Self::Capturing { layout, .. } => layout,
+    pub(super) fn generation(&self, generations: CaptureLayoutGenerations) -> u64
+    where
+        B: CaptureBackend,
+    {
+        self.backend().map_or(generations.active_output, |backend| {
+            backend.layout_generation(generations)
+        })
+    }
+
+    /// Before acquisition starts, an unknown target may bind to its first
+    /// output. A request already bound to an output must never move to another.
+    pub(super) fn can_retry_on_output(&self, output_id: Option<u32>, generation: u64) -> bool {
+        let Some(layout) = self.layout() else {
+            return false;
         };
 
-        layout.output_id.is_some()
-            && layout.output_id == output_id
-            && layout.generation != generation
+        match (layout.output_id, output_id) {
+            (None, _) => true,
+            (Some(captured), Some(active)) => captured == active && layout.generation != generation,
+            _ => false,
+        }
+    }
+
+    pub(super) fn log_layout(
+        &self,
+        phase: &'static str,
+        barrier_id: Option<u64>,
+        active_output: Option<u32>,
+        generations: CaptureLayoutGenerations,
+    ) where
+        B: CaptureBackend,
+    {
+        if let (Some(backend), Some(layout)) = (self.backend(), self.layout()) {
+            let reason = backend.suppression_reason();
+            let current_generation = backend.layout_generation(generations);
+
+            log::info!(target: CAPTURE_LOG_TARGET,
+                "capture.preflight id={} component=layout reason={reason:?} phase={phase} backend={backend:?} captured_output={} active_output={} captured_generation={} current_generation={current_generation}",
+                LogField(barrier_id),
+                LogField(layout.output_id),
+                LogField(active_output),
+                layout.generation
+            );
+        }
     }
 
     pub(super) fn layout_matches(&self, output_id: Option<u32>, generation: u64) -> bool {
-        let layout = match self {
-            Self::Idle => return true,
-            Self::Pending { layout, .. } | Self::Capturing { layout, .. } => layout,
+        let Some(layout) = self.layout() else {
+            return true;
         };
 
         super::portal_capture::layout_token_matches(
@@ -171,121 +273,126 @@ impl<B: Copy> CapturePreflight<B> {
             Err(CapturePreflightError::StaleLayout)
         }
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum PortalRetryError {
-    OutputChanged,
-    LayoutDidNotSettle,
-}
-
-/// One retry retained by the original request while its portal result is discarded.
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) enum PortalLayoutRetry {
-    #[default]
-    Available,
-    Pending {
-        output_id: u32,
+    pub(super) fn ensure_admission_current(
+        &self,
+        output_id: Option<u32>,
         generation: u64,
-        not_before: Instant,
-        deadline: Instant,
-    },
-    Spent,
-}
-
-impl PortalLayoutRetry {
-    pub(super) fn schedule(
-        &mut self,
-        captured: Option<u32>,
-        active: Option<u32>,
-        layout_changed: bool,
-        generation: u64,
-        now: Instant,
-    ) -> bool {
-        let Some(output_id) = captured else {
-            return false;
-        };
-        if !matches!(self, Self::Available) || active != captured || !layout_changed {
-            return false;
+    ) -> Result<(), CapturePreflightError> {
+        if output_id.is_none() {
+            return Err(CapturePreflightError::StaleLayout);
         }
 
-        *self = Self::Pending {
-            output_id,
-            generation,
-            not_before: now + PORTAL_LAYOUT_QUIET_PERIOD,
-            deadline: now + PORTAL_LAYOUT_SETTLE_TIMEOUT,
-        };
-
-        true
-    }
-
-    pub(super) fn is_pending(&self) -> bool {
-        matches!(self, Self::Pending { .. })
-    }
-
-    pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
-        let Self::Pending {
-            not_before,
-            deadline,
-            ..
-        } = *self
-        else {
-            return None;
-        };
-
-        Some(not_before.min(deadline).saturating_duration_since(now))
-    }
-
-    /// Admit only a complete snapshot after a quiet period. Output events can
-    /// arrive in multiple batches; a deadline bounds metadata that never settles.
-    pub(super) fn take_ready(
-        &mut self,
-        active_output: Option<u32>,
-        active_generation: u64,
-        geometry: Option<&OutputGeometry>,
-        now: Instant,
-    ) -> Result<Option<u32>, PortalRetryError> {
-        let Self::Pending {
-            output_id,
-            generation,
-            not_before,
-            deadline,
-        } = self
-        else {
-            return Ok(None);
-        };
-        if active_output != Some(*output_id) {
-            *self = Self::Spent;
-            return Err(PortalRetryError::OutputChanged);
-        }
-        // Admission itself is bounded, even if dispatch wakes late after the
-        // geometry's quiet period. Never start a new barrier after this deadline.
-        if now >= *deadline {
-            *self = Self::Spent;
-            return Err(PortalRetryError::LayoutDidNotSettle);
-        }
-
-        if active_generation != *generation {
-            *generation = active_generation;
-            *not_before = now + PORTAL_LAYOUT_QUIET_PERIOD;
-        }
-        if now < *not_before {
-            return Ok(None);
-        }
-        if !geometry.is_some_and(OutputGeometry::portal_layout_is_complete) {
-            *not_before = now + INCOMPLETE_LAYOUT_POLL_INTERVAL;
-            return Ok(None);
-        }
-
-        let output_id = *output_id;
-        *self = Self::Spent;
-        Ok(Some(output_id))
+        self.ensure_layout_current(output_id, generation)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum TestBackend {
+        Portal,
+        Direct,
+    }
+
+    impl CaptureBackend for TestBackend {
+        fn layout_scope(self) -> CaptureLayoutScope {
+            match self {
+                Self::Portal => CaptureLayoutScope::Desktop,
+                Self::Direct => CaptureLayoutScope::ActiveOutput,
+            }
+        }
+
+        fn suppression_reason(self) -> OverlaySuppression {
+            OverlaySuppression::Frozen
+        }
+    }
+
+    fn generations(generation: u64) -> CaptureLayoutGenerations {
+        CaptureLayoutGenerations {
+            active_output: generation,
+            desktop: generation,
+        }
+    }
+
+    #[test]
+    fn direct_retry_does_not_wait_for_unrelated_output_metadata() {
+        let now = Instant::now();
+        let incomplete_desktop = geometry().with_known_output_count(Some(2));
+        let mut retry = CaptureLayoutRetry::default();
+        assert!(retry.schedule(TestBackend::Direct, Some(1), Some(1), true, 4, now));
+
+        assert_eq!(
+            retry.take_ready(
+                Some(1),
+                CaptureLayoutGenerations {
+                    active_output: 4,
+                    desktop: 5
+                },
+                Some(&incomplete_desktop),
+                now + Duration::from_millis(100)
+            ),
+            Ok(Some((TestBackend::Direct, 1)))
+        );
+    }
+
+    #[test]
+    fn preflight_retry_keeps_known_targets_and_allows_output_discovery() {
+        for (captured, active, generation, expected) in [
+            (None, None, 4, true),
+            (None, Some(1), 4, true),
+            (Some(1), None, 5, false),
+            (Some(1), Some(2), 5, false),
+            (Some(1), Some(1), 4, false),
+            (Some(1), Some(1), 5, true),
+        ] {
+            let mut preflight = CapturePreflight::default();
+            preflight.begin((), captured, 4);
+
+            assert_eq!(preflight.can_retry_on_output(active, generation), expected);
+
+            preflight.take_pending();
+            assert_eq!(preflight.can_retry_on_output(active, generation), expected);
+        }
+
+        assert!(!CapturePreflight::<()>::Idle.can_retry_on_output(Some(1), 5));
+    }
+
+    #[test]
+    fn retry_waits_for_a_first_output_then_keeps_that_identity() {
+        let now = Instant::now();
+        let geometry = geometry();
+        let mut unbound = CapturePreflight::default();
+        unbound.begin(TestBackend::Portal, None, 4);
+        let mut retry = CaptureLayoutRetry::default();
+        assert!(retry.queue_preflight(&unbound, None, generations(4), now));
+
+        assert_eq!(retry.take_ready(None, generations(4), None, now), Ok(None));
+        assert_eq!(
+            retry.take_ready(Some(1), generations(5), Some(&geometry), now),
+            Ok(None)
+        );
+        assert_eq!(
+            retry.take_ready(
+                Some(2),
+                generations(5),
+                Some(&geometry),
+                now + Duration::from_millis(150)
+            ),
+            Err(LayoutRetryError::OutputChanged)
+        );
+
+        let mut retry = CaptureLayoutRetry::default();
+        assert!(retry.queue_preflight(&unbound, None, generations(4), now));
+
+        assert_eq!(
+            retry.take_ready(None, generations(4), None, now + Duration::from_secs(1)),
+            Err(LayoutRetryError::LayoutDidNotSettle)
+        );
+    }
 
     fn geometry() -> OutputGeometry {
         OutputGeometry::update_from(
@@ -304,18 +411,23 @@ mod tests {
     fn retry_waits_for_both_output_update_batches_and_spends_the_budget_once() {
         let now = Instant::now();
         let geometry = geometry();
-        let mut retry = PortalLayoutRetry::default();
-        assert!(retry.schedule(Some(1), Some(1), true, 4, now));
+        let mut retry = CaptureLayoutRetry::default();
+        assert!(retry.schedule(TestBackend::Portal, Some(1), Some(1), true, 4, now));
 
         assert_eq!(retry.timeout(now), Some(Duration::from_millis(100)));
         assert_eq!(
-            retry.take_ready(Some(1), 4, Some(&geometry), now + Duration::from_millis(99)),
+            retry.take_ready(
+                Some(1),
+                generations(4),
+                Some(&geometry),
+                now + Duration::from_millis(99)
+            ),
             Ok(None)
         );
         assert_eq!(
             retry.take_ready(
                 Some(1),
-                5,
+                generations(5),
                 Some(&geometry),
                 now + Duration::from_millis(100)
             ),
@@ -328,7 +440,7 @@ mod tests {
         assert_eq!(
             retry.take_ready(
                 Some(1),
-                5,
+                generations(5),
                 Some(&geometry),
                 now + Duration::from_millis(199)
             ),
@@ -337,27 +449,27 @@ mod tests {
         assert_eq!(
             retry.take_ready(
                 Some(1),
-                5,
+                generations(5),
                 Some(&geometry),
                 now + Duration::from_millis(200)
             ),
-            Ok(Some(1))
+            Ok(Some((TestBackend::Portal, 1)))
         );
         assert_eq!(retry.timeout(now + Duration::from_millis(200)), None);
-        assert!(!retry.schedule(Some(1), Some(1), true, 6, now));
+        assert!(!retry.schedule(TestBackend::Portal, Some(1), Some(1), true, 6, now));
     }
 
     #[test]
     fn incomplete_topology_wait_is_paced_and_bounded() {
         let now = Instant::now();
         let incomplete = geometry().with_known_output_count(Some(2));
-        let mut retry = PortalLayoutRetry::default();
-        assert!(retry.schedule(Some(1), Some(1), true, 4, now));
+        let mut retry = CaptureLayoutRetry::default();
+        assert!(retry.schedule(TestBackend::Portal, Some(1), Some(1), true, 4, now));
 
         assert_eq!(
             retry.take_ready(
                 Some(1),
-                4,
+                generations(4),
                 Some(&incomplete),
                 now + Duration::from_millis(100)
             ),
@@ -369,7 +481,12 @@ mod tests {
         );
         assert!(
             retry
-                .take_ready(Some(1), 4, Some(&incomplete), now + Duration::from_secs(1))
+                .take_ready(
+                    Some(1),
+                    generations(4),
+                    Some(&incomplete),
+                    now + Duration::from_secs(1)
+                )
                 .is_err()
         );
         assert!(!retry.is_pending());

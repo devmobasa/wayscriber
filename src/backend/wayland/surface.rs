@@ -4,8 +4,6 @@
 //! pool. WaylandState asks SurfaceState for buffers and size information
 //! instead of juggling the raw objects directly.
 
-use std::time::{Duration, Instant};
-
 use anyhow::{Context, Result};
 use log::info;
 use smithay_client_toolkit::{
@@ -20,107 +18,11 @@ use wayland_client::{
     protocol::{wl_output, wl_shm, wl_surface},
 };
 
-const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
+mod output_membership;
+use output_membership::OutputMembership;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum XdgFrozenFullscreenState {
-    #[default]
-    Inactive,
-    PendingConfigure,
-    Active,
-}
-
-#[derive(Debug, Default)]
-pub(in crate::backend::wayland) struct XdgFrozenFullscreen {
-    state: XdgFrozenFullscreenState,
-    requested_at: Option<Instant>,
-}
-
-impl XdgFrozenFullscreen {
-    pub(in crate::backend::wayland) fn request(&mut self, now: Instant) {
-        self.state = XdgFrozenFullscreenState::PendingConfigure;
-        self.requested_at = Some(now);
-    }
-
-    pub(in crate::backend::wayland) fn activate(&mut self) {
-        self.state = XdgFrozenFullscreenState::Active;
-        self.requested_at = None;
-    }
-
-    pub(in crate::backend::wayland) fn finish(&mut self) {
-        self.state = XdgFrozenFullscreenState::Inactive;
-        self.requested_at = None;
-    }
-
-    pub(in crate::backend::wayland) fn timeout(&self, now: Instant) -> Option<Duration> {
-        if !self.pending_configure() {
-            return None;
-        }
-        Some(
-            self.requested_at
-                .and_then(|requested_at| requested_at.checked_add(XDG_FROZEN_FULLSCREEN_TIMEOUT))
-                .map(|deadline| deadline.saturating_duration_since(now))
-                .unwrap_or(Duration::ZERO),
-        )
-    }
-
-    pub(in crate::backend::wayland) fn pending_configure(&self) -> bool {
-        self.state == XdgFrozenFullscreenState::PendingConfigure
-    }
-
-    pub(in crate::backend::wayland) fn requested(&self) -> bool {
-        self.state != XdgFrozenFullscreenState::Inactive
-    }
-}
-
-#[derive(Debug)]
-pub(in crate::backend::wayland) struct SurfacePlacement {
-    preferred_output_identity: Option<String>,
-    xdg_fullscreen: bool,
-    main_surface_uses_overlay_layer: bool,
-    xdg_frozen: XdgFrozenFullscreen,
-}
-
-impl SurfacePlacement {
-    pub(in crate::backend::wayland) fn new(
-        preferred_output_identity: Option<String>,
-        xdg_fullscreen: bool,
-        main_surface_uses_overlay_layer: bool,
-    ) -> Self {
-        Self {
-            preferred_output_identity,
-            xdg_fullscreen,
-            main_surface_uses_overlay_layer,
-            xdg_frozen: XdgFrozenFullscreen::default(),
-        }
-    }
-
-    pub(in crate::backend::wayland) fn preferred_output_identity(&self) -> Option<&str> {
-        self.preferred_output_identity.as_deref()
-    }
-
-    pub(in crate::backend::wayland) fn xdg_fullscreen(&self) -> bool {
-        self.xdg_fullscreen
-    }
-
-    pub(in crate::backend::wayland) fn layer(
-        &self,
-    ) -> smithay_client_toolkit::shell::wlr_layer::Layer {
-        if self.main_surface_uses_overlay_layer {
-            smithay_client_toolkit::shell::wlr_layer::Layer::Overlay
-        } else {
-            smithay_client_toolkit::shell::wlr_layer::Layer::Top
-        }
-    }
-
-    pub(in crate::backend::wayland) fn xdg_frozen(&self) -> &XdgFrozenFullscreen {
-        &self.xdg_frozen
-    }
-
-    pub(in crate::backend::wayland) fn xdg_frozen_mut(&mut self) -> &mut XdgFrozenFullscreen {
-        &mut self.xdg_frozen
-    }
-}
+mod placement;
+pub(in crate::backend::wayland) use placement::SurfacePlacement;
 
 /// A buffer handed out for one frame, plus the pool identity the damage
 /// tracker needs to tell slot reuse from pool reallocation.
@@ -192,7 +94,7 @@ pub struct SurfaceState {
     pool_generation: u64,
     /// Last known pool size, used to detect pool growth.
     pool_size: usize,
-    current_output: Option<wl_output::WlOutput>,
+    outputs: OutputMembership,
     width: u32,
     height: u32,
     scale: i32,
@@ -211,7 +113,7 @@ impl SurfaceState {
             slots: Vec::new(),
             pool_generation: 0,
             pool_size: 0,
-            current_output: None,
+            outputs: OutputMembership::default(),
             width: 0,
             height: 0,
             scale: 1,
@@ -229,12 +131,16 @@ impl SurfaceState {
     }
 
     /// Assigns the layer surface produced during startup.
-    pub fn set_layer_surface(&mut self, surface: LayerSurface) {
+    pub fn set_layer_surface(
+        &mut self,
+        surface: LayerSurface,
+        output: Option<wl_output::WlOutput>,
+    ) {
         self.wl_surface = Some(surface.wl_surface().clone());
         self.kind = Some(SurfaceKind::Layer(surface));
         // A new shell surface invalidates current buffer resources/state.
         self.drop_pool();
-        self.current_output = None;
+        self.outputs = OutputMembership::for_layer(output);
         self.configured = false;
         self.frame_callbacks.clear();
     }
@@ -245,7 +151,7 @@ impl SurfaceState {
         self.kind = Some(SurfaceKind::Xdg { window });
         // A new shell surface invalidates current buffer resources/state.
         self.drop_pool();
-        self.current_output = None;
+        self.outputs = OutputMembership::default();
         self.configured = false;
         self.frame_callbacks.clear();
     }
@@ -284,21 +190,30 @@ impl SurfaceState {
         matches!(self.kind, Some(SurfaceKind::Xdg { .. }))
     }
 
-    /// Records the most recent output the surface entered.
-    pub fn set_current_output(&mut self, output: wl_output::WlOutput) {
-        self.current_output = Some(output);
+    /// Keeps an explicitly requested output until the compositor enters or removes it.
+    pub fn request_output(&mut self, output: wl_output::WlOutput) {
+        self.outputs.request_output(output);
     }
 
-    /// Clears the current output if it matches the provided handle.
+    /// Fills an empty selection with a guess that the first compositor enter replaces.
+    pub fn assume_output(&mut self, output: wl_output::WlOutput) {
+        self.outputs.assume(output);
+    }
+
+    /// Retain the current entered output when the surface overlaps a neighbour.
+    /// Explicit layer placement takes precedence until the output is left.
+    pub fn enter_output(&mut self, output: wl_output::WlOutput) {
+        self.outputs.enter(output);
+    }
+
+    /// Remove only this output, preserving any other entered outputs.
     pub fn clear_output(&mut self, output: &wl_output::WlOutput) {
-        if self.current_output.as_ref() == Some(output) {
-            self.current_output = None;
-        }
+        self.outputs.remove(output);
     }
 
-    /// Returns the last known output for this surface, if any.
+    /// Returns the selected output for this surface, if any.
     pub fn current_output(&self) -> Option<wl_output::WlOutput> {
-        self.current_output.clone()
+        self.outputs.current()
     }
 
     /// Updates the surface dimensions, returning `true` if the size changed.
@@ -567,49 +482,6 @@ mod tests {
         surface.drop_pool();
 
         assert!(surface.has_available_buffer(0));
-    }
-
-    #[test]
-    fn frozen_fullscreen_deadline_uses_injected_time() {
-        let start = Instant::now();
-        let mut state = XdgFrozenFullscreen::default();
-        state.request(start);
-
-        assert_eq!(state.timeout(start), Some(XDG_FROZEN_FULLSCREEN_TIMEOUT));
-        assert_eq!(
-            state.timeout(start + XDG_FROZEN_FULLSCREEN_TIMEOUT),
-            Some(Duration::ZERO)
-        );
-        assert!(state.pending_configure());
-        assert!(state.requested());
-    }
-
-    #[test]
-    fn frozen_fullscreen_activate_and_finish_clear_pending_timeout() {
-        let start = Instant::now();
-        let mut state = XdgFrozenFullscreen::default();
-        state.request(start);
-        state.activate();
-
-        assert!(state.requested());
-        assert!(!state.pending_configure());
-        assert_eq!(state.timeout(start + XDG_FROZEN_FULLSCREEN_TIMEOUT), None);
-
-        state.finish();
-        assert!(!state.requested());
-        assert_eq!(state.timeout(start), None);
-    }
-
-    #[test]
-    fn placement_keeps_output_fullscreen_and_layer_policy_together() {
-        let placement = SurfacePlacement::new(Some("DP-1".to_owned()), true, true);
-
-        assert_eq!(placement.preferred_output_identity(), Some("DP-1"));
-        assert!(placement.xdg_fullscreen());
-        assert_eq!(
-            placement.layer(),
-            smithay_client_toolkit::shell::wlr_layer::Layer::Overlay
-        );
     }
 
     #[test]

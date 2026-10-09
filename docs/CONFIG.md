@@ -2683,7 +2683,8 @@ These override behavior at runtime. Bool-ish values treat anything except `0`, `
 - `WAYSCRIBER_XDG_OUTPUT=...` forces GNOME fallback overlays onto a specific output (overrides `ui.preferred_output`)
 - `WAYSCRIBER_XDG_FULLSCREEN=1` requests fullscreen GNOME fallback overlays (overrides `ui.xdg_fullscreen`)
 - `WAYSCRIBER_XDG_FULLSCREEN_FORCE=1` bypasses the GNOME opacity safety check
-- `RUST_LOG=info` enables Rust logging (default: unset; use `wayscriber=debug` for app-level logs)
+- `RUST_LOG` sets the Rust log filter (default when unset: `info`; use `wayscriber=debug` for app-level logs or `info,wayscriber::capture_diagnostics=trace` for capture diagnostics)
+- `WAYSCRIBER_LOG_FILE=/path/to/wayscriber.log` overrides the file log destination for `--active` and `--daemon` (default: dated files in `$XDG_DATA_HOME/wayscriber/logs/`, normally `~/.local/share/wayscriber/logs/`)
 
 ## Troubleshooting
 

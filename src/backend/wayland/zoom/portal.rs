@@ -600,7 +600,7 @@ mod tests {
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
-        zoom.layout_retry = crate::backend::wayland::capture_preflight::PortalLayoutRetry::Spent;
+        zoom.layout_retry = crate::backend::wayland::capture_preflight::CaptureLayoutRetry::Spent;
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
@@ -688,7 +688,7 @@ mod tests {
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
-        zoom.layout_retry = crate::backend::wayland::capture_preflight::PortalLayoutRetry::Spent;
+        zoom.layout_retry = crate::backend::wayland::capture_preflight::CaptureLayoutRetry::Spent;
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0)).with_known_output_count(Some(1))));

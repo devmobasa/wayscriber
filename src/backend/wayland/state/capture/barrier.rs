@@ -83,6 +83,11 @@ impl OverlayCaptureBarrier {
         gtk_paint_generation
     }
 
+    /// Identifies the active barrier in capture diagnostics.
+    fn active_generation(&self) -> Option<u64> {
+        self.active.map(|active| active.generation)
+    }
+
     pub(in crate::backend::wayland::state) fn gtk_paint_generation(&self) -> Option<u64> {
         self.active.and_then(|active| active.gtk_paint_generation)
     }
@@ -349,6 +354,7 @@ impl WaylandState {
     }
 
     fn begin_ready_overlay_capture(&mut self, qh: &QueueHandle<Self>) {
+        let barrier_id = self.suppression.barrier.active_generation();
         let Some(reason) = self.suppression.barrier.take_ready() else {
             return;
         };
@@ -363,6 +369,7 @@ impl WaylandState {
 
         match reason {
             OverlaySuppression::Frozen => {
+                self.frozen.log_preflight_layout(barrier_id);
                 let Some(backend) = self.frozen.take_preflight_pending() else {
                     log::warn!("Frozen capture barrier completed without a pending preflight");
                     self.cancel_overlay_capture_preflight(reason, None);
@@ -374,10 +381,11 @@ impl WaylandState {
                     qh,
                     &self.tokio_handle,
                 ) {
-                    log::warn!("Frozen preflight capture failed: {err}");
-                    if self.frozen.retry_stale_portal_preflight(backend) {
+                    if self.frozen.retry_stale_preflight() {
+                        log::info!("Frozen preflight capture deferred to its retry: {err}");
                         return;
                     }
+                    log::warn!("Frozen preflight capture failed: {err}");
                     if self.frozen.has_acquisition_attempt() {
                         self.frozen.finish_preflight_failure(
                             CapturePreflightError::from_backend(err),
@@ -394,6 +402,7 @@ impl WaylandState {
                 }
             }
             OverlaySuppression::Zoom => {
+                self.zoom.log_preflight_layout(barrier_id);
                 let Some(backend) = self.zoom.take_preflight_pending() else {
                     log::warn!("Zoom capture barrier completed without a pending preflight");
                     self.cancel_overlay_capture_preflight(reason, None);
@@ -405,10 +414,11 @@ impl WaylandState {
                     qh,
                     &self.tokio_handle,
                 ) {
-                    log::warn!("Zoom preflight capture failed: {err}");
-                    if self.zoom.retry_stale_portal_preflight(backend) {
+                    if self.zoom.retry_stale_preflight() {
+                        log::info!("Zoom preflight capture deferred to its retry: {err}");
                         return;
                     }
+                    log::warn!("Zoom preflight capture failed: {err}");
                     self.zoom.finish_preflight_failure(
                         &mut self.input_state,
                         CapturePreflightError::from_backend(err),

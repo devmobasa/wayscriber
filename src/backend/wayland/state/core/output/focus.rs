@@ -63,7 +63,6 @@ impl WaylandState {
         let target_label = self
             .output_badge_label_for(&target_output)
             .unwrap_or_else(|| format!("Output {}", target_index + 1));
-        let target_identity = self.output_identity_for(&target_output);
 
         if self.surface.is_xdg_window() {
             if !self.surface.placement().xdg_fullscreen() {
@@ -82,9 +81,8 @@ impl WaylandState {
             info!("Switching xdg overlay to {}", target_label);
             window.set_fullscreen(Some(&target_output));
             window.commit();
-            self.surface.set_current_output(target_output);
-            self.refresh_active_output_label();
-            self.begin_session_output_transition(target_identity, "output switch");
+            self.surface.request_output(target_output);
+            self.refresh_surface_output(current_output.as_ref(), None);
             self.request_xdg_activation(qh);
             self.input_state.needs_redraw = true;
             return;
@@ -99,9 +97,7 @@ impl WaylandState {
         info!("Switching layer overlay to {}", target_label);
         self.teardown_keyboard_focus();
         self.recreate_layer_surface_for_output(qh, &target_output);
-        self.surface.set_current_output(target_output);
-        self.refresh_active_output_label();
-        self.begin_session_output_transition(target_identity, "output switch");
+        self.refresh_surface_output(current_output.as_ref(), None);
         self.input_state.needs_redraw = true;
         self.sync_toolbar_visibility(qh);
     }
@@ -134,12 +130,82 @@ impl WaylandState {
         layer_surface.set_exclusive_zone(-1);
         layer_surface.commit();
 
-        self.surface.set_layer_surface(layer_surface);
+        self.surface
+            .set_layer_surface(layer_surface, Some(output.clone()));
         self.focus
             .set_keyboard_interactivity(Some(desired_keyboard_mode));
         self.force_sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::LayerSurfaceRecreated);
         self.toolbar_chrome.set_needs_recreate(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::wayland::frozen::FrozenImage;
+    use crate::backend::wayland::handlers::test_support::HandlerFixture;
+    use smithay_client_toolkit::compositor::CompositorHandler;
+    use smithay_client_toolkit::output::OutputHandler;
+
+    #[test]
+    fn explicit_output_switch_invalidates_inactive_zoom_cache_before_same_output_enter() {
+        let mut config = crate::config::Config::default();
+        config.ui.xdg_fullscreen = true;
+        config.ui.multi_monitor_enabled = true;
+        let mut fixture = HandlerFixture::with_outputs(config, 3);
+        let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
+        for (output, name) in outputs.iter().zip(["DP-1", "DP-2", "DP-3"]) {
+            fixture.complete_output_metadata_for(output.clone(), name);
+        }
+
+        let qh = fixture.queue.handle();
+        let surface = fixture.state.surface.wl_surface().unwrap().clone();
+        fixture
+            .state
+            .surface_enter(&fixture.conn, &qh, &surface, &outputs[0]);
+        fixture.state.zoom.set_image(FrozenImage {
+            width: 1000,
+            height: 800,
+            stride: 4000,
+            data: vec![7; 3_200_000],
+        });
+        assert!(!fixture.state.zoom.active);
+
+        fixture
+            .state
+            .handle_output_focus_action(&qh, OutputFocusAction::Next);
+        assert_eq!(
+            fixture.state.surface.current_output(),
+            Some(outputs[1].clone())
+        );
+        assert!(fixture.state.zoom.image().is_none());
+
+        // Old-output events must not override the explicit fullscreen target.
+        fixture
+            .state
+            .surface_enter(&fixture.conn, &qh, &surface, &outputs[0]);
+        assert_eq!(
+            fixture.state.surface.current_output(),
+            Some(outputs[1].clone())
+        );
+        fixture
+            .state
+            .output_destroyed(&fixture.conn, &qh, outputs[2].clone());
+        assert_eq!(
+            fixture.state.surface.current_output(),
+            Some(outputs[1].clone())
+        );
+
+        fixture
+            .state
+            .surface_enter(&fixture.conn, &qh, &surface, &outputs[1]);
+
+        assert!(fixture.state.zoom.image().is_none());
+        assert_eq!(
+            fixture.state.surface.current_output(),
+            Some(outputs[1].clone())
+        );
     }
 }

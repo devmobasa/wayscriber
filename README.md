@@ -1297,6 +1297,23 @@ ls -la ~/.config/wayscriber/config.toml
 RUST_LOG=info wayscriber --active   # watch for TOML errors
 ```
 
+### Freeze and Zoom capture logs
+
+`--active` and `--daemon` write dated logs to `$XDG_DATA_HOME/wayscriber/logs/`,
+normally `~/.local/share/wayscriber/logs/`. Daemon-spawned overlays also write there;
+forwarding their stdout or stderr is not required. `WAYSCRIBER_LOG_FILE` overrides
+the log destination.
+
+At the default `info` level, `capture.output` records surface enter/leave events with
+previous and current output IDs and names. `capture.preflight` records Freeze/Zoom,
+the barrier ID, saved and current output/layout tokens, and retry decisions. Monitor
+metadata updates are available at `debug` level.
+
+For full output metadata and before/after geometry, set
+`RUST_LOG=info,wayscriber::capture_diagnostics=trace`
+in the daemon's startup environment. Restart the daemon after changing its environment
+so newly spawned overlays inherit the filter.
+
 ### Environment variables
 
 Common toggles:

@@ -39,7 +39,7 @@ pub(super) fn poll_capture_deadlines(
 ) {
     // Re-admit retries after dispatch, before GTK synchronization and rendering.
     // This lets a fresh GTK generation be published in the same iteration.
-    state.poll_portal_layout_retries(now);
+    state.poll_layout_retries(now);
     state.poll_overlay_capture_barrier_timeout(now);
     if let Some(backend) = state.frozen.take_timed_out_direct_capture(now) {
         warn!("{backend:?} frozen capture timed out; trying the next backend");
@@ -53,8 +53,8 @@ pub(super) fn capture_timeout(
     render_delay: Duration,
 ) -> Option<Duration> {
     [
-        state.frozen.portal_layout_retry_timeout(now),
-        state.zoom.portal_layout_retry_timeout(now),
+        state.frozen.layout_retry_timeout(now),
+        state.zoom.layout_retry_timeout(now),
         state.overlay_capture_barrier_timeout(now, render_delay),
         state.frozen.direct_capture_timeout(now),
         state.frozen.portal_timeout(now),
@@ -716,6 +716,136 @@ fn handle_capture_manager_failure(
 mod tests {
     use super::*;
     use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
+    use crate::backend::wayland::handlers::test_support::{CaptureFixtureBackend, HandlerFixture};
+
+    #[test]
+    fn toolbar_capture_retries_output_discovery_through_both_hidden_frames() {
+        use crate::ui::toolbar::ToolbarEvent;
+
+        for (event, backend) in [
+            (ToolbarEvent::ToggleFreeze, CaptureFixtureBackend::Portal),
+            (ToolbarEvent::ZoomIn, CaptureFixtureBackend::Portal),
+            (
+                ToolbarEvent::ToggleFreeze,
+                CaptureFixtureBackend::ExtImageCopy,
+            ),
+            (
+                ToolbarEvent::ToggleFreeze,
+                CaptureFixtureBackend::WlrScreencopy,
+            ),
+            (ToolbarEvent::ZoomIn, CaptureFixtureBackend::WlrScreencopy),
+        ] {
+            for enter_before_frame in [false, true] {
+                toolbar_output_discovery(event.clone(), enter_before_frame, backend);
+            }
+        }
+    }
+
+    fn toolbar_output_discovery(
+        event: crate::ui::toolbar::ToolbarEvent,
+        enter_before_frame: bool,
+        backend: CaptureFixtureBackend,
+    ) {
+        use smithay_client_toolkit::compositor::CompositorHandler;
+
+        let mut fixture =
+            HandlerFixture::with_capture_output(crate::config::Config::default(), backend);
+        let output = fixture.complete_output_metadata("DP-3");
+        let qh = fixture.queue.handle();
+        let surface = fixture.state.surface.wl_surface().unwrap().clone();
+
+        fixture
+            .state
+            .handle_toolbar_event(event.clone(), Some(&fixture.conn), Some(&qh));
+        handle_pending_actions(&mut fixture.state, &qh);
+
+        let acquisition = fixture.state.acquisition.slot();
+        let zoom_id = fixture.state.zoom.current_capture_id();
+        let reason = fixture.state.suppression.reason();
+        let keyboard_passthrough = fixture
+            .state
+            .suppression
+            .keyboard_passthrough_requested(false);
+        let freezing = matches!(event, crate::ui::toolbar::ToolbarEvent::ToggleFreeze);
+        assert_eq!(
+            reason,
+            if freezing {
+                OverlaySuppression::Frozen
+            } else {
+                OverlaySuppression::Zoom
+            }
+        );
+        assert_eq!(acquisition.is_some(), freezing);
+        assert_eq!(zoom_id.is_some(), !freezing);
+
+        if enter_before_frame {
+            fixture
+                .state
+                .surface_enter(&fixture.conn, &qh, &surface, &output);
+        }
+        complete_hidden_frame(&mut fixture, &qh);
+        assert_eq!(fixture.state.frozen.has_layout_retry(), freezing);
+        assert_eq!(fixture.state.zoom.has_layout_retry(), !freezing);
+
+        if !enter_before_frame {
+            fixture
+                .state
+                .surface_enter(&fixture.conn, &qh, &surface, &output);
+        }
+
+        // Repeated KWin enter notifications during settling must retain ownership.
+        fixture
+            .state
+            .surface_enter(&fixture.conn, &qh, &surface, &output);
+        assert_eq!(fixture.state.acquisition.slot(), acquisition);
+        assert_eq!(fixture.state.zoom.current_capture_id(), zoom_id);
+
+        let now = Instant::now();
+        poll_capture_deadlines(&mut fixture.state, &qh, now);
+        poll_capture_deadlines(&mut fixture.state, &qh, now + Duration::from_millis(150));
+        assert!(!fixture.state.frozen.has_layout_retry());
+        assert!(!fixture.state.zoom.has_layout_retry());
+        assert_eq!(fixture.state.suppression.reason(), reason);
+        assert_eq!(
+            fixture
+                .state
+                .suppression
+                .keyboard_passthrough_requested(false),
+            keyboard_passthrough
+        );
+        complete_hidden_frame(&mut fixture, &qh);
+
+        // Both barriers completed and the worker was admitted with the original request.
+        // The fixture's current-thread Tokio runtime is never polled, so no host portal runs.
+        assert_eq!(fixture.state.acquisition.slot(), acquisition);
+        assert_eq!(fixture.state.zoom.current_capture_id(), zoom_id);
+        assert_eq!(fixture.state.suppression.reason(), reason);
+        assert_capture_started(&fixture.state, freezing);
+        fixture.assert_direct_capture_started();
+
+        fixture.state.frozen.cancel(&mut fixture.state.input_state);
+        fixture.state.zoom.abort_capture();
+    }
+
+    fn assert_capture_started(state: &WaylandState, freezing: bool) {
+        assert!(!state.frozen.preflight_pending());
+        assert!(!state.zoom.preflight_pending());
+        assert_eq!(state.frozen.is_in_progress(), freezing);
+        assert_eq!(state.zoom.is_in_progress(), !freezing);
+        assert!(!state.frozen.has_layout_retry());
+        assert!(!state.zoom.has_layout_retry());
+    }
+
+    fn complete_hidden_frame(
+        fixture: &mut crate::backend::wayland::handlers::test_support::HandlerFixture,
+        qh: &wayland_client::QueueHandle<WaylandState>,
+    ) {
+        assert!(matches!(
+            fixture.state.render(qh).unwrap(),
+            crate::backend::wayland::state::RenderOutcome::Committed { .. }
+        ));
+        fixture.complete_main_frame();
+    }
 
     fn record(
         owner: ScreenAcquisitionOwner,

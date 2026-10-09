@@ -7,7 +7,8 @@
 - `capture.rs` coordinates zoom capture.
 - `portal.rs` provides portal fallback behavior.
 - `state.rs` owns zoom image/view state and distinguishes direct and portal capture backends. `state/source.rs` owns identified request IDs, waiters, terminal reports, and the shared terminal cleanup that the lifecycle entry points in `state.rs` (deactivate, cancel, fail, stale direct capture) delegate to; `abort_capture` stays in `state.rs` because it ends a request without touching view or input state.
-- `retry.rs` retains capture ID, waiter, and requested activation through the shared portal settling policy and fresh preflight.
+- `retry.rs` retains capture ID, waiter, requested activation, and selected backend through the shared layout settling policy and fresh preflight.
+- `state.rs::handle_output_change` retains unbound capture requests during output discovery and the retry wait; bound requests and installed sources deactivate on an output change. `../state/core/output.rs` publishes output changes for protocol handlers and explicit switches; repeated enters preserve the current source.
 - `view.rs` owns zoom view transforms.
 
 ## Invariants

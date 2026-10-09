@@ -13,6 +13,7 @@ impl ZoomState {
         }
 
         if !self.layout_retry.schedule(
+            ZoomCaptureBackend::Portal,
             captured,
             self.active_output_id,
             layout_changed,
@@ -22,8 +23,7 @@ impl ZoomState {
             return false;
         }
 
-        self.portal.finish();
-        self.capture_done = false;
+        self.reset_for_retry();
         log::info!(
             "portal.zoom phase=retry-queued output={captured:?} current_layout={} budget_remaining=0",
             self.layout_generations.desktop
@@ -32,22 +32,35 @@ impl ZoomState {
         true
     }
 
-    pub(in crate::backend::wayland) fn retry_stale_portal_preflight(
-        &mut self,
-        backend: ZoomCaptureBackend,
-    ) -> bool {
-        let portal_layout_changed = (backend == ZoomCaptureBackend::Portal)
-            && self
-                .preflight
-                .changed_on_output(self.active_output_id, self.layout_generations.desktop);
-        self.queue_portal_layout_retry(self.active_output_id, portal_layout_changed)
+    pub(in crate::backend::wayland) fn retry_stale_preflight(&mut self) -> bool {
+        if self.current_capture_id().is_none() {
+            return false;
+        }
+
+        let queued = self.layout_retry.queue_preflight(
+            &self.preflight,
+            self.active_output_id,
+            self.layout_generations,
+            Instant::now(),
+        );
+        if queued {
+            self.reset_for_retry();
+        }
+
+        queued
     }
 
-    pub(in crate::backend::wayland) fn has_portal_layout_retry(&self) -> bool {
+    /// Drops the attempt the retry replaces; the capture ID and waiter stay.
+    fn reset_for_retry(&mut self) {
+        self.portal.finish();
+        self.capture_done = false;
+    }
+
+    pub(in crate::backend::wayland) fn has_layout_retry(&self) -> bool {
         self.layout_retry.is_pending()
     }
 
-    pub(in crate::backend::wayland) fn portal_layout_retry_timeout(
+    pub(in crate::backend::wayland) fn layout_retry_timeout(
         &self,
         now: Instant,
     ) -> Option<Duration> {
@@ -55,34 +68,17 @@ impl ZoomState {
     }
 
     /// Retains the original capture ID, waiter, and requested Zoom activation.
-    pub(in crate::backend::wayland) fn restart_portal_preflight(
+    pub(in crate::backend::wayland) fn restart_preflight(
         &mut self,
         now: Instant,
     ) -> Result<bool, CapturePreflightError> {
-        let Some(output_id) = self
-            .layout_retry
-            .take_ready(
-                self.active_output_id,
-                self.layout_generations.desktop,
-                self.active_geometry.as_ref(),
-                now,
-            )
-            .map_err(CapturePreflightError::from)?
-        else {
-            return Ok(false);
-        };
-
-        self.preflight.begin(
-            ZoomCaptureBackend::Portal,
-            Some(output_id),
-            self.layout_generations.desktop,
-        );
-        log::info!(
-            "portal.zoom phase=retry-preflight output={output_id} layout={}",
-            self.layout_generations.desktop
-        );
-
-        Ok(true)
+        self.layout_retry.restart_preflight(
+            &mut self.preflight,
+            self.active_output_id,
+            self.layout_generations,
+            self.active_geometry.as_ref(),
+            now,
+        )
     }
 }
 
@@ -180,13 +176,13 @@ mod tests {
             drain(&mut zoom, &mut input).await;
 
             assert!(zoom.is_in_progress());
-            assert!(zoom.has_portal_layout_retry());
+            assert!(zoom.has_layout_retry());
             assert!(zoom.pending_activation);
             assert!(!zoom.take_capture_done());
             assert!(zoom.take_source_terminal().is_none());
             assert_eq!(zoom.current_capture_id(), Some(id));
             assert!(
-                zoom.restart_portal_preflight(Instant::now() + Duration::from_millis(150))
+                zoom.restart_preflight(Instant::now() + Duration::from_millis(150))
                     .unwrap()
             );
             assert_eq!(
@@ -224,7 +220,7 @@ mod tests {
             let terminal = zoom.take_source_terminal().unwrap();
             assert_eq!(terminal.id, id);
             assert!(waiters.take_for_terminal(&terminal).unwrap().1);
-            assert!(!zoom.has_portal_layout_retry());
+            assert!(!zoom.has_layout_retry());
             assert!(zoom.take_capture_done());
             assert!(zoom.take_source_terminal().is_none());
 
@@ -282,7 +278,7 @@ mod tests {
 
             drain(&mut zoom, &mut input).await;
 
-            assert!(!zoom.has_portal_layout_retry());
+            assert!(!zoom.has_layout_retry());
             assert!(!zoom.is_in_progress());
 
             let terminal = zoom.take_source_terminal().unwrap();
@@ -309,16 +305,16 @@ mod tests {
                 zoom.set_active_output(None, Some(2));
 
                 assert!(
-                    zoom.restart_portal_preflight(Instant::now() + Duration::from_millis(150))
+                    zoom.restart_preflight(Instant::now() + Duration::from_millis(150))
                         .is_err()
                 );
             }
 
             assert!(zoom.abort_capture());
-            assert!(!zoom.has_portal_layout_retry());
+            assert!(!zoom.has_layout_retry());
             assert!(
                 !zoom
-                    .restart_portal_preflight(Instant::now() + Duration::from_millis(150))
+                    .restart_preflight(Instant::now() + Duration::from_millis(150))
                     .unwrap()
             );
             assert_eq!(zoom.take_source_terminal().unwrap().id, id);

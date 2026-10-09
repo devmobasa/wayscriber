@@ -1,10 +1,11 @@
 mod activation;
+mod admission;
 mod direct;
 
 pub(super) use direct::{DirectCaptureAttempt, DirectCaptureContext};
 
 use crate::backend::wayland::capture_preflight::{
-    CaptureLayoutGenerations, CapturePreflight, CapturePreflightError, PortalLayoutRetry,
+    CaptureLayoutGenerations, CaptureLayoutRetry, CapturePreflight, CapturePreflightError,
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -69,7 +70,7 @@ pub struct FrozenState {
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight: CapturePreflight<FrozenCaptureBackend>,
     pub(super) capture_done: bool,
-    pub(super) layout_retry: PortalLayoutRetry,
+    pub(super) layout_retry: CaptureLayoutRetry<FrozenCaptureBackend>,
     pending_image: Option<PendingFrozenImage>,
     acquisition_attempt: Option<(ScreenAcquisitionId, ScreenAcquisitionOwner)>,
     acquisition_completion: Option<ScreenAcquisitionCompletion>,
@@ -134,7 +135,7 @@ impl FrozenState {
             runtime_wake,
             preflight: CapturePreflight::Idle,
             capture_done: false,
-            layout_retry: PortalLayoutRetry::default(),
+            layout_retry: CaptureLayoutRetry::default(),
             pending_image: None,
             acquisition_attempt: None,
             acquisition_completion: None,
@@ -232,43 +233,9 @@ impl FrozenState {
             || self.layout_retry.is_pending()
     }
 
-    pub(in crate::backend::wayland) fn take_preflight_pending(
-        &mut self,
-    ) -> Option<FrozenCaptureBackend> {
-        self.preflight.take_pending()
-    }
-
     #[cfg(test)]
-    pub(super) fn snapshot_preflight_layout(&mut self) {
-        self.preflight.begin(
-            FrozenCaptureBackend::Portal,
-            self.active_output_id,
-            self.layout_generations.desktop,
-        );
-    }
-
-    pub(super) fn capture_layout_generation(&self, backend: FrozenCaptureBackend) -> u64 {
-        match backend {
-            FrozenCaptureBackend::Portal => self.layout_generations.desktop,
-            FrozenCaptureBackend::WlrScreencopy | FrozenCaptureBackend::ExtImageCopy => {
-                self.layout_generations.active_output
-            }
-        }
-    }
-
-    pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), CapturePreflightError> {
-        self.preflight.ensure_layout_current(
-            self.active_output_id,
-            self.preflight
-                .backend()
-                .map(|backend| self.capture_layout_generation(backend))
-                .unwrap_or(self.layout_generations.active_output),
-        )
-    }
-
-    #[cfg(test)]
-    pub fn preflight_layout_is_current(&self) -> bool {
-        self.ensure_preflight_layout_current().is_ok()
+    pub(in crate::backend::wayland) fn preflight_pending(&self) -> bool {
+        self.preflight.is_pending()
     }
 
     pub(super) fn push_stale_layout_toast(input_state: &mut InputState) {
@@ -347,7 +314,7 @@ impl FrozenState {
     }
 
     fn finish_attempt_resources(&mut self) {
-        self.layout_retry = PortalLayoutRetry::default();
+        self.layout_retry = CaptureLayoutRetry::default();
         if let Some(capture) = self.direct_capture.take() {
             capture.destroy();
         }
@@ -1418,7 +1385,7 @@ mod tests {
 
         state.finish_preflight_failure(CapturePreflightError::LostSuppression, &mut input_state);
 
-        assert!(!state.has_portal_layout_retry());
+        assert!(!state.has_layout_retry());
         assert!(!state.is_in_progress());
         assert!(state.take_capture_done());
         assert!(state.take_acquisition_completion().is_none());
