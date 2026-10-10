@@ -388,7 +388,7 @@ mod tests {
             tool: Tool::Pen,
             start_x: 10,
             start_y: 20,
-            points: vec![(10, 20), (30, 40)],
+            points: vec![(10.0, 20.0), (30.0, 40.0)],
             point_thicknesses: vec![1.0, 1.0],
         };
         state.begin_pointer_drag(MouseButton::Left, None);

@@ -437,8 +437,8 @@ impl InputState {
     }
 }
 
-fn path_damage_ranges(
-    points: &[(i32, i32)],
+fn path_damage_ranges<T: Copy + Into<f64>>(
+    points: &[(T, T)],
     damage_regions: &[Rect],
     stroke_width: f64,
 ) -> Vec<Range<usize>> {
@@ -497,7 +497,7 @@ fn push_merged_range(ranges: &mut Vec<Range<usize>>, next: Range<usize>) {
     ranges.push(next);
 }
 
-fn segment_bounds(a: (i32, i32), b: (i32, i32), stroke_width: f64) -> Option<Rect> {
+fn segment_bounds<T: Copy + Into<f64>>(a: (T, T), b: (T, T), stroke_width: f64) -> Option<Rect> {
     bounding_box_for_points(&[a, b], stroke_width)
 }
 

@@ -1303,8 +1303,12 @@ fn a_press_on_a_meter_bar_activates_that_bar_not_its_neighbour() {
     let first = tree
         .node_by_id(&"top.style.pen-smoothing.level-1".into())
         .expect("first smoothing bar");
-    // 11px into the row: inside bar 1, and inside bar 2's inflated target.
-    let (x, y) = (first.rect.0 + 11.0, first.rect.1 + first.rect.3 / 2.0);
+    assert_eq!(first.rect.2, 14.0, "the zero dot does not shrink the bars");
+    // Inside bar 1, even where neighbouring minimum-target inflation overlaps.
+    let (x, y) = (
+        first.rect.0 + first.rect.2 / 2.0,
+        first.rect.1 + first.rect.3 / 2.0,
+    );
     let pressed = crate::backend::wayland::toolbar::hit::find_hit(&hits, x, y, |hit| {
         crate::backend::wayland::toolbar::hit::intent_for_hit(hit, x, y)
     })
@@ -1363,7 +1367,11 @@ fn shape_pen_meters_carry_captions_and_level_bars_inside_the_planned_width() {
 
         // One interactive bar per level above zero, abutting the caption and
         // each other, filling the fixed bar row, filled up to the level.
-        let mut left = caption.rect.0 + caption.rect.2;
+        let zero = tree
+            .node_by_id(&format!("{meter_id}.level-0").into())
+            .expect("zero dot");
+        assert_eq!(zero.rect.2, model::METER_ZERO_SLOT_W);
+        let mut left = caption.rect.0 + caption.rect.2 + model::METER_ZERO_SLOT_W;
         for bar in 1..=bars {
             let node = tree
                 .node_by_id(&format!("{meter_id}.level-{bar}").into())
@@ -1443,8 +1451,9 @@ fn shape_pen_steppers_carry_visible_captions_inside_the_planned_width() {
             .node_by_id(&format!("{stepper}.minus").into())
             .unwrap_or_else(|| panic!("{stepper} minus half"));
         assert!(
-            (minus.rect.0 - (caption.rect.0 + caption.rect.2)).abs() < 1e-9,
-            "{stepper} − half abuts its caption"
+            (minus.rect.0 - (caption.rect.0 + caption.rect.2 + model::METER_ZERO_SLOT_W)).abs()
+                < 1e-9,
+            "{stepper} − half follows the zero dot"
         );
 
         // The readout is the value being changed: primary tone, bold,

@@ -36,18 +36,21 @@ impl WaylandState {
         screen_x: f64,
         screen_y: f64,
     ) -> (i32, i32) {
+        let (x, y) = self.canvas_world_coords_precise(screen_x, screen_y);
+        (x.round() as i32, y.round() as i32)
+    }
+
+    pub(in crate::backend::wayland) fn canvas_world_coords_precise(
+        &self,
+        screen_x: f64,
+        screen_y: f64,
+    ) -> (f64, f64) {
         let (board_x, board_y) = self.board_view_offset();
         if self.zoom.active {
             let (zoom_x, zoom_y) = self.zoom.screen_to_world(screen_x, screen_y);
-            (
-                (board_x + zoom_x).round() as i32,
-                (board_y + zoom_y).round() as i32,
-            )
+            (board_x + zoom_x, board_y + zoom_y)
         } else {
-            (
-                (board_x + screen_x).round() as i32,
-                (board_y + screen_y).round() as i32,
-            )
+            (board_x + screen_x, board_y + screen_y)
         }
     }
 

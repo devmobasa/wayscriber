@@ -9,7 +9,7 @@ use crate::util;
 #[test]
 fn freehand_bounding_box_expands_with_thickness() {
     let shape = Shape::Freehand {
-        points: vec![(10, 20), (30, 40)],
+        points: vec![(10.0, 20.0), (30.0, 40.0)],
         color: WHITE,
         thick: 6.0,
     };
@@ -422,7 +422,7 @@ fn step_marker_bounding_box_is_square_and_contains_center() {
 #[test]
 fn marker_bounding_box_uses_inflated_thickness() {
     let shape = Shape::MarkerStroke {
-        points: vec![(0, 0), (10, 0)],
+        points: vec![(0.0, 0.0), (10.0, 0.0)],
         color: WHITE,
         thick: 4.0,
     };
@@ -474,7 +474,7 @@ fn image_bounding_box_and_kind_name_use_display_bounds() {
 #[test]
 fn pressure_and_image_bounds_handle_extreme_coordinates() {
     let pressure = Shape::FreehandPressure {
-        points: vec![(i32::MAX, i32::MAX, 2.0)],
+        points: vec![(f64::from(i32::MAX), f64::from(i32::MAX), 2.0)],
         color: WHITE,
     };
     let pressure_bounds = pressure

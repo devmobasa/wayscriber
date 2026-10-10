@@ -26,6 +26,7 @@ mod light_mode;
 mod menus;
 mod modal;
 mod pages;
+mod pen_sampling;
 mod presenter_mode;
 mod pressure_modes;
 mod properties_panel;

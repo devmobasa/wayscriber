@@ -6,9 +6,9 @@ use crate::draw::shape::{EraserBrush, EraserKind};
 ///
 /// This function accepts a borrowed slice, avoiding clones for better performance.
 /// Use this for rendering provisional shapes during drawing to prevent quadratic behavior.
-pub fn render_freehand_borrowed(
+pub fn render_freehand_borrowed<T: Copy + Into<f64>>(
     ctx: &cairo::Context,
-    points: &[(i32, i32)],
+    points: &[(T, T)],
     color: Color,
     thick: f64,
 ) {
@@ -23,11 +23,11 @@ pub fn render_freehand_borrowed(
 
     // Start at first point
     let (x0, y0) = points[0];
-    ctx.move_to(x0 as f64, y0 as f64);
+    ctx.move_to(x0.into(), y0.into());
 
     // Draw lines through all points
     for &(x, y) in &points[1..] {
-        ctx.line_to(x as f64, y as f64);
+        ctx.line_to(x.into(), y.into());
     }
 
     let _ = ctx.stroke();
@@ -94,9 +94,9 @@ pub(crate) fn render_eraser_stroke(
 }
 
 /// Render a marker stroke with soft edges and screen blending to mimic a physical highlighter.
-pub fn render_marker_stroke_borrowed(
+pub fn render_marker_stroke_borrowed<T: Copy + Into<f64>>(
     ctx: &cairo::Context,
-    points: &[(i32, i32)],
+    points: &[(T, T)],
     color: Color,
     thick: f64,
 ) {
@@ -114,9 +114,9 @@ pub fn render_marker_stroke_borrowed(
         ctx.set_line_cap(cairo::LineCap::Round);
         ctx.set_line_join(cairo::LineJoin::Round);
         let (x0, y0) = points[0];
-        ctx.move_to(x0 as f64, y0 as f64);
+        ctx.move_to(x0.into(), y0.into());
         for &(x, y) in &points[1..] {
-            ctx.line_to(x as f64, y as f64);
+            ctx.line_to(x.into(), y.into());
         }
         let _ = ctx.stroke();
     };

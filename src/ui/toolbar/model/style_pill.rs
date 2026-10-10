@@ -36,7 +36,7 @@ pub(crate) use arrow_menu::{
     ARROW_STYLE_MENU_ROW_GAP, ARROW_STYLE_MENU_ROW_H, ARROW_STYLE_MENU_ROW_W, ArrowStyleMenuEntry,
     arrow_style_chip_label, arrow_style_menu_entries, arrow_style_menu_size,
 };
-pub(crate) use meter::{StrokeSetting, StylePillMeter, StylePillMeterSegment};
+pub(crate) use meter::{METER_ZERO_SLOT_W, StrokeSetting, StylePillMeter, StylePillMeterSegment};
 pub(crate) use pen_feel::{
     PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H, PEN_FEEL_HINT_H, PEN_FEEL_PAD,
     PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE, PEN_FEEL_TITLE_H,

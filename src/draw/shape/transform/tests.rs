@@ -24,12 +24,12 @@ fn every_shape_variant_translates_its_bounds() {
     };
     let mut shapes = vec![
         Shape::Freehand {
-            points: vec![(10, 20), (30, 40)],
+            points: vec![(10.0, 20.0), (30.0, 40.0)],
             color: WHITE,
             thick: 2.0,
         },
         Shape::FreehandPressure {
-            points: vec![(10, 20, 1.5), (30, 40, 2.5)],
+            points: vec![(10.0, 20.0, 1.5), (30.0, 40.0, 2.5)],
             color: WHITE,
         },
         Shape::Line {
@@ -127,7 +127,7 @@ fn every_shape_variant_translates_its_bounds() {
             wrap_width: Some(80),
         },
         Shape::MarkerStroke {
-            points: vec![(10, 20), (30, 40)],
+            points: vec![(10.0, 20.0), (30.0, 40.0)],
             color: WHITE,
             thick: 8.0,
         },

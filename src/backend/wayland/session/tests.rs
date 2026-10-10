@@ -1141,7 +1141,7 @@ fn runtime_open_cancels_active_interaction_from_previous_session() {
         tool: Tool::Pen,
         start_x: 10,
         start_y: 20,
-        points: vec![(10, 20), (30, 40)],
+        points: vec![(10.0, 20.0), (30.0, 40.0)],
         point_thicknesses: vec![2.0, 2.0],
     };
     assert!(input.has_active_pointer_interaction());
@@ -2423,7 +2423,7 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
             assert_eq!(input.boards.active_frame().shapes.len(), 1);
             if draft_kind == "pointer" {
                 assert!(
-                    matches!(&input.state, DrawingState::Drawing { points, .. } if points.last() == Some(&(90,90)))
+                    matches!(&input.state, DrawingState::Drawing { points, .. } if points.last() == Some(&(90.0,90.0)))
                 );
             } else {
                 assert!(

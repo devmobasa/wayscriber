@@ -142,7 +142,7 @@ fn the_live_laser_preview_uses_the_laser_style_and_glow_damage() {
 
     match state.provisional_tool_stroke(140, 100) {
         ProvisionalToolStroke::Laser { points, style } => {
-            assert_eq!(points.last(), Some(&(140, 100)));
+            assert_eq!(points.last(), Some(&(140.0, 100.0)));
             assert_eq!(style.width, 10.0);
             assert_eq!(style.color.g, 0.9);
         }

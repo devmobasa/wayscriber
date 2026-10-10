@@ -23,8 +23,8 @@ impl InputState {
         &mut self,
         screen_x: i32,
         screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        canvas_x: impl Into<f64>,
+        canvas_y: impl Into<f64>,
     ) {
         let measurer = crate::draw::TextMeasurer::default();
         let ui_engine = crate::ui_text::UiTextEngine::default();
@@ -45,17 +45,15 @@ impl InputState {
         resources: crate::input::state::InputTextResources<'_>,
         screen_x: i32,
         screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        canvas_x: impl Into<f64>,
+        canvas_y: impl Into<f64>,
     ) {
         // Moving off the loupe ends a wheel adjustment of it. Nothing else runs
         // between two wheel bursts over one shape, so without this a visit
         // minutes later would merge into the same undo entry.
-        self.end_spotlight_magnification_gesture_if_pointer_left(canvas_x, canvas_y);
-        let points = PointerPoints::new(
-            ScreenPoint::new(screen_x, screen_y),
-            CanvasPoint::new(canvas_x, canvas_y),
-        );
+        let canvas = CanvasPoint::new(canvas_x, canvas_y);
+        self.end_spotlight_magnification_gesture_if_pointer_left(canvas.x(), canvas.y());
+        let points = PointerPoints::new(ScreenPoint::new(screen_x, screen_y), canvas);
         self.note_session_interaction_activity();
         let _ = route_pointer_motion(self, resources.measurer, PointerMotion::new(points));
         self.note_session_interaction_activity();

@@ -323,7 +323,8 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return target;
         }
-        let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
+        let (canvas_x, canvas_y) =
+            self.canvas_world_coords_precise(screen_position.0, screen_position.1);
         self.input_state.on_mouse_press_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -332,8 +333,8 @@ impl WaylandState {
             MouseButton::Left,
             screen_x,
             screen_y,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.input_state.needs_redraw = true;
         target
@@ -433,6 +434,8 @@ impl WaylandState {
         let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
         self.input_state
             .update_pointer_positions(screen_x, screen_y, wx, wy);
+        let (canvas_x, canvas_y) =
+            self.canvas_world_coords_precise(screen_position.0, screen_position.1);
         self.input_state.on_mouse_motion_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -440,8 +443,8 @@ impl WaylandState {
             },
             screen_x,
             screen_y,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.record_perf_input_sample(PerfInputSource::Touch, screen_x, screen_y, wx, wy, false);
     }
@@ -567,7 +570,8 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return;
         }
-        let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
+        let (canvas_x, canvas_y) =
+            self.canvas_world_coords_precise(screen_position.0, screen_position.1);
         self.input_state.on_mouse_release_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -576,8 +580,8 @@ impl WaylandState {
             MouseButton::Left,
             screen_x,
             screen_y,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.input_state.needs_redraw = true;
     }

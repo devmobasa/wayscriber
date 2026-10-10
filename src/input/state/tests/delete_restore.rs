@@ -386,7 +386,7 @@ fn pending_page_delete_survives_active_board_drift_and_deletes_original_page() {
         tool: Tool::Pen,
         start_x: 10,
         start_y: 20,
-        points: vec![(10, 20), (30, 40)],
+        points: vec![(10.0, 20.0), (30.0, 40.0)],
         point_thicknesses: vec![1.0, 1.0],
     };
     state.begin_pointer_drag(MouseButton::Left, None);
@@ -426,7 +426,7 @@ fn stale_active_page_delete_confirmation_does_not_cancel_active_interaction() {
         tool: Tool::Pen,
         start_x: 10,
         start_y: 20,
-        points: vec![(10, 20), (30, 40)],
+        points: vec![(10.0, 20.0), (30.0, 40.0)],
         point_thicknesses: vec![1.0, 1.0],
     };
     state.begin_pointer_drag(MouseButton::Left, None);
@@ -467,7 +467,7 @@ fn stale_board_panel_page_delete_confirmation_does_not_cancel_active_interaction
         tool: Tool::Pen,
         start_x: 10,
         start_y: 20,
-        points: vec![(10, 20), (30, 40)],
+        points: vec![(10.0, 20.0), (30.0, 40.0)],
         point_thicknesses: vec![1.0, 1.0],
     };
     state.begin_pointer_drag(MouseButton::Left, None);

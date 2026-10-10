@@ -2956,3 +2956,90 @@ fn offline_tool_clear_reports_corruption_instead_of_silently_rewriting_restored_
         }
     }
 }
+
+#[test]
+fn format_eight_preserves_fractional_ink_and_loads_legacy_integer_history() {
+    use crate::draw::frame::UndoAction;
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "float-ink");
+    options.persist_transparent = true;
+    options.compression = CompressionMode::Off;
+    let mut snapshot = sample_snapshot();
+    let frame = &mut snapshot.boards[0].pages.pages[0];
+    let shape = Shape::Freehand {
+        points: vec![(300.25, 300.5), (301.75, 301.125)],
+        color: crate::draw::color::BLACK,
+        thick: 2.0,
+    };
+    let id = frame.add_shape(shape.clone());
+    let index = frame.find_index(id).unwrap();
+    frame.push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(index, frame.shape(id).unwrap().clone())],
+        },
+        100,
+    );
+    save_snapshot(&snapshot, &options).unwrap();
+    let encoded = std::fs::read(options.session_file_path()).unwrap();
+    let mut value: serde_json::Value = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(value["version"], 8);
+    let loaded = load_snapshot_inner(&options.session_file_path(), &options)
+        .unwrap()
+        .unwrap();
+    let mut restored = loaded.snapshot.boards[0].pages.pages[0].clone();
+    assert_eq!(restored.shapes.last().unwrap().shape, shape);
+    assert!(restored.undo_last().is_some());
+    assert!(restored.redo_last().is_some());
+    assert_eq!(restored.shapes.last().unwrap().shape, shape);
+
+    // Format 7's coordinates are integers, including inside undo history.
+    fn integer_coordinates(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if let Some(serde_json::Value::Array(points)) = map.get_mut("points") {
+                    for point in points {
+                        if let Some(pair) = point.as_array_mut() {
+                            for coordinate in pair.iter_mut().take(2) {
+                                *coordinate =
+                                    serde_json::json!(coordinate.as_f64().unwrap().round() as i32);
+                            }
+                        }
+                    }
+                }
+                for value in map.values_mut() {
+                    integer_coordinates(value);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    integer_coordinates(value);
+                }
+            }
+            _ => {}
+        }
+    }
+    value["version"] = serde_json::json!(7);
+    integer_coordinates(&mut value);
+    let legacy = serde_json::to_vec(&value).unwrap();
+    std::fs::write(options.session_file_path(), &legacy).unwrap();
+    let loaded = load_snapshot_inner(&options.session_file_path(), &options)
+        .unwrap()
+        .unwrap();
+    assert_eq!(loaded.version, 7);
+    assert_eq!(
+        std::fs::read(options.session_file_path()).unwrap(),
+        legacy,
+        "loading does not migrate on disk"
+    );
+    let mut restored = loaded.snapshot.boards[0].pages.pages[0].clone();
+    let Shape::Freehand { points, .. } = &restored.shapes.last().unwrap().shape else {
+        panic!("legacy ink");
+    };
+    assert_eq!(points, &[(300.0, 301.0), (302.0, 301.0)]);
+    assert!(restored.undo_last().is_some());
+    assert!(restored.redo_last().is_some());
+    save_snapshot(&loaded.snapshot, &options).unwrap();
+    let value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(options.session_file_path()).unwrap()).unwrap();
+    assert_eq!(value["version"], 8);
+}

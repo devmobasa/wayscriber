@@ -60,6 +60,19 @@ pub(super) fn assert_builtin_style_pill_node(
             *control,
             *index,
         ),
+        StylePillNodeExpectation::MeterDot(control) => {
+            let setting = control.stroke_setting().expect("zero-level setting");
+            let zero = setting.zero_segment(snapshot, &control.id());
+            assert_eq!(
+                kind,
+                &crate::backend::wayland::TopToolbarWidgetKind::MeterDot {
+                    active: setting.level(snapshot) == 0,
+                    enabled: control.enabled(snapshot),
+                }
+            );
+            assert_eq!(interaction_event, Some(&zero.event));
+            assert_eq!(interaction_tooltip, Some(zero.tooltip.as_str()));
+        }
         StylePillNodeExpectation::ArrowChipGlyph => {
             use crate::backend::wayland::TopToolbarWidgetKind as W;
             assert!(!has_interaction, "{name}: {id} is decor");

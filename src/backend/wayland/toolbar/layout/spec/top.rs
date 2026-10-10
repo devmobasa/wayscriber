@@ -83,9 +83,9 @@ impl ToolbarLayoutSpec {
     /// "Detect"). Holds one short word at the caption size plus the gap to
     /// the first bar or the − half.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_CAPTION_W: f64 = 56.0;
-    /// Bar row of a level meter. Fixed whatever the level count, so both
-    /// meters line up; each bar takes an equal share of it.
-    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_METER_W: f64 = 84.0;
+    /// Zero dot plus the original 84px bar row, shared by both level meters.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_METER_W: f64 =
+        84.0 + crate::ui::toolbar::model::METER_ZERO_SLOT_W;
     /// The Pen feel chip ("Pen feel ▾"): a fixed slot like the font button's,
     /// so the planner budgets it whatever the levels behind it.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PEN_FEEL_W: f64 = 92.0;

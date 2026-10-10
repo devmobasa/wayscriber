@@ -27,8 +27,8 @@ pub(crate) struct LiveShapeMemo {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MemoKey {
     len: usize,
-    first: (i32, i32),
-    last: (i32, i32),
+    first: (f64, f64),
+    last: (f64, f64),
     color: Color,
     thick: f64,
     fill: bool,
@@ -43,7 +43,7 @@ impl LiveShapeMemo {
     /// point count and both ends identify it.
     pub(crate) fn recognize(
         &self,
-        points: &[(i32, i32)],
+        points: &[(f64, f64)],
         color: Color,
         thick: f64,
         fill: bool,
@@ -68,7 +68,10 @@ impl LiveShapeMemo {
 
         #[cfg(test)]
         self.runs.set(self.runs.get() + 1);
-        let shape = recognize(points, color, thick, fill, grid, sensitivity);
+        // Quantize only when recognition runs. Preview, bounds and readout
+        // reuse the cached result without allocating another path buffer.
+        let rounded = crate::draw::shape::quantize_path(points);
+        let shape = recognize(&rounded, color, thick, fill, grid, sensitivity);
         *self.last.borrow_mut() = Some((key, shape.clone()));
         shape
     }

@@ -147,3 +147,44 @@ fn enter_key_starts_edit_for_selected_text() {
     let edit_id = state.text_editing.edit_target().map(|(id, _)| *id);
     assert_eq!(edit_id, Some(shape_id));
 }
+
+#[test]
+fn a_pen_drag_starting_over_text_preserves_fractional_endpoints() {
+    let mut state = create_test_input_state();
+    state.set_pen_smoothing(3);
+    let id = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 300,
+        y: 300,
+        text: "Hello".to_string(),
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
+        wrap_width: None,
+    });
+    let bounds = state
+        .boards
+        .active_frame()
+        .shape(id)
+        .unwrap()
+        .shape
+        .bounding_box()
+        .unwrap();
+    let start = (
+        f64::from(bounds.x + 2) + 0.123456,
+        f64::from(bounds.y + 2) + 0.234567,
+    );
+    let end = (start.0 + 50.0, start.1 + 20.0);
+
+    state.on_mouse_press_with_canvas(MouseButton::Left, 300, 300, start.0, start.1);
+    assert!(matches!(state.state, DrawingState::PendingTextClick { .. }));
+    state.on_mouse_motion_with_canvas(350, 320, start.0 + 25.0, start.1 + 10.0);
+    state.on_mouse_release_with_canvas(MouseButton::Left, 350, 320, end.0, end.1);
+
+    let Shape::Freehand { points, .. } = &state.boards.active_frame().shapes.last().unwrap().shape
+    else {
+        panic!("expected a pen stroke");
+    };
+    assert_eq!(points.first(), Some(&start));
+    assert_eq!(points.last(), Some(&end));
+}

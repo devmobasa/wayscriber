@@ -78,7 +78,10 @@ fn add_active_point_shape(state: &mut InputState, kind: PointShapeKind, points: 
     let thick = state.style.current_thickness;
     match kind {
         PointShapeKind::Freehand => state.boards.active_frame_mut().add_shape(Shape::Freehand {
-            points: point_path(points),
+            points: point_path(points)
+                .iter()
+                .map(|&(x, y)| (f64::from(x), f64::from(y)))
+                .collect(),
             color,
             thick,
         }),
@@ -86,7 +89,10 @@ fn add_active_point_shape(state: &mut InputState, kind: PointShapeKind, points: 
             .boards
             .active_frame_mut()
             .add_shape(Shape::MarkerStroke {
-                points: point_path(points),
+                points: point_path(points)
+                    .iter()
+                    .map(|&(x, y)| (f64::from(x), f64::from(y)))
+                    .collect(),
                 color,
                 thick,
             }),
@@ -105,7 +111,10 @@ fn add_active_point_shape(state: &mut InputState, kind: PointShapeKind, points: 
                 .boards
                 .active_frame_mut()
                 .add_shape(Shape::FreehandPressure {
-                    points: pressure_point_path(points),
+                    points: pressure_point_path(points)
+                        .iter()
+                        .map(|&(x, y, t)| (f64::from(x), f64::from(y), t))
+                        .collect(),
                     color,
                 })
         }

@@ -245,7 +245,8 @@ internal static class DevelopmentCommands
 
             var combinedOutput = result.StandardOutput + result.StandardError;
             foreach ( var marker in new[] { "EXECUTED: GTK focus and slider assertions", "EXECUTED: GTK widget contract assertions",
-                "EXECUTED: GTK native popup presentation regression", "EXECUTED: GTK native menu presentation assertions" } )
+                "EXECUTED: GTK native popup presentation regression", "EXECUTED: GTK native menu presentation assertions",
+                "EXECUTED: GTK Pen feel fractional-scale render assertions" } )
             {
                 if ( !combinedOutput.Contains( marker, StringComparison.Ordinal ) )
                 {

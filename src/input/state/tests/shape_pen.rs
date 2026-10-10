@@ -271,7 +271,10 @@ fn first_undo_turns_a_recognized_shape_back_into_its_ink() {
     let Shape::Freehand { points, .. } = &state.boards.active_frame().shapes[0].shape else {
         panic!("the ink comes back as a freehand stroke");
     };
-    assert_eq!(points.first(), Some(&RECTANGLE[0]));
+    assert_eq!(
+        points.first(),
+        Some(&(f64::from(RECTANGLE[0].0), f64::from(RECTANGLE[0].1)))
+    );
 
     run_action(&mut state, Action::Undo);
     assert_eq!(kind(&state), None);

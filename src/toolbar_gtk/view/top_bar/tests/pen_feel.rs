@@ -220,7 +220,18 @@ fn assert_pen_feel_section(
         "{key} hint"
     );
 
-    let mut widths = 0;
+    let zero: gtk4::Button = named(content, &section.meter.zero.id);
+    assert!(zero.has_css_class("meter-dot"));
+    zero.emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("one-click zero"),
+        GtkToolbarFeedback::Event {
+            event: section.setting.event(0),
+            rebind_requested: false,
+        }
+    );
+    let mut widths = zero.width_request();
     for segment in &section.meter.segments {
         let bar: gtk4::Button = named(content, &segment.id);
         assert!(bar.has_css_class("meter-bar"), "{}", segment.id);

@@ -115,7 +115,7 @@ impl WaylandState {
 
         let screen_x = event.position.0.round() as i32;
         let screen_y = event.position.1.round() as i32;
-        let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+        let (wx, wy) = self.canvas_world_coords_precise(event.position.0, event.position.1);
         self.pointer.route_canvas_press(
             &mut self.input_state,
             crate::input::state::InputTextResources {
@@ -124,7 +124,8 @@ impl WaylandState {
             },
             button,
             mb,
-            [screen_x, screen_y, wx, wy],
+            (screen_x, screen_y),
+            (wx, wy),
         );
         self.pointer.reconcile_contacts(
             &self.input_state,

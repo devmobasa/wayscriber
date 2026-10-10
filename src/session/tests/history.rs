@@ -212,7 +212,7 @@ fn moved_multi_selection_with_history_survives_save_restore() {
     let mut input = dummy_input_state();
     input.update_screen_dimensions(400, 300);
     let first = input.boards.active_frame_mut().add_shape(Shape::Freehand {
-        points: vec![(10, 10), (20, 20)],
+        points: vec![(10.0, 10.0), (20.0, 20.0)],
         color: Color {
             r: 1.0,
             g: 0.0,
@@ -222,7 +222,7 @@ fn moved_multi_selection_with_history_survives_save_restore() {
         thick: 3.0,
     });
     let second = input.boards.active_frame_mut().add_shape(Shape::Freehand {
-        points: vec![(40, 40), (50, 50)],
+        points: vec![(40.0, 40.0), (50.0, 50.0)],
         color: Color {
             r: 0.0,
             g: 0.0,
@@ -237,11 +237,11 @@ fn moved_multi_selection_with_history_survives_save_restore() {
     assert_eq!(input.boards.active_frame().undo_stack_len(), 1);
     assert_eq!(
         freehand_points(input.boards.active_frame(), first),
-        vec![(35, 20), (45, 30)]
+        vec![(35.0, 20.0), (45.0, 30.0)]
     );
     assert_eq!(
         freehand_points(input.boards.active_frame(), second),
-        vec![(65, 50), (75, 60)]
+        vec![(65.0, 50.0), (75.0, 60.0)]
     );
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
@@ -259,15 +259,27 @@ fn moved_multi_selection_with_history_survives_save_restore() {
     restored.switch_board(BOARD_ID_TRANSPARENT);
     let frame = restored.boards.active_frame_mut();
     assert_eq!(frame.undo_stack_len(), 1);
-    assert_eq!(freehand_points(frame, first), vec![(35, 20), (45, 30)]);
-    assert_eq!(freehand_points(frame, second), vec![(65, 50), (75, 60)]);
+    assert_eq!(
+        freehand_points(frame, first),
+        vec![(35.0, 20.0), (45.0, 30.0)]
+    );
+    assert_eq!(
+        freehand_points(frame, second),
+        vec![(65.0, 50.0), (75.0, 60.0)]
+    );
 
     frame.undo_last().expect("compound undo should restore");
-    assert_eq!(freehand_points(frame, first), vec![(10, 10), (20, 20)]);
-    assert_eq!(freehand_points(frame, second), vec![(40, 40), (50, 50)]);
+    assert_eq!(
+        freehand_points(frame, first),
+        vec![(10.0, 10.0), (20.0, 20.0)]
+    );
+    assert_eq!(
+        freehand_points(frame, second),
+        vec![(40.0, 40.0), (50.0, 50.0)]
+    );
 }
 
-fn freehand_points(frame: &crate::draw::Frame, id: crate::draw::ShapeId) -> Vec<(i32, i32)> {
+fn freehand_points(frame: &crate::draw::Frame, id: crate::draw::ShapeId) -> Vec<(f64, f64)> {
     let shape = frame.shape(id).expect("shape exists");
     match &shape.shape {
         Shape::Freehand { points, .. } => points.clone(),

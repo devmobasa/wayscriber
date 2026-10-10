@@ -740,7 +740,7 @@ fn a_marker_keeps_its_opacity_so_its_own_hue_is_a_quiet_no_op() {
         .boards
         .active_frame_mut()
         .add_shape(Shape::MarkerStroke {
-            points: vec![(100, 100), (200, 120)],
+            points: vec![(100.0, 100.0), (200.0, 120.0)],
             color: Color {
                 a: 0.3,
                 ..PALETTE_RED
@@ -845,7 +845,7 @@ fn stepping_a_marker_skips_the_opacity_variant_it_cannot_take() {
         .boards
         .active_frame_mut()
         .add_shape(Shape::MarkerStroke {
-            points: vec![(100, 100), (200, 120)],
+            points: vec![(100.0, 100.0), (200.0, 120.0)],
             color: Color {
                 a: 0.3,
                 ..PALETTE_RED
@@ -971,7 +971,7 @@ fn the_opacity_row_steps_by_five_percent_and_a_marker_stays_translucent() {
         .boards
         .active_frame_mut()
         .add_shape(Shape::MarkerStroke {
-            points: vec![(100, 100), (200, 120)],
+            points: vec![(100.0, 100.0), (200.0, 120.0)],
             color: Color {
                 a: 0.85,
                 ..PALETTE_RED

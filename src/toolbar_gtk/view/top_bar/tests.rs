@@ -9,6 +9,7 @@ mod gtk_style_widgets;
 mod interactions;
 mod pane_popovers;
 mod pen_feel;
+mod pen_feel_render;
 mod structure;
 mod toolbar_popovers;
 mod widget_support;

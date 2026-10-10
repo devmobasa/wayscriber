@@ -42,8 +42,8 @@ impl InputState {
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        canvas_x: impl Into<f64>,
+        canvas_y: impl Into<f64>,
     ) {
         let measurer = crate::draw::TextMeasurer::default();
         let ui_engine = crate::ui_text::UiTextEngine::default();
@@ -66,8 +66,8 @@ impl InputState {
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        canvas_x: impl Into<f64>,
+        canvas_y: impl Into<f64>,
     ) {
         let points = PointerPoints::new(
             ScreenPoint::new(screen_x, screen_y),

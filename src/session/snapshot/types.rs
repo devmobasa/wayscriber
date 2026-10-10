@@ -5,7 +5,7 @@ use crate::draw::{
 use crate::input::{DrawingStyle, EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
-pub(super) const CURRENT_VERSION: u32 = 7;
+pub(super) const CURRENT_VERSION: u32 = 8;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]

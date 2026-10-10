@@ -7,6 +7,7 @@ mod actions;
 mod arrow_style_preview;
 mod controls;
 mod history;
+mod meter_dot;
 mod opacity_preview;
 mod security;
 mod slider_ticks;
@@ -23,6 +24,7 @@ pub use tools::*;
 pub use zoom::*;
 
 pub(crate) use arrow_style_preview::draw_arrow_style_preview;
+pub(crate) use meter_dot::draw_meter_dot;
 pub(crate) use opacity_preview::{draw_opacity_swatch, draw_opacity_track};
 pub(crate) use slider_ticks::draw_slider_ticks;
 pub(crate) use smoothing_preview::draw_smoothing_preview;

@@ -131,7 +131,9 @@ fn limited_history_copy_cost() {
     use std::{hint::black_box, time::Instant};
     let mut frame = Frame::new();
     let shape = Shape::Freehand {
-        points: (0..4096).map(|i| (i, i % 100)).collect(),
+        points: (0..4096)
+            .map(|i| (f64::from(i), f64::from(i % 100)))
+            .collect(),
         color: BLACK,
         thick: 2.0,
     };

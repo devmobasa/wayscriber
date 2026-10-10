@@ -75,6 +75,7 @@ pub(crate) enum KeyboardSideEffect {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoRouteReason {
+    InvalidPointerPosition,
     NoPointerBinding,
     NoActiveInteraction,
     NonLeftReleaseWithoutActiveDrag,

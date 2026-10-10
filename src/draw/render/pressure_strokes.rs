@@ -63,7 +63,7 @@ impl PressureStrokeSegment {
 }
 
 fn pressure_stroke_samples(
-    points: &[(i32, i32)],
+    points: &[(f64, f64)],
     thicknesses: &[f32],
 ) -> Vec<PressureStrokeSample> {
     let len = points.len().min(thicknesses.len());
@@ -77,7 +77,7 @@ fn pressure_stroke_samples(
 }
 
 fn packed_pressure_stroke_samples(
-    points: &[(i32, i32, f32)],
+    points: &[(f64, f64, f32)],
     thickness_delta: f32,
 ) -> Vec<PressureStrokeSample> {
     pressure_stroke_samples_from_iter(
@@ -89,7 +89,7 @@ fn packed_pressure_stroke_samples(
 }
 
 fn pressure_stroke_samples_from_iter(
-    points: impl Iterator<Item = (i32, i32, f32)>,
+    points: impl Iterator<Item = (f64, f64, f32)>,
     capacity: usize,
 ) -> Vec<PressureStrokeSample> {
     let mut samples = Vec::with_capacity(capacity);
@@ -97,8 +97,8 @@ fn pressure_stroke_samples_from_iter(
     for (x, y, width) in points {
         let width = f64::from(width).max(PRESSURE_STROKE_MIN_WIDTH);
         let current = PressureStrokeSample {
-            x: x as f64,
-            y: y as f64,
+            x,
+            y,
             radius: width / 2.0,
         };
 
@@ -133,7 +133,7 @@ fn pressure_stroke_samples_from_iter(
 
 #[cfg(test)]
 fn pressure_stroke_segments(
-    points: &[(i32, i32)],
+    points: &[(f64, f64)],
     thicknesses: &[f32],
 ) -> Vec<PressureStrokeSegment> {
     let samples = pressure_stroke_samples(points, thicknesses);
@@ -185,7 +185,7 @@ fn fill_pressure_geometry(ctx: &cairo::Context, samples: &[PressureStrokeSample]
 }
 
 fn pressure_stroke_preview_samples(
-    points: &[(i32, i32)],
+    points: &[(f64, f64)],
     thicknesses: &[f32],
 ) -> Vec<PressureStrokeSample> {
     let len = points.len().min(thicknesses.len());
@@ -195,8 +195,8 @@ fn pressure_stroke_preview_samples(
         let (x, y) = points[i];
         let width = (thicknesses[i] as f64).max(PRESSURE_STROKE_MIN_WIDTH);
         samples.push(PressureStrokeSample {
-            x: x as f64,
-            y: y as f64,
+            x,
+            y,
             radius: width / 2.0,
         });
     }
@@ -210,7 +210,7 @@ fn pressure_stroke_preview_samples(
 /// the stylus is still down. Committed pressure strokes use the mask renderer.
 pub(crate) fn render_freehand_pressure_preview_borrowed(
     ctx: &cairo::Context,
-    points: &[(i32, i32)],
+    points: &[(f64, f64)],
     thicknesses: &[f32],
     color: Color,
 ) {
@@ -241,7 +241,7 @@ pub(crate) fn render_freehand_pressure_preview_borrowed(
 /// Render a variable-thickness freehand stroke (pressure sensitive).
 pub fn render_freehand_pressure_borrowed(
     ctx: &cairo::Context,
-    points: &[(i32, i32)],
+    points: &[(f64, f64)],
     thicknesses: &[f32],
     color: Color,
 ) {
@@ -257,7 +257,7 @@ pub fn render_freehand_pressure_borrowed(
 /// the stored stroke into parallel coordinate and thickness buffers.
 pub(crate) fn render_packed_freehand_pressure_borrowed(
     ctx: &cairo::Context,
-    points: &[(i32, i32, f32)],
+    points: &[(f64, f64, f32)],
     thickness_delta: f32,
     color: Color,
 ) {
@@ -331,8 +331,8 @@ mod tests {
 
     #[test]
     fn packed_samples_match_parallel_pressure_buffers() {
-        let packed = [(10, 20, 4.0), (30, 40, 8.0), (50, 25, 2.0)];
-        let points = [(10, 20), (30, 40), (50, 25)];
+        let packed = [(10.0, 20.0, 4.0), (30.0, 40.0, 8.0), (50.0, 25.0, 2.0)];
+        let points = [(10.0, 20.0), (30.0, 40.0), (50.0, 25.0)];
         let thicknesses = [4.0, 8.0, 2.0];
 
         assert_eq!(
@@ -343,8 +343,8 @@ mod tests {
 
     #[test]
     fn packed_samples_apply_selection_thickness_delta() {
-        let packed = [(10, 20, 4.0), (30, 40, 8.0)];
-        let points = [(10, 20), (30, 40)];
+        let packed = [(10.0, 20.0, 4.0), (30.0, 40.0, 8.0)];
+        let points = [(10.0, 20.0), (30.0, 40.0)];
         let thicknesses = [8.0, 12.0];
 
         assert_eq!(
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn pressure_stroke_preview_renders_nonblank_output() {
-        let points = [(20, 140), (100, 50), (220, 50), (320, 110)];
+        let points = [(20.0, 140.0), (100.0, 50.0), (220.0, 50.0), (320.0, 110.0)];
         let thicknesses = [32.0, 18.0, 5.0, 1.0];
         let (mut surface, ctx) = surface_with_context(360, 180);
 
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn pressure_stroke_preview_covers_backtracking_turnaround() {
-        let points = [(40, 80), (160, 80), (100, 80)];
+        let points = [(40.0, 80.0), (160.0, 80.0), (100.0, 80.0)];
         let thicknesses = [30.0, 30.0, 30.0];
         let (mut surface, ctx) = surface_with_context(200, 140);
 
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn pressure_stroke_preview_translucent_overlap_applies_alpha_once() {
-        let points = [(40, 80), (160, 80), (100, 80)];
+        let points = [(40.0, 80.0), (160.0, 80.0), (100.0, 80.0)];
         let thicknesses = [30.0, 30.0, 30.0];
         let expected_alpha = (0.35_f64 * 255.0).round() as i32;
         let (mut surface, ctx) = surface_with_context(200, 140);
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn pressure_stroke_sparse_drop_geometry_is_valid_and_centerline_covered() {
-        let points = [(20, 140), (100, 50), (220, 50), (320, 110)];
+        let points = [(20.0, 140.0), (100.0, 50.0), (220.0, 50.0), (320.0, 110.0)];
         let thicknesses = [32.0, 18.0, 5.0, 1.0];
         let segments = pressure_stroke_segments(&points, &thicknesses);
         assert!(segments.len() > points.len() - 1);
@@ -454,10 +454,10 @@ mod tests {
             let (x1, y1) = window[1];
             for step in 1..20 {
                 let t = step as f64 / 20.0;
-                let x = (x0 as f64 + (x1 - x0) as f64 * t).round() as i32;
-                let y = (y0 as f64 + (y1 - y0) as f64 * t).round() as i32;
+                let x = x0 + (x1 - x0) * t;
+                let y = y0 + (y1 - y0) * t;
                 assert!(
-                    alpha_at(&mut surface, x, y) > 160,
+                    alpha_at(&mut surface, x.round() as i32, y.round() as i32) > 160,
                     "expected pressure stroke to cover centerline at ({x}, {y})"
                 );
             }
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn pressure_stroke_translucent_overlap_applies_alpha_once() {
-        let points = [(40, 80), (160, 80), (40, 80)];
+        let points = [(40.0, 80.0), (160.0, 80.0), (40.0, 80.0)];
         let thicknesses = [30.0, 30.0, 30.0];
         let expected_alpha = (0.35_f64 * 255.0).round() as i32;
 

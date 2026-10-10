@@ -41,7 +41,7 @@ impl LaserStyle {
     }
 
     /// Bounds of everything [`render_laser_stroke`] paints for `points`.
-    pub(crate) fn bounds(self, points: &[(i32, i32)]) -> Option<Rect> {
+    pub(crate) fn bounds<T: Copy + Into<f64>>(self, points: &[(T, T)]) -> Option<Rect> {
         bounding_box_for_points(points, self.glow_width())
     }
 
@@ -72,9 +72,9 @@ impl LaserStyle {
 /// near-white centre line, all scaled by `opacity`.
 ///
 /// A single point paints a round dot, so a tap still shows where it landed.
-pub(crate) fn render_laser_stroke(
+pub(crate) fn render_laser_stroke<T: Copy + Into<f64>>(
     ctx: &cairo::Context,
-    points: &[(i32, i32)],
+    points: &[(T, T)],
     style: LaserStyle,
     opacity: f64,
 ) {
@@ -115,17 +115,17 @@ pub(crate) fn render_laser_stroke(
     let _ = ctx.restore();
 }
 
-fn trace_path(ctx: &cairo::Context, points: &[(i32, i32)]) {
+fn trace_path<T: Copy + Into<f64>>(ctx: &cairo::Context, points: &[(T, T)]) {
     let (x0, y0) = points[0];
     ctx.new_path();
-    ctx.move_to(f64::from(x0), f64::from(y0));
+    ctx.move_to(x0.into(), y0.into());
     if points.len() == 1 {
         // A zero-length segment with round caps is how Cairo paints a dot.
-        ctx.line_to(f64::from(x0), f64::from(y0));
+        ctx.line_to(x0.into(), y0.into());
         return;
     }
     for &(x, y) in &points[1..] {
-        ctx.line_to(f64::from(x), f64::from(y));
+        ctx.line_to(x.into(), y.into());
     }
 }
 

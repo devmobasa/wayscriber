@@ -57,6 +57,7 @@ pub(crate) fn handle_active_motion(
     if let DrawingState::PendingTextClick {
         x: start_x,
         y: start_y,
+        position,
         tool,
         ..
     } = &state.state
@@ -70,10 +71,10 @@ pub(crate) fn handle_active_motion(
                 ToolPressBehavior::StartDrawing { .. }
             ) {
                 let drawing_thickness = state.thickness_for_tool(tool);
-                let mut points = vec![(*start_x, *start_y)];
+                let mut points = vec![*position];
                 let mut point_thicknesses = vec![drawing_thickness as f32];
                 if let Some(sample_size) = motion_sample_size(state, tool) {
-                    points.push((canvas.x(), canvas.y()));
+                    points.push(canvas.position());
                     point_thicknesses.push(sample_size as f32);
                 }
                 state.state = DrawingState::Drawing {
@@ -186,14 +187,23 @@ pub(crate) fn handle_drawing_or_idle_motion(
         None
     };
     if let DrawingState::Drawing {
+        tool,
         points,
         point_thicknesses,
         ..
     } = &mut state.state
     {
         if let Some(thickness) = sample_size {
-            points.push((canvas.x(), canvas.y()));
-            point_thicknesses.push(thickness as f32);
+            if !matches!(tool, Tool::Pen | Tool::Marker | Tool::LiveShape)
+                || crate::draw::shape::keep_stroke_sample(points, canvas.position())
+            {
+                points.push(canvas.position());
+                point_thicknesses.push(thickness as f32);
+            } else if let Some(last) = point_thicknesses.last_mut() {
+                // Pressure-only tablet frames still contribute their peak,
+                // without adding coincident positions to the smoothing filter.
+                *last = last.max(thickness as f32);
+            }
         }
         drawing = true;
     }

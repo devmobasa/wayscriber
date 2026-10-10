@@ -202,6 +202,8 @@ pub enum WidgetKind {
     /// painter draws a slimmer rounded bar centered in it, accent-filled at
     /// or below the current level and track-colored above it.
     MeterBar { filled: bool, enabled: bool },
+    /// Accent zero-level dot with a hover ring while another level is active.
+    MeterDot { active: bool, enabled: bool },
     /// The Pen feel panel's live smoothing preview at `level`, drawn by the
     /// painter both frontends share (`toolbar_icons::draw_smoothing_preview`).
     SmoothingPreview { level: u8 },

@@ -198,7 +198,8 @@ pub enum Shape {
     /// Freehand drawing - polyline connecting mouse drag points
     Freehand {
         /// Sequence of (x, y) coordinates traced by the mouse
-        points: Vec<(i32, i32)>,
+        #[serde(with = "super::stroke_points")]
+        points: Vec<(f64, f64)>,
         /// Stroke color
         color: Color,
         /// Line thickness in pixels
@@ -207,7 +208,11 @@ pub enum Shape {
     /// Freehand drawing with variable thickness (pressure sensitivity)
     FreehandPressure {
         /// Sequence of (x, y, thickness) coordinates
-        points: Vec<(i32, i32, f32)>,
+        #[serde(
+            serialize_with = "super::stroke_points::serialize_pressure",
+            deserialize_with = "super::stroke_points::deserialize_pressure"
+        )]
+        points: Vec<(f64, f64, f32)>,
         /// Stroke color
         color: Color,
     },
@@ -418,7 +423,8 @@ pub enum Shape {
     /// Highlighter-style stroke with translucent ink
     MarkerStroke {
         /// Sequence of (x, y) coordinates traced by the marker
-        points: Vec<(i32, i32)>,
+        #[serde(with = "super::stroke_points")]
+        points: Vec<(f64, f64)>,
         /// Stroke color (alpha controls ink intensity)
         color: Color,
         /// Stroke thickness in pixels

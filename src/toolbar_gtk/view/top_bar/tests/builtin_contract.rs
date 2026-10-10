@@ -252,6 +252,7 @@ pub(super) enum StylePillNodeExpectation {
     Caption(model::StylePillControl),
     /// One interactive bar of a level meter.
     MeterBar(model::StylePillControl, usize),
+    MeterDot(model::StylePillControl),
     /// The arrow style chip's drawn glyph and its name (decor laid over the
     /// chip's button body).
     ArrowChipGlyph,
@@ -272,6 +273,10 @@ fn expected_style_pill_nodes(
                 format!("{id}.caption"),
                 StylePillNodeExpectation::Caption(control),
             ));
+            nodes.push((
+                meter.zero.id.clone(),
+                StylePillNodeExpectation::MeterDot(control),
+            ));
             for (index, segment) in meter.segments.iter().enumerate() {
                 nodes.push((
                     segment.id.clone(),
@@ -285,6 +290,12 @@ fn expected_style_pill_nodes(
                 nodes.push((
                     format!("{id}.caption"),
                     StylePillNodeExpectation::Caption(control),
+                ));
+            }
+            if let Some(setting) = control.stroke_setting() {
+                nodes.push((
+                    setting.zero_segment(snapshot, &id).id,
+                    StylePillNodeExpectation::MeterDot(control),
                 ));
             }
             nodes.push((

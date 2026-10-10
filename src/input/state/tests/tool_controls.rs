@@ -27,7 +27,7 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
         tool: Tool::Pen,
         start_x: 10,
         start_y: 20,
-        points: vec![(10, 20), (12, 24)],
+        points: vec![(10.0, 20.0), (12.0, 24.0)],
         point_thicknesses: vec![3.0, 3.5],
     };
 

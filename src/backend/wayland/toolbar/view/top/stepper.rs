@@ -17,7 +17,15 @@ pub(super) fn style_stepper_width(control: model::StylePillControl) -> f64 {
     } else {
         0.0
     };
-    caption + ToolbarLayoutSpec::TOP_STYLE_STEP_W * 2.0 + ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W
+    let zero = if control.stroke_setting().is_some() {
+        model::METER_ZERO_SLOT_W
+    } else {
+        0.0
+    };
+    caption
+        + zero
+        + ToolbarLayoutSpec::TOP_STYLE_STEP_W * 2.0
+        + ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W
 }
 
 /// Push one stepper's nodes starting at `x` on the row whose top is `y`,
@@ -50,6 +58,20 @@ pub(super) fn push_style_stepper(
             WidgetKind::Label(LabelSpec::new(caption, CAPTION_FONT_SIZE, false).caption()),
         ));
         left += caption_w;
+    }
+
+    if let Some(setting) = control.stroke_setting() {
+        let zero = setting.zero_segment(snapshot, &id);
+        nodes.push(WidgetNode::new(
+            zero.id,
+            (left, y, model::METER_ZERO_SLOT_W, row_h),
+            WidgetKind::MeterDot {
+                active: setting.level(snapshot) == 0,
+                enabled,
+            },
+            enabled.then(|| Interaction::click(zero.event, Some(zero.tooltip))),
+        ));
+        left += model::METER_ZERO_SLOT_W;
     }
 
     nodes.push(WidgetNode::new(

@@ -411,7 +411,7 @@ mod tests {
             wrap_width: None,
         };
         let marker = Shape::MarkerStroke {
-            points: vec![(0, 0), (5, 5)],
+            points: vec![(0.0, 0.0), (5.0, 5.0)],
             color: Color {
                 r: 1.0,
                 g: 0.5,

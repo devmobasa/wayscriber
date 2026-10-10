@@ -14,7 +14,7 @@ const FINISHED_PATH_DAMAGE_MAX_SPAN: f64 = 128.0;
 pub(super) struct DrawingRelease {
     pub(super) start: (i32, i32),
     pub(super) end: (i32, i32),
-    pub(super) points: Vec<(i32, i32)>,
+    pub(super) points: Vec<(f64, f64)>,
     pub(super) point_thicknesses: Vec<f32>,
 }
 
@@ -254,8 +254,8 @@ fn follow_committed_stroke(
 ///
 /// The result is inflated the way the marker's own damage is, so one
 /// calculation covers the widest preview any path tool draws.
-fn raw_preview_damage_regions(
-    points: &[(i32, i32)],
+fn raw_preview_damage_regions<T: Copy + Into<f64>>(
+    points: &[(T, T)],
     thickness: f64,
     point_thicknesses: &[f32],
 ) -> Option<Vec<Rect>> {
@@ -306,8 +306,8 @@ fn finished_path_damage_regions(shape: &Shape, fallback: Option<Rect>) -> Option
     }
 }
 
-fn split_path_damage_regions(
-    points: &[(i32, i32)],
+fn split_path_damage_regions<T: Copy + Into<f64>>(
+    points: &[(T, T)],
     stroke_width: f64,
     fallback: Rect,
 ) -> Vec<Rect> {
@@ -317,7 +317,12 @@ fn split_path_damage_regions(
 
     let mut regions = Vec::new();
     for segment in points.windows(2) {
-        append_segment_damage_regions(segment[0], segment[1], stroke_width, &mut regions);
+        append_segment_damage_regions(
+            (segment[0].0.into(), segment[0].1.into()),
+            (segment[1].0.into(), segment[1].1.into()),
+            stroke_width,
+            &mut regions,
+        );
     }
 
     if regions.is_empty() {
@@ -328,8 +333,8 @@ fn split_path_damage_regions(
 }
 
 fn append_segment_damage_regions(
-    start: (i32, i32),
-    end: (i32, i32),
+    start: (f64, f64),
+    end: (f64, f64),
     stroke_width: f64,
     regions: &mut Vec<Rect>,
 ) {
@@ -340,22 +345,16 @@ fn append_segment_damage_regions(
         return;
     }
 
-    let dx = f64::from(end.0) - f64::from(start.0);
-    let dy = f64::from(end.1) - f64::from(start.1);
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
     let steps = (dx.abs().max(dy.abs()) / FINISHED_PATH_DAMAGE_MAX_SPAN).ceil() as usize;
     let steps = steps.max(1);
 
     for step in 0..steps {
         let t0 = step as f64 / steps as f64;
         let t1 = (step + 1) as f64 / steps as f64;
-        let p0 = (
-            (f64::from(start.0) + dx * t0).round() as i32,
-            (f64::from(start.1) + dy * t0).round() as i32,
-        );
-        let p1 = (
-            (f64::from(start.0) + dx * t1).round() as i32,
-            (f64::from(start.1) + dy * t1).round() as i32,
-        );
+        let p0 = (start.0 + dx * t0, start.1 + dy * t0);
+        let p1 = (start.0 + dx * t1, start.1 + dy * t1);
         if let Some(region) = bounding_box_for_points(&[p0, p1], stroke_width) {
             regions.push(region);
         }
@@ -400,7 +399,7 @@ mod tests {
 
     /// Draw `path` with `tool` at the state's current smoothing level and return
     /// the points the committed shape ended up with.
-    fn drawn_points(level: u8, tool: Tool) -> Vec<(i32, i32)> {
+    fn drawn_points(level: u8, tool: Tool) -> Vec<(f64, f64)> {
         let mut state = make_test_input_state();
         state.set_pen_smoothing(level);
         state.set_tool_override(Some(tool));
@@ -433,8 +432,8 @@ mod tests {
         let raw = drawn_points(0, Tool::Pen);
         let smoothed = drawn_points(4, Tool::Pen);
 
-        let raw_spike = raw.iter().map(|&(_, y)| y).max().unwrap();
-        let smoothed_spike = smoothed.iter().map(|&(_, y)| y).max().unwrap();
+        let raw_spike = raw.iter().map(|&(_, y)| y).reduce(f64::max).unwrap();
+        let smoothed_spike = smoothed.iter().map(|&(_, y)| y).reduce(f64::max).unwrap();
         assert!(
             smoothed_spike < raw_spike,
             "level 4 must pull the spike down from {raw_spike}, got {smoothed_spike}"
@@ -443,7 +442,13 @@ mod tests {
 
     #[test]
     fn level_zero_commits_the_exact_path_the_pointer_drew() {
-        assert_eq!(drawn_points(0, Tool::Pen), shaky_path());
+        assert_eq!(
+            drawn_points(0, Tool::Pen),
+            shaky_path()
+                .iter()
+                .map(|&(x, y)| (f64::from(x), f64::from(y)))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -451,8 +456,14 @@ mod tests {
         let path = shaky_path();
         let smoothed = drawn_points(6, Tool::Pen);
 
-        assert_eq!(smoothed.first(), path.first());
-        assert_eq!(smoothed.last(), path.last());
+        assert_eq!(
+            smoothed.first().copied(),
+            path.first().map(|&(x, y)| (f64::from(x), f64::from(y)))
+        );
+        assert_eq!(
+            smoothed.last().copied(),
+            path.last().map(|&(x, y)| (f64::from(x), f64::from(y)))
+        );
     }
 
     /// Draw the shaky path at `level` and return the damage the release left.

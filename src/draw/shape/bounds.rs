@@ -7,43 +7,52 @@ use super::types::{ArrowLabel, ArrowStyle};
 const MIN_COORDINATE: i64 = i32::MIN as i64;
 const MAX_COORDINATE_EXCLUSIVE: i64 = i32::MAX as i64 + 1;
 
-pub(crate) fn bounding_box_for_points(points: &[(i32, i32)], thick: f64) -> Option<Rect> {
-    if points.is_empty() {
-        return None;
-    }
-    let mut min_x = points[0].0;
-    let mut max_x = points[0].0;
-    let mut min_y = points[0].1;
-    let mut max_y = points[0].1;
-
-    for &(x, y) in &points[1..] {
-        min_x = min_x.min(x);
-        max_x = max_x.max(x);
-        min_y = min_y.min(y);
-        max_y = max_y.max(y);
-    }
-
-    padded_extrema_rect(min_x, min_y, max_x, max_y, stroke_padding(thick))
+pub(crate) fn bounding_box_for_points<T: Copy + Into<f64>>(
+    points: &[(T, T)],
+    thick: f64,
+) -> Option<Rect> {
+    bounding_box_for_positions(points.iter().map(|&(x, y)| (x.into(), y.into())), thick)
 }
 
-pub(super) fn bounding_box_for_pressure_points(points: &[(i32, i32, f32)]) -> Option<Rect> {
-    let &(first_x, first_y, _) = points.first()?;
-    let mut min_x = first_x;
-    let mut max_x = first_x;
-    let mut min_y = first_y;
-    let mut max_y = first_y;
-    let mut max_thick = 0.0f32;
+fn bounding_box_for_positions(
+    mut points: impl Iterator<Item = (f64, f64)>,
+    thick: f64,
+) -> Option<Rect> {
+    let (x, y) = points.next()?;
+    if !x.is_finite() || !y.is_finite() {
+        return None;
+    }
 
-    for &(x, y, thickness) in points {
+    let (mut min_x, mut max_x) = (x, x);
+    let (mut min_y, mut max_y) = (y, y);
+    for (x, y) in points {
+        if !x.is_finite() || !y.is_finite() {
+            return None;
+        }
         min_x = min_x.min(x);
         max_x = max_x.max(x);
         min_y = min_y.min(y);
         max_y = max_y.max(y);
-        max_thick = max_thick.max(thickness);
     }
 
-    let padding = i64::from((max_thick as i32 / 2).max(1));
-    padded_extrema_rect(min_x, min_y, max_x, max_y, padding)
+    let pad = stroke_padding(thick) as f64;
+    let extrema = [
+        (min_x - pad).floor(),
+        (min_y - pad).floor(),
+        (max_x + pad).ceil(),
+        (max_y + pad).ceil(),
+    ];
+    ensure_positive_rect_i64(
+        extrema[0] as i64,
+        extrema[1] as i64,
+        extrema[2] as i64,
+        extrema[3] as i64,
+    )
+}
+
+pub(super) fn bounding_box_for_pressure_points(points: &[(f64, f64, f32)]) -> Option<Rect> {
+    let max_thick = points.iter().map(|p| p.2).fold(0.0_f32, f32::max);
+    bounding_box_for_positions(points.iter().map(|&(x, y, _)| (x, y)), f64::from(max_thick))
 }
 
 pub(crate) fn bounding_box_for_line(
@@ -210,24 +219,11 @@ pub(crate) fn bounding_box_for_arrow_with(
     )
 }
 
-pub(crate) fn bounding_box_for_eraser(points: &[(i32, i32)], diameter: f64) -> Option<Rect> {
-    if points.is_empty() {
-        return None;
-    }
-    let padding = stroke_padding(diameter.max(1.0));
-    let mut min_x = points[0].0;
-    let mut max_x = points[0].0;
-    let mut min_y = points[0].1;
-    let mut max_y = points[0].1;
-
-    for &(x, y) in &points[1..] {
-        min_x = min_x.min(x);
-        max_x = max_x.max(x);
-        min_y = min_y.min(y);
-        max_y = max_y.max(y);
-    }
-
-    padded_extrema_rect(min_x, min_y, max_x, max_y, padding)
+pub(crate) fn bounding_box_for_eraser<T: Copy + Into<f64>>(
+    points: &[(T, T)],
+    diameter: f64,
+) -> Option<Rect> {
+    bounding_box_for_points(points, diameter.max(1.0))
 }
 
 fn stroke_padding(thick: f64) -> i64 {
@@ -320,7 +316,7 @@ mod tests {
 
     #[test]
     fn bounding_box_for_points_returns_none_for_empty_input() {
-        assert_eq!(bounding_box_for_points(&[], 2.0), None);
+        assert_eq!(bounding_box_for_points::<f64>(&[], 2.0), None);
     }
 
     #[test]

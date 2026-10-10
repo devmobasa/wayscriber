@@ -186,6 +186,66 @@ pub(super) fn assert_style_pill_interactions(regular: &ToolbarSnapshot) {
     assert_eraser_pill_interactions(&mut top, regular, &rx);
     assert_pen_pill_interactions(&mut top, regular, &rx);
     assert_shape_pill_interaction(&mut top, regular, &rx);
+    assert_inline_stroke_level_clicks(&mut top, regular, &rx);
+}
+
+fn assert_inline_stroke_level_clicks(
+    top: &mut TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    use crate::config::ToolbarStrokeControls::{Meter, Stepper};
+
+    for (presentation, controls) in [
+        (
+            Meter,
+            [
+                model::StylePillControl::PenSmoothingMeter,
+                model::StylePillControl::ShapeSensitivityMeter,
+            ],
+        ),
+        (
+            Stepper,
+            [
+                model::StylePillControl::PenSmoothingStepper,
+                model::StylePillControl::ShapeSensitivityStepper,
+            ],
+        ),
+    ] {
+        let mut snapshot = style_pill_tool_snapshot(regular, Tool::LiveShape);
+        snapshot.stroke_controls = presentation;
+        snapshot.pen_smoothing = 3;
+        snapshot.shape_recognition_sensitivity = 3;
+        top.build_strip(
+            &snapshot,
+            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &snapshot),
+        );
+        for control in controls {
+            let setting = control.stroke_setting().unwrap();
+            let levels = if presentation == Meter {
+                vec![0, 3, setting.max()]
+            } else {
+                vec![0]
+            };
+            for level in levels {
+                let id = format!("{}.level-{level}", control.id());
+                pill_widget(top, &id)
+                    .downcast::<gtk4::Button>()
+                    .unwrap()
+                    .emit_clicked();
+                assert_eq!(
+                    rx.recv_timeout(Duration::from_secs(1))
+                        .expect("inline level click"),
+                    GtkToolbarFeedback::Event {
+                        event: setting.event(level),
+                        rebind_requested: false,
+                    },
+                    "{presentation:?} {id} selects its exact level"
+                );
+            }
+        }
+        detach_test_popovers(top);
+    }
 }
 
 fn assert_eraser_pill_interactions(

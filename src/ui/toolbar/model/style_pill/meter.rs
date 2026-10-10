@@ -3,8 +3,8 @@
 //! A bare "− 3 +" said neither how high 3 is nor how far it goes, and the two
 //! settings run over different ranges. A meter shows both at a glance: one bar
 //! per level, filled up to the current one. Clicking a bar sets that level;
-//! clicking the highest filled bar steps one below it, so the lowest level (Off
-//! for smoothing, Precise for detection) stays one click away. The wheel steps
+//! a separate dot sets the lowest level (Off for smoothing, Precise for
+//! detection) in one click. Clicking the current level keeps it. The wheel steps
 //! one level either way, and each level has a name for tooltips and assistive
 //! tech.
 //!
@@ -13,6 +13,9 @@
 //! both read their range, level names, and events from.
 
 use super::*;
+
+/// Logical width reserved for the zero-level dot before the bars.
+pub(crate) const METER_ZERO_SLOT_W: f64 = 22.0;
 
 /// Names of pen smoothing levels 0..=6, weakest first.
 const SMOOTHING_LEVEL_NAMES: [&str; 7] = [
@@ -45,6 +48,7 @@ pub(crate) struct StylePillMeterSegment {
 pub(crate) struct StylePillMeter {
     pub(crate) level: u8,
     pub(crate) max: u8,
+    pub(crate) zero: StylePillMeterSegment,
     pub(crate) segments: Vec<StylePillMeterSegment>,
 }
 
@@ -131,7 +135,7 @@ impl StrokeSetting {
 
         let segments = (1..=max)
             .map(|bar| {
-                let target = clicked_level(level, bar);
+                let target = bar;
                 StylePillMeterSegment {
                     id: format!("{id_prefix}.level-{bar}"),
                     filled: bar <= level,
@@ -147,7 +151,26 @@ impl StrokeSetting {
         StylePillMeter {
             level,
             max,
+            zero: self.zero_segment(snapshot, id_prefix),
             segments,
+        }
+    }
+
+    pub(crate) fn zero_segment(
+        self,
+        snapshot: &ToolbarSnapshot,
+        id_prefix: &str,
+    ) -> StylePillMeterSegment {
+        StylePillMeterSegment {
+            id: format!("{id_prefix}.level-0"),
+            filled: true,
+            event: self.event(0),
+            tooltip: format!(
+                "{}: {}. Click for {}",
+                self.name(),
+                self.current_level_name(snapshot),
+                self.level_name(0)
+            ),
         }
     }
 
@@ -192,13 +215,17 @@ impl StrokeSetting {
     }
 }
 
-/// The level a click on bar `bar` (1-based) applies: that level, or one below
-/// it when the bar is already the highest filled one.
-fn clicked_level(level: u8, bar: u8) -> u8 {
-    if bar == level { bar - 1 } else { bar }
-}
-
 impl StylePillControl {
+    /// The stroke setting with a direct zero target, including steppers.
+    pub(crate) fn stroke_setting(self) -> Option<StrokeSetting> {
+        match self {
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Some(StrokeSetting::Smoothing),
+            Self::ShapeSensitivityMeter | Self::ShapeSensitivityStepper => {
+                Some(StrokeSetting::ShapeDetection)
+            }
+            _ => None,
+        }
+    }
     /// The setting an inline meter adjusts, `None` for every other control.
     pub(crate) fn meter_setting(self) -> Option<StrokeSetting> {
         match self {
@@ -271,15 +298,23 @@ mod tests {
     }
 
     #[test]
-    fn a_bar_sets_its_level_and_the_top_filled_bar_steps_one_below() {
-        let meter = StylePillControl::PenSmoothingMeter.required_meter(&snapshot(3, 3));
-
-        assert_eq!(meter.segments[4].event, ToolbarEvent::SetPenSmoothing(5));
-        assert_eq!(meter.segments[0].event, ToolbarEvent::SetPenSmoothing(1));
-        assert_eq!(meter.segments[2].event, ToolbarEvent::SetPenSmoothing(2));
-
-        let lowest = StylePillControl::PenSmoothingMeter.required_meter(&snapshot(1, 3));
-        assert_eq!(lowest.segments[0].event, ToolbarEvent::SetPenSmoothing(0));
+    fn the_dot_sets_zero_and_every_bar_sets_its_exact_level() {
+        for setting in [StrokeSetting::Smoothing, StrokeSetting::ShapeDetection] {
+            for current in 0..=setting.max() {
+                let meter = setting.meter(&snapshot(current, current), "test");
+                assert_eq!(meter.zero.event, setting.event(0));
+                assert!(meter.zero.filled, "zero is always reached");
+                assert!(
+                    meter
+                        .zero
+                        .tooltip
+                        .contains(&format!("Click for {}", setting.level_name(0)))
+                );
+                for (index, bar) in meter.segments.iter().enumerate() {
+                    assert_eq!(bar.event, setting.event(index as u8 + 1));
+                }
+            }
+        }
     }
 
     #[test]

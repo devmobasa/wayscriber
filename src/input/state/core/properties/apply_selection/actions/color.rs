@@ -252,7 +252,7 @@ mod tests {
             .boards
             .active_frame_mut()
             .add_shape(Shape::MarkerStroke {
-                points: vec![(0, 0), (10, 10)],
+                points: vec![(0.0, 0.0), (10.0, 10.0)],
                 color: Color {
                     r: 0.0,
                     g: 0.0,

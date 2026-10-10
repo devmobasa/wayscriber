@@ -134,6 +134,7 @@ impl WaylandState {
         self.pointer.set_position((x as i32, y as i32));
         self.tablet.last_pos = Some((x, y));
         let (wx, wy) = self.zoomed_world_coords(x, y);
+        let (canvas_x, canvas_y) = self.canvas_world_coords_precise(x, y);
         self.input_state.on_mouse_motion_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -141,8 +142,8 @@ impl WaylandState {
             },
             x.round() as i32,
             y.round() as i32,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.record_perf_input_sample(
             PerfInputSource::Stylus,
@@ -243,7 +244,7 @@ impl WaylandState {
         );
         let screen_x = self.pointer.position().0;
         let screen_y = self.pointer.position().1;
-        let (wx, wy) = self.zoomed_world_coords(x, y);
+        let (canvas_x, canvas_y) = self.canvas_world_coords_precise(x, y);
         self.input_state.on_mouse_press_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -252,8 +253,8 @@ impl WaylandState {
             MouseButton::Left,
             screen_x,
             screen_y,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.record_stylus_motion_thickness();
         self.input_state.needs_redraw = true;
@@ -326,7 +327,7 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return;
         }
-        let (wx, wy) = self.zoomed_world_coords(x, y);
+        let (canvas_x, canvas_y) = self.canvas_world_coords_precise(x, y);
         self.input_state.on_mouse_release_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -335,8 +336,8 @@ impl WaylandState {
             MouseButton::Left,
             screen_x,
             screen_y,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         let hover_cursor_pos = self.stylus_hover_cursor_position();
         self.mark_stylus_hover_cursor_dirty(None, hover_cursor_pos);

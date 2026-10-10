@@ -519,7 +519,7 @@ fn pressure_stroke_hit_includes_one_point_stylus_dots() {
     let dot = DrawnShape::with_metadata(
         1,
         Shape::FreehandPressure {
-            points: vec![(50, 50, 20.0)],
+            points: vec![(50.0, 50.0, 20.0)],
             color: BLACK,
         },
         0,

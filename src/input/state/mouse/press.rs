@@ -17,8 +17,7 @@ mod polygon;
 struct PressCoords {
     screen_x: i32,
     screen_y: i32,
-    canvas_x: i32,
-    canvas_y: i32,
+    canvas: CanvasPoint,
 }
 
 impl InputState {
@@ -126,8 +125,8 @@ impl InputState {
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        canvas_x: impl Into<f64>,
+        canvas_y: impl Into<f64>,
     ) {
         let measurer = crate::draw::TextMeasurer::default();
         let ui_engine = crate::ui_text::UiTextEngine::default();
@@ -150,8 +149,8 @@ impl InputState {
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        canvas_x: impl Into<f64>,
+        canvas_y: impl Into<f64>,
     ) -> super::super::interaction::RoutingOutcome {
         // Any press ends a wheel adjustment of a loupe, so the burst lands in
         // history as its own entry rather than merging with what follows.
@@ -214,10 +213,10 @@ impl InputState {
         self.update_pointer_positions(
             coords.screen_x,
             coords.screen_y,
-            coords.canvas_x,
-            coords.canvas_y,
+            coords.canvas.x(),
+            coords.canvas.y(),
         );
-        self.trigger_click_highlight(coords.canvas_x, coords.canvas_y);
+        self.trigger_click_highlight(coords.canvas.x(), coords.canvas.y());
 
         if self.handle_context_menu_press(coords.screen_x, coords.screen_y) {
             return;
@@ -230,8 +229,8 @@ impl InputState {
         if button == MouseButton::Left
             && self.handle_text_input_left_press_with(
                 measurer,
-                coords.canvas_x,
-                coords.canvas_y,
+                coords.canvas.x(),
+                coords.canvas.y(),
                 color,
             )
         {
@@ -244,14 +243,13 @@ impl InputState {
                 button,
                 tool,
                 color,
-                coords.canvas_x,
-                coords.canvas_y,
+                coords.canvas,
             ),
             DrawingState::BuildingPolygon { .. } if button == MouseButton::Left => {
                 self.handle_building_polygon_left_click_with_measurer(
                     measurer,
-                    coords.canvas_x,
-                    coords.canvas_y,
+                    coords.canvas.x(),
+                    coords.canvas.y(),
                 );
             }
             DrawingState::TextInput { .. }
@@ -421,7 +419,7 @@ impl InputState {
         tool: Tool,
         color: Option<crate::draw::Color>,
         screen: (i32, i32),
-        canvas: (i32, i32),
+        canvas: CanvasPoint,
     ) {
         self.handle_tool_button_press_with_measurer(
             measurer,
@@ -431,8 +429,7 @@ impl InputState {
             PressCoords {
                 screen_x: screen.0,
                 screen_y: screen.1,
-                canvas_x: canvas.0,
-                canvas_y: canvas.1,
+                canvas,
             },
         );
     }
@@ -443,9 +440,9 @@ impl InputState {
         button: MouseButton,
         tool: Tool,
         color: Option<crate::draw::Color>,
-        x: i32,
-        y: i32,
+        canvas: CanvasPoint,
     ) {
+        let (x, y) = (canvas.x(), canvas.y());
         let selection_click =
             self.modifiers.alt || matches!(tool.press_behavior(), ToolPressBehavior::Selection);
         let hit_id = self.hit_test_at_with(measurer, x, y);
@@ -530,6 +527,7 @@ impl InputState {
                 self.state = DrawingState::PendingTextClick {
                     x,
                     y,
+                    position: canvas.position(),
                     tool,
                     shape_id: hit_id,
                 };
@@ -601,7 +599,7 @@ impl InputState {
                     tool,
                     start_x: x,
                     start_y: y,
-                    points: vec![(x, y)],
+                    points: vec![canvas.position()],
                     point_thicknesses: vec![drawing_thickness as f32],
                 };
                 self.pointer.replace_provisional_bounds(None);

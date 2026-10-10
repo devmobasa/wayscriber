@@ -569,6 +569,14 @@ on the pointer and pays for the smoothing once, on a finished path.
 Both endpoints are pinned. A stroke starts and stops where you started and
 stopped it, at every level.
 
+Pen, Marker and Shape Pen keep fractional pointer positions. During a drag,
+samples less than 0.75 canvas units from the last kept sample are skipped (3 screen
+pixels at 4× zoom). The release position is always retained. This removes repeated
+samples from slow drags. Level 0 keeps those sampled positions unchanged.
+Levels 1–6 apply that many passes of the same smoothing filter. Smoothed interior points are
+committed to 0.001 canvas-unit precision to keep session files compact; endpoints
+retain their exact fractional positions.
+
 | Level | Result |
 |-------|--------|
 | 0 | The exact path you drew |
@@ -579,13 +587,18 @@ The level applies to the Pen and the Marker. The Eraser is not smoothed: its pat
 decides what gets erased, so moving it would change the result rather than the
 look.
 
-A tablet stroke is smoothed too, because its path shakes like any other. Its
-**pressure values** are not touched — each smoothed point keeps the thickness
-that was sampled with it, so pen dynamics survive.
+A tablet stroke is smoothed too, because its path shakes like any other.
+Smoothing changes positions and preserves each kept point's thickness. Motion
+skipped by the spacing threshold retains the highest pressure at the last kept
+point, including pressure changes during a pause.
 
-A stroke is stored as the points it ended up with, so nothing about smoothing
-changes how a shape is written. The level itself is remembered with the rest of
-the tool settings, so a session restores at the level it was saved at. A session
+A stroke is stored as the points it ended up with. Session format 8 stores
+freehand, pressure and marker positions as floating-point coordinates so
+fractional-scale outputs retain the smooth result. It loads integer positions
+from older sessions exactly. Loading alone does not rewrite a session; the
+next save writes format 8, which older Wayscriber versions cannot open.
+The level itself is remembered with the rest of the tool settings, so a session
+restores at the level it was saved at. A session
 written before this existed has no level recorded and restores at whatever
 `pen_smoothing` your config says.
 
@@ -603,9 +616,10 @@ The level is also on the toolbar whenever the Pen, Marker, or Shape Pen is up.
   current one.
 - `"stepper"`: a **Smooth** `− value +` stepper that reads `Off` at zero.
 
-On a meter, in the pill or in the panel, click a bar to set that level
-(clicking the highest filled bar steps one below it, down to `Off`), or scroll
-over it to step one level; the tooltip names the level. The chip, meter, or
+On a meter, in the pill or in the panel, click the accent dot for `Off` (or
+`Precise` for Shape detection), or click a bar to set that exact level.
+Clicking the current level keeps it. Steppers also have a dot for direct zero.
+Scroll over it to step one level; the tooltip names the level. The chip, meter, or
 stepper is one of the first things the pill drops on a narrow output; the
 actions below still reach the level there.
 

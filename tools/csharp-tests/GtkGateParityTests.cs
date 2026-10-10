@@ -8,6 +8,7 @@ public sealed class GtkGateParityTests
 {
     private const string PopupMarker = "EXECUTED: GTK native popup presentation regression";
     private const string MenuMarker = "EXECUTED: GTK native menu presentation assertions";
+    private const string PenFeelMarker = "EXECUTED: GTK Pen feel fractional-scale render assertions";
     private const string FixtureSocket = "WAYSCRIBER_FIXTURE_SOCKET";
     private const string FixtureOutput = "WAYSCRIBER_FIXTURE_OUTPUT";
     private const string FixtureExit = "WAYSCRIBER_FIXTURE_EXIT";
@@ -18,6 +19,7 @@ public sealed class GtkGateParityTests
     [InlineData( null, ExitCodes.Success )]
     [InlineData( PopupMarker, ExitCodes.Success )]
     [InlineData( MenuMarker, ExitCodes.Success )]
+    [InlineData( PenFeelMarker, ExitCodes.Success )]
     [InlineData( null, ExitCodes.Failure )]
     public async Task BothGatesRequireNativeAssertionsAndCleanUpTheirPrivateDisplay( string? omittedMarker, int childExitCode )
     {
@@ -71,6 +73,7 @@ public sealed class GtkGateParityTests
                 "EXECUTED: GTK widget contract assertions",
                 PopupMarker,
                 MenuMarker,
+                PenFeelMarker,
             ];
             File.WriteAllLines( output, markers.Where( marker => marker != omittedMarker ) );
             RuntimeLog = Path.Combine( _directory.Path, "runtime" );

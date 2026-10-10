@@ -11,6 +11,9 @@ pub(crate) fn route_pointer_press(
     event: PointerPress,
 ) -> RoutingOutcome {
     let points = event.points();
+    if !points.canvas().is_valid() {
+        return RoutingOutcome::NoRoute(NoRouteReason::InvalidPointerPosition);
+    }
     // A new press invalidates any HUD or zoom-chip press still awaiting its
     // release, so a stale flag can never swallow the release of an unrelated
     // interaction.
@@ -89,6 +92,9 @@ pub(crate) fn route_pointer_motion(
     event: PointerMotion,
 ) -> RoutingOutcome {
     let points = event.points();
+    if !points.canvas().is_valid() {
+        return RoutingOutcome::NoRoute(NoRouteReason::InvalidPointerPosition);
+    }
     adapters::update_pointer_positions(state, points);
     // Chrome hover affordances update on every motion, before any modal
     // early-return: the setters gate themselves (idle pointer + the same
@@ -129,6 +135,9 @@ pub(crate) fn route_pointer_release(
     event: PointerRelease,
 ) -> RoutingOutcome {
     let points = event.points();
+    if !points.canvas().is_valid() {
+        return RoutingOutcome::NoRoute(NoRouteReason::InvalidPointerPosition);
+    }
     adapters::update_pointer_positions(state, points);
 
     // The menu has already closed on press. Consume its release before any

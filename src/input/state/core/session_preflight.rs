@@ -50,6 +50,13 @@ impl CloneStorageEstimate {
         self.non_image_shape_count = self.non_image_shape_count.saturating_add(1);
     }
 
+    fn add_point_shape(&mut self, count: usize, bytes_per_point: u64) {
+        self.add_non_image_shape(
+            NON_IMAGE_SHAPE_RAW_OVERHEAD_BYTES
+                .saturating_add(usize_to_u64(count).saturating_mul(bytes_per_point)),
+        );
+    }
+
     fn saturating_add(self, other: Self) -> Self {
         Self {
             raw_bytes: self.raw_bytes.saturating_add(other.raw_bytes),
@@ -429,19 +436,14 @@ fn estimate_frame_page_storage(page: &Frame) -> CloneStorageEstimate {
 fn estimate_shape_storage(shape: &Shape) -> CloneStorageEstimate {
     let mut estimate = CloneStorageEstimate::default();
     match shape {
-        Shape::Freehand { points, .. }
-        | Shape::MarkerStroke { points, .. }
-        | Shape::EraserStroke { points, .. }
-        | Shape::Polygon { points, .. } => {
-            estimate.add_non_image_shape(
-                NON_IMAGE_SHAPE_RAW_OVERHEAD_BYTES
-                    .saturating_add(usize_to_u64(points.len()).saturating_mul(POINT_JSON_BYTES)),
-            );
+        Shape::Freehand { points, .. } | Shape::MarkerStroke { points, .. } => {
+            estimate.add_point_shape(points.len(), POINT_JSON_BYTES);
+        }
+        Shape::EraserStroke { points, .. } | Shape::Polygon { points, .. } => {
+            estimate.add_point_shape(points.len(), POINT_JSON_BYTES);
         }
         Shape::FreehandPressure { points, .. } => {
-            estimate.add_non_image_shape(NON_IMAGE_SHAPE_RAW_OVERHEAD_BYTES.saturating_add(
-                usize_to_u64(points.len()).saturating_mul(PRESSURE_POINT_JSON_BYTES),
-            ));
+            estimate.add_point_shape(points.len(), PRESSURE_POINT_JSON_BYTES);
         }
         Shape::Image { data, .. } => estimate.add_image(data.bytes.len(), &data.mime_type),
         Shape::Text {

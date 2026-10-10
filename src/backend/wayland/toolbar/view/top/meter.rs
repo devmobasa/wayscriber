@@ -60,21 +60,30 @@ pub(super) fn meter_bar_nodes(
     row: (f64, f64, f64, f64),
 ) -> impl Iterator<Item = WidgetNode> {
     let (x, y, w, h) = row;
-    let bar_w = w / meter.segments.len().max(1) as f64;
+    let dot_w = model::METER_ZERO_SLOT_W.min(w);
+    let bar_w = (w - dot_w) / meter.segments.len().max(1) as f64;
+    let zero = meter.zero;
+    let dot = WidgetNode::new(
+        zero.id,
+        (x, y, dot_w, h),
+        WidgetKind::MeterDot {
+            active: meter.level == 0,
+            enabled,
+        },
+        enabled.then(|| Interaction::click(zero.event, Some(zero.tooltip))),
+    );
 
-    meter
-        .segments
-        .into_iter()
-        .enumerate()
-        .map(move |(index, segment)| {
+    std::iter::once(dot).chain(meter.segments.into_iter().enumerate().map(
+        move |(index, segment)| {
             WidgetNode::new(
                 segment.id,
-                (x + index as f64 * bar_w, y, bar_w, h),
+                (x + dot_w + index as f64 * bar_w, y, bar_w, h),
                 WidgetKind::MeterBar {
                     filled: segment.filled,
                     enabled,
                 },
                 enabled.then(|| Interaction::click(segment.event, Some(segment.tooltip))),
             )
-        })
+        },
+    ))
 }

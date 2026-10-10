@@ -405,7 +405,7 @@ fn text_edit_block_moved(current: (i32, i32), original: &Shape) -> bool {
 }
 
 fn append_only_damage_regions(
-    points: &[(i32, i32)],
+    points: &[(f64, f64)],
     stroke_width: f64,
     fallback: Rect,
 ) -> Vec<Rect> {
@@ -416,8 +416,8 @@ fn append_only_damage_regions(
         return vec![fallback];
     }
 
-    let dx = f64::from(end.0 - start.0);
-    let dy = f64::from(end.1 - start.1);
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
     let steps = (dx.abs().max(dy.abs()) / APPEND_ONLY_DAMAGE_MAX_SPAN).ceil() as usize;
     let steps = steps.max(1);
     if steps == 1 {
@@ -428,14 +428,8 @@ fn append_only_damage_regions(
     for step in 0..steps {
         let t0 = step as f64 / steps as f64;
         let t1 = (step + 1) as f64 / steps as f64;
-        let p0 = (
-            (start.0 as f64 + dx * t0).round() as i32,
-            (start.1 as f64 + dy * t0).round() as i32,
-        );
-        let p1 = (
-            (start.0 as f64 + dx * t1).round() as i32,
-            (start.1 as f64 + dy * t1).round() as i32,
-        );
+        let p0 = (start.0 + dx * t0, start.1 + dy * t0);
+        let p1 = (start.0 + dx * t1, start.1 + dy * t1);
         if let Some(region) = bounding_box_for_points(&[p0, p1], stroke_width) {
             regions.push(region);
         }

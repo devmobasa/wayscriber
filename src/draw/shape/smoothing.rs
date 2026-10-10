@@ -28,6 +28,22 @@
 /// following its own corners and reads as a different line from the one drawn.
 pub const MAX_PEN_SMOOTHING: u8 = 6;
 
+/// Keep real pointer samples at least this far apart in logical canvas units.
+pub(crate) const MIN_STROKE_SAMPLE_DISTANCE: f64 = 0.75;
+
+pub(crate) fn keep_stroke_sample(points: &[(f64, f64)], point: (f64, f64)) -> bool {
+    if !point.0.is_finite() || !point.1.is_finite() {
+        return false;
+    }
+    points
+        .last()
+        .is_none_or(|last| (point.0 - last.0).hypot(point.1 - last.1) >= MIN_STROKE_SAMPLE_DISTANCE)
+}
+
+/// Smoothed interior points are committed on a 1/1000 canvas-unit grid: far
+/// below any visible difference, and short enough to keep sessions compact.
+const COMMITTED_POINTS_PER_UNIT: f64 = 1000.0;
+
 /// Fewest points a path needs before smoothing can do anything. With two points
 /// there is no interior to smooth, and both are pinned.
 const MIN_SMOOTHABLE_POINTS: usize = 3;
@@ -41,15 +57,27 @@ pub fn clamp_pen_smoothing(level: u8) -> u8 {
 }
 
 /// Smooth an `(x, y)` path. Level 0 returns the path unchanged.
-pub fn smooth_path(points: &[(i32, i32)], level: u8) -> Vec<(i32, i32)> {
-    let Some(smoothed) = smooth_points(points, level, |&(x, y)| (f64::from(x), f64::from(y)))
-    else {
+pub fn smooth_path(points: &[(f64, f64)], level: u8) -> Vec<(f64, f64)> {
+    let Some(smoothed) = smooth_points(points, level, |&(x, y)| (x, y)) else {
         return points.to_vec();
     };
     smoothed
-        .into_iter()
-        .map(|(x, y)| (round_to_i32(x), round_to_i32(y)))
-        .collect()
+}
+
+/// Smooth a finished stroke for commit. Level 0 and the pinned endpoints keep
+/// their exact positions; smoothed interior points are snapped to
+/// [`COMMITTED_POINTS_PER_UNIT`].
+pub(crate) fn smooth_committed_path(points: &[(f64, f64)], level: u8) -> Vec<(f64, f64)> {
+    let Some(mut smoothed) = smooth_points(points, level, |&(x, y)| (x, y)) else {
+        return points.to_vec();
+    };
+
+    let end = smoothed.len() - 1;
+    for (x, y) in &mut smoothed[1..end] {
+        *x = (*x * COMMITTED_POINTS_PER_UNIT).round() / COMMITTED_POINTS_PER_UNIT;
+        *y = (*y * COMMITTED_POINTS_PER_UNIT).round() / COMMITTED_POINTS_PER_UNIT;
+    }
+    smoothed
 }
 
 /// Smooth the positions of a pressure path, leaving every thickness alone.
@@ -59,15 +87,14 @@ pub fn smooth_path(points: &[(i32, i32)], level: u8) -> Vec<(i32, i32)> {
 /// tablet rather than from the hand's aim, and averaging them would erase real
 /// detail while fixing nothing. Each smoothed position keeps the thickness that
 /// was sampled with it.
-pub fn smooth_pressure_path(points: &[(i32, i32, f32)], level: u8) -> Vec<(i32, i32, f32)> {
-    let Some(smoothed) = smooth_points(points, level, |&(x, y, _)| (f64::from(x), f64::from(y)))
-    else {
+pub fn smooth_pressure_path(points: &[(f64, f64, f32)], level: u8) -> Vec<(f64, f64, f32)> {
+    let Some(smoothed) = smooth_points(points, level, |&(x, y, _)| (x, y)) else {
         return points.to_vec();
     };
     points
         .iter()
         .zip(smoothed)
-        .map(|(&(_, _, thickness), (x, y))| (round_to_i32(x), round_to_i32(y), thickness))
+        .map(|(&(_, _, thickness), (x, y))| (x, y, thickness))
         .collect()
 }
 
@@ -113,19 +140,19 @@ fn smooth_points<T>(
     Some(current)
 }
 
-fn round_to_i32(value: f64) -> i32 {
-    value
-        .round()
-        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// A straight run with one sample knocked sideways, as a shaky hand makes.
-    fn spike() -> Vec<(i32, i32)> {
-        vec![(0, 0), (10, 0), (20, 12), (30, 0), (40, 0)]
+    fn spike() -> Vec<(f64, f64)> {
+        vec![
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (20.0, 12.0),
+            (30.0, 0.0),
+            (40.0, 0.0),
+        ]
     }
 
     #[test]
@@ -146,7 +173,7 @@ mod tests {
             smoothed[2].1 < points[2].1,
             "the spike at index 2 must come down, not stay at 12"
         );
-        assert!(smoothed[2].1 > 0, "and not be flattened away entirely");
+        assert!(smoothed[2].1 > 0.0, "and not be flattened away entirely");
     }
 
     #[test]
@@ -183,7 +210,7 @@ mod tests {
 
     #[test]
     fn a_straight_line_survives_every_level_unchanged() {
-        let points = vec![(0, 0), (10, 0), (20, 0), (30, 0)];
+        let points = vec![(0.0, 0.0), (10.0, 0.0), (20.0, 0.0), (30.0, 0.0)];
 
         for level in 0..=MAX_PEN_SMOOTHING {
             assert_eq!(smooth_path(&points, level), points, "level {level}");
@@ -192,7 +219,7 @@ mod tests {
 
     #[test]
     fn paths_too_short_to_have_an_interior_are_returned_as_they_are() {
-        for points in [vec![], vec![(5, 5)], vec![(5, 5), (9, 9)]] {
+        for points in [vec![], vec![(5.0, 5.0)], vec![(5.0, 5.0), (9.0, 9.0)]] {
             assert_eq!(smooth_path(&points, 6), points);
         }
     }
@@ -211,11 +238,11 @@ mod tests {
     #[test]
     fn a_pressure_path_keeps_every_thickness_while_its_positions_move() {
         let points = vec![
-            (0, 0, 1.0f32),
-            (10, 0, 4.0),
-            (20, 12, 9.0),
-            (30, 0, 4.0),
-            (40, 0, 1.0),
+            (0.0, 0.0, 1.0f32),
+            (10.0, 0.0, 4.0),
+            (20.0, 12.0, 9.0),
+            (30.0, 0.0, 4.0),
+            (40.0, 0.0, 1.0),
         ];
 
         let smoothed = smooth_pressure_path(&points, 3);
@@ -226,7 +253,7 @@ mod tests {
             "tablet pressure is real detail and is not the hand's shake"
         );
         assert!(smoothed[2].1 < points[2].1);
-        assert_eq!(smoothed.first().map(|&(x, y, _)| (x, y)), Some((0, 0)));
+        assert_eq!(smoothed.first().map(|&(x, y, _)| (x, y)), Some((0.0, 0.0)));
     }
 
     #[test]

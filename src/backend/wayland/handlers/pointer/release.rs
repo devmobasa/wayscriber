@@ -159,7 +159,8 @@ impl WaylandState {
 
         let screen_x = event.position.0.round() as i32;
         let screen_y = event.position.1.round() as i32;
-        let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+        let (canvas_x, canvas_y) =
+            self.canvas_world_coords_precise(event.position.0, event.position.1);
         self.input_state.on_mouse_release_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -168,8 +169,8 @@ impl WaylandState {
             mb,
             screen_x,
             screen_y,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.input_state.needs_redraw = true;
     }
@@ -278,7 +279,7 @@ impl WaylandState {
         let (Some(mb), Some((sx, sy))) = (mb, routed.screen) else {
             return false;
         };
-        let (wx, wy) = self.zoomed_world_coords(sx, sy);
+        let (canvas_x, canvas_y) = self.canvas_world_coords_precise(sx, sy);
         self.input_state.on_mouse_release_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -287,8 +288,8 @@ impl WaylandState {
             mb,
             sx.round() as i32,
             sy.round() as i32,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.input_state.needs_redraw = true;
         true

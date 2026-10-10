@@ -141,7 +141,8 @@ mod dispatch_regressions {
                 resources(),
                 1,
                 mouse_button,
-                [300, 300, 300, 300],
+                (300, 300),
+                (300.0, 300.0),
             );
             assert_eq!(pointer.contact_motion(), ContactMotion::Hover);
             input.close_context_menu();
@@ -179,7 +180,8 @@ mod dispatch_regressions {
             },
             1,
             MouseButton::Left,
-            [600, 400, 600, 400],
+            (600, 400),
+            (600.0, 400.0),
         );
         assert_eq!(pointer.contact_motion(), ContactMotion::Canvas);
         input.cancel_active_interaction_with(&measurer);
@@ -245,7 +247,7 @@ mod popup_dispatch_regressions {
             } else {
                 (layout.ok_btn_x + 2.0, layout.ok_btn_y + 2.0)
             };
-            let coords = [x as i32, y as i32, x as i32, y as i32];
+            let screen = (x as i32, y as i32);
             pointer.route_canvas_press(
                 &mut input,
                 InputTextResources {
@@ -254,7 +256,8 @@ mod popup_dispatch_regressions {
                 },
                 1,
                 MouseButton::Left,
-                coords,
+                screen,
+                (x, y),
             );
             assert_eq!(
                 pointer.contact_motion(),
@@ -295,10 +298,10 @@ mod popup_dispatch_regressions {
                     ui_engine: &engine,
                 },
                 MouseButton::Left,
-                coords[0],
-                coords[1],
-                coords[2],
-                coords[3],
+                screen.0,
+                screen.1,
+                x,
+                y,
             );
             assert!(!input.color_picker_popup_is_dragging());
             assert_eq!(input.is_color_picker_popup_open(), slider);

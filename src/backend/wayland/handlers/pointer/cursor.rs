@@ -519,6 +519,7 @@ mod tests {
                 DrawingState::PendingTextClick {
                     x: 0,
                     y: 0,
+                    position: (0.0, 0.0),
                     tool: Tool::Select,
                     shape_id: 1,
                 },

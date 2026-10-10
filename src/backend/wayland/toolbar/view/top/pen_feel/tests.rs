@@ -126,6 +126,7 @@ fn the_open_panel_shows_the_sections_the_tool_uses() {
         "top.feel.title",
         "top.feel.smoothing.label",
         "top.feel.smoothing.value",
+        "top.feel.smoothing.level-0",
         "top.feel.smoothing.level-1",
         "top.feel.smoothing.level-2",
         "top.feel.smoothing.level-3",
@@ -146,6 +147,7 @@ fn the_open_panel_shows_the_sections_the_tool_uses() {
         [
             "top.feel.detection.label",
             "top.feel.detection.value",
+            "top.feel.detection.level-0",
             "top.feel.detection.level-1",
             "top.feel.detection.level-2",
             "top.feel.detection.level-3",
@@ -365,5 +367,109 @@ fn panel_text_fits_its_column() {
                 "{setting:?} {level} hint is {line}px"
             );
         }
+    }
+}
+
+#[test]
+fn zero_is_one_click_and_bars_keep_their_level_in_every_presentation() {
+    for style in [
+        ToolbarStrokeControls::Panel,
+        ToolbarStrokeControls::Meter,
+        ToolbarStrokeControls::Stepper,
+    ] {
+        for level in 0..=6 {
+            let mut snapshot = snapshot_for(Tool::LiveShape, style, true);
+            snapshot.pen_smoothing = level;
+            snapshot.shape_recognition_sensitivity = level.min(4);
+            let tree = tree_for(&snapshot);
+            for (setting, prefix) in [
+                (model::StrokeSetting::Smoothing, "pen-smoothing"),
+                (model::StrokeSetting::ShapeDetection, "shape-sensitivity"),
+            ] {
+                let prefix = if style == ToolbarStrokeControls::Panel {
+                    format!("top.feel.{}", setting.panel_key())
+                } else {
+                    format!("top.style.{prefix}")
+                };
+                let targets = if style == ToolbarStrokeControls::Stepper {
+                    0..=0
+                } else {
+                    0..=setting.max()
+                };
+                for target in targets {
+                    let node = tree
+                        .node_by_id(&format!("{prefix}.level-{target}").into())
+                        .unwrap();
+                    let (x, y, w, h) = node.rect;
+                    let hit = tree
+                        .hit(x + w / 2.0, y + h / 2.0)
+                        .expect("direct level hit");
+                    assert_eq!(
+                        hit.interact.as_ref().unwrap().event,
+                        setting.event(target),
+                        "{style:?} current={level} target={target}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn pen_feel_renders_the_zero_hover_ring_at_integer_and_fractional_scale() {
+    use crate::backend::wayland::toolbar::render::render_top_strip;
+    for scale in [1.0, 5.0 / 3.0] {
+        let engine = UiTextEngine::default();
+        let mut snapshot = snapshot_for(Tool::LiveShape, ToolbarStrokeControls::Panel, true);
+        snapshot.top_fade = 1.0;
+        let (w, h) = top_size(&engine, &snapshot);
+        let tree = tree_for(&snapshot);
+        let dot = tree
+            .node_by_id(&"top.feel.smoothing.level-0".into())
+            .unwrap();
+        let (x, y, _, row_h) = dot.rect;
+        let hover = Some((x + 6.0, y + row_h / 2.0));
+        let paint = |snapshot: &ToolbarSnapshot, hover| {
+            let surface = cairo::ImageSurface::create(
+                cairo::Format::ARgb32,
+                (f64::from(w) * scale).ceil() as i32,
+                (f64::from(h) * scale).ceil() as i32,
+            )
+            .unwrap();
+            let ctx = cairo::Context::new(&surface).unwrap();
+            ctx.scale(scale, scale);
+            render_top_strip(
+                &engine,
+                &ctx,
+                f64::from(w),
+                f64::from(h),
+                snapshot,
+                &mut Vec::new(),
+                hover,
+                None,
+            )
+            .unwrap();
+            drop(ctx);
+            surface
+        };
+        let mut resting = paint(&snapshot, None);
+        let mut hovered = paint(&snapshot, hover);
+        let px = ((x + 13.5) * scale).floor() as usize;
+        let py = ((y + row_h / 2.0) * scale).floor() as usize;
+        let stride = hovered.stride() as usize;
+        let offset = py * stride + px * 4;
+        assert_ne!(
+            &resting.data().unwrap()[offset..offset + 4],
+            &hovered.data().unwrap()[offset..offset + 4],
+            "hover ring at scale {scale}"
+        );
+        snapshot.pen_smoothing = 0;
+        let mut off = paint(&snapshot, None);
+        let mut off_hover = paint(&snapshot, hover);
+        assert_eq!(
+            &off.data().unwrap()[offset..offset + 4],
+            &off_hover.data().unwrap()[offset..offset + 4],
+            "active zero has no hover ring"
+        );
     }
 }

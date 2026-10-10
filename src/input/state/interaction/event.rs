@@ -20,27 +20,40 @@ impl ScreenPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct CanvasPoint {
-    x: i32,
-    y: i32,
+    x: f64,
+    y: f64,
 }
 
 impl CanvasPoint {
-    pub(crate) fn new(x: i32, y: i32) -> Self {
-        Self { x, y }
+    pub(crate) fn new(x: impl Into<f64>, y: impl Into<f64>) -> Self {
+        Self {
+            x: x.into(),
+            y: y.into(),
+        }
     }
 
     pub(crate) fn x(self) -> i32 {
-        self.x
+        self.x.round() as i32
     }
 
     pub(crate) fn y(self) -> i32 {
-        self.y
+        self.y.round() as i32
+    }
+
+    pub(crate) fn position(self) -> (f64, f64) {
+        (self.x, self.y)
+    }
+
+    pub(crate) fn is_valid(self) -> bool {
+        [self.x, self.y]
+            .into_iter()
+            .all(|v| v.is_finite() && v >= f64::from(i32::MIN) && v <= f64::from(i32::MAX))
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PointerPoints {
     screen: ScreenPoint,
     canvas: CanvasPoint,
@@ -60,7 +73,7 @@ impl PointerPoints {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PointerPress {
     button: MouseButton,
     points: PointerPoints,
@@ -80,7 +93,7 @@ impl PointerPress {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PointerMotion {
     points: PointerPoints,
 }
@@ -95,7 +108,7 @@ impl PointerMotion {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PointerRelease {
     button: MouseButton,
     points: PointerPoints,

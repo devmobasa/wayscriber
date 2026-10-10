@@ -332,6 +332,9 @@ fn paint_node(
         WidgetKind::MeterBar { filled, enabled } => {
             draw_meter_bar(ctx, node.rect, *filled, is_hover, *enabled);
         }
+        WidgetKind::MeterDot { active, enabled } => {
+            crate::toolbar_icons::draw_meter_dot(ctx, node.rect, *active, is_hover, *enabled);
+        }
         WidgetKind::SmoothingPreview { level } => {
             crate::toolbar_icons::draw_smoothing_preview(ctx, node.rect, *level);
         }

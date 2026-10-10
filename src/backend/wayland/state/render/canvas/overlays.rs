@@ -141,7 +141,9 @@ impl WaylandState {
                     ..
                 } = &self.input_state.state
                 {
-                    let sampled = self.input_state.sample_eraser_path_points(points);
+                    // Preview the integer path the committed stroke erases with.
+                    let rounded = crate::draw::shape::quantize_path(points);
+                    let sampled = self.input_state.sample_eraser_path_points(&rounded);
                     self.input_state.hit_test_all_for_points_cached_with(
                         self.render.text_measurer(),
                         &sampled,

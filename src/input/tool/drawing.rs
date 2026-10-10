@@ -1,6 +1,5 @@
 use crate::draw::shape::{
-    bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points, smooth_path,
-    smooth_pressure_path,
+    bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points, smooth_committed_path,
 };
 use crate::draw::{
     ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, LaserStyle,
@@ -40,7 +39,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) tool: Tool,
     pub(crate) start: (i32, i32),
     pub(crate) end: (i32, i32),
-    pub(crate) points: Vec<(i32, i32)>,
+    pub(crate) points: Vec<(f64, f64)>,
     pub(crate) point_thicknesses: Vec<f32>,
     pub(crate) color: Color,
     pub(crate) size: f64,
@@ -108,7 +107,7 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) tool: Tool,
     pub(crate) start: (i32, i32),
     pub(crate) current: (i32, i32),
-    pub(crate) points: &'a [(i32, i32)],
+    pub(crate) points: &'a [(f64, f64)],
     pub(crate) point_thicknesses: &'a [f32],
     pub(crate) color: Color,
     pub(crate) size: f64,
@@ -144,22 +143,22 @@ pub(crate) struct PolygonProvisionalSnapshot {
 
 pub(crate) enum ProvisionalToolStroke<'a> {
     BorrowedFreehand {
-        points: &'a [(i32, i32)],
+        points: &'a [(f64, f64)],
         color: Color,
         size: f64,
     },
     BorrowedPressureFreehand {
-        points: &'a [(i32, i32)],
+        points: &'a [(f64, f64)],
         point_thicknesses: &'a [f32],
         color: Color,
     },
     BorrowedMarker {
-        points: &'a [(i32, i32)],
+        points: &'a [(f64, f64)],
         color: Color,
         size: f64,
     },
     EraserPreview {
-        points: &'a [(i32, i32)],
+        points: &'a [(f64, f64)],
         size: f64,
     },
     Shape(Shape),
@@ -167,14 +166,14 @@ pub(crate) enum ProvisionalToolStroke<'a> {
     /// it came from, so the swap from ink to shape is never silent.
     Recognized {
         shape: Shape,
-        ink: &'a [(i32, i32)],
+        ink: &'a [(f64, f64)],
         ink_color: Color,
         ink_size: f64,
     },
     BlurReplayPreview(BlurRectParams),
     /// The laser stroke under the pointer, drawn exactly as its finished ink.
     Laser {
-        points: &'a [(i32, i32)],
+        points: &'a [(f64, f64)],
         style: LaserStyle,
     },
     None,
@@ -190,9 +189,10 @@ impl Tool {
                 finish_path_stroke(snapshot, kind, pressure, usage)
             }
             ToolDrawingBehavior::LiveShape => {
-                let recognized = if snapshot.points.last().copied() == Some(snapshot.end) {
+                let rounded = crate::draw::shape::quantize_path(&snapshot.points);
+                let recognized = if rounded.last().copied() == Some(snapshot.end) {
                     super::live_shape::recognize(
-                        &snapshot.points,
+                        &rounded,
                         snapshot.color,
                         snapshot.size,
                         snapshot.fill_enabled,
@@ -200,7 +200,7 @@ impl Tool {
                         snapshot.shape_recognition_sensitivity,
                     )
                 } else {
-                    let mut path = snapshot.points.clone();
+                    let mut path = rounded;
                     path.push(snapshot.end);
                     super::live_shape::recognize(
                         &path,
@@ -335,7 +335,7 @@ impl Tool {
             }
             ToolDrawingBehavior::Eraser => finish_eraser(snapshot),
             ToolDrawingBehavior::Laser => {
-                let mut points = snapshot.points;
+                let mut points = crate::draw::shape::quantize_path(&snapshot.points);
                 if points.last().copied() != Some(snapshot.end) {
                     points.push(snapshot.end);
                 }
@@ -592,6 +592,8 @@ fn finish_path_stroke(
     pressure: ToolPressureBehavior,
     usage: ToolUsage,
 ) -> FinishedToolStroke {
+    let points = smooth_committed_path(&snapshot.points, snapshot.pen_smoothing);
+
     match kind {
         ToolPathKind::Freehand => {
             if matches!(pressure, ToolPressureBehavior::OptionalPressureStroke)
@@ -601,15 +603,14 @@ fn finish_path_stroke(
                     snapshot.pressure_variation_threshold,
                 )
             {
-                let points: Vec<_> = snapshot
-                    .points
+                let points: Vec<_> = points
                     .into_iter()
                     .zip(snapshot.point_thicknesses)
                     .map(|((x, y), t)| (x, y, t))
                     .collect();
                 return FinishedToolStroke::Shape {
                     shape: Shape::FreehandPressure {
-                        points: smooth_pressure_path(&points, snapshot.pen_smoothing),
+                        points,
                         color: snapshot.color,
                     },
                     usage,
@@ -618,7 +619,7 @@ fn finish_path_stroke(
 
             FinishedToolStroke::Shape {
                 shape: Shape::Freehand {
-                    points: smooth_path(&snapshot.points, snapshot.pen_smoothing),
+                    points,
                     color: snapshot.color,
                     thick: snapshot.size,
                 },
@@ -627,7 +628,7 @@ fn finish_path_stroke(
         }
         ToolPathKind::Marker => FinishedToolStroke::Shape {
             shape: Shape::MarkerStroke {
-                points: smooth_path(&snapshot.points, snapshot.pen_smoothing),
+                points,
                 color: marker_color_with_opacity(snapshot.color, snapshot.marker_opacity),
                 thick: snapshot.size,
             },
@@ -638,7 +639,7 @@ fn finish_path_stroke(
 
 fn finish_eraser(snapshot: ToolStrokeSnapshot) -> FinishedToolStroke {
     if snapshot.eraser_mode == EraserMode::Stroke {
-        let mut path = snapshot.points;
+        let mut path = crate::draw::shape::quantize_path(&snapshot.points);
         if path.last().copied() != Some(snapshot.end) {
             path.push(snapshot.end);
         }
@@ -647,7 +648,7 @@ fn finish_eraser(snapshot: ToolStrokeSnapshot) -> FinishedToolStroke {
 
     FinishedToolStroke::Shape {
         shape: Shape::EraserStroke {
-            points: snapshot.points,
+            points: crate::draw::shape::quantize_path(&snapshot.points),
             brush: EraserBrush {
                 size: snapshot.eraser_size,
                 kind: snapshot.eraser_kind,

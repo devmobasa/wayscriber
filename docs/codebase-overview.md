@@ -582,7 +582,14 @@ data remains in the backup or recovery file.
 Offline tool-state clears report preserved corruption rather than silently rewriting
 restored data.
 
-Format 7 now writes an optional `save_generation` immediately after `version`.
+Format 8 stores freehand, pressure-stroke and marker positions as `f64`, including
+undo history. Older integer coordinates load exactly; opening a session does not
+rewrite it. The next save writes format 8, which older releases cannot open.
+Pen input keeps fractional canvas positions, thins motion samples at 0.75 logical
+pixels and retains the exact release endpoint. The existing 0–6 smoothing passes
+keep endpoints pinned and pressure paired with each retained position.
+
+Since format 7, saves write an optional `save_generation` immediately after `version`.
 Normal saves allocate a counter under the session lock using bounded payload and
 marker probes. Save As prepares before locking, then quarantines target sidecars.
 Marker format 1 records kind, generation, and a diagnostic timestamp. Load precedence

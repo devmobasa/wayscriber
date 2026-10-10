@@ -69,7 +69,7 @@ mod tests {
             tool: Tool::Pen,
             start_x: 1,
             start_y: 2,
-            points: vec![(1, 2)],
+            points: vec![(1.0, 2.0)],
             point_thicknesses: vec![1.0],
         };
         assert_eq!(
@@ -212,7 +212,7 @@ mod tests {
             tool: Tool::Pen,
             start_x: 1,
             start_y: 2,
-            points: vec![(1, 2)],
+            points: vec![(1.0, 2.0)],
             point_thicknesses: vec![1.0],
         };
         state.begin_pointer_drag(MouseButton::Left, None);

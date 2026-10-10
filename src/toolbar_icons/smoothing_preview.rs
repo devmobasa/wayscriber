@@ -16,8 +16,8 @@ use crate::ui::theme::toolbar::{
 };
 
 /// How many sample units make one preview unit. The sample is authored at
-/// four times the preview's size so the smoothing's rounding to whole units
-/// stays far below a preview pixel.
+/// four times the preview's size; its floating positions run the same filter
+/// as committed ink without quantization.
 const SAMPLE_SCALE: f64 = 4.0;
 /// Sample space: the panel's preview (220 x 48 spec units) at `SAMPLE_SCALE`.
 const SAMPLE_W: f64 = 880.0;
@@ -34,7 +34,7 @@ const WELL_RADIUS: f64 = 6.0;
 /// three frequencies so each smoothing level removes visibly more of it (one
 /// pass all but erases the fastest shake; the slowest survives even the
 /// maximum). Deterministic, so both frontends and the tests draw one stroke.
-pub(crate) fn smoothing_preview_sample() -> Vec<(i32, i32)> {
+pub(crate) fn smoothing_preview_sample() -> Vec<(f64, f64)> {
     (0..SAMPLE_POINTS)
         .map(|index| {
             let i = index as f64;
@@ -44,7 +44,7 @@ pub(crate) fn smoothing_preview_sample() -> Vec<(i32, i32)> {
             let tremor =
                 9.0 * (2.4 * i).sin() + 11.0 * (1.3 * i + 0.7).sin() + 8.0 * (0.8 * i + 2.1).sin();
             let y = SAMPLE_H / 2.0 + wave + tremor;
-            (x.round() as i32, y.round() as i32)
+            (x, y)
         })
         .collect()
 }
@@ -85,13 +85,10 @@ pub(crate) fn draw_smoothing_preview(ctx: &cairo::Context, rect: (f64, f64, f64,
     let _ = ctx.restore();
 }
 
-fn stroke_polyline(ctx: &cairo::Context, points: &[(i32, i32)], origin: (f64, f64), scale: f64) {
+fn stroke_polyline(ctx: &cairo::Context, points: &[(f64, f64)], origin: (f64, f64), scale: f64) {
     ctx.new_path();
     for &(px, py) in points {
-        ctx.line_to(
-            origin.0 + f64::from(px) * scale,
-            origin.1 + f64::from(py) * scale,
-        );
+        ctx.line_to(origin.0 + px * scale, origin.1 + py * scale);
     }
 }
 
@@ -157,7 +154,7 @@ mod tests {
         let total: f64 = raw
             .iter()
             .zip(&smoothed)
-            .map(|(a, b)| f64::from(a.0 - b.0).hypot(f64::from(a.1 - b.1)))
+            .map(|(a, b)| (a.0 - b.0).hypot(a.1 - b.1))
             .sum();
         total / raw.len() as f64
     }
@@ -184,8 +181,8 @@ mod tests {
     #[test]
     fn the_sample_fits_its_space() {
         for (x, y) in smoothing_preview_sample() {
-            assert!((0..SAMPLE_W as i32).contains(&x), "x {x}");
-            assert!((0..SAMPLE_H as i32).contains(&y), "y {y}");
+            assert!((0.0..SAMPLE_W).contains(&x), "x {x}");
+            assert!((0.0..SAMPLE_H).contains(&y), "y {y}");
         }
     }
 

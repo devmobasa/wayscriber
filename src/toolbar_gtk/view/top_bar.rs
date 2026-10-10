@@ -98,7 +98,7 @@ const STYLE_STEP_W: f64 = 20.0;
 /// meter or tool stepper ("Smooth", "Shapes", "Detect").
 const STYLE_CAPTION_W: f64 = 56.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_METER_W`: a level meter's bar row.
-const STYLE_METER_W: f64 = 84.0;
+const STYLE_METER_W: f64 = 84.0 + model::METER_ZERO_SLOT_W;
 /// `ToolbarLayoutSpec::TOP_STYLE_PEN_FEEL_W`: the Pen feel chip's slot.
 const STYLE_PEN_FEEL_W: f64 = 92.0;
 /// Segment tab height (matches the Settings pane's segmented tabs).

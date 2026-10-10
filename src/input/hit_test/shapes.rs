@@ -5,8 +5,8 @@ use super::geometry::{
     point_in_triangle, to_i32_pair,
 };
 
-pub(super) fn freehand_hit(
-    points: &[(i32, i32)],
+pub(super) fn freehand_hit<T: Copy + Into<f64>>(
+    points: &[(T, T)],
     point: (i32, i32),
     thickness: f64,
     tolerance: f64,
@@ -29,7 +29,7 @@ pub(super) fn freehand_hit(
 }
 
 pub(super) fn freehand_pressure_hit(
-    points: &[(i32, i32, f32)],
+    points: &[(f64, f64, f32)],
     point: (i32, i32),
     tolerance: f64,
 ) -> bool {
@@ -47,7 +47,9 @@ pub(super) fn freehand_pressure_hit(
     for window in points.windows(2) {
         let (x1, y1, t1) = window[0];
         let (x2, y2, t2) = window[1];
-        if segment_hit(x1, y1, x2, y2, t1.max(t2) as f64, point, tolerance) {
+        if distance_point_to_segment(point, (x1, y1), (x2, y2))
+            <= tolerance.max(f64::from(t1.max(t2)) / 2.0)
+        {
             return true;
         }
     }

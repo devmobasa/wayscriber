@@ -1,13 +1,13 @@
 pub(super) const EPS: f64 = 1e-6;
 
-pub(super) fn distance_point_to_segment(
+pub(super) fn distance_point_to_segment<T: Copy + Into<f64>>(
     point: (i32, i32),
-    start: (i32, i32),
-    end: (i32, i32),
+    start: (T, T),
+    end: (T, T),
 ) -> f64 {
     let (px, py) = (point.0 as f64, point.1 as f64);
-    let (x1, y1) = (start.0 as f64, start.1 as f64);
-    let (x2, y2) = (end.0 as f64, end.1 as f64);
+    let (x1, y1) = (start.0.into(), start.1.into());
+    let (x2, y2) = (end.0.into(), end.1.into());
     let vx = x2 - x1;
     let vy = y2 - y1;
     let len_sq = vx * vx + vy * vy;
@@ -21,9 +21,9 @@ pub(super) fn distance_point_to_segment(
     ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
 }
 
-pub(super) fn distance_point_to_point(a: (i32, i32), b: (i32, i32)) -> f64 {
-    let dx = (a.0 - b.0) as f64;
-    let dy = (a.1 - b.1) as f64;
+pub(super) fn distance_point_to_point<T: Copy + Into<f64>>(a: (T, T), b: (i32, i32)) -> f64 {
+    let dx = a.0.into() - f64::from(b.0);
+    let dy = a.1.into() - f64::from(b.1);
     (dx * dx + dy * dy).sqrt()
 }
 

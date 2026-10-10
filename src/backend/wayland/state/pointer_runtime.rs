@@ -142,7 +142,8 @@ impl PointerRuntime {
         resources: crate::input::state::InputTextResources<'_>,
         button: u32,
         mouse_button: crate::input::MouseButton,
-        [sx, sy, wx, wy]: [i32; 4],
+        (sx, sy): (i32, i32),
+        (wx, wy): (f64, f64),
     ) {
         let outcome =
             input.on_mouse_press_with_canvas_and_resources(resources, mouse_button, sx, sy, wx, wy);

@@ -265,7 +265,10 @@ fn assert_restored_limit_page(page: &crate::draw::Frame, page_index: usize, imag
             assert_eq!(points.len(), 3);
             assert_eq!(
                 points[0],
-                (i32::try_from(page_index).expect("page index fits i32"), 20)
+                (
+                    f64::from(i32::try_from(page_index).expect("page index fits i32")),
+                    20.0
+                )
             );
         }
         other => panic!("expected annotation stroke on page {page_index}, got {other:?}"),
@@ -431,7 +434,7 @@ fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
     match &frame.shapes[0].shape {
         Shape::Freehand { points, .. } => {
             assert_eq!(points.len(), point_count);
-            assert_eq!(points[0], (1, 1));
+            assert_eq!(points[0], (1.0, 1.0));
         }
         other => panic!("expected freehand stroke, got {other:?}"),
     }
@@ -788,9 +791,12 @@ fn add_image_and_annotations(frame: &mut crate::draw::Frame, page_index: usize, 
     let y = 20 + i32::try_from(page_index).expect("page index fits i32");
     frame.add_shape(Shape::Freehand {
         points: vec![
-            (i32::try_from(page_index).expect("page index fits i32"), 20),
-            (40, y),
-            (80, y + 8),
+            (
+                f64::from(i32::try_from(page_index).expect("page index fits i32")),
+                20.0,
+            ),
+            (40.0, f64::from(y)),
+            (80.0, f64::from(y + 8)),
         ],
         color: Color {
             r: 1.0,
@@ -831,7 +837,7 @@ fn large_freehand(point_count: usize, offset: i32) -> Shape {
     let points = (0..point_count)
         .map(|index| {
             let x = i32::try_from(index).expect("test point count fits i32");
-            (x + offset, (x % 173) + offset)
+            (f64::from(x + offset), f64::from((x % 173) + offset))
         })
         .collect();
 

@@ -552,7 +552,7 @@ fn passive_chip_release_does_not_finish_in_flight_interaction() {
         tool: Tool::Pen,
         start_x: 100,
         start_y: 100,
-        points: vec![(100, 100), (150, 150)],
+        points: vec![(100.0, 100.0), (150.0, 150.0)],
         point_thicknesses: vec![1.0, 1.0],
     };
     input.begin_pointer_drag(MouseButton::Left, None);

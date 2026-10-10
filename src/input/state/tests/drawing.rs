@@ -1252,7 +1252,7 @@ fn provisional_shape_readout_excludes_freehand_and_non_size_badge_tools() {
             tool,
             start_x: 10,
             start_y: 20,
-            points: vec![(10, 20)],
+            points: vec![(10.0, 20.0)],
             point_thicknesses: vec![2.0],
         };
 

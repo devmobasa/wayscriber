@@ -459,7 +459,7 @@ fn writer_header_restart_output_isolation_and_clear_reset_are_stable() {
     assert!(
         fs::read(first.session_file_path())
             .unwrap()
-            .starts_with(b"{\n  \"version\": 7,\n  \"save_generation\": 1,")
+            .starts_with(b"{\n  \"version\": 8,\n  \"save_generation\": 1,")
     );
     // Reconstruct options rather than retaining any writer state across saves.
     let mut restarted = options(temp.path());

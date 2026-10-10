@@ -128,6 +128,7 @@ impl WaylandState {
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
         self.input_state
             .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
+        let (canvas_x, canvas_y) = self.canvas_world_coords_precise(sx, sy);
         self.input_state.on_mouse_motion_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -135,8 +136,8 @@ impl WaylandState {
             },
             sx.round() as i32,
             sy.round() as i32,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.update_pointer_cursor(false, conn);
         true
@@ -263,6 +264,7 @@ impl WaylandState {
         }
         self.input_state
             .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
+        let (canvas_x, canvas_y) = self.canvas_world_coords_precise(sx, sy);
         self.input_state.on_mouse_motion_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: self.render.text_measurer(),
@@ -270,8 +272,8 @@ impl WaylandState {
             },
             sx.round() as i32,
             sy.round() as i32,
-            wx,
-            wy,
+            canvas_x,
+            canvas_y,
         );
         self.update_pointer_cursor(false, conn);
         self.mark_mouse_tool_preview_dirty(previous, next);

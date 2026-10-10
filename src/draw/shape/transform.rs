@@ -7,14 +7,14 @@ impl Shape {
         match self {
             Shape::Freehand { points, .. } => {
                 for point in points {
-                    point.0 += dx;
-                    point.1 += dy;
+                    point.0 += f64::from(dx);
+                    point.1 += f64::from(dy);
                 }
             }
             Shape::FreehandPressure { points, .. } => {
                 for point in points {
-                    point.0 += dx;
-                    point.1 += dy;
+                    point.0 += f64::from(dx);
+                    point.1 += f64::from(dy);
                 }
             }
             Shape::Line { x1, y1, x2, y2, .. } => {
@@ -69,8 +69,8 @@ impl Shape {
             }
             Shape::MarkerStroke { points, .. } => {
                 for point in points {
-                    point.0 += dx;
-                    point.1 += dy;
+                    point.0 += f64::from(dx);
+                    point.1 += f64::from(dy);
                 }
             }
             Shape::EraserStroke { points, .. } => {
@@ -265,7 +265,8 @@ impl Shape {
                 color,
                 thick,
             } => {
-                let scaled_points = scale_points(points, anchor_x, anchor_y, scale_x, scale_y);
+                let scaled_points =
+                    scale_stroke_points(points, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::Freehand {
                     points: scaled_points,
                     color: *color,
@@ -285,7 +286,8 @@ impl Shape {
                 color,
                 thick,
             } => {
-                let scaled_points = scale_points(points, anchor_x, anchor_y, scale_x, scale_y);
+                let scaled_points =
+                    scale_stroke_points(points, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::MarkerStroke {
                     points: scaled_points,
                     color: *color,
@@ -398,18 +400,31 @@ fn scale_points(
 }
 
 fn scale_points_with_pressure(
-    points: &[(i32, i32, f32)],
+    points: &[(f64, f64, f32)],
     anchor_x: f64,
     anchor_y: f64,
     scale_x: f64,
     scale_y: f64,
-) -> Vec<(i32, i32, f32)> {
+) -> Vec<(f64, f64, f32)> {
     points
         .iter()
         .map(|(x, y, pressure)| {
-            let (x, y) = scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
+            let (x, y) = scale_point(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
             (x, y, *pressure)
         })
+        .collect()
+}
+
+fn scale_stroke_points(
+    points: &[(f64, f64)],
+    anchor_x: f64,
+    anchor_y: f64,
+    scale_x: f64,
+    scale_y: f64,
+) -> Vec<(f64, f64)> {
+    points
+        .iter()
+        .map(|&(x, y)| scale_point(x, y, anchor_x, anchor_y, scale_x, scale_y))
         .collect()
 }
 

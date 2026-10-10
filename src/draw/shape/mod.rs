@@ -5,6 +5,7 @@ mod bounds;
 mod polygon;
 mod smoothing;
 mod step_marker;
+mod stroke_points;
 mod text;
 mod text_cache;
 mod transform;
@@ -15,6 +16,7 @@ pub use polygon::{
     REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides,
 };
 pub use smoothing::{MAX_PEN_SMOOTHING, clamp_pen_smoothing, smooth_path, smooth_pressure_path};
+pub(crate) use smoothing::{keep_stroke_sample, smooth_committed_path};
 pub use text_cache::TextMeasurer;
 pub use types::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, Shape,
@@ -33,6 +35,14 @@ pub(crate) use text_cache::{
     CaretGeometry, LogicalBounds, TextMeasurement, VisualCaretDirection, VisualLineDirection,
     VisualLineEdge, configured_layout,
 };
+
+/// Integer adapter for shape recognition and tools whose geometry stays integral.
+pub(crate) fn quantize_path(points: &[(f64, f64)]) -> Vec<(i32, i32)> {
+    points
+        .iter()
+        .map(|&(x, y)| (x.round() as i32, y.round() as i32))
+        .collect()
+}
 
 #[cfg(test)]
 mod tests;

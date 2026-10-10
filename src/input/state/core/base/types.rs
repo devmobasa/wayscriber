@@ -76,7 +76,7 @@ pub enum DrawingState {
         /// Starting Y coordinate (where mouse was pressed)
         start_y: i32,
         /// Accumulated points for freehand drawing
-        points: Vec<(i32, i32)>,
+        points: Vec<(f64, f64)>,
         /// Accumulated thickness values for freehand drawing (pressure sensitivity)
         point_thicknesses: Vec<f32>,
     },
@@ -112,6 +112,8 @@ pub enum DrawingState {
     },
     /// Pending click on text/note to detect double-click editing
     PendingTextClick {
+        /// Exact canvas position for a click that becomes an ink stroke.
+        position: (f64, f64),
         /// Starting X coordinate
         x: i32,
         /// Starting Y coordinate

@@ -519,7 +519,7 @@ mod load {
         let mut snapshot = sample_snapshot();
         snapshot.boards[0].pages.pages[0].add_shape(crate::draw::Shape::Freehand {
             points: (0..40_000)
-                .map(|index| (index % 1000, (index * 17) % 800))
+                .map(|index| (f64::from(index % 1000), f64::from((index * 17) % 800)))
                 .collect(),
             color: crate::draw::WHITE,
             thick: 2.0,

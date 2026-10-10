@@ -38,8 +38,19 @@ pub(super) fn assert_gtk_style_meter(
         "{id} caption keeps the planned slot"
     );
 
-    let mut bar = caption_label.next_sibling();
-    let mut bar_widths = 0;
+    let zero = caption_label
+        .next_sibling()
+        .expect("zero dot")
+        .downcast::<gtk4::Button>()
+        .expect("dot button");
+    assert_eq!(zero.widget_name().as_str(), meter.zero.id);
+    assert!(zero.has_css_class("meter-dot"));
+    assert_eq!(
+        zero.tooltip_text().as_deref(),
+        Some(meter.zero.tooltip.as_str())
+    );
+    let mut bar = zero.next_sibling();
+    let mut bar_widths = zero.width_request();
     for segment in &meter.segments {
         let button = bar
             .clone()
@@ -66,6 +77,11 @@ pub(super) fn assert_gtk_style_meter(
             control.enabled(snapshot),
             "{} enabled",
             segment.id
+        );
+        assert_eq!(
+            button.width_request(),
+            (84.0 / meter.segments.len() as f64).round() as i32,
+            "{id} retains its original bar widths",
         );
         bar_widths += button.width_request();
         bar = button.next_sibling();
@@ -114,6 +130,11 @@ pub(super) fn assert_gtk_style_stepper(
             "{id} caption keeps the planned slot"
         );
         first = caption_label.next_sibling().expect("stepper minus half");
+    }
+    if let Some(setting) = control.stroke_setting() {
+        let zero = setting.zero_segment(snapshot, &control.id());
+        assert_eq!(first.widget_name().as_str(), zero.id);
+        first = first.next_sibling().expect("minus follows zero dot");
     }
     let minus = first;
     let value = minus.next_sibling().expect("stepper value readout");

@@ -226,12 +226,13 @@ mod tests {
                 tool: Tool::Pen,
                 start_x: 10,
                 start_y: 20,
-                points: vec![(10, 20)],
+                points: vec![(10.0, 20.0)],
                 point_thicknesses: vec![2.0],
             },
             DrawingState::PendingTextClick {
                 x: 10,
                 y: 20,
+                position: (10.0, 20.0),
                 tool: Tool::Pen,
                 shape_id: 1,
             },
@@ -422,7 +423,7 @@ mod tests {
     fn test_shape_snapshot() -> ShapeSnapshot {
         ShapeSnapshot {
             shape: Shape::Freehand {
-                points: vec![(0, 0), (1, 1)],
+                points: vec![(0.0, 0.0), (1.0, 1.0)],
                 color: BLACK,
                 thick: 1.0,
             },

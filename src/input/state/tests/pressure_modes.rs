@@ -6,7 +6,7 @@ fn add_pressure_shape(state: &mut InputState, locked: bool) -> ShapeId {
         .boards
         .active_frame_mut()
         .add_shape(Shape::FreehandPressure {
-            points: vec![(0, 0, 2.0), (10, 10, 4.0)],
+            points: vec![(0.0, 0.0, 2.0), (10.0, 10.0, 4.0)],
             color: state.style.current_color,
         });
     if locked {

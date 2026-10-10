@@ -40,6 +40,22 @@ impl TopBar {
             row.append(&caption_label);
         }
 
+        if let Some(setting) = control.stroke_setting() {
+            let refresh = super::meter::append_meter_zero(
+                &self.feedback,
+                &row,
+                setting,
+                &control.id(),
+                STYLE_ROW_H,
+                snapshot,
+                scale,
+            );
+            refresh(snapshot, control.enabled(snapshot));
+            self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                refresh(snapshot, control.enabled(snapshot))
+            }));
+        }
+
         let steps = control.required_steps(snapshot);
         let mut handles: Vec<gtk4::Button> = Vec::new();
         let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));

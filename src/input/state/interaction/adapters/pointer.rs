@@ -5,9 +5,9 @@ use super::super::outcome::{
     PointerSideEffect, RoutingOutcome,
 };
 use crate::draw::Shape;
-use crate::input::MouseButton;
 use crate::input::state::core::MenuCommand;
 use crate::input::state::{ContextMenuKind, DrawingState, InputState};
+use crate::input::{MouseButton, Tool};
 
 pub(crate) fn update_pointer_positions(state: &mut InputState, points: PointerPoints) {
     let screen = points.screen();
@@ -197,7 +197,7 @@ pub(crate) fn handle_tool_button_press(
         tool,
         binding.color,
         (screen.x(), screen.y()),
-        (canvas.x(), canvas.y()),
+        canvas,
     );
     let after = active_interaction_kind(state);
     match (before, after) {
@@ -535,5 +535,17 @@ pub(crate) fn finish_pointer_interaction(
     points: PointerPoints,
 ) {
     let canvas = points.canvas();
+    if let DrawingState::Drawing {
+        tool,
+        points,
+        point_thicknesses,
+        ..
+    } = &mut state.state
+        && matches!(tool, Tool::Pen | Tool::Marker | Tool::LiveShape)
+        && points.last().copied() != Some(canvas.position())
+    {
+        points.push(canvas.position());
+        point_thicknesses.push(point_thicknesses.last().copied().unwrap_or(1.0));
+    }
     state.finish_pointer_interaction_at_with_measurer(measurer, canvas.x(), canvas.y());
 }
