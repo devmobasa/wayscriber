@@ -28,7 +28,10 @@ Draw over any app, present with callouts and zoom, keep your boards between sess
 
 [View demo (wayscriber.com)](https://wayscriber.com/media/demo.webm)
 
-https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
+
+https://github.com/user-attachments/assets/be0e1bea-594b-4f03-a24e-a934b61a4716
+
+
 
 </details>
 
