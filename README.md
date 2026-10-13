@@ -9,7 +9,7 @@ Draw over any app, present with callouts and zoom, keep your boards between sess
 
 **Docs:** https://wayscriber.com/docs/
 
-![wayscriber overlay drawing numbered arrows, an ellipse, a rectangle and a sticky note over a code editor](https://wayscriber.com/img/hero-annotate.webp)
+![wayscriber code review over an editor: a boxed loop with step markers, a highlighted line, a sticky note with an arrow, a circled expression and a hand-drawn check mark](https://wayscriber.com/img/hero-annotate.webp)
 
 <details>
 <summary>More screenshots</summary>
@@ -26,7 +26,7 @@ Draw over any app, present with callouts and zoom, keep your boards between sess
 <details>
 <summary>Demo video</summary>
 
-[View demo (wayscriber.com)](https://wayscriber.com/demo.webm)
+[View demo (wayscriber.com)](https://wayscriber.com/media/demo.webm)
 
 https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 
