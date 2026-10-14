@@ -9,6 +9,7 @@ use crate::backend::wayland::session::{
     SessionCommandTransaction, SessionTransaction,
     driver::{self, SessionCommandRuntime},
 };
+use crate::i18n::tr;
 use crate::session::ToolStateSnapshot;
 use std::time::{Duration, Instant};
 
@@ -38,7 +39,7 @@ impl SessionCommandRuntime for WaylandState {
     }
 
     fn session_command_queued(&mut self) {
-        self.input_state.push_toast(crate::input::state::ToastPriority::Action, "session.command", crate::input::state::Toast::info("Session command queued for the visible session. If the session changes, retry it on the intended session."));
+        self.input_state.push_toast(crate::input::state::ToastPriority::Action, "session.command", crate::input::state::Toast::info(tr("Session command queued for the visible session. If the session changes, retry it on the intended session.")));
     }
 
     fn session_target_committed(&mut self) {

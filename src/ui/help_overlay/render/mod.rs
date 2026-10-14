@@ -15,6 +15,7 @@ mod state;
 
 use super::types::HelpRowHit;
 use crate::config::{Action, action_label};
+use crate::i18n::{tr, trf};
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::UiTextStyle;
 pub(in crate::ui) use cache::HelpLayoutCache;
@@ -84,9 +85,9 @@ pub(crate) fn render_help_overlay_result_with_content(
     let bindings = &content.bindings;
     let ctx = render.cairo;
     let title_text = if quick_mode {
-        "Quick Reference"
+        tr("Quick Reference")
     } else {
-        "Wayscriber Controls"
+        tr("Wayscriber Controls")
     };
     let palette_binding = bindings
         .labels_for(Action::ToggleCommandPalette)
@@ -102,13 +103,13 @@ pub(crate) fn render_help_overlay_result_with_content(
     let header_hints = if quick_mode {
         vec![HeaderHint {
             keys: palette_binding,
-            label: "Command Palette (search all)",
+            label: tr("Command Palette (search all)"),
         }]
     } else {
         vec![
             HeaderHint {
                 keys: palette_binding,
-                label: "Command Palette",
+                label: tr("Command Palette"),
             },
             HeaderHint {
                 keys: config_binding,
@@ -119,7 +120,7 @@ pub(crate) fn render_help_overlay_result_with_content(
     let header = HeaderContent {
         version: &version_text,
         intro: if quick_mode {
-            Some("Essential shortcuts")
+            Some(tr("Essential shortcuts"))
         } else {
             None
         },
@@ -137,15 +138,15 @@ pub(crate) fn render_help_overlay_result_with_content(
         .unwrap_or("Shift+F1");
     let note_text_base_owned;
     let note_text_base: &str = if quick_mode {
-        note_text_base_owned = format!("{} for full help", help_binding);
+        note_text_base_owned = trf("{} for full help", &[&help_binding]);
         &note_text_base_owned
     } else {
-        "Note: Each board has independent pages"
+        tr("Note: Each board has independent pages")
     };
     let close_hint_owned = if quick_mode {
-        format!("{} / Esc to close", quick_help_binding)
+        trf("{} / Esc to close", &[&quick_help_binding])
     } else {
-        format!("{} / Esc to close", help_binding)
+        trf("{} / Esc to close", &[&help_binding])
     };
     let close_hint_text: &str = &close_hint_owned;
 

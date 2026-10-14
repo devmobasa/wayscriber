@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyleOption {
     Normal,
@@ -13,18 +15,18 @@ impl FontStyleOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Normal => "Normal",
-            Self::Italic => "Italic",
-            Self::Oblique => "Oblique",
-            Self::Custom => "Custom",
+            Self::Normal => tr("Normal"),
+            Self::Italic => tr("Italic"),
+            Self::Oblique => tr("Oblique"),
+            Self::Custom => tr("Custom"),
         }
     }
 
     pub fn canonical_value(&self) -> &'static str {
         match self {
-            Self::Normal => "normal",
-            Self::Italic => "italic",
-            Self::Oblique => "oblique",
+            Self::Normal => tr("normal"),
+            Self::Italic => tr("italic"),
+            Self::Oblique => tr("oblique"),
             Self::Custom => "",
         }
     }
@@ -32,9 +34,9 @@ impl FontStyleOption {
     pub fn from_value(value: &str) -> (Self, String) {
         let lower = value.trim().to_lowercase();
         match lower.as_str() {
-            "normal" => (Self::Normal, "normal".to_string()),
-            "italic" => (Self::Italic, "italic".to_string()),
-            "oblique" => (Self::Oblique, "oblique".to_string()),
+            "normal" => (Self::Normal, tr("normal").to_string()),
+            "italic" => (Self::Italic, tr("italic").to_string()),
+            "oblique" => (Self::Oblique, tr("oblique").to_string()),
             _ => (Self::Custom, value.to_string()),
         }
     }
@@ -72,24 +74,24 @@ impl FontWeightOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Normal => "Normal",
-            Self::Bold => "Bold",
-            Self::Light => "Light",
-            Self::Ultralight => "Ultralight",
-            Self::Heavy => "Heavy",
-            Self::Ultrabold => "Ultrabold",
-            Self::Custom => "Custom",
+            Self::Normal => tr("Normal"),
+            Self::Bold => tr("Bold"),
+            Self::Light => tr("Light"),
+            Self::Ultralight => tr("Ultralight"),
+            Self::Heavy => tr("Heavy"),
+            Self::Ultrabold => tr("Ultrabold"),
+            Self::Custom => tr("Custom"),
         }
     }
 
     pub fn canonical_value(&self) -> &'static str {
         match self {
-            Self::Normal => "normal",
-            Self::Bold => "bold",
-            Self::Light => "light",
-            Self::Ultralight => "ultralight",
-            Self::Heavy => "heavy",
-            Self::Ultrabold => "ultrabold",
+            Self::Normal => tr("normal"),
+            Self::Bold => tr("bold"),
+            Self::Light => tr("light"),
+            Self::Ultralight => tr("ultralight"),
+            Self::Heavy => tr("heavy"),
+            Self::Ultrabold => tr("ultrabold"),
             Self::Custom => "",
         }
     }
@@ -97,12 +99,12 @@ impl FontWeightOption {
     pub fn from_value(value: &str) -> (Self, String) {
         let lower = value.trim().to_lowercase();
         match lower.as_str() {
-            "normal" => (Self::Normal, "normal".to_string()),
-            "bold" => (Self::Bold, "bold".to_string()),
-            "light" => (Self::Light, "light".to_string()),
-            "ultralight" => (Self::Ultralight, "ultralight".to_string()),
-            "heavy" => (Self::Heavy, "heavy".to_string()),
-            "ultrabold" => (Self::Ultrabold, "ultrabold".to_string()),
+            "normal" => (Self::Normal, tr("normal").to_string()),
+            "bold" => (Self::Bold, tr("bold").to_string()),
+            "light" => (Self::Light, tr("light").to_string()),
+            "ultralight" => (Self::Ultralight, tr("ultralight").to_string()),
+            "heavy" => (Self::Heavy, tr("heavy").to_string()),
+            "ultrabold" => (Self::Ultrabold, tr("ultrabold").to_string()),
             _ => (Self::Custom, value.to_string()),
         }
     }

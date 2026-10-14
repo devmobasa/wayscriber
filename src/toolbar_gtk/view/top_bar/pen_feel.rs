@@ -8,6 +8,8 @@
 //! autohide grab (the backend's dismissal policy owns click-away), keys
 //! relayed to the overlay, and `closed` echoing a user dismissal.
 
+use crate::i18n::trf;
+
 use super::meter::{MeterBarsSpec, append_meter_bars};
 use super::*;
 
@@ -99,7 +101,7 @@ impl TopBar {
         // invisible to the clicks inside it.
         install_click_modifier_capture(&content, &self.feedback);
 
-        let title = gtk4::Label::new(Some(model::PEN_FEEL_TITLE));
+        let title = gtk4::Label::new(Some(model::pen_feel_title()));
         title.add_css_class("section-title");
         title.set_xalign(0.0);
         title.set_size_request(-1, px(model::PEN_FEEL_TITLE_H));
@@ -143,9 +145,9 @@ impl TopBar {
         let bars = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         bars.set_margin_top(px(model::PEN_FEEL_ROW_GAP));
         set_semantic_widget_id(&bars, &section.id("bars"));
-        bars.update_property(&[gtk4::accessible::Property::Label(&format!(
+        bars.update_property(&[gtk4::accessible::Property::Label(&trf(
             "{} level",
-            setting.name()
+            &[&setting.name()],
         ))]);
         updaters.push(append_meter_bars(
             &self.feedback,
@@ -242,8 +244,8 @@ fn smoothing_preview_area(section: &model::PenFeelSection, scale: f64) -> Smooth
 
 /// What the preview shows, for assistive tech.
 fn preview_label(level: u8) -> String {
-    format!(
+    trf(
         "Smoothing preview: a sample stroke at {}",
-        model::StrokeSetting::Smoothing.level_name(level)
+        &[&model::StrokeSetting::Smoothing.level_name(level)],
     )
 }

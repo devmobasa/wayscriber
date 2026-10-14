@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::i18n::tr;
 use crate::process_broker::{HelperKind, HelperLifetime};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,8 +48,8 @@ impl DesktopOpenRequest {
 
     pub(crate) fn failure_notice(&self) -> &'static str {
         match self {
-            Self::CaptureFolder(_) => "Failed to open capture folder.",
-            Self::ConfigFile(_) => "Failed to open config file.",
+            Self::CaptureFolder(_) => tr("Failed to open capture folder."),
+            Self::ConfigFile(_) => tr("Failed to open config file."),
         }
     }
 }

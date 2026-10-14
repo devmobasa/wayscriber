@@ -1,3 +1,4 @@
+use crate::i18n::{tr, trf};
 use crate::ui::primitives::text_extents_for_with_engine;
 
 use super::super::search::ellipsize_to_fit_with_engine;
@@ -36,12 +37,14 @@ pub(crate) fn build_nav_state(
     max_search_width: f64,
 ) -> NavState {
     let nav_text_primary = if !search_active && page_count > 1 {
-        format!(
+        trf(
             "{}  {}  Page {}/{}",
-            nav_title,
-            BULLET,
-            page_index + 1,
-            page_count
+            &[
+                &nav_title as &dyn std::fmt::Display,
+                &BULLET,
+                &(page_index + 1),
+                &page_count,
+            ],
         )
     } else {
         nav_title.to_string()
@@ -50,14 +53,14 @@ pub(crate) fn build_nav_state(
     let nav_secondary_segments: Vec<(String, [f64; 4])> = if search_active {
         vec![
             ("Esc".to_string(), nav_key_color),
-            (": Close".to_string(), subtitle_color),
+            (tr(": Close").to_string(), subtitle_color),
             (nav_separator.clone(), subtitle_color),
             ("Backspace".to_string(), nav_key_color),
-            (": Remove".to_string(), subtitle_color),
+            (tr(": Remove").to_string(), subtitle_color),
         ]
     } else if page_count > 1 {
         vec![
-            ("Switch pages:".to_string(), subtitle_color),
+            (tr("Switch pages:").to_string(), subtitle_color),
             (
                 "  Left/Right, PageUp/PageDown, Home/End".to_string(),
                 nav_key_color,
@@ -66,7 +69,7 @@ pub(crate) fn build_nav_state(
     } else {
         vec![
             ("Esc".to_string(), nav_key_color),
-            (": Close".to_string(), subtitle_color),
+            (tr(": Close").to_string(), subtitle_color),
         ]
     };
     let nav_text_secondary: String = nav_secondary_segments
@@ -96,7 +99,7 @@ pub(crate) fn build_nav_state(
     .width();
 
     let search_text = if search_active {
-        let prefix = "Search: ";
+        let prefix = tr("Search: ");
         let prefix_extents = text_extents_for_with_engine(
             engine,
             ctx,
@@ -120,7 +123,7 @@ pub(crate) fn build_nav_state(
     } else {
         None
     };
-    let search_hint_text = (!search_active).then(|| "Type to search".to_string());
+    let search_hint_text = (!search_active).then(|| tr("Type to search").to_string());
     let extra_line_text = search_text.or(search_hint_text);
     let extra_line_width = extra_line_text.as_ref().map(|text| {
         text_extents_for_with_engine(

@@ -2,11 +2,11 @@
 
 use super::super::base::{InputState, Toast, ToastPriority};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 
 const RESTORE_NOTICE_KEY: &str = "session.restored";
 /// The notice carries a button, so it stays up long enough to reach it.
 const RESTORE_NOTICE_DURATION_MS: u64 = 8000;
-const CLEAR_LABEL: &str = "Clear";
 
 /// The board and page a restore notice describes. Its Clear button runs Clear
 /// Canvas on whatever page is active, so the notice may only stand while that
@@ -38,7 +38,7 @@ impl InputState {
 
         let toast = Toast::info(restored_annotations_message(count))
             .duration_ms(RESTORE_NOTICE_DURATION_MS)
-            .action(CLEAR_LABEL, Action::ClearCanvas);
+            .action(tr("Clear"), Action::ClearCanvas);
         let accepted = self
             .push_toast(ToastPriority::Action, RESTORE_NOTICE_KEY, toast)
             .accepted();
@@ -81,8 +81,8 @@ impl InputState {
 
 fn restored_annotations_message(count: usize) -> String {
     match count {
-        1 => "Restored 1 annotation from last session".to_string(),
-        count => format!("Restored {count} annotations from last session"),
+        1 => tr("Restored 1 annotation from last session").to_string(),
+        count => trf("Restored {} annotations from last session", &[&count]),
     }
 }
 

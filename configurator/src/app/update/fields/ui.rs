@@ -1,8 +1,8 @@
 use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
-    InputHudModeOption, InputHudPositionOption, OverrideOption, ReducedMotionOption,
-    StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    InputHudModeOption, InputHudPositionOption, LanguageOption, OverrideOption,
+    ReducedMotionOption, StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
     ToolbarRebindModifierOption, ToolbarStrokeControlsOption, UiThemeOption, ZoomChipDisplayOption,
 };
 
@@ -56,6 +56,21 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.ui_reduced_motion = option;
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_ui_language_changed(
+        &mut self,
+        option: LanguageOption,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_language = option;
+        // Chrome translates through process-global state: selecting now makes
+        // surfaces built from here on (fresh dialogs, reopened windows) draw
+        // in the new language, while this window keeps its rendered labels
+        // until it is reopened.
+        wayscriber::i18n::set_language(option.to_language());
         self.refresh_dirty_flag();
         Vec::new()
     }

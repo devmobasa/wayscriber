@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TabId {
     Drawing,
@@ -52,20 +54,20 @@ impl TabId {
 
     pub fn title(&self) -> &'static str {
         match self {
-            TabId::Drawing => "Drawing",
-            TabId::Presets => "Presets",
-            TabId::Arrow => "Arrow",
-            TabId::History => "History",
-            TabId::Performance => "Performance",
+            TabId::Drawing => tr("Drawing"),
+            TabId::Presets => tr("Presets"),
+            TabId::Arrow => tr("Arrow"),
+            TabId::History => tr("History"),
+            TabId::Performance => tr("Performance"),
             TabId::Ui => "UI",
-            TabId::Boards => "Boards",
-            TabId::RenderProfiles => "Render Profiles",
-            TabId::Capture => "Capture",
-            TabId::Daemon => "Background Mode",
-            TabId::Session => "Session",
-            TabId::Keybindings => "Keybindings",
+            TabId::Boards => tr("Boards"),
+            TabId::RenderProfiles => tr("Render Profiles"),
+            TabId::Capture => tr("Capture"),
+            TabId::Daemon => tr("Background Mode"),
+            TabId::Session => tr("Session"),
+            TabId::Keybindings => tr("Keybindings"),
             #[cfg(feature = "tablet-input")]
-            TabId::Tablet => "Tablet",
+            TabId::Tablet => tr("Tablet"),
         }
     }
 }
@@ -94,13 +96,13 @@ impl UiTabId {
 
     pub fn title(&self) -> &'static str {
         match self {
-            UiTabId::Toolbar => "Toolbar",
-            UiTabId::ToolbarVisibility => "Toolbar Visibility",
-            UiTabId::StatusBar => "Status Bar",
-            UiTabId::HelpOverlay => "Help Overlay",
-            UiTabId::ClickHighlight => "Click Highlight",
-            UiTabId::InputHud => "Input HUD",
-            UiTabId::PresenterMode => "Presenter Mode",
+            UiTabId::Toolbar => tr("Toolbar"),
+            UiTabId::ToolbarVisibility => tr("Toolbar Visibility"),
+            UiTabId::StatusBar => tr("Status Bar"),
+            UiTabId::HelpOverlay => tr("Help Overlay"),
+            UiTabId::ClickHighlight => tr("Click Highlight"),
+            UiTabId::InputHud => tr("Input HUD"),
+            UiTabId::PresenterMode => tr("Presenter Mode"),
         }
     }
 }
@@ -151,15 +153,15 @@ impl KeybindingsTabId {
 
     pub fn title(&self) -> &'static str {
         match self {
-            KeybindingsTabId::General => "General",
-            KeybindingsTabId::Drawing => "Drawing",
-            KeybindingsTabId::Tools => "Tools",
-            KeybindingsTabId::Selection => "Selection",
-            KeybindingsTabId::History => "History",
-            KeybindingsTabId::Boards => "Boards",
-            KeybindingsTabId::UiModes => "UI & Modes",
-            KeybindingsTabId::CaptureView => "Capture & View",
-            KeybindingsTabId::Presets => "Presets",
+            KeybindingsTabId::General => tr("General"),
+            KeybindingsTabId::Drawing => tr("Drawing"),
+            KeybindingsTabId::Tools => tr("Tools"),
+            KeybindingsTabId::Selection => tr("Selection"),
+            KeybindingsTabId::History => tr("History"),
+            KeybindingsTabId::Boards => tr("Boards"),
+            KeybindingsTabId::UiModes => tr("UI & Modes"),
+            KeybindingsTabId::CaptureView => tr("Capture & View"),
+            KeybindingsTabId::Presets => tr("Presets"),
         }
     }
 }

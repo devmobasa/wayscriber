@@ -4,6 +4,7 @@ use crate::config::{
     Action, StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode,
 };
 use crate::draw::{Color, FontDescriptor};
+use crate::i18n::tr;
 use crate::input::{EraserMode, Tool};
 
 use super::ToolbarSnapshot;
@@ -20,15 +21,15 @@ pub enum ToolbarItemCustomizeGroup {
 }
 
 impl ToolbarItemCustomizeGroup {
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Self::TopTools => "Top tools",
-            Self::TopControls => "Top controls",
-            Self::Actions => "Actions",
-            Self::Pages => "Pages",
-            Self::Boards => "Boards",
-            Self::Presets => "Presets",
-            Self::Sessions => "Sessions",
+            Self::TopTools => tr("Top tools"),
+            Self::TopControls => tr("Top controls"),
+            Self::Actions => tr("Actions"),
+            Self::Pages => tr("Pages"),
+            Self::Boards => tr("Boards"),
+            Self::Presets => tr("Presets"),
+            Self::Sessions => tr("Sessions"),
         }
     }
 }
@@ -47,8 +48,8 @@ pub enum PrecisionEntryTarget {
 impl PrecisionEntryTarget {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Thickness => "Thickness",
-            Self::FontSize => "Text size",
+            Self::Thickness => tr("Thickness"),
+            Self::FontSize => tr("Text size"),
         }
     }
 

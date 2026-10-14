@@ -1,4 +1,5 @@
 use crate::config::{Action, QuickColorSlot, action_label};
+use crate::i18n::tr;
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::toolbar_icons;
 
@@ -36,7 +37,7 @@ pub(super) fn build_main_sections(
     capture_enabled: bool,
 ) -> MainSections {
     let board_modes = (!context_filter || board_enabled).then(|| Section {
-        title: "Boards",
+        title: tr("Boards"),
         rows: vec![
             action_row(bindings, Action::ToggleWhiteboard, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleBlackboard, NOT_BOUND_LABEL),
@@ -57,7 +58,7 @@ pub(super) fn build_main_sections(
                     ],
                     "Ctrl+Shift+1..9",
                 ),
-                "Switch board slot",
+                tr("Switch board slot"),
             ),
             row(
                 bindings_or_fallback(
@@ -65,7 +66,7 @@ pub(super) fn build_main_sections(
                     &[Action::BoardPrev, Action::BoardNext],
                     "Ctrl+Shift+Left/Right",
                 ),
-                "Previous/next board",
+                tr("Previous/next board"),
             ),
             row(
                 bindings_or_fallback(
@@ -73,7 +74,7 @@ pub(super) fn build_main_sections(
                     &[Action::FocusPrevOutput, Action::FocusNextOutput],
                     "Ctrl+Shift+Alt+Left/Right",
                 ),
-                "Previous/next output",
+                tr("Previous/next output"),
             ),
             action_row(bindings, Action::BoardNew, NOT_BOUND_LABEL),
             action_row(bindings, Action::BoardDelete, NOT_BOUND_LABEL),
@@ -84,7 +85,7 @@ pub(super) fn build_main_sections(
     });
 
     let pages = Section {
-        title: "Pages",
+        title: tr("Pages"),
         rows: vec![
             action_row(bindings, Action::PagePrev, NOT_BOUND_LABEL),
             action_row(bindings, Action::PageNext, NOT_BOUND_LABEL),
@@ -101,7 +102,7 @@ pub(super) fn build_main_sections(
         .collect();
 
     let drawing = Section {
-        title: "Drawing",
+        title: tr("Drawing"),
         rows: vec![
             action_row(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectLiveShapeTool, NOT_BOUND_LABEL),
@@ -122,7 +123,7 @@ pub(super) fn build_main_sections(
                     &[Action::IncreaseThickness, Action::DecreaseThickness],
                     NOT_BOUND_LABEL,
                 ),
-                "Adjust thickness",
+                tr("Adjust thickness"),
             ),
             row(
                 bindings_or_fallback(
@@ -130,7 +131,7 @@ pub(super) fn build_main_sections(
                     &[Action::IncreasePenSmoothing, Action::DecreasePenSmoothing],
                     NOT_BOUND_LABEL,
                 ),
-                "Adjust stroke smoothing",
+                tr("Adjust stroke smoothing"),
             ),
             row(
                 bindings_or_fallback(
@@ -141,7 +142,7 @@ pub(super) fn build_main_sections(
                     ],
                     NOT_BOUND_LABEL,
                 ),
-                "Adjust Shape Pen sensitivity",
+                tr("Adjust Shape Pen sensitivity"),
             ),
         ],
         badges: color_badges.clone(),
@@ -149,10 +150,10 @@ pub(super) fn build_main_sections(
     };
 
     let selection = Section {
-        title: "Selection",
+        title: tr("Selection"),
         rows: vec![
             action_row(bindings, Action::SelectSelectionTool, NOT_BOUND_LABEL),
-            row("Drag", "Selection tool"),
+            row(tr("Drag"), tr("Selection tool")),
             action_row(bindings, Action::SelectAll, NOT_BOUND_LABEL),
             action_row(bindings, Action::DuplicateSelection, NOT_BOUND_LABEL),
             action_row(bindings, Action::CopySelection, NOT_BOUND_LABEL),
@@ -167,7 +168,7 @@ pub(super) fn build_main_sections(
     };
 
     let pen_text = Section {
-        title: "Pen & Text",
+        title: tr("Pen & Text"),
         rows: vec![
             action_row(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
             action_row(bindings, Action::EnterStickyNoteMode, NOT_BOUND_LABEL),
@@ -176,7 +177,7 @@ pub(super) fn build_main_sections(
             action_row(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
-            row("Selection properties panel", "Text background"),
+            row(tr("Selection properties panel"), tr("Text background")),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_text),
@@ -186,33 +187,33 @@ pub(super) fn build_main_sections(
     // the editor, ahead of the action layer, so they are fixed rather than
     // configurable bindings.
     let text_editing = Section {
-        title: "Text editing",
+        title: tr("Text editing"),
         rows: vec![
-            row("Click", "Place caret"),
-            row("Shift+Click / Shift+Arrows", "Select text"),
-            row("Alt+Drag", "Move the text block"),
-            row("Left/Right, Ctrl+Left/Right", "Move by character/word"),
-            row("Home/End, Ctrl+Home/End", "Line start/end, text start/end"),
-            row("Ctrl+A", "Select all text"),
-            row("Ctrl+C / Ctrl+X / Ctrl+V", "Copy / cut / paste selection"),
-            row("Backspace/Delete, +Ctrl", "Delete character/word"),
-            row("Shift+Enter", "New line"),
-            row("Enter", "Finish editing"),
-            row("Escape", "Cancel editing"),
+            row(tr("Click"), tr("Place caret")),
+            row("Shift+Click / Shift+Arrows", tr("Select text")),
+            row("Alt+Drag", tr("Move the text block")),
+            row("Left/Right, Ctrl+Left/Right", tr("Move by character/word")),
+            row("Home/End, Ctrl+Home/End", tr("Line start/end, text start/end")),
+            row("Ctrl+A", tr("Select all text")),
+            row("Ctrl+C / Ctrl+X / Ctrl+V", tr("Copy / cut / paste selection")),
+            row("Backspace/Delete, +Ctrl", tr("Delete character/word")),
+            row("Shift+Enter", tr("New line")),
+            row("Enter", tr("Finish editing")),
+            row("Escape", tr("Cancel editing")),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_text),
     };
 
     let zoom = Section {
-        title: "Zoom",
+        title: tr("Zoom"),
         rows: vec![
             action_row(bindings, Action::ZoomIn, NOT_BOUND_LABEL),
             action_row(bindings, Action::ZoomOut, NOT_BOUND_LABEL),
-            row("Ctrl + Scroll", "Zoom at pointer"),
+            row("Ctrl + Scroll", tr("Zoom at pointer")),
             action_row(bindings, Action::ResetZoom, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleZoomLock, NOT_BOUND_LABEL),
-            row("Middle drag / arrow keys", "Pan view"),
+            row(tr("Middle drag / arrow keys"), tr("Pan view")),
             action_row(bindings, Action::RefreshZoomCapture, NOT_BOUND_LABEL),
         ],
         badges: Vec::new(),
@@ -226,8 +227,8 @@ pub(super) fn build_main_sections(
         action_row(bindings, Action::ToggleInputHud, NOT_BOUND_LABEL),
         row(
             match joined_labels(bindings, &[Action::OpenContextMenu]) {
-                Some(label) => format!("Right Click / {label}"),
-                None => "Right Click".to_string(),
+                Some(label) => format!("{} / {label}", tr("Right Click")),
+                None => tr("Right Click").to_string(),
             },
             action_label(Action::OpenContextMenu),
         )
@@ -265,7 +266,7 @@ pub(super) fn build_main_sections(
         ));
     }
     let actions = Section {
-        title: "Actions",
+        title: tr("Actions"),
         rows: action_rows,
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_undo),
@@ -276,32 +277,32 @@ pub(super) fn build_main_sections(
         screenshot_rows.extend([
             row(
                 binding_or_fallback(bindings, Action::CaptureClipboardFull, NOT_BOUND_LABEL),
-                "Full screen → clipboard",
+                tr("Full screen → clipboard"),
             )
             .with_action(Action::CaptureClipboardFull),
             row(
                 binding_or_fallback(bindings, Action::CaptureFileFull, NOT_BOUND_LABEL),
-                "Full screen → file",
+                tr("Full screen → file"),
             )
             .with_action(Action::CaptureFileFull),
             row(
                 binding_or_fallback(bindings, Action::CaptureClipboardSelection, NOT_BOUND_LABEL),
-                "Region → clipboard",
+                tr("Region → clipboard"),
             )
             .with_action(Action::CaptureClipboardSelection),
             row(
                 binding_or_fallback(bindings, Action::CaptureFileSelection, NOT_BOUND_LABEL),
-                "Region → file",
+                tr("Region → file"),
             )
             .with_action(Action::CaptureFileSelection),
             row(
                 binding_or_fallback(bindings, Action::CaptureActiveWindow, NOT_BOUND_LABEL),
-                "Active window (Hyprland)",
+                tr("Active window (Hyprland)"),
             )
             .with_action(Action::CaptureActiveWindow),
             row(
                 binding_or_fallback(bindings, Action::CaptureSelection, NOT_BOUND_LABEL),
-                "Selection (capture defaults)",
+                tr("Selection (capture defaults)"),
             )
             .with_action(Action::CaptureSelection),
             action_row(bindings, Action::CaptureRegionInteractive, NOT_BOUND_LABEL),
@@ -321,7 +322,7 @@ pub(super) fn build_main_sections(
         action_row(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
     ]);
     let screenshots = Some(Section {
-        title: "Screenshots & Export",
+        title: tr("Screenshots & Export"),
         rows: screenshot_rows,
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_save),

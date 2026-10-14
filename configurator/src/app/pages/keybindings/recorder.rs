@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -18,6 +20,7 @@ use crate::models::keybindings::{
 
 use super::super::super::state::ConfiguratorApp;
 use super::widgets::{
+
     field_canceled, set_accessible_label, set_label, set_sensitive, set_visible,
     unparent_on_destroy,
 };
@@ -53,7 +56,7 @@ impl RecorderPopover {
             .build();
         set_accessible_label(&hint, super_consumed_hint());
 
-        let cancel = gtk::Button::builder().label("Cancel").build();
+        let cancel = gtk::Button::builder().label(tr("Cancel")).build();
         set_accessible_label(&cancel, "Cancel recording");
         {
             let sender = sender.clone();
@@ -62,7 +65,7 @@ impl RecorderPopover {
             });
         }
 
-        let finish = gtk::Button::builder().label("Finish").build();
+        let finish = gtk::Button::builder().label(tr("Finish")).build();
         set_accessible_label(&finish, "Finish sequence");
         {
             let sender = sender.clone();
@@ -71,7 +74,7 @@ impl RecorderPopover {
             });
         }
 
-        let remove_last = gtk::Button::builder().label("Remove Last Step").build();
+        let remove_last = gtk::Button::builder().label(tr("Remove Last Step")).build();
         set_accessible_label(&remove_last, "Remove last sequence step");
         {
             let sender = sender.clone();
@@ -198,7 +201,7 @@ fn device_hint_label() -> gtk::Label {
 fn device_hint_text() -> &'static str {
     #[cfg(feature = "tablet-input")]
     {
-        "Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot."
+        tr("Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot.")
     }
     #[cfg(not(feature = "tablet-input"))]
     {

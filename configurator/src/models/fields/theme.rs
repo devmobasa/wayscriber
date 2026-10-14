@@ -1,4 +1,6 @@
-use wayscriber::config::{ReducedMotion, UiTheme};
+use wayscriber::i18n::tr;
+
+use wayscriber::config::{Language, ReducedMotion, UiTheme};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiThemeOption {
@@ -18,9 +20,9 @@ impl UiThemeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            UiThemeOption::Auto => "Auto",
-            UiThemeOption::Dark => "Dark",
-            UiThemeOption::Light => "Light",
+            UiThemeOption::Auto => tr("Auto"),
+            UiThemeOption::Dark => tr("Dark"),
+            UiThemeOption::Light => tr("Light"),
         }
     }
 
@@ -65,9 +67,9 @@ impl ReducedMotionOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            ReducedMotionOption::Auto => "Auto",
-            ReducedMotionOption::On => "On",
-            ReducedMotionOption::Off => "Off",
+            ReducedMotionOption::Auto => tr("Auto"),
+            ReducedMotionOption::On => tr("On"),
+            ReducedMotionOption::Off => tr("Off"),
         }
     }
 
@@ -89,6 +91,53 @@ impl ReducedMotionOption {
 }
 
 impl std::fmt::Display for ReducedMotionOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageOption {
+    Auto,
+    English,
+    SimplifiedChinese,
+}
+
+impl LanguageOption {
+    pub fn list() -> Vec<Self> {
+        vec![
+            LanguageOption::Auto,
+            LanguageOption::English,
+            LanguageOption::SimplifiedChinese,
+        ]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            LanguageOption::Auto => tr("Automatic (system locale)"),
+            LanguageOption::English => tr("English"),
+            LanguageOption::SimplifiedChinese => tr("Simplified Chinese"),
+        }
+    }
+
+    pub fn to_language(self) -> Language {
+        match self {
+            LanguageOption::Auto => Language::Auto,
+            LanguageOption::English => Language::English,
+            LanguageOption::SimplifiedChinese => Language::SimplifiedChinese,
+        }
+    }
+
+    pub fn from_language(value: Language) -> Self {
+        match value {
+            Language::Auto => LanguageOption::Auto,
+            Language::English => LanguageOption::English,
+            Language::SimplifiedChinese => LanguageOption::SimplifiedChinese,
+        }
+    }
+}
+
+impl std::fmt::Display for LanguageOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

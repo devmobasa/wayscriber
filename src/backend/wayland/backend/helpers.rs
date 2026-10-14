@@ -12,33 +12,38 @@ use super::runtime_wake::{
     RuntimeWakeSource, TerminalReadinessPolicy, poll_with_retry, validate_poll_readiness,
 };
 use crate::capture::CaptureFailureKind;
+use crate::i18n::tr;
 use crate::{RESUME_SESSION_ENV, runtime_session_override};
 
 pub(super) fn friendly_capture_error(kind: CaptureFailureKind) -> String {
     match kind {
         CaptureFailureKind::MissingTool("slurp") => {
-            "Missing screenshot tool: slurp. Install slurp + grim and try again.".to_string()
+            tr("Missing screenshot tool: slurp. Install slurp + grim and try again.").to_string()
         }
         CaptureFailureKind::MissingTool("grim") => {
-            "Missing screenshot tool: grim. Install grim and try again.".to_string()
+            tr("Missing screenshot tool: grim. Install grim and try again.").to_string()
         }
         CaptureFailureKind::MissingTool("wl-copy") => {
-            "Missing clipboard tool: wl-clipboard (wl-copy). Install it and try again.".to_string()
-        }
-        CaptureFailureKind::PermissionDenied => {
-            "Permission denied. Enable screen sharing in system settings.".to_string()
-        }
-        CaptureFailureKind::PortalError => {
-            "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service."
+            tr("Missing clipboard tool: wl-clipboard (wl-copy). Install it and try again.")
                 .to_string()
         }
+        CaptureFailureKind::PermissionDenied => {
+            tr("Permission denied. Enable screen sharing in system settings.").to_string()
+        }
+        CaptureFailureKind::PortalError => {
+            tr(
+                "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service.",
+            )
+            .to_string()
+        }
         CaptureFailureKind::Save => {
-            "Screenshot was not saved. Check the capture save directory and try again.".to_string()
+            tr("Screenshot was not saved. Check the capture save directory and try again.")
+                .to_string()
         }
         // Other helpers, such as `hyprctl`, are only absent on desktops where
         // the portal is the real capture path, so installing them is no fix.
         CaptureFailureKind::MissingTool(_) | CaptureFailureKind::Other => {
-            "Screen capture failed. Please try again.".to_string()
+            tr("Screen capture failed. Please try again.").to_string()
         }
     }
 }

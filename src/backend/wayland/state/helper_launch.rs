@@ -9,6 +9,7 @@ use super::WaylandState;
 use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
 use crate::env_vars::CONFIGURATOR_ENV;
 use crate::input::state::{HelperLaunchRequest, Toast, ToastPriority};
+use crate::i18n::tr;
 
 fn spawn_detached(
     kind: crate::process_broker::HelperKind,
@@ -30,7 +31,7 @@ fn launch_deferred_by_busy_broker(error: &anyhow::Error) -> bool {
 
 fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'static str {
     if launch_deferred_by_busy_broker(error) {
-        "Busy with another task. Try again in a moment."
+        tr("Busy with another task. Try again in a moment.")
     } else {
         failed
     }
@@ -57,7 +58,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     "launcher",
-                    Toast::error("Could not locate Wayscriber to open About."),
+                    Toast::error(tr("Could not locate Wayscriber to open About.")),
                 );
                 return;
             }
@@ -79,7 +80,7 @@ impl WaylandState {
                     "launcher",
                     Toast::error(launch_failure_message(
                         &error,
-                        "Failed to open About (see logs).",
+                        tr("Failed to open About (see logs)."),
                     )),
                 );
             }
@@ -118,7 +119,7 @@ impl WaylandState {
                         "launcher",
                         Toast::error(launch_failure_message(
                             &error,
-                            "Failed to launch configurator (see logs).",
+                            tr("Failed to launch configurator (see logs)."),
                         )),
                     );
                 }

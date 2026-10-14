@@ -12,6 +12,8 @@
 mod color;
 mod rows;
 
+use wayscriber::i18n::tr;
+
 use relm4::adw;
 use relm4::prelude::*;
 
@@ -30,22 +32,23 @@ use super::{BuiltPage, PageBuilder};
 use color::build_color_rows;
 use rows::{SlotBuilder, labels_of, slot_button};
 
+
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Presets);
 
     let counts: Vec<usize> = (PRESET_SLOTS_MIN..=PRESET_SLOTS_MAX).collect();
     let count_labels: Vec<String> = counts.iter().map(usize::to_string).collect();
-    page.group_in_area("Preset Slots", SearchArea::PresetControls)
+    page.group_in_area(tr("Preset Slots"), SearchArea::PresetControls)
         .combo_row(
-            "Visible slots",
-            "How many preset slots the toolbar offers.",
+            tr("Visible slots"),
+            tr("How many preset slots the toolbar offers."),
             counts,
             count_labels,
             |app| app.draft.presets.slot_count,
             Message::PresetSlotCountChanged,
         );
 
-    page.group("Slots").group_visible_when(|app| {
+    page.group(tr("Slots")).group_visible_when(|app| {
         let search = app.search_summary();
         (1..=PRESET_SLOTS_MAX).any(|slot| slot_visible(app, &search, slot))
     });
@@ -103,15 +106,15 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
 
     let reset = slot_button(
         page,
-        "Reset",
-        "Restore this slot's default settings",
+        tr("Reset"),
+        tr("Restore this slot's default settings"),
         Message::PresetResetSlot(slot),
     );
     expander.add_suffix(&reset);
     let duplicate = slot_button(
         page,
-        "Duplicate",
-        "Copy this slot into the next one",
+        tr("Duplicate"),
+        tr("Copy this slot into the next one"),
         Message::PresetDuplicateSlot(slot),
     );
     // The last slot has nowhere to copy to, exactly as the Iced header's
@@ -156,7 +159,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
             }
 
             let subtitle = if !draft.enabled {
-                "Slot disabled. Enable to configure.".to_string()
+                tr("Slot disabled. Enable to configure.").to_string()
             } else if draft.name.trim().is_empty() {
                 draft.tool.label().to_string()
             } else {
@@ -175,7 +178,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     };
 
     rows.entry_row(
-        "Label",
+        tr("Label"),
         move |app| app.draft.presets.slot(slot).map(|draft| draft.name.clone()),
         move |slot, value| Message::PresetTextChanged(slot, PresetTextField::Name, value),
     );
@@ -183,7 +186,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     let tools = ToolOption::list();
     let tool_labels = labels_of(&tools, ToolOption::label);
     rows.combo_row(
-        "Tool",
+        tr("Tool"),
         tools,
         tool_labels,
         move |app| app.draft.presets.slot(slot).map(|draft| draft.tool),
@@ -193,12 +196,12 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     build_color_rows(&mut rows, slot);
 
     rows.entry_row(
-        "Size (px)",
+        tr("Size (px)"),
         move |app| app.draft.presets.slot(slot).map(|draft| draft.size.clone()),
         move |slot, value| Message::PresetTextChanged(slot, PresetTextField::Size, value),
     );
     rows.entry_row(
-        "Marker opacity (0.05-0.9)",
+        tr("Marker opacity (0.05-0.9)"),
         move |app| {
             app.draft
                 .presets
@@ -211,7 +214,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     let kinds = PresetEraserKindOption::list();
     let kind_labels = labels_of(&kinds, PresetEraserKindOption::label);
     rows.combo_row(
-        "Eraser kind",
+        tr("Eraser kind"),
         kinds,
         kind_labels,
         move |app| app.draft.presets.slot(slot).map(|draft| draft.eraser_kind),
@@ -220,7 +223,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     let modes = PresetEraserModeOption::list();
     let mode_labels = labels_of(&modes, PresetEraserModeOption::label);
     rows.combo_row(
-        "Eraser mode",
+        tr("Eraser mode"),
         modes,
         mode_labels,
         move |app| app.draft.presets.slot(slot).map(|draft| draft.eraser_mode),
@@ -231,7 +234,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
         app.draft.presets.slot(slot).map(|draft| draft.fill_enabled)
     });
     rows.override_row(
-        "Text background",
+        tr("Text background"),
         PresetToggleField::TextBackgroundEnabled,
         move |app| {
             app.draft
@@ -242,7 +245,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     );
 
     rows.entry_row(
-        "Font size (pt)",
+        tr("Font size (pt)"),
         move |app| {
             app.draft
                 .presets
@@ -252,7 +255,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
         move |slot, value| Message::PresetTextChanged(slot, PresetTextField::FontSize, value),
     );
     rows.entry_row(
-        "Arrow length (px)",
+        tr("Arrow length (px)"),
         move |app| {
             app.draft
                 .presets
@@ -262,7 +265,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
         move |slot, value| Message::PresetTextChanged(slot, PresetTextField::ArrowLength, value),
     );
     rows.entry_row(
-        "Arrow angle (deg)",
+        tr("Arrow angle (deg)"),
         move |app| {
             app.draft
                 .presets
@@ -272,7 +275,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
         move |slot, value| Message::PresetTextChanged(slot, PresetTextField::ArrowAngle, value),
     );
     rows.override_row(
-        "Arrow head at end",
+        tr("Arrow head at end"),
         PresetToggleField::ArrowHeadAtEnd,
         move |app| {
             app.draft
@@ -282,7 +285,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
         },
     );
     rows.override_row(
-        "Show status bar",
+        tr("Show status bar"),
         PresetToggleField::ShowStatusBar,
         move |app| {
             app.draft

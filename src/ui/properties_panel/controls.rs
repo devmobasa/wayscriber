@@ -6,6 +6,7 @@ use std::f64::consts::{PI, TAU};
 use cairo::FontWeight;
 
 use crate::draw::{ArrowStyle, Color};
+use crate::i18n::tr;
 use crate::input::state::properties_panel_metrics::{
     CAPTION_FONT, SEGMENT_ICON_GAP, SEGMENT_ICON_WIDTH, SLIDER_THUMB_RADIUS, SLIDER_TRACK_HEIGHT,
     VALUE_FONT, text_style,
@@ -449,7 +450,7 @@ pub(super) fn draw_arrow_head_segments(
     let _ = ctx.fill();
 
     let style = text_style(VALUE_FONT, FontWeight::Normal);
-    for (rect, is_end, label) in [(start, false, "Start"), (end, true, "End")] {
+    for (rect, is_end, label) in [(start, false, tr("Start")), (end, true, tr("End"))] {
         let active = at_end == Some(is_end);
         let hovered = state.hovers(
             |hit| matches!(hit, PropertiesPanelHit::ArrowHead { at_end, .. } if at_end == is_end),

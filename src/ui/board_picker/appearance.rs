@@ -1,4 +1,5 @@
 use crate::domain::BoardGridKind;
+use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::AppearanceField;
 use crate::ui::constants::{
@@ -75,7 +76,7 @@ pub(super) fn render(
             weight: cairo::FontWeight::Bold,
             ..style
         },
-        &format!("Paper: {board_name}"),
+        &trf("Paper: {}", &[&board_name]),
         4.0,
         -45.0,
         None,
@@ -170,9 +171,9 @@ pub(super) fn render(
                 label_x: 4.0,
                 label_right: row.label_right,
                 label: match edit.kind {
-                    BoardGridKind::None => "Spacing",
-                    BoardGridKind::Cartesian => "Square side",
-                    BoardGridKind::Isometric | BoardGridKind::IsometricDots => "Triangle side",
+                    BoardGridKind::None => tr("Spacing"),
+                    BoardGridKind::Cartesian => tr("Square side"),
+                    BoardGridKind::Isometric | BoardGridKind::IsometricDots => tr("Triangle side"),
                 },
                 slider: (row.track.2 > 0.0).then_some((row.rail, row.thumb_x, row.thumb_radius)),
                 field: row.field,
@@ -201,7 +202,7 @@ pub(super) fn render(
             engine,
             ctx,
             buttons.cancel,
-            "Cancel",
+            tr("Cancel"),
             ButtonStyle::Secondary,
             style,
         );
@@ -210,14 +211,14 @@ pub(super) fn render(
         } else {
             ButtonStyle::Disabled
         };
-        draw_button(engine, ctx, buttons.apply, "Apply", apply_style, style);
+        draw_button(engine, ctx, buttons.apply, tr("Apply"), apply_style, style);
     }
     constants::set_color(ctx, TEXT_HINT);
     let message = edit
         .error
         .as_deref()
         .or_else(|| edit.validation_error())
-        .unwrap_or("Session only • Tab: field • arrows: pattern • Enter: Apply");
+        .unwrap_or(tr("Session only • Tab: field • arrows: pattern • Enter: Apply"));
     engine.draw_baseline(
         ctx,
         UiTextStyle {

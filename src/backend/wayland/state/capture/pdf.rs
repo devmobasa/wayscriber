@@ -1,5 +1,6 @@
 use super::super::*;
 use crate::backend::wayland::capture::CaptureLayoutContext;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 
 impl WaylandState {
@@ -37,7 +38,7 @@ impl WaylandState {
             let Some((request, layout_context)) = self.desktop_backdrop_capture_request(operation)
             else {
                 let message =
-                    "Board PDF export failed: active output geometry is unavailable".to_string();
+                    tr("Board PDF export failed: active output geometry is unavailable").to_string();
                 log::error!("{message}");
                 self.input_state.push_toast(
                     ToastPriority::Critical,
@@ -54,9 +55,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "capture.pdf",
-                    Toast::warning(
+                    Toast::warning(tr(
                         "Board PDF export is already preparing another overlay operation.",
-                    ),
+                    )),
                 );
                 return;
             }
@@ -100,9 +101,10 @@ impl WaylandState {
         exit_on_success: bool,
     ) {
         let Some(pending) = self.capture.take_pending_pdf_export() else {
-            let message =
-                "Board PDF export failed: desktop backdrop completed without pending PDF export"
-                    .to_string();
+            let message = tr(
+                "Board PDF export failed: desktop backdrop completed without pending PDF export",
+            )
+            .to_string();
             log::error!("{message}");
             self.input_state.push_toast(
                 ToastPriority::Critical,
@@ -121,7 +123,8 @@ impl WaylandState {
             .matches_desktop(active_output_id, &self.frozen)
         {
             let message =
-                "Board PDF export failed: output layout changed during desktop capture".to_string();
+                tr("Board PDF export failed: output layout changed during desktop capture")
+                    .to_string();
             log::error!("{message}");
             self.input_state.push_toast(
                 ToastPriority::Critical,

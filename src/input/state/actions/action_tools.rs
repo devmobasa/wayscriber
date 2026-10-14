@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 use log::info;
@@ -18,9 +19,9 @@ impl InputState {
         let max = crate::draw::shape::MAX_PEN_SMOOTHING;
         info!("Pen smoothing set to {level}/{max}");
         let message = if level == 0 {
-            "Pen smoothing off".to_string()
+            tr("Pen smoothing off").to_string()
         } else {
-            format!("Pen smoothing {level}/{max}")
+            trf("Pen smoothing {}/{}", &[&level, &max])
         };
         self.push_toast(ToastPriority::Info, "pen-smoothing", Toast::info(message));
     }
@@ -37,7 +38,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "shape-recognition-sensitivity",
-            Toast::info(format!("Shape Pen sensitivity {level}/{max}")),
+            Toast::info(trf("Shape Pen sensitivity {}/{}", &[&level, &max])),
         );
     }
 
@@ -105,7 +106,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "blur-style",
-                        Toast::info(format!("Blur style: {label}")),
+                        Toast::info(trf("Blur style: {}", &[&label])),
                     );
                 }
             }
@@ -121,7 +122,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "arrow-style",
-                        Toast::info(format!("Arrow style: {label}")),
+                        Toast::info(trf("Arrow style: {}", &[&label])),
                     );
                 }
             }

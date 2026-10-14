@@ -29,6 +29,8 @@ mod section;
 #[cfg(test)]
 mod tests;
 
+use wayscriber::i18n::tr;
+
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
@@ -44,6 +46,7 @@ use super::{BuiltPage, PageBuilder};
 use rows::{picker_hex, selected_string, sync_combo};
 use section::{BoundProfileSection, rebuild_sections};
 
+
 /// `GTK_INVALID_LIST_POSITION`: what a `GtkSingleSelection` reads as "nothing
 /// is selected", which is how the Iced pick list rendered an unknown id.
 const NO_SELECTION: u32 = u32::MAX;
@@ -57,15 +60,15 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         .map(|option| option.label().to_string())
         .collect();
 
-    page.group_in_area("Render Profiles", SearchArea::RenderProfilesGeneral)
+    page.group_in_area(tr("Render Profiles"), SearchArea::RenderProfilesGeneral)
         .switch_row(
-            "Preview canvas",
+            tr("Preview canvas"),
             "",
             |app| app.draft.render_profiles.apply_to_canvas,
             Message::RenderProfileApplyCanvasChanged,
         )
         .switch_row(
-            "Preview UI",
+            tr("Preview UI"),
             "",
             |app| app.draft.render_profiles.apply_to_ui,
             Message::RenderProfileApplyUiChanged,
@@ -74,7 +77,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     add_active_row(&mut page);
 
     page.combo_row(
-        "Canvas export profile",
+        tr("Canvas export profile"),
         "",
         export_options,
         export_labels,

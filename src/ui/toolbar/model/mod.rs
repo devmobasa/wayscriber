@@ -51,11 +51,11 @@ pub(crate) use style_pill::{
     ARROW_STYLE_MENU_ROW_GAP, ARROW_STYLE_MENU_ROW_H, ARROW_STYLE_MENU_ROW_W, ArrowStyleMenuEntry,
     METER_ZERO_SLOT_W, OpacityPaint, PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H,
     PEN_FEEL_HINT_H, PEN_FEEL_PAD, PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP,
-    PEN_FEEL_TITLE, PEN_FEEL_TITLE_H, PenFeelSection, StrokeSetting, StylePillControl,
+    PEN_FEEL_TITLE_H, PenFeelSection, StrokeSetting, StylePillControl,
     StylePillCounter, StylePillMeter, StylePillMeterSegment, StylePillRole, StylePillSegment,
     StylePillSlider, StylePillSpec, StylePillState, arrow_style_chip_label,
     arrow_style_menu_entries, arrow_style_menu_size, pen_feel_id, pen_feel_panel_size,
-    pen_feel_sections, pen_feel_settings,
+    pen_feel_sections, pen_feel_settings, pen_feel_title,
 };
 #[allow(unused_imports)]
 pub(crate) use tools::{

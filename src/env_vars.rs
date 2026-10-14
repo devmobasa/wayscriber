@@ -39,6 +39,10 @@ pub const TRAY_FORCE_PIXMAP_ENV: &str = "WAYSCRIBER_TRAY_FORCE_PIXMAP";
 pub const XDG_FULLSCREEN_ENV: &str = "WAYSCRIBER_XDG_FULLSCREEN";
 pub const XDG_FULLSCREEN_FORCE_ENV: &str = "WAYSCRIBER_XDG_FULLSCREEN_FORCE";
 pub const XDG_OUTPUT_ENV: &str = "WAYSCRIBER_XDG_OUTPUT";
+/// Overrides `[ui] language` ("auto", "en", or "zh-CN"); mainly a testing aid.
+pub const LANGUAGE_OVERRIDE_ENV: &str = "WAYSCRIBER_LANGUAGE";
+/// Directory of user locale catalogs overriding the embedded ones.
+pub const LOCALE_DIR_ENV: &str = "WAYSCRIBER_LOCALE_DIR";
 
 pub const HOME_ENV: &str = "HOME";
 pub const HYPRLAND_INSTANCE_SIGNATURE_ENV: &str = "HYPRLAND_INSTANCE_SIGNATURE";
@@ -61,6 +65,13 @@ pub const XDG_RUNTIME_DIR_ENV: &str = "XDG_RUNTIME_DIR";
 /// a multi-seat machine reads the seat the user is actually sitting at.
 pub const XDG_SEAT_ENV: &str = "XDG_SEAT";
 pub const DESKTOP_STARTUP_ID_ENV: &str = "DESKTOP_STARTUP_ID";
+/// POSIX locale environment variables, most specific first.
+pub const LOCALE_ENV_KEYS: [&str; 4] = [LANGUAGE_ENV, LC_ALL_ENV, LC_MESSAGES_ENV, LANG_ENV];
+
+pub const LANGUAGE_ENV: &str = "LANGUAGE";
+pub const LC_ALL_ENV: &str = "LC_ALL";
+pub const LC_MESSAGES_ENV: &str = "LC_MESSAGES";
+pub const LANG_ENV: &str = "LANG";
 
 pub const DESKTOP_ENV_KEYS: [&str; 3] = [
     XDG_CURRENT_DESKTOP_ENV,

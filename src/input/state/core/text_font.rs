@@ -9,6 +9,7 @@
 use super::InputState;
 use crate::draw::TextMeasurer;
 use crate::draw::{DrawnShape, FontDescriptor, Shape, families_match};
+use crate::i18n::tr;
 
 fn text_font_descriptor(shape: &Shape) -> Option<&FontDescriptor> {
     match shape {
@@ -102,7 +103,7 @@ impl InputState {
     /// Restyle every selected text shape to `weight`.
     fn apply_weight_to_selected_text(&mut self, measurer: &TextMeasurer, weight: &str) -> bool {
         let target = weight.to_string();
-        self.apply_descriptor_to_selected_text(measurer, "weight", move |descriptor| {
+        self.apply_descriptor_to_selected_text(measurer, tr("weight"), move |descriptor| {
             if descriptor.weight.eq_ignore_ascii_case(&target) {
                 return false;
             }
@@ -123,7 +124,7 @@ impl InputState {
         family: &str,
     ) -> bool {
         let target = family.to_string();
-        self.apply_descriptor_to_selected_text(measurer, "font", move |descriptor| {
+        self.apply_descriptor_to_selected_text(measurer, tr("font"), move |descriptor| {
             if families_match(&descriptor.family, &target) {
                 return false;
             }

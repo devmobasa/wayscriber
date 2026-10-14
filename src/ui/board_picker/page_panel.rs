@@ -1,6 +1,7 @@
 mod thumbnail;
 pub(crate) use thumbnail::ThumbnailCache;
 
+use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{
     BoardPickerFocus, BoardPickerLayout, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
@@ -68,9 +69,9 @@ pub(super) fn render_page_panel(
 
     // Header: show "drag to reorder" hint only during drag
     let label = if is_dragging && page_count > 1 {
-        format!("Pages: {}  • drag to reorder", board.spec.name)
+        trf("Pages: {}  • drag to reorder", &[&board.spec.name])
     } else {
-        format!("Pages: {}", board.spec.name)
+        trf("Pages: {}", &[&board.spec.name])
     };
     let footer_style = UiTextStyle {
         family: "Sans",
@@ -260,7 +261,7 @@ pub(super) fn render_page_panel(
     if page_count > visible {
         let first_label = first_visible + 1;
         let last_label = first_visible + visible;
-        let hint = format!("Pages {first_label}-{last_label} of {page_count}");
+        let hint = trf("Pages {}-{} of {}", &[&first_label, &last_label, &page_count]);
         let overflow_hover = input_state.board_picker_page_overflow_at(pointer_x, pointer_y);
         if overflow_hover {
             constants::set_color(ctx, TEXT_TERTIARY);
@@ -325,7 +326,7 @@ fn render_sticky_add_button(
         size: layout.footer_font_size,
     };
     constants::set_color(ctx, TEXT_SECONDARY);
-    let label = "+ Add page";
+    let label = tr("+ Add page");
     let extents = text_extents_for_with_engine(
         engine,
         ctx,

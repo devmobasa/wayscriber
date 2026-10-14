@@ -6,6 +6,7 @@ use crate::env_vars::HOME_ENV;
 use crate::input::InputState;
 use crate::input::boards::BoardState;
 use crate::input::state::ClipboardPasteRequest;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::{notification, session};
 use std::path::PathBuf;
@@ -121,7 +122,7 @@ impl WaylandState {
             ToastPriority::Action,
             "clipboard",
             Toast::warning(warning.toast)
-                .action("Settings", Action::OpenConfigurator)
+                .action(tr("Settings"), Action::OpenConfigurator)
                 .duration_ms(SESSION_PASTE_WARNING_TOAST_MS),
         );
         if let Some((summary, body)) = warning.notification {
@@ -264,8 +265,9 @@ fn paste_persistence_decision(
             options.max_file_size_bytes,
         );
         return PastePersistenceDecision::Allow {
-            warning: Some(SessionPasteWarning::toast_only(format!(
-                "Image pasted. Session near limit: {written}/{limit}. Consider {suggested_limit_mb} MiB."
+            warning: Some(SessionPasteWarning::toast_only(trf(
+                "Image pasted. Session near limit: {}/{}. Consider {} MiB.",
+                &[&written, &limit, &suggested_limit_mb],
             ))),
         };
     }
@@ -284,16 +286,17 @@ fn visible_limit_warning(
             let suggested_limit_mb =
                 suggested_limit_mb(estimate.written_size as u64, options.max_file_size_bytes);
             let written = format_bytes(estimate.written_size as u64);
-            let toast = format!(
-                "Image blocked: {written}/{formatted_file_limit}. Set {suggested_limit_mb} MiB."
+            let toast = trf(
+                "Image blocked: {}/{}. Set {} MiB.",
+                &[&written, &formatted_file_limit, &suggested_limit_mb],
             );
-            let body = format!(
-                "Paste would save as {written}, over the {formatted_file_limit} cap. Open Settings > Session > Max file size and set {suggested_limit_mb} MiB, or edit {}.",
-                config_path_display()
+            let body = trf(
+                "Paste would save as {}, over the {} cap. Open Settings > Session > Max file size and set {} MiB, or edit {}.",
+                &[&written, &formatted_file_limit, &suggested_limit_mb, &config_path_display()],
             );
             SessionPasteWarning {
                 toast,
-                notification: Some(("Image Paste Blocked".to_string(), body)),
+                notification: Some((tr("Image Paste Blocked").to_string(), body)),
                 log_detail: format!(
                     "visible payload {}, suggested max_file_size_mb={suggested_limit_mb}",
                     describe_limit(limit_exceeded)
@@ -307,11 +310,15 @@ fn visible_limit_warning(
             let raw = format_bytes(raw_size);
             let expanded_limit = format_bytes(max_expanded_size);
             SessionPasteWarning {
-                toast: format!("Image blocked: restore safety {raw}/{expanded_limit}."),
+                toast: trf(
+                    "Image blocked: restore safety {}/{}.",
+                    &[&raw, &expanded_limit],
+                ),
                 notification: Some((
-                    "Image Paste Blocked".to_string(),
-                    format!(
-                        "Paste would expand to {raw}, over the {expanded_limit} restore safety limit. Reduce images or history; max_file_size_mb will not help."
+                    tr("Image Paste Blocked").to_string(),
+                    trf(
+                        "Paste would expand to {}, over the {} restore safety limit. Reduce images or history; max_file_size_mb will not help.",
+                        &[&raw, &expanded_limit],
                     ),
                 )),
                 log_detail: format!("visible payload {}", describe_limit(limit_exceeded)),
@@ -329,15 +336,17 @@ fn full_limit_warning(
         session::SaveLimitExceeded::WrittenSize { .. } => {
             let suggested_limit_mb =
                 suggested_limit_mb(estimate.written_size as u64, options.max_file_size_bytes);
-            let toast =
-                format!("Image pasted. Undo history may be dropped. Set {suggested_limit_mb} MiB.");
-            let body = format!(
-                "Drawing data fits, but undo history may be dropped on save. Set Session > Max file size to {suggested_limit_mb} MiB, or edit {}.",
-                config_path_display()
+            let toast = trf(
+                "Image pasted. Undo history may be dropped. Set {} MiB.",
+                &[&suggested_limit_mb],
+            );
+            let body = trf(
+                "Drawing data fits, but undo history may be dropped on save. Set Session > Max file size to {} MiB, or edit {}.",
+                &[&suggested_limit_mb, &config_path_display()],
             );
             SessionPasteWarning {
                 toast,
-                notification: Some(("Session Undo History at Risk".to_string(), body)),
+                notification: Some((tr("Session Undo History at Risk").to_string(), body)),
                 log_detail: format!(
                     "full payload {}, suggested max_file_size_mb={suggested_limit_mb}",
                     describe_limit(limit_exceeded)
@@ -351,11 +360,13 @@ fn full_limit_warning(
             let raw = format_bytes(raw_size);
             let expanded_limit = format_bytes(max_expanded_size);
             SessionPasteWarning {
-                toast: "Image pasted. Undo history may be dropped for restore safety.".to_string(),
+                toast: tr("Image pasted. Undo history may be dropped for restore safety.")
+                    .to_string(),
                 notification: Some((
-                    "Session Undo History at Risk".to_string(),
-                    format!(
-                        "Full session would expand to {raw}, over the {expanded_limit} restore safety limit. Visible drawing data can still be saved."
+                    tr("Session Undo History at Risk").to_string(),
+                    trf(
+                        "Full session would expand to {}, over the {} restore safety limit. Visible drawing data can still be saved.",
+                        &[&raw, &expanded_limit],
                     ),
                 )),
                 log_detail: format!("full payload {}", describe_limit(limit_exceeded)),

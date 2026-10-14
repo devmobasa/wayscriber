@@ -1,4 +1,5 @@
 mod layout;
+use crate::i18n::trf;
 use crate::input::InputState;
 use crate::input::state::{PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UiToastKind};
 use layout::{toast_box_geometry, ui_toast_layout};
@@ -86,9 +87,9 @@ fn latest_preset_feedback(
 
 fn preset_feedback_label(slot: usize, kind: PresetFeedbackKind) -> String {
     match kind {
-        PresetFeedbackKind::Apply => format!("Preset {} applied", slot),
-        PresetFeedbackKind::Save => format!("Preset {} saved", slot),
-        PresetFeedbackKind::Clear => format!("Preset {} cleared", slot),
+        PresetFeedbackKind::Apply => trf("Preset {} applied", &[&slot]),
+        PresetFeedbackKind::Save => trf("Preset {} saved", &[&slot]),
+        PresetFeedbackKind::Clear => trf("Preset {} cleared", &[&slot]),
     }
 }
 

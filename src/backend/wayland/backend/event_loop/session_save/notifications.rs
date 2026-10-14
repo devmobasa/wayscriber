@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::{
     config::{Action, Config},
@@ -56,7 +57,7 @@ pub(super) fn notify_session_save_report(
             ToastPriority::Action,
             "session.save",
             Toast::warning(toast)
-                .action("Settings", Action::OpenConfigurator)
+                .action(tr("Settings"), Action::OpenConfigurator)
                 .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
         );
         notification::send_notification_with_timeout_async(
@@ -79,12 +80,20 @@ fn session_save_toast_text(
         suggested_limit_mb(report.written_size as u64, report.max_file_size_bytes);
     match notification {
         SessionSaveNotification::NearLimit => {
-            format!("Session near limit: {written}/{limit}. Set {suggested_limit_mb} MiB.")
+            trf(
+                "Session near limit: {}/{}. Set {} MiB.",
+                &[&written, &limit, &suggested_limit_mb],
+            )
         }
         SessionSaveNotification::TrimmedHistory { depth } => {
-            format!("Session saved. Undo history trimmed to {depth} entries.")
+            trf(
+                "Session saved. Undo history trimmed to {} entries.",
+                &[&depth],
+            )
         }
-        SessionSaveNotification::VisibleOnly => "Session saved without undo history.".to_string(),
+        SessionSaveNotification::VisibleOnly => {
+            tr("Session saved without undo history.").to_string()
+        }
     }
 }
 
@@ -98,21 +107,25 @@ pub(super) fn session_save_notification_text(
         suggested_limit_mb(report.written_size as u64, report.max_file_size_bytes);
     match notification {
         SessionSaveNotification::NearLimit => (
-            "Session Storage Nearly Full".to_string(),
-            format!(
-                "Session save is using {written} of {limit}. Open Settings > Session > Max file size and set {suggested_limit_mb} MiB, or edit {}.",
-                config_path_display()
+            tr("Session Storage Nearly Full").to_string(),
+            trf(
+                "Session save is using {} of {}. Open Settings > Session > Max file size and set {} MiB, or edit {}.",
+                &[&written, &limit, &suggested_limit_mb, &config_path_display()],
             ),
         ),
         SessionSaveNotification::TrimmedHistory { depth } => (
-            "Session Undo History Trimmed".to_string(),
-            format!(
-                "Drawings were saved, but undo/redo history was trimmed to {depth} entries per stack to meet save and restore safety limits."
+            tr("Session Undo History Trimmed").to_string(),
+            trf(
+                "Drawings were saved, but undo/redo history was trimmed to {} entries per stack to meet save and restore safety limits.",
+                &[&depth],
             ),
         ),
         SessionSaveNotification::VisibleOnly => (
-            "Session Undo History Not Saved".to_string(),
-            "Drawings were saved, but undo/redo history was omitted to meet save and restore safety limits.".to_string(),
+            tr("Session Undo History Not Saved").to_string(),
+            tr(
+                "Drawings were saved, but undo/redo history was omitted to meet save and restore safety limits.",
+            )
+            .to_string(),
         ),
     }
 }
@@ -155,7 +168,7 @@ pub(in crate::backend::wayland::backend::event_loop) fn notify_session_failure(
 ) {
     notification::send_notification_with_timeout_async(
         &state.tokio_handle,
-        "Failed to Save Session".to_string(),
+        tr("Failed to Save Session").to_string(),
         session_failure_text(err, true),
         Some("dialog-error".to_string()),
         SESSION_SAVE_NOTIFICATION_TIMEOUT_MS,
@@ -165,9 +178,10 @@ pub(in crate::backend::wayland::backend::event_loop) fn notify_session_failure(
 pub(super) fn notify_persistence_worker_failure(state: &WaylandState, err: &anyhow::Error) {
     notification::send_notification_with_timeout_async(
         &state.tokio_handle,
-        "Session Persistence Stopped".to_string(),
-        format!(
-            "Automatic session persistence stopped because its background worker failed. Wayscriber will retry the final save during shutdown. Details: {err}"
+        tr("Session Persistence Stopped").to_string(),
+        trf(
+            "Automatic session persistence stopped because its background worker failed. Wayscriber will retry the final save during shutdown. Details: {}",
+            &[&err],
         ),
         Some("dialog-error".to_string()),
         SESSION_SAVE_NOTIFICATION_TIMEOUT_MS,
@@ -179,7 +193,7 @@ pub(super) fn show_session_failure_toast(state: &mut WaylandState, error: &anyho
         ToastPriority::Action,
         "session.save",
         Toast::warning(session_failure_text(error, false))
-            .action("Settings", Action::OpenConfigurator)
+            .action(tr("Settings"), Action::OpenConfigurator)
             .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
     );
 }
@@ -188,10 +202,10 @@ pub(super) fn show_persistence_worker_failure_toast(state: &mut WaylandState) {
     state.input_state.push_toast(
         ToastPriority::Action,
         "session.save",
-        Toast::warning(
+        Toast::warning(tr(
             "Automatic session persistence stopped; final save will be retried on exit.",
-        )
-        .action("Settings", Action::OpenConfigurator)
+        ))
+        .action(tr("Settings"), Action::OpenConfigurator)
         .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
     );
 }
@@ -200,45 +214,49 @@ pub(super) fn show_persistence_worker_failure_toast(state: &mut WaylandState) {
 pub(super) fn session_failure_text(error: &anyhow::Error, shutdown: bool) -> String {
     if let Some(saved) = error.downcast_ref::<super::final_save::RefusedDrawingsSaved>() {
         let kept = match &saved.recovery {
-            Some(recovery) => format!(
+            Some(recovery) => trf(
                 "were saved to {} instead, in its recovery file {} because they exceed the session size limit",
-                saved.saved_to.display(),
-                recovery.display()
+                &[&saved.saved_to.display(), &recovery.display()],
             ),
-            None => format!("were saved to {} instead", saved.saved_to.display()),
+            None => trf("were saved to {} instead", &[&saved.saved_to.display()]),
         };
-        return format!(
-            "New drawings were not written to {} and {kept}. Open that file to continue them.",
-            saved.session.display()
+        return trf(
+            "New drawings were not written to {} and {}. Open that file to continue them.",
+            &[&saved.session.display(), &kept],
         );
     }
     if let Some(failure) = error.downcast_ref::<session::SavePayloadTooLarge>() {
         let advice = match failure.limit {
             session::SaveLimitExceeded::WrittenSize { .. } => {
-                "Raise Settings > Session > Max file size, or remove images."
+                tr("Raise Settings > Session > Max file size, or remove images.")
             }
             session::SaveLimitExceeded::ExpandedSize { .. } => {
-                "Reduce images or undo history to fit the expanded session safety limit."
+                tr("Reduce images or undo history to fit the expanded session safety limit.")
             }
         };
         let saved = failure
             .recovery_path
             .as_ref()
             .map(|path| {
-                format!(
+                trf(
                     "Drawings were preserved in the recovery file {}. ",
-                    path.display()
+                    &[&path.display()],
                 )
             })
             .unwrap_or_default();
-        return format!("{saved}Session exceeds its size limit. {advice} Details: {error}");
+        return trf(
+            "{}Session exceeds its size limit. {} Details: {}",
+            &[&saved, &advice, &error],
+        );
     }
     let advice = if shutdown {
-        "Check session files, disk space and permissions."
+        tr("Check session files, disk space and permissions.")
     } else {
-        "Check session files, disk space and permissions, or use Save As to keep the current drawings."
+        tr(
+            "Check session files, disk space and permissions, or use Save As to keep the current drawings.",
+        )
     };
-    format!("Session save failed. {advice} Details: {error}")
+    trf("Session save failed. {} Details: {}", &[&advice, &error])
 }
 
 fn suggested_limit_mb(projected_written_size: u64, current_limit_bytes: u64) -> u64 {

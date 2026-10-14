@@ -17,20 +17,6 @@ use super::*;
 /// Logical width reserved for the zero-level dot before the bars.
 pub(crate) const METER_ZERO_SLOT_W: f64 = 22.0;
 
-/// Names of pen smoothing levels 0..=6, weakest first.
-const SMOOTHING_LEVEL_NAMES: [&str; 7] = [
-    "Off", "Minimal", "Light", "Medium", "Strong", "Stronger", "Maximum",
-];
-
-/// Names of Shape Pen detection levels 0..=4, strictest first.
-const DETECTION_LEVEL_NAMES: [&str; 5] = [
-    "Precise",
-    "Careful",
-    "Balanced",
-    "Forgiving",
-    "Very forgiving",
-];
-
 /// One bar of a level meter.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StylePillMeterSegment {
@@ -68,23 +54,19 @@ pub(crate) enum StrokeSetting {
 
 impl StrokeSetting {
     /// Setting name used in tooltips and panel sections ("Smoothing").
-    pub(crate) const fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
-            Self::Smoothing => "Smoothing",
-            Self::ShapeDetection => "Shape detection",
-        }
-    }
-
-    const fn level_names(self) -> &'static [&'static str] {
-        match self {
-            Self::Smoothing => &SMOOTHING_LEVEL_NAMES,
-            Self::ShapeDetection => &DETECTION_LEVEL_NAMES,
+            Self::Smoothing => tr("Smoothing"),
+            Self::ShapeDetection => tr("Shape detection"),
         }
     }
 
     /// Highest level; the lowest is always 0.
     pub(crate) const fn max(self) -> u8 {
-        (self.level_names().len() - 1) as u8
+        match self {
+            Self::Smoothing => 6,
+            Self::ShapeDetection => 4,
+        }
     }
 
     /// The current level, clamped into the setting's range.
@@ -98,7 +80,25 @@ impl StrokeSetting {
 
     /// Name of `level` ("Medium"), clamped into the setting's range.
     pub(crate) fn level_name(self, level: u8) -> &'static str {
-        self.level_names()[usize::from(level.min(self.max()))]
+        let level = usize::from(level.min(self.max()));
+        match self {
+            Self::Smoothing => [
+                tr("Off"),
+                tr("Minimal"),
+                tr("Light"),
+                tr("Medium"),
+                tr("Strong"),
+                tr("Stronger"),
+                tr("Maximum"),
+            ][level],
+            Self::ShapeDetection => [
+                tr("Precise"),
+                tr("Careful"),
+                tr("Balanced"),
+                tr("Forgiving"),
+                tr("Very forgiving"),
+            ][level],
+        }
     }
 
     /// Name of the current level.
@@ -127,10 +127,9 @@ impl StrokeSetting {
     pub(crate) fn meter(self, snapshot: &ToolbarSnapshot, id_prefix: &str) -> StylePillMeter {
         let level = self.level(snapshot);
         let max = self.max();
-        let current = format!(
-            "{}: {} ({level} of {max})",
-            self.name(),
-            self.level_name(level)
+        let current = trf(
+            "{}: {} ({} of {})",
+            &[&self.name(), &self.level_name(level), &level, &max],
         );
 
         let segments = (1..=max)
@@ -140,9 +139,9 @@ impl StrokeSetting {
                     id: format!("{id_prefix}.level-{bar}"),
                     filled: bar <= level,
                     event: self.event(target),
-                    tooltip: format!(
-                        "{current}. Click for {}, or scroll to adjust",
-                        self.level_name(target)
+                    tooltip: trf(
+                        "{}. Click for {}, or scroll to adjust",
+                        &[&current, &self.level_name(target)],
                     ),
                 }
             })
@@ -165,11 +164,9 @@ impl StrokeSetting {
             id: format!("{id_prefix}.level-0"),
             filled: true,
             event: self.event(0),
-            tooltip: format!(
+            tooltip: trf(
                 "{}: {}. Click for {}",
-                self.name(),
-                self.current_level_name(snapshot),
-                self.level_name(0)
+                &[&self.name(), &self.current_level_name(snapshot), &self.level_name(0)],
             ),
         }
     }

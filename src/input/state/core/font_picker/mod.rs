@@ -27,6 +27,7 @@ pub use layout::{FontPickerLayout, FontPickerRow, font_picker_layout, font_picke
 use super::InputState;
 use crate::draw::TextMeasurer;
 use crate::draw::{FontDescriptor, families_match, system_font_catalog_is_ready};
+use crate::i18n::{tr, trf};
 
 /// The picker's memoized result list, keyed by what produced it.
 pub type FontPickerResults = Option<((String, FontPickerFilter), Vec<String>)>;
@@ -44,8 +45,8 @@ pub enum FontPickerFilter {
 impl FontPickerFilter {
     pub fn label(self) -> &'static str {
         match self {
-            Self::All => "All fonts",
-            Self::Monospace => "Monospace",
+            Self::All => tr("All fonts"),
+            Self::Monospace => tr("Monospace"),
         }
     }
 
@@ -69,8 +70,8 @@ pub enum FontPickerTarget {
 impl FontPickerTarget {
     pub fn label(self) -> &'static str {
         match self {
-            Self::ToolDefault => "Sets the font for new text",
-            Self::Selection => "Restyles the selected text",
+            Self::ToolDefault => tr("Sets the font for new text"),
+            Self::Selection => tr("Restyles the selected text"),
         }
     }
 }
@@ -234,7 +235,7 @@ impl InputState {
             self.push_toast(
                 super::ToastPriority::Info,
                 FONT_PICKER_TOAST_SOURCE,
-                super::Toast::info(format!("Font: {family}")),
+                super::Toast::info(trf("Font: {}", &[&family])),
             );
         }
         self.close_font_picker();

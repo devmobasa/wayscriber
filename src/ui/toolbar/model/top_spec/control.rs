@@ -1,5 +1,6 @@
 use super::control_meta::*;
 use super::*;
+use crate::i18n::{tr, trf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopToolbarNode {
@@ -318,11 +319,11 @@ impl TopToolbarControl {
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
             // The tab's visible caption; screen readers get the full phrase.
-            Self::Restore => Cow::Borrowed("Tools"),
-            Self::MicroChip => Cow::Borrowed("Show full toolbar"),
-            Self::DragHandle => Cow::Borrowed("Drag toolbar"),
+            Self::Restore => Cow::Borrowed(tr("Tools")),
+            Self::MicroChip => Cow::Borrowed(tr("Show full toolbar")),
+            Self::DragHandle => Cow::Borrowed(tr("Drag toolbar")),
             Self::Tool(tool) => Cow::Borrowed(tool_label(tool)),
-            Self::ShapePicker => Cow::Borrowed("Shapes"),
+            Self::ShapePicker => Cow::Borrowed(tr("Shapes")),
             Self::Utility(utility) => Cow::Borrowed(utility_short_label(utility)),
             // An empty slot's visible label is its 1-based number; once
             // filled the renderers show the tool glyph instead.
@@ -330,18 +331,18 @@ impl TopToolbarControl {
             Self::Undo => Cow::Borrowed(action_short_label(Action::Undo)),
             Self::Redo => Cow::Borrowed(action_short_label(Action::Redo)),
             Self::ClearCanvas => Cow::Borrowed(action_short_label(Action::ClearCanvas)),
-            Self::Pin if snapshot.top_pinned => Cow::Borrowed("Unpin top toolbar"),
-            Self::Pin => Cow::Borrowed("Pin top toolbar"),
-            Self::Overflow => Cow::Borrowed("More tools"),
-            Self::CanvasMenu => Cow::Borrowed("Canvas..."),
-            Self::SessionMenu => Cow::Borrowed("Session..."),
-            Self::SettingsMenu => Cow::Borrowed("Settings..."),
-            Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
+            Self::Pin if snapshot.top_pinned => Cow::Borrowed(tr("Unpin top toolbar")),
+            Self::Pin => Cow::Borrowed(tr("Pin top toolbar")),
+            Self::Overflow => Cow::Borrowed(tr("More tools")),
+            Self::CanvasMenu => Cow::Borrowed(tr("Canvas...")),
+            Self::SessionMenu => Cow::Borrowed(tr("Session...")),
+            Self::SettingsMenu => Cow::Borrowed(tr("Settings...")),
+            Self::Minimize => Cow::Borrowed(tr("Minimize top toolbar")),
             Self::About => Cow::Borrowed(action_short_label(Action::OpenAbout)),
-            Self::Exit if snapshot.exit_hides_overlay => Cow::Borrowed("Hide overlay"),
+            Self::Exit if snapshot.exit_hides_overlay => Cow::Borrowed(tr("Hide overlay")),
             Self::Exit => Cow::Borrowed(action_short_label(Action::Exit)),
-            Self::LayoutMode => Cow::Borrowed("Toolbar layout"),
-            Self::HighlightRing => Cow::Borrowed("Ring"),
+            Self::LayoutMode => Cow::Borrowed(tr("Toolbar layout")),
+            Self::HighlightRing => Cow::Borrowed(tr("Ring")),
         }
     }
 
@@ -353,11 +354,11 @@ impl TopToolbarControl {
             Self::Redo => Cow::Borrowed(action_label(Action::Redo)),
             Self::ClearCanvas => Cow::Borrowed(action_label(Action::ClearCanvas)),
             Self::Preset(index) => Cow::Owned(preset_accessible_label(snapshot, index)),
-            Self::CanvasMenu => Cow::Borrowed("Canvas menu"),
-            Self::SessionMenu => Cow::Borrowed("Session menu"),
-            Self::SettingsMenu => Cow::Borrowed("Settings menu"),
+            Self::CanvasMenu => Cow::Borrowed(tr("Canvas menu")),
+            Self::SessionMenu => Cow::Borrowed(tr("Session menu")),
+            Self::SettingsMenu => Cow::Borrowed(tr("Settings menu")),
             Self::About => Cow::Borrowed(action_label(Action::OpenAbout)),
-            Self::Restore => Cow::Borrowed("Show toolbar"),
+            Self::Restore => Cow::Borrowed(tr("Show toolbar")),
             _ => self.label(snapshot),
         }
     }
@@ -371,26 +372,28 @@ impl TopToolbarControl {
             Self::Redo => action_tooltip(snapshot, Action::Redo),
             Self::ClearCanvas => action_tooltip(snapshot, Action::ClearCanvas),
             Self::Pin if snapshot.top_pinned => {
-                "Pinned: opens at startup (click to disable)".to_string()
+                tr("Pinned: opens at startup (click to disable)").to_string()
             }
-            Self::Pin => "Pin: click to open at startup".to_string(),
+            Self::Pin => tr("Pin: click to open at startup").to_string(),
             // Current mode first, so hovering reads the preset without
             // opening the menu.
-            Self::LayoutMode => format!(
+            Self::LayoutMode => trf(
                 "Layout: {} (click to choose)",
-                layout_mode_label(snapshot.layout_mode)
+                &[&layout_mode_label(snapshot.layout_mode)],
             ),
-            Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
+            Self::Minimize => tr("Minimize (leaves a restore tab)").to_string(),
             // The key text comes from the configured Exit binding.
             Self::Exit => format_binding_label(
                 &self.label(snapshot),
                 snapshot.binding_hints.binding_for_action(Action::Exit),
             ),
-            Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
-            Self::CanvasMenu => "Canvas: boards, pages, zoom, history, steps".to_string(),
-            Self::SessionMenu => "Session: open, save, recent files".to_string(),
-            Self::SettingsMenu => "Settings: toolbar options and customization".to_string(),
-            Self::HighlightRing => "Highlight ring".to_string(),
+            Self::MicroChip => tr("Micro toolbar (click to show the full toolbar)").to_string(),
+            Self::CanvasMenu => tr("Canvas: boards, pages, zoom, history, steps").to_string(),
+            Self::SessionMenu => tr("Session: open, save, recent files").to_string(),
+            Self::SettingsMenu => {
+                tr("Settings: toolbar options and customization").to_string()
+            }
+            Self::HighlightRing => tr("Highlight ring").to_string(),
             _ => self.accessible_label(snapshot).into_owned(),
         }
     }

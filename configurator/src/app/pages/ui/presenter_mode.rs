@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::ComponentSender;
 
 use crate::messages::Message;
@@ -7,6 +9,7 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder};
 use super::{note, options};
 
+
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (toolbar_modes, toolbar_mode_labels) =
         options(PresenterToolbarModeOption::list(), |value| value.label());
@@ -15,22 +18,22 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
-    page.group("Presenter Mode")
-        .custom(&note("Customize what presenter mode changes when toggled."))
+    page.group(tr("Presenter Mode"))
+        .custom(&note(tr("Customize what presenter mode changes when toggled.")))
         .switch_row(
-            "Hide status bar",
+            tr("Hide status bar"),
             "",
             |app| app.draft.presenter_hide_status_bar,
             |value| Message::ToggleChanged(ToggleField::PresenterHideStatusBar, value),
         )
         .switch_row(
-            "Hide toolbars",
+            tr("Hide toolbars"),
             "",
             |app| app.draft.presenter_hide_toolbars,
             |value| Message::ToggleChanged(ToggleField::PresenterHideToolbars, value),
         )
         .combo_row(
-            "Top toolbar while presenting",
+            tr("Top toolbar while presenting"),
             "",
             toolbar_modes,
             toolbar_mode_labels,
@@ -38,31 +41,31 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::PresenterToolbarModeChanged,
         )
         .switch_row(
-            "Hide tool preview",
+            tr("Hide tool preview"),
             "",
             |app| app.draft.presenter_hide_tool_preview,
             |value| Message::ToggleChanged(ToggleField::PresenterHideToolPreview, value),
         )
         .switch_row(
-            "Close help overlay on entry",
+            tr("Close help overlay on entry"),
             "",
             |app| app.draft.presenter_close_help_overlay,
             |value| Message::ToggleChanged(ToggleField::PresenterCloseHelpOverlay, value),
         )
         .switch_row(
-            "Force click highlights on",
+            tr("Force click highlights on"),
             "",
             |app| app.draft.presenter_enable_click_highlight,
             |value| Message::ToggleChanged(ToggleField::PresenterEnableClickHighlight, value),
         )
         .switch_row(
-            "Force input HUD on",
+            tr("Force input HUD on"),
             "",
             |app| app.draft.presenter_enable_input_hud,
             |value| Message::ToggleChanged(ToggleField::PresenterEnableInputHud, value),
         )
         .combo_row(
-            "Tool behavior",
+            tr("Tool behavior"),
             "",
             behaviors,
             behavior_labels,
@@ -70,7 +73,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::PresenterToolBehaviorChanged,
         )
         .switch_row(
-            "Show enter/exit toast",
+            tr("Show enter/exit toast"),
             "",
             |app| app.draft.presenter_show_toast,
             |value| Message::ToggleChanged(ToggleField::PresenterShowToast, value),

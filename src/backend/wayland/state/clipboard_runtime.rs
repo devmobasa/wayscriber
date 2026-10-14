@@ -19,10 +19,10 @@ pub(in crate::backend::wayland) enum HexCopyOutcome {
 }
 
 impl HexCopyOutcome {
-    pub(in crate::backend::wayland) const fn message(&self) -> &'static str {
+    pub(in crate::backend::wayland) fn message(&self) -> &'static str {
         match self {
-            Self::Copied => "Copied to clipboard",
-            Self::Failed => "Failed to copy to clipboard",
+            Self::Copied => crate::i18n::tr("Copied to clipboard"),
+            Self::Failed => crate::i18n::tr("Failed to copy to clipboard"),
         }
     }
 }
@@ -34,10 +34,10 @@ pub(in crate::backend::wayland) enum TextCopyOutcome {
 }
 
 impl TextCopyOutcome {
-    pub(in crate::backend::wayland) const fn message(&self) -> &'static str {
+    pub(in crate::backend::wayland) fn message(&self) -> &'static str {
         match self {
-            Self::Copied => "Copied to clipboard",
-            Self::Failed => "Failed to copy to clipboard",
+            Self::Copied => crate::i18n::tr("Copied to clipboard"),
+            Self::Failed => crate::i18n::tr("Failed to copy to clipboard"),
         }
     }
 }
@@ -61,11 +61,11 @@ impl ClipboardPasteSubmitFailure {
 }
 
 impl TextPasteOutcome {
-    pub(in crate::backend::wayland) const fn message(&self) -> &'static str {
+    pub(in crate::backend::wayland) fn message(&self) -> &'static str {
         match self {
-            Self::Text(_) => "Pasted from clipboard",
-            Self::Empty => "Clipboard empty",
-            Self::Failed => "Failed to paste from clipboard",
+            Self::Text(_) => crate::i18n::tr("Pasted from clipboard"),
+            Self::Empty => crate::i18n::tr("Clipboard empty"),
+            Self::Failed => crate::i18n::tr("Failed to paste from clipboard"),
         }
     }
 }

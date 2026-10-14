@@ -19,6 +19,7 @@ use wayland_client::globals::registry_queue_init;
 
 use crate::app_id::runtime_app_id;
 use crate::config::Config;
+use crate::i18n::tr;
 
 mod clipboard;
 mod content;
@@ -64,7 +65,7 @@ pub fn run_about_window() -> Result<()> {
 
     let wl_surface = compositor_state.create_surface(&qh);
     let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, &qh);
-    window.set_title("About Wayscriber");
+    window.set_title(tr("About Wayscriber"));
     window.set_app_id(runtime_app_id());
     // The dialog is content-sized; letting the compositor resize it would only
     // clip rows or leave dead space.

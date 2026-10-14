@@ -1,4 +1,5 @@
 use crate::draw::{Color, color::*};
+use crate::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigHexColorError {
@@ -84,16 +85,16 @@ pub fn parse_config_hex_color(value: &str) -> Result<Color, ConfigHexColorError>
 pub fn color_to_name(color: &Color) -> &'static str {
     // Match the tuned palette first so named colors and quick color defaults
     // report their names instead of "Custom".
-    const TUNED_NAMES: [(Color, &str); 7] = [
-        (PALETTE_RED, "Red"),
-        (PALETTE_GREEN, "Green"),
-        (PALETTE_BLUE, "Blue"),
-        (PALETTE_YELLOW, "Yellow"),
-        (PALETTE_ORANGE, "Orange"),
-        (PALETTE_PINK, "Pink"),
-        (PALETTE_BLACK, "Black"),
+    let tuned_names = [
+        (PALETTE_RED, tr("Red")),
+        (PALETTE_GREEN, tr("Green")),
+        (PALETTE_BLUE, tr("Blue")),
+        (PALETTE_YELLOW, tr("Yellow")),
+        (PALETTE_ORANGE, tr("Orange")),
+        (PALETTE_PINK, tr("Pink")),
+        (PALETTE_BLACK, tr("Black")),
     ];
-    for (tuned, name) in TUNED_NAMES {
+    for (tuned, name) in tuned_names {
         if (color.r - tuned.r).abs() < 0.01
             && (color.g - tuned.g).abs() < 0.01
             && (color.b - tuned.b).abs() < 0.01
@@ -104,23 +105,23 @@ pub fn color_to_name(color: &Color) -> &'static str {
 
     // Match legacy pure colors approximately with 0.1 tolerance
     if color.r > 0.9 && color.g < 0.1 && color.b < 0.1 {
-        "Red"
+        tr("Red")
     } else if color.r < 0.1 && color.g > 0.9 && color.b < 0.1 {
-        "Green"
+        tr("Green")
     } else if color.r < 0.1 && color.g < 0.1 && color.b > 0.9 {
-        "Blue"
+        tr("Blue")
     } else if color.r > 0.9 && color.g > 0.9 && color.b < 0.1 {
-        "Yellow"
+        tr("Yellow")
     } else if color.r > 0.9 && (0.4..=0.6).contains(&color.g) && color.b < 0.1 {
-        "Orange"
+        tr("Orange")
     } else if color.r > 0.9 && color.g < 0.1 && color.b > 0.9 {
-        "Pink"
+        tr("Pink")
     } else if color.r > 0.9 && color.g > 0.9 && color.b > 0.9 {
-        "White"
+        tr("White")
     } else if color.r < 0.1 && color.g < 0.1 && color.b < 0.1 {
-        "Black"
+        tr("Black")
     } else {
-        "Custom"
+        tr("Custom")
     }
 }
 

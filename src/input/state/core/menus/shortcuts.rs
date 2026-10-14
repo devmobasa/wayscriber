@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use crate::domain::Action;
+use crate::i18n::tr;
 
 impl InputState {
     /// Get the display string for the first keybinding of an action.
@@ -22,8 +23,8 @@ impl InputState {
         use crate::config::RadialMenuMouseBinding;
 
         let mouse_label = match self.radial_menu.mouse_binding {
-            RadialMenuMouseBinding::Middle => Some("Middle Click".to_string()),
-            RadialMenuMouseBinding::Right => Some("Right Click".to_string()),
+            RadialMenuMouseBinding::Middle => Some(tr("Middle Click").to_string()),
+            RadialMenuMouseBinding::Right => Some(tr("Right Click").to_string()),
             RadialMenuMouseBinding::Disabled => None,
         };
         let key_label = self

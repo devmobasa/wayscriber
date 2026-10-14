@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use wayscriber::config::{PerformanceFieldId, ScalarConstraint, performance_field_metadata};
 
 use super::ConfigDraft;
@@ -15,15 +17,15 @@ pub(super) fn validate_performance_u32(
 
     let expected = match metadata.constraint {
         ScalarConstraint::Unsigned { min, max } => format!("Expected {min}-{max}"),
-        ScalarConstraint::UnsignedChoice(values) => format!(
+        ScalarConstraint::UnsignedChoice(values) => trf(
             "Expected one of {}",
-            values
+            &[&values
                 .iter()
                 .map(u32::to_string)
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", ")],
         ),
-        ScalarConstraint::Boolean => "Expected a boolean".to_string(),
+        ScalarConstraint::Boolean => tr("Expected a boolean").to_string(),
     };
     errors.push(FormError::new(metadata.path, expected));
     None

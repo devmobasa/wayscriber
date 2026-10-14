@@ -3,6 +3,7 @@ use super::super::selection::LocalSelectionContext;
 use crate::draw::Shape;
 use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;
 
@@ -118,7 +119,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.clipboard",
-                Toast::warning("Paste target changed; clipboard paste was cancelled."),
+                Toast::warning(tr("Paste target changed; clipboard paste was cancelled.")),
             );
             self.trigger_blocked_feedback();
             return 0;
@@ -147,7 +148,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "selection.clipboard",
-                    Toast::warning("Shape limit reached; nothing pasted."),
+                    Toast::warning(tr("Shape limit reached; nothing pasted.")),
                 );
             }
             return 0;
@@ -170,8 +171,9 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.clipboard",
-                Toast::warning(format!(
-                    "Shape limit reached; pasted {created_len} of {total}."
+                Toast::warning(trf(
+                    "Shape limit reached; pasted {} of {}.",
+                    &[&created_len, &total],
                 )),
             );
         }

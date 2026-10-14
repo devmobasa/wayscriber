@@ -74,12 +74,12 @@ pub(in crate::backend::wayland) enum SourceWriteRefused {
 impl std::fmt::Display for SourceWriteRefused {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(match self {
-            Self::NotLoaded => {
-                "the source session has not loaded; new drawings are kept on screen and saved drawings are untouched; use Save As to keep new drawings elsewhere, or Clear before reloading"
-            }
-            Self::NotPreserved => {
-                "unreadable session data was not preserved; repair and reload its files or use Save As before replacing these drawings"
-            }
+            Self::NotLoaded => crate::i18n::tr(
+                "the source session has not loaded; new drawings are kept on screen and saved drawings are untouched; use Save As to keep new drawings elsewhere, or Clear before reloading",
+            ),
+            Self::NotPreserved => crate::i18n::tr(
+                "unreadable session data was not preserved; repair and reload its files or use Save As before replacing these drawings",
+            ),
         })
     }
 }

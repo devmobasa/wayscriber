@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::path::{Path, PathBuf};
 
 use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogOperation};
@@ -30,7 +32,7 @@ fn duplicate_session_catalog_entry_sync(
         .iter()
         .find(|item| item.id == id)
         .cloned()
-        .ok_or_else(|| "Session is no longer in the catalog.".to_string())?;
+        .ok_or_else(|| tr("Session is no longer in the catalog.").to_string())?;
     let _reservation = reserve_inactive_session_operation(SessionCatalogOperation::Duplicate)?;
     if let Some(blocker) = service_status_blocker(Some(status), SessionCatalogOperation::Duplicate)
     {
@@ -47,10 +49,13 @@ fn duplicate_session_catalog_entry_sync(
         Ok(entry) => entry,
         Err(err) => {
             return Ok(SessionCatalogActionResult::warning(
-                format!(
-                    "Duplicated {} to {}, but failed to update the session catalog: {err}",
-                    item.display_name,
-                    outcome.target.display()
+                trf(
+                    "Duplicated {} to {}, but failed to update the session catalog: {}",
+                    &[
+                        &item.display_name,
+                        &outcome.target.display(),
+                        &err,
+                    ],
                 ),
                 initial_items,
             ));
@@ -60,20 +65,25 @@ fn duplicate_session_catalog_entry_sync(
         Ok(items) => items,
         Err(err) => {
             return Ok(SessionCatalogActionResult::warning(
-                format!(
-                    "Duplicated {} to {}, but failed to reload the session catalog: {err}",
-                    item.display_name,
-                    Path::new(&entry.path).display()
+                trf(
+                    "Duplicated {} to {}, but failed to reload the session catalog: {}",
+                    &[
+                        &item.display_name,
+                        &Path::new(&entry.path).display(),
+                        &err,
+                    ],
                 ),
                 initial_items,
             ));
         }
     };
     Ok(SessionCatalogActionResult::success(
-        format!(
+        trf(
             "Duplicated {} to {}.",
-            item.display_name,
-            Path::new(&entry.path).display()
+            &[
+                &item.display_name,
+                &Path::new(&entry.path).display(),
+            ],
         ),
         items,
     ))

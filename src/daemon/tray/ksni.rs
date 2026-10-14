@@ -9,6 +9,8 @@ use crate::config::{Action, TrayIconStyle, action_label};
 #[cfg(feature = "tray")]
 use crate::configurator_destination::{ConfiguratorDestination, ConfiguratorScreen};
 #[cfg(feature = "tray")]
+use crate::i18n::{tr, trf};
+#[cfg(feature = "tray")]
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, ICON_THEME_PATH_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV,
     XDG_SESSION_DESKTOP_ENV,
@@ -39,7 +41,9 @@ const TRAY_ICON_NAME: &str = "wayscriber-symbolic";
 /// keep. The trailing ellipsis is the usual signal that the click opens a
 /// window rather than changing something in place.
 #[cfg(feature = "tray")]
-const SESSION_SETTINGS_LABEL: &str = "Session persistence settings…";
+fn session_settings_label() -> &'static str {
+    tr("Session persistence settings…")
+}
 
 #[cfg(feature = "tray")]
 impl ksni::Tray for WayscriberTray {
@@ -48,7 +52,7 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn title(&self) -> String {
-        "Wayscriber Screen Annotation".into()
+        tr("Wayscriber Screen Annotation").into()
     }
 
     fn icon_name(&self) -> String {
@@ -73,16 +77,19 @@ impl ksni::Tray for WayscriberTray {
             available_update,
         } = status;
         let mut description =
-            "Toggle overlay, open configurator, or quit from the tray".to_string();
-        description.push_str("\nOverlay: ");
-        description.push_str(if overlay_active { "active" } else { "hidden" });
+            tr("Toggle overlay, open configurator, or quit from the tray").to_string();
+        description.push('\n');
+        description.push_str(tr("Overlay: "));
+        description.push_str(if overlay_active { tr("active") } else { tr("hidden") });
 
         if let Some(update) = available_update.as_ref() {
-            description.push_str(&format!("\nUpdate available: {}", update.version));
+            description.push('\n');
+            description.push_str(&trf("Update available: {}", &[&update.version]));
         }
 
         if watcher_offline {
-            description.push_str("\nTray watcher offline");
+            description.push('\n');
+            description.push_str(tr("Tray watcher offline"));
             if let Some(reason) = watcher_reason {
                 description.push_str(": ");
                 description.push_str(&reason);
@@ -90,12 +97,16 @@ impl ksni::Tray for WayscriberTray {
         }
 
         if let Some(error) = overlay_error {
-            description.push_str("\nOverlay error: ");
+            description.push('\n');
+            description.push_str(tr("Overlay error: "));
             description.push_str(&error.message);
             if let Some(next_retry_at) = error.next_retry_at {
                 let remaining = next_retry_at.saturating_duration_since(Instant::now());
                 if remaining > Duration::from_secs(0) {
-                    description.push_str(&format!(" (retry in {}s)", remaining.as_secs().max(1)));
+                    description.push_str(&trf(
+                        " (retry in {}s)",
+                        &[&remaining.as_secs().max(1)],
+                    ));
                 }
             }
         }
@@ -107,7 +118,7 @@ impl ksni::Tray for WayscriberTray {
                 String::new()
             },
             icon_pixmap: vec![],
-            title: format!("Wayscriber {}", crate::build_info::version()),
+            title: trf("Wayscriber {}", &[&crate::build_info::version()]),
             description,
         }
     }
@@ -129,6 +140,7 @@ impl ksni::Tray for WayscriberTray {
         let use_theme_icons = menu_theme_icons_enabled();
         let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let toggle_label = toggle_overlay_menu_label();
+        let overlay_state = if overlay_active { tr("active") } else { tr("hidden") };
 
         let mut items: Vec<MenuItem<Self>> = Vec::new();
 
@@ -138,7 +150,7 @@ impl ksni::Tray for WayscriberTray {
             let update_url = update.update_url.clone();
             items.push(
                 StandardItem {
-                    label: format!("Update available: {}", update.version),
+                    label: trf("Update available: {}", &[&update.version]),
                     icon_name: menu_icon_name("system-software-update", use_theme_icons),
                     activate: Box::new(move |this: &mut Self| {
                         this.open_update_instructions(&update_url);
@@ -152,7 +164,7 @@ impl ksni::Tray for WayscriberTray {
 
         items.extend([
             StandardItem {
-                label: "About Wayscriber".to_string(),
+                label: tr("About Wayscriber").to_string(),
                 icon_name: menu_icon_name("help-about", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
                     this.launch_about();
@@ -171,10 +183,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: format!(
-                    "Overlay: {}",
-                    if overlay_active { "active" } else { "hidden" }
-                ),
+                label: trf("Overlay: {}", &[&overlay_state]),
                 enabled: false,
                 ..Default::default()
             }
@@ -198,7 +207,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             SubMenu {
-                label: "Drawing Modes".to_string(),
+                label: tr("Drawing Modes").to_string(),
                 icon_name: menu_icon_name("applications-graphics", use_theme_icons),
                 submenu: vec![
                     StandardItem {
@@ -227,7 +236,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             SubMenu {
-                label: "Capture".to_string(),
+                label: tr("Capture").to_string(),
                 icon_name: menu_icon_name("camera-photo", use_theme_icons),
                 submenu: vec![
                     StandardItem {
@@ -274,7 +283,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             SubMenu {
-                label: "Settings & Data".to_string(),
+                label: tr("Settings & Data").to_string(),
                 icon_name: menu_icon_name("preferences-system", use_theme_icons),
                 submenu: vec![
                     StandardItem {
@@ -287,7 +296,7 @@ impl ksni::Tray for WayscriberTray {
                     }
                     .into(),
                     StandardItem {
-                        label: "Open Config File".to_string(),
+                        label: tr("Open Config File").to_string(),
                         icon_name: menu_icon_name("text-x-generic", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
                             this.open_config_file();
@@ -296,7 +305,7 @@ impl ksni::Tray for WayscriberTray {
                     }
                     .into(),
                     StandardItem {
-                        label: SESSION_SETTINGS_LABEL.to_string(),
+                        label: session_settings_label().to_string(),
                         icon_name: menu_icon_name("document-save", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
                             this.launch_configurator(Some(ConfiguratorDestination::new(
@@ -307,7 +316,7 @@ impl ksni::Tray for WayscriberTray {
                     }
                     .into(),
                     StandardItem {
-                        label: "Clear saved session data".to_string(),
+                        label: tr("Clear saved session data").to_string(),
                         icon_name: menu_icon_name("edit-clear", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
                             this.clear_session_files();
@@ -316,7 +325,7 @@ impl ksni::Tray for WayscriberTray {
                     }
                     .into(),
                     StandardItem {
-                        label: "Open log folder".to_string(),
+                        label: tr("Open log folder").to_string(),
                         icon_name: menu_icon_name("folder", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
                             this.open_log_folder();
@@ -330,7 +339,7 @@ impl ksni::Tray for WayscriberTray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Quit".to_string(),
+                label: tr("Quit").to_string(),
                 icon_name: menu_icon_name("window-close", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
                     this.request_quit();
@@ -458,9 +467,9 @@ fn installed_icon_theme_path() -> Option<PathBuf> {
 
 #[cfg(feature = "tray")]
 fn toggle_overlay_menu_label() -> String {
-    let base = "Toggle Overlay";
+    let base = tr("Toggle Overlay");
     match configured_toggle_shortcut_hint() {
-        Some(shortcut) => format!("{base} ({shortcut})"),
+        Some(shortcut) => trf("{} ({})", &[&base, &shortcut]),
         None => base.to_string(),
     }
 }

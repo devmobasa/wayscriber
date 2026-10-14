@@ -8,6 +8,7 @@
 use crate::config::{
     ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode, toolbar_item_ids as ids,
 };
+use crate::i18n::tr;
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
 
@@ -456,10 +457,10 @@ pub(crate) fn semantic_icon_for_tool(tool: Tool) -> SemanticToolIcon {
 
 pub(crate) fn default_drag_hint(tool: Tool) -> Option<&'static str> {
     match tool {
-        Tool::Line => Some("Shift+Drag"),
-        Tool::Rect => Some("Ctrl+Drag"),
-        Tool::Ellipse => Some("Tab+Drag"),
-        Tool::Arrow => Some("Ctrl+Shift+Drag"),
+        Tool::Line => Some(tr("Shift+Drag")),
+        Tool::Rect => Some(tr("Ctrl+Drag")),
+        Tool::Ellipse => Some(tr("Tab+Drag")),
+        Tool::Arrow => Some(tr("Ctrl+Shift+Drag")),
         _ => None,
     }
 }

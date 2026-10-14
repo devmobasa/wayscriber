@@ -8,6 +8,7 @@
 //! dismissal. Choosing a style closes the menu from the backend.
 
 use crate::draw::ArrowStyle;
+use crate::i18n::trf;
 
 use super::*;
 
@@ -53,10 +54,9 @@ impl TopBar {
         let handle = chip.clone();
         let refresh = move |snapshot: &ToolbarSnapshot| {
             handle.set_tooltip_text(control.tooltip(snapshot).as_deref());
-            handle.update_property(&[gtk4::accessible::Property::Label(&format!(
+            handle.update_property(&[gtk4::accessible::Property::Label(&trf(
                 "{}: {}",
-                control.label(snapshot),
-                snapshot.arrow_style.label()
+                &[&control.label(snapshot), &snapshot.arrow_style.label()],
             ))]);
             set_active_class(&handle, control.active(snapshot));
             if glyph.set_style(snapshot.arrow_style) {
@@ -132,9 +132,9 @@ impl TopBar {
         );
         set_semantic_widget_id(&row, &id);
         row.set_tooltip_text(Some(&entry.tooltip()));
-        row.update_property(&[gtk4::accessible::Property::Label(&format!(
+        row.update_property(&[gtk4::accessible::Property::Label(&trf(
             "{} arrow: {}",
-            entry.label, entry.hint
+            &[&entry.label, &entry.hint],
         ))]);
         set_active_class(&row, entry.current);
 

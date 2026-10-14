@@ -1,6 +1,7 @@
 use super::super::base::{BOARD_DELETE_CONFIRM_MS, InputState};
 use crate::domain::Action;
 use crate::draw::TextMeasurer;
+use crate::i18n::{tr, trf};
 use crate::input::boards::{
     BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
     BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
@@ -56,7 +57,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.delete",
-                Toast::info("Board deletion cancelled."),
+                Toast::info(tr("Board deletion cancelled.")),
             );
         }
     }
@@ -75,7 +76,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "page.delete",
-                Toast::info("Page deletion cancelled."),
+                Toast::info(tr("Page deletion cancelled.")),
             );
         }
     }
@@ -165,9 +166,12 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Action,
                     "board.delete",
-                    Toast::warning(format!("Delete board '{name}'? Click to confirm."))
-                        .action("Delete", Action::BoardDelete)
-                        .duration_ms(BOARD_DELETE_CONFIRM_MS),
+                    Toast::warning(trf(
+                        "Delete board '{}'? Click to confirm.",
+                        &[&name],
+                    ))
+                    .action(tr("Delete"), Action::BoardDelete)
+                    .duration_ms(BOARD_DELETE_CONFIRM_MS),
                 );
             }
             BoardDeleteOutcome::Deleted {
@@ -194,8 +198,8 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Action,
                     "board.delete",
-                    Toast::info(format!("Board deleted: {deleted_name}"))
-                        .action("Undo", Action::BoardRestoreDeleted),
+                    Toast::info(trf("Board deleted: {}", &[&deleted_name]))
+                        .action(tr("Undo"), Action::BoardRestoreDeleted),
                 );
 
                 if self.boards.active_board_id() != active_id_before {
@@ -217,21 +221,21 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",
-                    Toast::warning("Board deletion changed; try again."),
+                    Toast::warning(tr("Board deletion changed; try again.")),
                 );
             }
             BoardDeleteRejection::TransparentBoard => {
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",
-                    Toast::info("Overlay board cannot be deleted."),
+                    Toast::info(tr("Overlay board cannot be deleted.")),
                 );
             }
             BoardDeleteRejection::LastBoard => {
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",
-                    Toast::info("At least one board must remain."),
+                    Toast::info(tr("At least one board must remain.")),
                 );
             }
         }
@@ -256,7 +260,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.delete",
-                Toast::info("No deleted board to restore."),
+                Toast::info(tr("No deleted board to restore.")),
             );
             return;
         };
@@ -277,7 +281,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",
-                    Toast::info(format!("Board restored: {restored_name}")),
+                    Toast::info(trf("Board restored: {}", &[&restored_name])),
                 );
             }
             BoardRestoreOutcome::Rejected(BoardRestoreRejection::MaxCountReached { request }) => {
@@ -286,7 +290,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",
-                    Toast::warning("Board limit reached; cannot restore."),
+                    Toast::warning(tr("Board limit reached; cannot restore.")),
                 );
             }
         }

@@ -9,6 +9,7 @@ use crate::backend::wayland::{
         transfer,
     },
 };
+use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{ClipboardFingerprint, ClipboardPasteRequest};
 use crate::input::state::{Toast, ToastPriority};
@@ -463,11 +464,15 @@ impl WaylandState {
 
     fn set_transfer_info_toast(&mut self, warning: TransferWarning) {
         let message = match warning {
-            TransferWarning::ReadTimedOut => Some("Clipboard read timed out; pasted local copy."),
-            TransferWarning::ClipboardUnavailable => {
-                Some("System clipboard unavailable; pasted local copy.")
+            TransferWarning::ReadTimedOut => {
+                Some(tr("Clipboard read timed out; pasted local copy."))
             }
-            TransferWarning::ClipboardError => Some("Failed to read clipboard; pasted local copy."),
+            TransferWarning::ClipboardUnavailable => {
+                Some(tr("System clipboard unavailable; pasted local copy."))
+            }
+            TransferWarning::ClipboardError => {
+                Some(tr("Failed to read clipboard; pasted local copy."))
+            }
             _ => None,
         };
         if let Some(message) = message {
@@ -481,41 +486,41 @@ impl WaylandState {
             TransferWarning::PublishSelectionTooLarge => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Copied locally; selection is too large for system clipboard."),
+                Toast::warning(tr("Copied locally; selection is too large for system clipboard.")),
             ),
             TransferWarning::PublishUnavailable => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Copied locally; system clipboard unavailable."),
+                Toast::warning(tr("Copied locally; system clipboard unavailable.")),
             ),
             TransferWarning::NothingPasted => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Nothing pasted."),
+                Toast::warning(tr("Nothing pasted.")),
             ),
             TransferWarning::NoShapesPasted => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("No shapes pasted."),
+                Toast::warning(tr("No shapes pasted.")),
             ),
             TransferWarning::ClipboardEmpty => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("System clipboard is empty."),
+                Toast::warning(tr("System clipboard is empty.")),
             ),
             TransferWarning::UnsupportedContent => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning(
+                Toast::warning(tr(
                     "Clipboard content is not a supported image or Wayscriber selection.",
-                ),
+                )),
             ),
             TransferWarning::TooLarge { limit } => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning(format!(
+                Toast::warning(trf(
                     "Clipboard data is too large to paste (limit {} MB).",
-                    limit / 1024 / 1024
+                    &[&(limit / 1024 / 1024)],
                 )),
             ),
             TransferWarning::TooManyPixels {
@@ -525,35 +530,35 @@ impl WaylandState {
             } => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning(format!(
+                Toast::warning(trf(
                     "Clipboard image is too large ({}x{}, limit {} pixels).",
-                    width, height, limit
+                    &[&width, &height, &limit],
                 )),
             ),
             TransferWarning::DecodeFailed => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Clipboard image could not be decoded."),
+                Toast::warning(tr("Clipboard image could not be decoded.")),
             ),
             TransferWarning::ReadTimedOut => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Clipboard read timed out."),
+                Toast::warning(tr("Clipboard read timed out.")),
             ),
             TransferWarning::ClipboardUnavailable => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("System clipboard unavailable."),
+                Toast::warning(tr("System clipboard unavailable.")),
             ),
             TransferWarning::ClipboardError => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Failed to read clipboard."),
+                Toast::warning(tr("Failed to read clipboard.")),
             ),
             TransferWarning::MalformedPrivateSelection => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning("Wayscriber clipboard selection could not be read."),
+                Toast::warning(tr("Wayscriber clipboard selection could not be read.")),
             ),
         };
     }

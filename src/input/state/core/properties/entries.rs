@@ -8,6 +8,7 @@ use super::summary::{
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind, SelectionPropertyValue};
 use super::utils::{approx_eq, color_label, color_rgba_eq};
 use crate::draw::{DrawnShape, Shape, ShapeId};
+use crate::i18n::tr;
 use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
 /// Renders one summary the way every popup row shows it: a locked row reads
@@ -21,16 +22,16 @@ fn summary_value<T: Clone>(
     format: impl FnOnce(T) -> String,
 ) -> String {
     if !summary.editable {
-        return "Locked".to_string();
+        return tr("Locked").to_string();
     }
     if summary.mixed {
-        return "Mixed".to_string();
+        return tr("Mixed").to_string();
     }
     summary
         .value
         .clone()
         .map(format)
-        .unwrap_or_else(|| "Mixed".to_string())
+        .unwrap_or_else(|| tr("Mixed").to_string())
 }
 
 /// The summary's single editable value, or `None` when it is mixed or locked:
@@ -91,7 +92,7 @@ impl InputState {
         let color_summary = summarize_property(selected, shape_color, color_rgba_eq);
         if color_summary.applicable {
             entries.push(entry(
-                "Color",
+                tr("Color"),
                 SelectionPropertyKind::Color,
                 &color_summary,
                 |color| color_label(palette, color),
@@ -102,7 +103,7 @@ impl InputState {
         let thickness_summary = summarize_property(selected, shape_thickness, approx_eq);
         if thickness_summary.applicable {
             entries.push(entry(
-                "Thickness",
+                tr("Thickness"),
                 SelectionPropertyKind::Thickness,
                 &thickness_summary,
                 |v| format!("{v:.1}px"),
@@ -133,11 +134,11 @@ impl InputState {
                     != PressureThicknessEditMode::Disabled
                     && any_pressure_editable;
                 entries.push(SelectionPropertyEntry {
-                    label: "Thickness".to_string(),
+                    label: tr("Thickness").to_string(),
                     value: if any_pressure_editable {
-                        "Varies (pressure)".to_string()
+                        tr("Varies (pressure)").to_string()
                     } else {
-                        "Locked".to_string()
+                        tr("Locked").to_string()
                     },
                     kind: SelectionPropertyKind::Thickness,
                     state: SelectionPropertyValue::PressureVaries,
@@ -149,7 +150,7 @@ impl InputState {
         let opacity_summary = summarize_property(selected, shape_opacity, approx_eq);
         if opacity_summary.applicable {
             entries.push(entry(
-                "Opacity",
+                tr("Opacity"),
                 SelectionPropertyKind::Opacity,
                 &opacity_summary,
                 |v| format!("{:.0}%", v * 100.0),
@@ -163,11 +164,14 @@ impl InputState {
         });
         if fill_summary.applicable {
             entries.push(entry(
-                "Fill",
+                tr("Fill"),
                 SelectionPropertyKind::Fill,
                 &fill_summary,
                 |paint| {
-                    paint.map_or_else(|| "None".to_string(), |color| color_label(palette, color))
+                    paint.map_or_else(
+                        || tr("None").to_string(),
+                        |color| color_label(palette, color),
+                    )
                 },
                 SelectionPropertyValue::Fill,
             ));
@@ -176,7 +180,7 @@ impl InputState {
         let font_summary = summarize_property(selected, shape_font_size, approx_eq);
         if font_summary.applicable {
             entries.push(entry(
-                "Font size",
+                tr("Font size"),
                 SelectionPropertyKind::FontSize,
                 &font_summary,
                 |v| format!("{v:.0}pt"),
@@ -187,10 +191,10 @@ impl InputState {
         let head_summary = summarize_property(selected, shape_arrow_head, |a, b| a == b);
         if head_summary.applicable {
             entries.push(entry(
-                "Arrow head",
+                tr("Arrow head"),
                 SelectionPropertyKind::ArrowHead,
                 &head_summary,
-                |v| if v { "End" } else { "Start" }.to_string(),
+                |v| if v { tr("End") } else { tr("Start") }.to_string(),
                 SelectionPropertyValue::ArrowHead,
             ));
         }
@@ -198,7 +202,7 @@ impl InputState {
         let style_summary = summarize_property(selected, shape_arrow_style, |a, b| a == b);
         if style_summary.applicable {
             entries.push(entry(
-                "Arrow style",
+                tr("Arrow style"),
                 SelectionPropertyKind::ArrowStyle,
                 &style_summary,
                 |v| v.label().to_string(),
@@ -209,7 +213,7 @@ impl InputState {
         let length_summary = summarize_property(selected, shape_arrow_length, approx_eq);
         if length_summary.applicable {
             entries.push(entry(
-                "Arrow length",
+                tr("Arrow length"),
                 SelectionPropertyKind::ArrowLength,
                 &length_summary,
                 |v| format!("{v:.0}px"),
@@ -220,7 +224,7 @@ impl InputState {
         let angle_summary = summarize_property(selected, shape_arrow_angle, approx_eq);
         if angle_summary.applicable {
             entries.push(entry(
-                "Arrow angle",
+                tr("Arrow angle"),
                 SelectionPropertyKind::ArrowAngle,
                 &angle_summary,
                 |v| format!("{v:.0}°"),
@@ -231,10 +235,10 @@ impl InputState {
         let text_bg_summary = summarize_property(selected, shape_text_background, |a, b| a == b);
         if text_bg_summary.applicable {
             entries.push(entry(
-                "Text background",
+                tr("Text background"),
                 SelectionPropertyKind::TextBackground,
                 &text_bg_summary,
-                |v| if v { "On" } else { "Off" }.to_string(),
+                |v| if v { tr("On") } else { tr("Off") }.to_string(),
                 SelectionPropertyValue::Toggle,
             ));
         }
@@ -243,7 +247,7 @@ impl InputState {
             summarize_property(selected, shape_spotlight_magnification, approx_eq);
         if spotlight_summary.applicable {
             entries.push(entry(
-                "Magnification",
+                tr("Magnification"),
                 SelectionPropertyKind::SpotlightMagnification,
                 &spotlight_summary,
                 crate::draw::format_spotlight_magnification,

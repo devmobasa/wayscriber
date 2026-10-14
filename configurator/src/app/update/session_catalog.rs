@@ -1,11 +1,19 @@
 use std::path::PathBuf;
 
+use wayscriber::i18n::{tr, trf};
+
 use crate::models::{SessionCatalogActionResult, SessionCatalogItem, SessionCatalogOperation};
 
 use super::super::effects::Effect;
 use super::super::state::{
     ConfiguratorApp, ConfirmationPrompt, PendingConfirmation, StatusMessage,
 };
+
+/// The loading status text, kept as the untranslated key the loaded handler
+/// matches on: the status strip shows [`LOADING_SESSIONS_MESSAGE`] through
+/// `tr`, and the comparison below has to keep recognizing it after the UI
+/// language changes.
+const LOADING_SESSIONS_MESSAGE: &str = "Loading sessions";
 
 impl ConfiguratorApp {
     pub(super) fn handle_session_catalog_loaded(
@@ -19,7 +27,7 @@ impl ConfiguratorApp {
                 if matches!(self.status, StatusMessage::Info(_))
                     && self
                         .status_text()
-                        .is_some_and(|message| message.contains("Loading sessions"))
+                        .is_some_and(|message| message.contains(LOADING_SESSIONS_MESSAGE))
                 {
                     self.status = StatusMessage::idle();
                 }
@@ -27,8 +35,10 @@ impl ConfiguratorApp {
             Err(err) => {
                 self.session_catalog.is_loading = false;
                 self.session_catalog.busy = false;
-                self.status =
-                    StatusMessage::error(format!("Failed to load session catalog: {err}"));
+                self.status = StatusMessage::error(trf(
+                    tr("Failed to load session catalog: {}"),
+                    &[&err],
+                ));
             }
         }
         Vec::new()
@@ -40,7 +50,7 @@ impl ConfiguratorApp {
         }
         self.session_catalog.is_loading = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Loading sessions...");
+        self.status = StatusMessage::info(tr("Loading sessions..."));
         vec![Effect::LoadSessionCatalog]
     }
 
@@ -50,7 +60,7 @@ impl ConfiguratorApp {
         }
         self.session_catalog.busy = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Forgetting session metadata...");
+        self.status = StatusMessage::info(tr("Forgetting session metadata..."));
         vec![Effect::ForgetSessionEntry { id }]
     }
 
@@ -68,18 +78,18 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         let Some(item) = self.session_catalog.item(&id) else {
-            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            self.status = StatusMessage::error(tr("Session is no longer in the catalog."));
             return Vec::new();
         };
         let display_name = self.session_catalog.rename_value(&id, &item.display_name);
         if display_name.trim().is_empty() {
-            self.status = StatusMessage::error("Session display name cannot be empty.");
+            self.status = StatusMessage::error(tr("Session display name cannot be empty."));
             return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Renaming session...");
+        self.status = StatusMessage::info(tr("Renaming session..."));
         vec![Effect::RenameSessionEntry { id, display_name }]
     }
 
@@ -103,18 +113,18 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         let Some(item) = self.session_catalog.item(&id) else {
-            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            self.status = StatusMessage::error(tr("Session is no longer in the catalog."));
             return Vec::new();
         };
         let target = self.session_catalog.duplicate_value(&id, &item.path);
         if target.trim().is_empty() {
-            self.status = StatusMessage::error("Duplicate Session target cannot be empty.");
+            self.status = StatusMessage::error(tr("Duplicate Session target cannot be empty."));
             return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Duplicating session...");
+        self.status = StatusMessage::info(tr("Duplicating session..."));
         vec![Effect::DuplicateSessionEntry {
             id,
             target: PathBuf::from(target),
@@ -141,18 +151,18 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         let Some(item) = self.session_catalog.item(&id) else {
-            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            self.status = StatusMessage::error(tr("Session is no longer in the catalog."));
             return Vec::new();
         };
         let target = self.session_catalog.move_value(&id, &item.path);
         if target.trim().is_empty() {
-            self.status = StatusMessage::error("Move Session target cannot be empty.");
+            self.status = StatusMessage::error(tr("Move Session target cannot be empty."));
             return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Moving session...");
+        self.status = StatusMessage::info(tr("Moving session..."));
         vec![Effect::MoveSessionEntry {
             id,
             target: PathBuf::from(target),
@@ -165,7 +175,7 @@ impl ConfiguratorApp {
         }
         self.session_catalog.busy = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Opening session folder...");
+        self.status = StatusMessage::info(tr("Opening session folder..."));
         vec![Effect::RevealSessionEntry { id }]
     }
 
@@ -183,13 +193,13 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         if self.session_catalog.item(&id).is_none() {
-            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            self.status = StatusMessage::error(tr("Session is no longer in the catalog."));
             return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info("Clearing saved tool state...");
+        self.status = StatusMessage::info(tr("Clearing saved tool state..."));
         vec![Effect::ClearSessionToolState { id }]
     }
 
@@ -204,7 +214,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         if self.session_catalog.item(&id).is_none() {
-            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            self.status = StatusMessage::error(tr("Session is no longer in the catalog."));
             return Vec::new();
         }
         self.pending_confirmation = Some(PendingConfirmation::SessionClear(id));
@@ -225,7 +235,7 @@ impl ConfiguratorApp {
         // too, which from here is redundant rather than load-bearing.
         self.clear_session_confirmation();
         self.session_catalog.busy = true;
-        self.status = StatusMessage::info("Clearing saved session data...");
+        self.status = StatusMessage::info(tr("Clearing saved session data..."));
         vec![Effect::ClearSessionEntry { id }]
     }
 

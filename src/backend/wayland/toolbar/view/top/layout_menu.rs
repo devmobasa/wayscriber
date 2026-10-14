@@ -7,6 +7,7 @@
 //! `model::layout_menu_entries`, so both frontends list the same presets
 //! with the same wording.
 
+use crate::i18n::trf;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
 use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
@@ -95,7 +96,7 @@ pub(super) fn push_layout_menu(
             },
             Some(Interaction::click(
                 entry.event.clone(),
-                Some(format!("Switch to the {} layout", entry.label)),
+                Some(trf("Switch to the {} layout", &[&entry.label])),
             )),
         ));
         let text_x = row_x + TEXT_INSET;

@@ -2,7 +2,8 @@ use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::ZoomChipDisplayOption;
 use super::super::super::fields::{
     ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
-    InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
+    InputHudPositionOption, LanguageOption, PdfFitModeOption, PdfLabelContentModeOption,
+    PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
@@ -127,6 +128,7 @@ impl ConfigDraft {
 
             ui_theme: UiThemeOption::from_theme(config.ui.theme),
             ui_reduced_motion: ReducedMotionOption::from_reduced_motion(config.ui.reduced_motion),
+            ui_language: LanguageOption::from_language(config.ui.language),
             ui_show_status_bar: config.ui.show_status_bar,
             ui_status_bar_interactive: config.ui.status_bar_interactive,
             ui_active_output_badge: config.ui.active_output_badge,

@@ -4,6 +4,8 @@
 //! from [`KeybindingsDraft`] identity, not from widgets. Search still lives in
 //! the app shell; callers intersect that visibility with this summary.
 
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{Action, Shortcut, ShortcutTrigger};
 
 use super::analysis::ParsedShortcuts;
@@ -35,12 +37,12 @@ impl ShortcutManagerFilter {
 
     pub fn title(self) -> &'static str {
         match self {
-            Self::All => "All",
-            Self::Changed => "Changed",
-            Self::Conflicts => "Conflicts",
-            Self::Unbound => "Unbound",
-            Self::Device => "Device",
-            Self::Sequences => "Sequences",
+            Self::All => tr("All"),
+            Self::Changed => tr("Changed"),
+            Self::Conflicts => tr("Conflicts"),
+            Self::Unbound => tr("Unbound"),
+            Self::Device => tr("Device"),
+            Self::Sequences => tr("Sequences"),
         }
     }
 }
@@ -58,9 +60,9 @@ impl ShortcutManagerSort {
 
     pub fn title(self) -> &'static str {
         match self {
-            Self::Category => "Category",
-            Self::Name => "Name",
-            Self::Changed => "Changed",
+            Self::Category => tr("Category"),
+            Self::Name => tr("Name"),
+            Self::Changed => tr("Changed"),
         }
     }
 }
@@ -76,10 +78,10 @@ pub enum ShortcutSourceBadge {
 impl ShortcutSourceBadge {
     pub fn title(self) -> &'static str {
         match self {
-            Self::Default => "Default",
-            Self::Authored => "Authored",
-            Self::LegacyTablet => "Legacy Tablet",
-            Self::Unavailable => "Unavailable",
+            Self::Default => tr("Default"),
+            Self::Authored => tr("Authored"),
+            Self::LegacyTablet => tr("Legacy Tablet"),
+            Self::Unavailable => tr("Unavailable"),
         }
     }
 }
@@ -96,11 +98,11 @@ pub enum ShortcutRowStatus {
 impl ShortcutRowStatus {
     pub fn title(self) -> &'static str {
         match self {
-            Self::Default => "Default",
-            Self::Changed => "Changed",
-            Self::Unbound => "Unbound",
-            Self::Conflict => "Conflict",
-            Self::Invalid => "Invalid",
+            Self::Default => tr("Default"),
+            Self::Changed => tr("Changed"),
+            Self::Unbound => tr("Unbound"),
+            Self::Conflict => tr("Conflict"),
+            Self::Invalid => tr("Invalid"),
         }
     }
 }

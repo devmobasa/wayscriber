@@ -1,6 +1,8 @@
 mod quick;
 mod sections;
 
+use crate::i18n::tr;
+
 use super::super::search::{row_matches, title_matches};
 use super::super::types::{Section, row};
 use super::bindings::HelpOverlayBindings;
@@ -104,10 +106,10 @@ pub(crate) fn filter_sections_for_search(
 
     if filtered.is_empty() {
         filtered.push(Section {
-            title: "No results",
+            title: tr("No results"),
             rows: vec![
-                row("", "Try: zoom, page, selection, capture"),
-                row("", "Tip: search by key or action name"),
+                row("", tr("Try: zoom, page, selection, capture")),
+                row("", tr("Tip: search by key or action name")),
             ],
             badges: Vec::new(),
             icon: None,

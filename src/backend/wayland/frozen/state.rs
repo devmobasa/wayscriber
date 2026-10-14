@@ -25,6 +25,7 @@ use crate::input::state::{Toast, ToastPriority};
 
 use super::PortalCaptureResult;
 use super::ext_image_copy::ExtImageCopyManagers;
+use crate::i18n::tr;
 
 struct PendingFrozenImage {
     image: FrozenImage,
@@ -242,7 +243,7 @@ impl FrozenState {
         input_state.push_toast(
             ToastPriority::Critical,
             "freeze",
-            Toast::error("Freeze failed after the display layout changed"),
+            Toast::error(tr("Freeze failed after the display layout changed")),
         );
     }
 
@@ -253,10 +254,10 @@ impl FrozenState {
         let stale_message = self
             .ensure_preflight_layout_current()
             .err()
-            .map(|error| error.message("Freeze"));
+            .map(|error| error.message(tr("Freeze")));
         let message = stale_message
             .clone()
-            .unwrap_or_else(|| "Freeze could not capture the screen.".to_string());
+            .unwrap_or_else(|| tr("Freeze could not capture the screen.").to_string());
         if self.has_acquisition_attempt() {
             let outcome = if stale_message.is_some() {
                 ScreenAcquisitionOutcome::StaleLayout
@@ -283,7 +284,7 @@ impl FrozenState {
         let outcome = if error.is_stale_layout() {
             ScreenAcquisitionOutcome::StaleLayout
         } else {
-            ScreenAcquisitionOutcome::Failed(error.message("Freeze"))
+            ScreenAcquisitionOutcome::Failed(error.message(tr("Freeze")))
         };
 
         self.finish_acquisition(outcome, input_state);

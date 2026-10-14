@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::TextMeasurer;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
@@ -137,7 +138,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info(format!("Board created: {name}")),
+                Toast::info(trf("Board created: {}", &[&name])),
             );
         }
         created
@@ -199,7 +200,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info("Overlay board cannot be duplicated."),
+                Toast::info(tr("Overlay board cannot be duplicated.")),
             );
             return;
         }
@@ -209,7 +210,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info("Board limit reached."),
+                Toast::info(tr("Board limit reached.")),
             );
             return;
         }
@@ -227,7 +228,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info(format!("Board duplicated: {name}")),
+                Toast::info(trf("Board duplicated: {}", &[&name])),
             );
 
             // Handle color auto-adjustment for the duplicated board
@@ -245,7 +246,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info("Board limit reached."),
+                Toast::info(tr("Board limit reached.")),
             );
         }
     }
@@ -272,7 +273,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info("No recent board to switch to."),
+                Toast::info(tr("No recent board to switch to.")),
             );
         }
     }

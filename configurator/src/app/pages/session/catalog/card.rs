@@ -1,5 +1,7 @@
 //! Construction and in-place refresh of one saved-session catalog card.
 
+use wayscriber::i18n::tr;
+
 use relm4::gtk;
 use relm4::prelude::*;
 
@@ -11,6 +13,7 @@ use crate::messages::Message;
 use super::super::super::super::state::ConfiguratorApp;
 use super::super::super::set_text_blocked;
 use super::{
+
     CatalogItemLayout, CatalogLayout, CatalogRowValues, body_label, caption_label, hint_label,
     message_button, row_box, set_sensitive, set_visible,
 };
@@ -136,13 +139,13 @@ fn item_card(
 
     let actions = row_box();
     let reveal = message_button(
-        "Reveal File",
+        tr("Reveal File"),
         sender,
         Message::SessionCatalogRevealRequested(item.id.clone()),
     );
     actions.append(&reveal);
     let tool_state = message_button(
-        "Clear Tool State",
+        tr("Clear Tool State"),
         sender,
         Message::SessionCatalogClearToolStateRequested(item.id.clone()),
     );
@@ -151,7 +154,7 @@ fn item_card(
 
     let danger = row_box();
     let clear = message_button(
-        "Clear Saved Data",
+        tr("Clear Saved Data"),
         sender,
         Message::SessionCatalogClearRequested(item.id.clone()),
     );
@@ -162,14 +165,14 @@ fn item_card(
     // pending id swaps which one is visible.
     let confirm = row_box();
     let confirm_button = message_button(
-        "Confirm Clear",
+        tr("Confirm Clear"),
         sender,
         Message::SessionCatalogClearConfirmed(item.id.clone()),
     );
     confirm_button.add_css_class("destructive-action");
     confirm.append(&confirm_button);
     let cancel_button = message_button(
-        "Cancel",
+        tr("Cancel"),
         sender,
         Message::SessionCatalogClearCanceled(item.id.clone()),
     );
@@ -178,7 +181,7 @@ fn item_card(
     danger.append(&confirm);
 
     let forget = message_button(
-        "Forget",
+        tr("Forget"),
         sender,
         Message::SessionCatalogForgetRequested(item.id.clone()),
     );

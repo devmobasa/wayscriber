@@ -3,8 +3,8 @@ use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
-    self, NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, RADIUS_PANEL, TEXT_HINT,
-    TEXT_PRIMARY, TEXT_TERTIARY,
+    self, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, RADIUS_PANEL, TEXT_HINT, TEXT_PRIMARY,
+    TEXT_TERTIARY, nav_hint_board_picker,
 };
 
 mod appearance;
@@ -144,7 +144,7 @@ pub(crate) fn render_board_picker_with_halo(
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         layout.footer_font_size,
-        NAV_HINT_BOARD_PICKER,
+        nav_hint_board_picker(),
     );
     let nav_start = layout.origin_x + layout.width - layout.padding_x - nav_extents.width();
     let footer_end = layout.origin_x + layout.padding_x + footer_extents.width();
@@ -153,7 +153,7 @@ pub(crate) fn render_board_picker_with_halo(
         engine.draw_baseline(
             ctx,
             footer_style,
-            NAV_HINT_BOARD_PICKER,
+            nav_hint_board_picker(),
             nav_start,
             footer_y,
             None,

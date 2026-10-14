@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use crate::models::color::ColorInput;
 use crate::models::error::FormError;
 use wayscriber::config::{ColorSpec, QuickColorConfig, QuickColorSlot, QuickColorsConfig};
@@ -37,7 +39,7 @@ impl QuickColorsDraft {
         if self.entries.len() < MIN_QUICK_COLOR_ENTRIES {
             errors.push(FormError::new(
                 "drawing.quick_colors",
-                "Keep at least eight quick colors so existing shortcuts stay bound.",
+                tr("Keep at least eight quick colors so existing shortcuts stay bound."),
             ));
         }
 
@@ -118,7 +120,7 @@ impl Default for QuickColorsDraft {
 impl Default for QuickColorDraftEntry {
     fn default() -> Self {
         Self {
-            label: "New color".to_string(),
+            label: tr("New color").to_string(),
             color: ColorInput::from_color(&ColorSpec::Name("red".to_string())),
         }
     }

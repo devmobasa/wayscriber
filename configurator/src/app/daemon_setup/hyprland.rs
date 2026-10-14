@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -38,39 +40,47 @@ pub(super) struct HyprlandLightControlsInstallResult {
 
 impl HyprlandLightControlsInstallResult {
     pub(super) fn summary(&self) -> String {
-        let mut parts = vec![format!(
+        let mut parts = vec![trf(
             "Wrote Hyprland light controls to {}",
-            self.include_path.display()
+            &[
+                &self.include_path.display(),
+            ],
         )];
-        parts.push("clears the default light keys before rebinding them".to_string());
+        parts.push(tr("clears the default light keys before rebinding them").to_string());
 
         if self.source_configured {
             if self.source_updated {
-                parts.push(format!(
+                parts.push(trf(
                     "added source line to {}",
-                    self.main_config_path.display()
+                    &[
+                        &self.main_config_path.display(),
+                    ],
                 ));
             } else {
-                parts.push(format!(
+                parts.push(trf(
                     "source line already present in {}",
-                    self.main_config_path.display()
+                    &[
+                        &self.main_config_path.display(),
+                    ],
                 ));
             }
         } else {
-            parts.push(format!(
+            parts.push(trf(
                 "add `{}` to your Hyprland config to enable it",
-                self.source_line
+                &[
+                    &self.source_line,
+                ],
             ));
         }
 
         if self.reload_attempted {
             if self.reload_succeeded {
-                parts.push("reloaded Hyprland".to_string());
+                parts.push(tr("reloaded Hyprland").to_string());
             } else if let Some(error) = self.reload_error.as_deref() {
                 parts.push(format!("hyprctl reload failed: {error}"));
             }
         } else if self.source_configured {
-            parts.push("run `hyprctl reload` to apply it".to_string());
+            parts.push(tr("run `hyprctl reload` to apply it").to_string());
         }
 
         parts.join("; ")
@@ -105,7 +115,7 @@ fn read_light_controls_status_from_config_root(config_root: &Path) -> HyprlandLi
 
 pub(super) fn install_light_controls() -> Result<HyprlandLightControlsInstallResult, String> {
     let config_root = wayscriber::paths::config_dir().ok_or_else(|| {
-        "Cannot resolve config directory; failed to determine Hyprland config path.".to_string()
+        tr("Cannot resolve config directory; failed to determine Hyprland config path.").to_string()
     })?;
     let binary_path = resolve_wayscriber_binary_path()?;
     let mut result = write_light_controls(&config_root, &binary_path)?;
@@ -117,10 +127,12 @@ pub(super) fn install_light_controls() -> Result<HyprlandLightControlsInstallRes
                 result.reload_succeeded = true;
             }
             Ok(capture) => {
-                result.reload_error = Some(format!(
+                result.reload_error = Some(trf(
                     "stdout: {}; stderr: {}",
-                    capture.stdout.trim(),
-                    capture.stderr.trim()
+                    &[
+                        &capture.stdout.trim(),
+                        &capture.stderr.trim(),
+                    ],
                 ));
             }
             Err(err) => {
@@ -138,10 +150,12 @@ fn write_light_controls(
 ) -> Result<HyprlandLightControlsInstallResult, String> {
     let hyprland_dir = config_root.join(HYPRLAND_DIR);
     fs::create_dir_all(&hyprland_dir).map_err(|err| {
-        format!(
+        trf(
             "Failed to create Hyprland config directory {}: {}",
-            hyprland_dir.display(),
-            err
+            &[
+                &hyprland_dir.display(),
+                &err,
+            ],
         )
     })?;
 
@@ -152,10 +166,12 @@ fn write_light_controls(
         AtomicWriteOptions::user_config_file(),
     )
     .map_err(|err| {
-        format!(
+        trf(
             "Failed to write Hyprland light controls {}: {}",
-            include_path.display(),
-            err
+            &[
+                &include_path.display(),
+                &err,
+            ],
         )
     })?;
 
@@ -176,20 +192,24 @@ fn write_light_controls(
                     AtomicWriteOptions::user_config_file(),
                 )
                 .map_err(|err| {
-                    format!(
+                    trf(
                         "Failed to update Hyprland config {}: {}",
-                        main_config_path.display(),
-                        err
+                        &[
+                            &main_config_path.display(),
+                            &err,
+                        ],
                     )
                 })?;
             }
         }
         Err(err) if err.kind() == ErrorKind::NotFound => {}
         Err(err) => {
-            return Err(format!(
+            return Err(trf(
                 "Failed to read Hyprland config {}: {}",
-                main_config_path.display(),
-                err
+                &[
+                    &main_config_path.display(),
+                    &err,
+                ],
             ));
         }
     }

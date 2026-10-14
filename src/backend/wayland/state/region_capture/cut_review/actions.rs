@@ -254,9 +254,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     crate::input::state::ToastPriority::Info,
                     "capture",
-                    crate::input::state::Toast::warning(
+                    crate::input::state::Toast::warning(crate::i18n::tr(
                         "That cut would remove the entire remaining image.",
-                    ),
+                    )),
                 );
                 self.mark_region_cut_ui_dirty();
             }

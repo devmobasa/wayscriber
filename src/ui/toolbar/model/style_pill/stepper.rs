@@ -48,13 +48,13 @@ impl StylePillControl {
                     kind,
                     direction: -1,
                 },
-                tooltip: format!("Decrease {}", entry.label.to_lowercase()),
+                tooltip: trf("Decrease {}", &[&entry.label.to_lowercase()]),
             },
             StylePillStep {
                 id: plus_id,
                 label: "+",
                 event: ToolbarEvent::AdjustSelectionProperty { kind, direction: 1 },
-                tooltip: format!("Increase {}", entry.label.to_lowercase()),
+                tooltip: trf("Increase {}", &[&entry.label.to_lowercase()]),
             },
         ])
     }
@@ -78,7 +78,7 @@ fn pen_smoothing_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
             id: "top.style.pen-smoothing.minus",
             label: "\u{2212}",
             event: ToolbarEvent::SetPenSmoothing(level.saturating_sub(1)),
-            tooltip: "Less smoothing".to_string(),
+            tooltip: tr("Less smoothing").to_string(),
         },
         StylePillStep {
             id: "top.style.pen-smoothing.plus",
@@ -86,7 +86,7 @@ fn pen_smoothing_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
             event: ToolbarEvent::SetPenSmoothing(
                 level.saturating_add(1).min(crate::draw::MAX_PEN_SMOOTHING),
             ),
-            tooltip: "More smoothing".to_string(),
+            tooltip: tr("More smoothing").to_string(),
         },
     ]
 }
@@ -99,7 +99,7 @@ fn shape_sensitivity_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
             id: "top.style.shape-sensitivity.minus",
             label: "\u{2212}",
             event: ToolbarEvent::SetShapeRecognitionSensitivity(level.saturating_sub(1)),
-            tooltip: "Keep more strokes as ink".to_string(),
+            tooltip: tr("Keep more strokes as ink").to_string(),
         },
         StylePillStep {
             id: "top.style.shape-sensitivity.plus",
@@ -109,7 +109,7 @@ fn shape_sensitivity_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
                     .saturating_add(1)
                     .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
             ),
-            tooltip: "Recognize rougher strokes".to_string(),
+            tooltip: tr("Recognize rougher strokes").to_string(),
         },
     ]
 }

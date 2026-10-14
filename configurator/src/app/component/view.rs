@@ -2,6 +2,8 @@ use relm4::{adw, gtk};
 
 use adw::prelude::*;
 
+use wayscriber::i18n::tr;
+
 use super::super::pages;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 use super::AppWidgets;
@@ -9,7 +11,7 @@ use super::AppWidgets;
 pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     // Header chrome.
     let subtitle = if app.has_unsaved_work() {
-        "Unsaved changes"
+        tr("Unsaved changes")
     } else {
         ""
     };

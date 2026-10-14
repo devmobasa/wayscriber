@@ -1,6 +1,7 @@
 use crate::config::QuickColorPalette;
 use crate::config::{ResolvedToolbarItems, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode};
 use crate::draw::{ArrowStyle, Color, EraserKind, FontDescriptor};
+use crate::i18n::tr;
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
 use crate::input::{EraserMode, Tool};
@@ -128,7 +129,7 @@ impl ToolContext {
         if snapshot.thickness_targets_eraser {
             ctx.needs_thickness = true;
             ctx.tool_options_kind = ToolOptionsKind::Eraser;
-            ctx.thickness_label = "Eraser size";
+            ctx.thickness_label = tr("Eraser size");
             ctx.show_eraser_mode = true;
         }
         if snapshot.thickness_targets_marker {
@@ -188,9 +189,9 @@ impl ToolContext {
             needs_thickness: true,
             tool_options_kind: ToolOptionsKind::Stroke, // Generic
             thickness_label: if snapshot.thickness_targets_eraser {
-                "Eraser size"
+                tr("Eraser size")
             } else {
-                "Thickness"
+                tr("Thickness")
             },
             show_fill_toggle: false, // Only shown contextually for shapes
             show_arrow_labels,

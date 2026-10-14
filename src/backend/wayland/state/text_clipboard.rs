@@ -10,6 +10,7 @@
 
 use super::{TextCopyOutcome, TextPasteOutcome, WaylandState};
 use crate::backend::wayland::RuntimeOperationPoll;
+use crate::i18n::tr;
 use crate::input::state::{TextClipboardRequest, TextPasteTarget, Toast, ToastPriority};
 use std::time::Duration;
 
@@ -26,7 +27,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "text_clipboard",
-                Toast::warning("Failed to copy to clipboard"),
+                Toast::warning(tr("Failed to copy to clipboard")),
             );
         }
     }
@@ -38,7 +39,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "text_clipboard",
-                Toast::warning("No saved capture to copy."),
+                Toast::warning(tr("No saved capture to copy.")),
             );
             return;
         };
@@ -80,7 +81,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "text_clipboard",
-                    Toast::warning("Failed to copy to clipboard"),
+                    Toast::warning(tr("Failed to copy to clipboard")),
                 );
             }
             RuntimeOperationPoll::Disconnected { .. } => {

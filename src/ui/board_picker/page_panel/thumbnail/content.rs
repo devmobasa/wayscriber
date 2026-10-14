@@ -3,6 +3,7 @@ use crate::draw::{
     render_eraser_stroke, render_spotlight_magnification_pass, render_spotlight_pass,
     spotlight_regions_for_frame,
 };
+use crate::i18n::tr;
 use crate::input::BoardBackground;
 use crate::input::state::{PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
 use crate::ui::constants::{
@@ -254,7 +255,7 @@ pub(super) fn render_page_name_label(
 ) {
     let label = match name {
         Some(value) => value,
-        None if is_hovered => "Add name",
+        None if is_hovered => tr("Add name"),
         None => return,
     };
     let max_w = width - 4.0;

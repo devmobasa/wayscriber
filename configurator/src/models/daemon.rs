@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::env_vars::{
     HYPRLAND_INSTANCE_SIGNATURE_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
 };
@@ -43,7 +45,7 @@ impl DesktopEnvironment {
             Self::Gnome => "GNOME",
             Self::Hyprland => "Hyprland",
             Self::Kde => "KDE Plasma",
-            Self::Unknown => "Unknown/Other",
+            Self::Unknown => tr("Unknown/Other"),
         }
     }
 
@@ -82,9 +84,9 @@ impl ShortcutBackend {
 
     pub fn friendly_label(self) -> &'static str {
         match self {
-            Self::GnomeCustomShortcut => "Active shortcut backend: GNOME custom shortcut",
-            Self::PortalServiceDropIn => "Active shortcut backend: desktop portal",
-            Self::Manual => "Active shortcut backend: manual/none",
+            Self::GnomeCustomShortcut => tr("Active shortcut backend: GNOME custom shortcut"),
+            Self::PortalServiceDropIn => tr("Active shortcut backend: desktop portal"),
+            Self::Manual => tr("Active shortcut backend: manual/none"),
         }
     }
 }
@@ -117,9 +119,9 @@ impl ShortcutApplyCapability {
 
     pub fn friendly_label(self) -> &'static str {
         match self {
-            Self::GnomeCustomShortcut => "Shortcut setup available via GNOME Settings",
-            Self::PortalServiceDropIn => "Shortcut setup available via desktop portal drop-in",
-            Self::Manual => "Automatic shortcut setup unavailable in this session",
+            Self::GnomeCustomShortcut => tr("Shortcut setup available via GNOME Settings"),
+            Self::PortalServiceDropIn => tr("Shortcut setup available via desktop portal drop-in"),
+            Self::Manual => tr("Automatic shortcut setup unavailable in this session"),
         }
     }
 }
@@ -141,8 +143,8 @@ impl LightShortcutApplyCapability {
 
     pub fn friendly_label(self) -> &'static str {
         match self {
-            Self::HyprlandNative => "Light controls setup available via Hyprland native bindings",
-            Self::Manual => "Light controls setup requires manual compositor bindings",
+            Self::HyprlandNative => tr("Light controls setup available via Hyprland native bindings"),
+            Self::Manual => tr("Light controls setup requires manual compositor bindings"),
         }
     }
 }

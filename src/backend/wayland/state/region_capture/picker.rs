@@ -11,6 +11,7 @@ use super::super::capture::{overlay_suppression_for_screenshot, should_exit_afte
 use super::super::screen_image::displayed_screen_image;
 use super::{ActiveScreenRegion, FreezeOwnership, RegionCaptureIntent, RegionPickerOptions};
 use crate::backend::wayland::state::WaylandState;
+use crate::i18n::tr;
 
 const TOAST_SOURCE: &str = "capture";
 
@@ -93,7 +94,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("Screen capture is disabled."),
+                Toast::warning(tr("Screen capture is disabled.")),
             );
             return;
         }
@@ -101,7 +102,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("Another capture operation is still in progress."),
+                Toast::warning(tr("Another capture operation is still in progress.")),
             );
             return;
         }
@@ -143,7 +144,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("Another capture operation is still in progress."),
+                Toast::warning(tr("Another capture operation is still in progress.")),
             );
             return;
         }
@@ -153,7 +154,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("Interactive region capture requires the native screen picker."),
+                Toast::warning(tr("Interactive region capture requires the native screen picker.")),
             );
             return;
         }
@@ -216,9 +217,9 @@ impl WaylandState {
                         self.input_state.push_toast(
                             ToastPriority::Info,
                             TOAST_SOURCE,
-                            Toast::warning(
+                            Toast::warning(tr(
                                 "Capture is already preparing another overlay operation.",
-                            ),
+                            )),
                         );
                     }
                 }
@@ -229,7 +230,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
-                    Toast::warning("Region capture is unavailable while zoomed on a solid board."),
+                    Toast::warning(tr(
+                        "Region capture is unavailable while zoomed on a solid board.",
+                    )),
                 );
             }
             RegionPickerEntry::ZoomImageUnavailable => {
@@ -243,7 +246,7 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Info,
             TOAST_SOURCE,
-            Toast::warning("Region capture is unavailable because zoom has no screen image."),
+            Toast::warning(tr("Region capture is unavailable because zoom has no screen image.")),
         );
     }
 
@@ -378,7 +381,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("Capture is already preparing another overlay operation."),
+                Toast::warning(tr("Capture is already preparing another overlay operation.")),
             );
             return;
         }
@@ -393,7 +396,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("The screen changed, so region capture was cancelled."),
+                Toast::warning(tr("The screen changed, so region capture was cancelled.")),
             );
         }
     }

@@ -4,6 +4,8 @@
 //! module only translates a keyval or button event plus modifier flags into
 //! that type, so the recorder can be tested without a GTK display.
 
+use wayscriber::i18n::{tr, trf};
+
 #[cfg(feature = "tablet-input")]
 use wayscriber::config::StylusTrigger;
 use wayscriber::config::keybindings::MAX_SEQUENCE_STEPS;
@@ -150,19 +152,19 @@ impl ShortcutRecorderState {
 }
 
 pub fn waiting_prompt() -> String {
-    "Press a shortcut.".to_string()
+    tr("Press a shortcut.").to_string()
 }
 
 fn sequence_waiting_prompt(steps: &[KeyBinding]) -> String {
     match steps {
-        [] => "Press the first chord.".to_string(),
-        [first] => format!("{first} then …"),
-        [first, second] => format!("{first} then {second} then …"),
+        [] => tr("Press the first chord.").to_string(),
+        [first] => trf("{} then …", &[&first]),
+        [first, second] => trf("{} then {} then …", &[&first, &second]),
         _ => steps
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
-            .join(" then "),
+            .join(&tr(" then ")),
     }
 }
 
@@ -170,19 +172,22 @@ fn sequence_pending_prompt(steps: &[KeyBinding], preview: &str) -> String {
     if steps.is_empty() {
         preview.to_string()
     } else {
-        format!(
-            "{} then {preview}",
-            steps
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(" then ")
+        trf(
+            tr("{} then {}"),
+            &[
+                &steps
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(&tr(" then ")),
+                &preview,
+            ],
         )
     }
 }
 
 pub fn sequence_keyboard_only_message() -> &'static str {
-    "Sequences are keyboard-only."
+    tr("Sequences are keyboard-only.")
 }
 
 /// Map a GDK/X11 keyval and current modifiers onto the shared binding type.
@@ -219,17 +224,18 @@ pub fn pending_preview(modifiers: KeyboardModifiers) -> String {
 }
 
 pub fn super_consumed_hint() -> &'static str {
-    "If Super never appears, the desktop captured it. Use Edit as Text."
+    tr("If Super never appears, the desktop captured it. Use Edit as Text.")
 }
 
 #[cfg(not(feature = "tablet-input"))]
 pub fn tablet_unavailable_hint() -> &'static str {
-    "Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text."
+    tr("Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text.")
 }
 
 pub fn device_unidentified_message() -> String {
-    format!(
-        "This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{MAX_POINTER_EXTRA}, StylusPrimary, StylusSecondary."
+    trf(
+        tr("This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{}, StylusPrimary, StylusSecondary."),
+        &[&MAX_POINTER_EXTRA],
     )
 }
 
@@ -258,11 +264,13 @@ fn normalize_mouse_button(button: u32, modifiers: KeyboardModifiers) -> Recorded
             logo: modifiers.super_held,
         })),
         None if (1..=3).contains(&button) => RecordedDevice::Unsupported {
-            message: "Left, middle, and right already own drawing and toolbar input.".to_string(),
+            message: tr("Left, middle, and right already own drawing and toolbar input.")
+                .to_string(),
         },
         None => RecordedDevice::Unsupported {
-            message: format!(
-                "Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{MAX_POINTER_EXTRA}."
+            message: trf(
+                tr("Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{}."),
+                &[&MAX_POINTER_EXTRA],
             ),
         },
     }
@@ -286,16 +294,17 @@ fn normalize_stylus_button(button: u32, modifiers: KeyboardModifiers) -> Recorde
             logo: modifiers.super_held,
         })),
         None if button == 1 => RecordedDevice::Unsupported {
-            message: "The stylus tip cannot be bound as an action.".to_string(),
+            message: tr("The stylus tip cannot be bound as an action.").to_string(),
         },
         None => RecordedDevice::Unsupported {
-            message: "Unknown stylus button. Use StylusPrimary or StylusSecondary.".to_string(),
+            message: tr("Unknown stylus button. Use StylusPrimary or StylusSecondary.")
+                .to_string(),
         },
     }
 }
 
 pub fn unsupported_key_message() -> &'static str {
-    "This key cannot be recorded. Use Edit as Text if Wayscriber names it."
+    tr("This key cannot be recorded. Use Edit as Text if Wayscriber names it.")
 }
 
 fn is_supported_modifier_key(keyval: u32) -> bool {
@@ -353,10 +362,10 @@ fn named_key(keyval: u32) -> Option<&'static str> {
         keyval::ESCAPE => "Escape",
         keyval::RETURN | keyval::KP_ENTER => "Return",
         keyval::BACKSPACE => "Backspace",
-        keyval::MENU => "Menu",
-        keyval::DELETE | keyval::KP_DELETE => "Delete",
+        keyval::MENU => tr("Menu"),
+        keyval::DELETE | keyval::KP_DELETE => tr("Delete"),
         keyval::HOME | keyval::KP_HOME => "Home",
-        keyval::END | keyval::KP_END => "End",
+        keyval::END | keyval::KP_END => tr("End"),
         keyval::PAGE_UP | keyval::KP_PAGE_UP => "PageUp",
         keyval::PAGE_DOWN | keyval::KP_PAGE_DOWN => "PageDown",
         keyval::LEFT | keyval::KP_LEFT => "ArrowLeft",

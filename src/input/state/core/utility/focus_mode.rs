@@ -15,6 +15,7 @@
 use super::super::base::InputState;
 use super::super::modes::FocusModeRestore;
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -145,13 +146,13 @@ impl InputState {
         // Focus mode teaches its own way back (instead of the generic
         // all-chrome warning): one press restores everything.
         let label = match self.action_binding_primary_label(Action::ToggleFocusMode) {
-            Some(binding) => format!("Restore ({binding})"),
-            None => "Restore".to_string(),
+            Some(binding) => trf("Restore ({})", &[&binding]),
+            None => tr("Restore").to_string(),
         };
         self.push_toast(
             ToastPriority::Info,
             FOCUS_MODE_TOAST_KEY,
-            Toast::info("Focus mode: UI hidden").action(label, Action::ToggleFocusMode),
+            Toast::info(tr("Focus mode: UI hidden")).action(label, Action::ToggleFocusMode),
         );
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;

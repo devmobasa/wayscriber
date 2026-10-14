@@ -7,6 +7,8 @@
 //! fields in one row also keeps the group free for the search filter its
 //! area owns — a second visibility binding on the group would overwrite it.
 
+use wayscriber::i18n::tr;
+
 use relm4::adw;
 use relm4::prelude::*;
 
@@ -19,6 +21,7 @@ use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder, set_text_blocked, validate_u32_range};
 
+
 /// Delay bounds, in milliseconds, shared by every delay field here.
 const DELAY_RANGE: (u32, u32) = (50, 5000);
 /// Step-count bounds for the custom section's undo/redo counts.
@@ -27,9 +30,9 @@ const STEPS_RANGE: (u32, u32) = (1, 500);
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::History);
 
-    page.group_in_area("Delays", SearchArea::HistoryMain)
+    page.group_in_area(tr("Delays"), SearchArea::HistoryMain)
         .entry_row_validated(
-            "Undo all delay (ms)",
+            tr("Undo all delay (ms)"),
             |app| app.draft.history.undo_all_delay_ms.clone(),
             |value| Message::TextChanged(TextField::HistoryUndoAllDelayMs, value),
             |app| {
@@ -41,7 +44,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             },
         )
         .entry_row_validated(
-            "Redo all delay (ms)",
+            tr("Redo all delay (ms)"),
             |app| app.draft.history.redo_all_delay_ms.clone(),
             |value| Message::TextChanged(TextField::HistoryRedoAllDelayMs, value),
             |app| {
@@ -53,12 +56,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             },
         );
 
-    page.group_in_area("Custom section", SearchArea::HistoryCustom);
+    page.group_in_area(tr("Custom section"), SearchArea::HistoryCustom);
     let section = custom_section(&mut page);
     custom_field(
         &mut page,
         &section,
-        "Custom undo delay (ms)",
+        tr("Custom undo delay (ms)"),
         TextField::HistoryCustomUndoDelayMs,
         |app| app.draft.history.custom_undo_delay_ms.clone(),
         DELAY_RANGE,
@@ -66,7 +69,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     custom_field(
         &mut page,
         &section,
-        "Custom redo delay (ms)",
+        tr("Custom redo delay (ms)"),
         TextField::HistoryCustomRedoDelayMs,
         |app| app.draft.history.custom_redo_delay_ms.clone(),
         DELAY_RANGE,
@@ -74,7 +77,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     custom_field(
         &mut page,
         &section,
-        "Custom undo steps",
+        tr("Custom undo steps"),
         TextField::HistoryCustomUndoSteps,
         |app| app.draft.history.custom_undo_steps.clone(),
         STEPS_RANGE,
@@ -82,7 +85,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     custom_field(
         &mut page,
         &section,
-        "Custom redo steps",
+        tr("Custom redo steps"),
         TextField::HistoryCustomRedoSteps,
         |app| app.draft.history.custom_redo_steps.clone(),
         STEPS_RANGE,
@@ -96,7 +99,7 @@ fn custom_section(page: &mut PageBuilder) -> adw::ExpanderRow {
     // Starts folded, the shipped default: a switch that opens agreeing with
     // the draft keeps the first refresh from echoing a toggle back.
     let row = adw::ExpanderRow::builder()
-        .title("Enable custom undo/redo section")
+        .title(tr("Enable custom undo/redo section"))
         .show_enable_switch(true)
         .enable_expansion(false)
         .build();

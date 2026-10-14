@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::draw::ArrowStyle;
 
 /// Startup shape of the arrow tool, as a combo-row choice.
@@ -21,10 +23,10 @@ impl ArrowStyleOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Standard => "Standard",
-            Self::Pointy => "Pointy",
-            Self::Curved => "Curved",
-            Self::Double => "Double",
+            Self::Standard => tr("Standard"),
+            Self::Pointy => tr("Pointy"),
+            Self::Curved => tr("Curved"),
+            Self::Double => tr("Double"),
         }
     }
 

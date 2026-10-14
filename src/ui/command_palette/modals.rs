@@ -1,5 +1,7 @@
 //! Palette shortcut-capture modal and action tooltips.
 
+use crate::i18n::{tr, trf};
+
 use super::*;
 
 pub(super) fn command_palette_action_tooltip_geometry(
@@ -107,23 +109,21 @@ pub(super) fn render_keybinding_capture(
     engine.draw_baseline(
         ctx,
         title_style,
-        &format!("Rebind {}", action_label(action)),
+        &trf("Rebind {}", &[&action_label(action)]),
         x + 22.0,
         y + 38.0,
         None,
     );
     constants::set_color(ctx, theme.text_secondary);
+    let current_label = if current.is_empty() {
+        "Not bound".to_string()
+    } else {
+        current.join(", ")
+    };
     engine.draw_baseline(
         ctx,
         body_style,
-        &format!(
-            "Current: {}",
-            if current.is_empty() {
-                "Not bound".to_string()
-            } else {
-                current.join(", ")
-            }
-        ),
+        &trf("Current: {}", &[&current_label]),
         x + 22.0,
         y + 70.0,
         None,
@@ -132,7 +132,7 @@ pub(super) fn render_keybinding_capture(
     engine.draw_baseline(
         ctx,
         body_style,
-        "Press the new shortcut now",
+        tr("Press the new shortcut now"),
         x + 22.0,
         y + 108.0,
         None,
@@ -141,7 +141,7 @@ pub(super) fn render_keybinding_capture(
     engine.draw_baseline(
         ctx,
         body_style,
-        KEYBINDING_CAPTURE_SCOPE_NOTE,
+        keybinding_capture_scope_note(),
         x + 22.0,
         y + 140.0,
         None,
@@ -151,5 +151,6 @@ pub(super) fn render_keybinding_capture(
 /// Says what a captured chord costs and what refuses it, at the interaction
 /// point. The edit is durable, so the line names the two things that are not
 /// obvious: backing out, and what happens to a chord that is already taken.
-const KEYBINDING_CAPTURE_SCOPE_NOTE: &str =
-    "Escape cancels • a shortcut already in use is rejected";
+fn keybinding_capture_scope_note() -> &'static str {
+    tr("Escape cancels • a shortcut already in use is rejected")
+}

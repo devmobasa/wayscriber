@@ -415,6 +415,12 @@ theme = "auto"
 # currently behaves like "off" (full motion).
 reduced_motion = "auto"
 
+# UI language for overlay chrome: help, toolbars, menus, toasts, and settings.
+# Options: "auto", "en", "zh-CN". "auto" follows the desktop locale
+# (WAYSCRIBER_LANGUAGE, then LANGUAGE/LC_ALL/LC_MESSAGES/LANG) and falls back
+# to English when that locale has no translation.
+language = "auto"
+
 # Show the status bar and its configured contents
 show_status_bar = true
 

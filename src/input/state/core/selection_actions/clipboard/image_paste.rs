@@ -2,6 +2,7 @@ use super::super::super::base::{ClipboardPasteRequest, InputState};
 use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
@@ -45,7 +46,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.clipboard",
-                Toast::warning("Paste target changed; image paste was cancelled."),
+                Toast::warning(tr("Paste target changed; image paste was cancelled.")),
             );
             self.trigger_blocked_feedback();
             return false;
@@ -71,7 +72,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.clipboard",
-                Toast::warning("Shape limit reached; image not pasted."),
+                Toast::warning(tr("Shape limit reached; image not pasted.")),
             );
             self.trigger_blocked_feedback();
             return false;

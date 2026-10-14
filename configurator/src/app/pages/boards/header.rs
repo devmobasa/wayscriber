@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::{ComponentSender, gtk};
 
 use gtk::prelude::*;
@@ -24,7 +26,7 @@ impl HeaderRow {
         set_label(&self.title, &title);
 
         let id_label = if id.trim().is_empty() {
-            "id: <unset>".to_string()
+            tr("id: <unset>").to_string()
         } else {
             format!("id: {}", id.trim())
         };

@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{
     ToolbarLayoutMode, ToolbarRebindModifier, ToolbarStrokeControls, ZoomChipDisplay,
 };
@@ -22,7 +24,7 @@ impl ToolbarRebindModifierOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Disabled => "Disabled",
+            Self::Disabled => tr("Disabled"),
             Self::CtrlShift => "Ctrl+Shift",
             Self::CtrlAlt => "Ctrl+Alt",
             Self::ShiftAlt => "Shift+Alt",
@@ -75,9 +77,9 @@ impl ToolbarLayoutModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            ToolbarLayoutModeOption::Simple => "Simple",
-            ToolbarLayoutModeOption::Regular => "Regular",
-            ToolbarLayoutModeOption::Advanced => "Advanced",
+            ToolbarLayoutModeOption::Simple => tr("Simple"),
+            ToolbarLayoutModeOption::Regular => tr("Regular"),
+            ToolbarLayoutModeOption::Advanced => tr("Advanced"),
         }
     }
 
@@ -117,8 +119,8 @@ impl ZoomChipDisplayOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Always => "Always (default)",
-            Self::WhileZoomed => "Only while zoomed",
+            Self::Always => tr("Always (default)"),
+            Self::WhileZoomed => tr("Only while zoomed"),
         }
     }
 
@@ -162,9 +164,9 @@ impl ToolbarStrokeControlsOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Panel => "Panel (default)",
-            Self::Meter => "Meters",
-            Self::Stepper => "Steppers",
+            Self::Panel => tr("Panel (default)"),
+            Self::Meter => tr("Meters"),
+            Self::Stepper => tr("Steppers"),
         }
     }
 
@@ -205,9 +207,9 @@ impl OverrideOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Default => "Default",
-            Self::On => "On",
-            Self::Off => "Off",
+            Self::Default => tr("Default"),
+            Self::On => tr("On"),
+            Self::Off => tr("Off"),
         }
     }
 
@@ -250,14 +252,14 @@ pub enum ToolbarOverrideField {
 impl ToolbarOverrideField {
     pub fn label(&self) -> &'static str {
         match self {
-            Self::ShowPresets => "Presets",
-            Self::ShowActionsSection => "Actions",
-            Self::ShowActionsAdvanced => "Advanced actions",
-            Self::ShowZoomActions => "Zoom actions",
-            Self::ShowPagesSection => "Pages",
-            Self::ShowBoardsSection => "Boards",
-            Self::ShowStepSection => "Multi-step undo/redo",
-            Self::ShowTextControls => "Text controls",
+            Self::ShowPresets => tr("Presets"),
+            Self::ShowActionsSection => tr("Actions"),
+            Self::ShowActionsAdvanced => tr("Advanced actions"),
+            Self::ShowZoomActions => tr("Zoom actions"),
+            Self::ShowPagesSection => tr("Pages"),
+            Self::ShowBoardsSection => tr("Boards"),
+            Self::ShowStepSection => tr("Multi-step undo/redo"),
+            Self::ShowTextControls => tr("Text controls"),
         }
     }
 }

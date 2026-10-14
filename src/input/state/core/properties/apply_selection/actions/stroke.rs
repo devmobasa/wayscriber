@@ -1,5 +1,6 @@
 use crate::draw::Shape;
 use crate::draw::TextMeasurer;
+use crate::i18n::tr;
 use crate::input::state::PressureThicknessEditMode;
 use crate::input::state::core::base::{InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::state::core::properties::apply_selection::constants::SELECTION_THICKNESS_STEP;
@@ -87,7 +88,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "thickness")
+        self.report_selection_apply_result(result, tr("thickness"))
     }
 }
 

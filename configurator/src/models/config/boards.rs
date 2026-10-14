@@ -1,6 +1,8 @@
 mod mapping;
 mod validation;
 
+use wayscriber::i18n::tr;
+
 use super::super::color::ColorTripletInput;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,8 +18,8 @@ impl BoardBackgroundOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Transparent => "Transparent",
-            Self::Color => "Solid color",
+            Self::Transparent => tr("Transparent"),
+            Self::Color => tr("Solid color"),
         }
     }
 }

@@ -4,17 +4,12 @@ use log::{debug, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
+use crate::i18n::tr;
+
 use super::content::{AboutAction, AboutContent, UpdateState};
 use super::interaction::{self, Element};
 use super::layout::Plan;
 use super::{AboutWindowState, clipboard, icon, surface_size};
-
-/// How the footer acknowledges an action that has no visible result of its own.
-const COPIED_NOTICE: &str = "Copied to clipboard";
-const OPENING_NOTICE: &str = "Opening in your browser";
-const OPEN_FAILED_NOTICE: &str = "Could not open your browser (see logs)";
-const REPORTED_NOTICE: &str = "Diagnostics copied, opening browser";
-const REPORT_OPEN_FAILED_NOTICE: &str = "Diagnostics copied, but the browser did not open";
 
 impl AboutWindowState {
     #[allow(clippy::too_many_arguments)]
@@ -133,18 +128,18 @@ impl AboutWindowState {
             AboutAction::OpenUrl(url) => match clipboard::open_url(&url) {
                 Ok(worker) => {
                     self.track_helper_worker(worker);
-                    self.set_notice(OPENING_NOTICE);
+                    self.set_notice(tr("Opening in your browser"));
                 }
                 Err(err) => {
                     warn!("About dialog refused or failed to open a URL: {err:#}");
-                    self.set_notice(OPEN_FAILED_NOTICE);
+                    self.set_notice(tr("Could not open your browser (see logs)"));
                 }
             },
             AboutAction::CopyText(text) => {
                 if let Some(worker) = clipboard::copy_text_to_clipboard(&text) {
                     self.track_helper_worker(worker);
                 }
-                self.set_notice(COPIED_NOTICE);
+                self.set_notice(tr("Copied to clipboard"));
             }
             // Copy as well as open: the URL carries the same diagnostics in its
             // fragment, but a browser that never launches, or a form that drops
@@ -159,11 +154,11 @@ impl AboutWindowState {
                 match opened {
                     Ok(worker) => {
                         self.track_helper_worker(worker);
-                        self.set_notice(REPORTED_NOTICE);
+                        self.set_notice(tr("Diagnostics copied, opening browser"));
                     }
                     Err(err) => {
                         warn!("About dialog failed to open the report URL: {err:#}");
-                        self.set_notice(REPORT_OPEN_FAILED_NOTICE);
+                        self.set_notice(tr("Diagnostics copied, but the browser did not open"));
                     }
                 }
             }

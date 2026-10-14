@@ -4,6 +4,7 @@
 use cairo::FontWeight;
 
 use crate::draw::Color;
+use crate::i18n::tr;
 use crate::input::state::properties_panel_metrics::{
     ACTION_BUTTON_HEIGHT, ACTION_ROW_GAP, ACTIONS_TOP_GAP, BODY_FONT, VALUE_FONT, text_style,
 };
@@ -39,7 +40,7 @@ pub(super) fn draw_actions(
     let label_style = text_style(BODY_FONT, FontWeight::Normal);
     let order_top = layout.actions_top + ACTIONS_TOP_GAP;
     let preset_top = order_top + (ACTION_BUTTON_HEIGHT + ACTION_ROW_GAP) * 2.0;
-    for (label, top) in [("Order", order_top), ("Presets", preset_top)] {
+    for (label, top) in [(tr("Order"), order_top), (tr("Presets"), preset_top)] {
         engine.draw_baseline(
             ctx,
             label_style,
@@ -89,9 +90,9 @@ pub(super) fn draw_actions(
         };
         set_color(ctx, ink);
         match action {
-            PanelAction::Duplicate => draw_label(engine, ctx, rect, "Duplicate"),
-            PanelAction::Delete => draw_label(engine, ctx, rect, "Delete"),
-            PanelAction::SavePreset => draw_label(engine, ctx, rect, "Save"),
+            PanelAction::Duplicate => draw_label(engine, ctx, rect, tr("Duplicate")),
+            PanelAction::Delete => draw_label(engine, ctx, rect, tr("Delete")),
+            PanelAction::SavePreset => draw_label(engine, ctx, rect, tr("Save")),
             PanelAction::Preset(slot) => {
                 let preset = panel.actions.presets.get(slot - 1).and_then(Option::as_ref);
                 draw_preset_chip(engine, ctx, rect, slot, preset.map(|p| p.color), ink);

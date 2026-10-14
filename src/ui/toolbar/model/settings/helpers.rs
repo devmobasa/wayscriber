@@ -1,29 +1,30 @@
+use crate::i18n::tr;
 use super::*;
 
 pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let mut buttons = vec![
         ToolbarSettingsButton {
             id: ToolbarControlId::StatusBarContents,
-            label: Cow::Borrowed("Status bar contents…"),
+            label: Cow::Borrowed(tr("Status bar contents…")),
             event: ToolbarEvent::SetStatusBarContentsOpen(true),
             icon: ToolbarIcon::Visibility,
-            tooltip: ToolbarTooltip::text("Choose which status-bar items are visible"),
+            tooltip: ToolbarTooltip::text(tr("Choose which status-bar items are visible")),
         },
         ToolbarSettingsButton {
             id: ToolbarControlId::CustomizeToolbarItems,
-            label: Cow::Borrowed("Customize"),
+            label: Cow::Borrowed(tr("Customize")),
             event: ToolbarEvent::SetToolbarItemCustomizationOpen(true),
             icon: ToolbarIcon::Visibility,
-            tooltip: ToolbarTooltip::text("Customize toolbar item visibility"),
+            tooltip: ToolbarTooltip::text(tr("Customize toolbar item visibility")),
         },
         ToolbarSettingsButton {
             id: ToolbarControlId::ResetToolbarHiddenItems,
-            label: Cow::Borrowed("Restore built-in visibility"),
+            label: Cow::Borrowed(tr("Restore built-in visibility")),
             event: ToolbarEvent::ResetToolbarItemHiddenOverrides,
             icon: ToolbarIcon::Visibility,
-            tooltip: ToolbarTooltip::text(
+            tooltip: ToolbarTooltip::text(tr(
                 "Restore built-in visibility for individual toolbar items; section preferences are unchanged",
-            ),
+            )),
         },
         ToolbarSettingsButton {
             id: ToolbarControlId::OpenCommandPalette,
@@ -53,10 +54,10 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         },
         ToolbarSettingsButton {
             id: ToolbarControlId::OpenConfigFile,
-            label: Cow::Borrowed("Config file"),
+            label: Cow::Borrowed(tr("Config file")),
             event: ToolbarEvent::OpenConfigFile,
             icon: ToolbarIcon::File,
-            tooltip: ToolbarTooltip::text("Config file"),
+            tooltip: ToolbarTooltip::text(tr("Config file")),
         },
         ToolbarSettingsButton {
             id: ToolbarControlId::OpenAbout,
@@ -83,10 +84,10 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
 pub(super) fn status_bar_content_buttons() -> Vec<ToolbarSettingsButton> {
     vec![ToolbarSettingsButton {
         id: ToolbarControlId::BackStatusBarContents,
-        label: Cow::Borrowed("Back"),
+        label: Cow::Borrowed(tr("Back")),
         event: ToolbarEvent::SetStatusBarContentsOpen(false),
         icon: ToolbarIcon::Back,
-        tooltip: ToolbarTooltip::text("Back to settings"),
+        tooltip: ToolbarTooltip::text(tr("Back to settings")),
     }]
 }
 
@@ -108,63 +109,69 @@ fn runtime_persistence_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         Mode::Missing => Vec::new(),
         Mode::Supported | Mode::UnsupportedReadOnly { .. } => vec![button(
             ToolbarControlId::ResetRuntimeUi,
-            "Reset toolbar changes",
+            tr("Reset toolbar changes"),
             ToolbarEvent::RequestRuntimeUiReset,
-            "Undo toolbar and board changes made in the overlay, back to your configured defaults",
+            tr(
+                "Undo toolbar and board changes made in the overlay, back to your configured defaults",
+            ),
         )],
         Mode::Resetting | Mode::CancellingRecovery => Vec::new(),
         Mode::AwaitingUnsupportedResetConfirmation { .. } => vec![
             button(
                 ToolbarControlId::ConfirmRuntimeUiReset,
-                "Confirm runtime reset",
+                tr("Confirm runtime reset"),
                 ToolbarEvent::ConfirmUnsupportedRuntimeUiReset,
-                "Preserve the newer runtime-state file as a recovery artifact, then reset",
+                tr("Preserve the newer runtime-state file as a recovery artifact, then reset"),
             ),
             button(
                 ToolbarControlId::CancelRuntimeUiReset,
-                "Cancel runtime reset",
+                tr("Cancel runtime reset"),
                 ToolbarEvent::CancelUnsupportedRuntimeUiReset,
-                "Keep the newer runtime-state file unchanged",
+                tr("Keep the newer runtime-state file unchanged"),
             ),
         ],
         Mode::Unhealthy => vec![
             button(
                 ToolbarControlId::RetryRuntimeUiPersistence,
-                "Retry pending save",
+                tr("Retry pending save"),
                 ToolbarEvent::RetryRuntimeUiPersistence,
-                "Reinspect the exact source and retry only still-current pending preferences",
+                tr("Reinspect the exact source and retry only still-current pending preferences"),
             ),
             button(
                 ToolbarControlId::AdoptRuntimeUiFromDisk,
-                "Use state from disk",
+                tr("Use state from disk"),
                 ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk,
-                "Discard pending runtime preferences and adopt the freshly inspected file",
+                tr("Discard pending runtime preferences and adopt the freshly inspected file"),
             ),
             button(
                 ToolbarControlId::PreserveInvalidRuntimeUi,
-                "Preserve invalid & reset",
+                tr("Preserve invalid & reset"),
                 ToolbarEvent::RequestPreserveInvalidRuntimeUiReset,
-                "Inspect invalid runtime state and request an exact-file confirmation before reset",
+                tr(
+                    "Inspect invalid runtime state and request an exact-file confirmation before reset",
+                ),
             ),
         ],
         Mode::Recovering => vec![button(
             ToolbarControlId::CancelRuntimeUiRecovery,
-            "Cancel recovery",
+            tr("Cancel recovery"),
             ToolbarEvent::CancelRuntimeUiRecovery,
-            "Cancel read-only recovery work, or wait for an already-started write to finish safely",
+            tr(
+                "Cancel read-only recovery work, or wait for an already-started write to finish safely",
+            ),
         )],
         Mode::AwaitingInvalidResetConfirmation => vec![
             button(
                 ToolbarControlId::ConfirmRuntimeUiReset,
-                "Confirm preserve & reset",
+                tr("Confirm preserve & reset"),
                 ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset,
-                "Move the exact invalid file to a retained recovery path, then reset",
+                tr("Move the exact invalid file to a retained recovery path, then reset"),
             ),
             button(
                 ToolbarControlId::CancelRuntimeUiReset,
-                "Cancel runtime reset",
+                tr("Cancel runtime reset"),
                 ToolbarEvent::CancelPreserveInvalidRuntimeUiReset,
-                "Keep the invalid runtime-state file unchanged",
+                tr("Keep the invalid runtime-state file unchanged"),
             ),
         ],
     }
@@ -179,19 +186,19 @@ pub(super) fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettin
     let mut buttons = vec![
         ToolbarSettingsButton {
             id: ToolbarControlId::BackToolbarSettings,
-            label: Cow::Borrowed("Back"),
+            label: Cow::Borrowed(tr("Back")),
             event: back_event,
             icon: ToolbarIcon::Back,
-            tooltip: ToolbarTooltip::text("Back to settings"),
+            tooltip: ToolbarTooltip::text(tr("Back to settings")),
         },
         ToolbarSettingsButton {
             id: ToolbarControlId::ResetToolbarHiddenItems,
-            label: Cow::Borrowed("Restore built-in visibility"),
+            label: Cow::Borrowed(tr("Restore built-in visibility")),
             event: ToolbarEvent::ResetToolbarItemHiddenOverrides,
             icon: ToolbarIcon::Visibility,
-            tooltip: ToolbarTooltip::text(
+            tooltip: ToolbarTooltip::text(tr(
                 "Restore built-in visibility for individual toolbar items; section preferences are unchanged",
-            ),
+            )),
         },
     ];
     if let Some(group) = snapshot
@@ -201,11 +208,11 @@ pub(super) fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettin
     {
         buttons.push(ToolbarSettingsButton {
             id: ToolbarControlId::ResetToolbarItemOrder,
-            label: Cow::Borrowed("Restore built-in order"),
+            label: Cow::Borrowed(tr("Restore built-in order")),
             event: ToolbarEvent::ResetToolbarItemOrder(group),
             icon: ToolbarIcon::Back,
             tooltip: ToolbarTooltip::text(
-                "Restore built-in order for this group; configured order is unchanged",
+                tr("Restore built-in order for this group; configured order is unchanged"),
             ),
         });
     }

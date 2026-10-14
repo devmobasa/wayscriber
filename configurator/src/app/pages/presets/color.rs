@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::rows::{SlotBuilder, color_swatch, labels_of};
 use relm4::adw::prelude::*;
 
@@ -6,13 +8,14 @@ use crate::models::{ColorMode, NamedColorOption, PresetTextField};
 
 use super::super::validate_u32_range;
 
+
 /// The slot's color block: a mode chooser with a live preview, then the
 /// rows the chosen mode edits.
 pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
     let mode_row = rows.combo_row(
-        "Color mode",
+        tr("Color mode"),
         vec![ColorMode::Named, ColorMode::Rgb],
-        vec!["Named".to_string(), "RGB".to_string()],
+        vec![tr("Named").to_string(), "RGB".to_string()],
         move |app| app.draft.presets.slot(slot).map(|draft| draft.color.mode),
         Message::PresetColorModeChanged,
     );
@@ -48,7 +51,7 @@ pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
     let named = NamedColorOption::list();
     let named_labels = labels_of(&named, NamedColorOption::label);
     let named_row = rows.combo_row(
-        "Named color",
+        tr("Named color"),
         named,
         named_labels,
         move |app| {
@@ -67,7 +70,7 @@ pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
     });
 
     let custom_name = rows.entry_row_validated(
-        "Custom color name",
+        tr("Custom color name"),
         move |app| {
             app.draft
                 .presets
@@ -81,7 +84,7 @@ pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
                 return None;
             }
             (color.preview_color().is_none() && !color.name.trim().is_empty())
-                .then(|| "Unknown color name.".to_string())
+                .then(|| tr("Unknown color name.").to_string())
         },
     );
     rows.visible_when(&custom_name, move |app| {

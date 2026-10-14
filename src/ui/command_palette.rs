@@ -1,6 +1,7 @@
 //! Command palette UI rendering.
 
 use crate::config::action_label;
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
@@ -10,8 +11,8 @@ use crate::input::state::{
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
-    self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, OVERLAY_DIM_MEDIUM, RADIUS_LG,
-    RADIUS_STD,
+    self, OVERLAY_DIM_MEDIUM, RADIUS_LG, RADIUS_STD, empty_command_palette,
+    empty_command_suggestions,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 
@@ -42,8 +43,9 @@ const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
 /// frame and is not part of the width calculation, so a longer line would be
 /// clipped whenever a query matches nothing. Ctrl+Shift+E — the route into the
 /// configurator's own editor — is taught by the tour and the docs instead.
-const COMMAND_PALETTE_INPUT_HINT: &str =
-    "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
+fn command_palette_input_hint() -> &'static str {
+    tr("Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close")
+}
 /// Maximum extent of the frame drop shadow below/right of the palette. Also
 /// the damage-region padding, so the softest (furthest) shadow layer is
 /// always covered — keep the layer offsets in `draw_command_palette_frame`
@@ -557,12 +559,12 @@ fn draw_command_palette_empty_state(
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
         empty_style.size,
-        EMPTY_COMMAND_PALETTE,
+        empty_command_palette(),
     );
     engine.draw_baseline(
         ctx,
         empty_style,
-        EMPTY_COMMAND_PALETTE,
+        empty_command_palette(),
         center_x - msg_extents.width() / 2.0,
         empty_y,
         None,
@@ -581,12 +583,12 @@ fn draw_command_palette_empty_state(
         cairo::FontSlant::Italic,
         cairo::FontWeight::Normal,
         suggest_style.size,
-        EMPTY_COMMAND_SUGGESTIONS,
+        empty_command_suggestions(),
     );
     engine.draw_baseline(
         ctx,
         suggest_style,
-        EMPTY_COMMAND_SUGGESTIONS,
+        empty_command_suggestions(),
         center_x - suggest_extents.width() / 2.0,
         empty_y + 20.0,
         None,
@@ -662,12 +664,12 @@ fn draw_command_palette_escape_hint(
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         COMMAND_PALETTE_HINT_TEXT_SIZE,
-        COMMAND_PALETTE_INPUT_HINT,
+        command_palette_input_hint(),
     );
     engine.draw_baseline(
         ctx,
         hint_style,
-        COMMAND_PALETTE_INPUT_HINT,
+        command_palette_input_hint(),
         x + (palette_width - hint_extents.width()) / 2.0,
         hint_y,
         None,

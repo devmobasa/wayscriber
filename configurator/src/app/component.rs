@@ -115,6 +115,15 @@ impl Component for ConfiguratorApp {
             spawn_effect(effect, &sender, &root);
         }
 
+        // UI chrome translates through process-global language state, so the
+        // active language must be selected before any label is built. The
+        // draft loads asynchronously (Effect::LoadConfig), hence this one
+        // synchronous read of the on-disk config; the async load still owns
+        // the editor state that follows.
+        if let Ok(loaded) = wayscriber::config::Config::load() {
+            wayscriber::i18n::set_language(loaded.config.ui.language);
+        }
+
         let widgets = shell::build(&root, &sender);
         ComponentParts { model, widgets }
     }

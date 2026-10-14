@@ -26,6 +26,7 @@ use crate::config::{
     Action, QuickColorPalette, ToolbarStrokeControls, action_label, action_short_label,
     toolbar_item_ids as ids,
 };
+use crate::i18n::{tr, trf};
 use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
 use crate::label_format::{format_binding_label, format_quick_color_tooltip};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
@@ -39,8 +40,9 @@ pub(crate) use arrow_menu::{
 pub(crate) use meter::{METER_ZERO_SLOT_W, StrokeSetting, StylePillMeter, StylePillMeterSegment};
 pub(crate) use pen_feel::{
     PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H, PEN_FEEL_HINT_H, PEN_FEEL_PAD,
-    PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE, PEN_FEEL_TITLE_H,
+    PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE_H,
     PenFeelSection, pen_feel_id, pen_feel_panel_size, pen_feel_sections, pen_feel_settings,
+    pen_feel_title,
 };
 
 use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};

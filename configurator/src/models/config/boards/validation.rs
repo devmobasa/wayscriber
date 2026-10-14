@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::collections::HashMap;
 
 use wayscriber::config::BoardBackgroundConfig;
@@ -94,7 +96,7 @@ pub(super) fn check_board_list(
     if !has_transparent {
         errors.push(FormError::new(
             "boards.items",
-            "Keep one board with a Transparent background; the overlay draws on it",
+            tr("Keep one board with a Transparent background; the overlay draws on it"),
         ));
     }
 
@@ -103,9 +105,12 @@ pub(super) fn check_board_list(
     {
         errors.push(FormError::new(
             "boards.items",
-            format!(
-                "{} boards exceed Max boards ({max_count}); remove a board or raise Max boards",
-                draft.items.len()
+            trf(
+                "{} boards exceed Max boards ({}); remove a board or raise Max boards",
+                &[
+                    &draft.items.len(),
+                    &max_count,
+                ],
             ),
         ));
     }

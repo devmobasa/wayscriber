@@ -1,4 +1,5 @@
 use crate::draw::Color;
+use crate::i18n::{tr, trf};
 use crate::input::BoardBackground;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -169,35 +170,35 @@ impl InputState {
         }
         let search = self.board_picker.search.trim();
         if !search.is_empty() {
-            return format!(
+            return trf(
                 "Search: {}  (Esc: clear)",
-                truncate_search_label(search, BOARD_PICKER_SEARCH_MAX_LEN)
+                &[&truncate_search_label(search, BOARD_PICKER_SEARCH_MAX_LEN)],
             );
         }
         if self.board_picker_is_quick() {
-            "Enter: switch  Type: jump  Esc: close".to_string()
+            tr("Enter: switch  Type: jump  Esc: close").to_string()
         } else if self.board_picker_focus() == BoardPickerFocus::PagePanel {
-            "Enter: open  Ctrl+N: add  Ctrl+G: page  /: search  F2: rename".to_string()
+            tr("Enter: open  Ctrl+N: add  Ctrl+G: page  /: search  F2: rename").to_string()
         } else {
             let page_panel_enabled = self
                 .board_picker
                 .layout
                 .is_some_and(|layout| layout.page_panel_enabled);
             if page_panel_enabled {
-                "Enter: open  F2: rename  Ctrl+C: color  Del: delete  Tab: pages".to_string()
+                tr("Enter: open  F2: rename  Ctrl+C: color  Del: delete  Tab: pages").to_string()
             } else {
-                "Enter: open  F2: rename  Ctrl+C: color  Ctrl+N: new  Del: delete".to_string()
+                tr("Enter: open  F2: rename  Ctrl+C: color  Ctrl+N: new  Del: delete").to_string()
             }
         }
     }
 
     pub(crate) fn board_picker_title(&self, board_count: usize, max_count: usize) -> String {
         if self.board_picker_is_quick() {
-            "Switch board".to_string()
+            tr("Switch board").to_string()
         } else {
             // "5 of 9 max" reads as capacity; a bare "5/9" read like the status
             // bar's "1/5" (current board of the total).
-            format!("Boards ({board_count} of {max_count} max)")
+            trf("Boards ({} of {} max)", &[&board_count, &max_count])
         }
     }
 
@@ -362,7 +363,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board_picker",
-                Toast::info("Overlay board has no background color."),
+                Toast::info(tr("Overlay board has no background color.")),
             );
             return;
         }
@@ -403,7 +404,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "board_picker",
-                        Toast::warning("Invalid color. Use #RRGGBB or RRGGBB."),
+                        Toast::warning(tr("Invalid color. Use #RRGGBB or RRGGBB.")),
                     );
                     return false;
                 };

@@ -1,5 +1,6 @@
 use super::header;
 use crate::config::{Action, action_label};
+use crate::i18n::tr;
 use crate::ui::primitives::{
     draw_keycap_with_engine, draw_rounded_rect, keycap_size_with_engine,
     text_extents_for_with_engine,
@@ -56,9 +57,9 @@ pub(super) fn footer_pills(show_unbound: bool) -> [FooterPill; 3] {
         FooterPill {
             target: FooterTarget::ToggleUnbound,
             label: if show_unbound {
-                "Hide Unbound"
+                tr("Hide Unbound")
             } else {
-                "Show Unbound"
+                tr("Show Unbound")
             },
             key_hint: Some(TOGGLE_UNBOUND_KEY),
             icon: crate::toolbar_icons::draw_icon_visibility,

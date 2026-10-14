@@ -8,8 +8,14 @@ use crate::input::state::{EyedropperCaptureSource, ScreenCaptureSource};
 use crate::input::state::{Toast, ToastPriority};
 
 use super::super::region_capture::owned_generation_is_current;
+use crate::i18n::tr;
 
+/// The English source strings the toasts below carry, kept for the tests that
+/// assert the exact wording. In a test build `tr` resolves to the source, so
+/// these mirror what the toast shows without duplicating the literals above.
+#[cfg(test)]
 const INCONSISTENT_CAPTURE_MESSAGE: &str = "Screen capture state was inconsistent; try again.";
+#[cfg(test)]
 const SOURCE_ACTIVATION_REJECTED_MESSAGE: &str =
     "Screen image changed before the selection could start; try again.";
 
@@ -17,7 +23,7 @@ pub(super) fn report_inconsistent_capture_to(input_state: &mut crate::input::Inp
     input_state.push_toast(
         ToastPriority::Critical,
         "capture",
-        Toast::error(INCONSISTENT_CAPTURE_MESSAGE),
+        Toast::error(tr("Screen capture state was inconsistent; try again.")),
     );
 }
 
@@ -37,7 +43,9 @@ pub(in crate::backend::wayland::state) fn report_screen_source_activation_reject
     input_state.push_toast(
         ToastPriority::Info,
         source,
-        Toast::warning(SOURCE_ACTIVATION_REJECTED_MESSAGE),
+        Toast::warning(tr(
+            "Screen image changed before the selection could start; try again.",
+        )),
     );
 }
 
@@ -58,8 +66,12 @@ fn zoom_terminal_report(
         return None;
     }
     match owner? {
-        ZoomWaiterOwner::Eyedropper => Some(("eyedropper", "Screen eyedropper capture failed.")),
-        ZoomWaiterOwner::Ocr => Some(("ocr", "Screen capture for text recognition failed.")),
+        ZoomWaiterOwner::Eyedropper => {
+            Some(("eyedropper", tr("Screen eyedropper capture failed.")))
+        }
+        ZoomWaiterOwner::Ocr => {
+            Some(("ocr", tr("Screen capture for text recognition failed.")))
+        }
         ZoomWaiterOwner::RegionCapture
             if matches!(
                 outcome,
@@ -69,7 +81,7 @@ fn zoom_terminal_report(
             None
         }
         ZoomWaiterOwner::RegionCapture => {
-            Some(("capture", "Screen capture for region selection failed."))
+            Some(("capture", tr("Screen capture for region selection failed.")))
         }
     }
 }
@@ -107,18 +119,20 @@ pub(super) fn report_screen_terminal_to(
         input_state.push_toast(
             ToastPriority::Info,
             "capture",
-            Toast::warning("Freeze is already preparing another overlay operation."),
+            Toast::warning(tr("Freeze is already preparing another overlay operation.")),
         );
         return;
     }
     let message = match outcome {
         ScreenAcquisitionOutcome::Ready { .. } | ScreenAcquisitionOutcome::Cancelled => return,
-        ScreenAcquisitionOutcome::StaleLayout => "Freeze failed after the display layout changed",
+        ScreenAcquisitionOutcome::StaleLayout => {
+            tr("Freeze failed after the display layout changed")
+        }
         ScreenAcquisitionOutcome::Failed(message) => message,
         ScreenAcquisitionOutcome::Unavailable => match owner {
             ScreenAcquisitionOwner::UserFreeze => unreachable!("handled above"),
-            ScreenAcquisitionOwner::Eyedropper => "Screen eyedropper capture failed.",
-            ScreenAcquisitionOwner::Ocr => "Screen capture for text recognition failed.",
+            ScreenAcquisitionOwner::Eyedropper => tr("Screen eyedropper capture failed."),
+            ScreenAcquisitionOwner::Ocr => tr("Screen capture for text recognition failed."),
             ScreenAcquisitionOwner::RegionCapture => return,
         },
     };

@@ -9,6 +9,7 @@
 use std::fmt;
 
 use crate::capture::png::encode_packed_argb32_png;
+use crate::i18n::{tr, trf};
 use crate::screen_pixels::PackedArgb32;
 
 mod controller;
@@ -132,21 +133,21 @@ impl OcrFailure {
     /// Stable user-facing message. Never includes engine output.
     pub(crate) fn message(&self) -> String {
         match self {
-            Self::EngineMissing => "Install Tesseract to use screen text recognition.".to_string(),
+            Self::EngineMissing => tr("Install Tesseract to use screen text recognition.").to_string(),
             Self::LanguageMissing { languages } => {
-                format!("Tesseract has no language data for \"{languages}\".")
+                trf("Tesseract has no language data for \"{}\".", &[languages])
             }
-            Self::EngineFailed => "Screen text recognition failed.".to_string(),
-            Self::TimedOut => "Screen text recognition timed out.".to_string(),
-            Self::OutputTooLarge => "That region produced too much text to copy.".to_string(),
+            Self::EngineFailed => tr("Screen text recognition failed.").to_string(),
+            Self::TimedOut => tr("Screen text recognition timed out.").to_string(),
+            Self::OutputTooLarge => tr("That region produced too much text to copy.").to_string(),
             Self::EncodeFailed => {
-                "Could not prepare the selected region for recognition.".to_string()
+                tr("Could not prepare the selected region for recognition.").to_string()
             }
             Self::TemporaryFileFailed => {
-                "Could not create a temporary file for recognition.".to_string()
+                tr("Could not create a temporary file for recognition.").to_string()
             }
-            Self::EngineUnavailable => "Screen text recognition is unavailable.".to_string(),
-            Self::ClipboardFailed => "Text recognized, but clipboard copy failed.".to_string(),
+            Self::EngineUnavailable => tr("Screen text recognition is unavailable.").to_string(),
+            Self::ClipboardFailed => tr("Text recognized, but clipboard copy failed.").to_string(),
         }
     }
 }

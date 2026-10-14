@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -15,6 +17,7 @@ use crate::models::TabId;
 use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder};
 use super::note;
+
 
 /// One preferences group of item rows: a surface/category batch, or one of
 /// the three order groups the configurator can reorder.
@@ -55,9 +58,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     // not know.
     let unknown_notice = note("");
     unknown_notice.set_visible(false);
-    page.group("Toolbar Visibility")
+    page.group(tr("Toolbar Visibility"))
         .custom(&note(
-            "These are configured visibility defaults. Overlay customizations are stored separately as runtime preferences. Enabled items are shown; section toggles and mode overrides can still hide them.",
+            tr("These are configured visibility defaults. Overlay customizations are stored separately as runtime preferences. Enabled items are shown; section toggles and mode overrides can still hide them."),
         ))
         .custom(&unknown_notice);
 
@@ -73,10 +76,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             let id = definition.id;
             let row = adw::SwitchRow::builder()
                 .title(definition.label)
-                .subtitle(format!(
-                    "{} - built-in default: {}",
-                    id.as_str(),
-                    visibility_label(!built_in.is_hidden(id))
+                .subtitle(trf(
+                    tr("{} - built-in default: {}"),
+                    &[&id.as_str(), &visibility_label(!built_in.is_hidden(id))],
                 ))
                 .build();
             let handler = {
@@ -109,7 +111,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         let mut reset = None;
         if let Some(group) = section.order_group {
             let button = gtk::Button::builder()
-                .label("Restore built-in order")
+                .label(tr("Restore built-in order"))
                 .halign(gtk::Align::End)
                 .margin_top(6)
                 .build();
@@ -225,15 +227,16 @@ fn item_sections(built_in: &ResolvedToolbarItems) -> Vec<ItemSection> {
 
         let order_group = configurator_order_group(definition);
         let title = match order_group {
-            Some((_, label)) => format!(
-                "{}: {} (reorderable)",
-                surface_label(definition.surface),
-                label
+            Some((_, label)) => trf(
+                tr("{}: {} (reorderable)"),
+                &[&surface_label(definition.surface), &label],
             ),
-            None => format!(
-                "{}: {}",
-                surface_label(definition.surface),
-                category_label(definition.category)
+            None => trf(
+                tr("{}: {}"),
+                &[
+                    &surface_label(definition.surface),
+                    &category_label(definition.category),
+                ],
             ),
         };
 
@@ -326,21 +329,21 @@ fn visibility_label(visible: bool) -> &'static str {
 
 fn surface_label(surface: ToolbarItemSurface) -> &'static str {
     match surface {
-        ToolbarItemSurface::Top => "Top toolbar",
-        ToolbarItemSurface::Popover => "Popover sections",
+        ToolbarItemSurface::Top => tr("Top toolbar"),
+        ToolbarItemSurface::Popover => tr("Popover sections"),
     }
 }
 
 fn category_label(category: ToolbarItemCategory) -> &'static str {
     match category {
-        ToolbarItemCategory::Chrome => "Toolbar controls",
-        ToolbarItemCategory::Tool => "Tools",
-        ToolbarItemCategory::Utility => "Utilities",
-        ToolbarItemCategory::Group => "Sections",
-        ToolbarItemCategory::Action => "Actions",
-        ToolbarItemCategory::Page => "Pages",
-        ToolbarItemCategory::Board => "Boards",
-        ToolbarItemCategory::Setting => "Settings",
-        ToolbarItemCategory::Session => "Sessions",
+        ToolbarItemCategory::Chrome => tr("Toolbar controls"),
+        ToolbarItemCategory::Tool => tr("Tools"),
+        ToolbarItemCategory::Utility => tr("Utilities"),
+        ToolbarItemCategory::Group => tr("Sections"),
+        ToolbarItemCategory::Action => tr("Actions"),
+        ToolbarItemCategory::Page => tr("Pages"),
+        ToolbarItemCategory::Board => tr("Boards"),
+        ToolbarItemCategory::Setting => tr("Settings"),
+        ToolbarItemCategory::Session => tr("Sessions"),
     }
 }

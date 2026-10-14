@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use log::{debug, info, warn};
 
 use crate::config::{Config, UpdatesConfig};
+use crate::i18n::trf;
 use crate::notification::NotificationError;
 use crate::update_check::{self, AvailableUpdate, CachedStatus, CheckOutcome};
 
@@ -201,7 +202,7 @@ fn announce(update: &AvailableUpdate, notify_enabled: bool, overlay_active: &Ato
 }
 
 fn send_notification(update: &AvailableUpdate) -> Result<(), NotificationError> {
-    let summary = format!("Wayscriber {} is available", update.version);
+    let summary = trf("Wayscriber {} is available", &[&update.version]);
     let body = notification_body(update_check::current_version(), update);
 
     let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -226,9 +227,9 @@ fn send_notification(update: &AvailableUpdate) -> Result<(), NotificationError> 
 
 /// The body states plainly that nothing was installed, and where the steps are.
 fn notification_body(current: &str, update: &AvailableUpdate) -> String {
-    format!(
-        "You are running {current}. Wayscriber does not install updates itself. See {}",
-        update.update_url
+    trf(
+        "You are running {}. Wayscriber does not install updates itself. See {}",
+        &[&current, &update.update_url],
     )
 }
 

@@ -4,6 +4,8 @@
 //! the color dialog feed the same `ColorPickerHexChanged` the Iced picker's
 //! hex field sent; the four RGBA component boxes it drew are gone with it.
 
+use wayscriber::i18n::{tr, trf};
+
 use relm4::prelude::*;
 
 use crate::messages::Message;
@@ -22,51 +24,52 @@ use super::super::state::ConfiguratorApp;
 use super::color_rows::{ResolvedColor, color_row};
 use super::{BuiltPage, PageBuilder};
 
+
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Capture);
 
-    page.group_in_area("Capture", SearchArea::CaptureFiles)
+    page.group_in_area(tr("Capture"), SearchArea::CaptureFiles)
         .switch_row(
-            "Enable capture shortcuts",
+            tr("Enable capture shortcuts"),
             "",
             |app| app.draft.capture.enabled,
             |value| Message::ToggleChanged(ToggleField::CaptureEnabled, value),
         )
         .entry_row(
-            "Save directory",
+            tr("Save directory"),
             |app| app.draft.capture.save_directory.clone(),
             |value| Message::TextChanged(TextField::CaptureSaveDirectory, value),
         )
         .entry_row(
-            "Filename template",
+            tr("Filename template"),
             |app| app.draft.capture.filename_template.clone(),
             |value| Message::TextChanged(TextField::CaptureFilename, value),
         )
         .entry_row(
-            "Format (png, jpg, ...)",
+            tr("Format (png, jpg, ...)"),
             |app| app.draft.capture.format.clone(),
             |value| Message::TextChanged(TextField::CaptureFormat, value),
         )
         .switch_row(
-            "Copy to clipboard",
+            tr("Copy to clipboard"),
             "",
             |app| app.draft.capture.copy_to_clipboard,
             |value| Message::ToggleChanged(ToggleField::CaptureCopyToClipboard, value),
         )
         .switch_row(
-            "Include drawings in screenshots",
-            "Composites the active board's committed annotations into full-screen and region captures by default. Interactive region capture can override this per screenshot.",
+            tr("Include drawings in screenshots"),
+            tr("Composites the active board's committed annotations into full-screen and region captures by default. Interactive region capture can override this per screenshot."),
             |app| app.draft.capture.include_drawings,
             |value| Message::ToggleChanged(ToggleField::CaptureIncludeDrawings, value),
         )
         .switch_row(
-            "Always exit overlay after capture",
+            tr("Always exit overlay after capture"),
             "",
             |app| app.draft.capture.exit_after,
             |value| Message::ToggleChanged(ToggleField::CaptureExitAfter, value),
         )
         .entry_row_validated(
-            "OCR languages (e.g. eng, eng+deu; needs the matching Tesseract packages)",
+            tr("OCR languages (e.g. eng, eng+deu; needs the matching Tesseract packages)"),
             |app| app.draft.capture.ocr_languages.clone(),
             |value| Message::TextChanged(TextField::CaptureOcrLanguages, value),
             |app| {
@@ -78,47 +81,47 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             },
         );
 
-    page.group_in_area("Region picker", SearchArea::CaptureRegion)
+    page.group_in_area(tr("Region picker"), SearchArea::CaptureRegion)
         .combo_row(
-            "Selection frontend",
-            "Native draws the picker over a frozen desktop image. Slurp uses the external selector.",
+            tr("Selection frontend"),
+            tr("Native draws the picker over a frozen desktop image. Slurp uses the external selector."),
             RegionPickerOption::list(),
             labels(RegionPickerOption::list(), RegionPickerOption::label),
             |app| app.draft.capture.region_picker,
             Message::CaptureRegionPickerChanged,
         )
         .switch_row(
-            "Show pointer position and selection size",
-            "Shows coordinates while idle and the selected export size while dragging.",
+            tr("Show pointer position and selection size"),
+            tr("Shows coordinates while idle and the selected export size while dragging."),
             |app| app.draft.capture.region_show_size_readout,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowSizeReadout, value),
         )
         .switch_row(
-            "Show magnified pixel loupe",
-            "Shows a magnified pixel grid beside the pointer while selecting or reviewing.",
+            tr("Show magnified pixel loupe"),
+            tr("Shows a magnified pixel grid beside the pointer while selecting or reviewing."),
             |app| app.draft.capture.region_show_loupe,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLoupe, value),
         )
         .switch_row(
-            "Show hotkey legend",
-            "Shows a short picker hotkey guide until the first drag.",
+            tr("Show hotkey legend"),
+            tr("Shows a short picker hotkey guide until the first drag."),
             |app| app.draft.capture.region_show_legend,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLegend, value),
         );
 
-    page.group_in_area("PDF export", SearchArea::CapturePdf)
+    page.group_in_area(tr("PDF export"), SearchArea::CapturePdf)
         .entry_row(
-            "PDF filename template (blank = capture template)",
+            tr("PDF filename template (blank = capture template)"),
             |app| app.draft.export_pdf_filename_template.clone(),
             |value| Message::TextChanged(TextField::ExportPdfFilenameTemplate, value),
         )
         .entry_row(
-            "All boards PDF filename template",
+            tr("All boards PDF filename template"),
             |app| app.draft.export_pdf_all_boards_filename_template.clone(),
             |value| Message::TextChanged(TextField::ExportPdfAllBoardsFilenameTemplate, value),
         )
         .combo_row(
-            "Page size",
+            tr("Page size"),
             "",
             PdfPageSizeOption::list(),
             labels(PdfPageSizeOption::list(), PdfPageSizeOption::label),
@@ -126,7 +129,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ExportPdfPageSizeChanged,
         )
         .combo_row(
-            "Orientation",
+            tr("Orientation"),
             "",
             PdfOrientationOption::list(),
             labels(PdfOrientationOption::list(), PdfOrientationOption::label),
@@ -134,7 +137,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ExportPdfOrientationChanged,
         )
         .combo_row(
-            "Fit",
+            tr("Fit"),
             "",
             PdfFitModeOption::list(),
             labels(PdfFitModeOption::list(), PdfFitModeOption::label),
@@ -142,7 +145,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ExportPdfFitChanged,
         )
         .combo_row(
-            "Transparent page background",
+            tr("Transparent page background"),
             "",
             PdfTransparentBackgroundOption::list(),
             labels(
@@ -153,31 +156,31 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ExportPdfTransparentBackgroundChanged,
         )
         .entry_row_validated(
-            "Custom width (PDF points)",
+            tr("Custom width (PDF points)"),
             |app| app.draft.export_pdf_custom_width.clone(),
             |value| Message::TextChanged(TextField::ExportPdfCustomWidth, value),
             |app| validate_f64_range(&app.draft.export_pdf_custom_width, 1.0, 14400.0),
         )
         .entry_row_validated(
-            "Custom height (PDF points)",
+            tr("Custom height (PDF points)"),
             |app| app.draft.export_pdf_custom_height.clone(),
             |value| Message::TextChanged(TextField::ExportPdfCustomHeight, value),
             |app| validate_f64_range(&app.draft.export_pdf_custom_height, 1.0, 14400.0),
         )
         .entry_row_validated(
-            "Content source padding",
+            tr("Content source padding"),
             |app| app.draft.export_pdf_content_source_padding.clone(),
             |value| Message::TextChanged(TextField::ExportPdfContentSourcePadding, value),
             |app| validate_f64_range(&app.draft.export_pdf_content_source_padding, 0.0, 4096.0),
         )
         .switch_row(
-            "Show PDF page labels",
+            tr("Show PDF page labels"),
             "",
             |app| app.draft.export_pdf_labels_enabled,
             |value| Message::ToggleChanged(ToggleField::ExportPdfLabelsEnabled, value),
         )
         .combo_row(
-            "Label position",
+            tr("Label position"),
             "",
             PdfLabelPositionOption::list(),
             labels(
@@ -188,7 +191,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ExportPdfLabelPositionChanged,
         )
         .combo_row(
-            "Label content",
+            tr("Label content"),
             "",
             PdfLabelContentModeOption::list(),
             labels(
@@ -199,35 +202,35 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ExportPdfLabelContentChanged,
         )
         .entry_row(
-            "Label template",
+            tr("Label template"),
             |app| app.draft.export_pdf_label_template.clone(),
             |value| Message::TextChanged(TextField::ExportPdfLabelTemplate, value),
         )
         .entry_row(
-            "Label font family",
+            tr("Label font family"),
             |app| app.draft.export_pdf_label_font_family.clone(),
             |value| Message::TextChanged(TextField::ExportPdfLabelFontFamily, value),
         )
         .entry_row_validated(
-            "Label font size",
+            tr("Label font size"),
             |app| app.draft.export_pdf_label_font_size.clone(),
             |value| Message::TextChanged(TextField::ExportPdfLabelFontSize, value),
             |app| validate_f64_range(&app.draft.export_pdf_label_font_size, 1.0, 72.0),
         )
         .entry_row_validated(
-            "Label margin",
+            tr("Label margin"),
             |app| app.draft.export_pdf_label_margin.clone(),
             |value| Message::TextChanged(TextField::ExportPdfLabelMargin, value),
             |app| validate_f64_range(&app.draft.export_pdf_label_margin, 0.0, 240.0),
         )
         .entry_row_validated(
-            "Label horizontal padding",
+            tr("Label horizontal padding"),
             |app| app.draft.export_pdf_label_padding_x.clone(),
             |value| Message::TextChanged(TextField::ExportPdfLabelPaddingX, value),
             |app| validate_f64_range(&app.draft.export_pdf_label_padding_x, 0.0, 120.0),
         )
         .entry_row_validated(
-            "Label vertical padding",
+            tr("Label vertical padding"),
             |app| app.draft.export_pdf_label_padding_y.clone(),
             |value| Message::TextChanged(TextField::ExportPdfLabelPaddingY, value),
             |app| validate_f64_range(&app.draft.export_pdf_label_padding_y, 0.0, 120.0),
@@ -235,13 +238,13 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     color_row(
         &mut page,
-        "Label text color",
+        tr("Label text color"),
         ColorPickerId::ExportPdfLabelText,
         |app| quad_color(&app.draft.export_pdf_label_text_color),
     );
 
     page.switch_row(
-        "Label solid background",
+        tr("Label solid background"),
         "",
         |app| app.draft.export_pdf_label_background_enabled,
         |value| Message::ToggleChanged(ToggleField::ExportPdfLabelBackgroundEnabled, value),
@@ -249,7 +252,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     color_row(
         &mut page,
-        "Label background color",
+        tr("Label background color"),
         ColorPickerId::ExportPdfLabelBackground,
         |app| quad_color(&app.draft.export_pdf_label_background_color),
     );
@@ -265,10 +268,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 pub(super) fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
     match value.trim().parse::<f64>() {
         Ok(parsed) if parsed.is_finite() && (min..=max).contains(&parsed) => None,
-        _ => Some(format!(
-            "Enter a number between {} and {}.",
-            format_float(min),
-            format_float(max)
+        _ => Some(trf(
+            tr("Enter a number between {} and {}."),
+            &[&format_float(min), &format_float(max)],
         )),
     }
 }

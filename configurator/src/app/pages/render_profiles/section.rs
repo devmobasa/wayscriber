@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::mapping::{MappingRow, build_add_mapping_row, build_mapping_row};
 use super::rows::{build_header_row, build_text_row};
 use relm4::{ComponentSender, gtk};
@@ -9,6 +11,7 @@ use crate::models::RenderProfileTextField;
 use super::super::super::state::ConfiguratorApp;
 use super::super::set_text_blocked;
 use super::{ProfileValues, SectionLayout};
+
 
 /// One section's refresh: built beside its row, so it owns that row's typed
 /// widget handles and the signal handler ids guarding each write.
@@ -89,7 +92,7 @@ fn build_section(
 
     let refresh: ProfileRowRefresh = Box::new(move |values| {
         let heading = if values.name.trim().is_empty() {
-            "Profile"
+            tr("Profile")
         } else {
             values.name.trim()
         };

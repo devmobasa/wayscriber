@@ -1,6 +1,7 @@
 use super::super::base::InputState;
 use crate::draw::Color;
 use crate::draw::TextMeasurer;
+use crate::i18n::{tr, trf};
 use crate::input::BoardBackground;
 use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::{Toast, ToastPriority};
@@ -18,7 +19,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "page.nav",
-            Toast::info("Canvas position reset."),
+            Toast::info(tr("Canvas position reset.")),
         );
         true
     }
@@ -32,7 +33,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "page.nav",
-                Toast::warning("Board name cannot be empty."),
+                Toast::warning(tr("Board name cannot be empty.")),
             );
             return false;
         }
@@ -52,7 +53,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "page.nav",
-                Toast::info("Overlay board has no background color."),
+                Toast::info(tr("Overlay board has no background color.")),
             );
             return false;
         }
@@ -157,8 +158,9 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "page.nav",
-            Toast::info(format!(
-                "Page added on '{board_name}' ({board_id}) ({page_num}/{page_count})"
+            Toast::info(trf(
+                "Page added on '{}' ({}) ({}/{})",
+                &[&board_name, &board_id, &page_num, &page_count],
             )),
         );
         true
@@ -197,8 +199,9 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "page.nav",
-            Toast::info(format!(
-                "Page duplicated on '{board_name}' ({board_id}) ({page_num}/{page_count})"
+            Toast::info(trf(
+                "Page duplicated on '{}' ({}) ({}/{})",
+                &[&board_name, &board_id, &page_num, &page_count],
             )),
         );
         true
@@ -231,7 +234,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "page.nav",
-            Toast::info("Page renamed."),
+            Toast::info(tr("Page renamed.")),
         );
         true
     }
@@ -302,16 +305,18 @@ impl InputState {
             self.mark_board_surface_changed();
         }
 
-        let action = if copy { "copied" } else { "moved" };
-        self.push_toast(
-            ToastPriority::Info,
-            "page.nav",
-            Toast::info(format!(
-                "Page {action} to '{target_name}' ({target_id}) ({}/{})",
-                new_index + 1,
-                target_count
-            )),
-        );
+        let message = if copy {
+            trf(
+                "Page copied to '{}' ({}) ({}/{})",
+                &[&target_name, &target_id, &(new_index + 1), &target_count],
+            )
+        } else {
+            trf(
+                "Page moved to '{}' ({}) ({}/{})",
+                &[&target_name, &target_id, &(new_index + 1), &target_count],
+            )
+        };
+        self.push_toast(ToastPriority::Info, "page.nav", Toast::info(message));
         self.mark_session_dirty();
         if activate_target {
             self.switch_board_slot_with_measurer(measurer, target_board);
@@ -384,7 +389,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "page.nav",
-            Toast::info(format!("Page created ({page_num}/{page_count})")),
+            Toast::info(trf("Page created ({}/{})", &[&page_num, &page_count])),
         );
     }
 
@@ -406,7 +411,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "page.nav",
-            Toast::info(format!("Page duplicated ({page_num}/{page_count})")),
+            Toast::info(trf("Page duplicated ({}/{})", &[&page_num, &page_count])),
         );
     }
 }

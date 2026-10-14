@@ -1,6 +1,7 @@
 //! Background setup workflow; callback identity and feedback policy live together.
 use super::effects::Effect;
 use crate::models::{DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment};
+use wayscriber::i18n::{tr, trf};
 
 #[derive(Debug)]
 pub(crate) enum DaemonFeedback {
@@ -34,7 +35,7 @@ impl DaemonWorkflow {
             status: None,
             shortcut_input: desktop.default_shortcut_input().to_string(),
             feedback: Some(DaemonFeedback::Status(
-                "Detecting background mode setup status...".to_string(),
+                tr("Detecting background mode setup status...").to_string(),
             )),
             active_action: None,
             next_status_request_id: 2,
@@ -66,7 +67,7 @@ impl DaemonWorkflow {
                     self.feedback.as_ref(),
                 ) {
                     self.feedback = Some(DaemonFeedback::Status(
-                        "Background mode status loaded.".to_string(),
+                        tr("Background mode status loaded.").to_string(),
                     ));
                 }
             }
@@ -76,13 +77,15 @@ impl DaemonWorkflow {
                         .feedback
                         .as_ref()
                         .map(DaemonFeedback::text)
-                        .unwrap_or("Background setup action failed.");
-                    self.feedback = Some(DaemonFeedback::Action(format!(
-                        "{previous_feedback}\nStatus refresh failed: {err}"
+                        .unwrap_or(tr("Background setup action failed."));
+                    self.feedback = Some(DaemonFeedback::Action(trf(
+                        tr("{}\nStatus refresh failed: {}"),
+                        &[&previous_feedback, &err],
                     )));
                 } else if !self.is_busy() {
-                    self.feedback = Some(DaemonFeedback::Status(format!(
-                        "Failed to load background setup status: {err}"
+                    self.feedback = Some(DaemonFeedback::Status(trf(
+                        tr("Failed to load background setup status: {}"),
+                        &[&err],
                     )));
                 }
             }
@@ -121,8 +124,9 @@ impl DaemonWorkflow {
                 Vec::new()
             }
             Err(err) => {
-                self.feedback = Some(DaemonFeedback::Action(format!(
-                    "Background setup action failed: {err}"
+                self.feedback = Some(DaemonFeedback::Action(trf(
+                    tr("Background setup action failed: {}"),
+                    &[&err],
                 )));
                 self.schedule_daemon_status_reload(true)
             }
@@ -166,20 +170,20 @@ fn should_update_feedback_after_status_load(
 
 fn action_pending_message(action: DaemonAction) -> String {
     match action {
-        DaemonAction::RefreshStatus => "Refreshing background setup status...".to_string(),
+        DaemonAction::RefreshStatus => tr("Refreshing background setup status...").to_string(),
         DaemonAction::InstallOrUpdateService => {
-            "Installing/updating background service...".to_string()
+            tr("Installing/updating background service...").to_string()
         }
         DaemonAction::EnableAndStartService => {
-            "Enabling and starting background mode...".to_string()
+            tr("Enabling and starting background mode...").to_string()
         }
-        DaemonAction::RestartService => "Restarting background service...".to_string(),
+        DaemonAction::RestartService => tr("Restarting background service...").to_string(),
         DaemonAction::StopAndDisableService => {
-            "Stopping and disabling background mode...".to_string()
+            tr("Stopping and disabling background mode...").to_string()
         }
-        DaemonAction::ApplyShortcut => "Applying desktop shortcut setup...".to_string(),
+        DaemonAction::ApplyShortcut => tr("Applying desktop shortcut setup...").to_string(),
         DaemonAction::ApplyLightControls => {
-            "Applying light passthrough controls setup...".to_string()
+            tr("Applying light passthrough controls setup...").to_string()
         }
     }
 }

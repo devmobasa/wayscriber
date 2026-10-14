@@ -1,5 +1,6 @@
 use crate::draw::TextMeasurer;
 use crate::draw::{ArrowStyle, Shape};
+use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
     MAX_ARROW_ANGLE, MAX_ARROW_LENGTH, MIN_ARROW_ANGLE, MIN_ARROW_LENGTH,
@@ -41,7 +42,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
-                Toast::warning("No arrows selected."),
+                Toast::warning(tr("No arrows selected.")),
             );
             return false;
         };
@@ -58,7 +59,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "arrow head")
+        self.report_selection_apply_result(result, tr("arrow head"))
     }
 
     /// Steps the style of every selected arrow.
@@ -99,7 +100,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "selection.apply",
-                    Toast::warning("No arrows selected."),
+                    Toast::warning(tr("No arrows selected.")),
                 );
                 return false;
             }
@@ -132,7 +133,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "arrow style")
+        self.report_selection_apply_result(result, tr("arrow style"))
     }
 
     /// The style a restyle should move the selection to.
@@ -193,7 +194,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "arrow length")
+        self.report_selection_apply_result(result, tr("arrow length"))
     }
 
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_angle(
@@ -219,7 +220,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "arrow angle")
+        self.report_selection_apply_result(result, tr("arrow angle"))
     }
 }
 

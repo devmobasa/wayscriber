@@ -3,6 +3,7 @@ use crate::configurator_destination::{
     quick_colors_destination,
 };
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
@@ -276,7 +277,7 @@ impl InputState {
         if enabled {
             info!("Input HUD enabled");
         } else {
-            let message = "Input HUD disabled";
+            let message = tr("Input HUD disabled");
             self.push_toast(ToastPriority::Info, "ui", Toast::info(message));
             info!("{}", message);
         }
@@ -342,14 +343,14 @@ impl InputState {
 
     fn toolbar_display_toast(&self, mode: crate::config::TopDisplayMode) -> Toast {
         match mode {
-            crate::config::TopDisplayMode::Full => Toast::info("Toolbar: full"),
-            crate::config::TopDisplayMode::Micro => Toast::info("Toolbar: micro"),
+            crate::config::TopDisplayMode::Full => Toast::info(tr("Toolbar: full")),
+            crate::config::TopDisplayMode::Micro => Toast::info(tr("Toolbar: micro")),
             crate::config::TopDisplayMode::Hidden => {
                 let label = match self.action_binding_primary_label(Action::CycleToolbarDisplay) {
-                    Some(binding) => format!("Show ({binding})"),
-                    None => "Show".to_string(),
+                    Some(binding) => trf("Show ({})", &[&binding]),
+                    None => tr("Show").to_string(),
                 };
-                Toast::info("Toolbar: hidden").action(label, Action::CycleToolbarDisplay)
+                Toast::info(tr("Toolbar: hidden")).action(label, Action::CycleToolbarDisplay)
             }
         }
     }
@@ -378,7 +379,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "ui",
-                Toast::warning("No selection to edit."),
+                Toast::warning(tr("No selection to edit.")),
             );
         }
     }

@@ -1,4 +1,5 @@
 use crate::config::Action;
+use crate::i18n::tr;
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::toolbar_icons;
 
@@ -9,7 +10,7 @@ use super::super::bindings::{
 
 pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Section> {
     let quick_drawing = Section {
-        title: "Drawing",
+        title: tr("Drawing"),
         rows: vec![
             action_row(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
@@ -20,7 +21,7 @@ pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Sectio
         icon: Some(toolbar_icons::draw_icon_pen),
     };
     let quick_actions = Section {
-        title: "Actions",
+        title: tr("Actions"),
         rows: vec![
             action_row(bindings, Action::Undo, NOT_BOUND_LABEL),
             action_row(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
@@ -31,7 +32,7 @@ pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Sectio
         icon: Some(toolbar_icons::draw_icon_undo),
     };
     let quick_navigation = Section {
-        title: "Navigation",
+        title: tr("Navigation"),
         rows: vec![
             row(
                 bindings_or_fallback(
@@ -39,7 +40,7 @@ pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Sectio
                     &[Action::BoardPrev, Action::BoardNext],
                     NOT_BOUND_LABEL,
                 ),
-                "Previous/next board",
+                tr("Previous/next board"),
             ),
             row(
                 bindings_or_fallback(
@@ -47,11 +48,11 @@ pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Sectio
                     &[Action::PagePrev, Action::PageNext],
                     NOT_BOUND_LABEL,
                 ),
-                "Previous/next page",
+                tr("Previous/next page"),
             ),
             row(
                 binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
-                "Full help",
+                tr("Full help"),
             )
             .with_action(Action::ToggleHelp),
         ],

@@ -1,3 +1,5 @@
+use wayscriber::i18n::trf;
+
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
@@ -32,11 +34,13 @@ pub(super) fn run_command_checked(program: &str, args: &[&str]) -> Result<Comman
 
 pub(super) fn run_command(program: &str, args: &[&str]) -> Result<CommandCapture, String> {
     let output = Command::new(program).args(args).output().map_err(|err| {
-        format!(
+        trf(
             "Failed to execute `{}` with args [{}]: {}",
-            program,
-            args.join(" "),
-            err
+            &[
+                &program,
+                &args.join(" "),
+                &err,
+            ],
         )
     })?;
     Ok(CommandCapture {
@@ -47,11 +51,13 @@ pub(super) fn run_command(program: &str, args: &[&str]) -> Result<CommandCapture
 }
 
 fn format_command_failure(program: &str, args: &[&str], capture: &CommandCapture) -> String {
-    format!(
+    trf(
         "`{}` failed with args [{}]\nstdout: {}\nstderr: {}",
-        program,
-        args.join(" "),
-        capture.stdout.trim(),
-        capture.stderr.trim()
+        &[
+            &program,
+            &args.join(" "),
+            &capture.stdout.trim(),
+            &capture.stderr.trim(),
+        ],
     )
 }

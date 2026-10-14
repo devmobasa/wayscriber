@@ -92,7 +92,7 @@ fn measure_panel(
         width(
             BODY_FONT,
             FontWeight::Normal,
-            crate::ui::theme::overlay::EMPTY_PROPERTIES,
+            crate::ui::theme::overlay::empty_properties(),
         )
     } else {
         0.0

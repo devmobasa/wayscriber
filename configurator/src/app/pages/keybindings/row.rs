@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -50,7 +52,7 @@ pub(super) fn binding_row(
     let add = icon_button("input-keyboard-symbolic", "Add shortcut");
     connect_clicked(&add, sender, Message::ShortcutRecordingStarted(field));
     let record_sequence = gtk::Button::builder()
-        .label("Record Sequence")
+        .label(tr("Record Sequence"))
         .valign(gtk::Align::Center)
         .build();
     set_accessible_label(&record_sequence, "Record sequence");
@@ -85,7 +87,7 @@ pub(super) fn binding_row(
         .xalign(1.0)
         .build();
     let edit_shortcuts = gtk::Button::builder()
-        .label("Edit Shortcuts")
+        .label(tr("Edit Shortcuts"))
         .valign(gtk::Align::Center)
         .build();
     set_accessible_label(&edit_shortcuts, "Edit shortcuts");
@@ -208,7 +210,7 @@ pub(super) fn binding_row(
                     *seen_chips.borrow_mut() = labels;
                 }
                 let summary_text = if bindings.is_empty() {
-                    "Unbound".to_string()
+                    tr("Unbound").to_string()
                 } else {
                     serialize_bindings(bindings)
                 };
@@ -236,7 +238,7 @@ pub(super) fn binding_row(
         let caption_text = match &parse_error {
             Some(message) => message.clone(),
             None if manager_row.internal_conflict => {
-                "This action lists the same shortcut twice.".to_string()
+                tr("This action lists the same shortcut twice.").to_string()
             }
             None => {
                 let default = app
@@ -245,7 +247,7 @@ pub(super) fn binding_row(
                     .value_for(field)
                     .unwrap_or_default();
                 if default.trim().is_empty() {
-                    "Default: Unbound".to_string()
+                    tr("Default: Unbound").to_string()
                 } else {
                     format!("Default: {default}")
                 }

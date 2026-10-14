@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
@@ -96,13 +97,13 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "selection",
-                        Toast::warning("No unlocked shapes to copy; clipboard unchanged."),
+                        Toast::warning(tr("No unlocked shapes to copy; clipboard unchanged.")),
                     );
                 } else {
                     self.push_toast(
                         ToastPriority::Info,
                         "selection",
-                        Toast::warning("No selection to copy; clipboard unchanged."),
+                        Toast::warning(tr("No selection to copy; clipboard unchanged.")),
                     );
                 }
             }
@@ -126,7 +127,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection",
-                Toast::warning("No shapes to select."),
+                Toast::warning(tr("No shapes to select.")),
             );
         } else {
             self.set_selection_with(measurer, ids);

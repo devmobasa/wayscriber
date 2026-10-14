@@ -1,5 +1,6 @@
 use crate::draw::PageDeleteOutcome;
 use crate::draw::TextMeasurer;
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -11,7 +12,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "page.nav",
-                Toast::info("Already on the first page."),
+                Toast::info(tr("Already on the first page.")),
             );
             false
         }
@@ -24,7 +25,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "page.nav",
-                Toast::info("Already on the last page."),
+                Toast::info(tr("Already on the last page.")),
             );
             false
         }
@@ -48,7 +49,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "page.nav",
-                Toast::info("Cleared the last page."),
+                Toast::info(tr("Cleared the last page.")),
             );
         }
         true

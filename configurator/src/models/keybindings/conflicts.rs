@@ -1,5 +1,7 @@
 //! Draft-wide shortcut conflict lookup and explicit replacement.
 
+use wayscriber::i18n::{tr, trf};
+
 use wayscriber::config::{Action, Shortcut, ShortcutTrigger, StylusButton, action_label};
 
 use super::draft::KeybindingsDraft;
@@ -34,7 +36,10 @@ impl ShortcutClaim {
     pub(super) fn legacy_tablet(action: Action, held: Shortcut) -> Self {
         Self {
             field: None,
-            label: format!("{} (legacy tablet barrel button)", action_label(action)),
+            label: trf(
+                tr("{} (legacy tablet barrel button)"),
+                &[&action_label(action)],
+            ),
             source: BindingSource::LegacyTablet,
             held,
         }
@@ -73,10 +78,10 @@ impl PendingShortcutConflict {
                         .iter()
                         .all(|claim| claim.source == BindingSource::LegacyTablet) =>
             {
-                "Move Legacy Binding"
+                tr("Move Legacy Binding")
             }
-            Self::Recorded { .. } => "Replace",
-            Self::Text { .. } => "Resolve Conflicts",
+            Self::Recorded { .. } => tr("Replace"),
+            Self::Text { .. } => tr("Resolve Conflicts"),
         }
     }
 
@@ -261,7 +266,7 @@ fn later_internal_conflict_index(parts: &[String]) -> Option<usize> {
 }
 
 pub fn recorded_conflict_prompt(binding: &Shortcut, claimants: &[ShortcutClaim]) -> String {
-    let mut lines = vec![format!("{binding} is already assigned to:")];
+    let mut lines = vec![trf("{} is already assigned to:", &[&binding])];
     for claim in claimants {
         if claim.held == *binding {
             lines.push(format!("- {}", claim.label));
@@ -280,14 +285,16 @@ pub fn recorded_conflict_prompt(binding: &Shortcut, claimants: &[ShortcutClaim])
         && !claimants.is_empty()
     {
         lines.push(
-            "Move that legacy barrel-button assignment into this action's shortcuts?".to_string(),
+            tr("Move that legacy barrel-button assignment into this action's shortcuts?")
+                .to_string(),
         );
     } else if claimants.iter().any(|claim| claim.held != *binding) {
         lines.push(
-            "Replace those assignments? Prefix and extension shortcuts cannot coexist.".to_string(),
+            tr("Replace those assignments? Prefix and extension shortcuts cannot coexist.")
+                .to_string(),
         );
     } else {
-        lines.push("Replace those assignments?".to_string());
+        lines.push(tr("Replace those assignments?").to_string());
     }
     lines.join("\n")
 }
@@ -323,7 +330,7 @@ fn clear_legacy_for(draft: &mut KeybindingsDraft, binding: &Shortcut) {
 }
 
 fn text_conflict_prompt(conflicts: &[TextShortcutConflict]) -> String {
-    let mut lines = vec!["These shortcuts conflict:".to_string()];
+    let mut lines = vec![tr("These shortcuts conflict:").to_string()];
     for conflict in conflicts {
         let names = conflict
             .claimants
@@ -332,15 +339,22 @@ fn text_conflict_prompt(conflicts: &[TextShortcutConflict]) -> String {
                 if claim.held == conflict.binding {
                     claim.label.clone()
                 } else {
-                    format!("{} ({})", claim.label, claim.held.display_label())
+                    trf(
+                        tr("{} ({})"),
+                        &[&claim.label, &claim.held.display_label()],
+                    )
                 }
             })
             .collect::<Vec<_>>()
             .join(", ");
-        lines.push(format!("- {}: {names}", conflict.binding.display_label()));
+        lines.push(format!(
+            "- {}: {}",
+            conflict.binding.display_label(),
+            names
+        ));
     }
     lines.push(String::new());
-    lines.push("Resolve those assignments?".to_string());
+    lines.push(tr("Resolve those assignments?").to_string());
     lines.join("\n")
 }
 

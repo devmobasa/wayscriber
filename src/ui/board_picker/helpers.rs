@@ -53,7 +53,9 @@ pub(super) fn board_slot_hint(state: &InputState, index: usize) -> Option<String
         _ => return None,
     };
     let label = state.action_binding_label(action);
-    if label == "Not bound" {
+    // The unbound sentinel stays in the source language: it is compared, never
+    // drawn, so it is not translated and needs no catalog entry.
+    if label == crate::label_format::NOT_BOUND_LABEL {
         None
     } else {
         Some(label)

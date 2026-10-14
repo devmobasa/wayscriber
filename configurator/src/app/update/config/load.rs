@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use wayscriber::config::ConfigDocument;
 
 use crate::models::ConfigDraft;
@@ -31,8 +33,9 @@ impl ConfiguratorApp {
                     Some(_) if !document.section_errors().is_empty() => {
                         salvaged_document_status(&document)
                     }
-                    Some(warning) => StatusMessage::warning(format!(
-                        "The configuration could not be parsed, so built-in defaults were loaded for repair. Saving will create a backup before replacing the unreadable configuration with this draft. Unknown settings are retained only when the TOML structure is parseable and they can be separated safely; malformed TOML content remains only in the backup.\n{warning}"
+                    Some(warning) => StatusMessage::warning(trf(
+                        "The configuration could not be parsed, so built-in defaults were loaded for repair. Saving will create a backup before replacing the unreadable configuration with this draft. Unknown settings are retained only when the TOML structure is parseable and they can be separated safely; malformed TOML content remains only in the backup.\n{}",
+                        &[&warning],
                     )),
                 };
                 // Last, so everything above reads the document by reference and
@@ -60,7 +63,7 @@ impl ConfiguratorApp {
     pub(in crate::app::update) fn begin_config_reload(&mut self) -> Vec<Effect> {
         if self.document.begin_reload() {
             self.clear_defaults_confirmation();
-            self.status = StatusMessage::info("Reloading configuration...");
+            self.status = StatusMessage::info(tr("Reloading configuration..."));
             return vec![Effect::LoadConfig];
         }
 

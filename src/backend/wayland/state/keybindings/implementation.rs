@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::{tr, trf};
 
 /// Why a shortcut edit was refused. Both arms leave the keymap untouched.
 #[derive(Debug)]
@@ -59,9 +60,9 @@ fn apply_keybinding_edit(
             });
         }
         if let Some(first) = requested.insert(binding, binding_text.clone()) {
-            return Err(KeybindingEditError::Edit(format!(
-                "Shortcut not changed: {first} is listed twice for {}.",
-                action_label(request.action)
+            return Err(KeybindingEditError::Edit(trf(
+                "Shortcut not changed: {} is listed twice for {}.",
+                &[&first, &action_label(request.action)],
             )));
         }
     }
@@ -72,9 +73,9 @@ fn apply_keybinding_edit(
 }
 
 fn shortcut_conflict_message(binding: &str, existing_action: Action) -> String {
-    format!(
-        "Shortcut not changed: {binding} is already assigned to {}.",
-        action_label(existing_action)
+    trf(
+        "Shortcut not changed: {} is already assigned to {}.",
+        &[&binding, &action_label(existing_action)],
     )
 }
 
@@ -82,9 +83,11 @@ fn shortcut_conflict_message(binding: &str, existing_action: Action) -> String {
 fn shortcut_applied_message(request: &KeybindingEditRequest) -> String {
     let action = action_label(request.action);
     match request.operation {
-        KeybindingEditOperation::Replace(_) => format!("Updated shortcut for {action}."),
-        KeybindingEditOperation::Delete => format!("Unbound {action}."),
-        KeybindingEditOperation::Reset => format!("Reset the shortcut for {action} to default."),
+        KeybindingEditOperation::Replace(_) => trf("Updated shortcut for {}.", &[&action]),
+        KeybindingEditOperation::Delete => trf("Unbound {}.", &[&action]),
+        KeybindingEditOperation::Reset => {
+            trf("Reset the shortcut for {} to default.", &[&action])
+        }
     }
 }
 
@@ -96,17 +99,19 @@ fn shortcut_applied_message(request: &KeybindingEditRequest) -> String {
 fn shortcut_unchanged_message(request: &KeybindingEditRequest) -> String {
     let action = action_label(request.action);
     match request.operation {
-        KeybindingEditOperation::Replace(_) => format!("{action} already uses that shortcut."),
-        KeybindingEditOperation::Delete => format!("{action} was already unbound."),
-        KeybindingEditOperation::Reset => format!("{action} already uses the default shortcut."),
+        KeybindingEditOperation::Replace(_) => trf("{} already uses that shortcut.", &[&action]),
+        KeybindingEditOperation::Delete => trf("{} was already unbound.", &[&action]),
+        KeybindingEditOperation::Reset => {
+            trf("{} already uses the default shortcut.", &[&action])
+        }
     }
 }
 
 /// What the user is told when the file, not this run's keymap, owns the chord.
 fn shortcut_claimed_on_disk_message(binding: &str, existing_action: Action) -> String {
-    format!(
-        "Shortcut not changed: config.toml now assigns {binding} to {}.",
-        action_label(existing_action)
+    trf(
+        "Shortcut not changed: config.toml now assigns {} to {}.",
+        &[&binding, &action_label(existing_action)],
     )
 }
 
@@ -237,7 +242,7 @@ fn prepare_keybinding_edit(
     let mut next = keybindings.clone();
     for projected in in_flight {
         next.set_bindings_for_action(projected.action, projected.bindings.clone())
-            .map_err(|err| format!("Shortcut not changed: {err}"))?;
+            .map_err(|err| trf("Shortcut not changed: {}", &[&err]))?;
     }
     if let Err(error) = apply_keybinding_edit(&mut next, &request) {
         return Err(match error {
@@ -470,7 +475,7 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Action,
             "keybindings",
-            toast.action("Edit", Action::OpenConfiguratorKeybindings),
+            toast.action(tr("Edit"), Action::OpenConfiguratorKeybindings),
         );
     }
 }

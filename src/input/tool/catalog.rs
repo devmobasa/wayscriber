@@ -1,5 +1,6 @@
 use crate::domain::Action;
 use crate::draw::shape::PolygonTemplate;
+use crate::i18n::tr;
 
 use super::{Tool, ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};
 
@@ -7,8 +8,6 @@ use super::{Tool, ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSourc
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ToolDescriptor {
     pub(crate) tool: Tool,
-    pub(crate) short_label: &'static str,
-    pub(crate) display_label: &'static str,
     pub(crate) action: Option<Action>,
     pub(crate) profile: ToolProfile,
     pub(crate) press: ToolPressBehavior,
@@ -90,8 +89,6 @@ const fn profile(
 const DESCRIPTORS: [ToolDescriptor; 19] = [
     ToolDescriptor {
         tool: Tool::Select,
-        short_label: "Select",
-        display_label: "Selection Tool",
         action: Some(Action::SelectSelectionTool),
         profile: profile(
             ToolSettingsSlot::Pen,
@@ -106,8 +103,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Pen,
-        short_label: "Pen",
-        display_label: "Pen Tool",
         action: Some(Action::SelectPenTool),
         profile: profile(
             ToolSettingsSlot::Pen,
@@ -129,8 +124,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::LiveShape,
-        short_label: "Shape Pen",
-        display_label: "Shape Pen Tool",
         action: Some(Action::SelectLiveShapeTool),
         profile: profile(
             ToolSettingsSlot::Pen,
@@ -149,8 +142,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Line,
-        short_label: "Line",
-        display_label: "Line Tool",
         action: Some(Action::SelectLineTool),
         profile: profile(
             ToolSettingsSlot::Line,
@@ -167,8 +158,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Rect,
-        short_label: "Rect",
-        display_label: "Rectangle Tool",
         action: Some(Action::SelectRectTool),
         profile: profile(
             ToolSettingsSlot::Rect,
@@ -185,8 +174,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Ellipse,
-        short_label: "Circle",
-        display_label: "Ellipse Tool",
         action: Some(Action::SelectEllipseTool),
         profile: profile(
             ToolSettingsSlot::Ellipse,
@@ -203,8 +190,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Triangle,
-        short_label: "Triangle",
-        display_label: "Triangle Tool",
         action: Some(Action::SelectTriangleTool),
         profile: profile(
             ToolSettingsSlot::Rect,
@@ -221,8 +206,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Parallelogram,
-        short_label: "Para",
-        display_label: "Parallelogram Tool",
         action: Some(Action::SelectParallelogramTool),
         profile: profile(
             ToolSettingsSlot::Rect,
@@ -239,8 +222,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Rhombus,
-        short_label: "Rhombus",
-        display_label: "Rhombus Tool",
         action: Some(Action::SelectRhombusTool),
         profile: profile(
             ToolSettingsSlot::Rect,
@@ -257,8 +238,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::RegularPolygon,
-        short_label: "Polygon",
-        display_label: "Regular Polygon Tool",
         action: Some(Action::SelectRegularPolygonTool),
         profile: profile(
             ToolSettingsSlot::Rect,
@@ -275,8 +254,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::FreeformPolygon,
-        short_label: "Freeform",
-        display_label: "Freeform Polygon Tool",
         action: Some(Action::SelectFreeformPolygonTool),
         profile: profile(
             ToolSettingsSlot::Rect,
@@ -291,8 +268,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Arrow,
-        short_label: "Arrow",
-        display_label: "Arrow Tool",
         action: Some(Action::SelectArrowTool),
         profile: profile(
             ToolSettingsSlot::Arrow,
@@ -309,8 +284,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Blur,
-        short_label: "Blur",
-        display_label: "Blur Tool",
         action: Some(Action::SelectBlurTool),
         profile: profile(
             ToolSettingsSlot::Blur,
@@ -327,8 +300,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Spotlight,
-        short_label: "Spotlight",
-        display_label: "Spotlight Tool",
         action: Some(Action::SelectSpotlightTool),
         profile: profile(
             // A spotlight's geometry comes entirely from the drag and it has no
@@ -349,8 +320,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Marker,
-        short_label: "Marker",
-        display_label: "Marker Tool",
         action: Some(Action::SelectMarkerTool),
         profile: profile(
             ToolSettingsSlot::Marker,
@@ -372,8 +341,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Highlight,
-        short_label: "Highlight",
-        display_label: "Highlight Tool",
         action: Some(Action::SelectHighlightTool),
         profile: profile(
             ToolSettingsSlot::Pen,
@@ -388,8 +355,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Laser,
-        short_label: "Laser",
-        display_label: "Laser Pointer Tool",
         action: Some(Action::SelectLaserTool),
         profile: profile(
             // Laser ink takes its color and width from `[laser]`, not from a
@@ -411,8 +376,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::StepMarker,
-        short_label: "Steps",
-        display_label: "Step Marker Tool",
         action: Some(Action::SelectStepMarkerTool),
         profile: profile(
             ToolSettingsSlot::StepMarker,
@@ -429,8 +392,6 @@ const DESCRIPTORS: [ToolDescriptor; 19] = [
     },
     ToolDescriptor {
         tool: Tool::Eraser,
-        short_label: "Eraser",
-        display_label: "Eraser Tool",
         action: Some(Action::SelectEraserTool),
         profile: profile(
             ToolSettingsSlot::Pen,
@@ -512,11 +473,51 @@ impl Tool {
     }
 
     pub(crate) fn short_label(self) -> &'static str {
-        self.descriptor().short_label
+        match self {
+            Self::Select => tr("Select"),
+            Self::Pen => tr("Pen"),
+            Self::LiveShape => tr("Shape Pen"),
+            Self::Line => tr("Line"),
+            Self::Rect => tr("Rect"),
+            Self::Ellipse => tr("Circle"),
+            Self::Triangle => tr("Triangle"),
+            Self::Parallelogram => tr("Para"),
+            Self::Rhombus => tr("Rhombus"),
+            Self::RegularPolygon => tr("Polygon"),
+            Self::FreeformPolygon => tr("Freeform"),
+            Self::Arrow => tr("Arrow"),
+            Self::Blur => tr("Blur"),
+            Self::Spotlight => tr("Spotlight"),
+            Self::Marker => tr("Marker"),
+            Self::Highlight => tr("Highlight"),
+            Self::Laser => tr("Laser"),
+            Self::StepMarker => tr("Steps"),
+            Self::Eraser => tr("Eraser"),
+        }
     }
 
     pub(crate) fn display_label(self) -> &'static str {
-        self.descriptor().display_label
+        match self {
+            Self::Select => tr("Selection Tool"),
+            Self::Pen => tr("Pen Tool"),
+            Self::LiveShape => tr("Shape Pen Tool"),
+            Self::Line => tr("Line Tool"),
+            Self::Rect => tr("Rectangle Tool"),
+            Self::Ellipse => tr("Ellipse Tool"),
+            Self::Triangle => tr("Triangle Tool"),
+            Self::Parallelogram => tr("Parallelogram Tool"),
+            Self::Rhombus => tr("Rhombus Tool"),
+            Self::RegularPolygon => tr("Regular Polygon Tool"),
+            Self::FreeformPolygon => tr("Freeform Polygon Tool"),
+            Self::Arrow => tr("Arrow Tool"),
+            Self::Blur => tr("Blur Tool"),
+            Self::Spotlight => tr("Spotlight Tool"),
+            Self::Marker => tr("Marker Tool"),
+            Self::Highlight => tr("Highlight Tool"),
+            Self::Laser => tr("Laser Pointer Tool"),
+            Self::StepMarker => tr("Step Marker Tool"),
+            Self::Eraser => tr("Eraser Tool"),
+        }
     }
 
     pub(crate) fn press_behavior(self) -> ToolPressBehavior {

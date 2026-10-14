@@ -1,6 +1,7 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 
 /// Maximum number of boards to show in the submenu before truncating.
 const MAX_VISIBLE_BOARDS: usize = 8;
@@ -49,7 +50,7 @@ impl InputState {
 
         if start > 0 {
             entries.push(ContextMenuEntry::new(
-                format!("  ... {} above (open picker)", start),
+                trf("  ... {} above (open picker)", &[&start]),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
                 Some(MenuCommand::OpenBoardPicker),
@@ -59,7 +60,7 @@ impl InputState {
         for (index, board) in boards.iter().enumerate().take(end).skip(start) {
             let is_active = index == board_index;
             let label = if is_active {
-                format!("  {} (current)", board.spec.name)
+                trf("  {} (current)", &[&board.spec.name])
             } else {
                 format!("  {}", board.spec.name)
             };
@@ -75,7 +76,7 @@ impl InputState {
 
         if end < board_count {
             entries.push(ContextMenuEntry::new(
-                format!("  ... {} below (open picker)", board_count - end),
+                trf("  ... {} below (open picker)", &[&(board_count - end)]),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
                 Some(MenuCommand::OpenBoardPicker),
@@ -85,7 +86,7 @@ impl InputState {
         // Every board and its pages, past what this short list can hold.
         entries.push(
             ContextMenuEntry::new(
-                "Board Picker…",
+                tr("Board Picker…"),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
                 Some(MenuCommand::OpenBoardPicker),
@@ -95,13 +96,13 @@ impl InputState {
 
         // Navigation
         entries.push(ContextMenuEntry::new(
-            "Previous Board",
+            tr("Previous Board"),
             self.shortcut_for_action(Action::BoardPrev),
             !can_prev,
             Some(MenuCommand::BoardPrev),
         ));
         entries.push(ContextMenuEntry::new(
-            "Next Board",
+            tr("Next Board"),
             self.shortcut_for_action(Action::BoardNext),
             !can_next,
             Some(MenuCommand::BoardNext),
@@ -110,7 +111,7 @@ impl InputState {
         // Management
         entries.push(
             ContextMenuEntry::new(
-                "New Board",
+                tr("New Board"),
                 self.shortcut_for_action(Action::BoardNew),
                 false,
                 Some(MenuCommand::BoardNew),
@@ -118,14 +119,14 @@ impl InputState {
             .with_separator(),
         );
         entries.push(ContextMenuEntry::new(
-            "Duplicate Board",
+            tr("Duplicate Board"),
             self.shortcut_for_action(Action::BoardDuplicate),
             false,
             Some(MenuCommand::BoardDuplicate),
         ));
         // The overlay has no paper to edit.
         entries.push(ContextMenuEntry::new(
-            "Edit Board Paper…",
+            tr("Edit Board Paper…"),
             self.shortcut_for_action(Action::BoardPaperEdit),
             self.board_is_transparent(),
             Some(MenuCommand::BoardEditPaper),
@@ -134,7 +135,7 @@ impl InputState {
         // Can't delete the transparent board or if only one board left
         let can_delete = !self.board_is_transparent() && board_count > 1;
         entries.push(ContextMenuEntry::new(
-            "Delete Board",
+            tr("Delete Board"),
             self.shortcut_for_action(Action::BoardDelete),
             !can_delete,
             Some(MenuCommand::BoardDelete),
@@ -155,21 +156,21 @@ impl InputState {
             return Vec::new();
         };
         let pin_label = if board.spec.pinned {
-            "Unpin Board"
+            tr("Unpin Board")
         } else {
-            "Pin Board"
+            tr("Pin Board")
         };
 
         vec![
             ContextMenuEntry::new(board.spec.name.clone(), None::<String>, true, None),
             ContextMenuEntry::new(
-                "Edit Paper…",
+                tr("Edit Paper…"),
                 Some("Ctrl+C"),
                 board.spec.background.is_transparent(),
                 Some(MenuCommand::BoardEditPaperFromContext),
             ),
             ContextMenuEntry::new(
-                "Rename Board",
+                tr("Rename Board"),
                 Some("F2"),
                 false,
                 Some(MenuCommand::BoardRenameFromContext),

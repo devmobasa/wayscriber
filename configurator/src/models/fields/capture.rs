@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::RegionPicker;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,7 +15,7 @@ impl RegionPickerOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Native => "Native",
+            Self::Native => tr("Native"),
             Self::Slurp => "Slurp",
         }
     }

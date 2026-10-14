@@ -1,6 +1,7 @@
 use super::super::base::InputState;
 use super::{CommandEntry, CommandPaletteListRow};
 use crate::config::keybindings::default_keybindings;
+use crate::i18n::tr;
 
 /// Visible rows (commands + group headers) before the list scrolls. Dropped
 /// from 10 when rows grew to the 44px comfort height so the clamped panel
@@ -75,9 +76,9 @@ pub(crate) enum CommandPaletteRowAction {
 impl CommandPaletteRowAction {
     pub(crate) fn tooltip(self) -> &'static str {
         match self {
-            Self::Edit => "Edit shortcut",
-            Self::Delete => "Unbind shortcut",
-            Self::Reset => "Reset shortcut to default",
+            Self::Edit => tr("Edit shortcut"),
+            Self::Delete => tr("Unbind shortcut"),
+            Self::Reset => tr("Reset shortcut to default"),
         }
     }
 }

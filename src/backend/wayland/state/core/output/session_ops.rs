@@ -2,6 +2,7 @@ use super::*;
 use crate::backend::wayland::session::{
     ExpandedTooLarge, OutputSessionLoad, commit_output_load, load_output_session,
 };
+use crate::i18n::{tr, trf};
 
 impl WaylandState {
     /// Loads and commits `staged` as the session for the output identified as
@@ -117,7 +118,15 @@ impl WaylandState {
         error: &anyhow::Error,
     ) {
         if self.session.mark_output_transition_notified() {
-            self.input_state.push_toast(ToastPriority::Critical, "session.load", Toast::error(format!("Session could not be loaded: {error:#}. Repair the session files or use Save As to keep new drawings elsewhere.")).duration_ms(20_000));
+            let message = trf(
+                "Session could not be loaded: {}. Repair the session files or use Save As to keep new drawings elsewhere.",
+                &[&format!("{error:#}")],
+            );
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                "session.load",
+                Toast::error(message).duration_ms(20_000),
+            );
         }
     }
 
@@ -125,7 +134,11 @@ impl WaylandState {
         if !self.session.mark_output_transition_notified() {
             return;
         }
-        self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Session switch deferred until the active drawing is committed and the current session is saved."));
+        let message = tr(
+            "Session switch deferred until the active drawing is committed and the current session is saved.",
+        );
+        self.input_state
+            .push_toast(ToastPriority::Info, "output", Toast::warning(message));
         self.input_state.needs_redraw = true;
     }
 
@@ -148,11 +161,10 @@ impl WaylandState {
         if self.session.mark_expanded_load_notified(&path) {
             notification::send_notification_async(
                 &self.tokio_handle,
-                "Session Too Large to Restore".to_string(),
-                format!(
+                tr("Session Too Large to Restore").to_string(),
+                trf(
                     "The saved session was left unchanged because it expands beyond the {} MiB safety cap. Clear the session or move {} if it is no longer needed.",
-                    max_expanded_size / 1024 / 1024,
-                    path.display()
+                    &[&(max_expanded_size / 1024 / 1024), &path.display()],
                 ),
                 Some("dialog-warning".to_string()),
             );

@@ -11,6 +11,7 @@ use super::screen_image::{
     DisplayedScreenImage, ScreenSourceEntry, current_screen_source_token, displayed_screen_image,
     image_point_for_screen_point, screen_source_entry, screen_source_token,
 };
+use crate::i18n::tr;
 
 pub(in crate::backend::wayland) fn sample_at(
     image: &FrozenImage,
@@ -110,24 +111,29 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     "eyedropper",
-                    Toast::info("Screen eyedropper isn't available while zoomed on a solid board.")
-                        .action(
-                            "Switch to transparent",
-                            crate::config::Action::ReturnToTransparent,
-                        ),
+                    Toast::info(tr(
+                        "Screen eyedropper isn't available while zoomed on a solid board.",
+                    ))
+                    .action(
+                        tr("Switch to transparent"),
+                        crate::config::Action::ReturnToTransparent,
+                    ),
                 );
             }
             ScreenSourceEntry::RefuseSolidBoard => {
-                self.input_state.push_toast(ToastPriority::Action, "eyedropper", Toast::info("Screen eyedropper requires a transparent board or an active screen freeze.").action("Switch to transparent", crate::config::Action::ReturnToTransparent));
+                let toast = Toast::info(tr(
+                    "Screen eyedropper requires a transparent board or an active screen freeze.",
+                ))
+                .action(tr("Switch to transparent"), crate::config::Action::ReturnToTransparent);
+                self.input_state
+                    .push_toast(ToastPriority::Action, "eyedropper", toast);
             }
             ScreenSourceEntry::CaptureUnavailable => {
-                self.input_state.push_toast(
-                    ToastPriority::Info,
-                    "eyedropper",
-                    Toast::warning(
-                        "Screen eyedropper is unavailable because screen capture is not available.",
-                    ),
-                );
+                let toast = Toast::warning(tr(
+                    "Screen eyedropper is unavailable because screen capture is not available.",
+                ));
+                self.input_state
+                    .push_toast(ToastPriority::Info, "eyedropper", toast);
             }
             ScreenSourceEntry::ZoomImageUnavailable => {
                 self.report_zoom_image_unavailable();
@@ -136,13 +142,11 @@ impl WaylandState {
     }
 
     fn report_zoom_image_unavailable(&mut self) {
-        self.input_state.push_toast(
-            ToastPriority::Info,
-            "eyedropper",
-            Toast::warning(
-                "Screen eyedropper is unavailable because zoom has no captured screen image.",
-            ),
-        );
+        let toast = Toast::warning(tr(
+            "Screen eyedropper is unavailable because zoom has no captured screen image.",
+        ));
+        self.input_state
+            .push_toast(ToastPriority::Info, "eyedropper", toast);
     }
 
     fn background_image_source(&self) -> Option<DisplayedScreenImage<'_>> {
@@ -214,7 +218,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Critical,
                 "eyedropper",
-                Toast::error("Could not sample that screen pixel."),
+                Toast::error(tr("Could not sample that screen pixel.")),
             );
         }
         self.cancel_eyedropper();

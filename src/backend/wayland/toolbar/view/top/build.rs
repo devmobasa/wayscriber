@@ -3,6 +3,7 @@
 //! This module owns the implementation behind `top`'s stable planning,
 //! building, sizing, and input-region interface.
 
+use crate::i18n::{tr, trf};
 use crate::ui_text::UiTextEngine;
 
 use crate::backend::wayland::toolbar::events::HitKind;
@@ -555,14 +556,14 @@ fn push_option_row(
                 },
                 Some(Interaction::click(
                     ToolbarEvent::NudgePolygonSides(-1),
-                    Some("Fewer sides".to_string()),
+                    Some(tr("Fewer sides").to_string()),
                 )),
             ));
             tree.push(WidgetNode::decor(
                 "top.options.sides-label",
                 (x + btn + 4.0, y, (w - 2.0 * (btn + 4.0)).max(0.0), h),
                 WidgetKind::Label(LabelSpec::new(
-                    format!("{} sides", snapshot.polygon_sides),
+                    trf("{} sides", &[&snapshot.polygon_sides]),
                     TOP_LABEL_FONT_SIZE,
                     true,
                 )),
@@ -576,7 +577,7 @@ fn push_option_row(
                 },
                 Some(Interaction::click(
                     ToolbarEvent::NudgePolygonSides(1),
-                    Some("More sides".to_string()),
+                    Some(tr("More sides").to_string()),
                 )),
             ));
         }

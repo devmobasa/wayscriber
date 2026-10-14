@@ -8,6 +8,8 @@ mod card;
 #[cfg(test)]
 mod tests;
 
+use wayscriber::i18n::tr;
+
 use relm4::gtk;
 use relm4::prelude::*;
 
@@ -21,8 +23,9 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::PageBuilder;
 use card::{BoundCatalogCard, rebuild_items};
 
+
 pub(super) fn add(page: &mut PageBuilder) {
-    page.group_in_area("Saved Sessions", SearchArea::SessionCatalog);
+    page.group_in_area(tr("Saved Sessions"), SearchArea::SessionCatalog);
 
     let sender = page.sender();
     let body = column_box();
@@ -31,7 +34,7 @@ pub(super) fn add(page: &mut PageBuilder) {
     toolbar.append(&refresh);
     body.append(&toolbar);
     body.append(&hint_label(
-        "Clear Tool State applies config defaults without deleting boards.",
+        tr("Clear Tool State applies config defaults without deleting boards."),
     ));
     body.append(&hint_label("Clear Saved Data removes saved session files."));
 

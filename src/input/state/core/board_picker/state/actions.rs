@@ -1,6 +1,7 @@
 use super::super::super::base::InputState;
 use super::super::BoardPickerEditMode;
 use crate::draw::PageDeleteOutcome;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
@@ -123,7 +124,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board_picker",
-                Toast::warning("Board limit reached."),
+                Toast::warning(tr("Board limit reached.")),
             );
             return;
         }

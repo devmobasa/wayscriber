@@ -9,6 +9,8 @@ use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
 #[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
 #[cfg(feature = "tray")]
+use crate::i18n::tr;
+#[cfg(feature = "tray")]
 use crate::paths::log_dir;
 #[cfg(feature = "tray")]
 use crate::session::{clear_session, options_from_config};
@@ -36,6 +38,16 @@ fn spawn_detached(
         arguments,
         Vec::new(),
     )
+}
+
+/// Notification body when the configurator binary cannot be launched.
+#[cfg(all(feature = "tray", feature = "dbus"))]
+fn configurator_fallback_body(opened_config: bool) -> &'static str {
+    if opened_config {
+        tr("Configurator not found; opened config.toml with the default application.")
+    } else {
+        tr("Configurator not found, and config.toml could not be opened.")
+    }
 }
 
 #[cfg(feature = "tray")]
@@ -67,22 +79,18 @@ impl WayscriberTray {
                 let opened_config = self.open_config_file();
                 #[cfg(feature = "dbus")]
                 {
-                    let body = if opened_config {
-                        "Configurator not found; opened config.toml with the default application."
-                    } else {
-                        "Configurator not found, and config.toml could not be opened."
-                    };
+                    let body = configurator_fallback_body(opened_config);
                     match tokio::runtime::Handle::try_current() {
                         Ok(handle) => crate::notification::send_notification_async(
                             &handle,
-                            "Configurator unavailable".to_string(),
+                            tr("Configurator unavailable").to_string(),
                             body.to_string(),
                             Some("dialog-error".to_string()),
                         ),
                         Err(_) => {
                             if let Ok(rt) = tokio::runtime::Runtime::new() {
                                 let _ = rt.block_on(crate::notification::send_notification(
-                                    "Configurator unavailable",
+                                    tr("Configurator unavailable"),
                                     body,
                                     Some("dialog-error"),
                                 ));

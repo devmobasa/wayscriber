@@ -30,6 +30,8 @@ mod section;
 #[cfg(test)]
 mod tests;
 
+use wayscriber::i18n::tr;
+
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
@@ -44,6 +46,7 @@ use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder};
 use rows::{is_collapsed, note_label, picker_hex, sync_combo, validate_min};
 use section::{BoundBoardSection, rebuild_sections};
+
 
 /// `GTK_INVALID_LIST_POSITION`: what a `GtkSingleSelection` reads as "nothing
 /// is selected", which is how the Iced pick list rendered an unknown default.
@@ -64,30 +67,30 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     // The list below is the seed, not the running session, so the heading has
     // to say which of the two this screen edits.
-    page.group_in_area("Boards", SearchArea::BoardsGeneral);
+    page.group_in_area(tr("Boards"), SearchArea::BoardsGeneral);
     page.custom(&note_label(INTRO));
 
     page.group_in_area("", SearchArea::BoardsGeneral)
         .entry_row_validated(
-            "Max boards",
+            tr("Max boards"),
             |app| app.draft.boards.max_count.clone(),
             |value| Message::TextChanged(TextField::BoardsMaxCount, value),
             |app| validate_min(&app.draft.boards.max_count, 1),
         )
         .switch_row(
-            "Auto-create missing boards",
+            tr("Auto-create missing boards"),
             "",
             |app| app.draft.boards.auto_create,
             |value| Message::ToggleChanged(ToggleField::BoardsAutoCreate, value),
         )
         .switch_row(
-            "Show board badge",
+            tr("Show board badge"),
             "",
             |app| app.draft.boards.show_board_badge,
             |value| Message::ToggleChanged(ToggleField::BoardsShowBadge, value),
         )
         .switch_row(
-            "Persist runtime customizations (deprecated)",
+            tr("Persist runtime customizations (deprecated)"),
             PERSIST_NOTE,
             |app| app.draft.boards.persist_customizations,
             |value| Message::ToggleChanged(ToggleField::BoardsPersistCustomizations, value),
@@ -136,7 +139,7 @@ fn add_default_board_row(page: &mut PageBuilder) {
         let subtitle = if has_boards {
             ""
         } else {
-            "Add a board to choose a default"
+            tr("Add a board to choose a default")
         };
         if row.subtitle().as_deref() != Some(subtitle) {
             row.set_subtitle(subtitle);

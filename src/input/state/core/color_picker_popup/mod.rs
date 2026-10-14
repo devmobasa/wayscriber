@@ -7,6 +7,7 @@ mod panel;
 mod state;
 
 use crate::draw::Color;
+use crate::i18n::tr;
 use crate::input::Tool;
 
 pub use panel::ColorPickerPopupPanel;
@@ -537,11 +538,11 @@ impl ColorPickerPopupLayout {
     /// Tooltip for an icon-only action at the given point.
     pub(crate) fn action_tooltip_at(&self, x: f64, y: f64) -> Option<&'static str> {
         if self.point_in_copy_button(x, y) {
-            Some("Copy hex color")
+            Some(tr("Copy hex color"))
         } else if self.point_in_paste_button(x, y) {
-            Some("Paste hex color from clipboard")
+            Some(tr("Paste hex color from clipboard"))
         } else if self.point_in_eyedropper_button(x, y) {
-            Some("Pick color from screen")
+            Some(tr("Pick color from screen"))
         } else {
             None
         }

@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -13,6 +15,7 @@ use super::color::build_color_row;
 use super::header::build_header_row;
 use super::rows::{build_kind_row, build_text_row, build_toggle_row};
 use super::{BoardValues, SectionLayout};
+
 
 /// One section's refresh: built beside its row, so it owns that row's typed
 /// widget handles and the signal handler ids guarding each write. No
@@ -81,7 +84,7 @@ fn build_section(
     section.append(&kind_row);
 
     let background = build_color_row(
-        "Background color (0-1)",
+        tr("Background color (0-1)"),
         ColorPickerId::BoardBackground(index),
         index,
         Message::BoardsBackgroundColorChanged,
@@ -99,7 +102,7 @@ fn build_section(
     section.append(&grid_spacing.row);
 
     let pen_enabled = adw::SwitchRow::builder()
-        .title("Override default pen color")
+        .title(tr("Override default pen color"))
         .active(layout.pen_enabled)
         .visible(layout.expanded)
         .build();
@@ -115,7 +118,7 @@ fn build_section(
     section.append(&pen_enabled);
 
     let pen = build_color_row(
-        "Pen color (0-1)",
+        tr("Pen color (0-1)"),
         ColorPickerId::BoardPen(index),
         index,
         Message::BoardsDefaultPenColorChanged,
@@ -126,13 +129,13 @@ fn build_section(
 
     for (title, field, active) in [
         (
-            "Auto-adjust pen",
+            tr("Auto-adjust pen"),
             BoardItemToggleField::AutoAdjustPen,
             layout.auto_adjust,
         ),
         ("Persist", BoardItemToggleField::Persist, layout.persist),
         (
-            "Configured default pinned",
+            tr("Configured default pinned"),
             BoardItemToggleField::Pinned,
             layout.pinned,
         ),

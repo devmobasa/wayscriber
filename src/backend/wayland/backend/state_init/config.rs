@@ -5,6 +5,7 @@ use crate::config::{
     Action, Config, ConfigSectionError, ConfigSource, ConfigValidationReport,
     DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution,
 };
+use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 use crate::notification;
@@ -95,6 +96,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
     };
 
     crate::ui::anim::set_motion_enabled(config.ui.reduced_motion.motion_enabled());
+    crate::i18n::set_language(config.ui.language);
 
     let exit_after_capture_mode = match backend_exit_mode {
         ExitAfterCaptureMode::Auto if config.capture.exit_after_capture => {
@@ -133,10 +135,10 @@ pub(super) fn notify_config_load_failure(
 
     let (toast_text, notification_body) = match failure {
         ConfigLoadFailure::File { error } => (
-            "Config file could not be read; all settings are using defaults".to_string(),
-            format!(
-                "{error}\nNothing was changed in {}; fix the file to get your settings back.",
-                config_path_display()
+            tr("Config file could not be read; all settings are using defaults").to_string(),
+            trf(
+                "{}\nNothing was changed in {}; fix the file to get your settings back.",
+                &[&error, &config_path_display()],
             ),
         ),
         ConfigLoadFailure::Sections(sections) => {
@@ -151,10 +153,13 @@ pub(super) fn notify_config_load_failure(
                 .collect::<Vec<_>>()
                 .join("\n");
             (
-                format!("Config {names} could not be read; using defaults for it"),
-                format!(
-                    "{details}\nNothing was changed in {}; fix the value there to get the setting back.",
-                    config_path_display()
+                trf(
+                    "Config {} could not be read; using defaults for it",
+                    &[&names],
+                ),
+                trf(
+                    "{}\nNothing was changed in {}; fix the value there to get the setting back.",
+                    &[&details, &config_path_display()],
                 ),
             )
         }
@@ -164,12 +169,12 @@ pub(super) fn notify_config_load_failure(
         ToastPriority::Action,
         "config.load-failure",
         Toast::warning(toast_text)
-            .action("Settings", Action::OpenConfigurator)
+            .action(tr("Settings"), Action::OpenConfigurator)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     notification::send_notification_with_timeout_async(
         tokio_handle,
-        "Configuration Not Loaded".to_string(),
+        tr("Configuration Not Loaded").to_string(),
         notification_body,
         Some("dialog-warning".to_string()),
         KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
@@ -196,12 +201,12 @@ pub(super) fn notify_keybinding_conflicts(
         ToastPriority::Action,
         "keybindings.conflict",
         Toast::warning(keybinding_conflict_toast(conflicts))
-            .action("Shortcuts", Action::OpenConfiguratorKeybindings)
+            .action(tr("Shortcuts"), Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     notification::send_notification_with_timeout_async(
         tokio_handle,
-        "Conflicting Shortcuts".to_string(),
+        tr("Conflicting Shortcuts").to_string(),
         keybinding_conflict_notification_body(conflicts, &config_path_display()),
         Some("dialog-warning".to_string()),
         KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
@@ -227,12 +232,12 @@ pub(super) fn notify_invalid_keybindings(
         ToastPriority::Action,
         "keybindings.invalid",
         Toast::warning(invalid_keybinding_toast(invalid))
-            .action("Shortcuts", Action::OpenConfiguratorKeybindings)
+            .action(tr("Shortcuts"), Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     notification::send_notification_with_timeout_async(
         tokio_handle,
-        "Invalid Shortcuts".to_string(),
+        tr("Invalid Shortcuts").to_string(),
         invalid_keybinding_notification_body(invalid, &config_path_display()),
         Some("dialog-warning".to_string()),
         KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
@@ -270,7 +275,7 @@ pub(super) fn notify_skipped_default_shortcuts(
         ToastPriority::Action,
         "keybindings.skipped-default",
         Toast::info(skipped_default_toast(skipped))
-            .action("Shortcuts", Action::OpenConfiguratorKeybindings)
+            .action(tr("Shortcuts"), Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     if !outcome.accepted() || onboarding.acknowledge_startup_notice(&notice_id).is_err() {
@@ -278,7 +283,7 @@ pub(super) fn notify_skipped_default_shortcuts(
     }
     notification::send_notification_with_timeout_async(
         tokio_handle,
-        "New Default Shortcuts".to_string(),
+        tr("New Default Shortcuts").to_string(),
         skipped_default_notification_body(skipped, &config_path_display()),
         Some("dialog-information".to_string()),
         KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
@@ -302,16 +307,16 @@ fn skipped_default_notice_id(skipped: &[DefaultShortcutSkipped]) -> String {
 
 fn keybinding_conflict_toast(conflicts: &[KeybindingConflictResolution]) -> String {
     keybinding_toast(
-        "Shortcut conflict",
-        "shortcut conflicts",
+        tr("Shortcut conflict"),
+        tr("shortcut conflicts"),
         &summaries(conflicts, KeybindingConflictResolution::summary),
     )
 }
 
 fn invalid_keybinding_toast(invalid: &[InvalidKeybinding]) -> String {
     keybinding_toast(
-        "Invalid shortcut",
-        "invalid shortcuts",
+        tr("Invalid shortcut"),
+        tr("invalid shortcuts"),
         &summaries(invalid, InvalidKeybinding::summary),
     )
 }
@@ -322,8 +327,9 @@ fn keybinding_conflict_notification_body(
 ) -> String {
     keybinding_notification_body(
         &summaries(conflicts, ToString::to_string),
-        &format!(
-            "Nothing was changed in {config_path}; edit it to choose which action keeps each shortcut."
+        &trf(
+            "Nothing was changed in {}; edit it to choose which action keeps each shortcut.",
+            &[&config_path],
         ),
     )
 }
@@ -334,14 +340,17 @@ fn invalid_keybinding_notification_body(
 ) -> String {
     keybinding_notification_body(
         &summaries(invalid, ToString::to_string),
-        &format!("Nothing was changed in {config_path}; fix the spelling there to bind it again."),
+        &trf(
+            "Nothing was changed in {}; fix the spelling there to bind it again.",
+            &[&config_path],
+        ),
     )
 }
 
 fn skipped_default_toast(skipped: &[DefaultShortcutSkipped]) -> String {
     keybinding_toast(
-        "New default shortcut inactive",
-        "new default shortcuts are inactive",
+        tr("New default shortcut inactive"),
+        tr("new default shortcuts are inactive"),
         &summaries(skipped, DefaultShortcutSkipped::summary),
     )
 }
@@ -352,8 +361,9 @@ fn skipped_default_notification_body(
 ) -> String {
     keybinding_notification_body(
         &summaries(skipped, ToString::to_string),
-        &format!(
-            "Nothing was changed in {config_path}; add the shortcut there if you want it instead."
+        &trf(
+            "Nothing was changed in {}; add the shortcut there if you want it instead.",
+            &[&config_path],
         ),
     )
 }
@@ -368,12 +378,11 @@ fn keybinding_toast(singular: &str, plural: &str, entries: &[String]) -> String 
         return String::new();
     };
     if entries.len() == 1 {
-        return format!("{singular}: {first}");
+        return trf("{}: {}", &[&singular, &first]);
     }
-    format!(
-        "{} {plural}: {first} (and {} more)",
-        entries.len(),
-        entries.len() - 1
+    trf(
+        "{} {}: {} (and {} more)",
+        &[&entries.len(), &plural, &first, &(entries.len() - 1)],
     )
 }
 
@@ -389,7 +398,7 @@ fn keybinding_notification_body(entries: &[String], closing: &str) -> String {
         .checked_sub(KEYBINDING_CONFLICT_NOTIFICATION_LIMIT)
         .filter(|remaining| *remaining > 0)
     {
-        body.push_str(&format!("\n• and {remaining} more."));
+        body.push_str(&trf("\n• and {} more.", &[&remaining]));
     }
     body.push('\n');
     body.push_str(closing);

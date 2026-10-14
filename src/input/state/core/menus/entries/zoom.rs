@@ -1,6 +1,7 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 
 impl InputState {
     /// The current zoom level, shown on the parent row of the zoom submenu.
@@ -19,20 +20,20 @@ impl InputState {
 
         if with_header {
             entries.push(ContextMenuEntry::new(
-                format!("Zoom {}", self.zoom_summary()),
+                trf("Zoom {}", &[&self.zoom_summary()]),
                 None::<String>,
                 true,
                 None,
             ));
         }
         entries.push(ContextMenuEntry::new(
-            "Zoom In",
+            tr("Zoom In"),
             self.shortcut_for_action(Action::ZoomIn),
             false,
             Some(MenuCommand::ZoomIn),
         ));
         entries.push(ContextMenuEntry::new(
-            "Zoom Out",
+            tr("Zoom Out"),
             self.shortcut_for_action(Action::ZoomOut),
             !zoom_active,
             Some(MenuCommand::ZoomOut),
@@ -40,9 +41,9 @@ impl InputState {
         // Resetting to 100% leaves zoom, so while zoomed the row says so.
         entries.push(ContextMenuEntry::new(
             if zoom_active {
-                "Exit Zoom"
+                tr("Exit Zoom")
             } else {
-                "Reset Zoom"
+                tr("Reset Zoom")
             },
             self.shortcut_for_action(Action::ResetZoom),
             !zoom_active,
@@ -51,9 +52,9 @@ impl InputState {
         if zoom_active {
             entries.push(ContextMenuEntry::new(
                 if self.zoom_locked() {
-                    "Unlock View"
+                    tr("Unlock View")
                 } else {
-                    "Lock View"
+                    tr("Lock View")
                 },
                 self.shortcut_for_action(Action::ToggleZoomLock),
                 false,

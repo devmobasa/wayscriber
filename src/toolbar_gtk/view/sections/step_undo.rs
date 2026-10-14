@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use gtk4::prelude::*;
 
+use crate::i18n::{tr, trf};
 use crate::toolbar_icons;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 
@@ -30,15 +31,15 @@ fn populate(ctx: &mut SectionCtx, body: &gtk4::Box) {
     // section; the checkbox state never needs an updater.
     body.append(&toggle_checkbox(
         ctx,
-        "Step buttons",
-        "Step buttons: undo/redo several strokes at once.",
+        tr("Step buttons"),
+        tr("Step buttons: undo/redo several strokes at once."),
         snapshot.custom_section_enabled,
         ToolbarEvent::ToggleCustomSection,
     ));
     body.append(&toggle_checkbox(
         ctx,
-        "Delay sliders",
-        "Delay sliders: undo/redo delays.",
+        tr("Delay sliders"),
+        tr("Delay sliders: undo/redo delays."),
         snapshot.show_delay_sliders,
         ToolbarEvent::ToggleDelaySliders,
     ));
@@ -76,7 +77,11 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     let row_h = ctx.sz(26.0);
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(6.0));
 
-    let tooltip = if is_undo { "Step undo" } else { "Step redo" };
+    let tooltip = if is_undo {
+        tr("Step undo")
+    } else {
+        tr("Step redo")
+    };
     let step_button = if ctx.use_icons {
         let button = sized_button(ctx.sz(42.0), row_h);
         let icon = IconWidget::new(
@@ -92,7 +97,11 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     } else {
         // The built-in row draws the label left-aligned with a 10px inset.
         let button = sized_button(ctx.sz(90.0), row_h);
-        let text = gtk4::Label::new(Some(if is_undo { "Step Undo" } else { "Step Redo" }));
+        let text = gtk4::Label::new(Some(if is_undo {
+            tr("Step Undo")
+        } else {
+            tr("Step Redo")
+        }));
         text.set_xalign(0.0);
         text.set_margin_start(ctx.px(10.0));
         button.set_child(Some(&text));
@@ -125,9 +134,9 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
         ctx,
         toolbar_icons::draw_icon_minus,
         if is_undo {
-            "Decrease undo steps"
+            tr("Decrease undo steps")
         } else {
-            "Decrease redo steps"
+            tr("Decrease redo steps")
         },
     );
     let minus_sender = ctx.feedback.clone();
@@ -146,9 +155,9 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
         ctx,
         toolbar_icons::draw_icon_plus,
         if is_undo {
-            "Increase undo steps"
+            tr("Increase undo steps")
         } else {
-            "Increase redo steps"
+            tr("Increase redo steps")
         },
     );
     let plus_sender = ctx.feedback.clone();
@@ -167,9 +176,9 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     let slider = SliderRow::new(
         ctx.scale,
         if is_undo {
-            "Custom undo delay"
+            tr("Custom undo delay")
         } else {
-            "Custom redo delay"
+            tr("Custom redo delay")
         },
         spec,
         initial_secs,
@@ -252,7 +261,11 @@ fn global_delay_slider(ctx: &SectionCtx, is_undo: bool, delay_ms: u64) -> Slider
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
         ctx.scale,
-        if is_undo { "Undo delay" } else { "Redo delay" },
+        if is_undo {
+            tr("Undo delay")
+        } else {
+            tr("Redo delay")
+        },
         spec,
         delay_ms as f64 / 1000.0,
         format_secs,
@@ -286,11 +299,12 @@ fn set_steps_event(is_undo: bool, steps: usize) -> ToolbarEvent {
 }
 
 fn format_secs(value: f64) -> String {
-    format!("{value:.1}s")
+    let secs = format!("{value:.1}");
+    trf("{}s", &[&secs])
 }
 
 fn steps_text(steps: usize) -> String {
-    format!("{steps} steps")
+    trf("{} steps", &[&steps])
 }
 
 fn row_delay_secs(snapshot: &ToolbarSnapshot, is_undo: bool) -> f64 {
@@ -303,27 +317,28 @@ fn row_delay_secs(snapshot: &ToolbarSnapshot, is_undo: bool) -> f64 {
 }
 
 fn row_delay_tooltip(is_undo: bool, secs: f64) -> String {
+    let secs = format!("{secs:.1}");
     if is_undo {
-        format!("Undo step delay: {secs:.1}s (drag)")
+        trf("Undo step delay: {}s (drag)", &[&secs])
     } else {
-        format!("Redo step delay: {secs:.1}s (drag)")
+        trf("Redo step delay: {}s (drag)", &[&secs])
     }
 }
 
 fn global_delay_label(is_undo: bool, delay_ms: u64) -> String {
-    let secs = delay_ms as f64 / 1000.0;
+    let secs = format!("{:.1}", delay_ms as f64 / 1000.0);
     if is_undo {
-        format!("Undo delay: {secs:.1}s")
+        trf("Undo delay: {}s", &[&secs])
     } else {
-        format!("Redo delay: {secs:.1}s")
+        trf("Redo delay: {}s", &[&secs])
     }
 }
 
 fn global_delay_tooltip(is_undo: bool, delay_ms: u64) -> String {
-    let secs = delay_ms as f64 / 1000.0;
+    let secs = format!("{:.1}", delay_ms as f64 / 1000.0);
     if is_undo {
-        format!("Undo-all delay: {secs:.1}s (drag)")
+        trf("Undo-all delay: {}s (drag)", &[&secs])
     } else {
-        format!("Redo-all delay: {secs:.1}s (drag)")
+        trf("Redo-all delay: {}s (drag)", &[&secs])
     }
 }

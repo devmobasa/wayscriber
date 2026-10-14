@@ -958,6 +958,11 @@ theme = "auto"
 # Options: "auto", "on", "off"
 reduced_motion = "auto"
 
+# UI language for overlay chrome
+# Options: "auto", "en", "zh-CN" ("auto" follows the desktop locale and falls
+# back to English when that locale has no translation)
+language = "auto"
+
 # Show the status bar and its configured contents
 show_status_bar = true
 
@@ -1128,9 +1133,10 @@ to save it.
 - `"bottom-left"`: Lower left corner (default)
 - `"bottom-right"`: Lower right corner
 
-**Theme & Motion:**
+**Theme, Motion & Language:**
 - **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome. The command palette supports `"light"` throughout its search, results, shortcut editing, and tooltips. Other popups retain their complete dark palette until migrated.
 - **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
+- **Language**: `language` selects the language of the overlay chrome — `"auto"` (default) follows the desktop locale, `"en"` forces English, and `"zh-CN"` forces Simplified Chinese. A locale this build has no catalog for falls back to English, so `"auto"` is always safe; `WAYSCRIBER_LANGUAGE` overrides the setting for one run. Canvas content you type or name stays exactly as you wrote it. See `docs/I18N.md` for the catalog format and the surfaces that are not translated yet.
 
 **UI Styling:**
 - **Font sizes**: Customize text size for status bar and help overlay
@@ -1155,6 +1161,7 @@ to save it.
 **Defaults:**
 - Theme: auto (currently dark)
 - Reduced motion: auto (full motion)
+- Language: auto (follows the desktop locale)
 - Show status bar: true
 - Interactive status bar segments: true
 - Status bar content items: true, except the About/version chip (false); the output item appears only with two or more outputs

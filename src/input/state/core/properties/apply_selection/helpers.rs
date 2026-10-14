@@ -1,6 +1,7 @@
 use super::super::super::base::InputState;
 use super::super::summary::shape_color;
 use crate::draw::{Color, Shape, TextMeasurer};
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Default)]
@@ -97,7 +98,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
-                Toast::warning(format!("No {label} to edit in selection.")),
+                Toast::warning(trf("No {} to edit in selection.", &[&label])),
             );
             return false;
         }
@@ -107,13 +108,13 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "selection.apply",
-                    Toast::warning(format!("All {label} shapes are locked.")),
+                    Toast::warning(trf("All {} shapes are locked.", &[&label])),
                 );
             } else {
                 self.push_toast(
                     ToastPriority::Info,
                     "selection.apply",
-                    Toast::info("No changes applied."),
+                    Toast::info(tr("No changes applied.")),
                 );
             }
             return false;
@@ -123,7 +124,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
-                Toast::warning(format!("{} locked shape(s) unchanged.", result.locked)),
+                Toast::warning(trf("{} locked shape(s) unchanged.", &[&result.locked])),
             );
         }
         true

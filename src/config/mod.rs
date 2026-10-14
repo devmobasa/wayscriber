@@ -34,6 +34,7 @@ pub use action_meta::{
     action_meta, action_meta_iter, action_short_label,
 };
 pub use core::{CURRENT_CONFIG_REVISION, Config};
+pub use crate::domain::Language;
 pub use document::{
     ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
     ConfigSourceChanged, ConfigWriteLockTimeout,

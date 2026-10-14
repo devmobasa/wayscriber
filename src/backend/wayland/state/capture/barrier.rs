@@ -1,5 +1,6 @@
 use super::super::*;
 use crate::backend::wayland::capture_preflight::CapturePreflightError;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
@@ -277,7 +278,8 @@ impl WaylandState {
         // before restoring suppression state so the recovery frame is allowed
         // to commit even if the original callback never arrives.
         self.surface.clear_frame_callback_pending();
-        let message = "Screen capture cancelled because the compositor did not confirm the hidden overlay frame.";
+        let message =
+            tr("Screen capture cancelled because the compositor did not confirm the hidden overlay frame.");
         if !self.cancel_overlay_capture_preflight(timeout.reason, Some(message)) {
             push_capture_preflight_cancellation_toast(&mut self.input_state, message);
         }
@@ -331,7 +333,7 @@ impl WaylandState {
             "capture.preflight id={generation} component=gtk reason={reason:?} phase=capture-cancelled error={error}"
         );
         let message =
-            "Screen capture cancelled because GTK toolbar transparency was not confirmed.";
+            tr("Screen capture cancelled because GTK toolbar transparency was not confirmed.");
         if !self.cancel_overlay_capture_preflight(reason, Some(message)) {
             push_capture_preflight_cancellation_toast(&mut self.input_state, message);
         }
@@ -347,7 +349,7 @@ impl WaylandState {
             "Cancelling {reason:?} because the GTK toolbars could not confirm capture suppression"
         );
         let message =
-            "Screen capture cancelled because the GTK toolbar could not become transparent safely.";
+            tr("Screen capture cancelled because the GTK toolbar could not become transparent safely.");
         if !self.cancel_overlay_capture_preflight(reason, Some(message)) {
             push_capture_preflight_cancellation_toast(&mut self.input_state, message);
         }
@@ -479,7 +481,7 @@ impl WaylandState {
                 let terminal_will_report = finish_zoom_preflight_cancellation(
                     &mut self.zoom,
                     &mut self.input_state,
-                    frozen_message.unwrap_or("Zoom capture preflight was cancelled"),
+                    frozen_message.unwrap_or(tr("Zoom capture preflight was cancelled")),
                 );
                 self.exit_overlay_suppression(reason);
                 terminal_will_report

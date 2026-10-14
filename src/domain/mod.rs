@@ -10,6 +10,7 @@ mod board_grid;
 mod board_validation;
 pub mod color;
 mod drawing;
+mod language;
 mod onboarding;
 mod pressure;
 mod tool;
@@ -27,6 +28,7 @@ pub use board_validation::{
 };
 pub use color::Color;
 pub use drawing::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, step_stroke_thickness};
+pub use language::Language;
 pub use onboarding::OnboardingTip;
 pub use pressure::{PressureThicknessEditMode, PressureThicknessEntryMode};
 pub use tool::{DragBindableTool, DragTool, EraserMode, Tool};

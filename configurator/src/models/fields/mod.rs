@@ -28,7 +28,7 @@ pub use presenter::{PresenterToolBehaviorOption, PresenterToolbarModeOption};
 pub use pressure::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use session::{SessionCompressionOption, SessionStorageModeOption};
 pub use status::StatusPositionOption;
-pub use theme::{ReducedMotionOption, UiThemeOption};
+pub use theme::{LanguageOption, ReducedMotionOption, UiThemeOption};
 pub use toggles::{PresetTextField, PresetToggleField, QuadField, TextField, ToggleField};
 pub use tool::{DragColorOption, DragMouseButton, DragToolField, DragToolOption, ToolOption};
 pub use toolbar::{

@@ -11,9 +11,13 @@
 use super::*;
 
 /// The chip's visible label. The caret says it opens something.
-pub(crate) const PEN_FEEL_CHIP_LABEL: &str = "Pen feel \u{25BE}";
+pub(crate) fn pen_feel_chip_label() -> &'static str {
+    tr("Pen feel \u{25BE}")
+}
 /// The panel's title, and the chip's accessible name.
-pub(crate) const PEN_FEEL_TITLE: &str = "Pen feel";
+pub(crate) fn pen_feel_title() -> &'static str {
+    tr("Pen feel")
+}
 
 /// Panel geometry in spec units, shared by both frontends so the panel has
 /// the same footprint in each: the panel padding, the content column (the
@@ -28,34 +32,28 @@ pub(crate) const PEN_FEEL_PREVIEW_H: f64 = 48.0;
 pub(crate) const PEN_FEEL_HINT_H: f64 = 14.0;
 pub(crate) const PEN_FEEL_ROW_GAP: f64 = 4.0;
 
-/// What each smoothing level does, weakest first.
-const SMOOTHING_LEVEL_HINTS: [&str; 7] = [
-    "Strokes stay exactly as drawn",
-    "Irons out the finest jitter",
-    "Evens out small wobbles",
-    "Steadies a shaky hand",
-    "Smooths out visible shake",
-    "Rounds off small corners too",
-    "Smoothest; tight corners soften",
-];
-
-/// What each Shape Pen detection level turns into shapes, strictest first.
-const DETECTION_LEVEL_HINTS: [&str; 5] = [
-    "Only near-perfect strokes become shapes",
-    "Clean strokes become shapes",
-    "Most deliberate strokes become shapes",
-    "Rough strokes become shapes",
-    "Even quick scribbles become shapes",
-];
-
 impl StrokeSetting {
     /// One line saying what `level` does, shown under the panel's meter.
     pub(crate) fn level_hint(self, level: u8) -> &'static str {
-        let hints: &[&str] = match self {
-            Self::Smoothing => &SMOOTHING_LEVEL_HINTS,
-            Self::ShapeDetection => &DETECTION_LEVEL_HINTS,
-        };
-        hints[usize::from(level.min(self.max()))]
+        let level = usize::from(level.min(self.max()));
+        match self {
+            Self::Smoothing => [
+                tr("Strokes stay exactly as drawn"),
+                tr("Irons out the finest jitter"),
+                tr("Evens out small wobbles"),
+                tr("Steadies a shaky hand"),
+                tr("Smooths out visible shake"),
+                tr("Rounds off small corners too"),
+                tr("Smoothest; tight corners soften"),
+            ][level],
+            Self::ShapeDetection => [
+                tr("Only near-perfect strokes become shapes"),
+                tr("Clean strokes become shapes"),
+                tr("Most deliberate strokes become shapes"),
+                tr("Rough strokes become shapes"),
+                tr("Even quick scribbles become shapes"),
+            ][level],
+        }
     }
 
     /// Id fragment of the setting's panel section: `top.feel.<key>`.
@@ -183,13 +181,13 @@ pub(crate) fn pen_feel_panel_size(snapshot: &ToolbarSnapshot) -> (f64, f64) {
 impl StylePillControl {
     /// The chip's tooltip: the current levels and what a click does.
     pub(crate) fn pen_feel_tooltip(snapshot: &ToolbarSnapshot) -> String {
-        format!("{} (click to adjust)", pen_feel_summary(snapshot))
+        trf("{} (click to adjust)", &[&pen_feel_summary(snapshot)])
     }
 
     /// The chip's accessible name: the title with the current levels, so a
     /// screen reader hears the values without opening the panel.
     pub(crate) fn pen_feel_accessible_label(snapshot: &ToolbarSnapshot) -> String {
-        format!("{PEN_FEEL_TITLE}. {}", pen_feel_summary(snapshot))
+        format!("{}. {}", tr("Pen feel"), pen_feel_summary(snapshot))
     }
 }
 

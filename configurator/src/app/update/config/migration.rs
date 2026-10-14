@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use wayscriber::config::ConfigDocument;
 
 use super::super::super::effects::Effect;
@@ -32,15 +34,17 @@ impl ConfiguratorApp {
         let applied = result.changed;
         let kept = result.kept;
         let label = if applied == 1 {
-            "shortcut update"
+            tr("shortcut update")
         } else {
-            "shortcut updates"
+            tr("shortcut updates")
         };
         let mut message = format!("Applied {applied} {label} to the draft.");
         if !kept.is_empty() {
-            message.push_str(&format!(
+            message.push_str(&trf(
                 " Kept your edit to {}.",
-                list_with_overflow(&kept, ", ")
+                &[
+                    &list_with_overflow(&kept, ", "),
+                ],
             ));
         }
         message.push_str(" Nothing is written until you press Save.");

@@ -1,5 +1,7 @@
 //! Filter, sort, category scope, and bulk reset chrome for the shortcut manager.
 
+use wayscriber::i18n::tr;
+
 use relm4::{gtk, prelude::*};
 
 use gtk::prelude::*;
@@ -170,7 +172,7 @@ fn reset_banner(
     bindings: &mut Vec<Binding>,
 ) -> gtk::Revealer {
     let confirm_visible = gtk::Button::builder()
-        .label("Confirm Reset Visible")
+        .label(tr("Confirm Reset Visible"))
         .css_classes(["destructive-action"])
         .build();
     set_accessible_label(&confirm_visible, "Confirm reset visible");
@@ -180,7 +182,7 @@ fn reset_banner(
         Message::ShortcutResetVisibleConfirmed,
     );
     let confirm_all = gtk::Button::builder()
-        .label("Confirm Reset All")
+        .label(tr("Confirm Reset All"))
         .css_classes(["destructive-action"])
         .build();
     set_accessible_label(&confirm_all, "Confirm reset all");

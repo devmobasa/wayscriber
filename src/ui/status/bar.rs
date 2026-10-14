@@ -6,11 +6,13 @@ use super::super::primitives::{
 };
 use super::super::theme::{self, overlay};
 use super::badges::{
-    EDITING_BADGE_FONT_SIZE, EDITING_BADGE_HINT, EDITING_BADGE_LABEL, EDITING_BADGE_TINT,
-    FROZEN_BADGE_FONT_SIZE, FROZEN_BADGE_LABEL, FROZEN_BADGE_TINT, PAN_BADGE_FONT_SIZE,
-    PAN_BADGE_TINT, ZOOM_BADGE_FONT_SIZE, ZOOM_BADGE_TINT, pan_badge_label, zoom_badge_label,
+    EDITING_BADGE_FONT_SIZE, EDITING_BADGE_HINT_FONT_SIZE, EDITING_BADGE_TINT,
+    FROZEN_BADGE_FONT_SIZE, FROZEN_BADGE_TINT, PAN_BADGE_FONT_SIZE, PAN_BADGE_TINT,
+    ZOOM_BADGE_FONT_SIZE, ZOOM_BADGE_TINT, editing_badge_hint, editing_badge_label,
+    frozen_badge_label, pan_badge_label, zoom_badge_label,
 };
 use crate::config::{Action, StatusPosition, action_display_label};
+use crate::i18n::tr;
 use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
 use crate::label_format::{format_binding_labels, join_binding_labels};
 use crate::ui::toolbar::bindings::action_for_tool;
@@ -237,14 +239,14 @@ impl StatusHudSegmentKind {
     /// the tooltip is what says they act.
     pub(crate) fn tooltip(self) -> &'static str {
         match self {
-            Self::Board => "Boards: click to switch or add one",
-            Self::Page => "Pages: click to switch or add one",
-            Self::Color => "Color: click to pick another",
-            Self::Tool => "Tool: click for the radial menu",
-            Self::Size => "Size: click for the radial menu",
-            Self::Help => "Every shortcut and command",
-            Self::Toolbar => "Show the toolbar again",
-            Self::About => "About Wayscriber",
+            Self::Board => tr("Boards: click to switch or add one"),
+            Self::Page => tr("Pages: click to switch or add one"),
+            Self::Color => tr("Color: click to pick another"),
+            Self::Tool => tr("Tool: click for the radial menu"),
+            Self::Size => tr("Size: click for the radial menu"),
+            Self::Help => tr("Every shortcut and command"),
+            Self::Toolbar => tr("Show the toolbar again"),
+            Self::About => tr("About Wayscriber"),
         }
     }
 }

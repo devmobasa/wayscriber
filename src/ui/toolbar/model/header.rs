@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use crate::config::ToolbarLayoutMode;
+use crate::i18n::tr;
 
 use super::super::ToolbarEvent;
 use super::activation::ToolbarControlId;
@@ -10,21 +11,21 @@ use super::control::{
 };
 
 /// The preset's name as the toolbar shows it.
-pub(crate) const fn layout_mode_label(mode: ToolbarLayoutMode) -> &'static str {
+pub(crate) fn layout_mode_label(mode: ToolbarLayoutMode) -> &'static str {
     match mode {
-        ToolbarLayoutMode::Simple => "Simple",
-        ToolbarLayoutMode::Regular => "Regular",
-        ToolbarLayoutMode::Advanced => "Advanced",
+        ToolbarLayoutMode::Simple => tr("Simple"),
+        ToolbarLayoutMode::Regular => tr("Regular"),
+        ToolbarLayoutMode::Advanced => tr("Advanced"),
     }
 }
 
 /// One line saying what the preset puts on the strip, shown under its name
 /// in the layout menu. Kept short enough for a single line at menu width.
-pub(crate) const fn layout_mode_description(mode: ToolbarLayoutMode) -> &'static str {
+pub(crate) fn layout_mode_description(mode: ToolbarLayoutMode) -> &'static str {
     match mode {
-        ToolbarLayoutMode::Simple => "Core pens and one Shapes picker",
-        ToolbarLayoutMode::Regular => "Adds Shape Pen, Laser, Line/Arrow, presets",
-        ToolbarLayoutMode::Advanced => "Adds inline shapes and multi-step undo",
+        ToolbarLayoutMode::Simple => tr("Core pens and one Shapes picker"),
+        ToolbarLayoutMode::Regular => tr("Adds Shape Pen, Laser, Line/Arrow, presets"),
+        ToolbarLayoutMode::Advanced => tr("Adds inline shapes and multi-step undo"),
     }
 }
 
@@ -76,21 +77,21 @@ pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
     let segments = vec![
         segment(
             ToolbarControlId::LayoutModeSimple,
-            "Simple",
+            tr("Simple"),
             ToolbarLayoutMode::Simple,
-            "Simple preset",
+            tr("Simple preset"),
         ),
         segment(
             ToolbarControlId::LayoutModeRegular,
-            "Regular",
+            tr("Regular"),
             ToolbarLayoutMode::Regular,
-            "Regular preset",
+            tr("Regular preset"),
         ),
         segment(
             ToolbarControlId::LayoutModeAdvanced,
-            "Advanced",
+            tr("Advanced"),
             ToolbarLayoutMode::Advanced,
-            "Advanced preset",
+            tr("Advanced preset"),
         ),
     ];
     let active = match mode {
@@ -101,7 +102,7 @@ pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
     segmented_control(
         ToolbarControlId::LayoutModeSimple,
         active,
-        "Toolbar layout",
+        tr("Toolbar layout"),
         segments,
     )
 }

@@ -677,6 +677,8 @@ fn exact_pdf_background_field_label_matches_pdf_section() {
 #[test]
 fn exact_general_ui_field_labels_match_general_ui_section() {
     for query in [
+        "language",
+        "simplified chinese",
         "focus loss",
         "show automatic guidance and tips",
         "onboarding",

@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use crate::app::document_workflow::LeaveAction;
 use wayscriber::config::{Config, ConfigDocument, ConfigValidationReport, SaveValidationError};
 
@@ -39,19 +41,19 @@ impl ConfiguratorApp {
 
         if self.shortcuts.editor().is_some() || self.shortcuts.recorder().is_some() {
             self.status =
-                StatusMessage::error("Apply or cancel the unfinished shortcut edit before saving.");
+                StatusMessage::error(tr("Apply or cancel the unfinished shortcut edit before saving."));
             return Vec::new();
         }
 
         if self.shortcuts.conflict().is_some() {
-            self.status = StatusMessage::error("Resolve the shortcut conflict before saving.");
+            self.status = StatusMessage::error(tr("Resolve the shortcut conflict before saving."));
             return Vec::new();
         }
 
         // Validate against the loaded document before starting any transfer.
         let Some(document) = self.document.loaded() else {
             self.status = StatusMessage::error(
-                "Configuration has not loaded successfully. Reload before saving.",
+                tr("Configuration has not loaded successfully. Reload before saving."),
             );
             return Vec::new();
         };
@@ -61,7 +63,7 @@ impl ConfiguratorApp {
                 let Some(document) = self.document.begin_save(validation, continuation) else {
                     return Vec::new();
                 };
-                self.status = StatusMessage::info("Saving configuration...");
+                self.status = StatusMessage::info(tr("Saving configuration..."));
                 vec![Effect::SaveConfig {
                     document: Box::new(document),
                     config: Box::new(config),
@@ -73,8 +75,9 @@ impl ConfiguratorApp {
                     .map(|err| format!("{}: {}", err.field, err.message))
                     .collect::<Vec<_>>()
                     .join("\n");
-                self.status = StatusMessage::error(format!(
-                    "Cannot save due to validation errors:\n{message}"
+                self.status = StatusMessage::error(trf(
+                    "Cannot save due to validation errors:\n{}",
+                    &[&message],
                 ));
                 Vec::new()
             }
@@ -121,7 +124,7 @@ impl ConfiguratorApp {
                 // against it: an applied migration leaves nothing to propose,
                 // and an unrelated save leaves the same proposal standing.
                 self.refresh_migration_preview(&saved_document);
-                let mut msg = "Configuration saved successfully.".to_string();
+                let mut msg = tr("Configuration saved successfully.").to_string();
                 if let Some(path) = &backup {
                     msg.push_str(&format!("\nBackup created at {}", path.display()));
                 }
@@ -149,7 +152,7 @@ impl ConfiguratorApp {
                 let mut message = format!("Failed to save configuration: {err}");
                 if !restored {
                     message.push_str(
-                        "\nThe loaded configuration did not come back from the failed write. Reload before saving again.",
+                        tr("\nThe loaded configuration did not come back from the failed write. Reload before saving again."),
                     );
                 }
                 self.status = StatusMessage::error(message);

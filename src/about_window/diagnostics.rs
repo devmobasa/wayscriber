@@ -7,6 +7,7 @@
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, WAYLAND_DISPLAY_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
 };
+use crate::i18n::{tr, trf};
 
 /// Environment facts worth reporting, captured so the formatter stays pure.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -91,43 +92,40 @@ fn compiled_features() -> Vec<&'static str> {
 fn format_report(env: &DiagnosticsEnv, features: Vec<&'static str>) -> String {
     let mut lines = Vec::new();
 
-    let mut build = format!("Wayscriber {}", env.version);
+    let mut build = trf("Wayscriber {}", &[&env.version]);
     let mut build_details = Vec::new();
     if env.commit != "unknown" && !env.commit.is_empty() {
-        build_details.push(format!("commit {}", env.commit));
+        build_details.push(trf("commit {}", &[&env.commit]));
     }
     if let Some(date) = env.build_date.as_deref() {
-        build_details.push(format!("built {date}"));
+        build_details.push(trf("built {}", &[&date]));
     }
     if !build_details.is_empty() {
         build.push_str(&format!(" ({})", build_details.join(", ")));
     }
     lines.push(build);
 
-    lines.push(format!(
+    lines.push(trf(
         "Install source: {}",
-        env.install_source.as_deref().unwrap_or("unknown")
+        &[&env.install_source.as_deref().unwrap_or(tr("unknown"))],
     ));
-    lines.push(format!(
-        "Desktop: {}",
-        env.current_desktop
-            .as_deref()
-            .or(env.session_desktop.as_deref())
-            .or(env.desktop_session.as_deref())
-            .unwrap_or("unknown")
-    ));
-    lines.push(format!(
+    let desktop = env
+        .current_desktop
+        .as_deref()
+        .or(env.session_desktop.as_deref())
+        .or(env.desktop_session.as_deref())
+        .unwrap_or(tr("unknown"));
+    lines.push(trf("Desktop: {}", &[&desktop]));
+    lines.push(trf(
         "Wayland display: {}",
-        env.wayland_display.as_deref().unwrap_or("none")
+        &[&env.wayland_display.as_deref().unwrap_or(tr("none"))],
     ));
-    lines.push(format!(
-        "Features: {}",
-        if features.is_empty() {
-            "none".to_string()
-        } else {
-            features.join(", ")
-        }
-    ));
+    let feature_list = if features.is_empty() {
+        tr("none").to_string()
+    } else {
+        features.join(", ")
+    };
+    lines.push(trf("Features: {}", &[&feature_list]));
 
     lines.join("\n")
 }

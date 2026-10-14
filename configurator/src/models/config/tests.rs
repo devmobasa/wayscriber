@@ -212,8 +212,8 @@ fn a_board_draft_the_checks_accept_saves_unchanged() {
 }
 use super::super::fields::{
     ArrowStyleOption, DragMouseButton, DragToolField, DragToolOption, FontWeightOption,
-    InputHudModeOption, InputHudPositionOption, OverrideOption, PdfFitModeOption,
-    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
+    InputHudModeOption, InputHudPositionOption, LanguageOption, OverrideOption,
+    PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, RegionPickerOption,
     SessionStorageModeOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
     ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
@@ -441,7 +441,7 @@ fn config_draft_round_trips_capture_drawing_preference() {
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
-    ColorSpec, Config, ConfigDocument, InputHudMode, InputHudPosition, PdfFitMode,
+    ColorSpec, Config, ConfigDocument, InputHudMode, InputHudPosition, Language, PdfFitMode,
     PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize, PdfTransparentBackground,
     PresetToolStatesConfig, QuickColorConfig, ReducedMotion, RenderColorMappingConfig,
     RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig,
@@ -1757,6 +1757,69 @@ fn config_draft_round_trips_ui_reduced_motion() {
         .to_config(&config)
         .expect("expected config to round trip");
     assert_eq!(round_trip.ui.reduced_motion, ReducedMotion::On);
+}
+
+#[test]
+fn config_draft_round_trips_ui_language() {
+    for (config_value, option) in [
+        (Language::Auto, LanguageOption::Auto),
+        (Language::English, LanguageOption::English),
+        (Language::SimplifiedChinese, LanguageOption::SimplifiedChinese),
+    ] {
+        let mut config = Config::default();
+        config.ui.language = config_value;
+
+        let draft = ConfigDraft::from_config(&config);
+        assert_eq!(draft.ui_language, option);
+
+        let round_trip = draft
+            .to_config(&config)
+            .expect("expected config to round trip");
+        assert_eq!(round_trip.ui.language, config_value);
+    }
+}
+
+#[test]
+fn config_draft_ui_language_defaults_to_auto_when_key_missing() {
+    let temp = crate::test_temp::tempdir().expect("create temp directory");
+
+    let missing = temp.path().join("missing-language.toml");
+    std::fs::write(&missing, "[ui]\ntheme = \"dark\"\n").expect("write config without language");
+    let document =
+        ConfigDocument::load_from_path(&missing).expect("load config without language");
+    assert_eq!(document.config().ui.language, Language::Auto);
+    assert_eq!(
+        ConfigDraft::from_config(document.config()).ui_language,
+        LanguageOption::Auto
+    );
+}
+
+/// The configurator loads through the editing path, so an out-of-vocabulary
+/// language holds its default and is reported as an unreadable entry instead
+/// of reaching the draft as a silently rewritten value.
+#[test]
+fn config_document_salvages_unknown_ui_language_to_auto() {
+    let temp = crate::test_temp::tempdir().expect("create temp directory");
+
+    let unknown = temp.path().join("unknown-language.toml");
+    std::fs::write(&unknown, "[ui]\nlanguage = \"fr\"\n").expect("write unknown language");
+
+    let (document, warning) = ConfigDocument::load_for_editing_from_path(&unknown)
+        .expect("expected the editing load to salvage the unknown language");
+    assert!(warning.is_some(), "expected a salvage warning");
+    assert_eq!(document.config().ui.language, Language::Auto);
+    assert!(
+        document
+            .section_errors()
+            .iter()
+            .any(|entry| entry.section == "ui.language"),
+        "expected ui.language in {:?}",
+        document.section_errors()
+    );
+    assert_eq!(
+        ConfigDraft::from_config(document.config()).ui_language,
+        LanguageOption::Auto
+    );
 }
 
 #[test]

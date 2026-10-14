@@ -1,3 +1,5 @@
+use crate::i18n::tr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RegionAction {
     Copy,
@@ -12,17 +14,17 @@ pub(crate) enum RegionAction {
 }
 
 impl RegionAction {
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Copy => "Copy",
-            Self::Save => "Save",
-            Self::Both => "Both",
-            Self::Board => "Board",
-            Self::CutBand => "Cut",
-            Self::UndoCut => "Undo",
-            Self::RedoCut => "Redo",
-            Self::ResetCuts => "Reset",
-            Self::ToggleIncludeDrawings => "Include drawings in exports",
+            Self::Copy => tr("Copy"),
+            Self::Save => tr("Save"),
+            Self::Both => tr("Both"),
+            Self::Board => tr("Board"),
+            Self::CutBand => tr("Cut"),
+            Self::UndoCut => tr("Undo"),
+            Self::RedoCut => tr("Redo"),
+            Self::ResetCuts => tr("Reset"),
+            Self::ToggleIncludeDrawings => tr("Include drawings in exports"),
         }
     }
 

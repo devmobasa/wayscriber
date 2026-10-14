@@ -11,6 +11,7 @@ use crate::input::state::{Toast, ToastPriority};
 use crate::session::{
     self as stored_session, LoadSnapshotOutcome, SessionOptions, SessionSnapshot,
 };
+use crate::i18n::{tr, trf};
 
 /// A session left on disk unloaded because it expands beyond the safety cap.
 #[derive(Debug)]
@@ -74,7 +75,7 @@ pub(in crate::backend::wayland) fn apply_load_outcome(
                 options.backup_file_path().display()
             );
             replace_output_session_snapshot(input_state, measurer, Some(*snapshot), options)?;
-            input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored drawings from the session backup; the primary session had no board data."));
+            input_state.push_toast(ToastPriority::Info, "output", Toast::warning(tr("Restored drawings from the session backup; the primary session had no board data.")));
         }
         LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => {
             debug!(
@@ -83,7 +84,7 @@ pub(in crate::backend::wayland) fn apply_load_outcome(
                 options.recovery_file_path().display()
             );
             replace_output_session_snapshot(input_state, measurer, Some(*snapshot), options)?;
-            input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored session from recovery file; normal save previously exceeded the size limit."));
+            input_state.push_toast(ToastPriority::Info, "output", Toast::warning(tr("Restored session from recovery file; normal save previously exceeded the size limit.")));
         }
         LoadSnapshotOutcome::RestoredAfterCorruption {
             snapshot,
@@ -147,17 +148,19 @@ fn notify_unreadable_session(
     let toast = match restored_from {
         Some(source) => {
             let source = match source {
-                stored_session::RestoredArtifact::Backup => "backup. Recent changes may be missing",
-                stored_session::RestoredArtifact::Recovery => "recovery file",
+                stored_session::RestoredArtifact::Backup => {
+                    tr("backup. Recent changes may be missing")
+                }
+                stored_session::RestoredArtifact::Recovery => tr("recovery file"),
             };
-            Toast::warning(format!(
-                "Previous session could not be read; restored drawings from the {source}. A copy of the unreadable file was saved to {}",
-                corrupt_copy.display()
+            Toast::warning(trf(
+                "Previous session could not be read; restored drawings from the {}. A copy of the unreadable file was saved to {}",
+                &[&source, &corrupt_copy.display()],
             ))
         }
-        None => Toast::error(format!(
+        None => Toast::error(trf(
             "Previous session could not be read and no backup could be restored; a copy was saved to {}",
-            corrupt_copy.display()
+            &[&corrupt_copy.display()],
         )),
     };
     input_state.push_toast(

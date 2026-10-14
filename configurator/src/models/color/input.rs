@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use wayscriber::config::enums::ColorSpec;
 use wayscriber::draw::Color;
 use wayscriber::util::{ConfigHexColorError, name_to_color, parse_config_hex_color};
@@ -52,7 +54,7 @@ impl ColorInput {
                 if value.trim().is_empty() {
                     Err(FormError::new(
                         field.to_string(),
-                        "Please enter a color name.",
+                        tr("Please enter a color name."),
                     ))
                 } else {
                     Ok(ColorSpec::Name(value))
@@ -82,7 +84,7 @@ impl ColorInput {
                 if value.is_empty() {
                     return Err(FormError::new(
                         field.to_string(),
-                        "Please enter a color name or #RRGGBB / #RRGGBBAA hex color.",
+                        tr("Please enter a color name or #RRGGBB / #RRGGBBAA hex color."),
                     ));
                 }
 
@@ -92,7 +94,7 @@ impl ColorInput {
                     Err(_) => {
                         return Err(FormError::new(
                             field.to_string(),
-                            "Expected #RRGGBB or #RRGGBBAA hex color.",
+                            tr("Expected #RRGGBB or #RRGGBBAA hex color."),
                         ));
                     }
                 }
@@ -102,7 +104,7 @@ impl ColorInput {
                 } else {
                     Err(FormError::new(
                         field.to_string(),
-                        "Expected a known color name or #RRGGBB / #RRGGBBAA hex color.",
+                        tr("Expected a known color name or #RRGGBB / #RRGGBBAA hex color."),
                     ))
                 }
             }
@@ -170,7 +172,7 @@ impl ColorInput {
                 if self.selected_named_is_custom() {
                     let trimmed = self.name.trim();
                     if trimmed.is_empty() {
-                        "Custom name".to_string()
+                        tr("Custom name").to_string()
                     } else {
                         trimmed.to_string()
                     }
@@ -178,11 +180,13 @@ impl ColorInput {
                     self.selected_named.label().to_string()
                 }
             }
-            ColorMode::Rgb => format!(
+            ColorMode::Rgb => trf(
                 "{}, {}, {}",
-                self.rgb[0].trim(),
-                self.rgb[1].trim(),
-                self.rgb[2].trim()
+                &[
+                    &self.rgb[0].trim(),
+                    &self.rgb[1].trim(),
+                    &self.rgb[2].trim(),
+                ],
             ),
         }
     }

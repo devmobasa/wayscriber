@@ -2,6 +2,8 @@ use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
 
+use wayscriber::i18n::{tr, trf};
+
 use crate::messages::Message;
 use crate::models::TabId;
 
@@ -23,7 +25,7 @@ pub(super) fn build(
     }
     // ---- Sidebar ----------------------------------------------------
     let search_entry = gtk::SearchEntry::builder()
-        .placeholder_text("Search settings")
+        .placeholder_text(tr("Search settings"))
         .build();
     {
         let sender = sender.clone();
@@ -84,10 +86,12 @@ pub(super) fn build(
     sidebar_box.append(&search_entry);
     sidebar_box.append(&sidebar_scroll);
     let build_identity = gtk::Label::builder()
-        .label(format!(
-            "Version {} · commit {}",
-            wayscriber::build_info::version(),
-            wayscriber::build_info::commit_hash()
+        .label(trf(
+            tr("Version {} · commit {}"),
+            &[
+                &wayscriber::build_info::version(),
+                &wayscriber::build_info::commit_hash(),
+            ],
         ))
         .css_classes(["dim-label"])
         .halign(gtk::Align::Start)
@@ -103,8 +107,8 @@ pub(super) fn build(
         .build();
 
     // ---- Header actions ---------------------------------------------
-    let window_title = adw::WindowTitle::new("Wayscriber Configurator", "");
-    let reload_button = gtk::Button::with_label("Reload");
+    let window_title = adw::WindowTitle::new(tr("Wayscriber Configurator"), "");
+    let reload_button = gtk::Button::with_label(tr("Reload"));
     {
         let sender = sender.clone();
         reload_button.connect_clicked(move |_| sender.input(Message::ReloadRequested));
@@ -114,7 +118,7 @@ pub(super) fn build(
     // button that asks steps aside for the pair that answers. All three
     // exist from the start and visibility picks between them, which is
     // what keeps a repeat of the same press from ever applying defaults.
-    let defaults_button = gtk::Button::with_label("Defaults");
+    let defaults_button = gtk::Button::with_label(tr("Defaults"));
     {
         let sender = sender.clone();
         defaults_button.connect_clicked(move |_| {
@@ -122,7 +126,7 @@ pub(super) fn build(
         });
     }
     let defaults_confirm_button = gtk::Button::builder()
-        .label("Confirm Defaults")
+        .label(tr("Confirm Defaults"))
         .visible(false)
         .css_classes(["destructive-action"])
         .build();
@@ -133,7 +137,7 @@ pub(super) fn build(
         });
     }
     let defaults_cancel_button = gtk::Button::builder()
-        .label("Cancel")
+        .label(tr("Cancel"))
         .visible(false)
         .css_classes(["flat"])
         .build();
@@ -148,7 +152,7 @@ pub(super) fn build(
     defaults_box.append(&defaults_confirm_button);
     defaults_box.append(&defaults_cancel_button);
 
-    let save_button = gtk::Button::with_label("Save");
+    let save_button = gtk::Button::with_label(tr("Save"));
     save_button.add_css_class("suggested-action");
     {
         let sender = sender.clone();
@@ -175,7 +179,7 @@ pub(super) fn build(
     let status_revealer = gtk::Revealer::builder().child(&status_label).build();
 
     let migration_label = gtk::Label::builder().wrap(true).xalign(0.0).build();
-    let migration_apply = gtk::Button::with_label("Apply Update");
+    let migration_apply = gtk::Button::with_label(tr("Apply Update"));
     migration_apply.add_css_class("suggested-action");
     {
         let sender = sender.clone();
@@ -183,7 +187,7 @@ pub(super) fn build(
             sender.input(Message::MigrationApplyRequested);
         });
     }
-    let migration_dismiss = gtk::Button::with_label("Dismiss");
+    let migration_dismiss = gtk::Button::with_label(tr("Dismiss"));
     {
         let sender = sender.clone();
         migration_dismiss.connect_clicked(move |_| {
@@ -237,14 +241,14 @@ pub(super) fn build(
     leave_actions.set_visible(false);
     leave_actions.set_margin_start(12);
     leave_actions.set_margin_bottom(6);
-    let leave_cancel = gtk::Button::with_label("Cancel");
+    let leave_cancel = gtk::Button::with_label(tr("Cancel"));
     for (button, message) in [
         (
-            gtk::Button::with_label("Save changes"),
+            gtk::Button::with_label(tr("Save changes")),
             Message::LeaveSaveRequested,
         ),
         (
-            gtk::Button::with_label("Discard changes"),
+            gtk::Button::with_label(tr("Discard changes")),
             Message::LeaveDiscardRequested,
         ),
         (leave_cancel.clone(), Message::LeaveCanceled),
@@ -264,7 +268,7 @@ pub(super) fn build(
     toolbar_view.add_top_bar(&header);
     toolbar_view.set_content(Some(&content_box));
     let content_page = adw::NavigationPage::builder()
-        .title("Settings")
+        .title(tr("Settings"))
         .child(&toolbar_view)
         .build();
 

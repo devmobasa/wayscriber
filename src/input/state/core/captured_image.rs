@@ -2,6 +2,7 @@ use super::InputState;
 use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
+use crate::i18n::tr;
 use crate::screen_pixels::EmbeddedImageLimits;
 use crate::util::Rect;
 
@@ -25,7 +26,7 @@ impl InputState {
             self.push_toast(
                 super::ToastPriority::Info,
                 "capture.region.board",
-                super::Toast::warning("Region is too large to add to the board."),
+                super::Toast::warning(tr("Region is too large to add to the board.")),
             );
             return false;
         }
@@ -37,7 +38,7 @@ impl InputState {
             self.push_toast(
                 super::ToastPriority::Info,
                 "capture.region.board",
-                super::Toast::warning("Paste target changed; region was not added."),
+                super::Toast::warning(tr("Paste target changed; region was not added.")),
             );
             return false;
         }
@@ -52,7 +53,7 @@ impl InputState {
             self.push_toast(
                 super::ToastPriority::Info,
                 "capture.region.board",
-                super::Toast::warning("Paste target changed; region was not added."),
+                super::Toast::warning(tr("Paste target changed; region was not added.")),
             );
             return false;
         };
@@ -68,7 +69,7 @@ impl InputState {
             self.push_toast(
                 super::ToastPriority::Info,
                 "capture.region.board",
-                super::Toast::warning("Shape limit reached; region was not added."),
+                super::Toast::warning(tr("Shape limit reached; region was not added.")),
             );
             return false;
         };
@@ -95,7 +96,7 @@ impl InputState {
         self.push_toast(
             super::ToastPriority::Info,
             "capture.region.board",
-            super::Toast::info("Region added to board."),
+            super::Toast::info(tr("Region added to board.")),
         );
         true
     }

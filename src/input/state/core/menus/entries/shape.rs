@@ -2,6 +2,7 @@ use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, ContextMenuKind, MenuCommand};
 use crate::domain::Action;
 use crate::draw::{Shape, ShapeId};
+use crate::i18n::tr;
 
 impl InputState {
     pub(super) fn shape_menu_entries(
@@ -25,8 +26,8 @@ impl InputState {
             && let Some(drawn) = frame.shape(*shape_id)
         {
             let label = match drawn.shape {
-                Shape::Text { .. } => Some("Edit Text"),
-                Shape::StickyNote { .. } => Some("Edit Note"),
+                Shape::Text { .. } => Some(tr("Edit Text")),
+                Shape::StickyNote { .. } => Some(tr("Edit Note")),
                 _ => None,
             };
             if let Some(label) = label {
@@ -39,7 +40,7 @@ impl InputState {
             }
         }
         entries.push(ContextMenuEntry::new(
-            "Properties\u{2026}",
+            tr("Properties\u{2026}"),
             self.shortcut_for_action(Action::ToggleSelectionProperties),
             false,
             Some(MenuCommand::Properties),
@@ -51,7 +52,7 @@ impl InputState {
             && ids != [hovered]
         {
             entries.push(ContextMenuEntry::new(
-                "Select This Shape",
+                tr("Select This Shape"),
                 Some("Alt+Click"), // Mouse action, not configurable
                 false,
                 Some(MenuCommand::SelectHoveredShape),
@@ -60,7 +61,7 @@ impl InputState {
 
         entries.push(
             ContextMenuEntry::new(
-                "Copy",
+                tr("Copy"),
                 self.shortcut_for_action(Action::CopySelection),
                 all_locked,
                 Some(MenuCommand::Copy),
@@ -69,7 +70,7 @@ impl InputState {
         );
         entries.push(self.paste_entry());
         entries.push(ContextMenuEntry::new(
-            "Duplicate",
+            tr("Duplicate"),
             self.shortcut_for_action(Action::DuplicateSelection),
             false,
             Some(MenuCommand::Duplicate),
@@ -78,11 +79,11 @@ impl InputState {
         // can go neither way.
         let can_move = self.selection_can_step(true) || self.selection_can_step(false);
         entries.push(
-            ContextMenuEntry::new("Arrange", None::<String>, !can_move, None)
+            ContextMenuEntry::new(tr("Arrange"), None::<String>, !can_move, None)
                 .with_submenu(ContextMenuKind::Arrange),
         );
         entries.push(ContextMenuEntry::new(
-            if locked { "Unlock" } else { "Lock" },
+            if locked { tr("Unlock") } else { tr("Lock") },
             None::<String>, // Lock/unlock not a configurable keybinding
             false,
             Some(if locked {
@@ -96,19 +97,19 @@ impl InputState {
         if self.boards.pan_enabled() && !self.board_is_transparent() {
             let reset_disabled = self.boards.active_frame().view_offset() == (0, 0);
             entries.push(ContextMenuEntry::new(
-                "Reset Canvas Position",
+                tr("Reset Canvas Position"),
                 Some("Space+Drag"),
                 reset_disabled,
                 Some(MenuCommand::ResetCanvasPosition),
             ));
         }
         entries.push(
-            ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
+            ContextMenuEntry::new(tr("Zoom"), Some(self.zoom_summary()), false, None)
                 .with_submenu(ContextMenuKind::Zoom),
         );
         entries[view_group_start].separator_before = true;
         entries.push(ContextMenuEntry::new(
-            "Radial Menu",
+            tr("Radial Menu"),
             self.shortcut_for_action(Action::ToggleRadialMenu),
             false,
             Some(MenuCommand::OpenRadialMenu),
@@ -119,7 +120,7 @@ impl InputState {
         // canvas menu: never the row under the pointer when the menu opens.
         entries.push(
             ContextMenuEntry::new(
-                "Delete",
+                tr("Delete"),
                 self.shortcut_for_action(Action::DeleteSelection),
                 all_locked,
                 Some(MenuCommand::Delete),
@@ -139,28 +140,28 @@ impl InputState {
         let mut entries = Vec::new();
 
         if with_header {
-            entries.push(ContextMenuEntry::new("Arrange", None::<String>, true, None));
+            entries.push(ContextMenuEntry::new(tr("Arrange"), None::<String>, true, None));
         }
         entries.push(ContextMenuEntry::new(
-            "Move to Front",
+            tr("Move to Front"),
             self.shortcut_for_action(Action::MoveSelectionToFront),
             !can_raise,
             Some(MenuCommand::MoveToFront),
         ));
         entries.push(ContextMenuEntry::new(
-            "Move Forward",
+            tr("Move Forward"),
             None::<String>,
             !can_raise,
             Some(MenuCommand::MoveForward),
         ));
         entries.push(ContextMenuEntry::new(
-            "Move Backward",
+            tr("Move Backward"),
             None::<String>,
             !can_lower,
             Some(MenuCommand::MoveBackward),
         ));
         entries.push(ContextMenuEntry::new(
-            "Move to Back",
+            tr("Move to Back"),
             self.shortcut_for_action(Action::MoveSelectionToBack),
             !can_lower,
             Some(MenuCommand::MoveToBack),

@@ -4,6 +4,7 @@
 
 use gtk4::prelude::*;
 
+use crate::i18n::tr;
 use crate::toolbar_icons;
 use crate::ui::toolbar::{ToolbarEvent, model};
 
@@ -270,7 +271,7 @@ fn group_chooser(
         return None;
     }
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
-    column.append(&sub_header("Choose a group"));
+    column.append(&sub_header(tr("Choose a group")));
     let grid = gtk4::Grid::new();
     grid.set_column_homogeneous(true);
     grid.set_column_spacing(ctx.px(6.0) as u32);
@@ -308,7 +309,7 @@ fn item_override_rows(
     let header = ctx
         .snapshot
         .customize_items_group
-        .map_or("Uncheck items to hide", |group| group.label());
+        .map_or(tr("Uncheck items to hide"), |group| group.label());
     column.append(&sub_header(header));
     for override_item in overrides {
         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(4.0));
@@ -331,13 +332,13 @@ fn item_override_rows(
         row.append(&check);
         if let Some(order) = override_item.order.as_ref() {
             for (label, enabled, activation, tooltip) in [
-                ("^", order.can_move_up, &order.move_up, "Move up"),
-                ("v", order.can_move_down, &order.move_down, "Move down"),
+                ("^", order.can_move_up, &order.move_up, tr("Move up")),
+                ("v", order.can_move_down, &order.move_down, tr("Move down")),
             ] {
                 let button = text_button(
                     label,
                     (ctx.sz(28.0), ctx.sz(24.0)),
-                    &format!("{} {}", tooltip, override_item.label),
+                    &format!("{tooltip} {}", override_item.label),
                 );
                 button.set_sensitive(enabled);
                 let sender = ctx.feedback.clone();

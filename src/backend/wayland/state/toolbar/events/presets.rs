@@ -1,6 +1,7 @@
 use super::*;
 use crate::backend::wayland::config_edits::{ConfigEdit, ConfigEditWorker};
 use crate::config::{Config, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite};
+use crate::i18n::{tr, trf};
 use crate::input::state::{PresetAction, Toast, ToastPriority};
 
 /// Apply an accepted preset save/clear to the effective config.
@@ -22,8 +23,8 @@ fn apply_preset_action(config: &mut Config, action: &PresetAction) {
 /// What the user is told once the file has taken the slot.
 fn preset_saved_message(action: &PresetAction) -> String {
     match action {
-        PresetAction::Save { slot, .. } => format!("Saved preset {slot}."),
-        PresetAction::Clear { slot } => format!("Cleared preset {slot}."),
+        PresetAction::Save { slot, .. } => trf("Saved preset {}.", &[slot]),
+        PresetAction::Clear { slot } => trf("Cleared preset {}.", &[slot]),
     }
 }
 
@@ -34,15 +35,22 @@ fn preset_saved_message(action: &PresetAction) -> String {
 /// already agrees rather than claiming a save that did not happen.
 fn preset_unchanged_message(action: &PresetAction) -> String {
     match action {
-        PresetAction::Save { slot, .. } => format!("Preset {slot} already holds these settings."),
-        PresetAction::Clear { slot } => format!("Preset {slot} was already empty in config.toml."),
+        PresetAction::Save { slot, .. } => {
+            trf("Preset {} already holds these settings.", &[slot])
+        }
+        PresetAction::Clear { slot } => {
+            trf("Preset {} was already empty in config.toml.", &[slot])
+        }
     }
 }
 
 /// What the user is told when the slot changed but the file did not.
 fn preset_save_failed_message(action: &PresetAction) -> String {
     let (slot, verb) = preset_slot_and_verb(action);
-    format!("Preset {slot} {verb} for this run, but saving to config.toml failed (see logs).")
+    trf(
+        "Preset {} {} for this run, but saving to config.toml failed (see logs).",
+        &[&slot, &verb],
+    )
 }
 
 /// What the user is told when the write landed but the slot does not read back.
@@ -52,15 +60,16 @@ fn preset_save_failed_message(action: &PresetAction) -> String {
 fn preset_write_unverified_message(action: &PresetAction) -> String {
     let (slot, verb) = preset_slot_and_verb(action);
     format!(
-        "Preset {slot} {verb} for this run, but config.toml was written and does not read back \
-         with it (see logs)."
+        "{}{}",
+        trf("Preset {} {} for this run, ", &[&slot, &verb]),
+        tr("but config.toml was written and does not read back with it (see logs).")
     )
 }
 
 fn preset_slot_and_verb(action: &PresetAction) -> (usize, &'static str) {
     match action {
-        PresetAction::Save { slot, .. } => (*slot, "saved"),
-        PresetAction::Clear { slot } => (*slot, "cleared"),
+        PresetAction::Save { slot, .. } => (*slot, tr("saved")),
+        PresetAction::Clear { slot } => (*slot, tr("cleared")),
     }
 }
 
@@ -119,7 +128,7 @@ impl WaylandState {
                     ToastPriority::Action,
                     "presets",
                     Toast::warning(message)
-                        .action("Edit", crate::domain::Action::OpenConfiguratorPresets),
+                        .action(tr("Edit"), crate::domain::Action::OpenConfiguratorPresets),
                 );
             }
         }

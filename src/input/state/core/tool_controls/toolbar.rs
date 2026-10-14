@@ -4,6 +4,7 @@ use crate::config::{
     TopDisplayMode,
 };
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority, TopMenuState};
 
 /// How long the "Cleared — Undo?" toast stays up after a mouse-path clear.
@@ -55,22 +56,23 @@ impl InputState {
         }
         let mut parts = Vec::new();
         if let Some(binding) = self.action_binding_primary_label(Action::ToggleToolbar) {
-            parts.push(format!("{binding} toolbar"));
+            parts.push(trf("{} toolbar", &[&binding]));
         }
         if let Some(binding) = self.action_binding_primary_label(Action::ToggleStatusBar) {
-            parts.push(format!("{binding} status bar"));
+            parts.push(trf("{} status bar", &[&binding]));
         }
         let message = if parts.is_empty() && self.right_click_chrome_recovery_available() {
-            "All UI hidden: right-click to restore".to_string()
+            tr("All UI hidden: right-click to restore").to_string()
         } else if parts.is_empty() {
-            "All UI hidden: select the recovery action".to_string()
+            tr("All UI hidden: select the recovery action").to_string()
         } else {
-            format!("All UI hidden: {}", parts.join(" · "))
+            let details = parts.join(" · ");
+            trf("All UI hidden: {}", &[&details])
         };
         let (action_label, recovery_action) = if self.presenter_hides_toolbars() {
-            ("Show status bar", Action::ToggleStatusBar)
+            (tr("Show status bar"), Action::ToggleStatusBar)
         } else {
-            ("Show toolbar", Action::ToggleToolbar)
+            (tr("Show toolbar"), Action::ToggleToolbar)
         };
         self.push_toast(
             ToastPriority::Info,
@@ -511,8 +513,8 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Action,
                 "canvas.clear",
-                Toast::info("Cleared")
-                    .action("Undo?", Action::Undo)
+                Toast::info(tr("Cleared"))
+                    .action(tr("Undo?"), Action::Undo)
                     .duration_ms(CLEAR_UNDO_TOAST_MS),
             );
         }

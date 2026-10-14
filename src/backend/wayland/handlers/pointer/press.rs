@@ -4,6 +4,7 @@ use wayland_client::QueueHandle;
 
 use crate::backend::wayland::state::{ContactOwner, RegionReviewPress, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
+use crate::i18n::{tr, trf};
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
 use crate::ui::toolbar::ToolbarEvent;
@@ -373,12 +374,12 @@ impl WaylandState {
 /// the shortcut parser; anything else reports its evdev code.
 fn input_hud_button_label(button: u32) -> String {
     match button {
-        BTN_LEFT => "Click".to_string(),
-        BTN_RIGHT => "Right Click".to_string(),
-        BTN_MIDDLE => "Middle Click".to_string(),
+        BTN_LEFT => tr("Click").to_string(),
+        BTN_RIGHT => tr("Right Click").to_string(),
+        BTN_MIDDLE => tr("Middle Click").to_string(),
         other => crate::config::keybindings::linux::pointer_button(other)
             .map(|button| button.name())
-            .unwrap_or_else(|| format!("Button {other}")),
+            .unwrap_or_else(|| trf("Button {}", &[&other])),
     }
 }
 

@@ -129,7 +129,7 @@ pub(super) fn layout_mode_badges(
     if input_state.frozen_active() {
         // Literal red safety state; never abstracted behind the theme.
         specs.push(StatusHudBadgeSpec {
-            label: FROZEN_BADGE_LABEL.to_string(),
+            label: frozen_badge_label().to_string(),
             hint: None,
             font_size: FROZEN_BADGE_FONT_SIZE,
             tint: FROZEN_BADGE_TINT,
@@ -165,8 +165,8 @@ pub(super) fn layout_mode_badges(
         && input_state.text_editing.edit_target().is_some()
     {
         specs.push(StatusHudBadgeSpec {
-            label: EDITING_BADGE_LABEL.to_string(),
-            hint: Some(EDITING_BADGE_HINT),
+            label: editing_badge_label().to_string(),
+            hint: Some((editing_badge_hint(), EDITING_BADGE_HINT_FONT_SIZE)),
             font_size: EDITING_BADGE_FONT_SIZE,
             tint: EDITING_BADGE_TINT,
         });

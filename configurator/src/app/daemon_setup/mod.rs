@@ -3,6 +3,8 @@ mod hyprland;
 mod service;
 mod shortcut;
 
+use wayscriber::i18n::{tr, trf};
+
 use crate::models::{
     DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment,
     LightShortcutApplyCapability, ShortcutBackend,
@@ -47,7 +49,7 @@ fn perform_daemon_action_sync(
     shortcut_input: &str,
 ) -> Result<String, String> {
     match action {
-        DaemonAction::RefreshStatus => Ok("Daemon status refreshed.".to_string()),
+        DaemonAction::RefreshStatus => Ok(tr("Daemon status refreshed.").to_string()),
         DaemonAction::InstallOrUpdateService => {
             let desktop = DesktopEnvironment::detect_current();
             let service_path = install_or_update_user_service()?;
@@ -58,31 +60,33 @@ fn perform_daemon_action_sync(
                     run_systemctl_user(&["restart", SERVICE_NAME])?;
                 }
             }
-            Ok(format!(
+            Ok(trf(
                 "Installed/updated user service at {}{}",
-                service_path.display(),
-                if removed_dropin {
-                    "; removed stale GNOME portal shortcut drop-in"
-                } else {
-                    ""
-                }
+                &[
+                    &service_path.display(),
+                    &if removed_dropin {
+                        tr("; removed stale GNOME portal shortcut drop-in")
+                    } else {
+                        ""
+                    },
+                ],
             ))
         }
         DaemonAction::EnableAndStartService => {
             require_systemctl_available()?;
             run_systemctl_user(&["daemon-reload"])?;
             run_systemctl_user(&["enable", "--now", SERVICE_NAME])?;
-            Ok("Enabled and started wayscriber.service.".to_string())
+            Ok(tr("Enabled and started wayscriber.service.").to_string())
         }
         DaemonAction::RestartService => {
             require_systemctl_available()?;
             run_systemctl_user(&["restart", SERVICE_NAME])?;
-            Ok("Restarted wayscriber.service.".to_string())
+            Ok(tr("Restarted wayscriber.service.").to_string())
         }
         DaemonAction::StopAndDisableService => {
             require_systemctl_available()?;
             run_systemctl_user(&["disable", "--now", SERVICE_NAME])?;
-            Ok("Stopped and disabled wayscriber.service.".to_string())
+            Ok(tr("Stopped and disabled wayscriber.service.").to_string())
         }
         DaemonAction::ApplyShortcut => apply_shortcut(shortcut_input),
         DaemonAction::ApplyLightControls => {

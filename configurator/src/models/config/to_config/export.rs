@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::super::draft::ConfigDraft;
 use crate::models::error::FormError;
 use crate::models::util::parse_f64;
@@ -141,7 +143,7 @@ fn validate_pdf_label_template_for_content(
 ) -> Result<bool, String> {
     let is_custom = content == PdfLabelContentMode::CustomTemplate;
     if is_custom && template.trim().is_empty() {
-        return Err("Expected a non-empty template".to_string());
+        return Err(tr("Expected a non-empty template").to_string());
     }
     match validate_pdf_label_template(template) {
         Ok(()) => Ok(true),

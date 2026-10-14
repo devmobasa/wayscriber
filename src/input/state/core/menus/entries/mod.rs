@@ -11,6 +11,7 @@ use super::types::{
 };
 use crate::domain::Action;
 use crate::draw::ShapeId;
+use crate::i18n::tr;
 
 impl InputState {
     /// Append the chrome recovery entries ("Show Toolbar"/"Show Status Bar")
@@ -22,7 +23,7 @@ impl InputState {
     pub(super) fn push_chrome_recovery_entries(&self, entries: &mut Vec<ContextMenuEntry>) {
         if !(self.toolbar_visible() || self.presenter_hides_toolbars()) {
             entries.push(ContextMenuEntry::new(
-                "Show Toolbar",
+                tr("Show Toolbar"),
                 self.shortcut_for_action(Action::ToggleToolbar),
                 false,
                 Some(MenuCommand::ShowToolbar),
@@ -32,7 +33,7 @@ impl InputState {
             || self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar)
         {
             entries.push(ContextMenuEntry::new(
-                "Show Status Bar",
+                tr("Show Status Bar"),
                 self.shortcut_for_action(Action::ToggleStatusBar),
                 false,
                 Some(MenuCommand::ShowStatusBar),
@@ -43,7 +44,7 @@ impl InputState {
     /// Paste, enabled only when something is known to be pasteable.
     pub(super) fn paste_entry(&self) -> ContextMenuEntry {
         ContextMenuEntry::new(
-            "Paste",
+            tr("Paste"),
             self.shortcut_for_action(Action::PasteSelection),
             !self.paste_available(),
             Some(MenuCommand::Paste),
@@ -55,9 +56,9 @@ impl InputState {
     /// exiting, and the label says which.
     pub(super) fn exit_entry(&self) -> ContextMenuEntry {
         let label = if self.context_menu.exit_hides_overlay {
-            "Hide Overlay"
+            tr("Hide Overlay")
         } else {
-            "Exit"
+            tr("Exit")
         };
         ContextMenuEntry::new(
             label,

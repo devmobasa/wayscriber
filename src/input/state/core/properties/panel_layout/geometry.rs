@@ -17,6 +17,7 @@ use super::super::types::{
 };
 use super::super::utils::palette_position;
 use crate::draw::ArrowStyle;
+use crate::i18n::{tr, trf};
 
 /// How a row presents its control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -547,7 +548,7 @@ impl SelectionPropertyEntry {
     /// varies along it, which a stepper readout can only say briefly.
     pub fn stepper_text(&self) -> &str {
         match self.state {
-            SelectionPropertyValue::PressureVaries if !self.disabled => "Varies",
+            SelectionPropertyValue::PressureVaries if !self.disabled => tr("Varies"),
             _ => &self.value,
         }
     }
@@ -571,11 +572,11 @@ impl ShapePropertiesPanel {
             PropertiesPanelHit::Title => self.details.clone(),
             PropertiesPanelHit::Lock => Some(
                 match (self.lock, self.multiple_selection) {
-                    (PropertiesPanelLock::Locked, false) => "Unlock shape",
-                    (PropertiesPanelLock::Locked, true) => "Unlock shapes",
-                    (PropertiesPanelLock::Partial, _) => "Lock all shapes",
-                    (PropertiesPanelLock::Unlocked, false) => "Lock shape",
-                    (PropertiesPanelLock::Unlocked, true) => "Lock shapes",
+                    (PropertiesPanelLock::Locked, false) => tr("Unlock shape"),
+                    (PropertiesPanelLock::Locked, true) => tr("Unlock shapes"),
+                    (PropertiesPanelLock::Partial, _) => tr("Lock all shapes"),
+                    (PropertiesPanelLock::Unlocked, false) => tr("Lock shape"),
+                    (PropertiesPanelLock::Unlocked, true) => tr("Lock shapes"),
                 }
                 .to_string(),
             ),
@@ -584,35 +585,35 @@ impl ShapePropertiesPanel {
             }
             PropertiesPanelHit::MoreColors(row) => Some(
                 match self.entries.get(row).map(|entry| entry.kind) {
-                    Some(SelectionPropertyKind::Fill) => "More fill colors…",
-                    _ => "More colors…",
+                    Some(SelectionPropertyKind::Fill) => tr("More fill colors…"),
+                    _ => tr("More colors…"),
                 }
                 .to_string(),
             ),
-            PropertiesPanelHit::NoFill(_) => Some("No fill".to_string()),
+            PropertiesPanelHit::NoFill(_) => Some(tr("No fill").to_string()),
             PropertiesPanelHit::Action(action) => match action {
-                PanelAction::ToBack => Some("Send to back".to_string()),
-                PanelAction::Backward => Some("Send backward".to_string()),
-                PanelAction::Forward => Some("Bring forward".to_string()),
-                PanelAction::ToFront => Some("Bring to front".to_string()),
+                PanelAction::ToBack => Some(tr("Send to back").to_string()),
+                PanelAction::Backward => Some(tr("Send backward").to_string()),
+                PanelAction::Forward => Some(tr("Bring forward").to_string()),
+                PanelAction::ToFront => Some(tr("Bring to front").to_string()),
                 PanelAction::Duplicate | PanelAction::Delete => None,
                 PanelAction::SavePreset => Some(
                     if self.preset_save_mode {
-                        "Pick a slot to save into"
+                        tr("Pick a slot to save into")
                     } else {
-                        "Save the selection's style as a preset"
+                        tr("Save the selection's style as a preset")
                     }
                     .to_string(),
                 ),
                 PanelAction::Preset(slot) => Some(if self.preset_save_mode {
-                    format!("Save to preset {slot}")
+                    trf("Save to preset {}", &[&slot])
                 } else {
                     match self.actions.presets.get(slot - 1) {
                         Some(Some(preset)) => match &preset.name {
-                            Some(name) => format!("Apply preset {slot}: {name}"),
-                            None => format!("Apply preset {slot}"),
+                            Some(name) => trf("Apply preset {}: {}", &[&slot, &name]),
+                            None => trf("Apply preset {}", &[&slot]),
                         },
-                        _ => format!("Preset {slot} is empty"),
+                        _ => trf("Preset {} is empty", &[&slot]),
                     }
                 }),
             },

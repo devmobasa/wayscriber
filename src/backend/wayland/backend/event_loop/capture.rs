@@ -12,6 +12,7 @@ use crate::capture::{
     CaptureFailureKind, CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind,
 };
 use crate::config::Action;
+use crate::i18n::{tr, trf};
 use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
 use crate::notification;
 
@@ -100,7 +101,7 @@ fn handle_pending_frozen_image(state: &mut WaylandState, now: Instant) {
                     state.input_state.push_toast(
                         ToastPriority::Critical,
                         "capture",
-                        Toast::error("Freeze failed because fullscreen was not confirmed"),
+                        Toast::error(tr("Freeze failed because fullscreen was not confirmed")),
                     );
                     state.frozen.cancel(&mut state.input_state);
                 }
@@ -306,7 +307,7 @@ fn handle_frozen_toggle(state: &mut WaylandState, user_requested: bool) {
             state.input_state.push_toast(
                 ToastPriority::Info,
                 "capture",
-                Toast::warning("Freeze is unavailable because screen capture is not available."),
+                Toast::warning(tr("Freeze is unavailable because screen capture is not available.")),
             );
         }
         FrozenUserToggleAction::RequestUserFreeze => {
@@ -402,7 +403,7 @@ fn resolve_board_capture_outcome(
             state.input_state.push_toast(
                 ToastPriority::Critical,
                 "capture.region.board",
-                Toast::error("Region was not added to the board."),
+                Toast::error(tr("Region was not added to the board.")),
             );
             None
         }
@@ -439,7 +440,7 @@ fn resolve_board_capture_outcome(
             state.input_state.push_toast(
                 ToastPriority::Critical,
                 "capture.region.board",
-                Toast::error("Region was not added to the board."),
+                Toast::error(tr("Region was not added to the board.")),
             );
             None
         }
@@ -476,14 +477,14 @@ fn handle_capture_results(state: &mut WaylandState) {
                     path.display()
                 );
                 if let Some(filename) = path.file_name() {
-                    message_parts.push(format!("Saved as {}", filename.to_string_lossy()));
+                    message_parts.push(trf("Saved as {}", &[&filename.to_string_lossy()]));
                 }
             }
 
             if result.copied_to_clipboard {
                 info!("{} copied to clipboard", result.operation.saved_log_label());
                 state.input_state.note_capture_image_on_clipboard();
-                message_parts.push("Copied to clipboard".to_string());
+                message_parts.push(tr("Copied to clipboard").to_string());
             }
 
             // Handle clipboard failure with fallback option
@@ -514,13 +515,13 @@ fn handle_capture_results(state: &mut WaylandState) {
                     ToastPriority::Critical,
                     "capture",
                     Toast::error(result.operation.fallback_toast())
-                        .action("Save to file", Action::SavePendingToFile),
+                        .action(tr("Save to file"), Action::SavePendingToFile),
                 );
 
                 notification::send_notification_async(
                     &state.tokio_handle,
                     result.operation.clipboard_failure_title().to_string(),
-                    "Could not copy to clipboard. Use overlay to save to file.".to_string(),
+                    tr("Could not copy to clipboard. Use overlay to save to file.").to_string(),
                     Some("dialog-warning".to_string()),
                 );
                 // Don't set should_exit - keep overlay open for fallback action
@@ -553,14 +554,14 @@ fn handle_capture_results(state: &mut WaylandState) {
                 state.input_state.push_toast(
                     ToastPriority::Critical,
                     "capture",
-                    Toast::warning("Copied to clipboard, but the file was not saved".to_string())
-                        .action("Save to file", Action::SavePendingToFile),
+                    Toast::warning(tr("Copied to clipboard, but the file was not saved"))
+                        .action(tr("Save to file"), Action::SavePendingToFile),
                 );
 
                 notification::send_notification_async(
                     &state.tokio_handle,
                     result.operation.save_failure_title().to_string(),
-                    format!("Copied to clipboard, but the file was not saved: {save_err}"),
+                    trf("Copied to clipboard, but the file was not saved: {}", &[&save_err]),
                     Some("dialog-warning".to_string()),
                 );
                 // Don't set should_exit - keep overlay open for fallback action
@@ -569,16 +570,16 @@ fn handle_capture_results(state: &mut WaylandState) {
                 let notification_body = if message_parts.is_empty() {
                     match result.operation {
                         crate::capture::ImageOperationKind::Screenshot => {
-                            "Screenshot captured".to_string()
+                            tr("Screenshot captured").to_string()
                         }
                         crate::capture::ImageOperationKind::CanvasExport => {
-                            "Canvas exported".to_string()
+                            tr("Canvas exported").to_string()
                         }
                         crate::capture::ImageOperationKind::BoardPdfExport => {
-                            "Board exported".to_string()
+                            tr("Board exported").to_string()
                         }
                         crate::capture::ImageOperationKind::AllBoardsPdfExport => {
-                            "Boards exported".to_string()
+                            tr("Boards exported").to_string()
                         }
                     }
                 } else {
@@ -689,11 +690,11 @@ fn handle_capture_manager_failure(
 
     let message = match operation {
         Some(ImageOperationKind::Screenshot) => friendly_capture_error(CaptureFailureKind::Other),
-        Some(operation) => format!(
+        Some(operation) => trf(
             "{} failed because the capture worker stopped.",
-            operation.saved_log_label()
+            &[&operation.saved_log_label()],
         ),
-        None => "Capture services stopped unexpectedly.".to_string(),
+        None => tr("Capture services stopped unexpectedly.").to_string(),
     };
     warn!("Capture manager failure: {error}");
     state.input_state.push_toast(
@@ -705,7 +706,7 @@ fn handle_capture_manager_failure(
         &state.tokio_handle,
         operation
             .map(ImageOperationKind::failure_title)
-            .unwrap_or("Capture failed")
+            .unwrap_or(tr("Capture failed"))
             .to_string(),
         message,
         Some("dialog-error".to_string()),

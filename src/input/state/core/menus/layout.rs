@@ -5,7 +5,7 @@ use super::types::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuLayout, ContextMenuLevel, ContextMenuState,
     SubmenuSide,
 };
-use crate::ui::theme::overlay::{NAV_HINT_MENU, NAV_HINT_MENU_SUBMENUS, NAV_HINT_SUBMENU};
+use crate::ui::theme::overlay::{nav_hint_menu, nav_hint_menu_submenus, nav_hint_submenu};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 const FONT_SIZE: f64 = 14.0;
@@ -78,7 +78,7 @@ impl InputState {
         let anchor = *anchor;
         let entries = self.context_menu_entries();
         let footer_hints = context_menu_footer_hints(&entries);
-        let Some(mut root) = measure_menu(engine, &entries, footer_hints) else {
+        let Some(mut root) = measure_menu(engine, &entries, &footer_hints) else {
             self.context_menu.clear_layout();
             return;
         };
@@ -197,22 +197,23 @@ impl InputState {
 
 /// Every key hint a root menu with these entries can show in its footer.
 /// The box is sized for the widest, so opening a submenu never resizes it.
-fn context_menu_footer_hints(entries: &[ContextMenuEntry]) -> &'static [&'static str] {
+fn context_menu_footer_hints(entries: &[ContextMenuEntry]) -> [&'static str; 2] {
     if entries.iter().any(|entry| entry.submenu.is_some()) {
-        &[NAV_HINT_MENU_SUBMENUS, NAV_HINT_SUBMENU]
+        [nav_hint_menu_submenus(), nav_hint_submenu()]
     } else {
-        &[NAV_HINT_MENU]
+        let hint = nav_hint_menu();
+        [hint, hint]
     }
 }
 
 /// The key hint a root menu's footer shows right now.
 fn context_menu_footer_hint(entries: &[ContextMenuEntry], submenu_active: bool) -> &'static str {
     if submenu_active {
-        NAV_HINT_SUBMENU
+        nav_hint_submenu()
     } else if entries.iter().any(|entry| entry.submenu.is_some()) {
-        NAV_HINT_MENU_SUBMENUS
+        nav_hint_menu_submenus()
     } else {
-        NAV_HINT_MENU
+        nav_hint_menu()
     }
 }
 

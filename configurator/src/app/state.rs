@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use std::collections::HashMap;
 
 use wayscriber::config::{Config, MigrationPreview, PRESET_SLOTS_MAX};
@@ -88,19 +90,19 @@ impl ConfirmationPrompt {
     pub(crate) fn message(self) -> &'static str {
         match self {
             ConfirmationPrompt::LeaveDraft => {
-                "You have unsaved changes. Save them, discard them, or cancel to keep editing."
+                tr("You have unsaved changes. Save them, discard them, or cancel to keep editing.")
             }
             ConfirmationPrompt::DefaultsReset => {
-                "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue."
+                tr("Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.")
             }
             ConfirmationPrompt::SessionClear => {
-                "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue."
+                tr("Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue.")
             }
             ConfirmationPrompt::ShortcutResetVisible => {
-                "Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save."
+                tr("Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save.")
             }
             ConfirmationPrompt::ShortcutResetAll => {
-                "Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save."
+                tr("Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save.")
             }
         }
     }

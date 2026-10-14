@@ -1,6 +1,7 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, ContextMenuKind, MenuCommand};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 
 impl InputState {
     pub(super) fn page_context_menu_entries(&self) -> Vec<ContextMenuEntry> {
@@ -16,28 +17,25 @@ impl InputState {
 
         let mut entries = Vec::new();
         let header = if let Some(name) = page_name {
-            format!(
-                "{}: Page {} ({}/{})",
-                name, page_number, page_number, page_count
-            )
+            trf("{}: Page {} ({}/{})", &[&name, &page_number, &page_number, &page_count])
         } else {
-            format!("Page {} ({}/{})", page_number, page_number, page_count)
+            trf("Page {} ({}/{})", &[&page_number, &page_number, &page_count])
         };
         entries.push(ContextMenuEntry::new(header, None::<String>, true, None));
         entries.push(ContextMenuEntry::new(
-            "Rename Page",
+            tr("Rename Page"),
             None::<String>,
             false,
             Some(MenuCommand::PageRename),
         ));
         entries.push(ContextMenuEntry::new(
-            "Duplicate Page",
+            tr("Duplicate Page"),
             self.shortcut_for_action(Action::PageDuplicate),
             false,
             Some(MenuCommand::PageDuplicateFromContext),
         ));
         entries.push(ContextMenuEntry::new(
-            "Delete Page",
+            tr("Delete Page"),
             self.shortcut_for_action(Action::PageDelete),
             false,
             Some(MenuCommand::PageDeleteFromContext),
@@ -45,7 +43,7 @@ impl InputState {
 
         let can_move = self.boards.board_count() > 1;
         entries.push(
-            ContextMenuEntry::new("Move to Board", None::<String>, !can_move, None)
+            ContextMenuEntry::new(tr("Move to Board"), None::<String>, !can_move, None)
                 .with_submenu(ContextMenuKind::PageMove),
         );
         entries
@@ -58,7 +56,7 @@ impl InputState {
         let boards = self.boards.board_states();
         if boards.len() <= 1 {
             return vec![ContextMenuEntry::new(
-                "No other boards",
+                tr("No other boards"),
                 None::<String>,
                 true,
                 None,
@@ -81,7 +79,7 @@ impl InputState {
         }
         if entries.is_empty() {
             entries.push(ContextMenuEntry::new(
-                "No other boards",
+                tr("No other boards"),
                 None::<String>,
                 true,
                 None,

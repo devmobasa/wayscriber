@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::gtk;
 
 use gtk::prelude::*;
@@ -5,6 +7,7 @@ use gtk::prelude::*;
 use crate::models::{DaemonRuntimeStatus, ShortcutApplyCapability};
 
 use super::super::super::state::ConfiguratorApp;
+
 
 /// Emphasis for a status line, mapped to the Adwaita state classes that
 /// stand in for the Iced view's literal colors.
@@ -34,7 +37,7 @@ pub(super) fn overall_status(status: Option<&DaemonRuntimeStatus>) -> (&'static 
         None => ("Status: Detecting...", Tone::Neutral),
         Some(status) if status.service_active => ("Status: Running", Tone::Positive),
         Some(status) if status.service_installed => {
-            ("Status: Installed, not running", Tone::Caution)
+            (tr("Status: Installed, not running"), Tone::Caution)
         }
         Some(_) => ("Status: Not installed", Tone::Neutral),
     }
@@ -51,25 +54,25 @@ pub(super) fn feedback_tone(feedback: &str) -> Tone {
 
 pub(super) fn install_status(installed: bool) -> (&'static str, Tone) {
     if installed {
-        ("Installed \u{2713}", Tone::Positive)
+        (tr("Installed \u{2713}"), Tone::Positive)
     } else {
-        ("Not installed", Tone::Neutral)
+        (tr("Not installed"), Tone::Neutral)
     }
 }
 
 pub(super) fn install_button_label(installed: bool) -> &'static str {
     if installed {
-        "Update Service"
+        tr("Update Service")
     } else {
-        "Install Service"
+        tr("Install Service")
     }
 }
 
 pub(super) fn light_controls_status(configured: bool) -> (&'static str, Tone) {
     if configured {
-        ("Configured \u{2713}", Tone::Positive)
+        (tr("Configured \u{2713}"), Tone::Positive)
     } else {
-        ("Not configured", Tone::Neutral)
+        (tr("Not configured"), Tone::Neutral)
     }
 }
 
@@ -84,9 +87,9 @@ pub(super) fn service_status(running: bool, enabled: bool) -> (&'static str, Ton
 
 pub(super) fn shortcut_placeholder(capability: Option<ShortcutApplyCapability>) -> &'static str {
     match capability {
-        Some(ShortcutApplyCapability::GnomeCustomShortcut) => "e.g. Super+G or <Super>g",
-        Some(ShortcutApplyCapability::PortalServiceDropIn) => "e.g. Ctrl+Shift+G or <Ctrl><Shift>g",
-        _ => "e.g. Ctrl+Shift+G",
+        Some(ShortcutApplyCapability::GnomeCustomShortcut) => tr("e.g. Super+G or <Super>g"),
+        Some(ShortcutApplyCapability::PortalServiceDropIn) => tr("e.g. Ctrl+Shift+G or <Ctrl><Shift>g"),
+        _ => tr("e.g. Ctrl+Shift+G"),
     }
 }
 

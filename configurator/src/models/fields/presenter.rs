@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{PresenterToolBehavior, PresenterToolbarMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,9 +20,9 @@ impl PresenterToolBehaviorOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            PresenterToolBehaviorOption::Keep => "Keep active tool",
-            PresenterToolBehaviorOption::ForceHighlight => "Force highlight (switchable)",
-            PresenterToolBehaviorOption::ForceHighlightLocked => "Force highlight (locked)",
+            PresenterToolBehaviorOption::Keep => tr("Keep active tool"),
+            PresenterToolBehaviorOption::ForceHighlight => tr("Force highlight (switchable)"),
+            PresenterToolBehaviorOption::ForceHighlightLocked => tr("Force highlight (locked)"),
         }
     }
 
@@ -67,8 +69,8 @@ impl PresenterToolbarModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            PresenterToolbarModeOption::Hidden => "Hide completely",
-            PresenterToolbarModeOption::Micro => "Micro chip (top toolbar)",
+            PresenterToolbarModeOption::Hidden => tr("Hide completely"),
+            PresenterToolbarModeOption::Micro => tr("Micro chip (top toolbar)"),
         }
     }
 

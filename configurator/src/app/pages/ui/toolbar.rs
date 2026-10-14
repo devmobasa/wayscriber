@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::ComponentSender;
 
 use crate::messages::Message;
@@ -9,6 +11,7 @@ use crate::models::{
 use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder};
 use super::{note, options};
+
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (layout_modes, layout_labels) =
@@ -25,21 +28,21 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
-    page.group("Toolbar").custom(&note(
-        "These settings are configured defaults. Toolbar pin, position, display form, item visibility/order, and board pins changed in the overlay are saved separately as runtime preferences.",
+    page.group(tr("Toolbar")).custom(&note(
+        tr("These settings are configured defaults. Toolbar pin, position, display form, item visibility/order, and board pins changed in the overlay are saved separately as runtime preferences."),
     ));
 
-    page.group("Layout")
+    page.group(tr("Layout"))
         .combo_row(
-            "Layout mode",
-            "Simple: core pens. Regular: adds Shape Pen, Line, Arrow, presets. Advanced: shapes inline, multi-step undo.",
+            tr("Layout mode"),
+            tr("Simple: core pens. Regular: adds Shape Pen, Line, Arrow, presets. Advanced: shapes inline, multi-step undo."),
             layout_modes,
             layout_labels,
             |app| app.draft.ui_toolbar_layout_mode,
             Message::ToolbarLayoutModeChanged,
         )
         .combo_row(
-            "Zoom chip",
+            tr("Zoom chip"),
             "",
             zoom_chips,
             zoom_chip_labels,
@@ -47,13 +50,13 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ToolbarZoomChipDisplayChanged,
         )
         .switch_row(
-            "Show zoom chip",
+            tr("Show zoom chip"),
             "",
             |app| app.draft.ui_toolbar_show_zoom_chip,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowZoomChip, value),
         )
         .combo_row(
-            "Shortcut edit click",
+            tr("Shortcut edit click"),
             "",
             rebinds,
             rebind_labels,
@@ -61,121 +64,121 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             Message::ToolbarRebindModifierChanged,
         )
         .combo_row(
-            "Stroke controls",
-            "How the style pill shows pen smoothing and Shape Pen sensitivity. Panel: one Pen feel button opening meters with a live smoothing preview. Meters or Steppers: inline controls.",
+            tr("Stroke controls"),
+            tr("How the style pill shows pen smoothing and Shape Pen sensitivity. Panel: one Pen feel button opening meters with a live smoothing preview. Meters or Steppers: inline controls."),
             stroke_styles,
             stroke_style_labels,
             |app| app.draft.ui_toolbar_stroke_controls,
             Message::ToolbarStrokeControlsChanged,
         )
         .switch_row(
-            "Configured default: pin top toolbar",
+            tr("Configured default: pin top toolbar"),
             "",
             |app| app.draft.ui_toolbar_top_pinned,
             |value| Message::ToggleChanged(ToggleField::UiToolbarTopPinned, value),
         )
         .switch_row(
-            "Use icon-only buttons",
+            tr("Use icon-only buttons"),
             "",
             |app| app.draft.ui_toolbar_use_icons,
             |value| Message::ToggleChanged(ToggleField::UiToolbarUseIcons, value),
         )
         .switch_row(
-            "Hide toolbar when idle",
-            "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
+            tr("Hide toolbar when idle"),
+            tr("Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible."),
             |app| app.draft.ui_toolbar_idle_fade,
             |value| Message::ToggleChanged(ToggleField::UiToolbarIdleFade, value),
         );
 
-    page.group("Sections")
+    page.group(tr("Sections"))
         .switch_row(
-            "Show extended colors",
+            tr("Show extended colors"),
             "",
             |app| app.draft.ui_toolbar_show_more_colors,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowMoreColors, value),
         )
         .switch_row(
-            "Show presets",
+            tr("Show presets"),
             "",
             |app| app.draft.ui_toolbar_show_presets,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowPresets, value),
         )
         .switch_row(
-            "Show actions",
+            tr("Show actions"),
             "",
             |app| app.draft.ui_toolbar_show_actions_section,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowActionsSection, value),
         )
         .switch_row(
-            "Show zoom actions",
+            tr("Show zoom actions"),
             "",
             |app| app.draft.ui_toolbar_show_zoom_actions,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowZoomActions, value),
         )
         .switch_row(
-            "Show advanced actions",
+            tr("Show advanced actions"),
             "",
             |app| app.draft.ui_toolbar_show_actions_advanced,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowActionsAdvanced, value),
         )
         .switch_row(
-            "Show pages section",
+            tr("Show pages section"),
             "",
             |app| app.draft.ui_toolbar_show_pages_section,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowPagesSection, value),
         )
         .switch_row(
-            "Show boards section",
+            tr("Show boards section"),
             "",
             |app| app.draft.ui_toolbar_show_boards_section,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowBoardsSection, value),
         )
         .switch_row(
-            "Show multi-step undo/redo",
+            tr("Show multi-step undo/redo"),
             "",
             |app| app.draft.ui_toolbar_show_step_section,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowStepSection, value),
         )
         .switch_row(
-            "Always show text controls",
-            "Applies while the toolbar's Adapt to tool setting is off; otherwise font controls follow tools that draw text.",
+            tr("Always show text controls"),
+            tr("Applies while the toolbar's Adapt to tool setting is off; otherwise font controls follow tools that draw text."),
             |app| app.draft.ui_toolbar_show_text_controls,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowTextControls, value),
         )
         .switch_row(
-            "Show delay sliders",
+            tr("Show delay sliders"),
             "",
             |app| app.draft.ui_toolbar_show_delay_sliders,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowDelaySliders, value),
         )
         .switch_row(
-            "Show marker opacity controls",
+            tr("Show marker opacity controls"),
             "",
             |app| app.draft.ui_toolbar_show_marker_opacity_section,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowMarkerOpacitySection, value),
         )
         .switch_row(
-            "Show tool preview bubble",
+            tr("Show tool preview bubble"),
             "",
             |app| app.draft.ui_toolbar_show_tool_preview,
             |value| Message::ToggleChanged(ToggleField::UiToolbarShowToolPreview, value),
         )
         .switch_row(
-            "Show preset action toasts",
+            tr("Show preset action toasts"),
             "",
             |app| app.draft.ui_toolbar_show_preset_toasts,
             |value| Message::ToggleChanged(ToggleField::UiToolbarPresetToasts, value),
         )
         .switch_row(
-            "Force inline toolbars",
+            tr("Force inline toolbars"),
             "",
             |app| app.draft.ui_toolbar_force_inline,
             |value| Message::ToggleChanged(ToggleField::UiToolbarForceInline, value),
         );
 
-    page.group("Mode overrides").combo_row(
-        "Edit mode",
-        "Overrides below apply to the mode selected here; \"Default\" keeps the mode preset.",
+    page.group(tr("Mode overrides")).combo_row(
+        tr("Edit mode"),
+        tr("Overrides below apply to the mode selected here; \"Default\" keeps the mode preset."),
         override_modes,
         override_mode_labels,
         |app| app.override_mode,
@@ -202,19 +205,19 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         );
     }
 
-    page.group("Placement offsets")
+    page.group(tr("Placement offsets"))
         .entry_row(
-            "Top offset X (px)",
+            tr("Top offset X (px)"),
             |app| app.draft.ui_toolbar_top_offset.clone(),
             |value| Message::TextChanged(TextField::ToolbarTopOffset, value),
         )
         .entry_row(
-            "Top offset Y (px)",
+            tr("Top offset Y (px)"),
             |app| app.draft.ui_toolbar_top_offset_y.clone(),
             |value| Message::TextChanged(TextField::ToolbarTopOffsetY, value),
         )
         .custom(&note(
-            "Configured defaults. Dragging a toolbar in the overlay saves that position as a runtime preference; editing a value here takes over from the saved drag.",
+            tr("Configured defaults. Dragging a toolbar in the overlay saves that position as a runtime preference; editing a value here takes over from the saved drag."),
         ));
 
     page.finish()

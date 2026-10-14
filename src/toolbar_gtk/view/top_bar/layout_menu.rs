@@ -3,6 +3,8 @@
 //! Rows come from the shared `model::layout_menu_entries`, so this menu lists
 //! the same presets with the same wording as the built-in one.
 
+use crate::i18n::trf;
+
 use super::*;
 
 impl TopBar {
@@ -54,10 +56,10 @@ impl TopBar {
                 model::layout_mode_label(entry.mode).to_ascii_lowercase()
             ),
         );
-        row.set_tooltip_text(Some(&format!("Switch to the {} layout", entry.label)));
-        row.update_property(&[gtk4::accessible::Property::Label(&format!(
+        row.set_tooltip_text(Some(&trf("Switch to the {} layout", &[&entry.label])));
+        row.update_property(&[gtk4::accessible::Property::Label(&trf(
             "{} layout: {}",
-            entry.label, entry.description
+            &[&entry.label, &entry.description],
         ))]);
         set_active_class(&row, entry.current);
 

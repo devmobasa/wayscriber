@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::path::{Path, PathBuf};
 
 use crate::models::{
@@ -31,7 +33,7 @@ fn move_session_catalog_entry_sync(
         .iter()
         .find(|item| item.id == id)
         .cloned()
-        .ok_or_else(|| "Session is no longer in the catalog.".to_string())?;
+        .ok_or_else(|| tr("Session is no longer in the catalog.").to_string())?;
     reject_catalog_target_collision(&initial_items, id, target)?;
 
     let _reservation = reserve_inactive_session_operation(SessionCatalogOperation::Move)?;
@@ -49,7 +51,7 @@ fn move_session_catalog_entry_sync(
                     &item,
                     &outcome,
                     initial_items,
-                    "the original catalog entry disappeared before metadata could be updated"
+                    tr("the original catalog entry disappeared before metadata could be updated")
                         .to_string(),
                 );
             }
@@ -66,10 +68,13 @@ fn move_session_catalog_entry_sync(
         Ok(items) => items,
         Err(err) => {
             return Ok(SessionCatalogActionResult::warning(
-                format!(
-                    "Moved {} to {}, but failed to reload the session catalog: {err}",
-                    item.display_name,
-                    Path::new(&entry.path).display()
+                trf(
+                    "Moved {} to {}, but failed to reload the session catalog: {}",
+                    &[
+                        &item.display_name,
+                        &Path::new(&entry.path).display(),
+                        &err,
+                    ],
                 ),
                 initial_items,
             ));
@@ -77,10 +82,12 @@ fn move_session_catalog_entry_sync(
     };
 
     Ok(SessionCatalogActionResult::success(
-        format!(
+        trf(
             "Moved {} to {}.",
-            item.display_name,
-            Path::new(&entry.path).display()
+            &[
+                &item.display_name,
+                &Path::new(&entry.path).display(),
+            ],
         ),
         items,
     ))
@@ -93,16 +100,20 @@ fn rollback_moved_artifacts_after_catalog_failure(
     reason: String,
 ) -> Result<SessionCatalogActionResult, String> {
     match wayscriber::session::rollback_named_session_non_lock_artifacts_move(outcome) {
-        Ok(_) => Err(format!(
-            "Move Session failed because {reason}; rolled back moved files for {}.",
-            item.display_name
+        Ok(_) => Err(trf(
+            "Move Session failed because {}; rolled back moved files for {}.",
+            &[&reason, &item.display_name],
         )),
         Err(rollback_err) => Ok(SessionCatalogActionResult::warning(
-            format!(
-                "Moved {} to {}, but {reason}; rollback to {} also failed: {rollback_err:#}",
-                item.display_name,
-                outcome.target.display(),
-                outcome.source.display()
+            trf(
+                "Moved {} to {}, but {}; rollback to {} also failed: {}",
+                &[
+                    &item.display_name,
+                    &outcome.target.display(),
+                    &reason,
+                    &outcome.source.display(),
+                    &rollback_err,
+                ],
             ),
             initial_items,
         )),
@@ -118,9 +129,11 @@ fn reject_catalog_target_collision(
         item.id != source_id
             && wayscriber::session::catalog::session_paths_match(&item.path, target)
     }) {
-        return Err(format!(
+        return Err(trf(
             "Move Session target is already in the catalog as {}.",
-            existing.display_name
+            &[
+                &existing.display_name,
+            ],
         ));
     }
     Ok(())

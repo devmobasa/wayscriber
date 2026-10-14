@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::i18n::tr;
 use crate::input::state::{RegionPurposeTag, Toast, ToastPriority};
 use crate::input::{OutputFocusAction, ZoomAction};
 
@@ -135,7 +136,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "capture.region.refused",
-            Toast::info("Finish or cancel the current screen selection first."),
+            Toast::info(tr("Finish or cancel the current screen selection first.")),
         );
         true
     }
@@ -160,7 +161,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "measure.refused",
-            Toast::info("Finish or cancel the current screen selection first."),
+            Toast::info(tr("Finish or cancel the current screen selection first.")),
         );
         true
     }

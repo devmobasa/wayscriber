@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::config::{
     Action, QuickColorPalette, QuickColorSlot, RadialMenuMouseBinding, action_meta_iter,
 };
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::label_format::{format_binding_labels_or, join_binding_labels};
 
@@ -42,8 +43,8 @@ impl HelpOverlayBindings {
             }
         }
         let radial_menu_mouse_label = match state.radial_menu.mouse_binding() {
-            RadialMenuMouseBinding::Middle => Some("Middle Click".to_string()),
-            RadialMenuMouseBinding::Right => Some("Right Click".to_string()),
+            RadialMenuMouseBinding::Middle => Some(tr("Middle Click").to_string()),
+            RadialMenuMouseBinding::Right => Some(tr("Right Click").to_string()),
             RadialMenuMouseBinding::Disabled => None,
         };
         cache_parts.push(format!(

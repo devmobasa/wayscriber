@@ -6,6 +6,8 @@ mod text_editor;
 mod toolbar;
 mod widgets;
 
+use wayscriber::i18n::tr;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -133,7 +135,7 @@ fn conflict_banner(
         .hexpand(true)
         .build();
     let replace = gtk::Button::builder()
-        .label("Replace")
+        .label(tr("Replace"))
         .css_classes(["suggested-action"])
         .build();
     set_accessible_label(&replace, "Replace conflicting shortcuts");
@@ -145,7 +147,7 @@ fn conflict_banner(
     }
     let jump = gtk::Button::with_label("Jump to Conflict");
     set_accessible_label(&jump, "Jump to conflicting action");
-    let cancel = gtk::Button::builder().label("Cancel").build();
+    let cancel = gtk::Button::builder().label(tr("Cancel")).build();
     set_accessible_label(&cancel, "Cancel shortcut conflict");
     {
         let sender = sender.clone();
