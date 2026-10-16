@@ -214,6 +214,17 @@ impl StatusMessage {
 }
 
 impl ConfiguratorApp {
+    /// Draws the window in the draft's language.
+    ///
+    /// Every transition that replaces the draft (a successful load, Defaults,
+    /// a finished save) and a pick in the Language row call this, before they
+    /// build their status text, so that text is in the language the window is
+    /// about to draw. A transition that fails keeps the language it found.
+    /// The shell notices the change and rebuilds its pages in that language.
+    pub(crate) fn apply_draft_language(&self) {
+        wayscriber::i18n::set_language(self.draft.ui_language.to_language());
+    }
+
     /// The app as a launch with no destination.
     ///
     /// Test-only: the binary always has a parsed launch request to pass, even

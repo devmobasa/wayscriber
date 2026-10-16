@@ -66,11 +66,9 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.ui_language = option;
-        // Chrome translates through process-global state: selecting now makes
-        // surfaces built from here on (fresh dialogs, reopened windows) draw
-        // in the new language, while this window keeps its rendered labels
-        // until it is reopened.
-        wayscriber::i18n::set_language(option.to_language());
+        // A preview: the whole window redraws in the new language now, and
+        // nothing is written until Save.
+        self.apply_draft_language();
         self.refresh_dirty_flag();
         Vec::new()
     }

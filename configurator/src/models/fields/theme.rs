@@ -112,11 +112,15 @@ impl LanguageOption {
         ]
     }
 
+    /// Each language is named in itself, never translated: picking a
+    /// language previews it at once, and a user who cannot read the preview
+    /// must still recognize their own language to get back. Only the
+    /// automatic choice, which is not a language, follows the UI.
     pub fn label(&self) -> &'static str {
         match self {
             LanguageOption::Auto => tr("Automatic (system locale)"),
-            LanguageOption::English => tr("English"),
-            LanguageOption::SimplifiedChinese => tr("Simplified Chinese"),
+            LanguageOption::English => "English",
+            LanguageOption::SimplifiedChinese => "简体中文",
         }
     }
 

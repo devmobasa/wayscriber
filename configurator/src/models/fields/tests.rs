@@ -117,12 +117,26 @@ fn language_option_round_trips() {
 }
 
 #[test]
-fn language_option_labels_name_each_choice() {
-    assert_eq!(LanguageOption::Auto.label(), "Automatic (system locale)");
-    assert_eq!(LanguageOption::English.label(), "English");
-    assert_eq!(
-        LanguageOption::SimplifiedChinese.label(),
-        "Simplified Chinese"
+fn language_option_labels_name_each_language_in_itself() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::language_option_labels_name_each_language_in_itself"
+        ),
+        || {
+            use wayscriber::domain::Language;
+
+            for language in [Language::English, Language::SimplifiedChinese] {
+                wayscriber::i18n::set_language(language);
+                // The way back from a preview reads the same in every UI language.
+                assert_eq!(LanguageOption::English.label(), "English");
+                assert_eq!(LanguageOption::SimplifiedChinese.label(), "简体中文");
+                assert_eq!(
+                    LanguageOption::Auto.label(),
+                    wayscriber::i18n::tr("Automatic (system locale)")
+                );
+            }
+        },
     );
 }
 

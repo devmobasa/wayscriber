@@ -9,10 +9,10 @@ use crate::app::search::keybinding_row_visible;
 use crate::app::state::{ConfirmationPrompt, PendingConfirmation};
 use crate::models::keybindings::{
     AppendOutcome, KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind,
-    ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary, ShortcutRecorderState,
-    ShortcutTextEditor, append_binding, apply_recorded_replace, apply_text_replace,
-    next_review_conflict, normalize_button_event, normalize_key_event, other_claimants,
-    parse_keybindings, remove_binding, reset_field, reset_fields, sequence_keyboard_only_message,
+    RecorderRejection, ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary,
+    ShortcutRecorderState, ShortcutTextEditor, append_binding, apply_recorded_replace,
+    apply_text_replace, next_review_conflict, normalize_button_event, normalize_key_event,
+    other_claimants, parse_keybindings, remove_binding, reset_field, reset_fields,
     text_conflicts_for,
 };
 use crate::models::{KeybindingField, keybinding_tab};
@@ -56,12 +56,12 @@ impl ConfiguratorApp {
             return Vec::new();
         };
         match normalize_key_event(keyval, modifiers) {
-            RecordedKeyboard::Pending { preview } => {
-                recorder.apply_pending_preview(preview);
+            RecordedKeyboard::Pending { modifiers } => {
+                recorder.show_pending(modifiers);
                 Vec::new()
             }
-            RecordedKeyboard::Unsupported { message } => {
-                recorder.prompt = message;
+            RecordedKeyboard::Unsupported { reason } => {
+                recorder.reject(reason);
                 Vec::new()
             }
             RecordedKeyboard::Chord(binding) => {
@@ -88,13 +88,13 @@ impl ConfiguratorApp {
         };
         let field = recorder.field;
         match normalize_button_event(button, kind, modifiers) {
-            RecordedDevice::Unsupported { message } => {
-                recorder.prompt = message;
+            RecordedDevice::Unsupported { reason } => {
+                recorder.reject(reason);
                 Vec::new()
             }
             RecordedDevice::Trigger(trigger) => {
                 if recorder.is_sequence() {
-                    recorder.prompt = sequence_keyboard_only_message().to_string();
+                    recorder.reject(RecorderRejection::SequenceKeyboardOnly);
                     return Vec::new();
                 }
                 self.shortcuts.set_recorder(None);

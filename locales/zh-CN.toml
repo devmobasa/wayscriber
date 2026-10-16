@@ -5,6 +5,7 @@
 # stays English at runtime, and
 # `cargo test --test repository_guards translations` lists every gap.
 
+"\nBackup created at {}" = "\n已在 {} 创建备份"
 "\nConflicting shortcuts were resolved for the running session only; the file still has them: {}." = "\n冲突的快捷键已仅为本次运行时段解决，文件中仍然保留它们：{}。"
 "\nNew default shortcuts stayed inactive because this configuration already uses those keys: {}." = "\n由于此配置已占用这些按键，新默认快捷键未生效：{}。"
 "\nRetired toolbar settings were preserved but are no longer used and can be removed: {}." = "\n已停用的工具栏设置被保留，但不再使用，可以删除：{}。"
@@ -419,6 +420,7 @@
 "Config UI" = "配置界面"
 "Config {} could not be read; using defaults for it" = "无法读取配置 {}；对其使用默认值"
 "Configuration has not loaded successfully. Reload before saving." = "配置尚未成功加载。请重新加载后再保存。"
+"Configuration loaded from disk." = "已从磁盘加载配置。"
 "Configuration Not Loaded" = "配置未加载"
 "Configuration saved successfully." = "配置已成功保存。"
 "Configuration update available" = "有可用的配置更新"
@@ -449,7 +451,6 @@
 "Context menu keyboard shortcut not configured" = "未配置上下文菜单快捷键"
 "Controls" = "控制"
 "Controls first-run guidance, discovery tips, and shortcut coaching. Replay Tour still runs the first-run cards on request." = "控制首次运行引导、发现提示和快捷键教学。重放教程仍会按需运行首次运行卡片。"
-"Controls overlay UI language. \"Automatic\" follows your desktop locale." = "控制叠层界面语言。\"自动\"跟随你的桌面语言。"
 "Copied locally; selection is too large for system clipboard." = "已复制到本地；选区过大，无法放入系统剪贴板。"
 "Copied locally; system clipboard unavailable." = "已复制到本地；系统剪贴板不可用。"
 "Copied to clipboard" = "已复制到剪贴板"
@@ -716,6 +717,7 @@
 "Failed to launch configurator (see logs)." = "无法启动配置器（请查看日志）。"
 "failed to launch xdg-open: {}" = "启动 xdg-open 失败：{}"
 "Failed to load background setup status: {}" = "加载后台设置状态失败：{}"
+"Failed to load config from disk: {}" = "从磁盘加载配置失败：{}"
 "Failed to load session catalog: {}" = "加载会话目录失败：{}"
 "Failed to open About (see logs)." = "无法打开“关于”（请查看日志）。"
 "Failed to open capture folder." = "无法打开截图文件夹。"
@@ -727,6 +729,7 @@
 "Failed to remove portal shortcut drop-in {}: {}" = "移除门户快捷键 drop-in {} 失败：{}"
 "Failed to reset tool defaults" = "重置工具默认值失败"
 "failed to run {}: {}" = "运行 {} 失败：{}"
+"Failed to save configuration: {}" = "保存配置失败：{}"
 "Failed to Save Session" = "保存会话失败"
 "Failed to update Hyprland config {}: {}" = "更新 Hyprland 配置 {} 失败：{}"
 "Failed to write Hyprland light controls {}: {}" = "写入 Hyprland 灯光控制 {} 失败：{}"
@@ -1375,6 +1378,7 @@
 "Prev Profile" = "上一个配置"
 "Preview canvas" = "预览画布"
 "Preview UI" = "预览界面"
+"Previews here at once; Save keeps it. The overlay and the About window use it the next time they open, background mode after it restarts. \"Automatic\" follows your desktop locale." = "在此窗口中立即预览；点击“保存”后保留。叠层和“关于”窗口在下次打开时使用，后台模式在重启后使用。“自动”跟随你的桌面语言。"
 "Previous Board" = "上一个画板"
 "Previous board" = "上一个画板"
 "Previous Output" = "上一个输出"

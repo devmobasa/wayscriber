@@ -73,6 +73,27 @@ impl TabId {
         }
     }
 
+    /// The title in English, the source text [`Self::title`] translates.
+    /// Search matches it in every UI language.
+    pub fn source_title(&self) -> &'static str {
+        match self {
+            TabId::Drawing => "Drawing",
+            TabId::Presets => "Presets",
+            TabId::Arrow => "Arrow",
+            TabId::History => "History",
+            TabId::Performance => "Performance",
+            TabId::Ui => "UI",
+            TabId::Boards => "Boards",
+            TabId::RenderProfiles => "Render Profiles",
+            TabId::Capture => "Capture",
+            TabId::Daemon => "Background Mode",
+            TabId::Session => "Session",
+            TabId::Keybindings => "Keybindings",
+            #[cfg(feature = "tablet-input")]
+            TabId::Tablet => "Tablet",
+        }
+    }
+
     pub fn title(&self) -> &'static str {
         match self {
             TabId::Drawing => tr("Drawing"),
@@ -133,6 +154,19 @@ impl UiTabId {
         Self::ALL.into_iter().find(|tab| tab.stack_name() == name)
     }
 
+    /// The title in English; see [`TabId::source_title`].
+    pub fn source_title(&self) -> &'static str {
+        match self {
+            UiTabId::Toolbar => "Toolbar",
+            UiTabId::ToolbarVisibility => "Toolbar Visibility",
+            UiTabId::StatusBar => "Status Bar",
+            UiTabId::HelpOverlay => "Help Overlay",
+            UiTabId::ClickHighlight => "Click Highlight",
+            UiTabId::InputHud => "Input HUD",
+            UiTabId::PresenterMode => "Presenter Mode",
+        }
+    }
+
     pub fn title(&self) -> &'static str {
         match self {
             UiTabId::Toolbar => tr("Toolbar"),
@@ -190,6 +224,21 @@ impl KeybindingsTabId {
         KeybindingsTabId::Presets,
     ];
 
+    /// The title in English; see [`TabId::source_title`].
+    pub fn source_title(&self) -> &'static str {
+        match self {
+            KeybindingsTabId::General => "General",
+            KeybindingsTabId::Drawing => "Drawing",
+            KeybindingsTabId::Tools => "Tools",
+            KeybindingsTabId::Selection => "Selection",
+            KeybindingsTabId::History => "History",
+            KeybindingsTabId::Boards => "Boards",
+            KeybindingsTabId::UiModes => "UI & Modes",
+            KeybindingsTabId::CaptureView => "Capture & View",
+            KeybindingsTabId::Presets => "Presets",
+        }
+    }
+
     pub fn title(&self) -> &'static str {
         match self {
             KeybindingsTabId::General => tr("General"),
@@ -213,6 +262,20 @@ mod tests {
     use wayscriber::domain::Language;
 
     #[test]
+    fn english_titles_are_the_source_titles() {
+        // In-process tests always draw in English; see `in_language_child`.
+        for tab in TabId::ALL {
+            assert_eq!(tab.title(), tab.source_title(), "{tab:?}");
+        }
+        for tab in UiTabId::ALL {
+            assert_eq!(tab.title(), tab.source_title(), "{tab:?}");
+        }
+        for tab in KeybindingsTabId::ALL {
+            assert_eq!(tab.title(), tab.source_title(), "{tab:?}");
+        }
+    }
+
+    #[test]
     fn stack_names_are_fixed_unique_and_untranslated() {
         crate::test_env::in_language_child(
             concat!(
@@ -232,7 +295,11 @@ mod tests {
         assert_eq!(chinese.iter().collect::<BTreeSet<_>>().len(), chinese.len());
         assert!(chinese.iter().all(|name| name.is_ascii()));
         // Translated titles are what used to name the children.
-        assert_ne!(TabId::Drawing.title(), "Drawing");
+        assert!(
+            TabId::ALL
+                .iter()
+                .any(|tab| tab.title() != tab.source_title())
+        );
 
         let ui_names: BTreeSet<&str> = UiTabId::ALL.iter().map(UiTabId::stack_name).collect();
         assert_eq!(ui_names.len(), UiTabId::ALL.len());

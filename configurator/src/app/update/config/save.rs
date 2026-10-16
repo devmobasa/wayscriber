@@ -125,9 +125,10 @@ impl ConfiguratorApp {
                 // against it: an applied migration leaves nothing to propose,
                 // and an unrelated save leaves the same proposal standing.
                 self.refresh_migration_preview(&saved_document);
+                self.apply_draft_language();
                 let mut msg = tr("Configuration saved successfully.").to_string();
                 if let Some(path) = &backup {
-                    msg.push_str(&format!("\nBackup created at {}", path.display()));
+                    msg.push_str(&trf("\nBackup created at {}", &[&path.display()]));
                 }
                 let mut status = config_document_status(&saved_document, &msg);
                 let completion = self
@@ -150,7 +151,7 @@ impl ConfiguratorApp {
                 let restored = document.is_some();
                 self.document
                     .save_failed(document.map(|document| *document));
-                let mut message = format!("Failed to save configuration: {err}");
+                let mut message = trf("Failed to save configuration: {}", &[&err]);
                 if !restored {
                     message.push_str(
                         tr("\nThe loaded configuration did not come back from the failed write. Reload before saving again."),

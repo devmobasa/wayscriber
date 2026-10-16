@@ -136,9 +136,9 @@ fn catalog_layout(app: &ConfiguratorApp) -> CatalogLayout {
                 display_name: item.display_name.clone(),
                 path_label: item.path_label.clone(),
                 canonical_path_label: item.canonical_path_label.clone(),
-                created_label: item.created_label.clone(),
-                last_opened_label: item.last_opened_label.clone(),
-                last_saved_label: item.last_saved_label.clone(),
+                created_label: item.created_label(),
+                last_opened_label: item.last_opened_label(),
+                last_saved_label: item.last_saved_label(),
                 artifacts: item.artifacts.status_label(),
             })
             .collect(),

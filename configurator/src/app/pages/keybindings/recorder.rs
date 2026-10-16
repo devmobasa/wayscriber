@@ -119,9 +119,9 @@ impl RecorderPopover {
         let recording = recorder.is_some();
         set_label(
             &self.prompt,
-            recorder
-                .map(|recorder| recorder.prompt.as_str())
-                .unwrap_or(""),
+            &recorder
+                .map(ShortcutRecorderState::prompt)
+                .unwrap_or_default(),
         );
         let sequence = recorder.is_some_and(ShortcutRecorderState::is_sequence);
         set_visible(&self.finish, sequence);

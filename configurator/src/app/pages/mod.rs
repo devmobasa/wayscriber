@@ -48,6 +48,37 @@ use super::state::ConfiguratorApp;
 /// is handed cannot drift apart.
 pub(crate) type Binding = Box<dyn FnMut(&ConfiguratorApp, &AppSearchSummary)>;
 
+thread_local! {
+    static REPLACING_PAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Marks the pages as being replaced for as long as it lives.
+///
+/// A language change rebuilds every page from the model. Tearing the old
+/// pages down closes any popover they own, and a closing editor popover
+/// normally reports that as the user canceling the edit. While this guard is
+/// alive those signals are the rebuild's, not the user's, so they are not
+/// sent: the model keeps the edit, and the new page reopens it.
+pub(crate) struct ReplacingPages(());
+
+impl ReplacingPages {
+    pub(crate) fn begin() -> Self {
+        REPLACING_PAGES.with(|flag| flag.set(true));
+        Self(())
+    }
+}
+
+impl Drop for ReplacingPages {
+    fn drop(&mut self) {
+        REPLACING_PAGES.with(|flag| flag.set(false));
+    }
+}
+
+/// Whether the pages are being replaced right now; see [`ReplacingPages`].
+pub(crate) fn replacing_pages() -> bool {
+    REPLACING_PAGES.with(std::cell::Cell::get)
+}
+
 /// Writes editable text the model owns without reporting it as a user edit.
 ///
 /// Every refresh that writes a control the user can also drive goes through a

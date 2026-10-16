@@ -37,7 +37,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .combo_row(
             tr("Language"),
-            tr("Controls overlay UI language. \"Automatic\" follows your desktop locale."),
+            tr("Previews here at once; Save keeps it. The overlay and the About window use it the next time they open, background mode after it restarts. \"Automatic\" follows your desktop locale."),
             languages,
             language_labels,
             |app| app.draft.ui_language,

@@ -11,9 +11,9 @@ fn test_item(id: &str, display_name: &str) -> SessionCatalogItem {
         path: PathBuf::from(format!("/tmp/{id}.wayscriber-session")),
         path_label: format!("/tmp/{id}.wayscriber-session"),
         canonical_path_label: None,
-        created_label: "2026-01-01 10:00".to_string(),
-        last_opened_label: "Never".to_string(),
-        last_saved_label: "Never".to_string(),
+        created_at_millis: 1_767_261_600_000,
+        last_opened_at_millis: None,
+        last_saved_at_millis: None,
         artifacts: SessionArtifactSummary {
             primary_exists: true,
             backup_exists: false,
@@ -174,5 +174,31 @@ fn catalog_focus_fallback_leaves_the_tab_chain_when_busy_work_finishes() {
     assert!(
         !should_release_catalog_focus_fallback(false, false),
         "ordinary idle browsing does not add or manage a structural tab stop"
+    );
+}
+
+/// The catalog can load before the window's language is known, and the
+/// language can change while the list is up: the "Never" a card shows is
+/// chosen when the layout is drawn, and a new language rebuilds the card.
+#[test]
+fn card_labels_follow_the_language_the_list_is_drawn_in() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::card_labels_follow_the_language_the_list_is_drawn_in"
+        ),
+        || {
+            use wayscriber::domain::Language;
+            let app = app_with_items(vec![test_item("one", "First")]);
+            let english = catalog_layout(&app);
+            assert_eq!(english.items[0].last_opened_label, "Never");
+
+            wayscriber::i18n::set_language(Language::SimplifiedChinese);
+            let chinese = catalog_layout(&app);
+
+            assert_eq!(chinese.items[0].last_opened_label, "从不");
+            assert_eq!(chinese.items[0].last_saved_label, "从不");
+            assert_ne!(chinese, english, "a new language rebuilds the card");
+        },
     );
 }

@@ -39,8 +39,9 @@ static ACTIVE: AtomicU8 = AtomicU8::new(0);
 ///
 /// `Auto` resolves through the locale chain, and `WAYSCRIBER_LANGUAGE`
 /// overrides the argument entirely — a testing aid for checking a translation
-/// without editing `config.toml`. Call this once at startup, before the first
-/// surface is built.
+/// without editing `config.toml`. Each process calls this before it builds
+/// translated chrome; the configurator calls it again whenever the language
+/// of its draft changes, to preview that language.
 pub fn set_language(language: Language) {
     let active = select(language, env_var(LANGUAGE_OVERRIDE_ENV).as_deref());
 

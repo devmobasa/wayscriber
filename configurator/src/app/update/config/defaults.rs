@@ -44,6 +44,7 @@ impl ConfiguratorApp {
         self.sync_all_color_picker_hex();
         self.clear_defaults_confirmation();
         self.clear_shortcut_editing();
+        self.apply_draft_language();
         self.status = StatusMessage::info(tr("Loaded default configuration (not saved)."));
         self.refresh_dirty_flag();
         Vec::new()

@@ -254,6 +254,21 @@ internal static class DevelopmentCommands
                 }
             }
 
+            // The configurator's window rebuilds itself on a language change;
+            // its assertions launch the real component on the same display.
+            var configurator = await context.Run( Programs.DbusRunSession, [CommandLineOptions.EndOfOptions, Programs.Cargo, CommandNames.Test, CommandLineOptions.Locked, "-p",
+                RepositoryNames.ConfiguratorPackage, CommandLineOptions.AllFeatures,
+                "app::component::tests::", CommandLineOptions.EndOfOptions, CommandLineOptions.SingleTestThread, "--nocapture"], environment: environment, capture: true );
+            await context.Output.WriteAsync( configurator.StandardOutput );
+            await context.Error.WriteAsync( configurator.StandardError );
+
+            const string configuratorMarker = "EXECUTED: configurator GTK language rebuild assertions";
+            var configuratorOutput = configurator.StandardOutput + configurator.StandardError;
+            if ( !configuratorOutput.Contains( configuratorMarker, StringComparison.Ordinal ) )
+            {
+                throw new ToolException( $"GTK test output lacks marker: {configuratorMarker}" );
+            }
+
             return ExitCodes.Success;
         }
         finally

@@ -26,8 +26,11 @@ impl ConfiguratorApp {
                 self.clear_defaults_confirmation();
                 self.clear_shortcut_editing();
                 self.refresh_migration_preview(&document);
+                self.apply_draft_language();
                 self.status = match repair_warning {
-                    None => config_document_status(&document, "Configuration loaded from disk."),
+                    None => {
+                        config_document_status(&document, tr("Configuration loaded from disk."))
+                    }
                     // Valid TOML with values that did not map: the draft is
                     // the file minus those entries, not a page of defaults.
                     Some(_) if !document.section_errors().is_empty() => {
@@ -45,7 +48,7 @@ impl ConfiguratorApp {
             Err(err) => {
                 self.document.finish_load(None);
                 self.status =
-                    StatusMessage::error(format!("Failed to load config from disk: {err}"));
+                    StatusMessage::error(trf("Failed to load config from disk: {}", &[&err]));
             }
         }
 

@@ -9,9 +9,9 @@ fn session_catalog_state_replaces_items_and_inputs() {
         path: PathBuf::from("/tmp/lecture.wayscriber-session"),
         path_label: "/tmp/lecture.wayscriber-session".to_string(),
         canonical_path_label: None,
-        created_label: "now".to_string(),
-        last_opened_label: "Never".to_string(),
-        last_saved_label: "Never".to_string(),
+        created_at_millis: 1_767_261_600_000,
+        last_opened_at_millis: None,
+        last_saved_at_millis: None,
         artifacts: SessionArtifactSummary {
             primary_exists: false,
             backup_exists: false,

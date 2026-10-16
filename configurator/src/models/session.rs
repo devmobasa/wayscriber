@@ -198,6 +198,11 @@ impl SessionCatalogState {
     }
 }
 
+/// One catalog entry as the session page shows it.
+///
+/// The times are kept as times, not as text: the catalog can load before the
+/// window's language is known, and the language can change while the list is
+/// on screen, so "Never" and "Unknown" are chosen when a card is drawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionCatalogItem {
     pub id: String,
@@ -205,9 +210,9 @@ pub struct SessionCatalogItem {
     pub path: PathBuf,
     pub path_label: String,
     pub canonical_path_label: Option<String>,
-    pub created_label: String,
-    pub last_opened_label: String,
-    pub last_saved_label: String,
+    pub created_at_millis: u64,
+    pub last_opened_at_millis: Option<u64>,
+    pub last_saved_at_millis: Option<u64>,
     pub artifacts: SessionArtifactSummary,
 }
 
@@ -225,18 +230,30 @@ impl SessionCatalogItem {
             path_label: truncate_path(&path),
             path,
             canonical_path_label,
-            created_label: format_catalog_time(entry.created_at_millis),
-            last_opened_label: entry
-                .last_opened_at_millis
-                .map(format_catalog_time)
-                .unwrap_or_else(|| tr("Never").to_string()),
-            last_saved_label: entry
-                .last_saved_at_millis
-                .map(format_catalog_time)
-                .unwrap_or_else(|| tr("Never").to_string()),
+            created_at_millis: entry.created_at_millis,
+            last_opened_at_millis: entry.last_opened_at_millis,
+            last_saved_at_millis: entry.last_saved_at_millis,
             artifacts,
         })
     }
+
+    pub fn created_label(&self) -> String {
+        format_catalog_time(self.created_at_millis)
+    }
+
+    pub fn last_opened_label(&self) -> String {
+        optional_catalog_time(self.last_opened_at_millis)
+    }
+
+    pub fn last_saved_label(&self) -> String {
+        optional_catalog_time(self.last_saved_at_millis)
+    }
+}
+
+fn optional_catalog_time(epoch_millis: Option<u64>) -> String {
+    epoch_millis
+        .map(format_catalog_time)
+        .unwrap_or_else(|| tr("Never").to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

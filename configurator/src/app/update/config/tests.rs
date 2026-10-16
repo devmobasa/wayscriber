@@ -9,6 +9,8 @@ use crate::app::state::{ConfiguratorApp, StatusMessage};
 use crate::models::{ColorPickerId, KeybindingField, ToggleField};
 use crate::test_temp::TempDir;
 
+mod language;
+
 fn status_contains(status: &StatusMessage, needle: &str) -> bool {
     status.text().is_some_and(|text| text.contains(needle))
 }

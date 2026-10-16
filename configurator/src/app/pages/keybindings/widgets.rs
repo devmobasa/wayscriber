@@ -96,6 +96,11 @@ pub(super) fn field_canceled(
 ) {
     let sender = sender.clone();
     popover.connect_closed(move |_| {
+        // Closed by a page rebuild rather than by the user: the edit is
+        // still the model's, and the rebuilt page reopens it.
+        if super::super::replacing_pages() {
+            return;
+        }
         sender.input(to_message(field));
     });
 }

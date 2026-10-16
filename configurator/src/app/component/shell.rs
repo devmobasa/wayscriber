@@ -12,6 +12,25 @@ use super::super::search::AppSearchSummary;
 use super::super::state::ConfiguratorApp;
 use super::AppWidgets;
 
+/// Window chrome that outlives a language change: it is built once and
+/// retitled in place by [`retitle`], while the pages are rebuilt.
+pub(super) struct Chrome {
+    build_identity: gtk::Label,
+    content_page: adw::NavigationPage,
+    migration_apply: gtk::Button,
+    migration_dismiss: gtk::Button,
+    leave_save: gtk::Button,
+    leave_discard: gtk::Button,
+    sidebar_labels: Vec<(TabId, gtk::Label)>,
+}
+
+#[cfg(test)]
+impl Chrome {
+    pub(super) fn sidebar_labels(&self) -> &[(TabId, gtk::Label)] {
+        &self.sidebar_labels
+    }
+}
+
 pub(super) fn build(
     root: &adw::ApplicationWindow,
     sender: &ComponentSender<ConfiguratorApp>,
@@ -24,9 +43,7 @@ pub(super) fn build(
         });
     }
     // ---- Sidebar ----------------------------------------------------
-    let search_entry = gtk::SearchEntry::builder()
-        .placeholder_text(tr("Search settings"))
-        .build();
+    let search_entry = gtk::SearchEntry::new();
     {
         let sender = sender.clone();
         search_entry.connect_search_changed(move |entry| {
@@ -45,21 +62,19 @@ pub(super) fn build(
         .css_classes(["navigation-sidebar"])
         .build();
     let mut sidebar_rows = Vec::new();
+    let mut sidebar_labels = Vec::new();
     for tab in TabId::ALL {
-        let row = gtk::ListBoxRow::builder()
-            .child(
-                &gtk::Label::builder()
-                    .label(tab.title())
-                    .halign(gtk::Align::Start)
-                    .margin_top(8)
-                    .margin_bottom(8)
-                    .margin_start(6)
-                    .margin_end(6)
-                    .build(),
-            )
+        let label = gtk::Label::builder()
+            .halign(gtk::Align::Start)
+            .margin_top(8)
+            .margin_bottom(8)
+            .margin_start(6)
+            .margin_end(6)
             .build();
+        let row = gtk::ListBoxRow::builder().child(&label).build();
         sidebar.append(&row);
         sidebar_rows.push((tab, row));
+        sidebar_labels.push((tab, label));
     }
     {
         let sender = sender.clone();
@@ -86,13 +101,6 @@ pub(super) fn build(
     sidebar_box.append(&search_entry);
     sidebar_box.append(&sidebar_scroll);
     let build_identity = gtk::Label::builder()
-        .label(trf(
-            tr("Version {} · commit {}"),
-            &[
-                &wayscriber::build_info::version(),
-                &wayscriber::build_info::commit_hash(),
-            ],
-        ))
         .css_classes(["dim-label"])
         .halign(gtk::Align::Start)
         .selectable(true)
@@ -107,8 +115,8 @@ pub(super) fn build(
         .build();
 
     // ---- Header actions ---------------------------------------------
-    let window_title = adw::WindowTitle::new(tr("Wayscriber Configurator"), "");
-    let reload_button = gtk::Button::with_label(tr("Reload"));
+    let window_title = adw::WindowTitle::new("", "");
+    let reload_button = gtk::Button::new();
     {
         let sender = sender.clone();
         reload_button.connect_clicked(move |_| sender.input(Message::ReloadRequested));
@@ -118,7 +126,7 @@ pub(super) fn build(
     // button that asks steps aside for the pair that answers. All three
     // exist from the start and visibility picks between them, which is
     // what keeps a repeat of the same press from ever applying defaults.
-    let defaults_button = gtk::Button::with_label(tr("Defaults"));
+    let defaults_button = gtk::Button::new();
     {
         let sender = sender.clone();
         defaults_button.connect_clicked(move |_| {
@@ -126,7 +134,6 @@ pub(super) fn build(
         });
     }
     let defaults_confirm_button = gtk::Button::builder()
-        .label(tr("Confirm Defaults"))
         .visible(false)
         .css_classes(["destructive-action"])
         .build();
@@ -137,7 +144,6 @@ pub(super) fn build(
         });
     }
     let defaults_cancel_button = gtk::Button::builder()
-        .label(tr("Cancel"))
         .visible(false)
         .css_classes(["flat"])
         .build();
@@ -152,7 +158,7 @@ pub(super) fn build(
     defaults_box.append(&defaults_confirm_button);
     defaults_box.append(&defaults_cancel_button);
 
-    let save_button = gtk::Button::with_label(tr("Save"));
+    let save_button = gtk::Button::new();
     save_button.add_css_class("suggested-action");
     {
         let sender = sender.clone();
@@ -179,7 +185,7 @@ pub(super) fn build(
     let status_revealer = gtk::Revealer::builder().child(&status_label).build();
 
     let migration_label = gtk::Label::builder().wrap(true).xalign(0.0).build();
-    let migration_apply = gtk::Button::with_label(tr("Apply Update"));
+    let migration_apply = gtk::Button::new();
     migration_apply.add_css_class("suggested-action");
     {
         let sender = sender.clone();
@@ -187,7 +193,7 @@ pub(super) fn build(
             sender.input(Message::MigrationApplyRequested);
         });
     }
-    let migration_dismiss = gtk::Button::with_label(tr("Dismiss"));
+    let migration_dismiss = gtk::Button::new();
     {
         let sender = sender.clone();
         migration_dismiss.connect_clicked(move |_| {
@@ -216,41 +222,18 @@ pub(super) fn build(
         .transition_type(gtk::StackTransitionType::Crossfade)
         .vexpand(true)
         .build();
-    let mut bindings: Vec<Binding> = Vec::new();
-    for (tab, built) in pages::build_all(sender) {
-        stack.add_named(&built.widget, Some(pages::stack_name(tab)));
-        bindings.extend(built.bindings);
-    }
-
-    // Sidebar visibility follows the search summary.
-    {
-        let rows = sidebar_rows.clone();
-        bindings.push(Box::new(
-            move |_app: &ConfiguratorApp, summary: &AppSearchSummary| {
-                for (tab, row) in &rows {
-                    let visible = !summary.is_active() || summary.tab(*tab).is_some();
-                    if row.is_visible() != visible {
-                        row.set_visible(visible);
-                    }
-                }
-            },
-        ));
-    }
+    let bindings = install_pages(&stack, &sidebar_rows, sender);
 
     let leave_actions = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     leave_actions.set_visible(false);
     leave_actions.set_margin_start(12);
     leave_actions.set_margin_bottom(6);
-    let leave_cancel = gtk::Button::with_label(tr("Cancel"));
+    let leave_save = gtk::Button::new();
+    let leave_discard = gtk::Button::new();
+    let leave_cancel = gtk::Button::new();
     for (button, message) in [
-        (
-            gtk::Button::with_label(tr("Save changes")),
-            Message::LeaveSaveRequested,
-        ),
-        (
-            gtk::Button::with_label(tr("Discard changes")),
-            Message::LeaveDiscardRequested,
-        ),
+        (leave_save.clone(), Message::LeaveSaveRequested),
+        (leave_discard.clone(), Message::LeaveDiscardRequested),
         (leave_cancel.clone(), Message::LeaveCanceled),
     ] {
         let sender = sender.clone();
@@ -267,10 +250,7 @@ pub(super) fn build(
     let toolbar_view = adw::ToolbarView::new();
     toolbar_view.add_top_bar(&header);
     toolbar_view.set_content(Some(&content_box));
-    let content_page = adw::NavigationPage::builder()
-        .title(tr("Settings"))
-        .child(&toolbar_view)
-        .build();
+    let content_page = adw::NavigationPage::builder().child(&toolbar_view).build();
 
     let split = adw::NavigationSplitView::builder()
         .sidebar(&sidebar_page)
@@ -323,7 +303,7 @@ pub(super) fn build(
         root.add_controller(click);
     }
 
-    AppWidgets {
+    let widgets = AppWidgets {
         leave_actions,
         leave_cancel,
         root: root.clone(),
@@ -345,5 +325,85 @@ pub(super) fn build(
         search_entry,
         seen_focus_serial: 0,
         bindings,
+        language: wayscriber::i18n::language(),
+        chrome: Chrome {
+            build_identity,
+            content_page,
+            migration_apply,
+            migration_dismiss,
+            leave_save,
+            leave_discard,
+            sidebar_labels,
+        },
+    };
+    retitle(&widgets);
+
+    widgets
+}
+
+/// Builds every page into `stack` and returns their bindings, plus the one
+/// that shows only the sidebar rows a search matches.
+///
+/// The pages are the language-dependent part of the window: a language
+/// change calls this again with the old pages removed, and the next refresh
+/// writes the model's values into the new ones.
+pub(super) fn install_pages(
+    stack: &gtk::Stack,
+    sidebar_rows: &[(TabId, gtk::ListBoxRow)],
+    sender: &ComponentSender<ConfiguratorApp>,
+) -> Vec<Binding> {
+    let mut bindings: Vec<Binding> = Vec::new();
+    for (tab, built) in pages::build_all(sender) {
+        stack.add_named(&built.widget, Some(pages::stack_name(tab)));
+        bindings.extend(built.bindings);
     }
+
+    let rows = sidebar_rows.to_vec();
+    bindings.push(Box::new(
+        move |_app: &ConfiguratorApp, summary: &AppSearchSummary| {
+            for (tab, row) in &rows {
+                let visible = !summary.is_active() || summary.tab(*tab).is_some();
+                if row.is_visible() != visible {
+                    row.set_visible(visible);
+                }
+            }
+        },
+    ));
+
+    bindings
+}
+
+/// Writes every caption of the persistent chrome in the active language.
+pub(super) fn retitle(widgets: &AppWidgets) {
+    let chrome = &widgets.chrome;
+
+    widgets
+        .search_entry
+        .set_placeholder_text(Some(tr("Search settings")));
+    for (tab, label) in &chrome.sidebar_labels {
+        label.set_label(tab.title());
+    }
+    chrome.build_identity.set_label(&trf(
+        "Version {} · commit {}",
+        &[
+            &wayscriber::build_info::version(),
+            &wayscriber::build_info::commit_hash(),
+        ],
+    ));
+    widgets
+        .window_title
+        .set_title(tr("Wayscriber Configurator"));
+    widgets.reload_button.set_label(tr("Reload"));
+    widgets.defaults_button.set_label(tr("Defaults"));
+    widgets
+        .defaults_confirm_button
+        .set_label(tr("Confirm Defaults"));
+    widgets.defaults_cancel_button.set_label(tr("Cancel"));
+    widgets.save_button.set_label(tr("Save"));
+    chrome.migration_apply.set_label(tr("Apply Update"));
+    chrome.migration_dismiss.set_label(tr("Dismiss"));
+    chrome.leave_save.set_label(tr("Save changes"));
+    chrome.leave_discard.set_label(tr("Discard changes"));
+    widgets.leave_cancel.set_label(tr("Cancel"));
+    chrome.content_page.set_title(tr("Settings"));
 }

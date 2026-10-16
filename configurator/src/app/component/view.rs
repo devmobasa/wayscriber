@@ -1,4 +1,4 @@
-use relm4::{adw, gtk};
+use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
 
@@ -6,9 +6,24 @@ use wayscriber::i18n::tr;
 
 use super::super::pages;
 use super::super::state::{ConfiguratorApp, StatusMessage};
-use super::AppWidgets;
+use super::{AppWidgets, rebuild};
 
-pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
+pub(super) fn refresh(
+    app: &ConfiguratorApp,
+    widgets: &mut AppWidgets,
+    sender: &ComponentSender<ConfiguratorApp>,
+) {
+    // First, so the refresh writes into pages in the current language.
+    let rebuilt = rebuild::rebuild_if_language_changed(widgets, sender);
+
+    write_widgets(app, widgets);
+
+    if let Some(state) = rebuilt {
+        rebuild::restore(widgets, state);
+    }
+}
+
+fn write_widgets(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     // Header chrome.
     let subtitle = if app.has_unsaved_work() {
         tr("Unsaved changes")

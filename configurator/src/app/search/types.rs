@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use crate::models::{
     KeybindingField, KeybindingsTabId, SearchQuery, TabId, UiTabId, keybinding_tab,
 };
@@ -29,6 +31,50 @@ pub(crate) enum SearchArea {
     SessionCatalog,
     #[cfg(feature = "tablet-input")]
     Tablet,
+}
+
+impl SearchArea {
+    /// The section titles this area's groups show, in the current UI
+    /// language, so a search for a title as displayed finds its section.
+    /// English search terms match in every language through the term lists;
+    /// these add the translated titles on top. Keep them in step with the
+    /// group titles the pages build.
+    pub(super) fn section_titles(self) -> Vec<&'static str> {
+        match self {
+            SearchArea::DrawingColor => {
+                vec![tr("Default color"), tr("RGB color"), tr("Quick colors")]
+            }
+            SearchArea::DrawingDefaults => vec![tr("Drawing defaults")],
+            SearchArea::DrawingLaser => vec![tr("Laser pointer")],
+            SearchArea::DrawingDragTools => vec![tr("Drag tool mapping")],
+            SearchArea::DrawingFont => vec![tr("Font"), tr("Font cycle")],
+            SearchArea::PresetControls => vec![tr("Preset Slots")],
+            SearchArea::Arrow => vec![tr("Arrow Settings")],
+            SearchArea::HistoryMain => vec![tr("Delays")],
+            SearchArea::HistoryCustom => vec![tr("Custom section")],
+            SearchArea::PerformanceRendering => vec![tr("Rendering")],
+            SearchArea::PerformanceAnimations => vec![tr("Animations")],
+            SearchArea::UiGeneral => vec![tr("General UI")],
+            SearchArea::BoardsGeneral => vec![tr("Boards")],
+            SearchArea::RenderProfilesGeneral => vec![tr("Render Profiles")],
+            SearchArea::CaptureFiles => vec![tr("Capture")],
+            SearchArea::CaptureRegion => vec![tr("Region picker")],
+            SearchArea::CapturePdf => vec![tr("PDF export")],
+            SearchArea::DaemonStatus => vec![tr("Background Mode"), tr("Details")],
+            SearchArea::DaemonService => vec![
+                tr("Step 1: Install the service"),
+                tr("Step 3: Start the service"),
+            ],
+            SearchArea::DaemonShortcut => vec![tr("Step 2: Set your shortcut")],
+            SearchArea::DaemonLightControls => vec![tr("Light passthrough controls")],
+            SearchArea::SessionPersistence => {
+                vec![tr("Session Persistence"), tr("Storage"), tr("Autosave")]
+            }
+            SearchArea::SessionCatalog => vec![tr("Saved Sessions")],
+            #[cfg(feature = "tablet-input")]
+            SearchArea::Tablet => vec![tr("Stylus"), tr("Pressure")],
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
