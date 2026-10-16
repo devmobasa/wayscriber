@@ -328,7 +328,7 @@ fn the_first_lookup_merges_the_override_directory() {
         ),
         directory.path(),
         || {
-            set_language(Language::SimplifiedChinese);
+            initialize(Language::SimplifiedChinese);
 
             assert_eq!(tr("Boards"), "白板");
             assert_eq!(tr("Undo"), catalog_pairs()["Undo"]);

@@ -5,6 +5,7 @@ mod control;
 mod core;
 mod global_shortcuts;
 mod icons;
+mod language;
 mod overlay;
 pub(crate) mod protocol_v2;
 pub(crate) mod setup;

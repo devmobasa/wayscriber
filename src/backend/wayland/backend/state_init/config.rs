@@ -96,7 +96,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
     };
 
     crate::ui::anim::set_motion_enabled(config.ui.reduced_motion.motion_enabled());
-    crate::i18n::set_language(config.ui.language);
+    crate::i18n::initialize(config.ui.language);
 
     let exit_after_capture_mode = match backend_exit_mode {
         ExitAfterCaptureMode::Auto if config.capture.exit_after_capture => {

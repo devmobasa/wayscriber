@@ -48,6 +48,18 @@ pub fn set_language(language: Language) {
     log::debug!("UI language: {}", active.code());
 }
 
+/// Start-up for a process that draws translated chrome: selects the
+/// configured language and, when it draws from a catalog, loads that catalog
+/// before the first surface is built. The overlay, the daemon and the About
+/// window call this with their loaded config; the configurator previews
+/// languages instead, and prepares its catalogs from a blocking job.
+pub fn initialize(language: Language) {
+    set_language(language);
+    if self::language().catalog_code().is_some() {
+        prepare_catalogs();
+    }
+}
+
 /// The selection rule: `WAYSCRIBER_LANGUAGE` beats the configured language,
 /// which beats nothing — an explicit language is already final.
 ///

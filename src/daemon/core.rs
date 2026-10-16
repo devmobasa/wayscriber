@@ -391,6 +391,10 @@ impl Daemon {
             return Err(err);
         }
 
+        // The tray, the portal's shortcut descriptions and update notices are
+        // all drawn in the saved UI language, so it is selected before any of
+        // them starts.
+        super::language::initialize_ui_language();
         self.start_tray(visibility.clone(), action, quit_event.clone());
 
         // Update notices are independent of the tray: without it the answer
