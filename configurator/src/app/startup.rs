@@ -141,6 +141,7 @@ mod tests {
 
     /// The app as the launcher would start it, after its first config load.
     fn app_launched_with(values: &[&str]) -> (ConfiguratorApp, TempDir, std::path::PathBuf) {
+        crate::test_env::sanitize_language_environment();
         let (dir, path) = config_file();
         let (mut app, _effects) =
             ConfiguratorApp::new_app_with_startup(StartupRequest::from_args(args(values)));

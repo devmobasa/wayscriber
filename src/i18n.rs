@@ -70,6 +70,13 @@ pub fn language() -> Language {
     decode(ACTIVE.load(Ordering::Relaxed))
 }
 
+/// Puts back a language a test read from [`language`], as it was: already
+/// resolved, so neither the override nor the locale chain applies again.
+#[cfg(test)]
+pub(crate) fn restore_language(language: Language) {
+    ACTIVE.store(encode(language), Ordering::Relaxed);
+}
+
 /// Resolves a configured language to the one actually drawn.
 ///
 /// Explicit languages resolve to themselves (English is the fallback, so

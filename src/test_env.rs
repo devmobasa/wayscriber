@@ -82,6 +82,51 @@ pub(crate) fn with_scrubbed_desktop_env<T>(body: impl FnOnce() -> T) -> T {
     body()
 }
 
+/// Runs `body` in a fresh copy of this test binary whose language environment
+/// the test owns: no `WAYSCRIBER_LANGUAGE`, no locale variables, and an empty
+/// catalog override directory, so the embedded catalogs are all it reads.
+///
+/// Catalogs load once per process and the override variable beats every
+/// configured language, so a test that asserts embedded translations cannot
+/// share a process with an environment it does not control. `test_path` is
+/// `concat!(module_path!(), "::", <test name>)`.
+pub(crate) fn in_language_isolated_child(test_path: &str, body: impl FnOnce()) {
+    const CHILD_ENV: &str = "WAYSCRIBER_TEST_LANGUAGE_ISOLATED_CHILD";
+
+    if std::env::var_os(CHILD_ENV).is_some() {
+        body();
+        return;
+    }
+
+    let test_name = test_path
+        .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
+        .expect("test path starts with the crate name");
+    let locale_dir = tempfile::tempdir().expect("empty locale override directory");
+    let mut command = std::process::Command::new(std::env::current_exe().expect("test binary"));
+    command
+        .args([test_name, "--exact", "--test-threads=1"])
+        .env(CHILD_ENV, "1")
+        .env(crate::env_vars::LOCALE_DIR_ENV, locale_dir.path())
+        .env_remove(crate::env_vars::LANGUAGE_OVERRIDE_ENV);
+    for key in crate::env_vars::LOCALE_ENV_KEYS {
+        command.env_remove(key);
+    }
+
+    let output = command.output().expect("run the language-isolated child");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        output.status.success(),
+        "language-isolated child failed:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // A filter that matched nothing would pass without running the body.
+    assert!(
+        stdout.contains("1 passed;"),
+        "language-isolated child ran no test:\n{stdout}"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

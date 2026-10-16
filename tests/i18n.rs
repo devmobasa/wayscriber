@@ -9,6 +9,7 @@ use wayscriber::domain::Language;
 use wayscriber::i18n;
 
 const OVERRIDE: &str = "WAYSCRIBER_LANGUAGE";
+const LOCALE_DIR: &str = "WAYSCRIBER_LOCALE_DIR";
 
 fn set_env(name: &str, value: &str) {
     // Safe here: this test binary runs one test at a time and owns the
@@ -30,6 +31,14 @@ fn clear_language_environment() {
 #[test]
 fn configured_and_ambient_languages_select_the_catalog() {
     clear_language_environment();
+    // The catalogs load once, on the first translated lookup below: point the
+    // override directory at an empty one so the embedded entries are what
+    // this process reads, whatever the runner has installed.
+    let no_overrides = tempfile::tempdir().expect("empty override directory");
+    set_env(
+        LOCALE_DIR,
+        no_overrides.path().to_str().expect("UTF-8 temp path"),
+    );
 
     // An explicit language wins over a translated desktop.
     set_env("LANG", "zh_CN.UTF-8");

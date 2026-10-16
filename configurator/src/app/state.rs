@@ -184,6 +184,7 @@ impl ConfiguratorApp {
     /// when it is the empty one.
     #[cfg(test)]
     pub(crate) fn new_app() -> (Self, Vec<Effect>) {
+        crate::test_env::sanitize_language_environment();
         Self::new_app_with_startup(StartupRequest::default())
     }
 

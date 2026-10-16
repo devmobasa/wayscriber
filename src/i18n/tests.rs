@@ -19,16 +19,23 @@ fn english_source_strings_are_the_identity_catalog() {
 
 #[test]
 fn simplified_chinese_serves_translations() {
-    let catalog = catalog_pairs();
-    assert!(!catalog.is_empty(), "the zh-CN catalog must not be empty");
+    // Catalogs load once per process, with the runner's override directory
+    // if any; the child's is empty, so lookup serves the embedded entries.
+    crate::test_env::in_language_isolated_child(
+        concat!(module_path!(), "::simplified_chinese_serves_translations"),
+        || {
+            let catalog = catalog_pairs();
+            assert!(!catalog.is_empty(), "the zh-CN catalog must not be empty");
 
-    for (source, translation) in &catalog {
-        assert_eq!(
-            lookup(Language::SimplifiedChinese, source),
-            translation,
-            "{source:?}"
-        );
-    }
+            for (source, translation) in &catalog {
+                assert_eq!(
+                    lookup(Language::SimplifiedChinese, source),
+                    translation,
+                    "{source:?}"
+                );
+            }
+        },
+    );
 }
 
 #[test]
