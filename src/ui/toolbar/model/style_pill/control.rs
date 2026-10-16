@@ -382,11 +382,14 @@ impl StylePillControl {
             // targets the pen, the marker, or the eraser depending on what is
             // active.
             Self::Slider(StylePillSlider::Thickness) => {
-                let label = ToolContext::from_snapshot(snapshot).thickness_label;
-                Some(if label == tr("Eraser size") {
+                let context = ToolContext::from_snapshot(snapshot);
+                Some(if context.thickness_targets_eraser {
                     tr("How wide the eraser rubs out.").to_string()
                 } else {
-                    trf("{} of the next stroke you draw.", &[&label])
+                    trf(
+                        "{} of the next stroke you draw.",
+                        &[&context.thickness_label],
+                    )
                 })
             }
             // The pill shows the opacity as a swatch, so the number lives

@@ -27,6 +27,7 @@ impl ConfiguratorApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::daemon_workflow::{ActionFeedback, DaemonFeedback};
     use crate::models::{
         DesktopEnvironment, LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,
     };
@@ -72,7 +73,7 @@ mod tests {
             app.daemon
                 .feedback
                 .as_ref()
-                .map(crate::app::daemon_workflow::DaemonFeedback::text)
+                .map(DaemonFeedback::text)
                 .unwrap_or_default()
                 .contains("Background setup action failed")
         );
@@ -86,9 +87,9 @@ mod tests {
     fn status_loaded_does_not_clear_daemon_busy() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         let _ = app.handle_daemon_action_requested(DaemonAction::RestartService);
-        app.daemon.feedback = Some(crate::app::daemon_workflow::DaemonFeedback::Action(
-            "Installing/updating background service...".to_string(),
-        ));
+        app.daemon.feedback = Some(DaemonFeedback::Action(ActionFeedback::Pending(
+            DaemonAction::InstallOrUpdateService,
+        )));
         let status = test_status(DesktopEnvironment::Kde, None);
 
         app.daemon.latest_status_request_id = 9;
@@ -99,7 +100,8 @@ mod tests {
             app.daemon
                 .feedback
                 .as_ref()
-                .map(crate::app::daemon_workflow::DaemonFeedback::text),
+                .map(DaemonFeedback::text)
+                .as_deref(),
             Some("Installing/updating background service...")
         );
     }
@@ -117,7 +119,7 @@ mod tests {
             app.daemon
                 .feedback
                 .as_ref()
-                .map(crate::app::daemon_workflow::DaemonFeedback::text)
+                .map(DaemonFeedback::text)
                 .unwrap_or_default()
                 .contains("Background setup action failed: boom")
         );
@@ -145,9 +147,9 @@ mod tests {
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
         let preserved_request_id = app.daemon.latest_status_request_id;
         let _ = app.handle_daemon_action_requested(DaemonAction::RestartService);
-        app.daemon.feedback = Some(crate::app::daemon_workflow::DaemonFeedback::Action(
-            "Restarting background service...".to_string(),
-        ));
+        app.daemon.feedback = Some(DaemonFeedback::Action(ActionFeedback::Pending(
+            DaemonAction::RestartService,
+        )));
 
         let _ = app.handle_daemon_status_loaded(
             preserved_request_id,
@@ -158,7 +160,8 @@ mod tests {
             app.daemon
                 .feedback
                 .as_ref()
-                .map(crate::app::daemon_workflow::DaemonFeedback::text),
+                .map(DaemonFeedback::text)
+                .as_deref(),
             Some("Restarting background service...")
         );
     }
@@ -193,6 +196,7 @@ mod tests {
         let _ = app.handle_daemon_action_completed(Ok(DaemonActionResult {
             status: new_status.clone(),
             message: "refresh complete".to_string(),
+            partial_failure: false,
         }));
 
         let _ = app.handle_daemon_status_loaded(old_request_id, Ok(old_status));
@@ -209,8 +213,55 @@ mod tests {
             app.daemon
                 .feedback
                 .as_ref()
-                .map(crate::app::daemon_workflow::DaemonFeedback::text),
+                .map(DaemonFeedback::text)
+                .as_deref(),
             Some("refresh complete")
         );
+    }
+
+    /// The panel's styling follows the outcome the setup step reports, not
+    /// its words: a written config whose reload failed is a failure in every
+    /// language, and a plain success never is.
+    #[test]
+    fn action_outcomes_keep_their_styling() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        let outcome = |app: &mut ConfiguratorApp, result| {
+            let _ = app.handle_daemon_action_requested(DaemonAction::ApplyLightControls);
+            let _ = app.handle_daemon_action_completed(result);
+            app.daemon
+                .feedback
+                .as_ref()
+                .map(|feedback| (feedback.is_failure(), feedback.text()))
+                .expect("feedback")
+        };
+        let status = || test_status(DesktopEnvironment::Hyprland, None);
+
+        let partial = outcome(
+            &mut app,
+            Ok(DaemonActionResult {
+                status: status(),
+                message: "已写入；hyprctl 重新加载失败：compositor unavailable".to_string(),
+                partial_failure: true,
+            }),
+        );
+        let complete = outcome(
+            &mut app,
+            Ok(DaemonActionResult {
+                status: status(),
+                message: "Wrote Hyprland light controls; reloaded Hyprland".to_string(),
+                partial_failure: false,
+            }),
+        );
+        let fatal = outcome(&mut app, Err("cannot write config".to_string()));
+
+        assert_eq!(
+            partial,
+            (
+                true,
+                "已写入；hyprctl 重新加载失败：compositor unavailable".to_string()
+            )
+        );
+        assert!(!complete.0, "{complete:?}");
+        assert!(fatal.0, "{fatal:?}");
     }
 }

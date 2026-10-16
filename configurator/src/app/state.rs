@@ -108,6 +108,26 @@ impl ConfirmationPrompt {
     }
 }
 
+/// Work in progress that owns the status line until it finishes.
+///
+/// Typed for the same reason as [`ConfirmationPrompt`]: completion has to
+/// recognize its own notice in every language, and the notice re-renders when
+/// the language changes underneath it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProgressNotice {
+    LoadingConfiguration,
+    LoadingSessions,
+}
+
+impl ProgressNotice {
+    pub(crate) fn message(self) -> &'static str {
+        match self {
+            ProgressNotice::LoadingConfiguration => tr("Loading configuration..."),
+            ProgressNotice::LoadingSessions => tr("Loading sessions..."),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum StatusMessage {
     Idle,
@@ -115,6 +135,7 @@ pub(crate) enum StatusMessage {
     Success(String),
     Error(String),
     Warning(String),
+    Progress(ProgressNotice),
     Confirmation(ConfirmationPrompt),
 }
 
@@ -139,6 +160,10 @@ impl StatusMessage {
         StatusMessage::Warning(message.into())
     }
 
+    pub(crate) fn progress(notice: ProgressNotice) -> Self {
+        StatusMessage::Progress(notice)
+    }
+
     pub(crate) fn confirmation(prompt: ConfirmationPrompt) -> Self {
         StatusMessage::Confirmation(prompt)
     }
@@ -147,6 +172,13 @@ impl StatusMessage {
         matches!(self, StatusMessage::Confirmation(current) if *current == prompt)
     }
 
+    pub(crate) fn is_progress(&self, notice: ProgressNotice) -> bool {
+        matches!(self, StatusMessage::Progress(current) if *current == notice)
+    }
+
+    /// What the status strip shows. Production code renders through the view;
+    /// tests read the text directly.
+    #[cfg(test)]
     pub(crate) fn text(&self) -> Option<&str> {
         match self {
             StatusMessage::Idle => None,
@@ -154,6 +186,7 @@ impl StatusMessage {
             | StatusMessage::Success(text)
             | StatusMessage::Error(text)
             | StatusMessage::Warning(text) => Some(text.as_str()),
+            StatusMessage::Progress(notice) => Some(notice.message()),
             StatusMessage::Confirmation(prompt) => Some(prompt.message()),
         }
     }
@@ -168,6 +201,9 @@ impl StatusMessage {
             StatusMessage::Info(text)
             | StatusMessage::Success(text)
             | StatusMessage::Warning(text) => StatusMessage::warning(format!("{text}\n{note}")),
+            StatusMessage::Progress(notice) => {
+                StatusMessage::warning(format!("{}\n{note}", notice.message()))
+            }
             StatusMessage::Confirmation(prompt) => {
                 StatusMessage::warning(format!("{}\n{note}", prompt.message()))
             }
@@ -201,7 +237,7 @@ impl ConfiguratorApp {
             baseline,
             defaults,
             document: super::document_workflow::DocumentWorkflow::loading(),
-            status: StatusMessage::info("Loading configuration..."),
+            status: StatusMessage::progress(ProgressNotice::LoadingConfiguration),
             active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,

@@ -180,7 +180,7 @@ pub(super) fn assert_layout_menu_contract(regular: &ToolbarSnapshot) {
     open.layout_menu_open = true;
     let content = top.build_layout_menu_content(&open, 1.0);
     for entry in model::layout_menu_entries(open.layout_mode) {
-        let key = model::layout_mode_label(entry.mode).to_ascii_lowercase();
+        let key = model::layout_mode_id(entry.mode);
         let row = find_widget_named(content.upcast_ref(), &format!("top.layout.{key}"))
             .and_then(|widget| widget.downcast::<gtk4::Button>().ok())
             .unwrap_or_else(|| panic!("{key} row"));

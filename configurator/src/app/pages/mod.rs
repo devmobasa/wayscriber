@@ -85,7 +85,7 @@ pub(crate) struct BuiltPage {
 /// Stable `GtkStack` child name for a tab (deep links and view sync key off
 /// the model's `active_tab`, never off these strings).
 pub(crate) fn stack_name(tab: TabId) -> &'static str {
-    tab.title()
+    tab.stack_name()
 }
 
 /// Builds every page in sidebar order.

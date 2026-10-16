@@ -964,6 +964,7 @@
 "Link highlight color to current pen" = "将高亮颜色关联到当前画笔"
 "Live desktop" = "实时桌面"
 "Loaded default configuration (not saved)." = "已加载默认配置（未保存）。"
+"Loading configuration..." = "正在加载配置..."
 "Loading sessions..." = "正在加载会话..."
 "Loading system fonts…" = "正在加载系统字体…"
 "Lock" = "锁定"

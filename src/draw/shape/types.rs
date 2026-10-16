@@ -118,7 +118,19 @@ impl ArrowStyle {
     /// Every style, in the order the toolbar and cycling action step through them.
     pub const ALL: [Self; 4] = [Self::Standard, Self::Pointy, Self::Curved, Self::Double];
 
-    /// Short human-readable name for toolbars, menus, and toasts.
+    /// Stable name for identifiers, the same in every UI language; it matches
+    /// the serde spelling.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Pointy => "pointy",
+            Self::Curved => "curved",
+            Self::Double => "double",
+        }
+    }
+
+    /// Short human-readable name for toolbars, menus, and toasts. Translated;
+    /// use [`Self::id`] wherever a name must stay stable.
     pub fn label(self) -> &'static str {
         match self {
             Self::Standard => tr("Standard"),

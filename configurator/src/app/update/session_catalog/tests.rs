@@ -5,6 +5,7 @@ use crate::models::{
     DesktopEnvironment, LightShortcutApplyCapability, SessionCatalogState, ShortcutApplyCapability,
     ShortcutBackend,
 };
+use wayscriber::domain::Language;
 use wayscriber::env_vars::XDG_RUNTIME_DIR_ENV;
 
 fn catalog_item(id: &str, display_name: &str) -> SessionCatalogItem {
@@ -119,6 +120,73 @@ fn catalog_load_preserves_a_defaults_confirmation() {
     let _ = app.handle_session_catalog_loaded(Ok(vec![catalog_item("s-1", "Lecture")]));
 
     assert!(app.defaults_reset_pending());
+}
+
+#[test]
+fn a_finished_load_clears_its_notice_in_every_language() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::a_finished_load_clears_its_notice_in_every_language"
+        ),
+        || {
+            for language in [Language::English, Language::SimplifiedChinese] {
+                wayscriber::i18n::set_language(language);
+                let (mut app, _effects) = ConfiguratorApp::new_app();
+
+                let effects = app.handle_session_catalog_refresh_requested();
+                assert!(matches!(effects.as_slice(), [Effect::LoadSessionCatalog]));
+                assert_eq!(app.status.text(), Some(tr("Loading sessions...")));
+                let _ = app.handle_session_catalog_loaded(Ok(vec![catalog_item("s-1", "Lecture")]));
+
+                assert!(matches!(app.status, StatusMessage::Idle), "{language:?}");
+                assert!(!app.session_catalog.is_loading);
+            }
+        },
+    );
+}
+
+#[test]
+fn the_loading_notice_is_drawn_in_the_current_language() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::the_loading_notice_is_drawn_in_the_current_language"
+        ),
+        || {
+            let (mut app, _effects) = ConfiguratorApp::new_app();
+            let _ = app.handle_session_catalog_refresh_requested();
+            assert_eq!(app.status.text(), Some("Loading sessions..."));
+
+            wayscriber::i18n::set_language(Language::SimplifiedChinese);
+
+            assert_eq!(app.status.text(), Some("正在加载会话..."));
+        },
+    );
+}
+
+#[test]
+fn a_finished_load_keeps_newer_feedback() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_session_catalog_refresh_requested();
+    app.status = StatusMessage::warning("Saved with warnings.");
+
+    let _ = app.handle_session_catalog_loaded(Ok(Vec::new()));
+
+    assert!(matches!(app.status, StatusMessage::Warning(_)));
+    assert!(status_contains(&app.status, "Saved with warnings."));
+}
+
+#[test]
+fn a_failed_load_stops_loading_and_shows_the_error() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_session_catalog_refresh_requested();
+
+    let _ = app.handle_session_catalog_loaded(Err("catalog unreadable".to_string()));
+
+    assert!(!app.session_catalog.is_loading);
+    assert!(matches!(app.status, StatusMessage::Error(_)));
+    assert!(status_contains(&app.status, "catalog unreadable"));
 }
 
 #[test]

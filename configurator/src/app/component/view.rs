@@ -82,6 +82,7 @@ pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
         StatusMessage::Success(text) => (text.as_str(), Some("success")),
         StatusMessage::Warning(text) => (text.as_str(), Some("warning")),
         StatusMessage::Error(text) => (text.as_str(), Some("error")),
+        StatusMessage::Progress(notice) => (notice.message(), None),
         StatusMessage::Confirmation(prompt) => (prompt.message(), Some("warning")),
     };
     if widgets.status_label.text() != status_text {

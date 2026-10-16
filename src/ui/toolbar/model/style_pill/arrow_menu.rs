@@ -39,8 +39,10 @@ pub(crate) struct ArrowStyleMenuEntry {
 }
 
 impl ArrowStyleMenuEntry {
+    /// Built from the typed style: the label is translated, and an ID must
+    /// stay the same, and unique, in every language.
     pub(crate) fn id(&self) -> String {
-        format!("top.arrow-style.{}", self.label.to_ascii_lowercase())
+        format!("top.arrow-style.{}", self.style.id())
     }
 
     pub(crate) fn tooltip(&self) -> String {
@@ -108,6 +110,36 @@ mod tests {
         assert_eq!(
             entries[1].tooltip(),
             "Pointy: a dart head with a notched back"
+        );
+    }
+
+    #[test]
+    fn menu_ids_stay_english_and_unique_when_the_labels_translate() {
+        crate::test_env::in_language_isolated_child(
+            concat!(
+                module_path!(),
+                "::menu_ids_stay_english_and_unique_when_the_labels_translate"
+            ),
+            || {
+                let english = arrow_style_menu_entries(ArrowStyle::Standard);
+                crate::i18n::set_language(crate::domain::Language::SimplifiedChinese);
+                let chinese = arrow_style_menu_entries(ArrowStyle::Standard);
+
+                let ids: Vec<String> = chinese.iter().map(ArrowStyleMenuEntry::id).collect();
+                assert_eq!(
+                    ids,
+                    [
+                        "top.arrow-style.standard",
+                        "top.arrow-style.pointy",
+                        "top.arrow-style.curved",
+                        "top.arrow-style.double",
+                    ]
+                );
+                for (english, chinese) in english.iter().zip(&chinese) {
+                    assert_ne!(english.label, chinese.label, "{:?}", english.style);
+                    assert_eq!(english.id(), chinese.id());
+                }
+            },
         );
     }
 

@@ -139,3 +139,41 @@ fn write_light_controls_handles_missing_main_config() {
     assert!(!result.source_configured);
     assert!(!result.source_updated);
 }
+
+fn install_result(
+    reload_attempted: bool,
+    reload_error: Option<&str>,
+) -> HyprlandLightControlsInstallResult {
+    HyprlandLightControlsInstallResult {
+        include_path: PathBuf::from("/tmp/hypr/wayscriber-light.conf"),
+        main_config_path: PathBuf::from("/tmp/hypr/hyprland.conf"),
+        source_line: "source = /tmp/hypr/wayscriber-light.conf".to_string(),
+        source_configured: true,
+        source_updated: false,
+        reload_attempted,
+        reload_succeeded: reload_attempted && reload_error.is_none(),
+        reload_error: reload_error.map(str::to_string),
+    }
+}
+
+/// A reload that fails after the controls were written is reported as a
+/// failure beside the message, so the panel does not read the message to
+/// decide how to style it.
+#[test]
+fn a_failed_reload_after_writing_is_a_partial_failure() {
+    let failed = super::super::ActionReport::light_controls(&install_result(
+        true,
+        Some("compositor unavailable"),
+    ));
+    let reloaded = super::super::ActionReport::light_controls(&install_result(true, None));
+    let not_attempted = super::super::ActionReport::light_controls(&install_result(false, None));
+
+    assert!(failed.partial_failure);
+    assert!(
+        failed.message.contains("compositor unavailable"),
+        "{}",
+        failed.message
+    );
+    assert!(!reloaded.partial_failure);
+    assert!(!not_attempted.partial_failure);
+}

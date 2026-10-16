@@ -52,6 +52,27 @@ impl TabId {
         TabId::Arrow,
     ];
 
+    /// Fixed `GtkStack` child name. Never translated: the stack looks pages up
+    /// by this name, and the display title changes with the UI language.
+    pub fn stack_name(&self) -> &'static str {
+        match self {
+            TabId::Drawing => "drawing",
+            TabId::Presets => "presets",
+            TabId::Arrow => "arrow",
+            TabId::History => "history",
+            TabId::Performance => "performance",
+            TabId::Ui => "ui",
+            TabId::Boards => "boards",
+            TabId::RenderProfiles => "render-profiles",
+            TabId::Capture => "capture",
+            TabId::Daemon => "daemon",
+            TabId::Session => "session",
+            TabId::Keybindings => "keybindings",
+            #[cfg(feature = "tablet-input")]
+            TabId::Tablet => "tablet",
+        }
+    }
+
     pub fn title(&self) -> &'static str {
         match self {
             TabId::Drawing => tr("Drawing"),
@@ -93,6 +114,24 @@ impl UiTabId {
         UiTabId::InputHud,
         UiTabId::PresenterMode,
     ];
+
+    /// Fixed `GtkStack` child name; see [`TabId::stack_name`].
+    pub fn stack_name(&self) -> &'static str {
+        match self {
+            UiTabId::Toolbar => "toolbar",
+            UiTabId::ToolbarVisibility => "toolbar-visibility",
+            UiTabId::StatusBar => "status-bar",
+            UiTabId::HelpOverlay => "help-overlay",
+            UiTabId::ClickHighlight => "click-highlight",
+            UiTabId::InputHud => "input-hud",
+            UiTabId::PresenterMode => "presenter-mode",
+        }
+    }
+
+    /// The name a stack child reports back, as a tab.
+    pub fn from_stack_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|tab| tab.stack_name() == name)
+    }
 
     pub fn title(&self) -> &'static str {
         match self {
@@ -162,6 +201,44 @@ impl KeybindingsTabId {
             KeybindingsTabId::UiModes => tr("UI & Modes"),
             KeybindingsTabId::CaptureView => tr("Capture & View"),
             KeybindingsTabId::Presets => tr("Presets"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+    use wayscriber::domain::Language;
+
+    #[test]
+    fn stack_names_are_fixed_unique_and_untranslated() {
+        crate::test_env::in_language_child(
+            concat!(
+                module_path!(),
+                "::stack_names_are_fixed_unique_and_untranslated"
+            ),
+            stack_names_survive_translation,
+        );
+    }
+
+    fn stack_names_survive_translation() {
+        let english: Vec<&str> = TabId::ALL.iter().map(TabId::stack_name).collect();
+        wayscriber::i18n::set_language(Language::SimplifiedChinese);
+        let chinese: Vec<&str> = TabId::ALL.iter().map(TabId::stack_name).collect();
+
+        assert_eq!(english, chinese);
+        assert_eq!(chinese.iter().collect::<BTreeSet<_>>().len(), chinese.len());
+        assert!(chinese.iter().all(|name| name.is_ascii()));
+        // Translated titles are what used to name the children.
+        assert_ne!(TabId::Drawing.title(), "Drawing");
+
+        let ui_names: BTreeSet<&str> = UiTabId::ALL.iter().map(UiTabId::stack_name).collect();
+        assert_eq!(ui_names.len(), UiTabId::ALL.len());
+        for tab in UiTabId::ALL {
+            assert_eq!(UiTabId::from_stack_name(tab.stack_name()), Some(tab));
+            assert_eq!(UiTabId::from_stack_name(tab.title()), None, "{tab:?}");
         }
     }
 }

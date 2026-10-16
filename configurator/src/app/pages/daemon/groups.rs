@@ -55,14 +55,9 @@ pub(super) fn overview_group(
         set_visible(&status_row, shown_areas(summary).status);
         set_sensitive(&refresh, !app.daemon.is_busy());
 
-        match app
-            .daemon
-            .feedback
-            .as_ref()
-            .map(crate::app::daemon_workflow::DaemonFeedback::text)
-        {
+        match app.daemon.feedback.as_ref() {
             Some(feedback) => {
-                set_label(&feedback_label, feedback);
+                set_label(&feedback_label, &feedback.text());
                 apply_tone(&feedback_label, feedback_tone(feedback));
                 set_visible(&feedback_label, true);
             }

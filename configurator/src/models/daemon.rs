@@ -183,6 +183,10 @@ pub struct DaemonRuntimeStatus {
 pub struct DaemonActionResult {
     pub status: DaemonRuntimeStatus,
     pub message: String,
+    /// The action did its main work but a later step failed, such as the
+    /// Hyprland reload after the light controls were written. The panel
+    /// shows it as a failure; the message names the step.
+    pub partial_failure: bool,
 }
 
 #[cfg(test)]

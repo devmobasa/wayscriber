@@ -6,6 +6,7 @@ use gtk::prelude::*;
 
 use crate::models::{DaemonRuntimeStatus, ShortcutApplyCapability};
 
+use super::super::super::daemon_workflow::DaemonFeedback;
 use super::super::super::state::ConfiguratorApp;
 
 /// Emphasis for a status line, mapped to the Adwaita state classes that
@@ -42,9 +43,10 @@ pub(super) fn overall_status(status: Option<&DaemonRuntimeStatus>) -> (&'static 
     }
 }
 
-pub(super) fn feedback_tone(feedback: &str) -> Tone {
-    let feedback = feedback.to_ascii_lowercase();
-    if feedback.contains("failed") || feedback.contains("error") {
+/// The feedback's styling, from its outcome. The words are translated, so they
+/// are never inspected.
+pub(super) fn feedback_tone(feedback: &DaemonFeedback) -> Tone {
+    if feedback.is_failure() {
         Tone::Negative
     } else {
         Tone::Positive

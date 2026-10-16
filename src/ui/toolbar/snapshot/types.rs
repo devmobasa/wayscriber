@@ -59,6 +59,9 @@ pub struct ToolContext {
     pub tool_options_kind: ToolOptionsKind,
     /// Label for the thickness/size slider
     pub thickness_label: &'static str,
+    /// Whether the size slider sets the eraser size. Typed so callers never
+    /// compare `thickness_label`, which is translated.
+    pub thickness_targets_eraser: bool,
     /// Whether the fill toggle should be shown (for shapes)
     pub show_fill_toggle: bool,
     /// Whether the arrow labels section should be shown
@@ -105,6 +108,7 @@ impl ToolContext {
                 needs_thickness: false,
                 tool_options_kind: ToolOptionsKind::Text,
                 thickness_label: "",
+                thickness_targets_eraser: false,
                 show_fill_toggle: false,
                 show_arrow_labels: false,
                 show_step_counter: false,
@@ -130,6 +134,7 @@ impl ToolContext {
             ctx.needs_thickness = true;
             ctx.tool_options_kind = ToolOptionsKind::Eraser;
             ctx.thickness_label = tr("Eraser size");
+            ctx.thickness_targets_eraser = true;
             ctx.show_eraser_mode = true;
         }
         if snapshot.thickness_targets_marker {
@@ -158,6 +163,7 @@ impl ToolContext {
             needs_thickness: profile.needs_thickness_control(),
             tool_options_kind: tool_options_kind_from_group(profile.control_group),
             thickness_label: profile.thickness_label,
+            thickness_targets_eraser: false,
             show_fill_toggle: profile.show_fill_toggle(),
             show_arrow_labels: profile.show_arrow_labels(),
             show_step_counter: profile.show_step_counter(),
@@ -193,6 +199,7 @@ impl ToolContext {
             } else {
                 tr("Thickness")
             },
+            thickness_targets_eraser: snapshot.thickness_targets_eraser,
             show_fill_toggle: false, // Only shown contextually for shapes
             show_arrow_labels,
             show_step_counter,

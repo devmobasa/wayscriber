@@ -6,14 +6,8 @@ use crate::models::{SessionCatalogActionResult, SessionCatalogItem, SessionCatal
 
 use super::super::effects::Effect;
 use super::super::state::{
-    ConfiguratorApp, ConfirmationPrompt, PendingConfirmation, StatusMessage,
+    ConfiguratorApp, ConfirmationPrompt, PendingConfirmation, ProgressNotice, StatusMessage,
 };
-
-/// The loading status text, kept as the untranslated key the loaded handler
-/// matches on: the status strip shows [`LOADING_SESSIONS_MESSAGE`] through
-/// `tr`, and the comparison below has to keep recognizing it after the UI
-/// language changes.
-const LOADING_SESSIONS_MESSAGE: &str = "Loading sessions";
 
 impl ConfiguratorApp {
     pub(super) fn handle_session_catalog_loaded(
@@ -24,11 +18,8 @@ impl ConfiguratorApp {
             Ok(items) => {
                 self.clear_session_confirmation();
                 self.session_catalog.replace_items(items);
-                if matches!(self.status, StatusMessage::Info(_))
-                    && self
-                        .status_text()
-                        .is_some_and(|message| message.contains(LOADING_SESSIONS_MESSAGE))
-                {
+                // Only the catalog's own notice: newer feedback stays.
+                if self.status.is_progress(ProgressNotice::LoadingSessions) {
                     self.status = StatusMessage::idle();
                 }
             }
@@ -36,7 +27,7 @@ impl ConfiguratorApp {
                 self.session_catalog.is_loading = false;
                 self.session_catalog.busy = false;
                 self.status =
-                    StatusMessage::error(trf(tr("Failed to load session catalog: {}"), &[&err]));
+                    StatusMessage::error(trf("Failed to load session catalog: {}", &[&err]));
             }
         }
         Vec::new()
@@ -48,7 +39,7 @@ impl ConfiguratorApp {
         }
         self.session_catalog.is_loading = true;
         self.clear_session_confirmation();
-        self.status = StatusMessage::info(tr("Loading sessions..."));
+        self.status = StatusMessage::progress(ProgressNotice::LoadingSessions);
         vec![Effect::LoadSessionCatalog]
     }
 
@@ -272,10 +263,6 @@ impl ConfiguratorApp {
             }
         }
         Vec::new()
-    }
-
-    fn status_text(&self) -> Option<&str> {
-        self.status.text()
     }
 }
 

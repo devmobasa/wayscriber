@@ -121,15 +121,23 @@ fn overall_status_follows_service_state() {
 }
 
 #[test]
-fn feedback_tone_flags_failures() {
-    assert_eq!(
-        feedback_tone("Background setup action failed"),
-        Tone::Negative
-    );
-    assert_eq!(feedback_tone("gsettings ERROR: nope"), Tone::Negative);
-    assert_eq!(
-        feedback_tone("Background mode status loaded."),
-        Tone::Positive
+fn feedback_tone_follows_the_outcome_in_every_language() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::feedback_tone_follows_the_outcome_in_every_language"
+        ),
+        || {
+            use crate::app::daemon_workflow::{ActionFeedback, DaemonFeedback, StatusFeedback};
+            wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+            let failed = DaemonFeedback::Action(ActionFeedback::Failed("权限不足".into()));
+            let loaded = DaemonFeedback::Status(StatusFeedback::Loaded);
+
+            // Neither Chinese message spells "failed" or "error".
+            assert!(!failed.text().to_ascii_lowercase().contains("failed"));
+            assert_eq!(feedback_tone(&failed), Tone::Negative);
+            assert_eq!(feedback_tone(&loaded), Tone::Positive);
+        },
     );
 }
 

@@ -39,6 +39,11 @@ pub(super) struct HyprlandLightControlsInstallResult {
 }
 
 impl HyprlandLightControlsInstallResult {
+    /// The controls were written, but reloading Hyprland to apply them failed.
+    pub(super) fn reload_failed(&self) -> bool {
+        self.reload_attempted && !self.reload_succeeded
+    }
+
     pub(super) fn summary(&self) -> String {
         let mut parts = vec![trf(
             "Wrote Hyprland light controls to {}",

@@ -10,6 +10,16 @@ use super::control::{
     ToolbarPresentationPayload, ToolbarSegment, ToolbarSegmentedControl, ToolbarTooltip,
 };
 
+/// The preset's stable name for widget IDs: the config spelling, the same in
+/// every UI language. The label is translated, so IDs never derive from it.
+pub(crate) fn layout_mode_id(mode: ToolbarLayoutMode) -> &'static str {
+    match mode {
+        ToolbarLayoutMode::Simple => "simple",
+        ToolbarLayoutMode::Regular => "regular",
+        ToolbarLayoutMode::Advanced => "advanced",
+    }
+}
+
 /// The preset's name as the toolbar shows it.
 pub(crate) fn layout_mode_label(mode: ToolbarLayoutMode) -> &'static str {
     match mode {
@@ -153,6 +163,29 @@ mod tests {
                 assert!(!entry.description.is_empty());
             }
         }
+    }
+
+    #[test]
+    fn layout_ids_stay_english_and_unique_when_the_labels_translate() {
+        crate::test_env::in_language_isolated_child(
+            concat!(
+                module_path!(),
+                "::layout_ids_stay_english_and_unique_when_the_labels_translate"
+            ),
+            || {
+                let english = ToolbarLayoutMode::ALL.map(layout_mode_label);
+                crate::i18n::set_language(crate::domain::Language::SimplifiedChinese);
+                let chinese = ToolbarLayoutMode::ALL.map(layout_mode_label);
+
+                assert_eq!(
+                    ToolbarLayoutMode::ALL.map(layout_mode_id),
+                    ["simple", "regular", "advanced"]
+                );
+                for (english, chinese) in english.iter().zip(&chinese) {
+                    assert_ne!(english, chinese);
+                }
+            },
+        );
     }
 
     /// Descriptions must stay one line at the menu's width in both frontends.

@@ -35,7 +35,7 @@ pub(crate) use event_policy::{
 #[allow(unused_imports)]
 pub(crate) use header::{
     LAYOUT_MENU_PAD, LAYOUT_MENU_ROW_GAP, LAYOUT_MENU_ROW_H, LAYOUT_MENU_ROW_W, LayoutMenuEntry,
-    layout_menu_entries, layout_mode_control, layout_mode_label,
+    layout_menu_entries, layout_mode_control, layout_mode_id, layout_mode_label,
 };
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};

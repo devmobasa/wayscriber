@@ -51,10 +51,7 @@ impl TopBar {
         );
         set_semantic_widget_id(
             &row,
-            &format!(
-                "top.layout.{}",
-                model::layout_mode_label(entry.mode).to_ascii_lowercase()
-            ),
+            &format!("top.layout.{}", model::layout_mode_id(entry.mode)),
         );
         row.set_tooltip_text(Some(&trf("Switch to the {} layout", &[&entry.label])));
         row.update_property(&[gtk4::accessible::Property::Label(&trf(
