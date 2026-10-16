@@ -91,6 +91,17 @@ pub(crate) fn with_scrubbed_desktop_env<T>(body: impl FnOnce() -> T) -> T {
 /// share a process with an environment it does not control. `test_path` is
 /// `concat!(module_path!(), "::", <test name>)`.
 pub(crate) fn in_language_isolated_child(test_path: &str, body: impl FnOnce()) {
+    let empty = tempfile::tempdir().expect("empty locale override directory");
+    in_language_isolated_child_with_overrides(test_path, empty.path(), body);
+}
+
+/// [`in_language_isolated_child`], with `locale_dir` as the child's catalog
+/// override directory.
+pub(crate) fn in_language_isolated_child_with_overrides(
+    test_path: &str,
+    locale_dir: &std::path::Path,
+    body: impl FnOnce(),
+) {
     const CHILD_ENV: &str = "WAYSCRIBER_TEST_LANGUAGE_ISOLATED_CHILD";
 
     if std::env::var_os(CHILD_ENV).is_some() {
@@ -101,12 +112,11 @@ pub(crate) fn in_language_isolated_child(test_path: &str, body: impl FnOnce()) {
     let test_name = test_path
         .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
         .expect("test path starts with the crate name");
-    let locale_dir = tempfile::tempdir().expect("empty locale override directory");
     let mut command = std::process::Command::new(std::env::current_exe().expect("test binary"));
     command
         .args([test_name, "--exact", "--test-threads=1"])
         .env(CHILD_ENV, "1")
-        .env(crate::env_vars::LOCALE_DIR_ENV, locale_dir.path())
+        .env(crate::env_vars::LOCALE_DIR_ENV, locale_dir)
         .env_remove(crate::env_vars::LANGUAGE_OVERRIDE_ENV);
     for key in crate::env_vars::LOCALE_ENV_KEYS {
         command.env_remove(key);

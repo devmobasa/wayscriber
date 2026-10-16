@@ -345,3 +345,51 @@ fn toolbar_item_definitions_are_unique_parseable_and_labeled() {
         );
     }
 }
+
+#[test]
+fn each_language_keeps_one_table_with_the_same_items() {
+    crate::test_env::in_language_isolated_child(
+        concat!(
+            module_path!(),
+            "::each_language_keeps_one_table_with_the_same_items"
+        ),
+        || {
+            use super::definitions::toolbar_item_definitions_in;
+            use crate::domain::Language;
+
+            let english = toolbar_item_definitions_in(Language::English);
+            let chinese = toolbar_item_definitions_in(Language::SimplifiedChinese);
+
+            // Switching back and forth reuses each language's table.
+            for language in [
+                Language::SimplifiedChinese,
+                Language::English,
+                Language::SimplifiedChinese,
+                Language::English,
+            ] {
+                crate::i18n::set_language(language);
+                let expected = match language {
+                    Language::SimplifiedChinese => chinese,
+                    _ => english,
+                };
+                assert!(std::ptr::eq(toolbar_item_definitions(), expected));
+            }
+
+            assert_eq!(english.len(), chinese.len());
+            for (english, chinese) in english.iter().zip(chinese) {
+                assert_eq!(
+                    (english.id, english.surface, english.category, english.group),
+                    (chinese.id, chinese.surface, chinese.category, chinese.group)
+                );
+            }
+            let drag = |table: &[ToolbarItemDefinition]| {
+                table
+                    .iter()
+                    .find(|definition| definition.id == ids::TOP_CHROME_DRAG)
+                    .map(|definition| definition.label)
+            };
+            assert_eq!(drag(english), Some("Move top toolbar"));
+            assert_eq!(drag(chinese), Some("移动顶部工具栏"));
+        },
+    );
+}

@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::{Display, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -171,9 +171,11 @@ pub fn tr(source: &'static str) -> &'static str {
     lookup(language(), source)
 }
 
-/// The lookup [`tr`] performs, split out so tests can exercise a language
-/// without moving the process-global selection.
-fn lookup(language: Language, source: &str) -> &str {
+/// The lookup [`tr`] performs, for a language the caller names instead of the
+/// process-global one. Tables built for one language use it so they never mix
+/// two; bind it to a local named `tr` so the catalog guard still reads each
+/// literal.
+pub(crate) fn lookup(language: Language, source: &str) -> &str {
     let Some(catalog) = language.catalog_code().and_then(catalog) else {
         return source;
     };
@@ -239,20 +241,26 @@ fn active_catalog() -> Option<&'static Catalog> {
     language().catalog_code().and_then(catalog)
 }
 
+/// Loads every catalog and its user override now, instead of on the first
+/// translated lookup.
+///
+/// Reading an override is file I/O. A process calls this where that is
+/// acceptable, before it draws translated chrome: the overlay, daemon and
+/// About window at startup, the configurator from its blocking load job. A
+/// lookup before that still loads the catalogs itself, as a fallback.
+pub fn prepare_catalogs() {
+    let _ = catalogs();
+}
+
 /// The embedded catalogs, each merged with its user override, built once.
 fn catalogs() -> &'static [(&'static str, Catalog)] {
     static CATALOGS: OnceLock<Vec<(&'static str, Catalog)>> = OnceLock::new();
 
     CATALOGS.get_or_init(|| {
+        let directory = locale_dir();
         EMBEDDED_CATALOGS
             .iter()
-            .map(|(code, source)| {
-                let mut catalog = parse_catalog(source, code);
-                if let Some(overrides) = read_user_catalog(code) {
-                    catalog.extend(parse_catalog(&overrides, code));
-                }
-                (*code, catalog)
-            })
+            .map(|(code, source)| (*code, load_catalog(code, source, directory.as_deref())))
             .collect()
     })
 }
@@ -262,6 +270,47 @@ fn catalog(code: &str) -> Option<&'static Catalog> {
         .iter()
         .find(|(entry, _)| *entry == code)
         .map(|(_, catalog)| catalog)
+}
+
+/// One embedded catalog with the override `directory` holds for it merged
+/// over it. A rejected override, or a rejected entry in one, leaves the
+/// embedded entries in place.
+fn load_catalog(code: &str, embedded: &str, directory: Option<&Path>) -> Catalog {
+    let mut catalog = parse_catalog(embedded, code);
+    let Some(directory) = directory else {
+        return catalog;
+    };
+
+    let path = directory.join(format!("{code}.toml"));
+    let source = match read_override(&path) {
+        Ok(source) => source,
+        Err(OverrideRejection::Missing) => return catalog,
+        Err(rejection) => {
+            log::warn!("Locale override {} ignored: {rejection}", path.display());
+            return catalog;
+        }
+    };
+
+    let mut overrides = parse_catalog(&source, code);
+    let malformed: Vec<String> = overrides
+        .iter()
+        .filter(|(key, value)| key.matches("{}").count() != value.matches("{}").count())
+        .map(|(key, _)| key.clone())
+        .collect();
+    if !malformed.is_empty() {
+        log::warn!(
+            "Locale override {} keeps the embedded text for {} entries whose {{}} placeholders \
+             do not match their key, such as {:?}",
+            path.display(),
+            malformed.len(),
+            malformed[0]
+        );
+        overrides.retain(|key, _| !malformed.contains(key));
+    }
+    log::debug!("Locale override loaded from {}", path.display());
+    catalog.extend(overrides);
+
+    catalog
 }
 
 fn parse_catalog(source: &str, code: &str) -> Catalog {
@@ -276,22 +325,65 @@ fn parse_catalog(source: &str, code: &str) -> Catalog {
     }
 }
 
-fn read_user_catalog(code: &str) -> Option<String> {
-    let path = locale_dir()?.join(format!("{code}.toml"));
-    match std::fs::read_to_string(&path) {
-        Ok(source) => {
-            log::debug!("Locale override loaded from {}", path.display());
-            Some(source)
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
-        Err(err) => {
-            log::warn!(
-                "Locale override {} could not be read: {err}",
-                path.display()
-            );
-            None
+/// The largest override read. The embedded Chinese catalog is about 140 KB.
+const MAX_OVERRIDE_BYTES: u64 = 1024 * 1024;
+
+/// Why an override file was not used.
+#[derive(Debug)]
+enum OverrideRejection {
+    Missing,
+    SymbolicLink,
+    NotARegularFile,
+    TooLarge,
+    InvalidUtf8,
+    Unreadable(std::io::Error),
+}
+
+impl std::fmt::Display for OverrideRejection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Missing => formatter.write_str("no such file"),
+            Self::SymbolicLink => formatter.write_str("it is a symbolic link"),
+            Self::NotARegularFile => formatter.write_str("it is not a regular file"),
+            Self::TooLarge => write!(formatter, "it is larger than {MAX_OVERRIDE_BYTES} bytes"),
+            Self::InvalidUtf8 => formatter.write_str("it is not UTF-8"),
+            Self::Unreadable(err) => write!(formatter, "{err}"),
         }
     }
+}
+
+/// Reads one override file, refusing anything but a bounded regular file.
+///
+/// The open does not follow a symlink and does not block, so a FIFO cannot
+/// stall the first translated frame. The checks run on the opened descriptor,
+/// so the file cannot be swapped between a check and the read.
+fn read_override(path: &Path) -> Result<String, OverrideRejection> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|err| match err.raw_os_error() {
+            _ if err.kind() == std::io::ErrorKind::NotFound => OverrideRejection::Missing,
+            Some(libc::ELOOP) => OverrideRejection::SymbolicLink,
+            _ => OverrideRejection::Unreadable(err),
+        })?;
+    let metadata = file.metadata().map_err(OverrideRejection::Unreadable)?;
+    if !metadata.is_file() {
+        return Err(OverrideRejection::NotARegularFile);
+    }
+
+    let mut bytes = Vec::new();
+    file.take(MAX_OVERRIDE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(OverrideRejection::Unreadable)?;
+    if bytes.len() as u64 > MAX_OVERRIDE_BYTES {
+        return Err(OverrideRejection::TooLarge);
+    }
+
+    String::from_utf8(bytes).map_err(|_| OverrideRejection::InvalidUtf8)
 }
 
 fn locale_dir() -> Option<PathBuf> {

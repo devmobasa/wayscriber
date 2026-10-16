@@ -1,31 +1,35 @@
-use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use super::*;
 
-use crate::i18n::tr;
+use crate::domain::Language;
 
+/// The toolbar items, labeled in the active UI language.
 pub fn toolbar_item_definitions() -> &'static [ToolbarItemDefinition] {
-    static CACHE: Mutex<Option<(crate::domain::Language, &'static [ToolbarItemDefinition])>> =
-        Mutex::new(None);
-
-    let language = crate::i18n::language();
-    let mut cache = match CACHE.lock() {
-        Ok(cache) => cache,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    if let Some((cached, definitions)) = *cache
-        && cached == language
-    {
-        return definitions;
-    }
-
-    let definitions: &'static [ToolbarItemDefinition] =
-        Box::leak(build_toolbar_item_definitions().into_boxed_slice());
-    *cache = Some((language, definitions));
-    definitions
+    toolbar_item_definitions_in(crate::i18n::language())
 }
 
-fn build_toolbar_item_definitions() -> Vec<ToolbarItemDefinition> {
+/// One table per supported language, built on first use and kept for the
+/// process: switching languages back and forth reuses the tables instead of
+/// building new ones.
+pub(crate) fn toolbar_item_definitions_in(language: Language) -> &'static [ToolbarItemDefinition] {
+    static ENGLISH: OnceLock<Vec<ToolbarItemDefinition>> = OnceLock::new();
+    static SIMPLIFIED_CHINESE: OnceLock<Vec<ToolbarItemDefinition>> = OnceLock::new();
+
+    let (table, language) = match language {
+        Language::Auto | Language::English => (&ENGLISH, Language::English),
+        Language::SimplifiedChinese => (&SIMPLIFIED_CHINESE, Language::SimplifiedChinese),
+    };
+
+    table.get_or_init(|| build_toolbar_item_definitions(language))
+}
+
+/// Every label comes from `language`, captured once, so a table never mixes
+/// two languages even when the active language changes while it is built.
+fn build_toolbar_item_definitions(language: Language) -> Vec<ToolbarItemDefinition> {
+    // Named `tr` so each label keeps the spelling the catalog guard reads.
+    let tr = |source: &'static str| crate::i18n::lookup(language, source);
+
     vec![
         item(
             ids::TOP_CHROME_DRAG,

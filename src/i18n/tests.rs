@@ -193,3 +193,145 @@ fn catalog_entries_are_translated_and_non_empty() {
         );
     }
 }
+
+/// The embedded catalog with whatever `contents` an override file holds.
+fn with_override(contents: &[u8]) -> Catalog {
+    let directory = tempfile::tempdir().expect("override directory");
+    std::fs::write(directory.path().join("zh-CN.toml"), contents).expect("write override");
+
+    load_catalog("zh-CN", SIMPLIFIED_CHINESE_CATALOG, Some(directory.path()))
+}
+
+#[test]
+fn a_valid_override_replaces_only_its_entries() {
+    let embedded = catalog_pairs();
+
+    let catalog = with_override("\"Boards\" = \"白板\"\n".as_bytes());
+
+    assert_eq!(catalog.get("Boards").map(String::as_str), Some("白板"));
+    assert_eq!(catalog.len(), embedded.len());
+    assert_eq!(catalog.get("Undo"), embedded.get("Undo"));
+}
+
+#[test]
+fn without_an_override_the_embedded_catalog_is_used() {
+    let embedded = catalog_pairs();
+    let empty = tempfile::tempdir().expect("override directory");
+
+    assert_eq!(
+        load_catalog("zh-CN", SIMPLIFIED_CHINESE_CATALOG, Some(empty.path())),
+        embedded
+    );
+    assert_eq!(
+        load_catalog("zh-CN", SIMPLIFIED_CHINESE_CATALOG, None),
+        embedded
+    );
+}
+
+#[test]
+fn a_rejected_override_keeps_the_embedded_entries() {
+    let embedded = catalog_pairs();
+    let mut oversize = b"\"Boards\" = \"".to_vec();
+    oversize.resize(MAX_OVERRIDE_BYTES as usize + 1, b'x');
+    oversize.extend_from_slice(b"\"\n");
+
+    for (case, contents) in [
+        ("malformed TOML", b"\"Boards\" = \n".to_vec()),
+        ("invalid UTF-8", b"\"Boards\" = \"\xff\"\n".to_vec()),
+        ("oversize", oversize),
+    ] {
+        assert_eq!(with_override(&contents), embedded, "{case}");
+    }
+}
+
+#[test]
+fn an_override_entry_that_changes_its_placeholders_is_dropped() {
+    let embedded = catalog_pairs();
+    const KEY: &str = "Background setup action failed: {}";
+    assert!(embedded.contains_key(KEY));
+
+    let catalog =
+        with_override(format!("\"{KEY}\" = \"失败\"\n\"Boards\" = \"白板\"\n").as_bytes());
+
+    assert_eq!(catalog.get(KEY), embedded.get(KEY));
+    assert_eq!(catalog.get("Boards").map(String::as_str), Some("白板"));
+}
+
+#[test]
+fn an_override_that_is_too_large_is_refused_after_a_bounded_read() {
+    let directory = tempfile::tempdir().expect("override directory");
+    let path = directory.path().join("zh-CN.toml");
+    std::fs::write(&path, vec![b'#'; MAX_OVERRIDE_BYTES as usize + 1]).expect("write");
+
+    assert!(matches!(
+        read_override(&path),
+        Err(OverrideRejection::TooLarge)
+    ));
+
+    std::fs::write(&path, vec![b'#'; MAX_OVERRIDE_BYTES as usize]).expect("write");
+    assert!(read_override(&path).is_ok(), "the limit itself is allowed");
+}
+
+#[test]
+fn a_symlinked_override_is_refused() {
+    let directory = tempfile::tempdir().expect("override directory");
+    let target = directory.path().join("real.toml");
+    std::fs::write(&target, "\"Boards\" = \"白板\"\n").expect("write target");
+    std::os::unix::fs::symlink(&target, directory.path().join("zh-CN.toml")).expect("symlink");
+
+    assert!(matches!(
+        read_override(&directory.path().join("zh-CN.toml")),
+        Err(OverrideRejection::SymbolicLink)
+    ));
+    assert_eq!(
+        load_catalog("zh-CN", SIMPLIFIED_CHINESE_CATALOG, Some(directory.path())),
+        catalog_pairs()
+    );
+}
+
+#[test]
+fn a_fifo_override_is_refused_without_waiting_for_a_writer() {
+    let directory = tempfile::tempdir().expect("override directory");
+    let path = directory.path().join("zh-CN.toml");
+    let raw_path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).expect("path");
+    // SAFETY: `raw_path` is a valid NUL-terminated path for the call.
+    assert_eq!(unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) }, 0);
+
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(matches!(
+            read_override(&path),
+            Err(OverrideRejection::NotARegularFile)
+        ));
+    });
+
+    // No process ever opens the write end, so a blocking open never returns.
+    let refused = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("reading a FIFO override must not block");
+    assert!(refused);
+}
+
+#[test]
+fn the_first_lookup_merges_the_override_directory() {
+    let directory = tempfile::tempdir().expect("override directory");
+    std::fs::write(
+        directory.path().join("zh-CN.toml"),
+        "\"Boards\" = \"白板\"\n",
+    )
+    .expect("write override");
+
+    crate::test_env::in_language_isolated_child_with_overrides(
+        concat!(
+            module_path!(),
+            "::the_first_lookup_merges_the_override_directory"
+        ),
+        directory.path(),
+        || {
+            set_language(Language::SimplifiedChinese);
+
+            assert_eq!(tr("Boards"), "白板");
+            assert_eq!(tr("Undo"), catalog_pairs()["Undo"]);
+        },
+    );
+}
