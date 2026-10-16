@@ -9,8 +9,6 @@ use std::path::Path;
 const CAPTURE_FEEDBACK_KEY: &str = "capture.feedback";
 /// Toasts that offer buttons stay up long enough to reach them.
 const CAPTURE_ACTIONS_DURATION_MS: u64 = 8000;
-/// Shown once the capture path reaches the clipboard.
-const PATH_COPIED_MESSAGE: &str = "Path copied";
 
 impl InputState {
     /// Announce a finished capture: the saved file's name (never its full
@@ -52,7 +50,7 @@ impl InputState {
         Some(TextClipboardRequest {
             text: path.display().to_string(),
             cut: None,
-            confirmation: Some(tr(PATH_COPIED_MESSAGE)),
+            confirmation: Some(tr("Path copied")),
         })
     }
 }
@@ -173,7 +171,7 @@ mod tests {
             .expect("copy request");
         assert_eq!(request.text, SAVED);
         assert!(request.cut.is_none());
-        assert_eq!(request.confirmation, Some(PATH_COPIED_MESSAGE));
+        assert_eq!(request.confirmation, Some("Path copied"));
     }
 
     #[test]

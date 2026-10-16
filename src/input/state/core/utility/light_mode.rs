@@ -136,11 +136,11 @@ impl InputState {
 
         self.cancel_active_interaction_with(resources.measurer);
         self.modes.set_light_drawing(drawing);
-        let message = tr(if drawing {
-            "Light Mode drawing"
+        let message = if drawing {
+            tr("Light Mode drawing")
         } else {
-            "Light Mode passthrough"
-        });
+            tr("Light Mode passthrough")
+        };
         self.push_toast(ToastPriority::Info, "light_mode", Toast::info(message));
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -219,11 +219,11 @@ impl InputState {
         }
 
         self.modes.begin_light(drawing, restore);
-        let message = tr(if drawing {
-            "Light Mode drawing"
+        let message = if drawing {
+            tr("Light Mode drawing")
         } else {
-            "Light Mode passthrough"
-        });
+            tr("Light Mode passthrough")
+        };
         self.push_toast(
             ToastPriority::Action,
             "light_mode",

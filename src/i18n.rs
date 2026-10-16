@@ -197,8 +197,11 @@ pub(crate) fn lookup(language: Language, source: &str) -> &str {
 
 /// Translates `source` and substitutes each `{}` with the next argument.
 ///
-/// Placeholders are positional, so a catalog may reorder the sentence around
-/// them. Missing arguments leave `{}` in place; extra arguments are ignored.
+/// Arguments fill the placeholders in order: the first `{}` in the translated
+/// text always receives the first argument. A translation can place its
+/// placeholders anywhere in the sentence but cannot swap two values, and only
+/// anonymous `{}` is supported; `{name}` and `{0}` stay literal. Missing
+/// arguments leave `{}` in place; extra arguments are ignored.
 pub fn trf(source: &'static str, args: &[&dyn Display]) -> String {
     substitute(tr(source), args)
 }

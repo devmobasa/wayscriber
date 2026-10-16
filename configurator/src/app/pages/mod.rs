@@ -30,7 +30,7 @@ use relm4::{adw, gtk};
 use adw::prelude::*;
 use gtk::glib::SignalHandlerId;
 
-use wayscriber::i18n::{tr, trf};
+use wayscriber::i18n::trf;
 
 use crate::messages::Message;
 use crate::models::TabId;
@@ -120,7 +120,7 @@ pub(crate) fn validate_u32_range(value: &str, min: u32, max: u32) -> Option<Stri
     match value.trim().parse::<u32>() {
         Ok(parsed) if (min..=max).contains(&parsed) => None,
         _ => Some(trf(
-            tr("Enter a whole number between {min} and {max}."),
+            "Enter a whole number between {} and {}.",
             &[&min, &max],
         )),
     }
@@ -389,3 +389,6 @@ impl PageBuilder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
