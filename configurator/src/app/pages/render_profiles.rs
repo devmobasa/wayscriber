@@ -46,7 +46,6 @@ use super::{BuiltPage, PageBuilder};
 use rows::{picker_hex, selected_string, sync_combo};
 use section::{BoundProfileSection, rebuild_sections};
 
-
 /// `GTK_INVALID_LIST_POSITION`: what a `GtkSingleSelection` reads as "nothing
 /// is selected", which is how the Iced pick list rendered an unknown id.
 const NO_SELECTION: u32 = u32::MAX;

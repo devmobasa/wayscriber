@@ -11,7 +11,10 @@ impl InputState {
     pub(super) fn pages_summary(&self) -> String {
         trf(
             "Page {}/{}",
-            &[&(self.boards.active_page_index() + 1), &self.boards.page_count().max(1)],
+            &[
+                &(self.boards.active_page_index() + 1),
+                &self.boards.page_count().max(1),
+            ],
         )
     }
 

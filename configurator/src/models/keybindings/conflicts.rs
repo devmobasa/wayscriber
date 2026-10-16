@@ -339,19 +339,12 @@ fn text_conflict_prompt(conflicts: &[TextShortcutConflict]) -> String {
                 if claim.held == conflict.binding {
                     claim.label.clone()
                 } else {
-                    trf(
-                        tr("{} ({})"),
-                        &[&claim.label, &claim.held.display_label()],
-                    )
+                    trf(tr("{} ({})"), &[&claim.label, &claim.held.display_label()])
                 }
             })
             .collect::<Vec<_>>()
             .join(", ");
-        lines.push(format!(
-            "- {}: {}",
-            conflict.binding.display_label(),
-            names
-        ));
+        lines.push(format!("- {}: {}", conflict.binding.display_label(), names));
     }
     lines.push(String::new());
     lines.push(tr("Resolve those assignments?").to_string());

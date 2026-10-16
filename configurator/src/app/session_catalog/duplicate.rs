@@ -51,11 +51,7 @@ fn duplicate_session_catalog_entry_sync(
             return Ok(SessionCatalogActionResult::warning(
                 trf(
                     "Duplicated {} to {}, but failed to update the session catalog: {}",
-                    &[
-                        &item.display_name,
-                        &outcome.target.display(),
-                        &err,
-                    ],
+                    &[&item.display_name, &outcome.target.display(), &err],
                 ),
                 initial_items,
             ));
@@ -67,11 +63,7 @@ fn duplicate_session_catalog_entry_sync(
             return Ok(SessionCatalogActionResult::warning(
                 trf(
                     "Duplicated {} to {}, but failed to reload the session catalog: {}",
-                    &[
-                        &item.display_name,
-                        &Path::new(&entry.path).display(),
-                        &err,
-                    ],
+                    &[&item.display_name, &Path::new(&entry.path).display(), &err],
                 ),
                 initial_items,
             ));
@@ -80,10 +72,7 @@ fn duplicate_session_catalog_entry_sync(
     Ok(SessionCatalogActionResult::success(
         trf(
             "Duplicated {} to {}.",
-            &[
-                &item.display_name,
-                &Path::new(&entry.path).display(),
-            ],
+            &[&item.display_name, &Path::new(&entry.path).display()],
         ),
         items,
     ))

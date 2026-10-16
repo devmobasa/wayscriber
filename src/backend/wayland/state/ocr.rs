@@ -63,7 +63,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning(tr("Screen text recognition is off because capture is disabled.")),
+                Toast::warning(tr(
+                    "Screen text recognition is off because capture is disabled.",
+                )),
             );
             return;
         }
@@ -398,7 +400,9 @@ impl WaylandState {
         rect: crate::screen_pixels::ImagePixelRect,
     ) -> Result<crate::screen_pixels::PackedArgb32, &'static str> {
         let Some(source) = self.ocr_screen_source() else {
-            return Err(tr("The screen image for text recognition is no longer available."));
+            return Err(tr(
+                "The screen image for text recognition is no longer available.",
+            ));
         };
         copy_image_rect(source.image, rect).map_err(|error| match error {
             CropError::Empty => tr("That selection has no screen pixels."),

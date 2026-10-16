@@ -12,7 +12,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder};
 use super::{note, options};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (layout_modes, layout_labels) =
         options(ToolbarLayoutModeOption::list(), |value| value.label());

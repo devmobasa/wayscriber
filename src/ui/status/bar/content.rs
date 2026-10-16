@@ -375,7 +375,10 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
         // indicator only stands in for it when that segment is hidden.
         if typing_text(input_state) && !input_state.ui_visibility.show_status_size {
             pieces.push(StatusHudPiece::text(
-                trf("Text {}px", &[&(input_state.style.current_font_size as i32)]),
+                trf(
+                    "Text {}px",
+                    &[&(input_state.style.current_font_size as i32)],
+                ),
                 None,
                 true,
             ));

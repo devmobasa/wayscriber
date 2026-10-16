@@ -853,7 +853,11 @@ fn push_canvas_step_row(
         format!("top.menu.canvas.step.{side}.apply"),
         (0.0, row_y, CANVAS_STEP_BTN_W, CANVAS_STEP_ROW_H),
         LabelSpec::new(
-            if is_undo { tr("Step Undo") } else { tr("Step Redo") },
+            if is_undo {
+                tr("Step Undo")
+            } else {
+                tr("Step Redo")
+            },
             MENU_META_FONT,
             true,
         ),
@@ -864,7 +868,14 @@ fn push_canvas_step_row(
             } else {
                 ToolbarEvent::CustomRedo
             },
-            Some(if is_undo { tr("Step undo") } else { tr("Step redo") }.to_string()),
+            Some(
+                if is_undo {
+                    tr("Step undo")
+                } else {
+                    tr("Step redo")
+                }
+                .to_string(),
+            ),
         )),
     ));
 
@@ -929,9 +940,15 @@ fn push_canvas_step_row(
             HitKind::DragCustomRedoDelay
         },
         if is_undo {
-            trf("Undo step delay: {}s (drag)", &[&format!("{:.1}", delay_ms as f64 / 1000.0)])
+            trf(
+                "Undo step delay: {}s (drag)",
+                &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+            )
         } else {
-            trf("Redo step delay: {}s (drag)", &[&format!("{:.1}", delay_ms as f64 / 1000.0)])
+            trf(
+                "Redo step delay: {}s (drag)",
+                &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+            )
         },
     );
 }
@@ -1027,9 +1044,15 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
                 (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_PATH_H),
                 WidgetKind::Label(LabelSpec::new(
                     if is_undo {
-                        trf("Undo delay: {}s", &[&format!("{:.1}", delay_ms as f64 / 1000.0)])
+                        trf(
+                            "Undo delay: {}s",
+                            &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+                        )
                     } else {
-                        trf("Redo delay: {}s", &[&format!("{:.1}", delay_ms as f64 / 1000.0)])
+                        trf(
+                            "Redo delay: {}s",
+                            &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+                        )
                     },
                     MENU_META_FONT,
                     false,

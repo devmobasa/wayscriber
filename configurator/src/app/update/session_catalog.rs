@@ -35,10 +35,8 @@ impl ConfiguratorApp {
             Err(err) => {
                 self.session_catalog.is_loading = false;
                 self.session_catalog.busy = false;
-                self.status = StatusMessage::error(trf(
-                    tr("Failed to load session catalog: {}"),
-                    &[&err],
-                ));
+                self.status =
+                    StatusMessage::error(trf(tr("Failed to load session catalog: {}"), &[&err]));
             }
         }
         Vec::new()

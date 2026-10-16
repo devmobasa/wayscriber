@@ -11,7 +11,10 @@ fn catalog_pairs() -> BTreeMap<String, String> {
 #[test]
 fn english_source_strings_are_the_identity_catalog() {
     assert_eq!(lookup(Language::English, "Boards"), "Boards");
-    assert_eq!(lookup(Language::English, "not a UI string"), "not a UI string");
+    assert_eq!(
+        lookup(Language::English, "not a UI string"),
+        "not a UI string"
+    );
 }
 
 #[test]
@@ -32,7 +35,10 @@ fn simplified_chinese_serves_translations() {
 fn unknown_strings_fall_through_in_every_language() {
     const UNTRANSLATED: &str = "4d1f0c31 no catalog entry";
 
-    assert_eq!(lookup(Language::SimplifiedChinese, UNTRANSLATED), UNTRANSLATED);
+    assert_eq!(
+        lookup(Language::SimplifiedChinese, UNTRANSLATED),
+        UNTRANSLATED
+    );
     assert_eq!(lookup(Language::English, UNTRANSLATED), UNTRANSLATED);
     assert_eq!(lookup(Language::Auto, UNTRANSLATED), UNTRANSLATED);
 }
@@ -63,7 +69,10 @@ fn environment_override_beats_the_configured_language() {
         Language::SimplifiedChinese
     );
     // An unknown override is ignored rather than silencing the UI.
-    assert_eq!(select(Language::English, Some("klingon")), Language::English);
+    assert_eq!(
+        select(Language::English, Some("klingon")),
+        Language::English
+    );
 }
 
 #[test]

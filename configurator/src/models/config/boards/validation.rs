@@ -107,10 +107,7 @@ pub(super) fn check_board_list(
             "boards.items",
             trf(
                 "{} boards exceed Max boards ({}); remove a board or raise Max boards",
-                &[
-                    &draft.items.len(),
-                    &max_count,
-                ],
+                &[&draft.items.len(), &max_count],
             ),
         ));
     }

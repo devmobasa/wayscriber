@@ -98,7 +98,12 @@ impl InputState {
                     "page.delete",
                     Toast::info(trf(
                         "Page deleted on '{}' ({}) ({}/{})",
-                        &[&board_name, &board_id, &(new_page_index + 1), &new_page_count],
+                        &[
+                            &board_name,
+                            &board_id,
+                            &(new_page_index + 1),
+                            &new_page_count,
+                        ],
                     )),
                 );
                 CanvasPageDeleteOutcome::Removed

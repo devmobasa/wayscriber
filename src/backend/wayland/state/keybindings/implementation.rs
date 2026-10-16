@@ -85,9 +85,7 @@ fn shortcut_applied_message(request: &KeybindingEditRequest) -> String {
     match request.operation {
         KeybindingEditOperation::Replace(_) => trf("Updated shortcut for {}.", &[&action]),
         KeybindingEditOperation::Delete => trf("Unbound {}.", &[&action]),
-        KeybindingEditOperation::Reset => {
-            trf("Reset the shortcut for {} to default.", &[&action])
-        }
+        KeybindingEditOperation::Reset => trf("Reset the shortcut for {} to default.", &[&action]),
     }
 }
 
@@ -101,9 +99,7 @@ fn shortcut_unchanged_message(request: &KeybindingEditRequest) -> String {
     match request.operation {
         KeybindingEditOperation::Replace(_) => trf("{} already uses that shortcut.", &[&action]),
         KeybindingEditOperation::Delete => trf("{} was already unbound.", &[&action]),
-        KeybindingEditOperation::Reset => {
-            trf("{} already uses the default shortcut.", &[&action])
-        }
+        KeybindingEditOperation::Reset => trf("{} already uses the default shortcut.", &[&action]),
     }
 }
 

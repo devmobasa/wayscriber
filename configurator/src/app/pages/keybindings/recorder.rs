@@ -20,7 +20,6 @@ use crate::models::keybindings::{
 
 use super::super::super::state::ConfiguratorApp;
 use super::widgets::{
-
     field_canceled, set_accessible_label, set_label, set_sensitive, set_visible,
     unparent_on_destroy,
 };
@@ -201,7 +200,9 @@ fn device_hint_label() -> gtk::Label {
 fn device_hint_text() -> &'static str {
     #[cfg(feature = "tablet-input")]
     {
-        tr("Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot.")
+        tr(
+            "Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot.",
+        )
     }
     #[cfg(not(feature = "tablet-input"))]
     {

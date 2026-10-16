@@ -42,9 +42,7 @@ impl ConfiguratorApp {
         if !kept.is_empty() {
             message.push_str(&trf(
                 " Kept your edit to {}.",
-                &[
-                    &list_with_overflow(&kept, ", "),
-                ],
+                &[&list_with_overflow(&kept, ", ")],
             ));
         }
         message.push_str(" Nothing is written until you press Save.");

@@ -79,18 +79,14 @@ fn session_save_toast_text(
     let suggested_limit_mb =
         suggested_limit_mb(report.written_size as u64, report.max_file_size_bytes);
     match notification {
-        SessionSaveNotification::NearLimit => {
-            trf(
-                "Session near limit: {}/{}. Set {} MiB.",
-                &[&written, &limit, &suggested_limit_mb],
-            )
-        }
-        SessionSaveNotification::TrimmedHistory { depth } => {
-            trf(
-                "Session saved. Undo history trimmed to {} entries.",
-                &[&depth],
-            )
-        }
+        SessionSaveNotification::NearLimit => trf(
+            "Session near limit: {}/{}. Set {} MiB.",
+            &[&written, &limit, &suggested_limit_mb],
+        ),
+        SessionSaveNotification::TrimmedHistory { depth } => trf(
+            "Session saved. Undo history trimmed to {} entries.",
+            &[&depth],
+        ),
         SessionSaveNotification::VisibleOnly => {
             tr("Session saved without undo history.").to_string()
         }

@@ -275,7 +275,9 @@ impl BoardAppearanceEdit {
             &self.original.grid.spacing(),
             &(spacing as u16),
         ) {
-            return Err(tr("Board appearance changed. Cancel and reopen to edit it."));
+            return Err(tr(
+                "Board appearance changed. Cancel and reopen to edit it.",
+            ));
         }
         if self.color_is_dirty() {
             desired.background = BoardBackground::Solid(color);

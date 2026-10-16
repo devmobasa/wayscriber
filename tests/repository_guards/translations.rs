@@ -394,7 +394,10 @@ fn a_missing_entry_fails() {
     let failures = audit(&marked("fn f() { draw(tr(\"Boards\")); }"), &catalog(&[]));
 
     assert_eq!(failures.len(), 1, "{failures:?}");
-    assert!(failures[0].contains("\"Boards\" has no entry"), "{failures:?}");
+    assert!(
+        failures[0].contains("\"Boards\" has no entry"),
+        "{failures:?}"
+    );
     assert!(failures[0].contains("src/ui/surface.rs:1"), "{failures:?}");
 }
 
@@ -459,4 +462,3 @@ fn an_action_label_without_an_entry_fails() {
     );
     assert!(failures[0].contains("Whiteboard label"), "{failures:?}");
 }
-

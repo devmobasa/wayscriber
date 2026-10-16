@@ -275,10 +275,7 @@ pub(crate) fn render_page_badge_with_engine(
         None
     };
     let page_label = if page_count > 1 {
-        Some(trf(
-            "Page {}/{}",
-            &[&(page_index + 1), &page_count.max(1)],
-        ))
+        Some(trf("Page {}/{}", &[&(page_index + 1), &page_count.max(1)]))
     } else {
         None
     };

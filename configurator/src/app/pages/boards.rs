@@ -47,7 +47,6 @@ use super::{BuiltPage, PageBuilder};
 use rows::{is_collapsed, note_label, picker_hex, sync_combo, validate_min};
 use section::{BoundBoardSection, rebuild_sections};
 
-
 /// `GTK_INVALID_LIST_POSITION`: what a `GtkSingleSelection` reads as "nothing
 /// is selected", which is how the Iced pick list rendered an unknown default.
 const NO_SELECTION: u32 = u32::MAX;

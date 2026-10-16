@@ -203,7 +203,10 @@ fn clear_tool_state_catalog_message(
         ),
         wayscriber::session::ClearToolStateOutcome::Cleared {
             preserved_board_data: false,
-        } => trf("Cleared saved tool state for {}. No board data was present.", &[&display_name]),
+        } => trf(
+            "Cleared saved tool state for {}. No board data was present.",
+            &[&display_name],
+        ),
     }
 }
 

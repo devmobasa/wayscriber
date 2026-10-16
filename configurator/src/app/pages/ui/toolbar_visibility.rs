@@ -18,7 +18,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder};
 use super::note;
 
-
 /// One preferences group of item rows: a surface/category batch, or one of
 /// the three order groups the configurator can reorder.
 struct ItemSection {

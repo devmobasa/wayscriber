@@ -16,7 +16,6 @@ use super::status::{
     shortcut_placeholder,
 };
 use super::widgets::{
-
     action_button, body_label, caption_label, column_box, hint_label, row_box, set_button_label,
     set_label, set_sensitive, set_visible, warning_label,
 };
@@ -27,7 +26,9 @@ pub(super) fn overview_group(
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
         .title(tr("Background Mode"))
-        .description(tr("Run wayscriber in the background and toggle it with a keyboard shortcut."))
+        .description(tr(
+            "Run wayscriber in the background and toggle it with a keyboard shortcut.",
+        ))
         .build();
 
     let body = column_box();
@@ -115,21 +116,23 @@ pub(super) fn shortcut_group(
         .title(tr("Step 2: Set your shortcut"))
         .build();
 
-    let locked_label = hint_label(tr("Install the background service first, then set your shortcut."));
+    let locked_label = hint_label(tr(
+        "Install the background service first, then set your shortcut.",
+    ));
     group.add(&locked_label);
 
     let body = column_box();
-    body.append(&body_label(
-        tr("Choose a keyboard shortcut to toggle drawing on/off."),
-    ));
-    body.append(&hint_label(
-        tr("The shortcut takes effect after the background service is installed and running."),
-    ));
+    body.append(&body_label(tr(
+        "Choose a keyboard shortcut to toggle drawing on/off.",
+    )));
+    body.append(&hint_label(tr(
+        "The shortcut takes effect after the background service is installed and running.",
+    )));
     let configured_label = hint_label("");
     body.append(&configured_label);
-    let manual_label = warning_label(
-        tr("Automatic shortcut setup is unavailable here. Add a manual keybind for `wayscriber --daemon-toggle`."),
-    );
+    let manual_label = warning_label(tr(
+        "Automatic shortcut setup is unavailable here. Add a manual keybind for `wayscriber --daemon-toggle`.",
+    ));
     body.append(&manual_label);
 
     let entry = gtk::Entry::builder().hexpand(true).build();
@@ -194,16 +197,18 @@ pub(super) fn light_controls_group(
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
         .title(tr("Light passthrough controls"))
-        .description(tr("Install global controls for light passthrough and quick drawing."))
+        .description(tr(
+            "Install global controls for light passthrough and quick drawing.",
+        ))
         .build();
 
     let path_label = hint_label("");
     group.add(&path_label);
 
     let native_body = column_box();
-    let service_warning = warning_label(
-        tr("Install the background service first so these bindings have a daemon to control."),
-    );
+    let service_warning = warning_label(tr(
+        "Install the background service first so these bindings have a daemon to control.",
+    ));
     native_body.append(&service_warning);
     let native_row = row_box();
     let state_label = body_label("");
@@ -218,9 +223,9 @@ pub(super) fn light_controls_group(
     native_body.append(&native_row);
     group.add(&native_body);
 
-    let manual_label = warning_label(
-        tr("Automatic light controls setup is unavailable here. Add compositor bindings for `wayscriber --light-toggle` and `wayscriber --light-draw-toggle`."),
-    );
+    let manual_label = warning_label(tr(
+        "Automatic light controls setup is unavailable here. Add compositor bindings for `wayscriber --light-toggle` and `wayscriber --light-draw-toggle`.",
+    ));
     group.add(&manual_label);
 
     bindings.push(Box::new(move |app, _summary| {
@@ -310,7 +315,9 @@ pub(super) fn details_group(
     sender: &ComponentSender<ConfiguratorApp>,
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
-    let group = adw::PreferencesGroup::builder().title(tr("Details")).build();
+    let group = adw::PreferencesGroup::builder()
+        .title(tr("Details"))
+        .build();
 
     let body = column_box();
     let detecting_label = hint_label(tr("Detecting environment..."));

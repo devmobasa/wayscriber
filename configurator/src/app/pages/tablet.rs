@@ -18,7 +18,6 @@ use super::super::state::ConfiguratorApp;
 use super::capture::validate_f64_range;
 use super::{BuiltPage, PageBuilder};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let edit_modes = PressureThicknessEditModeOption::list();
     let edit_mode_labels = edit_modes

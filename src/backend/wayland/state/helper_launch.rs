@@ -8,8 +8,8 @@ use std::ffi::{OsStr, OsString};
 use super::WaylandState;
 use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
 use crate::env_vars::CONFIGURATOR_ENV;
-use crate::input::state::{HelperLaunchRequest, Toast, ToastPriority};
 use crate::i18n::tr;
+use crate::input::state::{HelperLaunchRequest, Toast, ToastPriority};
 
 fn spawn_detached(
     kind: crate::process_broker::HelperKind,

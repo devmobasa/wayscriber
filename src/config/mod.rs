@@ -28,13 +28,13 @@ pub(crate) mod test_helpers;
 mod tests;
 
 // Re-export commonly used types at module level
+pub use crate::domain::Language;
 #[allow(unused_imports)]
 pub use action_meta::{
     ActionCategory, ActionMeta, action_description, action_display_label, action_label,
     action_meta, action_meta_iter, action_short_label,
 };
 pub use core::{CURRENT_CONFIG_REVISION, Config};
-pub use crate::domain::Language;
 pub use document::{
     ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
     ConfigSourceChanged, ConfigWriteLockTimeout,

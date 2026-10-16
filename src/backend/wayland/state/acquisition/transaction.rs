@@ -69,9 +69,7 @@ fn zoom_terminal_report(
         ZoomWaiterOwner::Eyedropper => {
             Some(("eyedropper", tr("Screen eyedropper capture failed.")))
         }
-        ZoomWaiterOwner::Ocr => {
-            Some(("ocr", tr("Screen capture for text recognition failed.")))
-        }
+        ZoomWaiterOwner::Ocr => Some(("ocr", tr("Screen capture for text recognition failed."))),
         ZoomWaiterOwner::RegionCapture
             if matches!(
                 outcome,

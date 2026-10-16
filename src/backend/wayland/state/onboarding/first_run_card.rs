@@ -62,8 +62,7 @@ impl WaylandState {
             FirstRunStep::ColorThickness => OnboardingCard {
                 eyebrow,
                 title: tr("Color and thickness").to_string(),
-                body: tr("Recolor and resize your strokes without leaving the canvas.")
-                    .to_string(),
+                body: tr("Recolor and resize your strokes without leaving the canvas.").to_string(),
                 items: self.color_thickness_checklist_items(state),
                 buttons: vec![skip_tour_button()],
                 footer: String::new(),

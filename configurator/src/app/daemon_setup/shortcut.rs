@@ -186,10 +186,7 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
     fs::create_dir_all(dropin_dir).map_err(|err| {
         trf(
             "Failed to create service drop-in directory {}: {}",
-            &[
-                &dropin_dir.display(),
-                &err,
-            ],
+            &[&dropin_dir.display(), &err],
         )
     })?;
 
@@ -204,10 +201,7 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
     .map_err(|err| {
         trf(
             "Failed to write portal shortcut drop-in {}: {}",
-            &[
-                &dropin_path.display(),
-                &err,
-            ],
+            &[&dropin_path.display(), &err],
         )
     })?;
     Ok(dropin_path)
@@ -310,9 +304,7 @@ fn normalize_shortcut(input: &str, gnome_style: bool) -> Result<String, String> 
         let normalized = normalize_modifier(modifier, gnome_style).ok_or_else(|| {
             trf(
                 "Unsupported modifier `{}`. Supported: Ctrl, Shift, Alt, Super/Meta.",
-                &[
-                    &modifier,
-                ],
+                &[&modifier],
             )
         })?;
         if !rendered_modifiers.contains(&normalized) {

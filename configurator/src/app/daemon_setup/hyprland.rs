@@ -42,9 +42,7 @@ impl HyprlandLightControlsInstallResult {
     pub(super) fn summary(&self) -> String {
         let mut parts = vec![trf(
             "Wrote Hyprland light controls to {}",
-            &[
-                &self.include_path.display(),
-            ],
+            &[&self.include_path.display()],
         )];
         parts.push(tr("clears the default light keys before rebinding them").to_string());
 
@@ -52,24 +50,18 @@ impl HyprlandLightControlsInstallResult {
             if self.source_updated {
                 parts.push(trf(
                     "added source line to {}",
-                    &[
-                        &self.main_config_path.display(),
-                    ],
+                    &[&self.main_config_path.display()],
                 ));
             } else {
                 parts.push(trf(
                     "source line already present in {}",
-                    &[
-                        &self.main_config_path.display(),
-                    ],
+                    &[&self.main_config_path.display()],
                 ));
             }
         } else {
             parts.push(trf(
                 "add `{}` to your Hyprland config to enable it",
-                &[
-                    &self.source_line,
-                ],
+                &[&self.source_line],
             ));
         }
 
@@ -129,10 +121,7 @@ pub(super) fn install_light_controls() -> Result<HyprlandLightControlsInstallRes
             Ok(capture) => {
                 result.reload_error = Some(trf(
                     "stdout: {}; stderr: {}",
-                    &[
-                        &capture.stdout.trim(),
-                        &capture.stderr.trim(),
-                    ],
+                    &[&capture.stdout.trim(), &capture.stderr.trim()],
                 ));
             }
             Err(err) => {
@@ -152,10 +141,7 @@ fn write_light_controls(
     fs::create_dir_all(&hyprland_dir).map_err(|err| {
         trf(
             "Failed to create Hyprland config directory {}: {}",
-            &[
-                &hyprland_dir.display(),
-                &err,
-            ],
+            &[&hyprland_dir.display(), &err],
         )
     })?;
 
@@ -168,10 +154,7 @@ fn write_light_controls(
     .map_err(|err| {
         trf(
             "Failed to write Hyprland light controls {}: {}",
-            &[
-                &include_path.display(),
-                &err,
-            ],
+            &[&include_path.display(), &err],
         )
     })?;
 
@@ -194,10 +177,7 @@ fn write_light_controls(
                 .map_err(|err| {
                     trf(
                         "Failed to update Hyprland config {}: {}",
-                        &[
-                            &main_config_path.display(),
-                            &err,
-                        ],
+                        &[&main_config_path.display(), &err],
                     )
                 })?;
             }
@@ -206,10 +186,7 @@ fn write_light_controls(
         Err(err) => {
             return Err(trf(
                 "Failed to read Hyprland config {}: {}",
-                &[
-                    &main_config_path.display(),
-                    &err,
-                ],
+                &[&main_config_path.display(), &err],
             ));
         }
     }

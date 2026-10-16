@@ -18,7 +18,6 @@ use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Arrow);
 

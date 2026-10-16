@@ -3,10 +3,10 @@ use crate::config::{Action, Config};
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
 use crate::env_vars::HOME_ENV;
+use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::boards::BoardState;
 use crate::input::state::ClipboardPasteRequest;
-use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::{notification, session};
 use std::path::PathBuf;
@@ -292,7 +292,12 @@ fn visible_limit_warning(
             );
             let body = trf(
                 "Paste would save as {}, over the {} cap. Open Settings > Session > Max file size and set {} MiB, or edit {}.",
-                &[&written, &formatted_file_limit, &suggested_limit_mb, &config_path_display()],
+                &[
+                    &written,
+                    &formatted_file_limit,
+                    &suggested_limit_mb,
+                    &config_path_display(),
+                ],
             );
             SessionPasteWarning {
                 toast,

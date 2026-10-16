@@ -32,7 +32,6 @@ use super::{BuiltPage, PageBuilder};
 use color::build_color_rows;
 use rows::{SlotBuilder, labels_of, slot_button};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Presets);
 

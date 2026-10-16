@@ -13,7 +13,6 @@ use crate::messages::Message;
 use super::super::super::super::state::ConfiguratorApp;
 use super::super::super::set_text_blocked;
 use super::{
-
     CatalogItemLayout, CatalogLayout, CatalogRowValues, body_label, caption_label, hint_label,
     message_button, row_box, set_sensitive, set_visible,
 };

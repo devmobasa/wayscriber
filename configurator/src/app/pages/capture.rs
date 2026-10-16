@@ -24,7 +24,6 @@ use super::super::state::ConfiguratorApp;
 use super::color_rows::{ResolvedColor, color_row};
 use super::{BuiltPage, PageBuilder};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Capture);
 

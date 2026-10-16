@@ -8,7 +8,6 @@ use crate::models::{ColorMode, NamedColorOption, PresetTextField};
 
 use super::super::validate_u32_range;
 
-
 /// The slot's color block: a mode chooser with a live preview, then the
 /// rows the chosen mode edits.
 pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {

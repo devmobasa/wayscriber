@@ -35,12 +35,8 @@ fn preset_saved_message(action: &PresetAction) -> String {
 /// already agrees rather than claiming a save that did not happen.
 fn preset_unchanged_message(action: &PresetAction) -> String {
     match action {
-        PresetAction::Save { slot, .. } => {
-            trf("Preset {} already holds these settings.", &[slot])
-        }
-        PresetAction::Clear { slot } => {
-            trf("Preset {} was already empty in config.toml.", &[slot])
-        }
+        PresetAction::Save { slot, .. } => trf("Preset {} already holds these settings.", &[slot]),
+        PresetAction::Clear { slot } => trf("Preset {} was already empty in config.toml.", &[slot]),
     }
 }
 

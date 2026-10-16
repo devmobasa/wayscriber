@@ -166,7 +166,11 @@ impl StrokeSetting {
             event: self.event(0),
             tooltip: trf(
                 "{}: {}. Click for {}",
-                &[&self.name(), &self.current_level_name(snapshot), &self.level_name(0)],
+                &[
+                    &self.name(),
+                    &self.current_level_name(snapshot),
+                    &self.level_name(0),
+                ],
             ),
         }
     }

@@ -8,9 +8,7 @@ use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
 use wayland_client::{Connection, QueueHandle};
 
-fn clear_tools_message(
-    outcome: Option<crate::session::ClearToolStateOutcome>,
-) -> &'static str {
+fn clear_tools_message(outcome: Option<crate::session::ClearToolStateOutcome>) -> &'static str {
     match outcome {
         Some(crate::session::ClearToolStateOutcome::Cleared {
             preserved_board_data: true,
@@ -575,11 +573,8 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     "session.save",
-                    Toast::error(trf(
-                        "Drawings kept on screen: {}",
-                        &[&format!("{error:#}")],
-                    ))
-                    .duration_ms(20_000),
+                    Toast::error(trf("Drawings kept on screen: {}", &[&format!("{error:#}")]))
+                        .duration_ms(20_000),
                 );
             }
         } else if self.session.is_loaded() {

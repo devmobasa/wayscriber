@@ -34,7 +34,6 @@ use super::super::state::ConfiguratorApp;
 use super::color_rows::ResolvedColor;
 use super::{BuiltPage, PageBuilder, set_text_blocked};
 
-
 /// Mouse buttons that carry a drag mapping section, in the order the old
 /// view listed them.
 const DRAG_BUTTONS: [DragMouseButton; 3] = [

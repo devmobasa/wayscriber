@@ -34,7 +34,14 @@ pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk
     column.set_margin_end(pad_h);
 
     if let Some(group) = model::toolbar_actions_model_for_popover(ctx.snapshot) {
-        command_section(ctx, &column, tr("Actions"), tr("Action"), &group, action_icon);
+        command_section(
+            ctx,
+            &column,
+            tr("Actions"),
+            tr("Action"),
+            &group,
+            action_icon,
+        );
     }
     if let Some(group) = model::toolbar_boards_model_for_popover(ctx.snapshot) {
         command_section(ctx, &column, tr("Boards"), tr("Board"), &group, board_icon);
@@ -43,7 +50,14 @@ pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk
         command_section(ctx, &column, tr("Pages"), tr("Page"), &group, page_icon);
     }
     if let Some(group) = model::toolbar_advanced_group_for_popover(ctx.snapshot) {
-        command_section(ctx, &column, tr("Advanced"), tr("Action"), &group, action_icon);
+        command_section(
+            ctx,
+            &column,
+            tr("Advanced"),
+            tr("Action"),
+            &group,
+            action_icon,
+        );
     }
     if let Some(group) = model::toolbar_zoom_group_for_popover(ctx.snapshot) {
         command_section(ctx, &column, tr("Zoom"), tr("Zoom"), &group, action_icon);

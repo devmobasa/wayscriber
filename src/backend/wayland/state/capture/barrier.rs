@@ -278,8 +278,9 @@ impl WaylandState {
         // before restoring suppression state so the recovery frame is allowed
         // to commit even if the original callback never arrives.
         self.surface.clear_frame_callback_pending();
-        let message =
-            tr("Screen capture cancelled because the compositor did not confirm the hidden overlay frame.");
+        let message = tr(
+            "Screen capture cancelled because the compositor did not confirm the hidden overlay frame.",
+        );
         if !self.cancel_overlay_capture_preflight(timeout.reason, Some(message)) {
             push_capture_preflight_cancellation_toast(&mut self.input_state, message);
         }
@@ -348,8 +349,9 @@ impl WaylandState {
         log::warn!(
             "Cancelling {reason:?} because the GTK toolbars could not confirm capture suppression"
         );
-        let message =
-            tr("Screen capture cancelled because the GTK toolbar could not become transparent safely.");
+        let message = tr(
+            "Screen capture cancelled because the GTK toolbar could not become transparent safely.",
+        );
         if !self.cancel_overlay_capture_preflight(reason, Some(message)) {
             push_capture_preflight_cancellation_toast(&mut self.input_state, message);
         }

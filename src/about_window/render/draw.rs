@@ -369,7 +369,10 @@ fn footer(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme:
     let hint_style = style(HINT_SIZE, cairo::FontWeight::Normal);
     let (text, color) = match frame.notice {
         Some(notice) => (notice, theme.accent_bright),
-        None => (tr("Tab to move · Enter to open · Esc to close"), theme.text_tertiary),
+        None => (
+            tr("Tab to move · Enter to open · Esc to close"),
+            theme.text_tertiary,
+        ),
     };
     let max_width = frame.plan.width - frame.plan.icon.0 * 2.0;
     label(

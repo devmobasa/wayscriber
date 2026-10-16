@@ -517,7 +517,11 @@ impl ToolbarSettingsDetails {
     fn new(open: bool) -> Self {
         Self {
             open,
-            label: if open { tr("Hide details") } else { tr("Details") },
+            label: if open {
+                tr("Hide details")
+            } else {
+                tr("Details")
+            },
             event: ToolbarEvent::SetSettingsDetailsOpen(!open),
             tooltip: ToolbarTooltip::text(if open {
                 tr("Hide where toolbar changes are saved")

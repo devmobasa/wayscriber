@@ -124,7 +124,10 @@ impl WaylandState {
                 let toast = Toast::info(tr(
                     "Screen eyedropper requires a transparent board or an active screen freeze.",
                 ))
-                .action(tr("Switch to transparent"), crate::config::Action::ReturnToTransparent);
+                .action(
+                    tr("Switch to transparent"),
+                    crate::config::Action::ReturnToTransparent,
+                );
                 self.input_state
                     .push_toast(ToastPriority::Action, "eyedropper", toast);
             }

@@ -10,7 +10,6 @@ use super::super::color_rows::color_row;
 use super::super::{BuiltPage, PageBuilder};
 use super::{options, quad_color};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (positions, position_labels) = options(StatusPositionOption::list(), |value| value.label());
 

@@ -164,7 +164,7 @@ fn sequence_waiting_prompt(steps: &[KeyBinding]) -> String {
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
-            .join(&tr(" then ")),
+            .join(tr(" then ")),
     }
 }
 
@@ -179,7 +179,7 @@ fn sequence_pending_prompt(steps: &[KeyBinding], preview: &str) -> String {
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
-                    .join(&tr(" then ")),
+                    .join(tr(" then ")),
                 &preview,
             ],
         )
@@ -229,12 +229,16 @@ pub fn super_consumed_hint() -> &'static str {
 
 #[cfg(not(feature = "tablet-input"))]
 pub fn tablet_unavailable_hint() -> &'static str {
-    tr("Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text.")
+    tr(
+        "Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text.",
+    )
 }
 
 pub fn device_unidentified_message() -> String {
     trf(
-        tr("This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{}, StylusPrimary, StylusSecondary."),
+        tr(
+            "This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{}, StylusPrimary, StylusSecondary.",
+        ),
         &[&MAX_POINTER_EXTRA],
     )
 }
@@ -269,7 +273,9 @@ fn normalize_mouse_button(button: u32, modifiers: KeyboardModifiers) -> Recorded
         },
         None => RecordedDevice::Unsupported {
             message: trf(
-                tr("Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{}."),
+                tr(
+                    "Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{}.",
+                ),
                 &[&MAX_POINTER_EXTRA],
             ),
         },
@@ -297,8 +303,7 @@ fn normalize_stylus_button(button: u32, modifiers: KeyboardModifiers) -> Recorde
             message: tr("The stylus tip cannot be bound as an action.").to_string(),
         },
         None => RecordedDevice::Unsupported {
-            message: tr("Unknown stylus button. Use StylusPrimary or StylusSecondary.")
-                .to_string(),
+            message: tr("Unknown stylus button. Use StylusPrimary or StylusSecondary.").to_string(),
         },
     }
 }

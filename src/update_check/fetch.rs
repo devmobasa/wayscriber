@@ -89,7 +89,10 @@ fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, Fe
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(FetchError::Failed(trf(
             "{} failed: {}",
-            &[&program, &failure_detail(program, stderr.trim(), Some(output.status))],
+            &[
+                &program,
+                &failure_detail(program, stderr.trim(), Some(output.status)),
+            ],
         )));
     }
 

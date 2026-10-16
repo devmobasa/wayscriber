@@ -212,8 +212,8 @@ fn a_board_draft_the_checks_accept_saves_unchanged() {
 }
 use super::super::fields::{
     ArrowStyleOption, DragMouseButton, DragToolField, DragToolOption, FontWeightOption,
-    InputHudModeOption, InputHudPositionOption, LanguageOption, OverrideOption,
-    PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
+    InputHudModeOption, InputHudPositionOption, LanguageOption, OverrideOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, RegionPickerOption,
     SessionStorageModeOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
     ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
@@ -1764,7 +1764,10 @@ fn config_draft_round_trips_ui_language() {
     for (config_value, option) in [
         (Language::Auto, LanguageOption::Auto),
         (Language::English, LanguageOption::English),
-        (Language::SimplifiedChinese, LanguageOption::SimplifiedChinese),
+        (
+            Language::SimplifiedChinese,
+            LanguageOption::SimplifiedChinese,
+        ),
     ] {
         let mut config = Config::default();
         config.ui.language = config_value;
@@ -1785,8 +1788,7 @@ fn config_draft_ui_language_defaults_to_auto_when_key_missing() {
 
     let missing = temp.path().join("missing-language.toml");
     std::fs::write(&missing, "[ui]\ntheme = \"dark\"\n").expect("write config without language");
-    let document =
-        ConfigDocument::load_from_path(&missing).expect("load config without language");
+    let document = ConfigDocument::load_from_path(&missing).expect("load config without language");
     assert_eq!(document.config().ui.language, Language::Auto);
     assert_eq!(
         ConfigDraft::from_config(document.config()).ui_language,

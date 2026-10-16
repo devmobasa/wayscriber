@@ -1,8 +1,8 @@
 use super::*;
 use crate::backend::wayland::frozen::FrozenCaptureBackend;
 use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
-use crate::input::state::{Toast, ToastPriority};
 use crate::i18n::{tr, trf};
+use crate::input::state::{Toast, ToastPriority};
 
 mod backdrop;
 mod barrier;
@@ -287,7 +287,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "capture",
-                Toast::warning(tr("Capture is already preparing another overlay operation.")),
+                Toast::warning(tr(
+                    "Capture is already preparing another overlay operation.",
+                )),
             );
             return;
         }

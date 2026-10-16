@@ -166,12 +166,9 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Action,
                     "board.delete",
-                    Toast::warning(trf(
-                        "Delete board '{}'? Click to confirm.",
-                        &[&name],
-                    ))
-                    .action(tr("Delete"), Action::BoardDelete)
-                    .duration_ms(BOARD_DELETE_CONFIRM_MS),
+                    Toast::warning(trf("Delete board '{}'? Click to confirm.", &[&name]))
+                        .action(tr("Delete"), Action::BoardDelete)
+                        .duration_ms(BOARD_DELETE_CONFIRM_MS),
                 );
             }
             BoardDeleteOutcome::Deleted {

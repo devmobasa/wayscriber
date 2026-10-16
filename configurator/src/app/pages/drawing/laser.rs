@@ -13,7 +13,6 @@ use super::super::PageBuilder;
 use super::super::color_rows::color_row;
 use super::{validate_f64_range, validate_usize_range};
 
-
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area(tr("Laser pointer"), SearchArea::DrawingLaser);
     color_row(page, "Ink color (hex)", ColorPickerId::LaserColor, |app| {

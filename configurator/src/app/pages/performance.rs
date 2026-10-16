@@ -17,7 +17,6 @@ use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder, validate_u32_range};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let buffer_metadata = performance_field_metadata(PerformanceFieldId::BufferCount);
     let vsync_metadata = performance_field_metadata(PerformanceFieldId::EnableVsync);

@@ -8,7 +8,6 @@ use super::super::super::search::SearchArea;
 use super::super::PageBuilder;
 use super::super::color_rows::color_row;
 use super::{
-
     COLOR_MODES, conditional_section, named_color_labels, resolved, section_combo_row,
     section_entry_row,
 };

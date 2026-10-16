@@ -109,8 +109,10 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     "drawing.quick-color",
-                    Toast::warning(message)
-                        .action(tr("Edit"), crate::domain::Action::OpenConfiguratorQuickColors),
+                    Toast::warning(message).action(
+                        tr("Edit"),
+                        crate::domain::Action::OpenConfiguratorQuickColors,
+                    ),
                 );
             }
         }

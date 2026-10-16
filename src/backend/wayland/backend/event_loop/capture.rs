@@ -307,7 +307,9 @@ fn handle_frozen_toggle(state: &mut WaylandState, user_requested: bool) {
             state.input_state.push_toast(
                 ToastPriority::Info,
                 "capture",
-                Toast::warning(tr("Freeze is unavailable because screen capture is not available.")),
+                Toast::warning(tr(
+                    "Freeze is unavailable because screen capture is not available.",
+                )),
             );
         }
         FrozenUserToggleAction::RequestUserFreeze => {
@@ -561,7 +563,10 @@ fn handle_capture_results(state: &mut WaylandState) {
                 notification::send_notification_async(
                     &state.tokio_handle,
                     result.operation.save_failure_title().to_string(),
-                    trf("Copied to clipboard, but the file was not saved: {}", &[&save_err]),
+                    trf(
+                        "Copied to clipboard, but the file was not saved: {}",
+                        &[&save_err],
+                    ),
                     Some("dialog-warning".to_string()),
                 );
                 // Don't set should_exit - keep overlay open for fallback action

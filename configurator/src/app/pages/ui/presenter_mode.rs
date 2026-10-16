@@ -9,7 +9,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder};
 use super::{note, options};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (toolbar_modes, toolbar_mode_labels) =
         options(PresenterToolbarModeOption::list(), |value| value.label());
@@ -19,7 +18,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
     page.group(tr("Presenter Mode"))
-        .custom(&note(tr("Customize what presenter mode changes when toggled.")))
+        .custom(&note(tr(
+            "Customize what presenter mode changes when toggled.",
+        )))
         .switch_row(
             tr("Hide status bar"),
             "",

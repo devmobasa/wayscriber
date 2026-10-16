@@ -106,7 +106,10 @@ fn language_option_round_trips() {
     for (config_value, option) in [
         (Language::Auto, LanguageOption::Auto),
         (Language::English, LanguageOption::English),
-        (Language::SimplifiedChinese, LanguageOption::SimplifiedChinese),
+        (
+            Language::SimplifiedChinese,
+            LanguageOption::SimplifiedChinese,
+        ),
     ] {
         assert_eq!(LanguageOption::from_language(config_value), option);
         assert_eq!(option.to_language(), config_value);

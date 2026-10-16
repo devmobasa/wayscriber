@@ -10,7 +10,6 @@ use super::super::color_rows::color_row;
 use super::super::{BuiltPage, PageBuilder};
 use super::quad_color;
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Ui);
 

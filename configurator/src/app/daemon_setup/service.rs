@@ -101,7 +101,8 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     let binary_path = resolve_wayscriber_binary_path()?;
 
     let service_path = user_service_unit_path().ok_or_else(|| {
-        tr("Cannot resolve home directory; failed to determine user systemd service path.").to_string()
+        tr("Cannot resolve home directory; failed to determine user systemd service path.")
+            .to_string()
     })?;
     let service_dir = service_path
         .parent()
@@ -109,10 +110,7 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     fs::create_dir_all(service_dir).map_err(|err| {
         trf(
             "Failed to create user service directory {}: {}",
-            &[
-                &service_dir.display(),
-                &err,
-            ],
+            &[&service_dir.display(), &err],
         )
     })?;
 
@@ -125,10 +123,7 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     .map_err(|err| {
         trf(
             "Failed to write user service file {}: {}",
-            &[
-                &service_path.display(),
-                &err,
-            ],
+            &[&service_path.display(), &err],
         )
     })?;
 
@@ -253,11 +248,7 @@ fn query_wayscriber_runtime_capabilities(
         .map_err(|err| {
             trf(
                 "Failed to execute `{}` with args [{}]: {}",
-                &[
-                    &binary_path.display(),
-                    &RUNTIME_CAPABILITIES_FLAG,
-                    &err,
-                ],
+                &[&binary_path.display(), &RUNTIME_CAPABILITIES_FLAG, &err],
             )
         })?;
 
@@ -295,10 +286,7 @@ pub(super) fn remove_portal_shortcut_dropin() -> Result<bool, String> {
     fs::remove_file(&path).map_err(|err| {
         trf(
             "Failed to remove portal shortcut drop-in {}: {}",
-            &[
-                &path.display(),
-                &err,
-            ],
+            &[&path.display(), &err],
         )
     })?;
     Ok(true)

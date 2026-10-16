@@ -37,8 +37,8 @@ impl WaylandState {
         if self.should_capture_desktop_for_pdf_export(action) {
             let Some((request, layout_context)) = self.desktop_backdrop_capture_request(operation)
             else {
-                let message =
-                    tr("Board PDF export failed: active output geometry is unavailable").to_string();
+                let message = tr("Board PDF export failed: active output geometry is unavailable")
+                    .to_string();
                 log::error!("{message}");
                 self.input_state.push_toast(
                     ToastPriority::Critical,

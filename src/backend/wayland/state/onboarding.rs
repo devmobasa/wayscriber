@@ -75,7 +75,10 @@ fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
 
 fn automatic_tip_toast(message: impl Into<String>, tip: OnboardingTip) -> Toast {
     Toast::info(message)
-        .command(tr("Got it"), ToastCommand::AcknowledgeTip { tip, then: None })
+        .command(
+            tr("Got it"),
+            ToastCommand::AcknowledgeTip { tip, then: None },
+        )
         .secondary_command(
             tr("Tip settings…"),
             ToastCommand::AcknowledgeTip {
@@ -412,10 +415,8 @@ impl WaylandState {
                     OnboardingTip::CommandPalette,
                     trf(
                         "Press {} to search actions.",
-                        &[&self.shortcut_label(
-                            Action::ToggleCommandPalette,
-                            tr("Command Palette"),
-                        )],
+                        &[&self
+                            .shortcut_label(Action::ToggleCommandPalette, tr("Command Palette"))],
                     ),
                 ),
                 ContextualHint::StatusBar(entry) => (
@@ -436,12 +437,10 @@ impl WaylandState {
                 ContextualHint::ZoomChip => (
                     OnboardingTip::ZoomChip,
                     match self.shortcut_label_opt(Action::ZoomIn) {
-                        Some(key) => {
-                            trf(
-                                "Zoom from the chip in the bottom-right corner, or press {}.",
-                                &[&key],
-                            )
-                        }
+                        Some(key) => trf(
+                            "Zoom from the chip in the bottom-right corner, or press {}.",
+                            &[&key],
+                        ),
                         None => tr("Zoom from the chip in the bottom-right corner.").to_string(),
                     },
                 ),

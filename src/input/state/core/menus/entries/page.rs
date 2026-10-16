@@ -17,9 +17,15 @@ impl InputState {
 
         let mut entries = Vec::new();
         let header = if let Some(name) = page_name {
-            trf("{}: Page {} ({}/{})", &[&name, &page_number, &page_number, &page_count])
+            trf(
+                "{}: Page {} ({}/{})",
+                &[&name, &page_number, &page_number, &page_count],
+            )
         } else {
-            trf("Page {} ({}/{})", &[&page_number, &page_number, &page_count])
+            trf(
+                "Page {} ({}/{})",
+                &[&page_number, &page_number, &page_count],
+            )
         };
         entries.push(ContextMenuEntry::new(header, None::<String>, true, None));
         entries.push(ContextMenuEntry::new(

@@ -486,7 +486,9 @@ impl WaylandState {
             TransferWarning::PublishSelectionTooLarge => self.input_state.push_toast(
                 ToastPriority::Info,
                 "clipboard",
-                Toast::warning(tr("Copied locally; selection is too large for system clipboard.")),
+                Toast::warning(tr(
+                    "Copied locally; selection is too large for system clipboard.",
+                )),
             ),
             TransferWarning::PublishUnavailable => self.input_state.push_toast(
                 ToastPriority::Info,

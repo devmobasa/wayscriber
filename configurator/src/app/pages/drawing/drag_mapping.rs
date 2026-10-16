@@ -14,7 +14,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::PageBuilder;
 use super::{DRAG_BUTTONS, DRAG_FIELDS, boxed_list, section_combo_row, set_visible_if_changed};
 
-
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area(tr("Drag tool mapping"), SearchArea::DrawingDragTools);
 

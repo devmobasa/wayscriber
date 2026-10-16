@@ -15,7 +15,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::{PageBuilder, set_selected_blocked};
 use super::{boxed_list, conditional_section, icon_button, section_entry_row};
 
-
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area(tr("Font"), SearchArea::DrawingFont)
         .entry_row_validated(
@@ -96,7 +95,9 @@ fn build_font_cycle(page: &mut PageBuilder) {
     page.custom(&add);
 
     let empty = gtk::Label::builder()
-        .label(tr("No fonts listed: Shift+T does nothing until one is added."))
+        .label(tr(
+            "No fonts listed: Shift+T does nothing until one is added.",
+        ))
         .wrap(true)
         .xalign(0.0)
         .margin_top(6)

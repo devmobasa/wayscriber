@@ -12,7 +12,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::set_text_blocked;
 use super::{ProfileValues, SectionLayout};
 
-
 /// One section's refresh: built beside its row, so it owns that row's typed
 /// widget handles and the signal handler ids guarding each write.
 type ProfileRowRefresh = Box<dyn Fn(&ProfileValues<'_>)>;

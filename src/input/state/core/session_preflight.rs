@@ -335,7 +335,10 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             toast_key,
-            Toast::warning(trf("{} {} blocked; {}", &[&action_label, &action_name, &reason])),
+            Toast::warning(trf(
+                "{} {} blocked; {}",
+                &[&action_label, &action_name, &reason],
+            )),
         );
         self.trigger_blocked_feedback();
         false

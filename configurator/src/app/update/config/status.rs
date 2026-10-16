@@ -1,8 +1,8 @@
-use wayscriber::i18n::{tr, trf};
 use wayscriber::config::{
     ConfigDiagnosticKind, ConfigDocument, ConfigValidationReport, InvalidKeybinding,
     KeybindingConflictResolution, MigrationPreview,
 };
+use wayscriber::i18n::{tr, trf};
 
 use super::super::super::state::StatusMessage;
 
@@ -17,8 +17,10 @@ const SHOWN_DIAGNOSTICS: usize = 8;
 /// not a color.
 pub(super) fn invalid_color_hex_message(count: usize) -> String {
     if count == 1 {
-        return tr("1 color field does not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.")
-            .to_string();
+        return tr(
+            "1 color field does not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.",
+        )
+        .to_string();
     }
     trf(
         "{} color fields do not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.",
@@ -59,9 +61,7 @@ pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -
     if !unknown.is_empty() {
         message.push_str(&trf(
             "\nUnrecognized settings were preserved: {}.",
-            &[
-                &list_with_overflow(&borrowed(&unknown), ", "),
-            ],
+            &[&list_with_overflow(&borrowed(&unknown), ", ")],
         ));
     }
     if !retired.is_empty() {
@@ -118,9 +118,7 @@ pub(super) fn salvaged_document_status(document: &ConfigDocument) -> StatusMessa
         .collect::<Vec<_>>();
     let message = trf(
         "Some settings could not be read, so the draft shows their built-in defaults: {}. Saving creates a backup, then replaces only those settings with this draft; the rest of the file is kept as written.",
-        &[
-            &list_with_overflow(&borrowed(&unreadable), "; "),
-        ],
+        &[&list_with_overflow(&borrowed(&unreadable), "; ")],
     );
     match config_document_status(document, &message) {
         StatusMessage::Success(text) => StatusMessage::warning(text),
@@ -164,9 +162,7 @@ pub(super) fn save_validation_note(validation: &ConfigValidationReport) -> Optio
     if !invalid.is_empty() {
         note.push_str(&trf(
             "Shortcuts that could not be parsed were left out of the saved configuration: {}.",
-            &[
-                &list_with_overflow(&borrowed(&invalid), "; "),
-            ],
+            &[&list_with_overflow(&borrowed(&invalid), "; ")],
         ));
     }
     if !conflicts.is_empty() {
@@ -218,7 +214,9 @@ pub(crate) fn migration_offer_text(preview: &MigrationPreview) -> String {
     let mut lines = vec![
         tr("Configuration update available").to_string(),
         trf(
-            tr("Shortcut defaults changed since this configuration was written. Applying updates this draft only; nothing reaches the file until you press Save, which also records revision {}."),
+            tr(
+                "Shortcut defaults changed since this configuration was written. Applying updates this draft only; nothing reaches the file until you press Save, which also records revision {}.",
+            ),
             &[&preview.proposed_revision()],
         ),
     ];

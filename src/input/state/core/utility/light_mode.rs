@@ -27,15 +27,15 @@ impl InputState {
             caps.shell_mode,
             caps.freeze_capture,
         ) {
-            (DesktopEnvironment::Gnome, ShellMode::XdgFallback, true) => tr(
-                "Light Mode passthrough is not supported in this GNOME Wayland session.",
-            ),
+            (DesktopEnvironment::Gnome, ShellMode::XdgFallback, true) => {
+                tr("Light Mode passthrough is not supported in this GNOME Wayland session.")
+            }
             (DesktopEnvironment::Gnome, ShellMode::XdgFallback, false) => tr(
                 "Light Mode passthrough is not supported in this GNOME Wayland session. Screen capture is also unavailable.",
             ),
-            (_, ShellMode::XdgFallback, _) => tr(
-                "Light Mode passthrough is not supported in this desktop session.",
-            ),
+            (_, ShellMode::XdgFallback, _) => {
+                tr("Light Mode passthrough is not supported in this desktop session.")
+            }
             _ => tr("Light Mode passthrough is not supported by this compositor."),
         }
     }

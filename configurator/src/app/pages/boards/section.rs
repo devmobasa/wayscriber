@@ -16,7 +16,6 @@ use super::header::build_header_row;
 use super::rows::{build_kind_row, build_text_row, build_toggle_row};
 use super::{BoardValues, SectionLayout};
 
-
 /// One section's refresh: built beside its row, so it owns that row's typed
 /// widget handles and the signal handler ids guarding each write. No
 /// positional lookup, and no widget the refresh can silently miss.

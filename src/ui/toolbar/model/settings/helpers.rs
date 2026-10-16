@@ -1,5 +1,5 @@
-use crate::i18n::tr;
 use super::*;
+use crate::i18n::tr;
 
 pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let mut buttons = vec![
@@ -211,9 +211,9 @@ pub(super) fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettin
             label: Cow::Borrowed(tr("Restore built-in order")),
             event: ToolbarEvent::ResetToolbarItemOrder(group),
             icon: ToolbarIcon::Back,
-            tooltip: ToolbarTooltip::text(
-                tr("Restore built-in order for this group; configured order is unchanged"),
-            ),
+            tooltip: ToolbarTooltip::text(tr(
+                "Restore built-in order for this group; configured order is unchanged",
+            )),
         });
     }
     buttons

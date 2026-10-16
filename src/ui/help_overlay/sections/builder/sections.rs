@@ -193,9 +193,15 @@ pub(super) fn build_main_sections(
             row("Shift+Click / Shift+Arrows", tr("Select text")),
             row("Alt+Drag", tr("Move the text block")),
             row("Left/Right, Ctrl+Left/Right", tr("Move by character/word")),
-            row("Home/End, Ctrl+Home/End", tr("Line start/end, text start/end")),
+            row(
+                "Home/End, Ctrl+Home/End",
+                tr("Line start/end, text start/end"),
+            ),
             row("Ctrl+A", tr("Select all text")),
-            row("Ctrl+C / Ctrl+X / Ctrl+V", tr("Copy / cut / paste selection")),
+            row(
+                "Ctrl+C / Ctrl+X / Ctrl+V",
+                tr("Copy / cut / paste selection"),
+            ),
             row("Backspace/Delete, +Ctrl", tr("Delete character/word")),
             row("Shift+Enter", tr("New line")),
             row("Enter", tr("Finish editing")),

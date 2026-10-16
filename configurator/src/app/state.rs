@@ -92,18 +92,18 @@ impl ConfirmationPrompt {
             ConfirmationPrompt::LeaveDraft => {
                 tr("You have unsaved changes. Save them, discard them, or cancel to keep editing.")
             }
-            ConfirmationPrompt::DefaultsReset => {
-                tr("Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.")
-            }
-            ConfirmationPrompt::SessionClear => {
-                tr("Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue.")
-            }
-            ConfirmationPrompt::ShortcutResetVisible => {
-                tr("Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save.")
-            }
-            ConfirmationPrompt::ShortcutResetAll => {
-                tr("Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save.")
-            }
+            ConfirmationPrompt::DefaultsReset => tr(
+                "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.",
+            ),
+            ConfirmationPrompt::SessionClear => tr(
+                "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue.",
+            ),
+            ConfirmationPrompt::ShortcutResetVisible => tr(
+                "Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save.",
+            ),
+            ConfirmationPrompt::ShortcutResetAll => tr(
+                "Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save.",
+            ),
         }
     }
 }

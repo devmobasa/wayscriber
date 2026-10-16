@@ -140,7 +140,12 @@ impl InputState {
         let mut entries = Vec::new();
 
         if with_header {
-            entries.push(ContextMenuEntry::new(tr("Arrange"), None::<String>, true, None));
+            entries.push(ContextMenuEntry::new(
+                tr("Arrange"),
+                None::<String>,
+                true,
+                None,
+            ));
         }
         entries.push(ContextMenuEntry::new(
             tr("Move to Front"),

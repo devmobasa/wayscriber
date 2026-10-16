@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use log::{debug, warn};
 
+use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::{
     self as stored_session, LoadSnapshotOutcome, SessionOptions, SessionSnapshot,
 };
-use crate::i18n::{tr, trf};
 
 /// A session left on disk unloaded because it expands beyond the safety cap.
 #[derive(Debug)]

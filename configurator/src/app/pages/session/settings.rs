@@ -12,7 +12,6 @@ use crate::models::{SessionCompressionOption, SessionStorageModeOption, TextFiel
 use super::super::super::search::SearchArea;
 use super::super::{PageBuilder, set_text_blocked};
 
-
 pub(super) fn add(page: &mut PageBuilder) {
     page.group_in_area(tr("Session Persistence"), SearchArea::SessionPersistence)
         .switch_row(
@@ -142,7 +141,9 @@ fn option_labels<O: Copy>(options: Vec<O>, label: impl Fn(&O) -> &'static str) -
 /// The custom directory only applies to one storage mode, so it is a row the
 /// mode shows rather than a row that is always there and usually inert.
 fn custom_directory_row(page: &mut PageBuilder) {
-    let row = adw::EntryRow::builder().title(tr("Custom directory")).build();
+    let row = adw::EntryRow::builder()
+        .title(tr("Custom directory"))
+        .build();
     let handler = {
         let sender = page.sender();
         row.connect_changed(move |row| {

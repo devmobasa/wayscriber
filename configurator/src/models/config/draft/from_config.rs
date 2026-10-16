@@ -3,11 +3,10 @@ use super::super::super::fields::ZoomChipDisplayOption;
 use super::super::super::fields::{
     ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, LanguageOption, PdfFitModeOption, PdfLabelContentModeOption,
-    PdfLabelPositionOption,
-    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
-    PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
+    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
     UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]

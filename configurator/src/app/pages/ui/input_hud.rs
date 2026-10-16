@@ -9,7 +9,6 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::{BuiltPage, PageBuilder, validate_u32_range};
 use super::{note, options, validate_f64_range};
 
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (modes, mode_labels) = options(InputHudModeOption::list(), |value| value.label());
     let (positions, position_labels) =

@@ -390,9 +390,7 @@ impl TopToolbarControl {
             Self::MicroChip => tr("Micro toolbar (click to show the full toolbar)").to_string(),
             Self::CanvasMenu => tr("Canvas: boards, pages, zoom, history, steps").to_string(),
             Self::SessionMenu => tr("Session: open, save, recent files").to_string(),
-            Self::SettingsMenu => {
-                tr("Settings: toolbar options and customization").to_string()
-            }
+            Self::SettingsMenu => tr("Settings: toolbar options and customization").to_string(),
             Self::HighlightRing => tr("Highlight ring").to_string(),
             _ => self.accessible_label(snapshot).into_owned(),
         }

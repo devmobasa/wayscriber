@@ -261,7 +261,10 @@ pub(super) fn render_page_panel(
     if page_count > visible {
         let first_label = first_visible + 1;
         let last_label = first_visible + visible;
-        let hint = trf("Pages {}-{} of {}", &[&first_label, &last_label, &page_count]);
+        let hint = trf(
+            "Pages {}-{} of {}",
+            &[&first_label, &last_label, &page_count],
+        );
         let overflow_hover = input_state.board_picker_page_overflow_at(pointer_x, pointer_y);
         if overflow_hover {
             constants::set_color(ctx, TEXT_TERTIARY);

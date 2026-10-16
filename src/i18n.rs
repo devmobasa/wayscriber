@@ -166,7 +166,7 @@ pub fn tr(source: &'static str) -> &'static str {
 
 /// The lookup [`tr`] performs, split out so tests can exercise a language
 /// without moving the process-global selection.
-fn lookup<'a>(language: Language, source: &'a str) -> &'a str {
+fn lookup(language: Language, source: &str) -> &str {
     let Some(catalog) = language.catalog_code().and_then(catalog) else {
         return source;
     };
@@ -278,7 +278,10 @@ fn read_user_catalog(code: &str) -> Option<String> {
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => {
-            log::warn!("Locale override {} could not be read: {err}", path.display());
+            log::warn!(
+                "Locale override {} could not be read: {err}",
+                path.display()
+            );
             None
         }
     }

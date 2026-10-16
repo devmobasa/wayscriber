@@ -8,7 +8,6 @@ use crate::models::{DaemonRuntimeStatus, ShortcutApplyCapability};
 
 use super::super::super::state::ConfiguratorApp;
 
-
 /// Emphasis for a status line, mapped to the Adwaita state classes that
 /// stand in for the Iced view's literal colors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,7 +87,9 @@ pub(super) fn service_status(running: bool, enabled: bool) -> (&'static str, Ton
 pub(super) fn shortcut_placeholder(capability: Option<ShortcutApplyCapability>) -> &'static str {
     match capability {
         Some(ShortcutApplyCapability::GnomeCustomShortcut) => tr("e.g. Super+G or <Super>g"),
-        Some(ShortcutApplyCapability::PortalServiceDropIn) => tr("e.g. Ctrl+Shift+G or <Ctrl><Shift>g"),
+        Some(ShortcutApplyCapability::PortalServiceDropIn) => {
+            tr("e.g. Ctrl+Shift+G or <Ctrl><Shift>g")
+        }
         _ => tr("e.g. Ctrl+Shift+G"),
     }
 }

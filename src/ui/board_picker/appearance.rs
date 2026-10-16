@@ -218,7 +218,9 @@ pub(super) fn render(
         .error
         .as_deref()
         .or_else(|| edit.validation_error())
-        .unwrap_or(tr("Session only • Tab: field • arrows: pattern • Enter: Apply"));
+        .unwrap_or(tr(
+            "Session only • Tab: field • arrows: pattern • Enter: Apply",
+        ));
     engine.draw_baseline(
         ctx,
         UiTextStyle {

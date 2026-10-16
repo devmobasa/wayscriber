@@ -70,35 +70,35 @@ impl SessionCatalogOperation {
 
     pub(crate) fn running_daemon_message(self) -> &'static str {
         match self {
-            Self::Clear => {
-                tr("Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay.")
-            }
-            Self::ClearToolState => {
-                tr("Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first.")
-            }
-            Self::Duplicate => {
-                tr("Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session.")
-            }
-            Self::Move => {
-                tr("Move Session is disabled while the background service or a manually started daemon is running. Stop it first or move from the overlay after opening the session.")
-            }
+            Self::Clear => tr(
+                "Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay.",
+            ),
+            Self::ClearToolState => tr(
+                "Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first.",
+            ),
+            Self::Duplicate => tr(
+                "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session.",
+            ),
+            Self::Move => tr(
+                "Move Session is disabled while the background service or a manually started daemon is running. Stop it first or move from the overlay after opening the session.",
+            ),
         }
     }
 
     pub(crate) fn running_overlay_message(self) -> &'static str {
         match self {
-            Self::Clear => {
-                tr("Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session.")
-            }
-            Self::ClearToolState => {
-                tr("Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session.")
-            }
-            Self::Duplicate => {
-                tr("Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session.")
-            }
-            Self::Move => {
-                tr("Move Session is disabled while an overlay is running. Active session moves must use a runtime transaction.")
-            }
+            Self::Clear => tr(
+                "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session.",
+            ),
+            Self::ClearToolState => tr(
+                "Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session.",
+            ),
+            Self::Duplicate => tr(
+                "Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session.",
+            ),
+            Self::Move => tr(
+                "Move Session is disabled while an overlay is running. Active session moves must use a runtime transaction.",
+            ),
         }
     }
 
@@ -107,12 +107,12 @@ impl SessionCatalogOperation {
             Self::Clear => {
                 tr("Clear saved data is disabled until background service status finishes loading.")
             }
-            Self::ClearToolState => {
-                tr("Clear saved tool state is disabled until background service status finishes loading.")
-            }
-            Self::Duplicate => {
-                tr("Duplicate Session is disabled until background service status finishes loading.")
-            }
+            Self::ClearToolState => tr(
+                "Clear saved tool state is disabled until background service status finishes loading.",
+            ),
+            Self::Duplicate => tr(
+                "Duplicate Session is disabled until background service status finishes loading.",
+            ),
             Self::Move => {
                 tr("Move Session is disabled until background service status finishes loading.")
             }

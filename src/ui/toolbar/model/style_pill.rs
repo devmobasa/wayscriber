@@ -40,9 +40,8 @@ pub(crate) use arrow_menu::{
 pub(crate) use meter::{METER_ZERO_SLOT_W, StrokeSetting, StylePillMeter, StylePillMeterSegment};
 pub(crate) use pen_feel::{
     PEN_FEEL_BARS_H, PEN_FEEL_CONTENT_W, PEN_FEEL_HEADER_H, PEN_FEEL_HINT_H, PEN_FEEL_PAD,
-    PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE_H,
-    PenFeelSection, pen_feel_id, pen_feel_panel_size, pen_feel_sections, pen_feel_settings,
-    pen_feel_title,
+    PEN_FEEL_PREVIEW_H, PEN_FEEL_ROW_GAP, PEN_FEEL_SECTION_GAP, PEN_FEEL_TITLE_H, PenFeelSection,
+    pen_feel_id, pen_feel_panel_size, pen_feel_sections, pen_feel_settings, pen_feel_title,
 };
 
 use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};

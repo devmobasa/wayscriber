@@ -224,10 +224,9 @@ impl InputState {
         match self.color_picker_popup.target() {
             Some(ColorPickerTarget::QuickColor(index)) => {
                 match self.style.quick_colors.entry(index) {
-                    Some(entry) => Cow::Owned(trf(
-                        "Recolor {}",
-                        &[&single_line_slot_label(&entry.label)],
-                    )),
+                    Some(entry) => {
+                        Cow::Owned(trf("Recolor {}", &[&single_line_slot_label(&entry.label)]))
+                    }
                     None => Cow::Borrowed(tr("Recolor swatch")),
                 }
             }

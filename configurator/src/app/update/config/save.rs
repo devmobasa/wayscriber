@@ -40,8 +40,9 @@ impl ConfiguratorApp {
         }
 
         if self.shortcuts.editor().is_some() || self.shortcuts.recorder().is_some() {
-            self.status =
-                StatusMessage::error(tr("Apply or cancel the unfinished shortcut edit before saving."));
+            self.status = StatusMessage::error(tr(
+                "Apply or cancel the unfinished shortcut edit before saving.",
+            ));
             return Vec::new();
         }
 
@@ -52,9 +53,9 @@ impl ConfiguratorApp {
 
         // Validate against the loaded document before starting any transfer.
         let Some(document) = self.document.loaded() else {
-            self.status = StatusMessage::error(
-                tr("Configuration has not loaded successfully. Reload before saving."),
-            );
+            self.status = StatusMessage::error(tr(
+                "Configuration has not loaded successfully. Reload before saving.",
+            ));
             return Vec::new();
         };
 

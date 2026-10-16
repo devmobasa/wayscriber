@@ -9,12 +9,12 @@ use crate::config::{Action, TrayIconStyle, action_label};
 #[cfg(feature = "tray")]
 use crate::configurator_destination::{ConfiguratorDestination, ConfiguratorScreen};
 #[cfg(feature = "tray")]
-use crate::i18n::{tr, trf};
-#[cfg(feature = "tray")]
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, ICON_THEME_PATH_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV,
     XDG_SESSION_DESKTOP_ENV,
 };
+#[cfg(feature = "tray")]
+use crate::i18n::{tr, trf};
 #[cfg(feature = "tray")]
 use crate::label_format::format_binding_label;
 #[cfg(feature = "tray")]
@@ -80,7 +80,11 @@ impl ksni::Tray for WayscriberTray {
             tr("Toggle overlay, open configurator, or quit from the tray").to_string();
         description.push('\n');
         description.push_str(tr("Overlay: "));
-        description.push_str(if overlay_active { tr("active") } else { tr("hidden") });
+        description.push_str(if overlay_active {
+            tr("active")
+        } else {
+            tr("hidden")
+        });
 
         if let Some(update) = available_update.as_ref() {
             description.push('\n');
@@ -103,10 +107,7 @@ impl ksni::Tray for WayscriberTray {
             if let Some(next_retry_at) = error.next_retry_at {
                 let remaining = next_retry_at.saturating_duration_since(Instant::now());
                 if remaining > Duration::from_secs(0) {
-                    description.push_str(&trf(
-                        " (retry in {}s)",
-                        &[&remaining.as_secs().max(1)],
-                    ));
+                    description.push_str(&trf(" (retry in {}s)", &[&remaining.as_secs().max(1)]));
                 }
             }
         }
@@ -140,7 +141,11 @@ impl ksni::Tray for WayscriberTray {
         let use_theme_icons = menu_theme_icons_enabled();
         let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let toggle_label = toggle_overlay_menu_label();
-        let overlay_state = if overlay_active { tr("active") } else { tr("hidden") };
+        let overlay_state = if overlay_active {
+            tr("active")
+        } else {
+            tr("hidden")
+        };
 
         let mut items: Vec<MenuItem<Self>> = Vec::new();
 

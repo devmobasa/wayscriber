@@ -36,11 +36,7 @@ pub(super) fn run_command(program: &str, args: &[&str]) -> Result<CommandCapture
     let output = Command::new(program).args(args).output().map_err(|err| {
         trf(
             "Failed to execute `{}` with args [{}]: {}",
-            &[
-                &program,
-                &args.join(" "),
-                &err,
-            ],
+            &[&program, &args.join(" "), &err],
         )
     })?;
     Ok(CommandCapture {

@@ -10,14 +10,14 @@ use crate::models::{
     KeybindingsTabId, KeyboardModifiers, LanguageOption, NamedColorOption, OverrideOption,
     PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
     PdfPageSizeOption, PdfTransparentBackgroundOption, PresenterToolBehaviorOption,
-    PresenterToolbarModeOption,
-    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
-    RecorderDeviceKind, ReducedMotionOption, RegionPickerOption, RenderProfileExportOption,
-    RenderProfileMappingSide, RenderProfileTextField, SessionCatalogActionResult,
-    SessionCatalogItem, SessionCompressionOption, SessionStorageModeOption, ShortcutManagerFilter,
-    ShortcutManagerSort, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    ToolbarStrokeControlsOption, UiTabId, UiThemeOption, ZoomChipDisplayOption,
+    PresenterToolbarModeOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
+    PresetToggleField, RecorderDeviceKind, ReducedMotionOption, RegionPickerOption,
+    RenderProfileExportOption, RenderProfileMappingSide, RenderProfileTextField,
+    SessionCatalogActionResult, SessionCatalogItem, SessionCompressionOption,
+    SessionStorageModeOption, ShortcutManagerFilter, ShortcutManagerSort, StatusPositionOption,
+    TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, ToolbarStrokeControlsOption, UiTabId, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

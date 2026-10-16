@@ -133,7 +133,9 @@ impl OcrFailure {
     /// Stable user-facing message. Never includes engine output.
     pub(crate) fn message(&self) -> String {
         match self {
-            Self::EngineMissing => tr("Install Tesseract to use screen text recognition.").to_string(),
+            Self::EngineMissing => {
+                tr("Install Tesseract to use screen text recognition.").to_string()
+            }
             Self::LanguageMissing { languages } => {
                 trf("Tesseract has no language data for \"{}\".", &[languages])
             }

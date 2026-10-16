@@ -11,7 +11,6 @@ use adw::prelude::*;
 use relm4::{ComponentSender, adw, gtk};
 use wayscriber::domain::BoardGridKind;
 
-
 pub(super) fn build(
     index: usize,
     layout: SectionLayout,

@@ -70,11 +70,7 @@ fn move_session_catalog_entry_sync(
             return Ok(SessionCatalogActionResult::warning(
                 trf(
                     "Moved {} to {}, but failed to reload the session catalog: {}",
-                    &[
-                        &item.display_name,
-                        &Path::new(&entry.path).display(),
-                        &err,
-                    ],
+                    &[&item.display_name, &Path::new(&entry.path).display(), &err],
                 ),
                 initial_items,
             ));
@@ -84,10 +80,7 @@ fn move_session_catalog_entry_sync(
     Ok(SessionCatalogActionResult::success(
         trf(
             "Moved {} to {}.",
-            &[
-                &item.display_name,
-                &Path::new(&entry.path).display(),
-            ],
+            &[&item.display_name, &Path::new(&entry.path).display()],
         ),
         items,
     ))
@@ -131,9 +124,7 @@ fn reject_catalog_target_collision(
     }) {
         return Err(trf(
             "Move Session target is already in the catalog as {}.",
-            &[
-                &existing.display_name,
-            ],
+            &[&existing.display_name],
         ));
     }
     Ok(())

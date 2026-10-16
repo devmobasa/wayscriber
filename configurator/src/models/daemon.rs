@@ -143,7 +143,9 @@ impl LightShortcutApplyCapability {
 
     pub fn friendly_label(self) -> &'static str {
         match self {
-            Self::HyprlandNative => tr("Light controls setup available via Hyprland native bindings"),
+            Self::HyprlandNative => {
+                tr("Light controls setup available via Hyprland native bindings")
+            }
             Self::Manual => tr("Light controls setup requires manual compositor bindings"),
         }
     }

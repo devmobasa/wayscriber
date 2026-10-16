@@ -184,7 +184,9 @@ pub fn action_meta(action: Action) -> Option<&'static ActionMeta> {
 /// The untranslated label from the metadata table, falling back to a word for
 /// actions that have no entry.
 fn source_label(action: Action) -> &'static str {
-    action_meta(action).map(|meta| meta.label).unwrap_or("Action")
+    action_meta(action)
+        .map(|meta| meta.label)
+        .unwrap_or("Action")
 }
 
 pub fn action_label(action: Action) -> &'static str {

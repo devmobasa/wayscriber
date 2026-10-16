@@ -101,9 +101,10 @@ impl CapturePreflightError {
     pub(super) fn message(&self, domain: &str) -> String {
         match self {
             Self::StaleLayout => trf("{} failed after the display layout changed", &[&domain]),
-            Self::LayoutDidNotSettle => {
-                trf("{} failed because the display layout did not settle", &[&domain])
-            }
+            Self::LayoutDidNotSettle => trf(
+                "{} failed because the display layout did not settle",
+                &[&domain],
+            ),
             Self::LostSuppression => tr("Capture retry lost overlay suppression").to_string(),
             Self::Backend(message) => message.clone(),
         }

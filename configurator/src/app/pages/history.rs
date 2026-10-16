@@ -21,7 +21,6 @@ use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder, set_text_blocked, validate_u32_range};
 
-
 /// Delay bounds, in milliseconds, shared by every delay field here.
 const DELAY_RANGE: (u32, u32) = (50, 5000);
 /// Step-count bounds for the custom section's undo/redo counts.

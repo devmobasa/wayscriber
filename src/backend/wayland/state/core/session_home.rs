@@ -32,7 +32,10 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Info,
             "session",
-            Toast::warning(trf("{}; opened {}", &[&message, &self.session_home.label()])),
+            Toast::warning(trf(
+                "{}; opened {}",
+                &[&message, &self.session_home.label()],
+            )),
         );
     }
 

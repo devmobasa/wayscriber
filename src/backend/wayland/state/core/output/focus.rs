@@ -11,7 +11,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "output",
-                Toast::info(tr("Multi-monitor focus is disabled (ui.multi_monitor_enabled=false)")),
+                Toast::info(tr(
+                    "Multi-monitor focus is disabled (ui.multi_monitor_enabled=false)",
+                )),
             );
             self.input_state.trigger_blocked_feedback();
             return;
