@@ -55,6 +55,7 @@ pub const XDG_ACTIVATION_TOKEN_ENV: &str = "XDG_ACTIVATION_TOKEN";
 pub const XDG_CACHE_HOME_ENV: &str = "XDG_CACHE_HOME";
 pub const XDG_CONFIG_HOME_ENV: &str = "XDG_CONFIG_HOME";
 pub const XDG_DATA_HOME_ENV: &str = "XDG_DATA_HOME";
+pub const XDG_DATA_DIRS_ENV: &str = "XDG_DATA_DIRS";
 pub const XDG_PICTURES_DIR_ENV: &str = "XDG_PICTURES_DIR";
 pub const XDG_RUNTIME_DIR_ENV: &str = "XDG_RUNTIME_DIR";
 /// Seat this session belongs to; the input HUD's system capture follows it so

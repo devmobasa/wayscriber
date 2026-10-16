@@ -1,9 +1,10 @@
 use std::env;
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::env_vars::{
-    HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
-    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
+    HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_DIRS_ENV,
+    XDG_DATA_HOME_ENV, XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
 };
 
 /// Resolve the user's home directory.
@@ -51,6 +52,53 @@ pub fn data_dir() -> Option<PathBuf> {
         return Some(PathBuf::from(dir));
     }
     home_dir().map(|home| home.join(".local").join("share"))
+}
+
+/// The data directories a program following the XDG base directory spec
+/// searches, most important first: the data home, then the system data
+/// directories.
+///
+/// Unlike [`data_dir`], this ignores relative values, as the spec requires, so
+/// the result does not depend on the current directory.
+pub fn searched_data_dirs() -> Vec<PathBuf> {
+    searched_data_dirs_from(
+        env::var_os(XDG_DATA_HOME_ENV),
+        home_dir(),
+        env::var_os(XDG_DATA_DIRS_ENV),
+    )
+}
+
+/// Reads `XDG_DATA_HOME` and `XDG_DATA_DIRS` values as the base directory spec
+/// does: an unset, empty, or relative data home means `~/.local/share`.
+fn searched_data_dirs_from(
+    data_home: Option<OsString>,
+    home: Option<PathBuf>,
+    data_dirs: Option<OsString>,
+) -> Vec<PathBuf> {
+    let data_home = data_home
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+        .or_else(|| home.map(|home| home.join(".local").join("share")))
+        .filter(|dir| dir.is_absolute());
+
+    data_home
+        .into_iter()
+        .chain(system_data_dirs_from(data_dirs))
+        .collect()
+}
+
+/// Parses an `XDG_DATA_DIRS` value as the base directory spec reads it: an
+/// unset or empty value means the defaults, and relative entries are ignored.
+fn system_data_dirs_from(value: Option<OsString>) -> Vec<PathBuf> {
+    let Some(value) = value.filter(|value| !value.is_empty()) else {
+        return vec![
+            PathBuf::from("/usr/local/share"),
+            PathBuf::from("/usr/share"),
+        ];
+    };
+    env::split_paths(&value)
+        .filter(|dir| dir.is_absolute())
+        .collect()
 }
 
 /// Location for generated, persistent runtime UI preferences. This is kept

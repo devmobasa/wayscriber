@@ -3,6 +3,8 @@ use super::super::types::TrayStatus;
 #[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
+use super::icon_theme_path::resolve_icon_theme_path;
+#[cfg(feature = "tray")]
 use super::shortcut_hint_io::configured_toggle_shortcut_hint;
 #[cfg(feature = "tray")]
 use crate::config::{Action, TrayIconStyle, action_label};
@@ -10,8 +12,7 @@ use crate::config::{Action, TrayIconStyle, action_label};
 use crate::configurator_destination::{ConfiguratorDestination, ConfiguratorScreen};
 #[cfg(feature = "tray")]
 use crate::env_vars::{
-    DESKTOP_SESSION_ENV, ICON_THEME_PATH_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV,
-    XDG_SESSION_DESKTOP_ENV,
+    DESKTOP_SESSION_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
 };
 #[cfg(feature = "tray")]
 use crate::label_format::format_binding_label;
@@ -21,8 +22,6 @@ use crate::tray_action::TrayAction;
 use log::{info, warn};
 #[cfg(feature = "tray")]
 use std::env;
-#[cfg(feature = "tray")]
-use std::path::PathBuf;
 #[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
 #[cfg(feature = "tray")]
@@ -60,7 +59,7 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn icon_theme_path(&self) -> String {
-        resolve_icon_theme_path()
+        resolve_icon_theme_path(tray_symbolic_icon_enabled(self.icon_style))
     }
 
     fn tool_tip(&self) -> ksni::ToolTip {
@@ -424,16 +423,6 @@ fn menu_icon_name(name: &str, use_theme_icons: bool) -> String {
 }
 
 #[cfg(feature = "tray")]
-fn resolve_icon_theme_path() -> String {
-    if let Ok(value) = env::var(ICON_THEME_PATH_ENV) {
-        return value;
-    }
-    installed_icon_theme_path()
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-#[cfg(feature = "tray")]
 fn tray_theme_icons_supported(desktop_env: &str, session_env: &str, desktop_session: &str) -> bool {
     !tray_theme_icons_blocked_by_desktop(desktop_env)
         && !tray_theme_icons_blocked_by_desktop(session_env)
@@ -446,14 +435,6 @@ fn tray_theme_icons_blocked_by_desktop(value: &str) -> bool {
         || value.contains("omarchy")
         || value.contains("quickshell")
         || value.contains("cosmic")
-}
-
-#[cfg(feature = "tray")]
-fn installed_icon_theme_path() -> Option<PathBuf> {
-    let exe_path = env::current_exe().ok()?;
-    let install_root = exe_path.parent()?.parent()?;
-    let icon_theme_path = install_root.join("share/icons");
-    icon_theme_path.is_dir().then_some(icon_theme_path)
 }
 
 #[cfg(feature = "tray")]

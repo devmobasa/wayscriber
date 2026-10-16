@@ -1,5 +1,7 @@
 mod helpers;
 #[cfg(feature = "tray")]
+mod icon_theme_path;
+#[cfg(feature = "tray")]
 mod ksni;
 mod runtime;
 #[cfg(feature = "tray")]

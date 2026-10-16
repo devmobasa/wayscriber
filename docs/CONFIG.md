@@ -913,6 +913,8 @@ icon_style = "auto"
 
 `WAYSCRIBER_TRAY_FORCE_PIXMAP=1` takes precedence over this setting and also disables named menu icons for compatibility with tray hosts that render them incorrectly.
 
+With the symbolic icon, the tray also advertises the install prefix's `share/icons` directory as its icon theme path, so hosts can find the icon in a custom install such as `/opt/wayscriber`. It is left out when the host already searches that directory through `XDG_DATA_HOME` or `XDG_DATA_DIRS`, as with `/usr` and `/usr/local` installs. `WAYSCRIBER_ICON_THEME_PATH` replaces the advertised path; set it to an empty value to advertise none.
+
 The tray menu reads the configuration to draw itself and changes none of it. Its **Session
 persistence settings…** entry launches the configurator on the Session screen, where the change is
 made and saved.
@@ -2684,6 +2686,7 @@ wayscriber --daemon &
 These override behavior at runtime. Bool-ish values treat anything except `0`, `false`, or `off` as true.
 
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
+- `WAYSCRIBER_ICON_THEME_PATH=/path/to/icons` replaces the icon theme path the tray advertises; an empty value advertises none (default: the install prefix's `share/icons` with the symbolic tray icon, unless the XDG data directories already cover it)
 - `WAYSCRIBER_RESUME_SESSION=1/0` forces session persistence on/off for the current run (default: unset; follows config)
 - `WAYSCRIBER_CONFIGURATOR=/path/to/wayscriber-configurator` overrides the configurator executable path
 - `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` disables the background update check for this run (overrides `[updates] check`; `--check-update` still works)
