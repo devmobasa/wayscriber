@@ -415,10 +415,13 @@ theme = "auto"
 # currently behaves like "off" (full motion).
 reduced_motion = "auto"
 
-# UI language for overlay chrome: help, toolbars, menus, toasts, and settings.
+# UI language: overlay chrome (help, toolbars, menus, toasts, settings), the
+# About window, background mode's tray and notices, and the configurator.
 # Options: "auto", "en", "zh-CN". "auto" follows the desktop locale
 # (WAYSCRIBER_LANGUAGE, then LANGUAGE/LC_ALL/LC_MESSAGES/LANG) and falls back
-# to English when that locale has no translation.
+# to English when that locale has no translation. Each process reads this when
+# it starts: the overlay and About window on their next open, background mode
+# after a restart.
 language = "auto"
 
 # Show the status bar and its configured contents

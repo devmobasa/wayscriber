@@ -958,9 +958,10 @@ theme = "auto"
 # Options: "auto", "on", "off"
 reduced_motion = "auto"
 
-# UI language for overlay chrome
+# UI language: overlay chrome, About window, background mode, configurator
 # Options: "auto", "en", "zh-CN" ("auto" follows the desktop locale and falls
-# back to English when that locale has no translation)
+# back to English when that locale has no translation). Each process reads it
+# when it starts; background mode needs a restart.
 language = "auto"
 
 # Show the status bar and its configured contents
@@ -1136,7 +1137,7 @@ to save it.
 **Theme, Motion & Language:**
 - **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome. The command palette supports `"light"` throughout its search, results, shortcut editing, and tooltips. Other popups retain their complete dark palette until migrated.
 - **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
-- **Language**: `language` selects the language of the overlay chrome — `"auto"` (default) follows the desktop locale, `"en"` forces English, and `"zh-CN"` forces Simplified Chinese. A locale this build has no catalog for falls back to English, so `"auto"` is always safe; `WAYSCRIBER_LANGUAGE` overrides the setting for one run. Canvas content you type or name stays exactly as you wrote it. See `docs/I18N.md` for the catalog format and the surfaces that are not translated yet.
+- **Language**: `language` selects the interface language — overlay chrome, the About window, background mode's tray and notices, and the configurator. `"auto"` (default) follows the desktop locale, `"en"` forces English, and `"zh-CN"` forces Simplified Chinese. A locale this build has no catalog for falls back to English, so `"auto"` is always safe; `WAYSCRIBER_LANGUAGE` overrides the setting for one run. Picking a language in the configurator previews it there at once and is written on Save; the overlay and the About window use it the next time they open, and background mode after it restarts. `"auto"` follows each process's own locale, and a systemd user service can see a different one than your terminal. Canvas content you type or name stays exactly as you wrote it. See `docs/I18N.md` for the catalog format, local catalog overrides, and the surfaces that are not translated yet.
 
 **UI Styling:**
 - **Font sizes**: Customize text size for status bar and help overlay

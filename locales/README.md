@@ -10,7 +10,9 @@ language shows instead.
 ```
 
 - Only values are translated. Never change a key; it is the lookup key.
-- Keep the number of `{}` placeholders equal to the key's. Order may differ.
+- Keep the number of `{}` placeholders equal to the key's. A placeholder may
+  move within the sentence, but values fill them in order: the first `{}` in
+  the value always receives the first value, so two cannot be swapped.
 - An entry whose value equals its key is dead weight and fails the guard.
 - The file is ordered by key, case-insensitively.
 
@@ -24,4 +26,6 @@ See `docs/I18N.md` for the whole workflow, and `src/i18n.rs` for how a catalog
 is loaded. A copy of a catalog placed in
 `$XDG_DATA_HOME/wayscriber/locales/<code>.toml` (or the directory
 `WAYSCRIBER_LOCALE_DIR` names) merges over the embedded one, which is how a
-translation is corrected without rebuilding.
+translation is corrected without rebuilding. It must be a regular file of at
+most 1 MiB, not a symbolic link; otherwise it is ignored and the embedded
+catalog is used.
