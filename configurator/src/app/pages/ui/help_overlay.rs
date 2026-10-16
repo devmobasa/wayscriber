@@ -33,9 +33,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         ColorPickerId::HelpBorder,
         |app| quad_color(&app.draft.help_border_color.components),
     );
-    color_row(&mut page, "Text (hex)", ColorPickerId::HelpText, |app| {
-        quad_color(&app.draft.help_text_color.components)
-    });
+    color_row(
+        &mut page,
+        tr("Text (hex)"),
+        ColorPickerId::HelpText,
+        |app| quad_color(&app.draft.help_text_color.components),
+    );
     page.entry_row(
         tr("Font family"),
         |app| app.draft.help_font_family.clone(),

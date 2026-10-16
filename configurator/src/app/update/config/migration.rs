@@ -38,14 +38,14 @@ impl ConfiguratorApp {
         } else {
             tr("shortcut updates")
         };
-        let mut message = format!("Applied {applied} {label} to the draft.");
+        let mut message = trf("Applied {} {} to the draft.", &[&applied, &label]);
         if !kept.is_empty() {
             message.push_str(&trf(
                 " Kept your edit to {}.",
                 &[&list_with_overflow(&kept, ", ")],
             ));
         }
-        message.push_str(" Nothing is written until you press Save.");
+        message.push_str(tr(" Nothing is written until you press Save."));
         self.status = StatusMessage::info(message);
         self.refresh_dirty_flag();
 

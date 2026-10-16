@@ -64,7 +64,10 @@ pub(super) fn check_board_list(
     errors: &mut Vec<FormError>,
 ) {
     if max_count == Some(0) {
-        errors.push(FormError::new("boards.max_count", "Expected at least 1"));
+        errors.push(FormError::new(
+            "boards.max_count",
+            tr("Expected at least 1"),
+        ));
     }
 
     let mut first_index_by_id: HashMap<String, usize> = HashMap::new();
@@ -74,7 +77,7 @@ pub(super) fn check_board_list(
         if lowercase != id {
             errors.push(FormError::new(
                 field,
-                format!("Board ids are lowercase; use \"{lowercase}\""),
+                trf("Board ids are lowercase; use \"{}\"", &[&lowercase]),
             ));
             continue;
         }
@@ -82,7 +85,7 @@ pub(super) fn check_board_list(
         if let Some(first) = first_index_by_id.get(&id) {
             errors.push(FormError::new(
                 field,
-                format!("Board {} already uses the id \"{id}\"", first + 1),
+                trf("Board {} already uses the id \"{}\"", &[&(first + 1), &id]),
             ));
             continue;
         }

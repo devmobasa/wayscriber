@@ -75,7 +75,10 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
                 validate_ocr_languages(&app.draft.capture.ocr_languages)
                     .err()
                     .map(|reason| {
-                        format!("{reason}. Use Tesseract codes joined by '+', such as eng+deu.")
+                        trf(
+                            "{}. Use Tesseract codes joined by '+', such as eng+deu.",
+                            &[&reason],
+                        )
                     })
             },
         );

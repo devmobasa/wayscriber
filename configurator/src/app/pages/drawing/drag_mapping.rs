@@ -1,4 +1,4 @@
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use relm4::gtk;
 
@@ -93,7 +93,7 @@ fn build_drag_button_section(page: &mut PageBuilder, button: DragMouseButton) {
         section_combo_row(
             page,
             &list,
-            &format!("{} color", field.label()),
+            &trf("{} color", &[&field.label()]),
             colors.clone(),
             color_labels.clone(),
             move |app| drag_color_for_field(drag_button_config(app, button), field),

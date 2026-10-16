@@ -28,20 +28,26 @@ pub(super) fn add(page: &mut PageBuilder) {
 
     let sender = page.sender();
     let body = column_box();
-    let refresh = message_button("Refresh", &sender, Message::SessionCatalogRefreshRequested);
+    let refresh = message_button(
+        tr("Refresh"),
+        &sender,
+        Message::SessionCatalogRefreshRequested,
+    );
     let toolbar = row_box();
     toolbar.append(&refresh);
     body.append(&toolbar);
     body.append(&hint_label(tr(
         "Clear Tool State applies config defaults without deleting boards.",
     )));
-    body.append(&hint_label("Clear Saved Data removes saved session files."));
+    body.append(&hint_label(tr(
+        "Clear Saved Data removes saved session files.",
+    )));
 
     let blocker_label = warning_label("");
     body.append(&blocker_label);
-    let loading_label = body_label("Loading sessions...");
+    let loading_label = body_label(tr("Loading sessions..."));
     body.append(&loading_label);
-    let empty_label = body_label("No named sessions in the catalog yet.");
+    let empty_label = body_label(tr("No named sessions in the catalog yet."));
     body.append(&empty_label);
 
     let list = gtk::Box::builder()

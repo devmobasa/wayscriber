@@ -16,7 +16,7 @@ pub(super) fn validate_performance_u32(
     }
 
     let expected = match metadata.constraint {
-        ScalarConstraint::Unsigned { min, max } => format!("Expected {min}-{max}"),
+        ScalarConstraint::Unsigned { min, max } => trf("Expected {}-{}", &[&min, &max]),
         ScalarConstraint::UnsignedChoice(values) => trf(
             "Expected one of {}",
             &[&values

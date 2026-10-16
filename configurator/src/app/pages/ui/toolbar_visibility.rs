@@ -143,7 +143,10 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
         let unknown = resolved.unknown_hidden.len() + resolved.unknown_shown.len();
         let notice_text = if unknown > 0 {
-            format!("Preserving {unknown} unknown toolbar item id(s) from config.")
+            trf(
+                "Preserving {} unknown toolbar item id(s) from config.",
+                &[&unknown],
+            )
         } else {
             String::new()
         };
@@ -305,9 +308,9 @@ fn move_button(
     delta: isize,
 ) -> gtk::Button {
     let (icon, tooltip) = if delta < 0 {
-        ("go-up-symbolic", "Move up")
+        ("go-up-symbolic", tr("Move up"))
     } else {
-        ("go-down-symbolic", "Move down")
+        ("go-down-symbolic", tr("Move down"))
     };
     let button = gtk::Button::builder()
         .icon_name(icon)

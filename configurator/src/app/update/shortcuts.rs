@@ -4,6 +4,7 @@
 mod tests;
 
 use wayscriber::config::Shortcut;
+use wayscriber::i18n::tr;
 
 use crate::app::search::keybinding_row_visible;
 use crate::app::state::{ConfirmationPrompt, PendingConfirmation};
@@ -361,7 +362,7 @@ impl ConfiguratorApp {
             &self.defaults.keybindings,
             &fields,
         );
-        self.status = StatusMessage::info("Reset visible keybindings (not saved).");
+        self.status = StatusMessage::info(tr("Reset visible keybindings (not saved)."));
         self.refresh_dirty_flag();
         Vec::new()
     }
@@ -385,7 +386,7 @@ impl ConfiguratorApp {
         self.pending_confirmation = None;
         self.draft.keybindings = self.defaults.keybindings.clone();
         self.clear_shortcut_editing();
-        self.status = StatusMessage::info("Reset all keybindings (not saved).");
+        self.status = StatusMessage::info(tr("Reset all keybindings (not saved)."));
         self.refresh_dirty_flag();
         Vec::new()
     }
@@ -400,7 +401,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_shortcut_conflict_review_started(&mut self) -> Vec<Effect> {
         if !self.shortcut_manager_summary().has_conflicts() {
             self.shortcuts.review = false;
-            self.status = StatusMessage::info("No shortcut conflicts to review.");
+            self.status = StatusMessage::info(tr("No shortcut conflicts to review."));
             return Vec::new();
         }
         self.shortcuts.review = true;
@@ -422,11 +423,11 @@ impl ConfiguratorApp {
                         claimants,
                     },
                 ));
-                self.status = StatusMessage::info("Review the next conflicting shortcut.");
+                self.status = StatusMessage::info(tr("Review the next conflicting shortcut."));
             }
             None => {
                 self.shortcuts.review = false;
-                self.status = StatusMessage::success("No remaining shortcut conflicts.");
+                self.status = StatusMessage::success(tr("No remaining shortcut conflicts."));
             }
         }
     }

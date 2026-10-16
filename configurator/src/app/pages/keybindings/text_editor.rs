@@ -30,7 +30,7 @@ impl TextEditorPopover {
             .hexpand(true)
             .width_chars(28)
             .build();
-        set_accessible_label(&entry, "Shortcut list");
+        set_accessible_label(&entry, tr("Shortcut list"));
         let entry_handler = {
             let sender = sender.clone();
             entry.connect_changed(move |entry| {
@@ -48,7 +48,7 @@ impl TextEditorPopover {
             .label(tr("Apply"))
             .css_classes(["suggested-action"])
             .build();
-        set_accessible_label(&apply, "Apply shortcut text");
+        set_accessible_label(&apply, tr("Apply shortcut text"));
         {
             let sender = sender.clone();
             apply.connect_clicked(move |_| {
@@ -56,7 +56,7 @@ impl TextEditorPopover {
             });
         }
         let cancel = gtk::Button::builder().label(tr("Cancel")).build();
-        set_accessible_label(&cancel, "Cancel text editing");
+        set_accessible_label(&cancel, tr("Cancel text editing"));
         {
             let sender = sender.clone();
             cancel.connect_clicked(move |_| {

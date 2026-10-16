@@ -44,7 +44,7 @@ impl RecorderPopover {
             .max_width_chars(36)
             .can_focus(true)
             .build();
-        set_accessible_label(&prompt, "Shortcut recorder");
+        set_accessible_label(&prompt, tr("Shortcut recorder"));
 
         let hint = gtk::Label::builder()
             .label(super_consumed_hint())
@@ -56,7 +56,7 @@ impl RecorderPopover {
         set_accessible_label(&hint, super_consumed_hint());
 
         let cancel = gtk::Button::builder().label(tr("Cancel")).build();
-        set_accessible_label(&cancel, "Cancel recording");
+        set_accessible_label(&cancel, tr("Cancel recording"));
         {
             let sender = sender.clone();
             cancel.connect_clicked(move |_| {
@@ -65,7 +65,7 @@ impl RecorderPopover {
         }
 
         let finish = gtk::Button::builder().label(tr("Finish")).build();
-        set_accessible_label(&finish, "Finish sequence");
+        set_accessible_label(&finish, tr("Finish sequence"));
         {
             let sender = sender.clone();
             finish.connect_clicked(move |_| {
@@ -74,7 +74,7 @@ impl RecorderPopover {
         }
 
         let remove_last = gtk::Button::builder().label(tr("Remove Last Step")).build();
-        set_accessible_label(&remove_last, "Remove last sequence step");
+        set_accessible_label(&remove_last, tr("Remove last sequence step"));
         {
             let sender = sender.clone();
             remove_last.connect_clicked(move |_| {

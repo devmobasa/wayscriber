@@ -273,7 +273,7 @@ fn normalized_hex(
     match parse_hex_rgb(value) {
         Some(color) => Some(format_hex_rgb(color)),
         None => {
-            errors.push(FormError::new(field, "Expected #RRGGBB hex color"));
+            errors.push(FormError::new(field, tr("Expected #RRGGBB hex color")));
             None
         }
     }

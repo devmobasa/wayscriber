@@ -77,7 +77,7 @@ pub(super) fn require_systemctl_available() -> Result<(), String> {
     if command_available("systemctl") {
         Ok(())
     } else {
-        Err(format!("systemctl is not available in {PATH_ENV}."))
+        Err(trf("systemctl is not available in {}.", &[&PATH_ENV]))
     }
 }
 

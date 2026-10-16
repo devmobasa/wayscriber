@@ -250,7 +250,7 @@ fn validate_usize_range(value: &str, min: usize, max: usize) -> Option<String> {
     }
     match trimmed.parse::<usize>() {
         Ok(parsed) if (min..=max).contains(&parsed) => None,
-        Ok(_) => Some(format!("Range: {min}-{max}")),
+        Ok(_) => Some(trf("Range: {}-{}", &[&min, &max])),
         Err(_) => Some(tr("Expected a whole number").to_string()),
     }
 }
@@ -263,7 +263,7 @@ fn validate_usize_min(value: &str, min: usize) -> Option<String> {
     }
     match trimmed.parse::<usize>() {
         Ok(parsed) if parsed >= min => None,
-        Ok(_) => Some(format!("Minimum: {min}")),
+        Ok(_) => Some(trf("Minimum: {}", &[&min])),
         Err(_) => Some(tr("Expected a whole number").to_string()),
     }
 }

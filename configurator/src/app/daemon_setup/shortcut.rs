@@ -61,7 +61,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
                     run_systemctl_user(&["restart", "wayscriber.service"])?;
                 }
             }
-            Ok(format!("Configured GNOME shortcut: {normalized}"))
+            Ok(trf("Configured GNOME shortcut: {}", &[&normalized]))
         }
         ShortcutApplyCapability::PortalServiceDropIn => {
             require_systemctl_available()?;
@@ -167,7 +167,7 @@ fn require_gsettings_available() -> Result<(), String> {
     if command_available("gsettings") {
         Ok(())
     } else {
-        Err(format!("gsettings is not available in {PATH_ENV}."))
+        Err(trf("gsettings is not available in {}.", &[&PATH_ENV]))
     }
 }
 

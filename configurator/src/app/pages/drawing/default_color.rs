@@ -39,7 +39,7 @@ pub(super) fn build(page: &mut PageBuilder) {
         tr("Custom color name"),
         |app| app.draft.drawing_color.name.clone(),
         |value| Message::TextChanged(TextField::DrawingColorName, value),
-        |app| color_name_error(&app.draft.drawing_color, "Unknown color name"),
+        |app| color_name_error(&app.draft.drawing_color, tr("Unknown color name")),
     );
 
     // Only in RGB mode: in Named mode the save serializes the named value,
@@ -47,9 +47,12 @@ pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area_when(tr("RGB color"), SearchArea::DrawingColor, |app| {
         app.draft.drawing_color.mode == ColorMode::Rgb
     });
-    color_row(page, "Custom color", ColorPickerId::DrawingColor, |app| {
-        resolved(app.draft.drawing_color.preview_color())
-    });
+    color_row(
+        page,
+        tr("Custom color"),
+        ColorPickerId::DrawingColor,
+        |app| resolved(app.draft.drawing_color.preview_color()),
+    );
 }
 
 /// The error the old view showed under a custom color name that resolves to

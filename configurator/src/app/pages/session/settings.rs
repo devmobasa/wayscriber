@@ -1,6 +1,6 @@
 //! Session persistence, storage, and autosave settings.
 
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use relm4::{adw, gtk};
 
@@ -176,9 +176,9 @@ fn validate_whole_number(value: &str, min: u64, max: u64) -> Option<String> {
         return None;
     }
     Some(if max == u64::MAX {
-        format!("Minimum: {min}")
+        trf("Minimum: {}", &[&min])
     } else {
-        format!("Range: {min}-{max}")
+        trf("Range: {}-{}", &[&min, &max])
     })
 }
 

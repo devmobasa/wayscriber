@@ -84,7 +84,7 @@ fn build_font_cycle(page: &mut PageBuilder) {
     // libadwaita 1.6 and the crate's feature floor is 1.4 (Ubuntu 24.04).
     let add = adw::ActionRow::builder()
         .title(tr("Add font"))
-        .subtitle("Shift+T steps through this list in order")
+        .subtitle(tr("Shift+T steps through this list in order"))
         .activatable(true)
         .build();
     add.add_prefix(&gtk::Image::from_icon_name("list-add-symbolic"));
@@ -220,19 +220,19 @@ fn build_font_cycle_row(
         .build();
     row.set_list_factory(Some(&family_preview_factory()));
 
-    let up = icon_button("go-up-symbolic", "Move up");
+    let up = icon_button("go-up-symbolic", tr("Move up"));
     up.set_sensitive(layout.can_move_up);
     {
         let sender = sender.clone();
         up.connect_clicked(move |_| sender.input(Message::FontCycleMoved(index, -1)));
     }
-    let down = icon_button("go-down-symbolic", "Move down");
+    let down = icon_button("go-down-symbolic", tr("Move down"));
     down.set_sensitive(layout.can_move_down);
     {
         let sender = sender.clone();
         down.connect_clicked(move |_| sender.input(Message::FontCycleMoved(index, 1)));
     }
-    let remove = icon_button("user-trash-symbolic", "Remove");
+    let remove = icon_button("user-trash-symbolic", tr("Remove"));
     {
         let sender = sender.clone();
         remove.connect_clicked(move |_| sender.input(Message::FontCycleRemoved(index)));
@@ -356,7 +356,7 @@ fn missing_family_note(family: &str) -> Option<String> {
     if trimmed.is_empty() || family_is_installed(trimmed) {
         return None;
     }
-    Some(format!("\"{trimmed}\" is not installed on this system"))
+    Some(trf("\"{}\" is not installed on this system", &[&trimmed]))
 }
 
 #[cfg(test)]

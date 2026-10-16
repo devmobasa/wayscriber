@@ -200,7 +200,7 @@ pub(super) fn list_with_overflow(entries: &[&str], separator: &str) -> String {
         .join(separator);
     match entries.len().saturating_sub(SHOWN_DIAGNOSTICS) {
         0 => shown,
-        remaining => format!("{shown}{separator}and {remaining} more"),
+        remaining => trf("{}{}and {} more", &[&shown, &separator, &remaining]),
     }
 }
 

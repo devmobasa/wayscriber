@@ -1,4 +1,4 @@
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use super::super::draft::ConfigDraft;
 use crate::models::error::FormError;
@@ -130,7 +130,7 @@ fn optional_filename_template(
         Err(reason) => {
             errors.push(FormError::new(
                 field,
-                format!("Filename template: {reason}."),
+                trf("Filename template: {}.", &[&reason]),
             ));
             None
         }
@@ -162,10 +162,10 @@ fn parse_pdf_number(
 ) {
     match parse_f64(value.trim()) {
         Ok(parsed) if !parsed.is_finite() => {
-            errors.push(FormError::new(field, "Expected a finite numeric value"));
+            errors.push(FormError::new(field, tr("Expected a finite numeric value")));
         }
         Ok(parsed) if parsed < min || parsed > max => {
-            errors.push(FormError::new(field, format!("Expected {min}-{max}")));
+            errors.push(FormError::new(field, trf("Expected {}-{}", &[&min, &max])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err)),

@@ -1,4 +1,4 @@
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use relm4::gtk;
 
@@ -34,12 +34,12 @@ impl Tone {
 
 pub(super) fn overall_status(status: Option<&DaemonRuntimeStatus>) -> (&'static str, Tone) {
     match status {
-        None => ("Status: Detecting...", Tone::Neutral),
-        Some(status) if status.service_active => ("Status: Running", Tone::Positive),
+        None => (tr("Status: Detecting..."), Tone::Neutral),
+        Some(status) if status.service_active => (tr("Status: Running"), Tone::Positive),
         Some(status) if status.service_installed => {
             (tr("Status: Installed, not running"), Tone::Caution)
         }
-        Some(_) => ("Status: Not installed", Tone::Neutral),
+        Some(_) => (tr("Status: Not installed"), Tone::Neutral),
     }
 }
 
@@ -79,10 +79,10 @@ pub(super) fn light_controls_status(configured: bool) -> (&'static str, Tone) {
 
 pub(super) fn service_status(running: bool, enabled: bool) -> (&'static str, Tone) {
     match (running, enabled) {
-        (true, true) => ("Running \u{2713}", Tone::Positive),
-        (true, false) => ("Running (not enabled)", Tone::Caution),
-        (false, true) => ("Enabled, not running", Tone::Caution),
-        (false, false) => ("Stopped and disabled", Tone::Neutral),
+        (true, true) => (tr("Running \u{2713}"), Tone::Positive),
+        (true, false) => (tr("Running (not enabled)"), Tone::Caution),
+        (false, true) => (tr("Enabled, not running"), Tone::Caution),
+        (false, false) => (tr("Stopped and disabled"), Tone::Neutral),
     }
 }
 
@@ -99,9 +99,9 @@ pub(super) fn shortcut_placeholder(capability: Option<ShortcutApplyCapability>) 
 pub(super) fn light_controls_details(status: &DaemonRuntimeStatus) -> Option<String> {
     let path = status.light_controls_config_path.as_deref()?;
     Some(if status.light_controls_configured {
-        format!("Light controls: configured at {path}")
+        trf("Light controls: configured at {}", &[&path])
     } else {
-        format!("Light controls include: {path}")
+        trf("Light controls include: {}", &[&path])
     })
 }
 
@@ -114,7 +114,7 @@ pub(super) fn missing_tools(status: &DaemonRuntimeStatus) -> Option<String> {
     if !status.gsettings_available {
         missing.push("gsettings");
     }
-    (!missing.is_empty()).then(|| format!("Missing tools: {}", missing.join(", ")))
+    (!missing.is_empty()).then(|| trf("Missing tools: {}", &[&missing.join(", ")]))
 }
 
 pub(super) fn service_installed(app: &ConfiguratorApp) -> bool {

@@ -12,7 +12,7 @@
 mod color;
 mod rows;
 
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use relm4::adw;
 use relm4::prelude::*;
@@ -79,7 +79,7 @@ fn slot_visible(app: &ConfiguratorApp, search: &AppSearchSummary, slot: usize) -
 
 fn build_slot(page: &mut PageBuilder, slot: usize) {
     let expander = adw::ExpanderRow::builder()
-        .title(format!("Slot {slot} settings"))
+        .title(trf("Slot {} settings", &[&slot]))
         .show_enable_switch(true)
         .build();
 
@@ -229,9 +229,11 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
         Message::PresetEraserModeChanged,
     );
 
-    rows.override_row("Fill enabled", PresetToggleField::FillEnabled, move |app| {
-        app.draft.presets.slot(slot).map(|draft| draft.fill_enabled)
-    });
+    rows.override_row(
+        tr("Fill enabled"),
+        PresetToggleField::FillEnabled,
+        move |app| app.draft.presets.slot(slot).map(|draft| draft.fill_enabled),
+    );
     rows.override_row(
         tr("Text background"),
         PresetToggleField::TextBackgroundEnabled,

@@ -1,4 +1,4 @@
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use relm4::{ComponentSender, adw, gtk};
 
@@ -171,7 +171,7 @@ pub(super) fn shortcut_group(
             Some(configured) => {
                 set_label(
                     &configured_label,
-                    &format!("Current shortcut: {configured}"),
+                    &trf("Current shortcut: {}", &[&configured]),
                 );
                 set_visible(&configured_label, true);
             }
@@ -227,7 +227,7 @@ pub(super) fn light_controls_group(
         let status = app.daemon.status.as_ref();
         match status.and_then(|status| status.light_controls_config_path.as_deref()) {
             Some(path) => {
-                set_label(&path_label, &format!("Hyprland include: {path}"));
+                set_label(&path_label, &trf("Hyprland include: {}", &[&path]));
                 set_visible(&path_label, true);
             }
             None => set_visible(&path_label, false),
@@ -362,7 +362,7 @@ pub(super) fn details_group(
         for (label, text) in [
             (
                 &desktop_label,
-                format!("Desktop: {}", status.desktop.label()),
+                trf("Desktop: {}", &[&status.desktop.label()]),
             ),
             (
                 &backend_label,
@@ -393,7 +393,7 @@ pub(super) fn details_group(
                 status
                     .service_unit_path
                     .as_deref()
-                    .map(|path| format!("Service file: {path}")),
+                    .map(|path| trf("Service file: {}", &[&path])),
             ),
             (&light_controls_label, light_controls_details(status)),
             (&missing_tools_label, missing_tools(status)),

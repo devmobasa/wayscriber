@@ -16,6 +16,8 @@ mod status_bar;
 mod toolbar;
 mod toolbar_visibility;
 
+use wayscriber::i18n::trf;
+
 use relm4::gtk;
 use relm4::prelude::*;
 
@@ -207,6 +209,6 @@ fn quad_color(components: &[String; 4]) -> ResolvedColor {
 fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
     match value.trim().parse::<f64>() {
         Ok(parsed) if parsed.is_finite() && (min..=max).contains(&parsed) => None,
-        _ => Some(format!("Enter a number between {min} and {max}.")),
+        _ => Some(trf("Enter a number between {} and {}.", &[&min, &max])),
     }
 }

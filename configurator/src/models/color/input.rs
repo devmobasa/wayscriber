@@ -65,10 +65,13 @@ impl ColorInput {
                 for (index, component) in self.rgb.iter().enumerate() {
                     let field = format!("{field}[{index}]");
                     let parsed = component.trim().parse::<i64>().map_err(|_| {
-                        FormError::new(&field, "Expected integer between 0 and 255")
+                        FormError::new(&field, tr("Expected integer between 0 and 255"))
                     })?;
                     if !(0..=255).contains(&parsed) {
-                        return Err(FormError::new(&field, "Value must be between 0 and 255"));
+                        return Err(FormError::new(
+                            &field,
+                            tr("Value must be between 0 and 255"),
+                        ));
                     }
                     rgb[index] = parsed as u8;
                 }

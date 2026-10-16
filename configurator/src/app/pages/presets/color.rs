@@ -93,9 +93,9 @@ pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
     });
 
     for (component, title) in [
-        (0usize, "Red (0-255)"),
-        (1, "Green (0-255)"),
-        (2, "Blue (0-255)"),
+        (0usize, tr("Red (0-255)")),
+        (1, tr("Green (0-255)")),
+        (2, tr("Blue (0-255)")),
     ] {
         let row = rows.entry_row_validated(
             title,

@@ -1,4 +1,4 @@
-use wayscriber::i18n::tr;
+use wayscriber::i18n::{tr, trf};
 
 use relm4::{ComponentSender, adw, gtk};
 
@@ -185,7 +185,7 @@ pub(super) fn is_collapsed(app: &ConfiguratorApp, index: usize) -> bool {
 pub(super) fn validate_min(value: &str, min: usize) -> Option<String> {
     match value.trim().parse::<usize>() {
         Ok(parsed) if parsed >= min => None,
-        Ok(_) => Some(format!("Minimum: {min}")),
+        Ok(_) => Some(trf("Minimum: {}", &[&min])),
         Err(_) => Some(tr("Expected a whole number").to_string()),
     }
 }

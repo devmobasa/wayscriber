@@ -15,10 +15,15 @@ use super::{validate_f64_range, validate_usize_range};
 
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area(tr("Laser pointer"), SearchArea::DrawingLaser);
-    color_row(page, "Ink color (hex)", ColorPickerId::LaserColor, |app| {
-        let [r, g, b, a] = parse_quad_values(&app.draft.laser_color.components);
-        Some((r, g, b, a))
-    });
+    color_row(
+        page,
+        tr("Ink color (hex)"),
+        ColorPickerId::LaserColor,
+        |app| {
+            let [r, g, b, a] = parse_quad_values(&app.draft.laser_color.components);
+            Some((r, g, b, a))
+        },
+    );
     page.entry_row_validated(
         tr("Width (px)"),
         |app| app.draft.laser_width.clone(),

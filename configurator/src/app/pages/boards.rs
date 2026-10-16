@@ -51,23 +51,15 @@ use section::{BoundBoardSection, rebuild_sections};
 /// is selected", which is how the Iced pick list rendered an unknown default.
 const NO_SELECTION: u32 = u32::MAX;
 
-const INTRO: &str = "Templates used to seed a new session. Boards you add or rename in the overlay belong to that session, not to this list.";
-
-// Kept visible rather than hidden: the key is still in existing files, and a
-// control that quietly disappears leaves the user to work out on their own why
-// a setting they wrote stopped doing anything.
-const PERSIST_NOTE: &str = "No effect: board renames, recolors, additions, and deletions belong to the running session, and nothing but Save writes config.toml. This setting is still parsed so older files load cleanly, and will be removed.";
-
-const LEGACY_NOTE: &str =
-    "Legacy [board] settings detected. Editing board settings will write [boards].";
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Boards);
 
     // The list below is the seed, not the running session, so the heading has
     // to say which of the two this screen edits.
     page.group_in_area(tr("Boards"), SearchArea::BoardsGeneral);
-    page.custom(&note_label(INTRO));
+    page.custom(&note_label(tr(
+        "Templates used to seed a new session. Boards you add or rename in the overlay belong to that session, not to this list.",
+    )));
 
     page.group_in_area("", SearchArea::BoardsGeneral)
         .entry_row_validated(
@@ -90,7 +82,13 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             tr("Persist runtime customizations (deprecated)"),
-            PERSIST_NOTE,
+            // Kept visible rather than hidden: the key is still in existing
+            // files, and a control that quietly disappears leaves the user to
+            // work out on their own why a setting they wrote stopped doing
+            // anything.
+            tr(
+                "No effect: board renames, recolors, additions, and deletions belong to the running session, and nothing but Save writes config.toml. This setting is still parsed so older files load cleanly, and will be removed.",
+            ),
             |app| app.draft.boards.persist_customizations,
             |value| Message::ToggleChanged(ToggleField::BoardsPersistCustomizations, value),
         );
@@ -106,7 +104,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 /// The default-board picker: a combo whose model is the effective board ids,
 /// which change as the user edits an id.
 fn add_default_board_row(page: &mut PageBuilder) {
-    let row = adw::ComboRow::builder().title("Default board").build();
+    let row = adw::ComboRow::builder().title(tr("Default board")).build();
     row.set_model(Some(&gtk::StringList::new(&[])));
     let handler = {
         let sender = page.sender();
@@ -148,7 +146,7 @@ fn add_default_board_row(page: &mut PageBuilder) {
 
 fn add_add_button(page: &mut PageBuilder) {
     let button = gtk::Button::builder()
-        .label("Add board")
+        .label(tr("Add board"))
         .halign(gtk::Align::Start)
         .margin_top(12)
         .build();
@@ -160,7 +158,9 @@ fn add_add_button(page: &mut PageBuilder) {
 }
 
 fn add_legacy_note(page: &mut PageBuilder) {
-    let label = note_label(LEGACY_NOTE);
+    let label = note_label(tr(
+        "Legacy [board] settings detected. Editing board settings will write [boards].",
+    ));
     label.set_margin_top(6);
     // Hidden until a load reports a legacy file, so it cannot flash on the
     // first frame.

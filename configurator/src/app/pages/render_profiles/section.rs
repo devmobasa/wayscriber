@@ -69,11 +69,16 @@ fn build_section(
         .build();
     section.append(&build_header_row(index, &title, sender));
 
-    let id = build_text_row("Profile id", index, RenderProfileTextField::Id, sender);
+    let id = build_text_row(tr("Profile id"), index, RenderProfileTextField::Id, sender);
     id.row.set_visible(layout.controls);
     section.append(&id.row);
 
-    let name = build_text_row("Display name", index, RenderProfileTextField::Name, sender);
+    let name = build_text_row(
+        tr("Display name"),
+        index,
+        RenderProfileTextField::Name,
+        sender,
+    );
     name.row.set_visible(layout.controls);
     section.append(&name.row);
 

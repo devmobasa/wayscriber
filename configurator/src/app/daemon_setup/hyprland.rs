@@ -74,7 +74,7 @@ impl HyprlandLightControlsInstallResult {
             if self.reload_succeeded {
                 parts.push(tr("reloaded Hyprland").to_string());
             } else if let Some(error) = self.reload_error.as_deref() {
-                parts.push(format!("hyprctl reload failed: {error}"));
+                parts.push(trf("hyprctl reload failed: {}", &[&error]));
             }
         } else if self.source_configured {
             parts.push(tr("run `hyprctl reload` to apply it").to_string());

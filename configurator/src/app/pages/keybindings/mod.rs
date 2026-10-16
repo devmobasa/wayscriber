@@ -25,8 +25,6 @@ use row::{ManagerRefresh, binding_row};
 use toolbar::build_chrome;
 use widgets::{set_accessible_label, set_label, set_sensitive, set_visible};
 
-const SECTION_DESCRIPTION: &str = "Record a shortcut or sequence, reset one action, or edit the comma-separated list as text. Filter and sort to review many actions at once.";
-
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut bindings: Vec<Binding> = Vec::new();
     let refresh: ManagerRefresh = Rc::new(RefCell::new(None));
@@ -45,7 +43,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     for tab in KeybindingsTabId::ALL {
         let group = adw::PreferencesGroup::builder()
             .title(tab.title())
-            .description(SECTION_DESCRIPTION)
+            .description(tr(
+                "Record a shortcut or sequence, reset one action, or edit the comma-separated list as text. Filter and sort to review many actions at once.",
+            ))
             .build();
         for field in fields
             .iter()
@@ -138,17 +138,17 @@ fn conflict_banner(
         .label(tr("Replace"))
         .css_classes(["suggested-action"])
         .build();
-    set_accessible_label(&replace, "Replace conflicting shortcuts");
+    set_accessible_label(&replace, tr("Replace conflicting shortcuts"));
     {
         let sender = sender.clone();
         replace.connect_clicked(move |_| {
             sender.input(Message::ShortcutConflictReplaceConfirmed);
         });
     }
-    let jump = gtk::Button::with_label("Jump to Conflict");
-    set_accessible_label(&jump, "Jump to conflicting action");
+    let jump = gtk::Button::with_label(tr("Jump to Conflict"));
+    set_accessible_label(&jump, tr("Jump to conflicting action"));
     let cancel = gtk::Button::builder().label(tr("Cancel")).build();
-    set_accessible_label(&cancel, "Cancel shortcut conflict");
+    set_accessible_label(&cancel, tr("Cancel shortcut conflict"));
     {
         let sender = sender.clone();
         cancel.connect_clicked(move |_| {

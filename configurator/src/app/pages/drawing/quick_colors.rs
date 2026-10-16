@@ -181,22 +181,22 @@ fn build_quick_color_row(
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> QuickColorRow {
     let row = adw::ExpanderRow::builder()
-        .title(format!("Color {}", index + 1))
+        .title(trf("Color {}", &[&(index + 1)]))
         .build();
 
-    let up = icon_button("go-up-symbolic", "Move up");
+    let up = icon_button("go-up-symbolic", tr("Move up"));
     up.set_sensitive(layout.can_move_up);
     {
         let sender = sender.clone();
         up.connect_clicked(move |_| sender.input(Message::QuickColorMoved(index, -1)));
     }
-    let down = icon_button("go-down-symbolic", "Move down");
+    let down = icon_button("go-down-symbolic", tr("Move down"));
     down.set_sensitive(layout.can_move_down);
     {
         let sender = sender.clone();
         down.connect_clicked(move |_| sender.input(Message::QuickColorMoved(index, 1)));
     }
-    let remove = icon_button("user-trash-symbolic", "Remove");
+    let remove = icon_button("user-trash-symbolic", tr("Remove"));
     remove.set_sensitive(layout.can_remove);
     {
         let sender = sender.clone();
@@ -231,7 +231,7 @@ fn build_quick_color_row(
     row.add_row(&mode);
 
     let named_options = NamedColorOption::list();
-    let named = combo_row_widget("Named color", &named_color_labels());
+    let named = combo_row_widget(tr("Named color"), &named_color_labels());
     named.set_visible(layout.mode == ColorMode::Named);
     let named_handler = {
         let sender = sender.clone();

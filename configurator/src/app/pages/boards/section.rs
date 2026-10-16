@@ -70,11 +70,11 @@ fn build_section(
     let header = build_header_row(index, layout.expanded, sender);
     section.append(&header.row);
 
-    let id = build_text_row("Board id", index, BoardItemTextField::Id, sender);
+    let id = build_text_row(tr("Board id"), index, BoardItemTextField::Id, sender);
     id.row.set_visible(layout.expanded);
     section.append(&id.row);
 
-    let name = build_text_row("Display name", index, BoardItemTextField::Name, sender);
+    let name = build_text_row(tr("Display name"), index, BoardItemTextField::Name, sender);
     name.row.set_visible(layout.expanded);
     section.append(&name.row);
 
@@ -132,7 +132,7 @@ fn build_section(
             BoardItemToggleField::AutoAdjustPen,
             layout.auto_adjust,
         ),
-        ("Persist", BoardItemToggleField::Persist, layout.persist),
+        (tr("Persist"), BoardItemToggleField::Persist, layout.persist),
         (
             tr("Configured default pinned"),
             BoardItemToggleField::Pinned,

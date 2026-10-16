@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 use wayscriber::configurator_destination::{
     ConfiguratorDestination, ConfiguratorScreen, OPEN_FLAG,
 };
+use wayscriber::i18n::trf;
 
 /// An argument this build could not act on.
 ///
@@ -23,14 +24,16 @@ pub(crate) enum StartupArgProblem {
 impl StartupArgProblem {
     pub(crate) fn message(&self) -> String {
         match self {
-            Self::UnknownDestination(raw) => {
-                format!("Unknown destination: {raw}. Showing the usual first screen.")
-            }
-            Self::MissingDestination => {
-                format!("{OPEN_FLAG} needs a destination. Showing the usual first screen.")
-            }
+            Self::UnknownDestination(raw) => trf(
+                "Unknown destination: {}. Showing the usual first screen.",
+                &[raw],
+            ),
+            Self::MissingDestination => trf(
+                "{} needs a destination. Showing the usual first screen.",
+                &[&OPEN_FLAG],
+            ),
             Self::UnrecognizedArgument(raw) => {
-                format!("Ignored an unrecognized startup argument: {raw}.")
+                trf("Ignored an unrecognized startup argument: {}.", &[raw])
             }
         }
     }
