@@ -101,6 +101,7 @@ pub(super) fn validate(
                 | "WAYSCRIBER_OVERLAY_SESSION_REPORTS"
                 | "WAYSCRIBER_OVERLAY_HOME_SESSION"
                 | "WAYSCRIBER_OVERLAY_PREFERRED_SESSION"
+                | "WAYSCRIBER_OVERLAY_LANGUAGE"
         ) {
             bail!("environment key {name:?} is not broker-allowed");
         }
@@ -272,14 +273,15 @@ fn looks_like_uri_bytes(value: &[u8]) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
 }
 
-/// Markers through which one wayscriber process tells another what it is.
+/// Markers through which one wayscriber process tells another what it is,
+/// and how a daemon's overlay should run.
 ///
 /// The broker runs with the environment of the process that started it, so
 /// without this a daemon-launched overlay's markers reached every helper it
 /// spawned, and from there xdg-open's browser, the configurator, tesseract
 /// and curl. A wayscriber started anywhere in those trees then took itself
-/// for a daemon child.
-const INTERNAL_PROCESS_MARKERS: [&str; 7] = [
+/// for a daemon child, or took the daemon's `--language`.
+const INTERNAL_PROCESS_MARKERS: [&str; 8] = [
     crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
     crate::env_vars::DETACHED_ENV,
     crate::RESUME_SESSION_ENV,
@@ -287,6 +289,7 @@ const INTERNAL_PROCESS_MARKERS: [&str; 7] = [
     crate::env_vars::OVERLAY_SESSION_REPORTS_ENV,
     crate::env_vars::OVERLAY_HOME_SESSION_ENV,
     crate::env_vars::OVERLAY_PREFERRED_SESSION_ENV,
+    crate::env_vars::OVERLAY_LANGUAGE_ENV,
 ];
 
 /// Whether `kind` relaunches wayscriber itself, the only helpers that keep

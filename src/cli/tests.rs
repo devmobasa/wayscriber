@@ -506,3 +506,98 @@ fn check_update_rejects_valued_launch_flags() {
         "--check-update conflicts with the selected command"
     );
 }
+
+#[test]
+fn language_selects_this_runs_interface_language() {
+    use crate::domain::Language;
+
+    for (args, expected) in [
+        (
+            ["wayscriber", "--active", "--language", "zh-CN"],
+            Language::SimplifiedChinese,
+        ),
+        (
+            ["wayscriber", "--daemon", "--language", "en"],
+            Language::English,
+        ),
+        (
+            ["wayscriber", "--about", "--language", "auto"],
+            Language::Auto,
+        ),
+        // Every spelling [ui] language accepts.
+        (
+            ["wayscriber", "--freeze", "--language", "zh"],
+            Language::SimplifiedChinese,
+        ),
+    ] {
+        assert_eq!(parse_cli(args).language, Some(expected), "{args:?}");
+    }
+
+    let cli = parse_cli(["wayscriber", "--active", "--language=zh-CN"]);
+    assert_eq!(cli.language, Some(Language::SimplifiedChinese));
+}
+
+#[test]
+fn language_rejects_unknown_codes_and_commands_it_cannot_change() {
+    let error = |args: &[&str]| match Cli::try_parse_from(args.iter().copied()) {
+        Err(error) => error,
+        Ok(outcome) => panic!("{args:?} parsed as {outcome:?}"),
+    };
+
+    assert_eq!(
+        error(&["wayscriber", "--active", "--language", "fr"]),
+        "unknown language 'fr'; run 'wayscriber --list-languages' to see the choices"
+    );
+    assert_eq!(
+        error(&["wayscriber", "--active", "--language"]),
+        "--language requires a value"
+    );
+    for args in [
+        &["wayscriber", "--daemon-toggle", "--language", "zh-CN"][..],
+        &["wayscriber", "--light-toggle", "--language", "zh-CN"],
+    ] {
+        assert!(
+            error(args).starts_with("--language cannot change a running daemon's overlays"),
+            "{args:?}"
+        );
+    }
+    for args in [
+        &["wayscriber", "--language", "zh-CN"][..],
+        &["wayscriber", "--session-info", "--language", "zh-CN"],
+        &["wayscriber", "--check-update", "--language", "zh-CN"],
+    ] {
+        assert_eq!(
+            error(args),
+            "--language applies to --active, --freeze, --daemon, --about and --list-languages",
+            "{args:?}"
+        );
+    }
+    assert_eq!(
+        error(&[
+            "wayscriber",
+            "--runtime-capabilities",
+            "--language",
+            "zh-CN"
+        ]),
+        "--runtime-capabilities conflicts with launch flags"
+    );
+}
+
+#[test]
+fn list_languages_is_a_print_and_exit_command() {
+    assert!(parse_cli(["wayscriber", "--list-languages"]).list_languages);
+    // It shows what --language would select.
+    let cli = parse_cli(["wayscriber", "--list-languages", "--language", "zh-CN"]);
+    assert!(cli.list_languages && cli.language.is_some());
+
+    for args in [
+        ["wayscriber", "--list-languages", "--active"],
+        ["wayscriber", "--list-languages", "--about"],
+    ] {
+        assert_eq!(
+            Cli::try_parse_from(args).unwrap_err(),
+            "--list-languages conflicts with the selected command",
+            "{args:?}"
+        );
+    }
+}

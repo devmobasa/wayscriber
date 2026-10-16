@@ -67,7 +67,7 @@ impl WaylandState {
         match spawn_detached(
             crate::process_broker::HelperKind::About,
             executable.as_os_str(),
-            &["--about".into()],
+            &crate::about_window::launch_arguments(),
         ) {
             Ok(child) => {
                 log::info!("Launched About window (pid {})", child.id());

@@ -18,6 +18,9 @@ pub(crate) const OVERLAY_HOME_SESSION_ENV: &str = "WAYSCRIBER_OVERLAY_HOME_SESSI
 /// The session file a daemon overlay continues in place of home, while it is
 /// still a usable session file.
 pub(crate) const OVERLAY_PREFERRED_SESSION_ENV: &str = "WAYSCRIBER_OVERLAY_PREFERRED_SESSION";
+/// The daemon's `--language`, which its overlays take as their own. Absent,
+/// an overlay selects its language like any other run.
+pub(crate) const OVERLAY_LANGUAGE_ENV: &str = "WAYSCRIBER_OVERLAY_LANGUAGE";
 pub const CATALOG_HOOKS_TEST_ENV: &str = "WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS";
 /// Disables the periodic update check regardless of `[updates] check`.
 pub const DISABLE_UPDATE_CHECK_ENV: &str = "WAYSCRIBER_DISABLE_UPDATE_CHECK";

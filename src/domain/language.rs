@@ -24,6 +24,10 @@ pub enum Language {
 }
 
 impl Language {
+    /// Every choice `[ui] language` and `--language` accept, `auto` first:
+    /// the order `--list-languages` and the configurator list them in.
+    pub const ALL: [Self; 3] = [Self::Auto, Self::English, Self::SimplifiedChinese];
+
     /// The spelling used in configuration and logs.
     pub fn code(self) -> &'static str {
         match self {
@@ -46,6 +50,26 @@ impl Language {
     pub fn is_auto(self) -> bool {
         matches!(self, Self::Auto)
     }
+
+    /// The language's name in itself, never translated, so a user can find
+    /// their own language in a list drawn in one they cannot read. `None` for
+    /// `Auto`, which is not a language.
+    pub fn native_name(self) -> Option<&'static str> {
+        match self {
+            Self::Auto => None,
+            Self::English => Some("English"),
+            Self::SimplifiedChinese => Some("简体中文"),
+        }
+    }
+
+    /// The language's English name, for command-line output and logs.
+    pub fn english_name(self) -> &'static str {
+        match self {
+            Self::Auto => "Automatic",
+            Self::English => "English",
+            Self::SimplifiedChinese => "Simplified Chinese",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -54,11 +78,7 @@ mod tests {
 
     #[test]
     fn language_codes_round_trip_through_serde() {
-        for language in [
-            Language::Auto,
-            Language::English,
-            Language::SimplifiedChinese,
-        ] {
+        for language in Language::ALL {
             let encoded = serde_json::to_string(&language).expect("serialize language");
             assert_eq!(encoded, format!("\"{}\"", language.code()));
             let decoded: Language = serde_json::from_str(&encoded).expect("deserialize language");
@@ -80,5 +100,13 @@ mod tests {
     #[test]
     fn default_language_follows_the_locale() {
         assert_eq!(Language::default(), Language::Auto);
+    }
+
+    #[test]
+    fn every_language_but_auto_is_named_in_itself() {
+        for language in Language::ALL {
+            assert_eq!(language.native_name().is_none(), language.is_auto());
+        }
+        assert_eq!(Language::SimplifiedChinese.native_name(), Some("简体中文"));
     }
 }

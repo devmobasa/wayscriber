@@ -94,6 +94,7 @@ impl OverlayLifecycle {
             crate::decode_session_override(resume_override.load(Ordering::Acquire)),
             self.child.generation(),
             remembered_session_file,
+            crate::i18n::command_line_language(),
         );
 
         let attempt = (|| -> Result<u32> {

@@ -421,7 +421,8 @@ reduced_motion = "auto"
 # (WAYSCRIBER_LANGUAGE, then LANGUAGE/LC_ALL/LC_MESSAGES/LANG) and falls back
 # to English when that locale has no translation. Each process reads this when
 # it starts: the overlay and About window on their next open, background mode
-# after a restart.
+# after a restart. `wayscriber --list-languages` shows the choices and the one
+# in effect; `--language CODE` overrides this for one run.
 language = "auto"
 
 # Show the status bar and its configured contents

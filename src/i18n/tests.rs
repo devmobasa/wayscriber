@@ -61,24 +61,38 @@ fn explicit_languages_never_resolve_to_auto() {
 }
 
 #[test]
-fn environment_override_beats_the_configured_language() {
+fn the_command_line_beats_the_environment_which_beats_the_config() {
+    use LanguageSource::{CommandLine, Configured, Environment};
+
     assert_eq!(
-        select(Language::English, Some("zh-CN")),
-        Language::SimplifiedChinese
+        select(Language::English, None, Some("zh-CN")),
+        (Language::SimplifiedChinese, Environment)
     );
     assert_eq!(
-        select(Language::SimplifiedChinese, Some("en")),
-        Language::English
+        select(Language::SimplifiedChinese, None, Some("en")),
+        (Language::English, Environment)
     );
-    assert_eq!(select(Language::English, None), Language::English);
     assert_eq!(
-        select(Language::SimplifiedChinese, None),
-        Language::SimplifiedChinese
+        select(Language::SimplifiedChinese, None, None),
+        (Language::SimplifiedChinese, Configured)
+    );
+    assert_eq!(
+        select(
+            Language::English,
+            Some(Language::SimplifiedChinese),
+            Some("en")
+        ),
+        (Language::SimplifiedChinese, CommandLine)
+    );
+    // `--language auto` follows the desktop locale whatever the config says.
+    assert_eq!(
+        select(Language::SimplifiedChinese, Some(Language::Auto), None),
+        (Language::Auto, CommandLine)
     );
     // An unknown override is ignored rather than silencing the UI.
     assert_eq!(
-        select(Language::English, Some("klingon")),
-        Language::English
+        select(Language::English, None, Some("klingon")),
+        (Language::English, Configured)
     );
 }
 
@@ -332,6 +346,30 @@ fn the_first_lookup_merges_the_override_directory() {
 
             assert_eq!(tr("Boards"), "白板");
             assert_eq!(tr("Undo"), catalog_pairs()["Undo"]);
+        },
+    );
+}
+
+#[test]
+fn the_command_line_language_holds_for_the_whole_process() {
+    crate::test_env::in_language_isolated_child(
+        concat!(
+            module_path!(),
+            "::the_command_line_language_holds_for_the_whole_process"
+        ),
+        || {
+            // SAFETY: this child process runs only this test.
+            unsafe { std::env::set_var(LANGUAGE_OVERRIDE_ENV, "en") };
+            set_command_line_language(Language::SimplifiedChinese);
+
+            set_language(Language::English);
+
+            assert_eq!(command_line_language(), Some(Language::SimplifiedChinese));
+            assert_eq!(language(), Language::SimplifiedChinese);
+            assert_eq!(
+                requested_language(Language::English),
+                (Language::SimplifiedChinese, LanguageSource::CommandLine)
+            );
         },
     );
 }

@@ -176,7 +176,7 @@ mod tests {
 
     fn build_test_launch(daemon: &mut Daemon) -> OverlayLaunch {
         let request = daemon.take_pending_launch();
-        build_overlay_launch(&request, daemon.session_resume_override(), None, None)
+        build_overlay_launch(&request, daemon.session_resume_override(), None, None, None)
     }
 
     fn launch_args(launch: &OverlayLaunch) -> Vec<String> {

@@ -117,10 +117,9 @@ impl LanguageOption {
     /// must still recognize their own language to get back. Only the
     /// automatic choice, which is not a language, follows the UI.
     pub fn label(&self) -> &'static str {
-        match self {
-            LanguageOption::Auto => tr("Automatic (system locale)"),
-            LanguageOption::English => "English",
-            LanguageOption::SimplifiedChinese => "简体中文",
+        match self.to_language().native_name() {
+            Some(name) => name,
+            None => tr("Automatic (system locale)"),
         }
     }
 

@@ -115,6 +115,22 @@ fn run_about_event_loop(
     Ok(())
 }
 
+/// The arguments that start the About window: `--about`, and the `--language`
+/// this process runs with, if any, so the window matches the one that opened
+/// it.
+pub(crate) fn launch_arguments() -> Vec<std::ffi::OsString> {
+    launch_arguments_for(crate::i18n::command_line_language())
+}
+
+fn launch_arguments_for(language: Option<crate::domain::Language>) -> Vec<std::ffi::OsString> {
+    let mut arguments = vec!["--about".into()];
+    if let Some(language) = language {
+        arguments.push("--language".into());
+        arguments.push(language.code().into());
+    }
+    arguments
+}
+
 /// What the dialog reads from the config before it draws: the theme, from
 /// the same `[ui] theme` key as the overlay so the dialog matches the toolbars
 /// the user already sees, and the UI language. A config that cannot be read
@@ -196,6 +212,28 @@ mod tests {
         let path = Config::get_config_path().expect("config path");
         fs::create_dir_all(path.parent().expect("config dir")).expect("create config dir");
         fs::write(path, contents).expect("write config");
+    }
+
+    #[test]
+    fn the_window_is_opened_with_the_openers_language() {
+        assert_eq!(launch_arguments_for(None), ["--about"]);
+        assert_eq!(
+            launch_arguments_for(Some(Language::SimplifiedChinese)),
+            ["--about", "--language", "zh-CN"]
+        );
+        // The arguments it is given parse back to the same language.
+        let parsed = crate::cli::Cli::try_parse_from(
+            std::iter::once("wayscriber".into())
+                .chain(launch_arguments_for(Some(Language::SimplifiedChinese))),
+        );
+        assert!(
+            matches!(
+                parsed,
+                Ok(crate::cli::CliOutcome::Run(ref cli))
+                    if cli.about && cli.language == Some(Language::SimplifiedChinese)
+            ),
+            "{parsed:?}"
+        );
     }
 
     #[test]

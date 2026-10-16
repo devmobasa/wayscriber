@@ -167,12 +167,41 @@ const HOME: &str = "/tmp/home.wayscriber-session";
 const REMEMBERED: &str = "/tmp/remembered.wayscriber-session";
 
 #[test]
+fn a_daemon_started_with_a_language_gives_it_to_its_overlays() {
+    // The command-line language is set once per process, so this runs alone.
+    crate::test_env::in_language_isolated_child(
+        concat!(
+            module_path!(),
+            "::a_daemon_started_with_a_language_gives_it_to_its_overlays"
+        ),
+        || {
+            crate::i18n::set_command_line_language(crate::domain::Language::SimplifiedChinese);
+            with_fixture(false, |daemon, _, root| {
+                let receipt = show(daemon, root);
+                assert_eq!(receipt["language"], "zh-CN");
+                // Not as an argument, so an older overlay still starts.
+                assert!(
+                    !receipt["args"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|argument| argument == "--language"),
+                    "{receipt}"
+                );
+                daemon.hide_overlay().unwrap();
+            });
+        },
+    );
+}
+
+#[test]
 fn the_next_show_continues_the_session_the_overlay_reported() {
     with_fixture(false, |daemon, _, root| {
         instruct(root, Some(REMEMBERED), false);
         let first = show(daemon, root);
         assert_eq!(first["reports"], "1");
         assert_eq!(first["home"], HOME);
+        assert!(first["language"].is_null());
         assert!(first["preferred"].is_null());
         let generation = first["generation"].as_str().unwrap();
         assert!(session_report(generation).exists());
@@ -468,7 +497,7 @@ fn preparation_error_keeps_only_the_token_and_does_not_replay_options() {
 
         assert!(daemon.start_launch(request, &[candidate]).is_err());
         let retained = daemon.take_pending_launch();
-        let actual = launch::build_overlay_launch(&retained, Some(true), None, None);
+        let actual = launch::build_overlay_launch(&retained, Some(true), None, None, None);
 
         assert_eq!(
             actual.arguments,

@@ -1236,6 +1236,33 @@ Pressure controls the width of pressure-sensitive freehand Pen strokes. Marker/T
 
 Tablet input works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support, drop only that feature (bare `--no-default-features` would also strip portal capture, tray, and the GTK toolbars): `cargo build --release --no-default-features --features portal,tray,toolbar-gtk`.
 
+### Interface language
+
+Wayscriber's interface is available in English and Simplified Chinese. By
+default it follows your desktop locale and falls back to English. Pick a
+language in the configurator (**UI → Language**, which previews it right away
+and keeps it when you save) or in `config.toml`:
+
+```toml
+[ui]
+language = "zh-CN"   # "auto" (default), "en", or "zh-CN"
+```
+
+The overlay and the About window use the saved language the next time they
+open, and background mode after it restarts. To use a language for one run
+without changing `config.toml`, or to see which one is in effect:
+
+```bash
+wayscriber --list-languages                 # the choices, and the language in effect and why
+wayscriber --active --language zh-CN        # this overlay only
+wayscriber --daemon --language en           # background mode and every overlay it opens
+```
+
+`--language` also applies to `--freeze` and `--about`. It beats both
+`[ui] language` and `WAYSCRIBER_LANGUAGE`. Typed text, board names and other
+content you create are never translated. See [docs/I18N.md](docs/I18N.md) for
+translations, local catalog overrides and adding a language.
+
 ---
 
 ## Troubleshooting
@@ -1329,6 +1356,7 @@ Common toggles:
 - `WAYSCRIBER_TOOLBAR_BACKEND=auto|gtk|builtin` overrides the toolbar frontend (default: auto)
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
 - `WAYSCRIBER_TRAY_FORCE_PIXMAP=1` forces colored tray pixmaps and overrides `[tray].icon_style`
+- `WAYSCRIBER_LANGUAGE=zh-CN` uses an interface language for this run (overrides `[ui] language`; `--language` overrides it)
 
 See `docs/CONFIG.md` for the full list.
 

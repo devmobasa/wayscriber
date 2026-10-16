@@ -35,18 +35,55 @@ type Catalog = BTreeMap<String, String>;
 /// Atoms: English is 0 so a never-configured process needs no catalog.
 static ACTIVE: AtomicU8 = AtomicU8::new(0);
 
+/// The `--language` this process runs with: its own, or, for an overlay, its
+/// daemon's.
+static COMMAND_LINE: OnceLock<Language> = OnceLock::new();
+
 /// Selects the language the UI will draw in.
 ///
-/// `Auto` resolves through the locale chain, and `WAYSCRIBER_LANGUAGE`
-/// overrides the argument entirely — a testing aid for checking a translation
-/// without editing `config.toml`. Each process calls this before it builds
-/// translated chrome; the configurator calls it again whenever the language
-/// of its draft changes, to preview that language.
+/// `Auto` resolves through the locale chain. `--language` and then
+/// `WAYSCRIBER_LANGUAGE` override the argument entirely, for one run, without
+/// editing `config.toml`. Each process calls this before it builds translated
+/// chrome; the configurator calls it again whenever the language of its draft
+/// changes, to preview that language.
 pub fn set_language(language: Language) {
-    let active = select(language, env_var(LANGUAGE_OVERRIDE_ENV).as_deref());
+    let active = resolve(requested_language(language).0);
 
     ACTIVE.store(encode(active), Ordering::Relaxed);
     log::debug!("UI language: {}", active.code());
+}
+
+/// Records `--language` for the rest of this process. Set once, at startup,
+/// before any language is selected.
+pub fn set_command_line_language(language: Language) {
+    let _ = COMMAND_LINE.set(language);
+}
+
+/// The `--language` this process was started with, so the overlays and About
+/// windows it starts can be given the same one.
+pub fn command_line_language() -> Option<Language> {
+    COMMAND_LINE.get().copied()
+}
+
+/// Which setting decided the language in effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageSource {
+    /// `--language`.
+    CommandLine,
+    /// The `WAYSCRIBER_LANGUAGE` environment variable.
+    Environment,
+    /// `[ui] language` in the config.
+    Configured,
+}
+
+/// The language the deciding setting asks for, possibly [`Language::Auto`],
+/// and which setting that is, given the configured language.
+pub fn requested_language(configured: Language) -> (Language, LanguageSource) {
+    select(
+        configured,
+        command_line_language(),
+        env_var(LANGUAGE_OVERRIDE_ENV).as_deref(),
+    )
 }
 
 /// Start-up for a process that draws translated chrome: selects the
@@ -61,21 +98,29 @@ pub fn initialize(language: Language) {
     }
 }
 
-/// The selection rule: `WAYSCRIBER_LANGUAGE` beats the configured language,
-/// which beats nothing — an explicit language is already final.
+/// The selection rule: `--language` beats `WAYSCRIBER_LANGUAGE`, which beats
+/// the configured language. The winner may still be `Auto`; [`resolve`]
+/// decides what that draws.
 ///
 /// Pure so the precedence is testable without touching the environment.
-fn select(configured: Language, override_code: Option<&str>) -> Language {
+fn select(
+    configured: Language,
+    command_line: Option<Language>,
+    override_code: Option<&str>,
+) -> (Language, LanguageSource) {
+    if let Some(language) = command_line {
+        return (language, LanguageSource::CommandLine);
+    }
     if let Some(code) = override_code {
         match language_from_code(code) {
-            Some(language) => return resolve(language),
+            Some(language) => return (language, LanguageSource::Environment),
             None => {
                 log::warn!("{LANGUAGE_OVERRIDE_ENV}={code} is not a known language; ignoring it");
             }
         }
     }
 
-    resolve(configured)
+    (configured, LanguageSource::Configured)
 }
 
 /// The language currently in effect; never [`Language::Auto`].

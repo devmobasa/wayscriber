@@ -117,7 +117,7 @@ impl WayscriberTray {
         match spawn_detached(
             crate::process_broker::HelperKind::About,
             exe.as_os_str(),
-            &["--about".into()],
+            &crate::about_window::launch_arguments(),
         ) {
             Ok(child) => {
                 info!("Launched About window (pid {})", child.id());
