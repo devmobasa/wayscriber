@@ -218,6 +218,51 @@ fn data_dir_falls_back_to_home_share() {
 }
 
 #[test]
+fn searched_data_dirs_follow_the_base_directory_spec() {
+    let home = || Some(PathBuf::from("/home/user"));
+    let default_home = PathBuf::from("/home/user/.local/share");
+    let system_defaults = [
+        PathBuf::from("/usr/local/share"),
+        PathBuf::from("/usr/share"),
+    ];
+    let with_defaults = |data_home: PathBuf| {
+        let mut dirs = vec![data_home];
+        dirs.extend(system_defaults.clone());
+        dirs
+    };
+
+    assert_eq!(
+        searched_data_dirs_from(None, home(), None),
+        with_defaults(default_home.clone())
+    );
+    assert_eq!(
+        searched_data_dirs_from(Some(OsString::new()), home(), Some(OsString::new())),
+        with_defaults(default_home.clone())
+    );
+    // A relative data home would resolve against the current directory.
+    assert_eq!(
+        searched_data_dirs_from(Some("share".into()), home(), None),
+        with_defaults(default_home)
+    );
+    assert_eq!(
+        searched_data_dirs_from(Some("/data".into()), home(), None),
+        with_defaults(PathBuf::from("/data"))
+    );
+    assert_eq!(
+        searched_data_dirs_from(
+            Some("/data".into()),
+            home(),
+            Some("/opt/share::relative/share:/usr/share/".into())
+        ),
+        vec![
+            PathBuf::from("/data"),
+            PathBuf::from("/opt/share"),
+            PathBuf::from("/usr/share/")
+        ]
+    );
+}
+
+#[test]
 fn pictures_dir_prefers_xdg_when_set() {
     let _guard = crate::test_env::lock();
 
