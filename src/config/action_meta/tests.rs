@@ -256,6 +256,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::OpenConfiguratorBoards,
     Action::OpenConfiguratorQuickColors,
     Action::OpenConfiguratorOnboardingHints,
+    Action::OpenConfiguratorLanguage,
     Action::OpenAbout,
     Action::ClearSavedToolState,
     Action::ToggleCommandPalette,

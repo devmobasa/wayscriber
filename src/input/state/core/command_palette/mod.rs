@@ -649,6 +649,57 @@ mod tests {
     }
 
     #[test]
+    fn language_route_is_searchable_unbound_and_opens_general_ui() {
+        crate::test_env::in_language_isolated_child(
+            concat!(
+                module_path!(),
+                "::language_route_is_searchable_unbound_and_opens_general_ui"
+            ),
+            || {
+                use crate::domain::Language;
+                use crate::input::state::{HelperLaunchRequest, PendingBackendAction};
+
+                for language in [Language::English, Language::SimplifiedChinese] {
+                    crate::i18n::set_language(language);
+                    let mut state = make_state();
+                    assert!(
+                        state
+                            .action_binding_labels(Action::OpenConfiguratorLanguage)
+                            .is_empty()
+                    );
+                    for query in ["language", "locale", "English", "简体中文", "中文", "语言"]
+                    {
+                        state.command_palette.query = query.to_string();
+                        assert!(
+                            state
+                                .filtered_commands()
+                                .iter()
+                                .any(|entry| { entry.action == Action::OpenConfiguratorLanguage }),
+                            "{query:?} must find the language action in {language:?}"
+                        );
+                    }
+
+                    let measurer = crate::draw::TextMeasurer::default();
+                    let ui_engine = crate::ui_text::UiTextEngine::default();
+                    let resources = crate::input::state::InputTextResources {
+                        measurer: &measurer,
+                        ui_engine: &ui_engine,
+                    };
+                    state.handle_action_with_resources(resources, Action::OpenConfiguratorLanguage);
+                    assert_eq!(
+                        state.take_pending_backend_action(),
+                        Some(PendingBackendAction::HelperLaunch(
+                            HelperLaunchRequest::Configurator(Some(
+                                crate::configurator_destination::language_destination()
+                            ))
+                        ))
+                    );
+                }
+            },
+        );
+    }
+
+    #[test]
     fn board_and_page_lifecycle_commands_are_searchable() {
         assert_palette_finds("new board", Action::BoardNew);
         assert_palette_finds("delete board", Action::BoardDelete);

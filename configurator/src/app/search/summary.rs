@@ -181,12 +181,22 @@ fn performance_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
 }
 
 fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
+    let general_terms: Vec<_> = UI_GENERAL_TERMS
+        .iter()
+        .copied()
+        .chain(
+            wayscriber::domain::Language::ALL
+                .into_iter()
+                .filter_map(wayscriber::domain::Language::native_name),
+        )
+        .chain(LANGUAGE_SETTING_TERMS.iter().copied())
+        .collect();
     add_area_if(
         query,
         summary,
         TabId::Ui,
         SearchArea::UiGeneral,
-        UI_GENERAL_TERMS,
+        &general_terms,
     );
     for tab in UiTabId::ALL {
         let identity_parts = [tab.title(), tab.source_title()]
