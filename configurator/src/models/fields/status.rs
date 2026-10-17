@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::StatusPosition;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,10 +22,10 @@ impl StatusPositionOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            StatusPositionOption::TopLeft => "Top Left",
-            StatusPositionOption::TopRight => "Top Right",
-            StatusPositionOption::BottomLeft => "Bottom Left",
-            StatusPositionOption::BottomRight => "Bottom Right",
+            StatusPositionOption::TopLeft => tr("Top Left"),
+            StatusPositionOption::TopRight => tr("Top Right"),
+            StatusPositionOption::BottomLeft => tr("Bottom Left"),
+            StatusPositionOption::BottomRight => tr("Bottom Right"),
         }
     }
 

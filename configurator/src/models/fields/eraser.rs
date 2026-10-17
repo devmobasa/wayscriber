@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::domain::EraserMode;
 use wayscriber::draw::EraserKind;
 
@@ -14,8 +16,8 @@ impl EraserModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Brush => "Brush",
-            Self::Stroke => "Stroke",
+            Self::Brush => tr("Brush"),
+            Self::Stroke => tr("Stroke"),
         }
     }
 
@@ -54,9 +56,9 @@ impl PresetEraserKindOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Default => "Default",
-            Self::Circle => "Circle",
-            Self::Rect => "Rectangle",
+            Self::Default => tr("Default"),
+            Self::Circle => tr("Circle"),
+            Self::Rect => tr("Rectangle"),
         }
     }
 
@@ -97,9 +99,9 @@ impl PresetEraserModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Default => "Default",
-            Self::Brush => "Brush",
-            Self::Stroke => "Stroke",
+            Self::Default => tr("Default"),
+            Self::Brush => tr("Brush"),
+            Self::Stroke => tr("Stroke"),
         }
     }
 

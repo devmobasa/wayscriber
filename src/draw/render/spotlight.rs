@@ -10,6 +10,8 @@
 //! last also means the committed canvas dims as a whole, while the live preview,
 //! selection handles, click highlights, and UI drawn afterwards stay bright.
 
+use crate::i18n::tr;
+
 /// One elliptical opening left bright by the pass, in logical canvas coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpotlightRegion {
@@ -93,9 +95,9 @@ impl SpotlightMagnifierSource {
     }
 
     /// Stable, user-facing reason a loupe cannot preview right now.
-    pub const fn unavailable_reason(self) -> Option<&'static str> {
+    pub fn unavailable_reason(self) -> Option<&'static str> {
         match self {
-            Self::IncompleteTransparent => Some("Freeze screen to preview"),
+            Self::IncompleteTransparent => Some(tr("Freeze screen to preview")),
             Self::CompleteSolid | Self::CompleteRaster { .. } => None,
         }
     }

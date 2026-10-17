@@ -28,6 +28,7 @@ pub(crate) mod test_helpers;
 mod tests;
 
 // Re-export commonly used types at module level
+pub use crate::domain::Language;
 #[allow(unused_imports)]
 pub use action_meta::{
     ActionCategory, ActionMeta, action_description, action_display_label, action_label,

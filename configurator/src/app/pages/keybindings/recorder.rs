@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -42,7 +44,7 @@ impl RecorderPopover {
             .max_width_chars(36)
             .can_focus(true)
             .build();
-        set_accessible_label(&prompt, "Shortcut recorder");
+        set_accessible_label(&prompt, tr("Shortcut recorder"));
 
         let hint = gtk::Label::builder()
             .label(super_consumed_hint())
@@ -53,8 +55,8 @@ impl RecorderPopover {
             .build();
         set_accessible_label(&hint, super_consumed_hint());
 
-        let cancel = gtk::Button::builder().label("Cancel").build();
-        set_accessible_label(&cancel, "Cancel recording");
+        let cancel = gtk::Button::builder().label(tr("Cancel")).build();
+        set_accessible_label(&cancel, tr("Cancel recording"));
         {
             let sender = sender.clone();
             cancel.connect_clicked(move |_| {
@@ -62,8 +64,8 @@ impl RecorderPopover {
             });
         }
 
-        let finish = gtk::Button::builder().label("Finish").build();
-        set_accessible_label(&finish, "Finish sequence");
+        let finish = gtk::Button::builder().label(tr("Finish")).build();
+        set_accessible_label(&finish, tr("Finish sequence"));
         {
             let sender = sender.clone();
             finish.connect_clicked(move |_| {
@@ -71,8 +73,8 @@ impl RecorderPopover {
             });
         }
 
-        let remove_last = gtk::Button::builder().label("Remove Last Step").build();
-        set_accessible_label(&remove_last, "Remove last sequence step");
+        let remove_last = gtk::Button::builder().label(tr("Remove Last Step")).build();
+        set_accessible_label(&remove_last, tr("Remove last sequence step"));
         {
             let sender = sender.clone();
             remove_last.connect_clicked(move |_| {
@@ -117,9 +119,9 @@ impl RecorderPopover {
         let recording = recorder.is_some();
         set_label(
             &self.prompt,
-            recorder
-                .map(|recorder| recorder.prompt.as_str())
-                .unwrap_or(""),
+            &recorder
+                .map(ShortcutRecorderState::prompt)
+                .unwrap_or_default(),
         );
         let sequence = recorder.is_some_and(ShortcutRecorderState::is_sequence);
         set_visible(&self.finish, sequence);
@@ -198,7 +200,9 @@ fn device_hint_label() -> gtk::Label {
 fn device_hint_text() -> &'static str {
     #[cfg(feature = "tablet-input")]
     {
-        "Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot."
+        tr(
+            "Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot.",
+        )
     }
     #[cfg(not(feature = "tablet-input"))]
     {

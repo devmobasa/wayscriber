@@ -1,3 +1,5 @@
+use wayscriber::i18n::trf;
+
 use super::super::color::ColorInput;
 use super::super::error::FormError;
 use super::super::fields::{
@@ -215,7 +217,10 @@ impl PresetsDraft {
         if !(PRESET_SLOTS_MIN..=PRESET_SLOTS_MAX).contains(&self.slot_count) {
             errors.push(FormError::new(
                 "presets.slot_count",
-                format!("Expected a value between {PRESET_SLOTS_MIN} and {PRESET_SLOTS_MAX}"),
+                trf(
+                    "Expected a value between {} and {}",
+                    &[&PRESET_SLOTS_MIN, &PRESET_SLOTS_MAX],
+                ),
             ));
         }
         config.slot_count = self.slot_count.clamp(PRESET_SLOTS_MIN, PRESET_SLOTS_MAX);

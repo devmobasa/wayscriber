@@ -5,6 +5,8 @@
 //! `SearchArea`s, and metadata-driven labels/help come from the shared
 //! `performance_field_metadata` table.
 
+use wayscriber::i18n::tr;
+
 use relm4::prelude::*;
 use wayscriber::config::{PerformanceFieldId, performance_field_metadata};
 
@@ -34,7 +36,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
     let mut page = PageBuilder::new(sender, TabId::Performance);
 
-    page.group_in_area("Rendering", SearchArea::PerformanceRendering)
+    page.group_in_area(tr("Rendering"), SearchArea::PerformanceRendering)
         .combo_row(
             buffer_metadata.label,
             buffer_metadata.help,
@@ -59,7 +61,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             },
         );
 
-    page.group_in_area("Animations", SearchArea::PerformanceAnimations)
+    page.group_in_area(tr("Animations"), SearchArea::PerformanceAnimations)
         .entry_row_validated(
             animation_metadata.label,
             |app| app.draft.performance_ui_animation_fps.clone(),

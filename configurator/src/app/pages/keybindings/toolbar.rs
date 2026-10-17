@@ -1,5 +1,7 @@
 //! Filter, sort, category scope, and bulk reset chrome for the shortcut manager.
 
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{gtk, prelude::*};
 
 use gtk::prelude::*;
@@ -33,7 +35,11 @@ fn category_bar(
     bindings: &mut Vec<Binding>,
 ) -> gtk::ScrolledWindow {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    let all = scope_button("All Categories", sender, Message::ShortcutManagerShowAll);
+    let all = scope_button(
+        tr("All Categories"),
+        sender,
+        Message::ShortcutManagerShowAll,
+    );
     row.append(&all);
     let mut category_buttons = Vec::new();
     for tab in KeybindingsTabId::ALL {
@@ -101,7 +107,7 @@ fn actions_bar(
         .map(|sort| sort.title())
         .collect();
     let sort = gtk::DropDown::from_strings(&labels);
-    set_accessible_label(&sort, "Sort shortcuts");
+    set_accessible_label(&sort, tr("Sort shortcuts"));
     {
         let sender = sender.clone();
         sort.connect_selected_notify(move |dropdown| {
@@ -112,18 +118,18 @@ fn actions_bar(
         });
     }
 
-    let reset_visible = gtk::Button::with_label("Reset Visible");
-    set_accessible_label(&reset_visible, "Reset visible keybindings");
+    let reset_visible = gtk::Button::with_label(tr("Reset Visible"));
+    set_accessible_label(&reset_visible, tr("Reset visible keybindings"));
     connect_clicked(
         &reset_visible,
         sender,
         Message::ShortcutResetVisibleRequested,
     );
-    let reset_all = gtk::Button::with_label("Reset All");
-    set_accessible_label(&reset_all, "Reset all keybindings");
+    let reset_all = gtk::Button::with_label(tr("Reset All"));
+    set_accessible_label(&reset_all, tr("Reset all keybindings"));
     connect_clicked(&reset_all, sender, Message::ShortcutResetAllRequested);
-    let review = gtk::Button::with_label("Review Conflicts");
-    set_accessible_label(&review, "Review shortcut conflicts");
+    let review = gtk::Button::with_label(tr("Review Conflicts"));
+    set_accessible_label(&review, tr("Review shortcut conflicts"));
     connect_clicked(&review, sender, Message::ShortcutConflictReviewStarted);
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -170,23 +176,23 @@ fn reset_banner(
     bindings: &mut Vec<Binding>,
 ) -> gtk::Revealer {
     let confirm_visible = gtk::Button::builder()
-        .label("Confirm Reset Visible")
+        .label(tr("Confirm Reset Visible"))
         .css_classes(["destructive-action"])
         .build();
-    set_accessible_label(&confirm_visible, "Confirm reset visible");
+    set_accessible_label(&confirm_visible, tr("Confirm reset visible"));
     connect_clicked(
         &confirm_visible,
         sender,
         Message::ShortcutResetVisibleConfirmed,
     );
     let confirm_all = gtk::Button::builder()
-        .label("Confirm Reset All")
+        .label(tr("Confirm Reset All"))
         .css_classes(["destructive-action"])
         .build();
-    set_accessible_label(&confirm_all, "Confirm reset all");
+    set_accessible_label(&confirm_all, tr("Confirm reset all"));
     connect_clicked(&confirm_all, sender, Message::ShortcutResetAllConfirmed);
-    let cancel = gtk::Button::with_label("Cancel");
-    set_accessible_label(&cancel, "Cancel keybinding reset");
+    let cancel = gtk::Button::with_label(tr("Cancel"));
+    set_accessible_label(&cancel, tr("Cancel keybinding reset"));
     connect_clicked(&cancel, sender, Message::ShortcutResetCanceled);
 
     let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -206,7 +212,7 @@ fn reset_banner(
         set_visible(&confirm_all, all_armed);
         set_visible(&cancel, visible_armed || all_armed);
         if let Some(fields) = app.pending_shortcut_reset_visible_fields() {
-            let label = format!("Confirm Reset Visible ({})", fields.len());
+            let label = trf("Confirm Reset Visible ({})", &[&fields.len()]);
             if confirm_visible.label().as_deref() != Some(label.as_str()) {
                 confirm_visible.set_label(&label);
             }

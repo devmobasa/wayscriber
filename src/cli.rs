@@ -1,6 +1,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use crate::domain::Language;
 use crate::tray_action::TrayAction;
 
 #[derive(Debug, Default)]
@@ -76,6 +77,13 @@ pub struct Cli {
 
     /// Print compiled runtime capabilities for companion tools
     pub runtime_capabilities: bool,
+
+    /// Interface language for this run, beating `[ui] language` and
+    /// `WAYSCRIBER_LANGUAGE` (the config file is not changed)
+    pub language: Option<Language>,
+
+    /// List the interface languages and the one in effect, then exit
+    pub list_languages: bool,
 }
 
 #[derive(Debug)]
@@ -151,6 +159,11 @@ impl Cli {
                 "--no-resume-session" => cli.no_resume_session = true,
                 "--about" => cli.about = true,
                 "--check-update" => cli.check_update = true,
+                "--language" => {
+                    index += 1;
+                    cli.language = Some(parse_language(&value_after(&args, index, "--language")?)?);
+                }
+                "--list-languages" => cli.list_languages = true,
                 crate::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
                     cli.runtime_capabilities = true;
                 }
@@ -166,6 +179,9 @@ impl Cli {
                 }
                 _ if arg.starts_with("--rename-session=") => {
                     cli.rename_session = Some(value_from_equals(arg, "--rename-session")?);
+                }
+                _ if arg.starts_with("--language=") => {
+                    cli.language = Some(parse_language(&value_from_equals(arg, "--language")?)?);
                 }
                 _ if is_short_option_cluster(arg) => {
                     match parse_short_option_cluster(&args, index, &mut cli)? {
@@ -261,12 +277,17 @@ impl Cli {
         self.validate_session_flag_pairs()?;
         self.validate_overlay_commands()?;
         self.validate_session_commands()?;
-        self.validate_catalog_commands()
+        self.validate_catalog_commands()?;
+        self.validate_language_options()
     }
 
     fn validate_runtime_capabilities_command(&self) -> Result<(), String> {
         if self.runtime_capabilities
-            && (self.selects_a_launch_command() || self.about || self.check_update)
+            && (self.selects_a_launch_command()
+                || self.about
+                || self.check_update
+                || self.list_languages
+                || self.language.is_some())
         {
             return Err("--runtime-capabilities conflicts with launch flags".to_string());
         }
@@ -462,8 +483,44 @@ impl Cli {
             return Err("--check-update conflicts with the selected command".to_string());
         }
 
+        if self.list_languages
+            && (self.selects_a_launch_command() || self.about || self.check_update)
+        {
+            return Err("--list-languages conflicts with the selected command".to_string());
+        }
+
         Ok(())
     }
+
+    /// `--language` sets the language of the process it starts, and of the
+    /// overlays and About windows that process starts in turn. A command that
+    /// hands its work to a running daemon, or only prints English text, has no
+    /// window for it to change.
+    fn validate_language_options(&self) -> Result<(), String> {
+        if self.language.is_none() {
+            return Ok(());
+        }
+        if self.daemon_toggle || self.overlay_action_count() > 0 {
+            return Err(
+                "--language cannot change a running daemon's overlays; start the daemon with --language, or set [ui] language"
+                    .to_string(),
+            );
+        }
+        if !(self.active || self.freeze || self.daemon || self.about || self.list_languages) {
+            return Err(
+                "--language applies to --active, --freeze, --daemon, --about and --list-languages"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+/// Parses a `--language` value: any spelling `[ui] language` accepts.
+fn parse_language(value: &str) -> Result<Language, String> {
+    crate::i18n::language_from_code(value).ok_or_else(|| {
+        format!("unknown language '{value}'; run 'wayscriber --list-languages' to see the choices")
+    })
 }
 
 fn is_short_option_cluster(arg: &str) -> bool {
@@ -563,6 +620,7 @@ pub(crate) fn print_help() {
     println!("  wayscriber --clear-tool-state [--session-file PATH]");
     println!("  wayscriber --about");
     println!("  wayscriber --check-update");
+    println!("  wayscriber --list-languages");
     println!();
     println!("Options:");
     println!("  -d, --daemon                  Run as background daemon");
@@ -588,6 +646,8 @@ pub(crate) fn print_help() {
     println!("      --session-file PATH       Use a named session file");
     println!("      --about                   Show the About window");
     println!("      --check-update            Check wayscriber.com for a newer release");
+    println!("      --language CODE           Interface language for this run (auto, en, zh-CN)");
+    println!("      --list-languages          List interface languages and the one in effect");
     println!("  -h, --help                    Show help");
     println!("  -V, --version                 Show version");
 }

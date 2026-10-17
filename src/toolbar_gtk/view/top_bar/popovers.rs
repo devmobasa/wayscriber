@@ -5,6 +5,7 @@
 //! changes.
 
 use super::*;
+use crate::i18n::{tr, trf};
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
 
 pub(super) fn set_popover_capture_transparent(
@@ -440,15 +441,15 @@ impl TopBar {
         {
             let row = gtk4::Box::new(gtk4::Orientation::Horizontal, gap);
             let side_button = (24.0 * scale, 24.0 * scale);
-            let minus = text_button("−", side_button, "Fewer sides");
+            let minus = text_button("−", side_button, tr("Fewer sides"));
             set_semantic_widget_id(&minus, "top.options.sides-minus");
             let sender = self.feedback.clone();
             minus.connect_clicked(move |_| {
                 send_event(&sender, ToolbarEvent::NudgePolygonSides(-1));
             });
-            let label = gtk4::Label::new(Some(&format!("{} sides", snapshot.polygon_sides)));
+            let label = gtk4::Label::new(Some(&trf("{} sides", &[&snapshot.polygon_sides])));
             label.set_hexpand(true);
-            let plus = text_button("+", side_button, "More sides");
+            let plus = text_button("+", side_button, tr("More sides"));
             set_semantic_widget_id(&plus, "top.options.sides-plus");
             let sender = self.feedback.clone();
             plus.connect_clicked(move |_| {

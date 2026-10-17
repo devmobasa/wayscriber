@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::{tr, trf};
 use crate::session::SessionOptions;
 
 impl WaylandState {
@@ -8,7 +9,7 @@ impl WaylandState {
         self.clear_toolbar_save_as_overwrite_prompt();
         let command = SessionCommand::OpenHome(self.home_session_options().map(Box::new));
         if let Err(error) = self.start_session_command(command) {
-            self.report_session_command_error("Return to the home session failed", &error);
+            self.report_session_command_error(tr("Return to the home session failed"), &error);
         }
     }
 
@@ -32,6 +33,6 @@ impl WaylandState {
         let output_identity = self.current_output_identity();
         self.begin_session_output_transition(output_identity, "return to the home session");
 
-        self.set_session_toolbar_info(format!("Returned to {}", self.session_home.label()));
+        self.set_session_toolbar_info(trf("Returned to {}", &[&self.session_home.label()]));
     }
 }

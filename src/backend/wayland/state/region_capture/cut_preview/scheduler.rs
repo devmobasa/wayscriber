@@ -6,6 +6,7 @@ use crate::backend::wayland::runtime_operation::{
     RuntimeOperationPoll, RuntimeOperationSubmitError,
 };
 use crate::backend::wayland::state::WaylandState;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use std::sync::Arc;
 
@@ -56,7 +57,7 @@ pub(super) fn present_cut_preview_effect(
         input.push_toast(
             ToastPriority::Info,
             TOAST_SOURCE,
-            Toast::warning("Could not update the cut preview."),
+            Toast::warning(tr("Could not update the cut preview.")),
         );
     }
     if effect.dirty {

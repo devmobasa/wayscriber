@@ -1,3 +1,5 @@
+use wayscriber::i18n::trf;
+
 use crate::models::error::FormError;
 use crate::models::fields::RegionPickerOption;
 use wayscriber::config::{
@@ -46,14 +48,14 @@ impl CaptureDraft {
             Ok(()) => config.filename_template = self.filename_template.clone(),
             Err(reason) => errors.push(FormError::new(
                 "capture.filename_template",
-                format!("Filename template: {reason}."),
+                trf("Filename template: {}.", &[&reason]),
             )),
         }
         match validate_capture_format(&self.format) {
             Ok(format) => config.format = format,
             Err(reason) => errors.push(FormError::new(
                 "capture.format",
-                format!("Image format: {reason}."),
+                trf("Image format: {}.", &[&reason]),
             )),
         }
         config.copy_to_clipboard = self.copy_to_clipboard;
@@ -67,7 +69,7 @@ impl CaptureDraft {
             Ok(languages) => config.ocr_languages = languages,
             Err(reason) => errors.push(FormError::new(
                 "capture.ocr_languages",
-                format!("OCR languages: {reason}."),
+                trf("OCR languages: {}.", &[&reason]),
             )),
         }
     }

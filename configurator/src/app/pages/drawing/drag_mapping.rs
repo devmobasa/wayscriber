@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::gtk;
 
 use gtk::prelude::*;
@@ -13,7 +15,7 @@ use super::super::PageBuilder;
 use super::{DRAG_BUTTONS, DRAG_FIELDS, boxed_list, section_combo_row, set_visible_if_changed};
 
 pub(super) fn build(page: &mut PageBuilder) {
-    page.group_in_area("Drag tool mapping", SearchArea::DrawingDragTools);
+    page.group_in_area(tr("Drag tool mapping"), SearchArea::DrawingDragTools);
 
     let switcher = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -91,7 +93,7 @@ fn build_drag_button_section(page: &mut PageBuilder, button: DragMouseButton) {
         section_combo_row(
             page,
             &list,
-            &format!("{} color", field.label()),
+            &trf("{} color", &[&field.label()]),
             colors.clone(),
             color_labels.clone(),
             move |app| drag_color_for_field(drag_button_config(app, button), field),

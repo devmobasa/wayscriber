@@ -2,6 +2,7 @@ use crate::config::{
     Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
     action_label, action_short_label, section_flag_for_item,
 };
+use crate::i18n::tr;
 use crate::input::Tool;
 
 use super::super::ToolbarEvent;
@@ -310,8 +311,8 @@ pub(crate) fn short_label_for_event(
     fallback: &'static str,
 ) -> &'static str {
     match event {
-        ToolbarEvent::ToggleFreeze if frozen_active => "Unfreeze",
-        ToolbarEvent::ToggleZoomLock if zoom_locked => "Unlock Zoom",
+        ToolbarEvent::ToggleFreeze if frozen_active => tr("Unfreeze"),
+        ToolbarEvent::ToggleZoomLock if zoom_locked => tr("Unlock Zoom"),
         _ => action_for_event(event)
             .map(action_short_label)
             .unwrap_or(fallback),
@@ -325,8 +326,8 @@ pub(crate) fn tooltip_label_for_event(
     fallback: &'static str,
 ) -> &'static str {
     match event {
-        ToolbarEvent::ToggleFreeze if frozen_active => "Unfreeze",
-        ToolbarEvent::ToggleZoomLock if zoom_locked => "Unlock Zoom",
+        ToolbarEvent::ToggleFreeze if frozen_active => tr("Unfreeze"),
+        ToolbarEvent::ToggleZoomLock if zoom_locked => tr("Unlock Zoom"),
         _ => action_for_event(event)
             .map(action_label)
             .unwrap_or(fallback),

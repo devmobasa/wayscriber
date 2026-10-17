@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
+use crate::i18n::{tr, trf};
 
 use super::super::session_format::session_display_name;
 use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSnapshot};
@@ -29,19 +30,19 @@ impl ToolbarSessionModel {
         let active_name = snapshot
             .active_session_name
             .clone()
-            .unwrap_or_else(|| "Default session".to_string());
+            .unwrap_or_else(|| tr("Default session").to_string());
         let active_path_label = snapshot
             .active_session_path
             .as_ref()
             .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "No persisted session target".to_string());
+            .unwrap_or_else(|| tr("No persisted session target").to_string());
         let target_active = snapshot.active_session_path.is_some();
         let buttons: Vec<_> = vec![
-            ToolbarSessionButton::new(ToolbarEvent::OpenSession, "Open", target_active),
-            ToolbarSessionButton::new(ToolbarEvent::SaveSessionAs, "Save As", target_active),
-            ToolbarSessionButton::new(ToolbarEvent::SessionInfo, "Info", target_active),
-            ToolbarSessionButton::new(ToolbarEvent::ClearSession, "Clear", target_active),
-            ToolbarSessionButton::new(ToolbarEvent::OpenConfigurator, "Manager", true),
+            ToolbarSessionButton::new(ToolbarEvent::OpenSession, tr("Open"), target_active),
+            ToolbarSessionButton::new(ToolbarEvent::SaveSessionAs, tr("Save As"), target_active),
+            ToolbarSessionButton::new(ToolbarEvent::SessionInfo, tr("Info"), target_active),
+            ToolbarSessionButton::new(ToolbarEvent::ClearSession, tr("Clear"), target_active),
+            ToolbarSessionButton::new(ToolbarEvent::OpenConfigurator, tr("Manager"), true),
         ]
         .into_iter()
         .filter(|button| session_button_visible(snapshot, &button.event))
@@ -131,8 +132,8 @@ impl ToolbarSessionHome {
     fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
         Self {
             label: snapshot.home_session_name.as_ref().map_or_else(
-                || "Default session".to_owned(),
-                |name| format!("Back to {name}"),
+                || tr("Default session").to_owned(),
+                |name| trf("Back to {}", &[&name]),
             ),
             enabled: !snapshot.at_home_session,
         }

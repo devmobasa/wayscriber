@@ -41,7 +41,7 @@ pub fn hex_from_rgb(rgb: [f64; 3]) -> String {
         "#{:02X}{:02X}{:02X}",
         to_u8(rgb[0]),
         to_u8(rgb[1]),
-        to_u8(rgb[2])
+        to_u8(rgb[2]),
     )
 }
 
@@ -51,7 +51,7 @@ pub fn hex_from_rgba(rgba: [f64; 4]) -> String {
         to_u8(rgba[0]),
         to_u8(rgba[1]),
         to_u8(rgba[2]),
-        to_u8(rgba[3])
+        to_u8(rgba[3]),
     )
 }
 

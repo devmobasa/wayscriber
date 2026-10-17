@@ -5,6 +5,7 @@
 //! module only decides color and paint order, which is why the other three can
 //! be tested without a compositor.
 
+use crate::i18n::tr;
 use crate::ui::ellipsize_to_fit_with_engine;
 use crate::ui::theme::{self, Rgba, Theme};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
@@ -38,9 +39,6 @@ const HOVER_TINT: f64 = 0.12;
 /// "Up to date" dot: the toast palette's success green, the only hue in the
 /// dialog that is not already a theme token.
 const SUCCESS: Rgba = theme::rgba(theme::overlay::TOAST_SUCCESS, 1.0);
-
-const KEY_HINT: &str = "Tab to move · Enter to open · Esc to close";
-const CHECK_NOW: &str = "Check now";
 
 /// Everything one frame needs.
 pub(super) struct Frame<'a> {
@@ -201,7 +199,8 @@ fn update_card(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, t
         Some(_) => {
             // The card doubles as the "check now" button whenever there is
             // nothing to open, so it says so.
-            let width = advance(engine, action_style, CHECK_NOW);
+            let check_now = tr("Check now");
+            let width = advance(engine, action_style, check_now);
             let x = rect.0 + rect.2 - PADDING - width;
             label(
                 engine,
@@ -213,7 +212,7 @@ fn update_card(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, t
                 } else {
                     theme.accent
                 },
-                CHECK_NOW,
+                check_now,
             );
             x - 8.0
         }
@@ -370,7 +369,10 @@ fn footer(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme:
     let hint_style = style(HINT_SIZE, cairo::FontWeight::Normal);
     let (text, color) = match frame.notice {
         Some(notice) => (notice, theme.accent_bright),
-        None => (KEY_HINT, theme.text_tertiary),
+        None => (
+            tr("Tab to move · Enter to open · Esc to close"),
+            theme.text_tertiary,
+        ),
     };
     let max_width = frame.plan.width - frame.plan.icon.0 * 2.0;
     label(

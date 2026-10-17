@@ -16,6 +16,8 @@ mod font;
 mod laser;
 mod quick_colors;
 
+use wayscriber::i18n::{tr, trf};
+
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
@@ -228,16 +230,15 @@ fn set_error_if_changed(row: &adw::EntryRow, error: Option<String>) {
 fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return Some("Expected a numeric value".to_string());
+        return Some(tr("Expected a numeric value").to_string());
     }
     match trimmed.parse::<f64>() {
         Ok(parsed) if (min..=max).contains(&parsed) => None,
-        Ok(_) => Some(format!(
-            "Range: {}-{}",
-            format_float(min),
-            format_float(max)
+        Ok(_) => Some(trf(
+            tr("Range: {}-{}"),
+            &[&format_float(min), &format_float(max)],
         )),
-        Err(_) => Some("Expected a numeric value".to_string()),
+        Err(_) => Some(tr("Expected a numeric value").to_string()),
     }
 }
 
@@ -245,12 +246,12 @@ fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
 fn validate_usize_range(value: &str, min: usize, max: usize) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return Some("Expected a whole number".to_string());
+        return Some(tr("Expected a whole number").to_string());
     }
     match trimmed.parse::<usize>() {
         Ok(parsed) if (min..=max).contains(&parsed) => None,
-        Ok(_) => Some(format!("Range: {min}-{max}")),
-        Err(_) => Some("Expected a whole number".to_string()),
+        Ok(_) => Some(trf("Range: {}-{}", &[&min, &max])),
+        Err(_) => Some(tr("Expected a whole number").to_string()),
     }
 }
 
@@ -258,12 +259,12 @@ fn validate_usize_range(value: &str, min: usize, max: usize) -> Option<String> {
 fn validate_usize_min(value: &str, min: usize) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return Some("Expected a whole number".to_string());
+        return Some(tr("Expected a whole number").to_string());
     }
     match trimmed.parse::<usize>() {
         Ok(parsed) if parsed >= min => None,
-        Ok(_) => Some(format!("Minimum: {min}")),
-        Err(_) => Some("Expected a whole number".to_string()),
+        Ok(_) => Some(trf("Minimum: {}", &[&min])),
+        Err(_) => Some(tr("Expected a whole number").to_string()),
     }
 }
 

@@ -1,6 +1,7 @@
 //! Drawing state machine and input state management.
 
 pub use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::i18n::tr;
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 pub const UI_TOAST_DURATION_MS: u64 = 5000;
@@ -493,15 +494,15 @@ impl CompositorCapabilities {
     pub fn limitations_summary(&self) -> Option<String> {
         let mut issues = Vec::new();
         if !self.layer_shell {
-            issues.push("Toolbars limited, light passthrough unavailable");
+            issues.push(tr("Toolbars limited, light passthrough unavailable"));
         }
         if !self.freeze_capture {
-            issues.push("Freeze unavailable");
+            issues.push(tr("Freeze unavailable"));
         } else if !self.direct_capture_available() {
-            issues.push("Freeze uses portal capture");
+            issues.push(tr("Freeze uses portal capture"));
         }
         if !self.pointer_constraints {
-            issues.push("Pointer lock unavailable");
+            issues.push(tr("Pointer lock unavailable"));
         }
         if issues.is_empty() {
             None

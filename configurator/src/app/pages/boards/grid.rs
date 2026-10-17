@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::{
     SectionLayout,
     rows::{TextRow, build_text_row},
@@ -16,7 +18,7 @@ pub(super) fn build(
 ) -> (adw::ComboRow, TextRow) {
     let labels: Vec<_> = BoardGridKind::ALL.iter().map(|kind| kind.label()).collect();
     let grid = adw::ComboRow::builder()
-        .title("Paper pattern")
+        .title(tr("Paper pattern"))
         .model(&gtk::StringList::new(&labels))
         .visible(layout.expanded)
         .build();
@@ -29,7 +31,7 @@ pub(super) fn build(
     let solid = layout.background_kind != BoardBackgroundOption::Transparent;
     grid.set_sensitive(solid);
     if !solid {
-        grid.set_subtitle("Paper patterns require a solid board background");
+        grid.set_subtitle(tr("Paper patterns require a solid board background"));
     }
     let grid_sender = sender.clone();
     grid.connect_selected_notify(move |row| {
@@ -38,10 +40,10 @@ pub(super) fn build(
         }
     });
     let spacing_title = match layout.grid_kind {
-        BoardGridKind::None => "Grid spacing (8–200 logical pixels)",
-        BoardGridKind::Cartesian => "Square side (8–200 logical pixels)",
+        BoardGridKind::None => tr("Grid spacing (8–200 logical pixels)"),
+        BoardGridKind::Cartesian => tr("Square side (8–200 logical pixels)"),
         BoardGridKind::Isometric | BoardGridKind::IsometricDots => {
-            "Equilateral triangle side (8–200 logical pixels)"
+            tr("Equilateral triangle side (8–200 logical pixels)")
         }
     };
     let spacing = build_text_row(

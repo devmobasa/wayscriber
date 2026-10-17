@@ -2,6 +2,7 @@ use super::super::base::{InputState, PasteAnchor};
 use super::types::{ContextMenuState, MenuCommand};
 use crate::domain::Action;
 use crate::draw::ShapeId;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;
@@ -231,7 +232,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "ui",
-                        Toast::info("Cleared the last page."),
+                        Toast::info(tr("Cleared the last page.")),
                     );
                 }
                 self.close_context_menu();

@@ -4,11 +4,11 @@ use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::ZoomChipDisplayOption;
 use super::super::fields::{
     ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
-    InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
-    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
-    PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
+    InputHudPositionOption, LanguageOption, PdfFitModeOption, PdfLabelContentModeOption,
+    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
     UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
@@ -87,6 +87,7 @@ pub struct ConfigDraft {
 
     pub ui_theme: UiThemeOption,
     pub ui_reduced_motion: ReducedMotionOption,
+    pub ui_language: LanguageOption,
     pub ui_show_status_bar: bool,
     pub ui_status_bar_interactive: bool,
     pub ui_active_output_badge: bool,

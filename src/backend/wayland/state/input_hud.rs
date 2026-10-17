@@ -9,6 +9,7 @@
 
 use super::WaylandState;
 use crate::config::InputHudMode;
+use crate::i18n::tr;
 use crate::input::state::{InputHudActiveSource, Toast, ToastPriority};
 
 /// Shown when system mode was requested from a build that cannot serve it.
@@ -16,8 +17,11 @@ use crate::input::state::{InputHudActiveSource, Toast, ToastPriority};
 /// binary compiled without the feature read `/dev/input`. Feature builds
 /// describe their own failures (see `SystemInputFailure`).
 #[cfg(not(feature = "input-monitor"))]
-const SYSTEM_CAPTURE_HINT: &str = "System-wide capture is not available in this build \
-(compiled without the 'input-monitor' feature).";
+fn system_capture_hint() -> &'static str {
+    tr(
+        "System-wide capture is not available in this build (compiled without the 'input-monitor' feature).",
+    )
+}
 
 /// What the configured mode resolves to for a given build/permission state.
 ///
@@ -126,7 +130,7 @@ impl InputHudRuntime {
 
     #[cfg(not(feature = "input-monitor"))]
     fn start(&mut self) -> MonitorStart {
-        MonitorStart::Failed(SYSTEM_CAPTURE_HINT.to_string())
+        MonitorStart::Failed(system_capture_hint().to_string())
     }
 
     #[cfg(feature = "input-monitor")]
@@ -297,8 +301,8 @@ impl WaylandState {
             return;
         }
         let message = match self.input_state.input_hud_active_source() {
-            InputHudActiveSource::System => "Input HUD: system-wide input",
-            InputHudActiveSource::Overlay => "Input HUD: overlay input only",
+            InputHudActiveSource::System => tr("Input HUD: system-wide input"),
+            InputHudActiveSource::Overlay => tr("Input HUD: overlay input only"),
         };
         log::info!("{message}");
         self.input_state
@@ -334,7 +338,7 @@ impl WaylandState {
 
     #[cfg(not(feature = "input-monitor"))]
     fn system_capture_denied_message(&self) -> String {
-        SYSTEM_CAPTURE_HINT.to_string()
+        system_capture_hint().to_string()
     }
 
     /// Report that system capture is unavailable.

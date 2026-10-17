@@ -1,6 +1,7 @@
 use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
 use crate::draw::shape::{PolygonKind, has_minimum_distinct_points};
+use crate::i18n::tr;
 use crate::input::Tool;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::Instant;
@@ -33,7 +34,9 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "draw.polygon",
-            Toast::info("Click points. Enter/double-click to finish. Backspace undo. Esc cancel."),
+            Toast::info(tr(
+                "Click points. Enter/double-click to finish. Backspace undo. Esc cancel.",
+            )),
         );
         self.needs_redraw = true;
     }

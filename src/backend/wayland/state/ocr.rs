@@ -22,6 +22,7 @@ use super::screen_image::{
     CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
     screen_source_entry,
 };
+use crate::i18n::tr;
 
 const TOAST_SOURCE: &str = "ocr";
 
@@ -62,7 +63,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::warning("Screen text recognition is off because capture is disabled."),
+                Toast::warning(tr(
+                    "Screen text recognition is off because capture is disabled.",
+                )),
             );
             return;
         }
@@ -70,7 +73,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 TOAST_SOURCE,
-                Toast::info("OCR is already running"),
+                Toast::info(tr("OCR is already running")),
             );
             return;
         }
@@ -133,7 +136,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     TOAST_SOURCE,
-                    Toast::info("OCR needs a visible screen image.").action(
+                    Toast::info(tr("OCR needs a visible screen image.")).action(
                         "Switch to transparent",
                         crate::config::Action::ReturnToTransparent,
                     ),
@@ -143,9 +146,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
-                    Toast::warning(
+                    Toast::warning(tr(
                         "Screen text recognition is unavailable because screen capture is not available.",
-                    ),
+                    )),
                 );
             }
             ScreenSourceEntry::ZoomImageUnavailable => {
@@ -158,9 +161,9 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Info,
             TOAST_SOURCE,
-            Toast::warning(
+            Toast::warning(tr(
                 "Screen text recognition is unavailable because zoom has no captured screen image.",
-            ),
+            )),
         );
     }
 
@@ -397,11 +400,13 @@ impl WaylandState {
         rect: crate::screen_pixels::ImagePixelRect,
     ) -> Result<crate::screen_pixels::PackedArgb32, &'static str> {
         let Some(source) = self.ocr_screen_source() else {
-            return Err("The screen image for text recognition is no longer available.");
+            return Err(tr(
+                "The screen image for text recognition is no longer available.",
+            ));
         };
         copy_image_rect(source.image, rect).map_err(|error| match error {
-            CropError::Empty => "That selection has no screen pixels.",
-            CropError::OutOfBounds => "Could not read that region of the screen image.",
+            CropError::Empty => tr("That selection has no screen pixels."),
+            CropError::OutOfBounds => tr("Could not read that region of the screen image."),
         })
     }
 
@@ -433,7 +438,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
-                    Toast::info("OCR is already running"),
+                    Toast::info(tr("OCR is already running")),
                 );
                 None
             }
@@ -442,7 +447,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
-                    Toast::warning("Could not start screen text recognition."),
+                    Toast::warning(tr("Could not start screen text recognition.")),
                 );
                 None
             }
@@ -472,9 +477,9 @@ impl WaylandState {
                     std::time::Instant::now(),
                 );
                 let message = if replaced_invalid_utf8 {
-                    "Text copied (some characters were unreadable)"
+                    tr("Text copied (some characters were unreadable)")
                 } else {
-                    "Text copied"
+                    tr("Text copied")
                 };
                 self.input_state.push_toast(
                     ToastPriority::Info,
@@ -494,7 +499,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
-                    Toast::info("No text found"),
+                    Toast::info(tr("No text found")),
                 );
             }
             OcrPoll::Ready {
@@ -526,7 +531,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     TOAST_SOURCE,
-                    Toast::error("Screen text recognition failed."),
+                    Toast::error(tr("Screen text recognition failed.")),
                 );
             }
         }

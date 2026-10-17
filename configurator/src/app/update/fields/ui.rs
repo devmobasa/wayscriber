@@ -1,8 +1,8 @@
 use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
-    InputHudModeOption, InputHudPositionOption, OverrideOption, ReducedMotionOption,
-    StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    InputHudModeOption, InputHudPositionOption, LanguageOption, OverrideOption,
+    ReducedMotionOption, StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
     ToolbarRebindModifierOption, ToolbarStrokeControlsOption, UiThemeOption, ZoomChipDisplayOption,
 };
 
@@ -56,6 +56,19 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.ui_reduced_motion = option;
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_ui_language_changed(
+        &mut self,
+        option: LanguageOption,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_language = option;
+        // A preview: the whole window redraws in the new language now, and
+        // nothing is written until Save.
+        self.apply_draft_language();
         self.refresh_dirty_flag();
         Vec::new()
     }

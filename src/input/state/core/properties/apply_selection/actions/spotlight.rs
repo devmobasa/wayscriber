@@ -1,5 +1,6 @@
 use crate::draw::TextMeasurer;
 use crate::draw::{SPOTLIGHT_MAGNIFICATION_STEP, Shape};
+use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 
 impl InputState {
@@ -30,7 +31,7 @@ impl InputState {
             },
         );
 
-        let applied = self.report_selection_apply_result(result, "Spotlight magnification");
+        let applied = self.report_selection_apply_result(result, tr("Spotlight magnification"));
         if applied && changed_to_magnified {
             self.request_spotlight_magnifier_feedback();
         }

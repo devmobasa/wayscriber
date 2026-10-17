@@ -8,6 +8,8 @@ mod card;
 #[cfg(test)]
 mod tests;
 
+use wayscriber::i18n::tr;
+
 use relm4::gtk;
 use relm4::prelude::*;
 
@@ -22,24 +24,30 @@ use super::super::PageBuilder;
 use card::{BoundCatalogCard, rebuild_items};
 
 pub(super) fn add(page: &mut PageBuilder) {
-    page.group_in_area("Saved Sessions", SearchArea::SessionCatalog);
+    page.group_in_area(tr("Saved Sessions"), SearchArea::SessionCatalog);
 
     let sender = page.sender();
     let body = column_box();
-    let refresh = message_button("Refresh", &sender, Message::SessionCatalogRefreshRequested);
+    let refresh = message_button(
+        tr("Refresh"),
+        &sender,
+        Message::SessionCatalogRefreshRequested,
+    );
     let toolbar = row_box();
     toolbar.append(&refresh);
     body.append(&toolbar);
-    body.append(&hint_label(
+    body.append(&hint_label(tr(
         "Clear Tool State applies config defaults without deleting boards.",
-    ));
-    body.append(&hint_label("Clear Saved Data removes saved session files."));
+    )));
+    body.append(&hint_label(tr(
+        "Clear Saved Data removes saved session files.",
+    )));
 
     let blocker_label = warning_label("");
     body.append(&blocker_label);
-    let loading_label = body_label("Loading sessions...");
+    let loading_label = body_label(tr("Loading sessions..."));
     body.append(&loading_label);
-    let empty_label = body_label("No named sessions in the catalog yet.");
+    let empty_label = body_label(tr("No named sessions in the catalog yet."));
     body.append(&empty_label);
 
     let list = gtk::Box::builder()
@@ -134,9 +142,9 @@ fn catalog_layout(app: &ConfiguratorApp) -> CatalogLayout {
                 display_name: item.display_name.clone(),
                 path_label: item.path_label.clone(),
                 canonical_path_label: item.canonical_path_label.clone(),
-                created_label: item.created_label.clone(),
-                last_opened_label: item.last_opened_label.clone(),
-                last_saved_label: item.last_saved_label.clone(),
+                created_label: item.created_label(),
+                last_opened_label: item.last_opened_label(),
+                last_saved_label: item.last_saved_label(),
                 artifacts: item.artifacts.status_label(),
             })
             .collect(),

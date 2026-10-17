@@ -1,3 +1,4 @@
+use crate::i18n::{tr, trf};
 use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::ui::constants::{
     self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_SELECTION, BORDER_FOCUS, RADIUS_MD, RADIUS_SM,
@@ -278,9 +279,9 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     );
 
     let label = if is_empty_state {
-        "Add first page"
+        tr("Add first page")
     } else {
-        "Add page"
+        tr("Add page")
     };
     let label_style = UiTextStyle {
         family: "Sans",
@@ -384,8 +385,8 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
 
     let label = frame
         .page_name()
-        .map(|name| format!("Page {}: {}", page_number, name))
-        .unwrap_or_else(|| format!("Page {page_number}"));
+        .map(|name| trf("Page {}: {}", &[&page_number, &name]))
+        .unwrap_or_else(|| trf("Page {}", &[&page_number]));
     let label_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,

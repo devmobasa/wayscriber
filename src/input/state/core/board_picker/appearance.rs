@@ -4,6 +4,7 @@ use crate::domain::{
     Color,
 };
 use crate::draw::TextMeasurer;
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::boards::{BoardAppearance, BoardIdentityGeneration};
 use crate::input::events::Key;
@@ -188,10 +189,10 @@ impl BoardAppearanceEdit {
 
     pub(crate) fn validation_error(&self) -> Option<&'static str> {
         if parse_hex_color(&self.color).is_none() {
-            return Some("Use a color in #RRGGBB format.");
+            return Some(tr("Use a color in #RRGGBB format."));
         }
         if !self.size_is_valid() {
-            return Some("Spacing must be a whole number from 8 to 200.");
+            return Some(tr("Spacing must be a whole number from 8 to 200."));
         }
         None
     }
@@ -245,13 +246,13 @@ impl BoardAppearanceEdit {
     }
 
     fn desired(&self, current: &BoardAppearance) -> Result<BoardAppearance, &'static str> {
-        let color = parse_hex_color(&self.color).ok_or("Use a color in #RRGGBB format.")?;
+        let color = parse_hex_color(&self.color).ok_or(tr("Use a color in #RRGGBB format."))?;
         let spacing = self
             .spacing
             .parse::<i64>()
             .ok()
             .filter(|s| (8..=200).contains(s))
-            .ok_or("Spacing must be a whole number from 8 to 200.")?;
+            .ok_or(tr("Spacing must be a whole number from 8 to 200."))?;
         let kind_dirty = self.kind != self.original.grid.kind;
         let spacing_dirty = spacing != i64::from(self.original.grid.spacing());
         let mut desired = current.clone();
@@ -274,7 +275,9 @@ impl BoardAppearanceEdit {
             &self.original.grid.spacing(),
             &(spacing as u16),
         ) {
-            return Err("Board appearance changed. Cancel and reopen to edit it.");
+            return Err(tr(
+                "Board appearance changed. Cancel and reopen to edit it.",
+            ));
         }
         if self.color_is_dirty() {
             desired.background = BoardBackground::Solid(color);
@@ -337,14 +340,14 @@ impl InputState {
             .position(|b| b.spec.id == edit.id);
         if self.boards.board_identity_generation() != edit.generation || index.is_none() {
             self.board_picker.appearance.as_mut().unwrap().error =
-                Some("Board identity changed. Cancel and reopen to edit it.".into());
+                Some(tr("Board identity changed. Cancel and reopen to edit it.").into());
             self.needs_redraw = true;
             return false;
         }
         let index = index.unwrap();
         let current = BoardAppearance::from_spec(&self.boards.board_states()[index].spec);
         let proposed = if current.background.is_transparent() {
-            Err("Paper patterns require a solid board.")
+            Err(tr("Paper patterns require a solid board."))
         } else {
             edit.desired(&current)
         };

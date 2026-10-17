@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -18,14 +20,14 @@ pub(super) fn build_header_row(
     content.append(title);
 
     let duplicate = gtk::Button::builder()
-        .label("Duplicate")
+        .label(tr("Duplicate"))
         .valign(gtk::Align::Center)
         .build();
     connect_button(&duplicate, Message::RenderProfileDuplicate(index), sender);
     content.append(&duplicate);
 
     let remove = gtk::Button::builder()
-        .label("Delete")
+        .label(tr("Delete"))
         .valign(gtk::Align::Center)
         .css_classes(["destructive-action"])
         .build();

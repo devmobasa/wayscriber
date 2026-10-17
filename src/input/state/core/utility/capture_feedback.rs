@@ -2,16 +2,13 @@
 
 use super::super::base::{InputState, TextClipboardRequest, Toast, ToastCommand, ToastPriority};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 use std::path::Path;
 
 /// One key for every capture outcome, so a new capture replaces the last one.
 const CAPTURE_FEEDBACK_KEY: &str = "capture.feedback";
 /// Toasts that offer buttons stay up long enough to reach them.
 const CAPTURE_ACTIONS_DURATION_MS: u64 = 8000;
-const OPEN_FOLDER_LABEL: &str = "Open folder";
-const COPY_PATH_LABEL: &str = "Copy path";
-/// Shown once the capture path reaches the clipboard.
-const PATH_COPIED_MESSAGE: &str = "Path copied";
 
 impl InputState {
     /// Announce a finished capture: the saved file's name (never its full
@@ -31,13 +28,13 @@ impl InputState {
         );
         let (priority, toast) = if saved_path.is_some() {
             let open_folder = match self.action_binding_primary_label(Action::OpenCaptureFolder) {
-                Some(binding) => format!("{OPEN_FOLDER_LABEL} · {binding}"),
-                None => OPEN_FOLDER_LABEL.to_string(),
+                Some(binding) => format!("{} · {binding}", tr("Open folder")),
+                None => tr("Open folder").to_string(),
             };
             let toast = Toast::info(message)
                 .duration_ms(CAPTURE_ACTIONS_DURATION_MS)
                 .action(open_folder, Action::OpenCaptureFolder)
-                .secondary_command(COPY_PATH_LABEL, ToastCommand::CopyLastCapturePath);
+                .secondary_command(tr("Copy path"), ToastCommand::CopyLastCapturePath);
             (ToastPriority::Action, toast)
         } else {
             (ToastPriority::Info, Toast::info(message))
@@ -53,7 +50,7 @@ impl InputState {
         Some(TextClipboardRequest {
             text: path.display().to_string(),
             cut: None,
-            confirmation: Some(PATH_COPIED_MESSAGE),
+            confirmation: Some(tr("Path copied")),
         })
     }
 }
@@ -66,13 +63,13 @@ pub(crate) fn capture_feedback_message(
     home: Option<&Path>,
 ) -> String {
     match (saved_path, copied_to_clipboard) {
-        (Some(path), true) => format!(
+        (Some(path), true) => trf(
             "Saved {} · Copied to clipboard",
-            capture_display_name(path, home)
+            &[&capture_display_name(path, home)],
         ),
-        (Some(path), false) => format!("Saved {}", capture_display_name(path, home)),
-        (None, true) => "Copied to clipboard".to_string(),
-        (None, false) => "Screenshot captured".to_string(),
+        (Some(path), false) => trf("Saved {}", &[&capture_display_name(path, home)]),
+        (None, true) => tr("Copied to clipboard").to_string(),
+        (None, false) => tr("Screenshot captured").to_string(),
     }
 }
 
@@ -174,7 +171,7 @@ mod tests {
             .expect("copy request");
         assert_eq!(request.text, SAVED);
         assert!(request.cut.is_none());
-        assert_eq!(request.confirmation, Some(PATH_COPIED_MESSAGE));
+        assert_eq!(request.confirmation, Some("Path copied"));
     }
 
     #[test]

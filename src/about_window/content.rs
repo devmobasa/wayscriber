@@ -4,6 +4,7 @@
 //! and the cached update status, so it can be asserted in tests without a
 //! compositor.
 
+use crate::i18n::{tr, trf};
 use crate::update_check::{
     AvailableUpdate, CachedStatus, DEFAULT_NOTES_URL, Freshness, update_instructions_url,
 };
@@ -66,8 +67,8 @@ impl LinkRow {
     /// stops being deterministic.
     fn reporting(diagnostics: String) -> Self {
         Self {
-            title: "Report a problem",
-            detail: "Opens wayscriber.com · your app details come along".to_string(),
+            title: tr("Report a problem"),
+            detail: tr("Opens wayscriber.com · your app details come along").to_string(),
             action: AboutAction::ReportBug {
                 url: super::diagnostics::report_url(REPORT_URL, &diagnostics),
                 diagnostics,
@@ -117,45 +118,45 @@ impl UpdateState {
     /// Headline shown in the update card.
     pub(super) fn headline(&self) -> String {
         match self {
-            Self::Unavailable => "Update checks are off in this build".to_string(),
-            Self::Unknown(_) => "Update status unknown".to_string(),
-            Self::Checking => "Checking for updates…".to_string(),
-            Self::UpToDate { .. } => "Wayscriber is up to date".to_string(),
-            Self::Available { update, .. } => format!("Version {} is available", update.version),
-            Self::Failed(_) => "Update check failed".to_string(),
+            Self::Unavailable => tr("Update checks are off in this build").to_string(),
+            Self::Unknown(_) => tr("Update status unknown").to_string(),
+            Self::Checking => tr("Checking for updates…").to_string(),
+            Self::UpToDate { .. } => tr("Wayscriber is up to date").to_string(),
+            Self::Available { update, .. } => trf("Version {} is available", &[&update.version]),
+            Self::Failed(_) => tr("Update check failed").to_string(),
         }
     }
 
     /// Supporting line under the headline.
     pub(super) fn detail(&self) -> String {
         match self {
-            Self::Unavailable => "Your packager updates Wayscriber".to_string(),
+            Self::Unavailable => tr("Your packager updates Wayscriber").to_string(),
             Self::Unknown(freshness) if freshness.last_attempt_failed => {
-                "Last check failed · click to retry".to_string()
+                tr("Last check failed · click to retry").to_string()
             }
-            Self::Unknown(_) => "Click to check wayscriber.com".to_string(),
-            Self::Checking => "Contacting wayscriber.com".to_string(),
+            Self::Unknown(_) => tr("Click to check wayscriber.com").to_string(),
+            Self::Checking => tr("Contacting wayscriber.com").to_string(),
             // A failed retry is named even when an older success is on record:
             // "checked 3 hours ago" alone would hide a check that just failed.
             Self::UpToDate(freshness) => {
                 match (freshness.last_attempt_failed, freshness.checked_seconds_ago) {
                     (true, Some(age)) => {
-                        format!("Last check failed · verified {}", humanize_age(age))
+                        trf("Last check failed · verified {}", &[&humanize_age(age)])
                     }
-                    (true, None) => "Last check failed · click to retry".to_string(),
-                    (false, Some(age)) => format!("Checked {}", humanize_age(age)),
-                    (false, None) => "Click to check again".to_string(),
+                    (true, None) => tr("Last check failed · click to retry").to_string(),
+                    (false, Some(age)) => trf("Checked {}", &[&humanize_age(age)]),
+                    (false, None) => tr("Click to check again").to_string(),
                 }
             }
             Self::Available { freshness, .. } if freshness.last_attempt_failed => {
                 match freshness.checked_seconds_ago {
-                    Some(age) => format!("Last check failed · verified {}", humanize_age(age)),
-                    None => "Last check failed · showing the last known release".to_string(),
+                    Some(age) => trf("Last check failed · verified {}", &[&humanize_age(age)]),
+                    None => tr("Last check failed · showing the last known release").to_string(),
                 }
             }
             Self::Available { update, .. } => match update.released.as_deref() {
-                Some(released) => format!("Released {released} · see how to update"),
-                None => "See how to update".to_string(),
+                Some(released) => trf("Released {} · see how to update", &[&released]),
+                None => tr("See how to update").to_string(),
             },
             Self::Failed(reason) => reason.clone(),
         }
@@ -206,13 +207,13 @@ impl AboutContent {
         let commit = (commit != "unknown" && !commit.is_empty()).then(|| commit.to_string());
 
         let mut build_line = match (commit.as_deref(), build_date) {
-            (Some(commit), Some(date)) => format!("Commit {commit} · built {date}"),
-            (Some(commit), None) => format!("Commit {commit}"),
-            (None, Some(date)) => format!("Built {date}"),
+            (Some(commit), Some(date)) => trf("Commit {} · built {}", &[&commit, &date]),
+            (Some(commit), None) => trf("Commit {}", &[&commit]),
+            (None, Some(date)) => trf("Built {}", &[&date]),
             (None, None) => String::new(),
         };
         if let Some(source) = install_source {
-            let installed = format!("installed via {source}");
+            let installed = trf("installed via {}", &[&source]);
             if build_line.is_empty() {
                 build_line = capitalize(&installed);
             } else {
@@ -225,27 +226,28 @@ impl AboutContent {
         if !build_line.is_empty() {
             meta_lines.push(build_line);
         }
-        meta_lines.push("MIT licensed · made for Wayland".to_string());
+        meta_lines.push(tr("MIT licensed · made for Wayland").to_string());
 
         Self {
+            // The product name is a brand, so it is not a catalog key.
             title: "Wayscriber",
-            tagline: "Screen annotation for Wayland",
-            version_line: format!("Version {version}"),
+            tagline: tr("Screen annotation for Wayland"),
+            version_line: trf("Version {}", &[&version]),
             links: vec![
-                LinkRow::opening("Website", "wayscriber.com", WEBSITE_URL.to_string()),
+                LinkRow::opening(tr("Website"), "wayscriber.com", WEBSITE_URL.to_string()),
                 LinkRow::opening(
-                    "Documentation",
-                    "Setup, config, troubleshooting",
+                    tr("Documentation"),
+                    tr("Setup, config, troubleshooting"),
                     DOCS_URL.to_string(),
                 ),
                 LinkRow::opening(
-                    "Release notes",
-                    "What changed in each version",
+                    tr("Release notes"),
+                    tr("What changed in each version"),
                     DEFAULT_NOTES_URL.to_string(),
                 ),
                 LinkRow::opening(
-                    "How to update",
-                    "Steps for your install method",
+                    tr("How to update"),
+                    tr("Steps for your install method"),
                     update_instructions_url(),
                 ),
                 LinkRow::reporting(super::diagnostics::report()),
@@ -264,12 +266,12 @@ impl AboutContent {
         let mut buttons = Vec::new();
         if let Some(commit) = self.commit.as_deref() {
             buttons.push(ButtonSpec {
-                label: "Copy commit",
+                label: tr("Copy commit"),
                 action: AboutAction::CopyText(commit.to_string()),
             });
         }
         buttons.push(ButtonSpec {
-            label: "Copy diagnostics",
+            label: tr("Copy diagnostics"),
             action: AboutAction::CopyText(super::diagnostics::report()),
         });
         buttons
@@ -292,18 +294,18 @@ pub(super) fn humanize_age(seconds: u64) -> String {
     const DAY: u64 = 24 * HOUR;
 
     match seconds {
-        0..MINUTE => "just now".to_string(),
-        MINUTE..HOUR => plural(seconds / MINUTE, "minute"),
-        HOUR..DAY => plural(seconds / HOUR, "hour"),
-        _ => plural(seconds / DAY, "day"),
+        0..MINUTE => tr("just now").to_string(),
+        MINUTE..HOUR => plural(seconds / MINUTE, tr("minute")),
+        HOUR..DAY => plural(seconds / HOUR, tr("hour")),
+        _ => plural(seconds / DAY, tr("day")),
     }
 }
 
 fn plural(count: u64, unit: &str) -> String {
     if count == 1 {
-        format!("1 {unit} ago")
+        trf("1 {} ago", &[&unit])
     } else {
-        format!("{count} {unit}s ago")
+        trf("{} {}s ago", &[&count, &unit])
     }
 }
 

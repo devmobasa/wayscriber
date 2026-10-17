@@ -4,6 +4,7 @@
 //! hex input field, and OK/Cancel buttons.
 
 use crate::draw::Color;
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{
     COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_RECENT_SWATCH_COUNT as RECENT_SWATCH_COUNT,
@@ -360,7 +361,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
             default_y,
             layout.btn_width,
             layout.btn_height,
-            "Default",
+            tr("Default"),
             false, // secondary
             default_hover,
         );
@@ -374,7 +375,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
         layout.ok_btn_y,
         layout.btn_width,
         layout.btn_height,
-        "OK",
+        tr("OK"),
         true, // primary
         ok_hover,
     );
@@ -387,7 +388,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
         layout.cancel_btn_y,
         layout.btn_width,
         layout.btn_height,
-        "Cancel",
+        tr("Cancel"),
         false, // secondary
         cancel_hover,
     );
@@ -400,7 +401,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
         size: 10.0,
     };
     constants::set_color(ctx, TEXT_HINT_DIM);
-    let hint = "Enter = OK  •  Esc = Cancel";
+    let hint = tr("Enter = OK  •  Esc = Cancel");
     let hint_extents = text_extents_for_with_engine(
         engine,
         ctx,

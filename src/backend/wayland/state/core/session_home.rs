@@ -5,6 +5,7 @@ use log::{info, warn};
 use super::super::*;
 use crate::backend::wayland::session::session_target;
 use crate::daemon::protocol_v2::publish_session_from_environment;
+use crate::i18n::trf;
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::MissingNamedSessionFile;
 use crate::ui::toolbar::session_format::session_display_name;
@@ -21,14 +22,20 @@ impl WaylandState {
         );
         let name = session_display_name(path);
         let message = if error.downcast_ref::<MissingNamedSessionFile>().is_some() {
-            format!("Session {name} is no longer available")
+            trf("Session {} is no longer available", &[&name])
         } else {
-            format!("Session {name} can no longer be used ({error:#})")
+            trf(
+                "Session {} can no longer be used ({})",
+                &[&name, &format!("{error:#}")],
+            )
         };
         self.input_state.push_toast(
             ToastPriority::Info,
             "session",
-            Toast::warning(format!("{message}; opened {}", self.session_home.label())),
+            Toast::warning(trf(
+                "{}; opened {}",
+                &[&message, &self.session_home.label()],
+            )),
         );
     }
 
@@ -50,8 +57,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "session.report",
-                    Toast::warning(format!(
-                        "The overlay may not reopen in this session after it hides: {error:#}"
+                    Toast::warning(trf(
+                        "The overlay may not reopen in this session after it hides: {}",
+                        &[&format!("{error:#}")],
                     )),
                 );
             }

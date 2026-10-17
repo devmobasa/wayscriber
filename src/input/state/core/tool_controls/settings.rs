@@ -1,6 +1,7 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::TextMeasurer;
 use crate::draw::{ArrowStyle, BlurStyle, Color, FontDescriptor};
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
@@ -172,7 +173,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "toolbar",
-                Toast::info("Capturing background for blur..."),
+                Toast::info(tr("Capturing background for blur...")),
             );
         }
 

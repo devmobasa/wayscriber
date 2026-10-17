@@ -1,11 +1,30 @@
 use super::*;
 use crate::backend::wayland::session::{SessionCommand, SessionCommandReport};
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::catalog;
 use crate::ui::toolbar::session_format::session_display_name;
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
 use wayland_client::{Connection, QueueHandle};
+
+fn clear_tools_message(outcome: Option<crate::session::ClearToolStateOutcome>) -> &'static str {
+    match outcome {
+        Some(crate::session::ClearToolStateOutcome::Cleared {
+            preserved_board_data: true,
+        }) => tr("Tool defaults reset from config. Saved boards and history were preserved."),
+        Some(crate::session::ClearToolStateOutcome::Cleared {
+            preserved_board_data: false,
+        }) => tr("Tool defaults reset from config. No board data was present."),
+        Some(crate::session::ClearToolStateOutcome::NoToolState) => {
+            tr("Tool defaults reset from config. No saved tool state was stored.")
+        }
+        Some(crate::session::ClearToolStateOutcome::NoSession) => {
+            tr("Tool defaults reset from config. No saved session file was present.")
+        }
+        None => tr("Tool defaults reset from config for this run. No active session file to edit."),
+    }
+}
 
 pub(super) fn populate_session_snapshot(
     snapshot: &mut ToolbarSnapshot,
@@ -31,36 +50,36 @@ pub(super) fn session_info_summary(inspection: &crate::session::SessionInspectio
     if !inspection.exists {
         return if inspection.backup_exists {
             match inspection.backup_size_bytes {
-                Some(size) => format!(
-                    "Session {name}: no primary file, backup {}",
-                    format_byte_count(size)
+                Some(size) => trf(
+                    "Session {}: no primary file, backup {}",
+                    &[&name, &format_byte_count(size)],
                 ),
-                None => format!("Session {name}: no primary file, backup present"),
+                None => trf("Session {}: no primary file, backup present", &[&name]),
             }
         } else {
-            format!("Session {name}: no saved file yet")
+            trf("Session {}: no saved file yet", &[&name])
         };
     }
 
     let size = inspection
         .size_bytes
         .map(format_byte_count)
-        .unwrap_or_else(|| "unknown size".to_string());
+        .unwrap_or_else(|| tr("unknown size").to_string());
     let shapes = inspection
         .frame_counts
         .map(|counts| {
-            format!(
+            trf(
                 ", shapes T/W/B {}/{}/{}",
-                counts.transparent, counts.whiteboard, counts.blackboard
+                &[&counts.transparent, &counts.whiteboard, &counts.blackboard],
             )
         })
         .unwrap_or_default();
     let history = if inspection.history_present {
-        "history"
+        tr("history")
     } else {
-        "no history"
+        tr("no history")
     };
-    format!("Session {name}: {size}{shapes}, {history}")
+    trf("Session {}: {}{}, {}", &[&name, &size, &shapes, &history])
 }
 
 fn format_byte_count(bytes: u64) -> String {
@@ -292,7 +311,7 @@ impl WaylandState {
             conn,
             qh,
         ) {
-            self.set_session_toolbar_error(format!("Open session failed: {err:#}"));
+            self.set_session_toolbar_error(format!("{}: {err:#}", tr("Open session failed")));
         }
     }
 
@@ -300,7 +319,7 @@ impl WaylandState {
         self.clear_toolbar_save_as_overwrite_prompt();
         let command = SessionCommand::Open(path.to_path_buf());
         if let Err(error) = self.start_session_command(command) {
-            self.report_session_command_error("Open session failed", &error);
+            self.report_session_command_error(tr("Open session failed"), &error);
         }
     }
 
@@ -317,7 +336,7 @@ impl WaylandState {
             conn,
             qh,
         ) {
-            self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
+            self.set_session_toolbar_error(format!("{}: {err:#}", tr("Save session failed")));
         }
     }
 
@@ -330,12 +349,18 @@ impl WaylandState {
             Ok(None) => return,
             Err(error) => {
                 let _ = self.exit_external_dialog_suppression(None, Some(qh));
-                self.set_session_toolbar_error(format!("Session dialog failed: {error:#}"));
+                self.set_session_toolbar_error(format!(
+                    "{}: {error:#}",
+                    tr("Session dialog failed")
+                ));
                 return;
             }
         };
         if let Err(error) = self.exit_external_dialog_suppression(None, Some(qh)) {
-            self.set_session_toolbar_error(format!("Session dialog restoration failed: {error:#}"));
+            self.set_session_toolbar_error(format!(
+                "{}: {error:#}",
+                tr("Session dialog restoration failed")
+            ));
             return;
         }
         match (completion.mode, completion.result) {
@@ -345,10 +370,10 @@ impl WaylandState {
             (SessionFileDialogMode::Open, Ok(None)) | (SessionFileDialogMode::SaveAs, Ok(None)) => {
             }
             (SessionFileDialogMode::Open, Err(error)) => {
-                self.set_session_toolbar_error(format!("Open session failed: {error}"));
+                self.set_session_toolbar_error(format!("{}: {error}", tr("Open session failed")));
             }
             (SessionFileDialogMode::SaveAs, Err(error)) => {
-                self.set_session_toolbar_error(format!("Save session failed: {error}"));
+                self.set_session_toolbar_error(format!("{}: {error}", tr("Save session failed")));
             }
             (SessionFileDialogMode::SaveAs, Ok(Some(path))) => {
                 self.handle_selected_save_as_path(ensure_save_as_extension(path));
@@ -358,7 +383,7 @@ impl WaylandState {
 
     fn handle_selected_save_as_path(&mut self, path: PathBuf) {
         if let Err(error) = self.start_session_command(SessionCommand::CheckOverwrite(path)) {
-            self.report_session_command_error("Save session failed", &error);
+            self.report_session_command_error(tr("Save session failed"), &error);
         }
     }
 
@@ -368,12 +393,12 @@ impl WaylandState {
             .pending_save_as_overwrite()
             .map(PathBuf::from)
         else {
-            self.set_session_toolbar_error("Save session failed: no overwrite target pending");
+            self.set_session_toolbar_error(tr("Save session failed: no overwrite target pending"));
             return;
         };
         if !catalog::session_paths_match(&pending_path, path) {
             self.clear_toolbar_save_as_overwrite_prompt();
-            self.set_session_toolbar_error("Save session failed: overwrite target changed");
+            self.set_session_toolbar_error(tr("Save session failed: overwrite target changed"));
             return;
         }
 
@@ -383,7 +408,7 @@ impl WaylandState {
 
     fn handle_toolbar_save_session_as_cancel(&mut self) {
         if self.clear_toolbar_save_as_overwrite_prompt() {
-            self.set_session_toolbar_info("Save As canceled");
+            self.set_session_toolbar_info(tr("Save As canceled"));
         }
     }
 
@@ -396,20 +421,20 @@ impl WaylandState {
             self.start_session_command(SessionCommand::SaveAs(path.to_path_buf(), overwrite))
         {
             self.clear_toolbar_save_as_overwrite_prompt();
-            self.report_session_command_error("Save session failed", &error);
+            self.report_session_command_error(tr("Save session failed"), &error);
         }
     }
 
     fn handle_toolbar_session_info(&mut self) {
         if let Err(error) = self.start_session_command(SessionCommand::Inspect) {
-            self.report_session_command_error("Session info failed", &error);
+            self.report_session_command_error(tr("Session info failed"), &error);
         }
     }
 
     fn handle_toolbar_clear_session(&mut self) {
         self.clear_toolbar_save_as_overwrite_prompt();
         if let Err(error) = self.start_session_command(SessionCommand::Clear) {
-            self.report_session_command_error("Clear session failed", &error);
+            self.report_session_command_error(tr("Clear session failed"), &error);
         }
     }
 
@@ -421,11 +446,12 @@ impl WaylandState {
             SessionCommandReport::Open(report) => {
                 let name = session_display_name(&report.opened_path);
                 if let Some(error) = report.catalog_error {
-                    self.set_session_toolbar_error(format!(
-                        "Opened session {name}; recent-session catalog update failed: {error:#}"
+                    self.set_session_toolbar_error(trf(
+                        "Opened session {}; recent-session catalog update failed: {}",
+                        &[&name, &format!("{error:#}")],
                     ));
                 } else {
-                    self.set_session_toolbar_info(format!("Opened session {name}"));
+                    self.set_session_toolbar_info(trf("Opened session {}", &[&name]));
                 }
             }
             SessionCommandReport::Output {
@@ -444,17 +470,17 @@ impl WaylandState {
             SessionCommandReport::Home => self.finish_open_home_session(),
             SessionCommandReport::SaveAs(report) => {
                 self.clear_toolbar_save_as_overwrite_prompt();
-                self.set_session_toolbar_info(format!(
+                self.set_session_toolbar_info(trf(
                     "Saved session as {}",
-                    session_display_name(&report.saved_path)
+                    &[&session_display_name(&report.saved_path)],
                 ));
             }
             SessionCommandReport::Overwrite(path, required) => {
                 if required {
                     self.input_state.set_pending_save_as_overwrite(path.clone());
-                    self.set_session_toolbar_info(format!(
+                    self.set_session_toolbar_info(trf(
                         "Replace existing session {}?",
-                        session_display_name(&path)
+                        &[&session_display_name(&path)],
                     ));
                 } else {
                     self.commit_toolbar_save_session_as(
@@ -463,44 +489,25 @@ impl WaylandState {
                     );
                 }
             }
-            SessionCommandReport::Clear(report) => self.set_session_toolbar_info(format!(
+            SessionCommandReport::Clear(report) => self.set_session_toolbar_info(trf(
                 "Cleared session {}",
-                session_display_name(&report.cleared_path)
+                &[&session_display_name(&report.cleared_path)],
             )),
             SessionCommandReport::ClearTools(report) => {
-                let message = match report.outcome {
-                    Some(crate::session::ClearToolStateOutcome::Cleared {
-                        preserved_board_data: true,
-                    }) => {
-                        "Tool defaults reset from config. Saved boards and history were preserved."
-                    }
-                    Some(crate::session::ClearToolStateOutcome::Cleared {
-                        preserved_board_data: false,
-                    }) => "Tool defaults reset from config. No board data was present.",
-                    Some(crate::session::ClearToolStateOutcome::NoToolState) => {
-                        "Tool defaults reset from config. No saved tool state was stored."
-                    }
-                    Some(crate::session::ClearToolStateOutcome::NoSession) => {
-                        "Tool defaults reset from config. No saved session file was present."
-                    }
-                    None => {
-                        "Tool defaults reset from config for this run. No active session file to edit."
-                    }
-                };
-                self.set_session_toolbar_info(message);
+                self.set_session_toolbar_info(clear_tools_message(report.outcome));
             }
             SessionCommandReport::Inspection(inspection) => {
                 self.set_session_toolbar_info(session_info_summary(&inspection))
             }
             SessionCommandReport::Forgotten(path, forgotten) => {
-                self.set_session_toolbar_error(format!(
+                let status = if forgotten {
+                    tr("removed from recent sessions")
+                } else {
+                    tr("no recent-session entry matched")
+                };
+                self.set_session_toolbar_error(trf(
                     "Session file missing; {}: {}",
-                    if forgotten {
-                        "removed from recent sessions"
-                    } else {
-                        "no recent-session entry matched"
-                    },
-                    session_display_name(&path)
+                    &[&status, &session_display_name(&path)],
                 ))
             }
         }
@@ -518,7 +525,7 @@ impl WaylandState {
                 self.start_session_command(SessionCommand::Forget(path.clone()))
             {
                 self.report_session_command_error(
-                    "Session file missing and recent-session cleanup failed",
+                    tr("Session file missing and recent-session cleanup failed"),
                     &catalog_error,
                 );
             }
@@ -526,13 +533,17 @@ impl WaylandState {
         }
         let prefix = match command {
             SessionCommand::Output { .. } => return self.fail_output_session_command(error),
-            SessionCommand::Open(_) => "Open session failed",
-            SessionCommand::OpenHome(_) => "Return to the home session failed",
-            SessionCommand::SaveAs(..) | SessionCommand::CheckOverwrite(_) => "Save session failed",
-            SessionCommand::Clear => "Clear session failed",
-            SessionCommand::ClearTools(_) => "Failed to reset tool defaults",
-            SessionCommand::Inspect => "Session info failed",
-            SessionCommand::Forget(_) => "Session file missing and recent-session cleanup failed",
+            SessionCommand::Open(_) => tr("Open session failed"),
+            SessionCommand::OpenHome(_) => tr("Return to the home session failed"),
+            SessionCommand::SaveAs(..) | SessionCommand::CheckOverwrite(_) => {
+                tr("Save session failed")
+            }
+            SessionCommand::Clear => tr("Clear session failed"),
+            SessionCommand::ClearTools(_) => tr("Failed to reset tool defaults"),
+            SessionCommand::Inspect => tr("Session info failed"),
+            SessionCommand::Forget(_) => {
+                tr("Session file missing and recent-session cleanup failed")
+            }
         };
         self.report_session_command_error(prefix, error);
     }
@@ -562,7 +573,8 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     "session.save",
-                    Toast::error(format!("Drawings kept on screen: {error:#}")).duration_ms(20_000),
+                    Toast::error(trf("Drawings kept on screen: {}", &[&format!("{error:#}")]))
+                        .duration_ms(20_000),
                 );
             }
         } else if self.session.is_loaded() {

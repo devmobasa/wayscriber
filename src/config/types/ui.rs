@@ -1,6 +1,7 @@
 use crate::config::enums::{
     RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
 };
+use crate::domain::Language;
 use crate::env_vars::DESKTOP_ENV_KEYS;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -27,6 +28,13 @@ pub struct UiConfig {
     /// desktop-portal query and currently behaves like `off` (full motion).
     #[serde(default)]
     pub reduced_motion: ReducedMotion,
+
+    /// UI language: auto (default), en, or zh-CN.
+    ///
+    /// `auto` follows the desktop locale and falls back to English when that
+    /// locale has no translation.
+    #[serde(default)]
+    pub language: Language,
 
     /// Show the status bar and its configured content
     #[serde(default = "default_show_status")]
@@ -191,6 +199,7 @@ impl Default for UiConfig {
         Self {
             theme: UiTheme::default(),
             reduced_motion: ReducedMotion::default(),
+            language: Language::default(),
             show_status_bar: default_show_status(),
             status_bar_interactive: default_status_bar_interactive(),
             show_status_selection_info: default_status_bar_item_visible(),

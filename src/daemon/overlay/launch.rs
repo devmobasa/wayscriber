@@ -2,9 +2,10 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::daemon::control::DaemonToggleRequest;
+use crate::domain::Language;
 use crate::env_vars::{
-    DESKTOP_STARTUP_ID_ENV, NO_DETACH_ENV, OVERLAY_HOME_SESSION_ENV, OVERLAY_PREFERRED_SESSION_ENV,
-    OVERLAY_SESSION_REPORTS_ENV, XDG_ACTIVATION_TOKEN_ENV,
+    DESKTOP_STARTUP_ID_ENV, NO_DETACH_ENV, OVERLAY_HOME_SESSION_ENV, OVERLAY_LANGUAGE_ENV,
+    OVERLAY_PREFERRED_SESSION_ENV, OVERLAY_SESSION_REPORTS_ENV, XDG_ACTIVATION_TOKEN_ENV,
 };
 
 pub(in crate::daemon) struct OverlayLaunchRequest {
@@ -81,11 +82,17 @@ pub(super) struct OverlayLaunch {
 /// The launch for `request`. A child `generation` reports its session to the
 /// daemon, which passes the session it remembers from the last report as the
 /// one to continue, unless the request asked for a session file.
+///
+/// `language` is the daemon's own `--language`, which its overlays use too.
+/// It travels as an optional input, so an overlay without the flag still
+/// starts, and not as `WAYSCRIBER_LANGUAGE`, which a configurator the overlay
+/// opens would inherit and obey over its own Language row.
 pub(super) fn build_overlay_launch(
     request: &OverlayLaunchRequest,
     resume_default: Option<bool>,
     generation: Option<&str>,
     remembered_session_file: Option<&Path>,
+    language: Option<Language>,
 ) -> OverlayLaunch {
     let mut arguments = vec![OsString::from("--active")];
     if request.freeze {
@@ -134,6 +141,10 @@ pub(super) fn build_overlay_launch(
                 .filter(|_| request.explicit_session_file.is_none())
                 .map(Into::into),
         ),
+        (
+            OVERLAY_LANGUAGE_ENV.into(),
+            language.map(|language| language.code().into()),
+        ),
     ]);
 
     if let Some(mode) = request.mode() {
@@ -180,7 +191,7 @@ mod tests {
                         false,
                     );
 
-                    let launch = build_overlay_launch(&request, default, generation, None);
+                    let launch = build_overlay_launch(&request, default, generation, None, None);
 
                     let mut expected = vec![(NO_DETACH_ENV.into(), Some("1".into()))];
                     if let Some(generation) = generation {
@@ -202,6 +213,7 @@ mod tests {
                         ),
                         (OVERLAY_HOME_SESSION_ENV.into(), None),
                         (OVERLAY_PREFERRED_SESSION_ENV.into(), None),
+                        (OVERLAY_LANGUAGE_ENV.into(), None),
                     ]);
                     assert_eq!(launch.environment, expected);
                 }
@@ -226,7 +238,8 @@ mod tests {
                 false,
             );
 
-            let launch = build_overlay_launch(&request, None, Some("generation"), Some(remembered));
+            let launch =
+                build_overlay_launch(&request, None, Some("generation"), Some(remembered), None);
 
             let value = |name: &str| {
                 launch
@@ -247,5 +260,35 @@ mod tests {
                 ["--active", "--session-file", session_file.unwrap_or(home)].map(OsString::from)
             );
         }
+    }
+
+    #[test]
+    fn the_daemons_language_reaches_its_overlays_without_a_new_argument() {
+        let request = OverlayLaunchRequest::new(None, None, None, None, false);
+        let language_entries = |language| {
+            build_overlay_launch(&request, None, None, None, language)
+                .environment
+                .into_iter()
+                .filter(|(key, _)| {
+                    key == OVERLAY_LANGUAGE_ENV || key == crate::env_vars::LANGUAGE_OVERRIDE_ENV
+                })
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            language_entries(Some(Language::SimplifiedChinese)),
+            [(OsString::from(OVERLAY_LANGUAGE_ENV), Some("zh-CN".into()))]
+        );
+        // Without --language a stale value is not inherited, so the overlay
+        // reads its config; a WAYSCRIBER_LANGUAGE the user set for the daemon
+        // is inherited untouched either way.
+        assert_eq!(
+            language_entries(None),
+            [(OsString::from(OVERLAY_LANGUAGE_ENV), None)]
+        );
+        assert_eq!(
+            build_overlay_launch(&request, None, None, None, Some(Language::Auto)).arguments,
+            [OsString::from("--active")]
+        );
     }
 }

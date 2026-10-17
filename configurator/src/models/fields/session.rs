@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{SessionCompression, SessionStorageMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,9 +16,9 @@ impl SessionStorageModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Auto => "Auto",
-            Self::Config => "Config directory",
-            Self::Custom => "Custom directory",
+            Self::Auto => tr("Auto"),
+            Self::Config => tr("Config directory"),
+            Self::Custom => tr("Custom directory"),
         }
     }
 
@@ -58,9 +60,9 @@ impl SessionCompressionOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Auto => "Auto",
-            Self::On => "On",
-            Self::Off => "Off",
+            Self::Auto => tr("Auto"),
+            Self::On => tr("On"),
+            Self::Off => tr("Off"),
         }
     }
 

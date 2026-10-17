@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::{self, Rgba};
 use crate::ui_text::UiTextStyle;
@@ -153,7 +154,7 @@ pub(crate) fn draw_nav(
         engine.draw_baseline(
             ctx,
             nav_style,
-            "Type to search... (Esc clears)",
+            tr("Type to search... (Esc clears)"),
             inner_x + search_padding_x,
             extra_line_baseline,
             None,

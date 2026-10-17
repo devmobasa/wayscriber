@@ -5,6 +5,8 @@
 //! an `AdwEntryRow` has no hint slot, so the range appears in the row's
 //! error text instead, on the same `.error` styling every ported page uses.
 
+use wayscriber::i18n::{tr, trf};
+
 use relm4::prelude::*;
 use wayscriber::config::{ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN};
 
@@ -19,27 +21,27 @@ use super::{BuiltPage, PageBuilder};
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Arrow);
 
-    page.group_in_area("Arrow Settings", SearchArea::Arrow)
+    page.group_in_area(tr("Arrow Settings"), SearchArea::Arrow)
         .entry_row_validated(
-            "Arrow length (px)",
+            tr("Arrow length (px)"),
             |app| app.draft.arrow_length.clone(),
             |value| Message::TextChanged(TextField::ArrowLength, value),
             |app| validate_f64_range(&app.draft.arrow_length, ARROW_LENGTH_MIN, ARROW_LENGTH_MAX),
         )
         .entry_row_validated(
-            "Arrow angle (deg)",
+            tr("Arrow angle (deg)"),
             |app| app.draft.arrow_angle.clone(),
             |value| Message::TextChanged(TextField::ArrowAngle, value),
             |app| validate_f64_range(&app.draft.arrow_angle, ARROW_ANGLE_MIN, ARROW_ANGLE_MAX),
         )
         .switch_row(
-            "Place arrowhead at end of line",
-            "Off draws the head at the start of the line instead.",
+            tr("Place arrowhead at end of line"),
+            tr("Off draws the head at the start of the line instead."),
             |app| app.draft.arrow_head_at_end,
             |value| Message::ToggleChanged(ToggleField::ArrowHeadAtEnd, value),
         )
         .combo_row(
-            "Arrow style",
+            tr("Arrow style"),
             "Shape of the next arrow drawn. Every arrow keeps its own style, so \
              changing this never restyles existing drawings.",
             ArrowStyleOption::list(),
@@ -59,10 +61,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
     match value.trim().parse::<f64>() {
         Ok(parsed) if (min..=max).contains(&parsed) => None,
-        _ => Some(format!(
-            "Enter a number between {} and {}.",
-            format_float(min),
-            format_float(max)
+        _ => Some(trf(
+            tr("Enter a number between {} and {}."),
+            &[&format_float(min), &format_float(max)],
         )),
     }
 }

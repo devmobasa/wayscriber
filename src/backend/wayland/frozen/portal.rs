@@ -16,6 +16,7 @@ use crate::capture::types::CaptureError;
 use crate::input::InputState;
 
 use super::state::FrozenState;
+use crate::i18n::tr;
 
 impl FrozenState {
     pub(in crate::backend::wayland) fn capture_via_portal(
@@ -42,8 +43,8 @@ impl FrozenState {
         // Notify user that portal fallback is in progress
         crate::notification::send_notification_async(
             tokio_handle,
-            "Freezing screen".to_string(),
-            "Requesting screen capture...".to_string(),
+            tr("Freezing screen").to_string(),
+            tr("Requesting screen capture...").to_string(),
             Some("camera-photo".to_string()),
         );
         self.portal
@@ -91,7 +92,7 @@ impl FrozenState {
             if self.has_acquisition_attempt() {
                 self.finish_acquisition(
                     ScreenAcquisitionOutcome::Failed(
-                        "Freeze timed out while waiting for screen capture.".to_string(),
+                        tr("Freeze timed out while waiting for screen capture.").to_string(),
                     ),
                     input_state,
                 );
@@ -99,7 +100,7 @@ impl FrozenState {
                 input_state.push_toast(
                     ToastPriority::Critical,
                     "freeze",
-                    Toast::error("Freeze timed out while waiting for screen capture."),
+                    Toast::error(tr("Freeze timed out while waiting for screen capture.")),
                 );
                 input_state.set_frozen_active(false);
                 self.finish_portal_task();
@@ -136,7 +137,7 @@ impl FrozenState {
                 if self.has_acquisition_attempt() {
                     self.finish_acquisition(
                         ScreenAcquisitionOutcome::Failed(
-                            "Freeze could not capture the screen.".to_string(),
+                            tr("Freeze could not capture the screen.").to_string(),
                         ),
                         input_state,
                     );
@@ -144,7 +145,7 @@ impl FrozenState {
                     input_state.push_toast(
                         ToastPriority::Critical,
                         "freeze",
-                        Toast::error("Freeze could not capture the screen."),
+                        Toast::error(tr("Freeze could not capture the screen.")),
                     );
                     input_state.set_frozen_active(false);
                     self.finish_portal_task();
@@ -156,7 +157,7 @@ impl FrozenState {
                 if self.has_acquisition_attempt() {
                     self.finish_acquisition(
                         ScreenAcquisitionOutcome::Failed(
-                            "Freeze could not capture the screen.".to_string(),
+                            tr("Freeze could not capture the screen.").to_string(),
                         ),
                         input_state,
                     );
@@ -164,7 +165,7 @@ impl FrozenState {
                     input_state.push_toast(
                         ToastPriority::Critical,
                         "freeze",
-                        Toast::error("Freeze could not capture the screen."),
+                        Toast::error(tr("Freeze could not capture the screen.")),
                     );
                     input_state.set_frozen_active(false);
                     self.finish_portal_task();
@@ -174,7 +175,9 @@ impl FrozenState {
             PortalPoll::Pending => {}
             PortalPoll::Disconnected => {
                 warn!("Portal frozen capture channel disconnected");
-                let message = "Freeze could not capture the screen because the system capture service stopped responding.";
+                let message = tr(
+                    "Freeze could not capture the screen because the system capture service stopped responding.",
+                );
                 if self.has_acquisition_attempt() {
                     self.finish_acquisition(
                         ScreenAcquisitionOutcome::Failed(message.to_string()),

@@ -12,6 +12,7 @@
 use std::time::{Duration, Instant};
 
 use super::super::base::InputState;
+use crate::i18n::{tr, trf};
 use crate::ocr::OcrRequestId;
 use crate::util::Rect;
 
@@ -39,13 +40,13 @@ impl OcrScanOutcome {
             Self::Copied {
                 replaced_invalid_utf8: false,
                 ..
-            } => "Copied to clipboard",
+            } => tr("Copied to clipboard"),
             Self::Copied {
                 replaced_invalid_utf8: true,
                 ..
-            } => "Copied, but some characters were unreadable",
-            Self::NoTextFound => "No text found",
-            Self::Failed => "Recognition failed",
+            } => tr("Copied, but some characters were unreadable"),
+            Self::NoTextFound => tr("No text found"),
+            Self::Failed => tr("Recognition failed"),
         }
     }
 
@@ -54,10 +55,10 @@ impl OcrScanOutcome {
         match self {
             Self::Copied {
                 character_count: 1, ..
-            } => Some("1 character".to_string()),
+            } => Some(tr("1 character").to_string()),
             Self::Copied {
                 character_count, ..
-            } => Some(format!("{character_count} characters")),
+            } => Some(trf("{} characters", &[&character_count])),
             Self::NoTextFound | Self::Failed => None,
         }
     }

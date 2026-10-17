@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::input::events::Key;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -179,7 +180,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board_picker",
-                Toast::warning("Page number out of range."),
+                Toast::warning(tr("Page number out of range.")),
             );
             self.needs_redraw = true;
             return;

@@ -3,6 +3,8 @@ mod hyprland;
 mod service;
 mod shortcut;
 
+use wayscriber::i18n::{tr, trf};
+
 use crate::models::{
     DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment,
     LightShortcutApplyCapability, ShortcutBackend,
@@ -35,19 +37,50 @@ pub(super) async fn perform_daemon_action(
     shortcut_input: String,
 ) -> Result<DaemonActionResult, String> {
     run_blocking(BlockingJobKind::DaemonAction, move || {
-        let message = perform_daemon_action_sync(action, shortcut_input.trim())?;
+        let report = perform_daemon_action_sync(action, shortcut_input.trim())?;
         let status = load_daemon_runtime_status_sync()?;
-        Ok(DaemonActionResult { status, message })
+        Ok(DaemonActionResult {
+            status,
+            message: report.message,
+            partial_failure: report.partial_failure,
+        })
     })
     .await
+}
+
+/// What a finished setup action reports. Whether a step failed travels next
+/// to the message, never inside it: the panel styles the outcome from this
+/// flag, and the message is translated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActionReport {
+    message: String,
+    /// The action did its main work, but a later step failed; the message
+    /// says which.
+    partial_failure: bool,
+}
+
+impl ActionReport {
+    fn complete(message: String) -> Self {
+        Self {
+            message,
+            partial_failure: false,
+        }
+    }
+
+    fn light_controls(result: &hyprland::HyprlandLightControlsInstallResult) -> Self {
+        Self {
+            message: result.summary(),
+            partial_failure: result.reload_failed(),
+        }
+    }
 }
 
 fn perform_daemon_action_sync(
     action: DaemonAction,
     shortcut_input: &str,
-) -> Result<String, String> {
-    match action {
-        DaemonAction::RefreshStatus => Ok("Daemon status refreshed.".to_string()),
+) -> Result<ActionReport, String> {
+    let message = match action {
+        DaemonAction::RefreshStatus => tr("Daemon status refreshed.").to_string(),
         DaemonAction::InstallOrUpdateService => {
             let desktop = DesktopEnvironment::detect_current();
             let service_path = install_or_update_user_service()?;
@@ -58,38 +91,42 @@ fn perform_daemon_action_sync(
                     run_systemctl_user(&["restart", SERVICE_NAME])?;
                 }
             }
-            Ok(format!(
+            trf(
                 "Installed/updated user service at {}{}",
-                service_path.display(),
-                if removed_dropin {
-                    "; removed stale GNOME portal shortcut drop-in"
-                } else {
-                    ""
-                }
-            ))
+                &[
+                    &service_path.display(),
+                    &if removed_dropin {
+                        tr("; removed stale GNOME portal shortcut drop-in")
+                    } else {
+                        ""
+                    },
+                ],
+            )
         }
         DaemonAction::EnableAndStartService => {
             require_systemctl_available()?;
             run_systemctl_user(&["daemon-reload"])?;
             run_systemctl_user(&["enable", "--now", SERVICE_NAME])?;
-            Ok("Enabled and started wayscriber.service.".to_string())
+            tr("Enabled and started wayscriber.service.").to_string()
         }
         DaemonAction::RestartService => {
             require_systemctl_available()?;
             run_systemctl_user(&["restart", SERVICE_NAME])?;
-            Ok("Restarted wayscriber.service.".to_string())
+            tr("Restarted wayscriber.service.").to_string()
         }
         DaemonAction::StopAndDisableService => {
             require_systemctl_available()?;
             run_systemctl_user(&["disable", "--now", SERVICE_NAME])?;
-            Ok("Stopped and disabled wayscriber.service.".to_string())
+            tr("Stopped and disabled wayscriber.service.").to_string()
         }
-        DaemonAction::ApplyShortcut => apply_shortcut(shortcut_input),
+        DaemonAction::ApplyShortcut => apply_shortcut(shortcut_input)?,
         DaemonAction::ApplyLightControls => {
             let result = install_hyprland_light_controls()?;
-            Ok(result.summary())
+            return Ok(ActionReport::light_controls(&result));
         }
-    }
+    };
+
+    Ok(ActionReport::complete(message))
 }
 
 pub(super) fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {

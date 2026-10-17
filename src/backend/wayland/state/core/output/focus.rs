@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::tr;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn handle_output_focus_action(
@@ -10,7 +11,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "output",
-                Toast::info("Multi-monitor focus is disabled (ui.multi_monitor_enabled=false)"),
+                Toast::info(tr(
+                    "Multi-monitor focus is disabled (ui.multi_monitor_enabled=false)",
+                )),
             );
             self.input_state.trigger_blocked_feedback();
             return;
@@ -24,9 +27,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "output",
-                Toast::info(
+                Toast::info(tr(
                     "Cannot switch outputs while capture, frozen mode, or zoom mode is active",
-                ),
+                )),
             );
             self.input_state.trigger_blocked_feedback();
             return;
@@ -37,7 +40,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "output",
-                Toast::info("Only one output is available"),
+                Toast::info(tr("Only one output is available")),
             );
             self.input_state.trigger_blocked_feedback();
             return;
@@ -69,7 +72,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "output",
-                    Toast::info("Enable fullscreen mode before switching outputs in this session."),
+                    Toast::info(tr(
+                        "Enable fullscreen mode before switching outputs in this session.",
+                    )),
                 );
                 self.input_state.trigger_blocked_feedback();
                 return;

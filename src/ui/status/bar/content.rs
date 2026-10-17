@@ -1,6 +1,7 @@
 use super::helpers::*;
 use super::measurement::*;
 use super::*;
+use crate::i18n::trf;
 
 pub(super) fn status_text_style(font_size: f64) -> UiTextStyle<'static> {
     UiTextStyle {
@@ -292,7 +293,7 @@ fn board_segment_label(input_state: &InputState, max_name_chars: Option<usize>) 
         .map(|limit| crate::util::truncate_with_ellipsis(input_state.board_name(), limit))
         .unwrap_or_default();
     if name.trim().is_empty() {
-        format!("Board {index}/{count}")
+        trf("Board {}/{}", &[&index, &count])
     } else {
         format!("{name} {index}/{count}")
     }
@@ -335,10 +336,12 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
 
     if input_state.ui_visibility.show_status_page_badge {
         pieces.push(StatusHudPiece::text(
-            format!(
+            trf(
                 "Page {}/{}",
-                input_state.boards.active_page_index() + 1,
-                input_state.boards.page_count().max(1)
+                &[
+                    &(input_state.boards.active_page_index() + 1),
+                    &input_state.boards.page_count().max(1),
+                ],
             ),
             Some(StatusHudSegmentKind::Page),
             false,
@@ -372,7 +375,10 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
         // indicator only stands in for it when that segment is hidden.
         if typing_text(input_state) && !input_state.ui_visibility.show_status_size {
             pieces.push(StatusHudPiece::text(
-                format!("Text {}px", input_state.style.current_font_size as i32),
+                trf(
+                    "Text {}px",
+                    &[&(input_state.style.current_font_size as i32)],
+                ),
                 None,
                 true,
             ));
@@ -431,7 +437,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     // name or the help hint their space.
     if input_state.ui_visibility.show_status_about {
         pieces.push(StatusHudPiece::text(
-            format!("About v{}", crate::build_info::version()),
+            trf("About v{}", &[&crate::build_info::version()]),
             Some(StatusHudSegmentKind::About),
             true,
         ));
@@ -449,7 +455,7 @@ pub(super) fn build_prefix_text(
     let mut parts: Vec<String> = Vec::new();
     if let Some(label) = input_state.status_output_label() {
         let label = crate::util::truncate_with_ellipsis(label, 28);
-        parts.push(format!("Output: {label}"));
+        parts.push(trf("Output: {}", &[&label]));
     }
     if input_state.ui_visibility.show_status_selection_info
         && let Some(bounds) = input_state.selection_bounds_with(measurer)
@@ -458,7 +464,10 @@ pub(super) fn build_prefix_text(
         parts.push(if count == 1 {
             format!("{}×{}px", bounds.width, bounds.height)
         } else {
-            format!("{} items: {}×{}px", count, bounds.width, bounds.height)
+            trf(
+                "{} items: {}×{}px",
+                &[&count, &bounds.width, &bounds.height],
+            )
         });
     }
     (!parts.is_empty()).then(|| parts.join(SEGMENT_SEPARATOR))

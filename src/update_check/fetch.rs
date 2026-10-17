@@ -14,6 +14,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::i18n::{tr, trf};
+
 use super::manifest::MAX_MANIFEST_BYTES;
 
 /// Programs tried in order; the first one present on the system wins.
@@ -30,7 +32,7 @@ fn fetch_with(
     mut run: impl FnMut(&str, &str, Duration) -> Result<String, FetchError>,
 ) -> Result<String, String> {
     if !url.starts_with("https://") {
-        return Err("refusing to fetch a non-HTTPS update manifest".to_string());
+        return Err(tr("refusing to fetch a non-HTTPS update manifest").to_string());
     }
 
     for program in FETCHERS {
@@ -45,7 +47,7 @@ fn fetch_with(
         }
     }
 
-    Err("no HTTP client available (install curl or wget)".to_string())
+    Err(tr("no HTTP client available (install curl or wget)").to_string())
 }
 
 enum FetchError {
@@ -74,20 +76,23 @@ fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, Fe
         .map_err(|err| {
             let message = err.to_string();
             if message.contains("stdout exceeded output cap") {
-                FetchError::Failed(OVERSIZED.to_string())
+                FetchError::Failed(oversized().to_string())
             } else {
-                FetchError::Failed(format!("failed to run {program}: {message}"))
+                FetchError::Failed(trf("failed to run {}: {}", &[&program, &message]))
             }
         })?;
 
     if output.timed_out {
-        return Err(FetchError::Failed("request timed out".to_string()));
+        return Err(FetchError::Failed(tr("request timed out").to_string()));
     }
     if output.status != 0 {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(FetchError::Failed(format!(
-            "{program} failed: {}",
-            failure_detail(program, stderr.trim(), Some(output.status))
+        return Err(FetchError::Failed(trf(
+            "{} failed: {}",
+            &[
+                &program,
+                &failure_detail(program, stderr.trim(), Some(output.status)),
+            ],
         )));
     }
 
@@ -122,17 +127,17 @@ fn failure_detail(program: &str, stderr: &str, code: Option<i32>) -> String {
         return stderr.to_string();
     }
     match (program, code) {
-        (_, None) => "killed by a signal".to_string(),
-        ("curl", Some(6)) => "could not resolve wayscriber.com".to_string(),
-        ("curl", Some(7)) => "could not connect".to_string(),
-        ("curl", Some(22)) => "server returned an error response".to_string(),
-        ("curl", Some(28)) => "request timed out".to_string(),
-        ("curl", Some(35) | Some(60)) => "TLS verification failed".to_string(),
-        ("curl", Some(63)) => "response larger than expected".to_string(),
-        (_, Some(4)) => "network failure".to_string(),
-        (_, Some(5)) => "TLS verification failed".to_string(),
-        (_, Some(8)) => "server returned an error response".to_string(),
-        (_, Some(code)) => format!("exit status {code}"),
+        (_, None) => tr("killed by a signal").to_string(),
+        ("curl", Some(6)) => tr("could not resolve wayscriber.com").to_string(),
+        ("curl", Some(7)) => tr("could not connect").to_string(),
+        ("curl", Some(22)) => tr("server returned an error response").to_string(),
+        ("curl", Some(28)) => tr("request timed out").to_string(),
+        ("curl", Some(35) | Some(60)) => tr("TLS verification failed").to_string(),
+        ("curl", Some(63)) => tr("response larger than expected").to_string(),
+        (_, Some(4)) => tr("network failure").to_string(),
+        (_, Some(5)) => tr("TLS verification failed").to_string(),
+        (_, Some(8)) => tr("server returned an error response").to_string(),
+        (_, Some(code)) => trf("exit status {}", &[&code]),
     }
 }
 
@@ -194,14 +199,17 @@ fn fetch_arguments(program: &str, url: &str, timeout: Duration) -> Vec<String> {
 }
 
 /// What an over-cap response reports, whichever client produced it.
-const OVERSIZED: &str = "release manifest is implausibly large";
+fn oversized() -> &'static str {
+    tr("release manifest is implausibly large")
+}
 
 /// Reject oversized or non-UTF-8 bodies before they reach the JSON parser.
 fn validate_body(bytes: &[u8]) -> Result<String, String> {
     if bytes.len() > MAX_MANIFEST_BYTES {
-        return Err(OVERSIZED.to_string());
+        return Err(oversized().to_string());
     }
-    String::from_utf8(bytes.to_vec()).map_err(|_| "release manifest is not valid UTF-8".to_string())
+    String::from_utf8(bytes.to_vec())
+        .map_err(|_| tr("release manifest is not valid UTF-8").to_string())
 }
 
 #[cfg(test)]

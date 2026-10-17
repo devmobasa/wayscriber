@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
 
@@ -21,11 +22,11 @@ pub enum PolygonKind {
 impl PolygonKind {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Triangle => "Triangle",
-            Self::Parallelogram => "Parallelogram",
-            Self::Rhombus => "Rhombus",
-            Self::Regular { .. } => "Regular Polygon",
-            Self::Freeform => "Freeform Polygon",
+            Self::Triangle => tr("Triangle"),
+            Self::Parallelogram => tr("Parallelogram"),
+            Self::Rhombus => tr("Rhombus"),
+            Self::Regular { .. } => tr("Regular Polygon"),
+            Self::Freeform => tr("Freeform Polygon"),
         }
     }
 }

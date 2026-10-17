@@ -1,5 +1,7 @@
 //! Construction and in-place refresh of one saved-session catalog card.
 
+use wayscriber::i18n::{tr, trf};
+
 use relm4::gtk;
 use relm4::prelude::*;
 
@@ -92,19 +94,19 @@ fn item_card(
 
     content.append(&caption_label(&item.path_label));
     if let Some(canonical) = item.canonical_path_label.as_deref() {
-        content.append(&caption_label(&format!("Canonical: {canonical}")));
+        content.append(&caption_label(&trf("Canonical: {}", &[&canonical])));
     }
     let times = row_box();
-    times.append(&hint_label(&format!("Created: {}", item.created_label)));
-    times.append(&hint_label(&format!("Opened: {}", item.last_opened_label)));
-    times.append(&hint_label(&format!("Saved: {}", item.last_saved_label)));
+    times.append(&hint_label(&trf("Created: {}", &[&item.created_label])));
+    times.append(&hint_label(&trf("Opened: {}", &[&item.last_opened_label])));
+    times.append(&hint_label(&trf("Saved: {}", &[&item.last_saved_label])));
     content.append(&times);
 
     let rename = input_row(
         InputRow {
             id: &item.id,
-            placeholder: "Display name",
-            button_label: "Save Name",
+            placeholder: tr("Display name"),
+            button_label: tr("Save Name"),
             on_input: Message::SessionCatalogRenameInputChanged,
             request: Message::SessionCatalogRenameRequested(item.id.clone()),
         },
@@ -114,8 +116,8 @@ fn item_card(
     let duplicate = input_row(
         InputRow {
             id: &item.id,
-            placeholder: "Duplicate target path",
-            button_label: "Duplicate",
+            placeholder: tr("Duplicate target path"),
+            button_label: tr("Duplicate"),
             on_input: Message::SessionCatalogDuplicateInputChanged,
             request: Message::SessionCatalogDuplicateRequested(item.id.clone()),
         },
@@ -125,8 +127,8 @@ fn item_card(
     let move_row = input_row(
         InputRow {
             id: &item.id,
-            placeholder: "Move target path",
-            button_label: "Move",
+            placeholder: tr("Move target path"),
+            button_label: tr("Move"),
             on_input: Message::SessionCatalogMoveInputChanged,
             request: Message::SessionCatalogMoveRequested(item.id.clone()),
         },
@@ -136,13 +138,13 @@ fn item_card(
 
     let actions = row_box();
     let reveal = message_button(
-        "Reveal File",
+        tr("Reveal File"),
         sender,
         Message::SessionCatalogRevealRequested(item.id.clone()),
     );
     actions.append(&reveal);
     let tool_state = message_button(
-        "Clear Tool State",
+        tr("Clear Tool State"),
         sender,
         Message::SessionCatalogClearToolStateRequested(item.id.clone()),
     );
@@ -151,7 +153,7 @@ fn item_card(
 
     let danger = row_box();
     let clear = message_button(
-        "Clear Saved Data",
+        tr("Clear Saved Data"),
         sender,
         Message::SessionCatalogClearRequested(item.id.clone()),
     );
@@ -162,14 +164,14 @@ fn item_card(
     // pending id swaps which one is visible.
     let confirm = row_box();
     let confirm_button = message_button(
-        "Confirm Clear",
+        tr("Confirm Clear"),
         sender,
         Message::SessionCatalogClearConfirmed(item.id.clone()),
     );
     confirm_button.add_css_class("destructive-action");
     confirm.append(&confirm_button);
     let cancel_button = message_button(
-        "Cancel",
+        tr("Cancel"),
         sender,
         Message::SessionCatalogClearCanceled(item.id.clone()),
     );
@@ -178,7 +180,7 @@ fn item_card(
     danger.append(&confirm);
 
     let forget = message_button(
-        "Forget",
+        tr("Forget"),
         sender,
         Message::SessionCatalogForgetRequested(item.id.clone()),
     );

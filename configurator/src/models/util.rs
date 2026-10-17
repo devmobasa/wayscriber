@@ -1,7 +1,9 @@
+use wayscriber::i18n::tr;
+
 pub fn parse_f64(input: &str) -> Result<f64, String> {
     input
         .parse::<f64>()
-        .map_err(|_| "Expected a numeric value".to_string())
+        .map_err(|_| tr("Expected a numeric value").to_string())
 }
 
 pub fn format_float(value: f64) -> String {

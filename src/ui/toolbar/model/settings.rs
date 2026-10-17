@@ -7,6 +7,7 @@ use crate::config::{
     item_visibility_setting, toolbar_item_definitions, toolbar_item_ids as ids,
     toolbar_item_order_group, toolbar_item_visibility_override_allowed,
 };
+use crate::i18n::{tr, trf};
 
 use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
 use super::activation::ToolbarControlId;
@@ -47,59 +48,61 @@ impl ToolbarSettingsModel {
             vec![
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsContextAwareUi,
-                    "Adapt to tool",
+                    tr("Adapt to tool"),
                     snapshot.context_aware_ui,
                     ToolbarEvent::ToggleContextAwareUi(!snapshot.context_aware_ui),
-                    "Show only the active tool's controls.",
+                    tr("Show only the active tool's controls."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsIconMode,
-                    "Icon buttons",
+                    tr("Icon buttons"),
                     snapshot.use_icons,
                     ToolbarEvent::ToggleIconMode(!snapshot.use_icons),
-                    "Icons instead of text labels.",
+                    tr("Icons instead of text labels."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsTextControls,
-                    "Text controls",
+                    tr("Text controls"),
                     snapshot.show_text_controls,
                     ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
-                    "Font size/family on every tool while Adapt to tool is off.",
+                    tr("Font size/family on every tool while Adapt to tool is off."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsStatusBar,
-                    "Status bar",
+                    tr("Status bar"),
                     snapshot.show_status_bar,
                     ToolbarEvent::ToggleStatusBar(!snapshot.show_status_bar),
-                    "Show the status bar and its configured contents.",
+                    tr("Show the status bar and its configured contents."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsFloatingBadgeAlways,
-                    "Overlay badge",
+                    tr("Overlay badge"),
                     snapshot.show_floating_badge_always,
                     ToolbarEvent::ToggleFloatingBadgeAlways(!snapshot.show_floating_badge_always),
-                    "Board/page badge when status bar is visible.",
+                    tr("Board/page badge when status bar is visible."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsPresetToasts,
-                    "Preset toasts",
+                    tr("Preset toasts"),
                     snapshot.show_preset_toasts,
                     ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-                    "Preset toasts: apply/save/clear.",
+                    tr("Preset toasts: apply/save/clear."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsIdleFade,
-                    "Hide toolbar when idle",
+                    tr("Hide toolbar when idle"),
                     snapshot.idle_fade,
                     ToolbarEvent::ToggleIdleFade(!snapshot.idle_fade),
-                    "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
+                    tr(
+                        "Hide the top bar a few seconds after you stop using it; it returns when the pointer comes near. Turn off to keep it always visible.",
+                    ),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsInputHud,
-                    "Input HUD",
+                    tr("Input HUD"),
                     snapshot.input_hud_enabled,
                     ToolbarEvent::ToggleInputHud(!snapshot.input_hud_enabled),
-                    "Show keystrokes and clicks on screen.",
+                    tr("Show keystrokes and clicks on screen."),
                 ),
             ]
         };
@@ -108,53 +111,53 @@ impl ToolbarSettingsModel {
             toggles.extend([
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsPresets,
-                    "Presets",
+                    tr("Presets"),
                     snapshot.show_presets,
                     ToolbarEvent::TogglePresets(!snapshot.show_presets),
-                    "Presets: quick slots.",
+                    tr("Presets: quick slots."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsActions,
-                    "Actions",
+                    tr("Actions"),
                     snapshot.show_actions_section,
                     ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
-                    "Actions: undo/redo/clear.",
+                    tr("Actions: undo/redo/clear."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsZoomActions,
-                    "Zoom actions",
+                    tr("Zoom actions"),
                     snapshot.show_zoom_actions,
                     ToolbarEvent::ToggleZoomActions(!snapshot.show_zoom_actions),
-                    "Zoom: in/out/reset/lock.",
+                    tr("Zoom: in/out/reset/lock."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsAdvancedActions,
-                    "Advanced actions",
+                    tr("Advanced actions"),
                     snapshot.show_actions_advanced,
                     ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
-                    "Undo all, delayed undo, freeze.",
+                    tr("Undo all, delayed undo, freeze."),
                 )
                 .wide(),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsBoards,
-                    "Boards",
+                    tr("Boards"),
                     snapshot.show_boards_section,
                     ToolbarEvent::ToggleBoardsSection(!snapshot.show_boards_section),
-                    "Boards: prev/next/new/del.",
+                    tr("Boards: prev/next/new/del."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsPages,
-                    "Pages",
+                    tr("Pages"),
                     snapshot.show_pages_section,
                     ToolbarEvent::TogglePagesSection(!snapshot.show_pages_section),
-                    "Pages: prev/next/new/dup/del.",
+                    tr("Pages: prev/next/new/dup/del."),
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsStepControls,
-                    "Multi-step undo/redo",
+                    tr("Multi-step undo/redo"),
                     snapshot.show_step_section,
                     ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
-                    "Undo/redo several strokes at once.",
+                    tr("Undo/redo several strokes at once."),
                 )
                 .wide(),
             ]);
@@ -287,10 +290,10 @@ fn status_bar_content_toggles(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettings
     let mut toggles = vec![
         ToolbarSettingsToggle::new(
             ToolbarControlId::SettingsStatusBarInteractive,
-            "Clickable segments",
+            tr("Clickable segments"),
             snapshot.status_bar_interactive,
             ToolbarEvent::SetStatusBarInteractive(!snapshot.status_bar_interactive),
-            "Allow status-bar segments to open their related controls.",
+            tr("Allow status-bar segments to open their related controls."),
         )
         .wide(),
     ];
@@ -298,58 +301,58 @@ fn status_bar_content_toggles(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettings
         let (id, label, tooltip) = match item {
             crate::config::StatusBarItem::ActiveOutput => (
                 ToolbarControlId::SettingsStatusActiveOutput,
-                "Active output",
-                "Status bar: active monitor/output.",
+                tr("Active output"),
+                tr("Status bar: active monitor/output."),
             ),
             crate::config::StatusBarItem::SelectionInfo => (
                 ToolbarControlId::SettingsStatusSelectionInfo,
-                "Selection size",
-                "Status bar: selected item dimensions.",
+                tr("Selection size"),
+                tr("Status bar: selected item dimensions."),
             ),
             crate::config::StatusBarItem::Board => (
                 ToolbarControlId::SettingsStatusBoardBadge,
-                "Board",
-                "Status bar: board label.",
+                tr("Board"),
+                tr("Status bar: board label."),
             ),
             crate::config::StatusBarItem::Page => (
                 ToolbarControlId::SettingsStatusPageBadge,
-                "Page",
-                "Status bar: page counter.",
+                tr("Page"),
+                tr("Status bar: page counter."),
             ),
             crate::config::StatusBarItem::Color => (
                 ToolbarControlId::SettingsStatusColor,
-                "Current color",
-                "Status bar: active color dot.",
+                tr("Current color"),
+                tr("Status bar: active color dot."),
             ),
             crate::config::StatusBarItem::Tool => (
                 ToolbarControlId::SettingsStatusTool,
-                "Active tool",
-                "Status bar: active tool name.",
+                tr("Active tool"),
+                tr("Status bar: active tool name."),
             ),
             crate::config::StatusBarItem::Size => (
                 ToolbarControlId::SettingsStatusSize,
-                "Tool size",
-                "Status bar: active tool size.",
+                tr("Tool size"),
+                tr("Status bar: active tool size."),
             ),
             crate::config::StatusBarItem::ContextIndicators => (
                 ToolbarControlId::SettingsStatusContextIndicators,
-                "Context indicators",
-                "Status bar: text and highlight state.",
+                tr("Context indicators"),
+                tr("Status bar: text and highlight state."),
             ),
             crate::config::StatusBarItem::ToolbarHint => (
                 ToolbarControlId::SettingsStatusToolbarHint,
-                "Toolbar hint",
-                "Status bar: recovery hint while toolbars are hidden.",
+                tr("Toolbar hint"),
+                tr("Status bar: recovery hint while toolbars are hidden."),
             ),
             crate::config::StatusBarItem::Help => (
                 ToolbarControlId::SettingsStatusHelp,
-                "Help shortcut",
-                "Status bar: Help shortcut.",
+                tr("Help shortcut"),
+                tr("Status bar: Help shortcut."),
             ),
             crate::config::StatusBarItem::About => (
                 ToolbarControlId::SettingsStatusAbout,
-                "About and version",
-                "Status bar: About/version chip.",
+                tr("About and version"),
+                tr("Status bar: About/version chip."),
             ),
         };
         ToolbarSettingsToggle::new(
@@ -375,7 +378,7 @@ impl ToolbarSettingsCustomizeGroup {
         Self {
             label: Cow::Borrowed(group.label()),
             event: ToolbarEvent::SetToolbarItemCustomizationGroup(Some(group)),
-            tooltip: ToolbarTooltip::text(format!("Customize {}", group.label())),
+            tooltip: ToolbarTooltip::text(trf("Customize {}", &[&group.label()])),
         }
     }
 }
@@ -431,7 +434,7 @@ impl ToolbarSettingsItemOverride {
             label: Cow::Borrowed(definition.label),
             shown: !hidden,
             activation: ToolbarEvent::SetToolbarItemHidden(id, !hidden),
-            tooltip: ToolbarTooltip::text(format!("{}: uncheck to hide", definition.label)),
+            tooltip: ToolbarTooltip::text(trf("{}: uncheck to hide", &[&definition.label])),
             order,
         }
     }
@@ -514,12 +517,16 @@ impl ToolbarSettingsDetails {
     fn new(open: bool) -> Self {
         Self {
             open,
-            label: if open { "Hide details" } else { "Details" },
+            label: if open {
+                tr("Hide details")
+            } else {
+                tr("Details")
+            },
             event: ToolbarEvent::SetSettingsDetailsOpen(!open),
             tooltip: ToolbarTooltip::text(if open {
-                "Hide where toolbar changes are saved"
+                tr("Hide where toolbar changes are saved")
             } else {
-                "Show where toolbar changes are saved"
+                tr("Show where toolbar changes are saved")
             }),
         }
     }
@@ -540,41 +547,41 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     };
     let (summary, severity) = match &runtime.mode {
         Mode::Unavailable => (
-            "Runtime preference persistence is unavailable",
+            tr("Runtime preference persistence is unavailable"),
             ToolbarSettingsNoticeSeverity::Error,
         ),
         // Healthy: nothing saved yet, or changes being saved. Either way the
         // user only needs to know their toolbar changes stick.
         Mode::Missing | Mode::Supported => (
-            "Toolbar changes are saved automatically",
+            tr("Toolbar changes are saved automatically"),
             ToolbarSettingsNoticeSeverity::Info,
         ),
         Mode::UnsupportedReadOnly { .. } => (
-            "Runtime preferences are read-only (newer format)",
+            tr("Runtime preferences are read-only (newer format)"),
             ToolbarSettingsNoticeSeverity::Warning,
         ),
         Mode::Resetting => (
-            "Resetting runtime preferences…",
+            tr("Resetting runtime preferences…"),
             ToolbarSettingsNoticeSeverity::Info,
         ),
         Mode::AwaitingUnsupportedResetConfirmation { .. } => (
-            "Confirm reset of newer runtime-state data",
+            tr("Confirm reset of newer runtime-state data"),
             ToolbarSettingsNoticeSeverity::Warning,
         ),
         Mode::Unhealthy => (
-            "Runtime preference persistence is blocked",
+            tr("Runtime preference persistence is blocked"),
             ToolbarSettingsNoticeSeverity::Error,
         ),
         Mode::Recovering => (
-            "Recovering runtime preference persistence…",
+            tr("Recovering runtime preference persistence…"),
             ToolbarSettingsNoticeSeverity::Warning,
         ),
         Mode::CancellingRecovery => (
-            "Waiting for the active recovery write…",
+            tr("Waiting for the active recovery write…"),
             ToolbarSettingsNoticeSeverity::Warning,
         ),
         Mode::AwaitingInvalidResetConfirmation => (
-            "Confirm preservation and reset of invalid data",
+            tr("Confirm preservation and reset of invalid data"),
             ToolbarSettingsNoticeSeverity::Warning,
         ),
     };
@@ -586,9 +593,9 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     // The file path is for troubleshooting, so it waits behind "Details".
     push_notice(
         &mut notices,
-        &format!(
+        &trf(
             "Saved separately from config.toml, in {}",
-            runtime.path.display()
+            &[&runtime.path.display()],
         ),
         ToolbarSettingsNoticeSeverity::Info,
         true,
@@ -596,7 +603,7 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     for path in &runtime.recovery_artifacts {
         push_notice(
             &mut notices,
-            &format!("Preserved recovery file: {}", path.display()),
+            &trf("Preserved recovery file: {}", &[&path.display()]),
             ToolbarSettingsNoticeSeverity::Warning,
             false,
         );

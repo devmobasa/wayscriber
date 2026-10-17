@@ -3,11 +3,12 @@ use crate::backend::wayland::config_edits::{ConfigEdit, ConfigEditWorker};
 use crate::config::{
     Config, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, QuickColorSlotMissing,
 };
+use crate::i18n::{tr, trf};
 use crate::input::state::{QuickColorEdit, Toast, ToastPriority};
 
 /// What the user is told when the swatch and the file both took the recolor.
 fn quick_color_saved_message(index: usize) -> String {
-    format!("Updated quick color {}.", index + 1)
+    trf("Updated quick color {}.", &[&(index + 1)])
 }
 
 /// What the user is told when the slot already painted this color.
@@ -16,14 +17,14 @@ fn quick_color_saved_message(index: usize) -> String {
 /// with, or "Default" on a slot that never moved — and there is no delta to
 /// write, so the message must not claim one.
 fn quick_color_unchanged_message(index: usize) -> String {
-    format!("Quick color {} already uses that color.", index + 1)
+    trf("Quick color {} already uses that color.", &[&(index + 1)])
 }
 
 /// What the user is told when the swatch changed but the file did not.
 fn quick_color_save_failed_message(index: usize) -> String {
-    format!(
+    trf(
         "Quick color {} changed for this run, but saving to config.toml failed (see logs).",
-        index + 1
+        &[&(index + 1)],
     )
 }
 
@@ -31,9 +32,9 @@ fn quick_color_save_failed_message(index: usize) -> String {
 /// The file changed, so this cannot borrow the wording above.
 fn quick_color_write_unverified_message(index: usize) -> String {
     format!(
-        "Quick color {} changed for this run, but config.toml was written and does not read back \
-         with it (see logs).",
-        index + 1
+        "{}{}",
+        trf("Quick color {} changed for this run, ", &[&(index + 1)]),
+        tr("but config.toml was written and does not read back with it (see logs).")
     )
 }
 
@@ -44,9 +45,9 @@ fn quick_color_write_unverified_message(index: usize) -> String {
 /// swatch keeps it for the run, and the message says which slot vanished
 /// rather than reporting a save failure the user cannot act on.
 fn quick_color_slot_missing_message(index: usize) -> String {
-    format!(
+    trf(
         "Quick color {} is no longer in config.toml, so the new color applies to this run only.",
-        index + 1
+        &[&(index + 1)],
     )
 }
 
@@ -108,8 +109,10 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     "drawing.quick-color",
-                    Toast::warning(message)
-                        .action("Edit", crate::domain::Action::OpenConfiguratorQuickColors),
+                    Toast::warning(message).action(
+                        tr("Edit"),
+                        crate::domain::Action::OpenConfiguratorQuickColors,
+                    ),
                 );
             }
         }

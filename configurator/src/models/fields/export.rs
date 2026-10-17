@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{
     PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
     PdfTransparentBackground,
@@ -18,10 +20,10 @@ impl PdfPageSizeOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Viewport => "Viewport",
+            Self::Viewport => tr("Viewport"),
             Self::A4 => "A4",
-            Self::Letter => "Letter",
-            Self::Custom => "Custom",
+            Self::Letter => tr("Letter"),
+            Self::Custom => tr("Custom"),
         }
     }
 
@@ -64,9 +66,9 @@ impl PdfOrientationOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Auto => "Auto",
-            Self::Portrait => "Portrait",
-            Self::Landscape => "Landscape",
+            Self::Auto => tr("Auto"),
+            Self::Portrait => tr("Portrait"),
+            Self::Landscape => tr("Landscape"),
         }
     }
 
@@ -111,9 +113,9 @@ impl PdfFitModeOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Viewport => "Viewport",
-            Self::FitViewportToPage => "Fit viewport",
-            Self::FitContentToPage => "Fit content",
+            Self::Viewport => tr("Viewport"),
+            Self::FitViewportToPage => tr("Fit viewport"),
+            Self::FitContentToPage => tr("Fit content"),
         }
     }
 
@@ -153,8 +155,8 @@ impl PdfTransparentBackgroundOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::None => "None",
-            Self::Desktop => "Live desktop",
+            Self::None => tr("None"),
+            Self::Desktop => tr("Live desktop"),
         }
     }
 
@@ -201,11 +203,11 @@ impl PdfLabelPositionOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::TopLeft => "Top left",
-            Self::TopRight => "Top right",
-            Self::BottomLeft => "Bottom left",
-            Self::BottomRight => "Bottom right",
-            Self::BottomCenter => "Bottom center",
+            Self::TopLeft => tr("Top left"),
+            Self::TopRight => tr("Top right"),
+            Self::BottomLeft => tr("Bottom left"),
+            Self::BottomRight => tr("Bottom right"),
+            Self::BottomCenter => tr("Bottom center"),
         }
     }
 
@@ -258,11 +260,11 @@ impl PdfLabelContentModeOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::CustomTemplate => "Custom template",
-            Self::BoardAndPage => "Board and page",
-            Self::DocumentPage => "Document page",
-            Self::BoardName => "Board name",
-            Self::PageName => "Page name",
+            Self::CustomTemplate => tr("Custom template"),
+            Self::BoardAndPage => tr("Board and page"),
+            Self::DocumentPage => tr("Document page"),
+            Self::BoardName => tr("Board name"),
+            Self::PageName => tr("Page name"),
         }
     }
 

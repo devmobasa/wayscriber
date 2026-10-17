@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
@@ -68,61 +70,61 @@ impl SessionCatalogOperation {
 
     pub(crate) fn running_daemon_message(self) -> &'static str {
         match self {
-            Self::Clear => {
-                "Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay."
-            }
-            Self::ClearToolState => {
-                "Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first."
-            }
-            Self::Duplicate => {
-                "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session."
-            }
-            Self::Move => {
-                "Move Session is disabled while the background service or a manually started daemon is running. Stop it first or move from the overlay after opening the session."
-            }
+            Self::Clear => tr(
+                "Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay.",
+            ),
+            Self::ClearToolState => tr(
+                "Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first.",
+            ),
+            Self::Duplicate => tr(
+                "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session.",
+            ),
+            Self::Move => tr(
+                "Move Session is disabled while the background service or a manually started daemon is running. Stop it first or move from the overlay after opening the session.",
+            ),
         }
     }
 
     pub(crate) fn running_overlay_message(self) -> &'static str {
         match self {
-            Self::Clear => {
-                "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session."
-            }
-            Self::ClearToolState => {
-                "Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session."
-            }
-            Self::Duplicate => {
-                "Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session."
-            }
-            Self::Move => {
-                "Move Session is disabled while an overlay is running. Active session moves must use a runtime transaction."
-            }
+            Self::Clear => tr(
+                "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session.",
+            ),
+            Self::ClearToolState => tr(
+                "Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session.",
+            ),
+            Self::Duplicate => tr(
+                "Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session.",
+            ),
+            Self::Move => tr(
+                "Move Session is disabled while an overlay is running. Active session moves must use a runtime transaction.",
+            ),
         }
     }
 
     pub(crate) fn waiting_for_status_message(self) -> &'static str {
         match self {
             Self::Clear => {
-                "Clear saved data is disabled until background service status finishes loading."
+                tr("Clear saved data is disabled until background service status finishes loading.")
             }
-            Self::ClearToolState => {
-                "Clear saved tool state is disabled until background service status finishes loading."
-            }
-            Self::Duplicate => {
-                "Duplicate Session is disabled until background service status finishes loading."
-            }
+            Self::ClearToolState => tr(
+                "Clear saved tool state is disabled until background service status finishes loading.",
+            ),
+            Self::Duplicate => tr(
+                "Duplicate Session is disabled until background service status finishes loading.",
+            ),
             Self::Move => {
-                "Move Session is disabled until background service status finishes loading."
+                tr("Move Session is disabled until background service status finishes loading.")
             }
         }
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Clear => "Clear saved data",
-            Self::ClearToolState => "Clear saved tool state",
-            Self::Duplicate => "Duplicate Session",
-            Self::Move => "Move Session",
+            Self::Clear => tr("Clear saved data"),
+            Self::ClearToolState => tr("Clear saved tool state"),
+            Self::Duplicate => tr("Duplicate Session"),
+            Self::Move => tr("Move Session"),
         }
     }
 }
@@ -196,6 +198,11 @@ impl SessionCatalogState {
     }
 }
 
+/// One catalog entry as the session page shows it.
+///
+/// The times are kept as times, not as text: the catalog can load before the
+/// window's language is known, and the language can change while the list is
+/// on screen, so "Never" and "Unknown" are chosen when a card is drawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionCatalogItem {
     pub id: String,
@@ -203,9 +210,9 @@ pub struct SessionCatalogItem {
     pub path: PathBuf,
     pub path_label: String,
     pub canonical_path_label: Option<String>,
-    pub created_label: String,
-    pub last_opened_label: String,
-    pub last_saved_label: String,
+    pub created_at_millis: u64,
+    pub last_opened_at_millis: Option<u64>,
+    pub last_saved_at_millis: Option<u64>,
     pub artifacts: SessionArtifactSummary,
 }
 
@@ -223,18 +230,30 @@ impl SessionCatalogItem {
             path_label: truncate_path(&path),
             path,
             canonical_path_label,
-            created_label: format_catalog_time(entry.created_at_millis),
-            last_opened_label: entry
-                .last_opened_at_millis
-                .map(format_catalog_time)
-                .unwrap_or_else(|| "Never".to_string()),
-            last_saved_label: entry
-                .last_saved_at_millis
-                .map(format_catalog_time)
-                .unwrap_or_else(|| "Never".to_string()),
+            created_at_millis: entry.created_at_millis,
+            last_opened_at_millis: entry.last_opened_at_millis,
+            last_saved_at_millis: entry.last_saved_at_millis,
             artifacts,
         })
     }
+
+    pub fn created_label(&self) -> String {
+        format_catalog_time(self.created_at_millis)
+    }
+
+    pub fn last_opened_label(&self) -> String {
+        optional_catalog_time(self.last_opened_at_millis)
+    }
+
+    pub fn last_saved_label(&self) -> String {
+        optional_catalog_time(self.last_saved_at_millis)
+    }
+}
+
+fn optional_catalog_time(epoch_millis: Option<u64>) -> String {
+    epoch_millis
+        .map(format_catalog_time)
+        .unwrap_or_else(|| tr("Never").to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,30 +310,32 @@ impl SessionArtifactSummary {
     pub fn status_label(&self) -> String {
         let mut parts = Vec::new();
         if self.primary_exists {
-            parts.push("primary");
+            parts.push(tr("primary"));
         }
         if self.backup_exists {
-            parts.push("backup");
+            parts.push(tr("backup"));
         }
         if self.recovery_exists {
-            parts.push("recovery");
+            parts.push(tr("recovery"));
         }
         if self.unreadable_copy_exists {
-            parts.push("unreadable copy");
+            parts.push(tr("unreadable copy"));
         }
         if self.clear_marker_exists {
-            parts.push("cleared");
+            parts.push(tr("cleared"));
         }
         if self.lock_exists {
-            parts.push("lock");
+            parts.push(tr("lock"));
         }
         if parts.is_empty() {
-            "No saved artifacts".to_string()
+            tr("No saved artifacts").to_string()
         } else {
-            format!(
-                "{} · {}",
-                parts.join(", "),
-                format_byte_count(self.non_lock_size_bytes)
+            trf(
+                tr("{} · {}"),
+                &[
+                    &parts.join(", "),
+                    &format_byte_count(self.non_lock_size_bytes),
+                ],
             )
         }
     }
@@ -328,7 +349,7 @@ fn artifact_metadata(path: &Path) -> Result<Option<std::fs::Metadata>, String> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) => Ok(Some(metadata)),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(err) => Err(format!("failed to inspect {}: {err}", path.display())),
+        Err(err) => Err(trf("failed to inspect {}: {}", &[&path.display(), &err])),
     }
 }
 
@@ -348,7 +369,7 @@ pub fn format_byte_count(bytes: u64) -> String {
 fn format_catalog_time(epoch_millis: u64) -> String {
     let time = UNIX_EPOCH + Duration::from_millis(epoch_millis);
     wayscriber::time_utils::format_system_time(time, "%Y-%m-%d %H:%M")
-        .unwrap_or_else(|| "Unknown".to_string())
+        .unwrap_or_else(|| tr("Unknown").to_string())
 }
 
 fn truncate_path(path: &Path) -> String {

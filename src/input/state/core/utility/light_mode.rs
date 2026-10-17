@@ -2,6 +2,7 @@ use super::super::base::{DesktopEnvironment, InputState, ShellMode};
 use super::super::modes::LightModeRestore;
 use crate::domain::Action;
 use crate::draw::TextMeasurer;
+use crate::i18n::tr;
 use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
@@ -27,15 +28,15 @@ impl InputState {
             caps.freeze_capture,
         ) {
             (DesktopEnvironment::Gnome, ShellMode::XdgFallback, true) => {
-                "Light Mode passthrough is not supported in this GNOME Wayland session."
+                tr("Light Mode passthrough is not supported in this GNOME Wayland session.")
             }
-            (DesktopEnvironment::Gnome, ShellMode::XdgFallback, false) => {
-                "Light Mode passthrough is not supported in this GNOME Wayland session. Screen capture is also unavailable."
-            }
+            (DesktopEnvironment::Gnome, ShellMode::XdgFallback, false) => tr(
+                "Light Mode passthrough is not supported in this GNOME Wayland session. Screen capture is also unavailable.",
+            ),
             (_, ShellMode::XdgFallback, _) => {
-                "Light Mode passthrough is not supported in this desktop session."
+                tr("Light Mode passthrough is not supported in this desktop session.")
             }
-            _ => "Light Mode passthrough is not supported by this compositor.",
+            _ => tr("Light Mode passthrough is not supported by this compositor."),
         }
     }
 
@@ -136,9 +137,9 @@ impl InputState {
         self.cancel_active_interaction_with(resources.measurer);
         self.modes.set_light_drawing(drawing);
         let message = if drawing {
-            "Light Mode drawing"
+            tr("Light Mode drawing")
         } else {
-            "Light Mode passthrough"
+            tr("Light Mode passthrough")
         };
         self.push_toast(ToastPriority::Info, "light_mode", Toast::info(message));
         self.dirty_tracker.mark_full();
@@ -166,7 +167,7 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             "light_mode",
-            Toast::info("Stopping Light Mode"),
+            Toast::info(tr("Stopping Light Mode")),
         );
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -219,14 +220,14 @@ impl InputState {
 
         self.modes.begin_light(drawing, restore);
         let message = if drawing {
-            "Light Mode drawing"
+            tr("Light Mode drawing")
         } else {
-            "Light Mode passthrough"
+            tr("Light Mode passthrough")
         };
         self.push_toast(
             ToastPriority::Action,
             "light_mode",
-            Toast::info(message).action("Exit", Action::ToggleLightMode),
+            Toast::info(message).action(tr("Exit"), Action::ToggleLightMode),
         );
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;

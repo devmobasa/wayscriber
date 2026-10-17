@@ -4,15 +4,16 @@
 mod tests;
 
 use wayscriber::config::Shortcut;
+use wayscriber::i18n::tr;
 
 use crate::app::search::keybinding_row_visible;
 use crate::app::state::{ConfirmationPrompt, PendingConfirmation};
 use crate::models::keybindings::{
     AppendOutcome, KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind,
-    ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary, ShortcutRecorderState,
-    ShortcutTextEditor, append_binding, apply_recorded_replace, apply_text_replace,
-    next_review_conflict, normalize_button_event, normalize_key_event, other_claimants,
-    parse_keybindings, remove_binding, reset_field, reset_fields, sequence_keyboard_only_message,
+    RecorderRejection, ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary,
+    ShortcutRecorderState, ShortcutTextEditor, append_binding, apply_recorded_replace,
+    apply_text_replace, next_review_conflict, normalize_button_event, normalize_key_event,
+    other_claimants, parse_keybindings, remove_binding, reset_field, reset_fields,
     text_conflicts_for,
 };
 use crate::models::{KeybindingField, keybinding_tab};
@@ -56,12 +57,12 @@ impl ConfiguratorApp {
             return Vec::new();
         };
         match normalize_key_event(keyval, modifiers) {
-            RecordedKeyboard::Pending { preview } => {
-                recorder.apply_pending_preview(preview);
+            RecordedKeyboard::Pending { modifiers } => {
+                recorder.show_pending(modifiers);
                 Vec::new()
             }
-            RecordedKeyboard::Unsupported { message } => {
-                recorder.prompt = message;
+            RecordedKeyboard::Unsupported { reason } => {
+                recorder.reject(reason);
                 Vec::new()
             }
             RecordedKeyboard::Chord(binding) => {
@@ -88,13 +89,13 @@ impl ConfiguratorApp {
         };
         let field = recorder.field;
         match normalize_button_event(button, kind, modifiers) {
-            RecordedDevice::Unsupported { message } => {
-                recorder.prompt = message;
+            RecordedDevice::Unsupported { reason } => {
+                recorder.reject(reason);
                 Vec::new()
             }
             RecordedDevice::Trigger(trigger) => {
                 if recorder.is_sequence() {
-                    recorder.prompt = sequence_keyboard_only_message().to_string();
+                    recorder.reject(RecorderRejection::SequenceKeyboardOnly);
                     return Vec::new();
                 }
                 self.shortcuts.set_recorder(None);
@@ -361,7 +362,7 @@ impl ConfiguratorApp {
             &self.defaults.keybindings,
             &fields,
         );
-        self.status = StatusMessage::info("Reset visible keybindings (not saved).");
+        self.status = StatusMessage::info(tr("Reset visible keybindings (not saved)."));
         self.refresh_dirty_flag();
         Vec::new()
     }
@@ -385,7 +386,7 @@ impl ConfiguratorApp {
         self.pending_confirmation = None;
         self.draft.keybindings = self.defaults.keybindings.clone();
         self.clear_shortcut_editing();
-        self.status = StatusMessage::info("Reset all keybindings (not saved).");
+        self.status = StatusMessage::info(tr("Reset all keybindings (not saved)."));
         self.refresh_dirty_flag();
         Vec::new()
     }
@@ -400,7 +401,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_shortcut_conflict_review_started(&mut self) -> Vec<Effect> {
         if !self.shortcut_manager_summary().has_conflicts() {
             self.shortcuts.review = false;
-            self.status = StatusMessage::info("No shortcut conflicts to review.");
+            self.status = StatusMessage::info(tr("No shortcut conflicts to review."));
             return Vec::new();
         }
         self.shortcuts.review = true;
@@ -422,11 +423,11 @@ impl ConfiguratorApp {
                         claimants,
                     },
                 ));
-                self.status = StatusMessage::info("Review the next conflicting shortcut.");
+                self.status = StatusMessage::info(tr("Review the next conflicting shortcut."));
             }
             None => {
                 self.shortcuts.review = false;
-                self.status = StatusMessage::success("No remaining shortcut conflicts.");
+                self.status = StatusMessage::success(tr("No remaining shortcut conflicts."));
             }
         }
     }

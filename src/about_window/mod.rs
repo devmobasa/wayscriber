@@ -19,6 +19,7 @@ use wayland_client::globals::registry_queue_init;
 
 use crate::app_id::runtime_app_id;
 use crate::config::Config;
+use crate::i18n::tr;
 
 mod clipboard;
 mod content;
@@ -35,15 +36,10 @@ use interaction::Element;
 use layout::Plan;
 
 pub fn run_about_window() -> Result<()> {
-    // Chrome colors come from the same `[ui] theme` key as the overlay, so the
-    // dialog matches the toolbars the user already sees.
-    let theme = match Config::load() {
-        Ok(loaded) => crate::ui::theme::Theme::resolve(loaded.config.ui.theme.to_theme_mode()),
-        Err(err) => {
-            debug!("About dialog falling back to the default theme: {err}");
-            crate::ui::theme::Theme::resolve(Config::default().ui.theme.to_theme_mode())
-        }
-    };
+    let (theme, language) = chrome_settings();
+    // This is its own process, so it selects its own language before any of
+    // its text is built.
+    crate::i18n::initialize(language);
 
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland compositor")?;
     let (globals, mut event_queue) =
@@ -64,7 +60,7 @@ pub fn run_about_window() -> Result<()> {
 
     let wl_surface = compositor_state.create_surface(&qh);
     let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, &qh);
-    window.set_title("About Wayscriber");
+    window.set_title(tr("About Wayscriber"));
     window.set_app_id(runtime_app_id());
     // The dialog is content-sized; letting the compositor resize it would only
     // clip rows or leave dead space.
@@ -119,6 +115,41 @@ fn run_about_event_loop(
     Ok(())
 }
 
+/// The arguments that start the About window: `--about`, and the `--language`
+/// this process runs with, if any, so the window matches the one that opened
+/// it.
+pub(crate) fn launch_arguments() -> Vec<std::ffi::OsString> {
+    launch_arguments_for(crate::i18n::command_line_language())
+}
+
+fn launch_arguments_for(language: Option<crate::domain::Language>) -> Vec<std::ffi::OsString> {
+    let mut arguments = vec!["--about".into()];
+    if let Some(language) = language {
+        arguments.push("--language".into());
+        arguments.push(language.code().into());
+    }
+    arguments
+}
+
+/// What the dialog reads from the config before it draws: the theme, from
+/// the same `[ui] theme` key as the overlay so the dialog matches the toolbars
+/// the user already sees, and the UI language. A config that cannot be read
+/// falls back to the defaults for both.
+fn chrome_settings() -> (crate::ui::theme::Theme, crate::domain::Language) {
+    let ui = match Config::load() {
+        Ok(loaded) => loaded.config.ui,
+        Err(err) => {
+            debug!("About dialog falling back to the default theme and language: {err}");
+            Config::default().ui
+        }
+    };
+
+    (
+        crate::ui::theme::Theme::resolve(ui.theme.to_theme_mode()),
+        ui.language,
+    )
+}
+
 /// Logical surface size for a plan, rounded up so nothing is clipped by a
 /// fractional pixel.
 fn surface_size(plan: &Plan) -> (u32, u32) {
@@ -167,4 +198,80 @@ struct AboutWindowState {
             smithay_client_toolkit::seat::pointer::PointerData,
         >,
     >,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::config::test_helpers::with_temp_config_home;
+    use crate::domain::Language;
+
+    fn write_config(contents: &str) {
+        let path = Config::get_config_path().expect("config path");
+        fs::create_dir_all(path.parent().expect("config dir")).expect("create config dir");
+        fs::write(path, contents).expect("write config");
+    }
+
+    #[test]
+    fn the_window_is_opened_with_the_openers_language() {
+        assert_eq!(launch_arguments_for(None), ["--about"]);
+        assert_eq!(
+            launch_arguments_for(Some(Language::SimplifiedChinese)),
+            ["--about", "--language", "zh-CN"]
+        );
+        // The arguments it is given parse back to the same language.
+        let parsed = crate::cli::Cli::try_parse_from(
+            std::iter::once("wayscriber".into())
+                .chain(launch_arguments_for(Some(Language::SimplifiedChinese))),
+        );
+        assert!(
+            matches!(
+                parsed,
+                Ok(crate::cli::CliOutcome::Run(ref cli))
+                    if cli.about && cli.language == Some(Language::SimplifiedChinese)
+            ),
+            "{parsed:?}"
+        );
+    }
+
+    #[test]
+    fn the_dialog_reads_its_language_with_its_theme() {
+        with_temp_config_home(|_| {
+            write_config("[ui]\nlanguage = \"zh-CN\"\n");
+            assert_eq!(chrome_settings().1, Language::SimplifiedChinese);
+
+            write_config("[ui\n");
+            assert_eq!(chrome_settings().1, Language::Auto);
+        });
+    }
+
+    #[test]
+    fn the_dialog_text_is_built_in_the_saved_language() {
+        crate::test_env::in_language_isolated_child(
+            concat!(
+                module_path!(),
+                "::the_dialog_text_is_built_in_the_saved_language"
+            ),
+            || {
+                with_temp_config_home(|_| {
+                    write_config("[ui]\nlanguage = \"zh-CN\"\n");
+
+                    // What `run_about_window` does before it builds content.
+                    let (_theme, language) = chrome_settings();
+                    crate::i18n::initialize(language);
+                    let content = AboutContent::build();
+
+                    let labels: Vec<&str> = content
+                        .buttons()
+                        .iter()
+                        .map(|button| button.label)
+                        .collect();
+                    assert!(labels.contains(&"复制诊断信息"), "{labels:?}");
+                    assert_eq!(crate::i18n::language(), Language::SimplifiedChinese);
+                });
+            },
+        );
+    }
 }

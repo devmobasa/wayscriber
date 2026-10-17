@@ -7,6 +7,7 @@
 
 use cairo::FontWeight;
 
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::properties_panel_metrics::{
     BODY_FONT, FOOTER_FONT, FOOTER_HEIGHT, SUBTITLE_FONT, SWITCH_VALUE_GAP, TITLE_FONT,
@@ -19,9 +20,9 @@ use crate::input::state::{
 use crate::input::{SelectionPropertyEntry, SelectionPropertyValue};
 use crate::ui::primitives::{draw_keycap_with_engine, draw_rounded_rect, keycap_size_with_engine};
 use crate::ui::theme::overlay::{
-    BG_HOVER_WASH, BORDER_FOCUS, BORDER_PROPERTIES, DIVIDER, DIVIDER_LIGHT, EMPTY_PROPERTIES,
-    FOCUS_RING_WIDTH, PANEL_BG_CONTEXT_SUBMENU, RADIUS_PANEL, RADIUS_STD, TEXT_DISABLED, TEXT_HINT,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
+    BG_HOVER_WASH, BORDER_FOCUS, BORDER_PROPERTIES, DIVIDER, DIVIDER_LIGHT, FOCUS_RING_WIDTH,
+    PANEL_BG_CONTEXT_SUBMENU, RADIUS_PANEL, RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+    TEXT_SECONDARY, TEXT_TERTIARY, empty_properties,
 };
 use crate::ui::theme::{Rgba, set_color, with_alpha};
 use crate::ui_text::UiTextEngine;
@@ -141,7 +142,7 @@ pub(crate) fn render_properties_panel_with_engine(
         engine.draw_baseline(
             ctx,
             empty_style,
-            EMPTY_PROPERTIES,
+            empty_properties(),
             layout.content_x(),
             layout.rows_top + BODY_FONT + 4.0,
             None,
@@ -391,9 +392,9 @@ fn draw_footer(
     let baseline = center_y + FOOTER_FONT * 0.35;
     let mut x = layout.content_x();
     let segments: [(Option<&str>, &str); 3] = [
-        (Some("↑↓"), "row"),
-        (Some("←→"), "adjust"),
-        (None, "scroll to step"),
+        (Some("↑↓"), tr("row")),
+        (Some("←→"), tr("adjust")),
+        (None, tr("scroll to step")),
     ];
     for (key, text) in segments {
         if let Some(key) = key {

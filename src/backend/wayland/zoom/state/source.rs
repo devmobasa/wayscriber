@@ -135,7 +135,7 @@ impl ZoomState {
         let report = report.or_else(|| {
             matches!(outcome, ZoomSourceOutcome::StaleLayout).then(|| ZoomTerminalReport {
                 source: "zoom",
-                message: CapturePreflightError::StaleLayout.message("Zoom"),
+                message: CapturePreflightError::StaleLayout.message(crate::i18n::tr("Zoom")),
             })
         });
         debug_assert!(self.source_terminal.is_none());
@@ -153,7 +153,7 @@ impl ZoomState {
         input_state: &mut InputState,
         error: CapturePreflightError,
     ) {
-        let message = error.message("Zoom");
+        let message = error.message(crate::i18n::tr("Zoom"));
         let report = ZoomTerminalReport {
             source: "zoom",
             message: message.clone(),

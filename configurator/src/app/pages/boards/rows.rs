@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -50,7 +52,7 @@ pub(super) fn build_kind_row(
         .collect();
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let row = adw::ComboRow::builder()
-        .title("Background")
+        .title(tr("Background"))
         .model(&gtk::StringList::new(&label_refs))
         .build();
 
@@ -183,7 +185,7 @@ pub(super) fn is_collapsed(app: &ConfiguratorApp, index: usize) -> bool {
 pub(super) fn validate_min(value: &str, min: usize) -> Option<String> {
     match value.trim().parse::<usize>() {
         Ok(parsed) if parsed >= min => None,
-        Ok(_) => Some(format!("Minimum: {min}")),
-        Err(_) => Some("Expected a whole number".to_string()),
+        Ok(_) => Some(trf("Minimum: {}", &[&min])),
+        Err(_) => Some(tr("Expected a whole number").to_string()),
     }
 }

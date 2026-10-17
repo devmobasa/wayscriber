@@ -677,6 +677,8 @@ fn exact_pdf_background_field_label_matches_pdf_section() {
 #[test]
 fn exact_general_ui_field_labels_match_general_ui_section() {
     for query in [
+        "language",
+        "simplified chinese",
         "focus loss",
         "show automatic guidance and tips",
         "onboarding",
@@ -835,9 +837,9 @@ fn catalog_item(id: &str) -> SessionCatalogItem {
         path: PathBuf::from("/tmp/lecture.wayscriber-session"),
         path_label: "/tmp/lecture.wayscriber-session".to_string(),
         canonical_path_label: None,
-        created_label: "now".to_string(),
-        last_opened_label: "Never".to_string(),
-        last_saved_label: "Never".to_string(),
+        created_at_millis: 1_767_261_600_000,
+        last_opened_at_millis: None,
+        last_saved_at_millis: None,
         artifacts: SessionArtifactSummary {
             primary_exists: false,
             backup_exists: false,
@@ -848,4 +850,39 @@ fn catalog_item(id: &str) -> SessionCatalogItem {
             non_lock_size_bytes: 0,
         },
     }
+}
+
+/// Decision D4: in a translated UI, English terms still find what they
+/// found, and titles as displayed find their tab, sub-tab and section.
+#[test]
+fn chinese_ui_search_matches_english_terms_and_displayed_titles() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::chinese_ui_search_matches_english_terms_and_displayed_titles"
+        ),
+        || {
+            wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+            let (mut app, _effects) = ConfiguratorApp::new_app();
+            let tabs_for = |app: &mut ConfiguratorApp, query: &str| {
+                app.search_query = SearchQuery::new(query);
+                let summary = app.search_summary();
+                TabId::ALL
+                    .into_iter()
+                    .filter(|tab| summary.tab(*tab).is_some())
+                    .collect::<Vec<_>>()
+            };
+
+            // English: a tab title, a sub-tab title, and an action label.
+            assert!(tabs_for(&mut app, "Render Profiles").contains(&TabId::RenderProfiles));
+            assert!(tabs_for(&mut app, "Presenter Mode").contains(&TabId::Ui));
+            assert!(tabs_for(&mut app, "Clear Canvas").contains(&TabId::Keybindings));
+            // As displayed: a tab title, a sub-tab title, a section title, and a
+            // translated action label.
+            assert!(tabs_for(&mut app, "渲染配置").contains(&TabId::RenderProfiles));
+            assert!(tabs_for(&mut app, "演示模式").contains(&TabId::Ui));
+            assert!(tabs_for(&mut app, "激光指示").contains(&TabId::Drawing));
+            assert!(tabs_for(&mut app, "清空画布").contains(&TabId::Keybindings));
+        },
+    );
 }

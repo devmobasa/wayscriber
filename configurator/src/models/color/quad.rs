@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::super::error::FormError;
 use super::super::util::{format_float, parse_f64};
 
@@ -27,13 +29,13 @@ impl ColorQuadInput {
             if !parsed.is_finite() {
                 return Err(FormError::new(
                     format!("{field}[{index}]"),
-                    "Expected a finite numeric value",
+                    tr("Expected a finite numeric value"),
                 ));
             }
             if !(0.0..=1.0).contains(&parsed) {
                 return Err(FormError::new(
                     format!("{field}[{index}]"),
-                    "Expected a value between 0 and 1",
+                    tr("Expected a value between 0 and 1"),
                 ));
             }
             out[index] = parsed;

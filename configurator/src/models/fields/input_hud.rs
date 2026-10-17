@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{InputHudMode, InputHudPosition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,9 +16,9 @@ impl InputHudModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Auto => "Auto (system when available)",
-            Self::Overlay => "Overlay only",
-            Self::System => "System-wide",
+            Self::Auto => tr("Auto (system when available)"),
+            Self::Overlay => tr("Overlay only"),
+            Self::System => tr("System-wide"),
         }
     }
 
@@ -74,15 +76,15 @@ impl InputHudPositionOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::TopLeft => "Top Left",
-            Self::TopCenter => "Top Center",
-            Self::TopRight => "Top Right",
-            Self::CenterLeft => "Center Left",
-            Self::Center => "Center",
-            Self::CenterRight => "Center Right",
-            Self::BottomLeft => "Bottom Left",
-            Self::BottomCenter => "Bottom Center",
-            Self::BottomRight => "Bottom Right",
+            Self::TopLeft => tr("Top Left"),
+            Self::TopCenter => tr("Top Center"),
+            Self::TopRight => tr("Top Right"),
+            Self::CenterLeft => tr("Center Left"),
+            Self::Center => tr("Center"),
+            Self::CenterRight => tr("Center Right"),
+            Self::BottomLeft => tr("Bottom Left"),
+            Self::BottomCenter => tr("Bottom Center"),
+            Self::BottomRight => tr("Bottom Right"),
         }
     }
 

@@ -1,4 +1,5 @@
 use crate::draw::TextMeasurer;
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -20,7 +21,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
-                Toast::info("Board limit reached."),
+                Toast::info(tr("Board limit reached.")),
             );
             false
         }

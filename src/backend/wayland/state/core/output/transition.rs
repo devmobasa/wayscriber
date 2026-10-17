@@ -2,6 +2,7 @@ use super::*;
 use crate::backend::wayland::session::{
     SessionCommand, SourceWriteRefused, interaction_defer_interval,
 };
+use crate::i18n::trf;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn begin_session_output_transition(
@@ -80,9 +81,9 @@ impl WaylandState {
                     self.input_state.push_toast(
                         ToastPriority::Critical,
                         "session.load",
-                        Toast::warning(format!(
+                        Toast::warning(trf(
                             "Drawings kept on screen: {}",
-                            SourceWriteRefused::NotLoaded
+                            &[&SourceWriteRefused::NotLoaded],
                         )),
                     );
                     return;

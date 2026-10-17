@@ -181,40 +181,54 @@ pub fn action_meta(action: Action) -> Option<&'static ActionMeta> {
     action_meta_iter().find(|meta| meta.action == action)
 }
 
-pub fn action_label(action: Action) -> &'static str {
+/// The untranslated label from the metadata table, falling back to a word for
+/// actions that have no entry.
+fn source_label(action: Action) -> &'static str {
     action_meta(action)
         .map(|meta| meta.label)
         .unwrap_or("Action")
 }
 
-pub fn action_short_label(action: Action) -> &'static str {
-    action_meta(action)
-        .map(|meta| meta.short_label())
-        .unwrap_or("Action")
+pub fn action_label(action: Action) -> &'static str {
+    crate::i18n::tr(source_label(action))
 }
 
+pub fn action_short_label(action: Action) -> &'static str {
+    crate::i18n::tr(
+        action_meta(action)
+            .map(|meta| meta.short_label())
+            .unwrap_or("Action"),
+    )
+}
+
+/// The compact spelling used where a full label is too wide.
+///
+/// Derivation happens on the English source label so the suffixes this UI
+/// abbreviates stay English; only the result is translated.
 pub fn action_display_label(action: Action) -> &'static str {
     if matches!(action, Action::SelectEllipseTool) {
         return action_short_label(action);
     }
-    let label = action_label(action);
+    let label = source_label(action);
     if let Some(stripped) = label.strip_suffix(" Tool") {
-        return stripped;
+        return crate::i18n::tr(stripped);
     }
     if let Some(stripped) = label.strip_suffix(" Mode") {
-        return stripped;
+        return crate::i18n::tr(stripped);
     }
     if let Some(stripped) = label.strip_prefix("Toggle ") {
-        return stripped;
+        return crate::i18n::tr(stripped);
     }
-    label
+    action_label(action)
 }
 
 #[allow(dead_code)]
 pub fn action_description(action: Action) -> &'static str {
-    action_meta(action)
-        .map(|meta| meta.description)
-        .unwrap_or("")
+    crate::i18n::tr(
+        action_meta(action)
+            .map(|meta| meta.description)
+            .unwrap_or(""),
+    )
 }
 
 #[cfg(test)]

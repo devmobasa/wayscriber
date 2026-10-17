@@ -2,6 +2,7 @@ use wayscriber::config::{
     ConfigDiagnosticKind, ConfigDocument, ConfigValidationReport, InvalidKeybinding,
     KeybindingConflictResolution, MigrationPreview,
 };
+use wayscriber::i18n::{tr, trf};
 
 use super::super::super::state::StatusMessage;
 
@@ -16,10 +17,15 @@ const SHOWN_DIAGNOSTICS: usize = 8;
 /// not a color.
 pub(super) fn invalid_color_hex_message(count: usize) -> String {
     if count == 1 {
-        return "1 color field does not hold a color. Enter #RRGGBB or #RRGGBBAA before saving."
-            .to_string();
+        return tr(
+            "1 color field does not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.",
+        )
+        .to_string();
     }
-    format!("{count} color fields do not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.")
+    trf(
+        "{} color fields do not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.",
+        &[&count],
+    )
 }
 
 pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMessage {
@@ -53,36 +59,44 @@ pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -
     }
 
     if !unknown.is_empty() {
-        message.push_str(&format!(
+        message.push_str(&trf(
             "\nUnrecognized settings were preserved: {}.",
-            list_with_overflow(&borrowed(&unknown), ", ")
+            &[&list_with_overflow(&borrowed(&unknown), ", ")],
         ));
     }
     if !retired.is_empty() {
-        message.push_str(&format!(
+        message.push_str(&trf(
             "\nRetired toolbar settings were preserved but are no longer used and can be removed: {}.",
-            list_with_overflow(&borrowed(&retired), ", ")
+            &[
+                &list_with_overflow(&borrowed(&retired), ", "),
+            ],
         ));
     }
     if !invalid.is_empty() {
-        message.push_str(&format!(
+        message.push_str(&trf(
             "\nShortcuts that could not be parsed are ignored for the running session; the file still has them: {}.",
-            list_with_overflow(&borrowed(&invalid), "; ")
+            &[
+                &list_with_overflow(&borrowed(&invalid), "; "),
+            ],
         ));
     }
     if !conflicts.is_empty() {
-        message.push_str(&format!(
+        message.push_str(&trf(
             "\nConflicting shortcuts were resolved for the running session only; the file still has them: {}.",
-            list_with_overflow(&borrowed(&conflicts), "; ")
+            &[
+                &list_with_overflow(&borrowed(&conflicts), "; "),
+            ],
         ));
     }
     // Its own sentence, and the last one: nothing in the file is wrong here.
     // An action this configuration never mentions was offered a shortcut this
     // build added, and the configuration already spends that key.
     if !skipped_defaults.is_empty() {
-        message.push_str(&format!(
+        message.push_str(&trf(
             "\nNew default shortcuts stayed inactive because this configuration already uses those keys: {}.",
-            list_with_overflow(&borrowed(&skipped_defaults), "; ")
+            &[
+                &list_with_overflow(&borrowed(&skipped_defaults), "; "),
+            ],
         ));
     }
 
@@ -102,9 +116,9 @@ pub(super) fn salvaged_document_status(document: &ConfigDocument) -> StatusMessa
         .iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
-    let message = format!(
+    let message = trf(
         "Some settings could not be read, so the draft shows their built-in defaults: {}. Saving creates a backup, then replaces only those settings with this draft; the rest of the file is kept as written.",
-        list_with_overflow(&borrowed(&unreadable), "; ")
+        &[&list_with_overflow(&borrowed(&unreadable), "; ")],
     );
     match config_document_status(document, &message) {
         StatusMessage::Success(text) => StatusMessage::warning(text),
@@ -146,18 +160,20 @@ pub(super) fn save_validation_note(validation: &ConfigValidationReport) -> Optio
 
     let mut note = String::new();
     if !invalid.is_empty() {
-        note.push_str(&format!(
+        note.push_str(&trf(
             "Shortcuts that could not be parsed were left out of the saved configuration: {}.",
-            list_with_overflow(&borrowed(&invalid), "; ")
+            &[&list_with_overflow(&borrowed(&invalid), "; ")],
         ));
     }
     if !conflicts.is_empty() {
         if !note.is_empty() {
             note.push('\n');
         }
-        note.push_str(&format!(
+        note.push_str(&trf(
             "Shortcuts two actions claimed were settled before saving, and the saved configuration keeps that outcome: {}.",
-            list_with_overflow(&borrowed(&conflicts), "; ")
+            &[
+                &list_with_overflow(&borrowed(&conflicts), "; "),
+            ],
         ));
     }
     Some(note)
@@ -184,7 +200,7 @@ pub(super) fn list_with_overflow(entries: &[&str], separator: &str) -> String {
         .join(separator);
     match entries.len().saturating_sub(SHOWN_DIAGNOSTICS) {
         0 => shown,
-        remaining => format!("{shown}{separator}and {remaining} more"),
+        remaining => trf("{}{}and {} more", &[&shown, &separator, &remaining]),
     }
 }
 
@@ -196,19 +212,23 @@ pub(super) fn list_with_overflow(entries: &[&str], separator: &str) -> String {
 /// is the one thing this flow exists to avoid.
 pub(crate) fn migration_offer_text(preview: &MigrationPreview) -> String {
     let mut lines = vec![
-        "Configuration update available".to_string(),
-        format!(
-            "Shortcut defaults changed since this configuration was written. Applying updates this draft only; nothing reaches the file until you press Save, which also records revision {}.",
-            preview.proposed_revision()
+        tr("Configuration update available").to_string(),
+        trf(
+            tr(
+                "Shortcut defaults changed since this configuration was written. Applying updates this draft only; nothing reaches the file until you press Save, which also records revision {}.",
+            ),
+            &[&preview.proposed_revision()],
         ),
     ];
     for change in preview.changes() {
-        lines.push(format!(
-            "{} ({}): {} → {}",
-            change.action_label(),
-            change.config_key(),
-            binding_summary(change.before()),
-            binding_summary(change.after()),
+        lines.push(trf(
+            tr("{} ({}): {} → {}"),
+            &[
+                &change.action_label(),
+                &change.config_key(),
+                &binding_summary(change.before()),
+                &binding_summary(change.after()),
+            ],
         ));
     }
     lines.join("\n")
@@ -216,7 +236,7 @@ pub(crate) fn migration_offer_text(preview: &MigrationPreview) -> String {
 
 fn binding_summary(bindings: &[String]) -> String {
     if bindings.is_empty() {
-        return "unbound".to_string();
+        return tr("unbound").to_string();
     }
     bindings.join(", ")
 }

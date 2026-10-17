@@ -5,6 +5,7 @@
 
 use gtk4::prelude::*;
 
+use crate::i18n::{tr, trf};
 use crate::label_format::format_binding_label;
 use crate::toolbar_icons;
 use crate::ui::toolbar::session_format::strip_session_extension;
@@ -107,7 +108,7 @@ fn overwrite_confirmation_rows(
     confirmation: &model::session::ToolbarSessionOverwriteConfirmation,
 ) -> gtk4::Box {
     let rows = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(5.0));
-    let message = gtk4::Label::new(Some(&format!("Replace {}?", confirmation.label)));
+    let message = gtk4::Label::new(Some(&trf("Replace {}?", &[&confirmation.label])));
     message.set_xalign(0.0);
     message.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
     rows.append(&message);
@@ -115,8 +116,8 @@ fn overwrite_confirmation_rows(
     let buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(5.0));
     buttons.set_homogeneous(true);
     let actions = [
-        ("Replace", confirmation.confirm_event(), true),
-        ("Cancel", confirmation.cancel_event(), false),
+        (tr("Replace"), confirmation.confirm_event(), true),
+        (tr("Cancel"), confirmation.cancel_event(), false),
     ];
     for (label, event, destructive) in actions {
         let button = gtk4::Button::with_label(label);
@@ -168,7 +169,7 @@ fn recent_row(ctx: &SectionCtx, recent: &model::ToolbarSessionRecent) -> gtk4::B
     row.append(&label);
     button.set_child(Some(&row));
     button.set_tooltip_text(Some(&format_binding_label(
-        &format!("Open {}", recent.label),
+        &trf("Open {}", &[&recent.label]),
         Some(&recent.path.display().to_string()),
     )));
     let sender = ctx.feedback.clone();

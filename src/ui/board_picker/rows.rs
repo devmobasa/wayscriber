@@ -1,4 +1,5 @@
 use crate::draw::Color;
+use crate::i18n::{tr, trf};
 use crate::input::state::{BoardPickerEditMode, BoardPickerLayout};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
@@ -114,7 +115,7 @@ impl<'a> BoardRowsRenderer<'a> {
             self.engine.draw_baseline(
                 self.ctx,
                 style,
-                "Pinned",
+                tr("Pinned"),
                 self.layout.origin_x + self.layout.padding_x,
                 self.rows_top - self.layout.footer_font_size * 0.4,
                 None,
@@ -218,9 +219,9 @@ impl<'a> BoardRowsRenderer<'a> {
         self.ctx.line_to(mid_x, mid_y + 4.0);
         let _ = self.ctx.stroke();
         let label = if self.board_count >= self.max_count {
-            "New board (max reached)"
+            tr("New board (max reached)")
         } else {
-            "New board"
+            tr("New board")
         };
         constants::set_color(self.ctx, TEXT_HINT);
         self.engine.draw_baseline(
@@ -386,7 +387,7 @@ impl<'a> BoardRowsRenderer<'a> {
         self.engine.draw_baseline(
             self.ctx,
             self.body_style,
-            &format!(" ({page_count} pages)"),
+            &trf(" ({} pages)", &[&page_count]),
             self.name_x + extents.width(),
             self.text_baseline(row_center),
             None,

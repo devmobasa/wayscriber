@@ -8,12 +8,16 @@
 
 use super::{CommandEntry, command_palette_entries};
 use crate::domain::Action;
+use crate::i18n::tr;
 
 /// Group label shown above recent commands when the query is empty.
+#[cfg(test)]
 pub(crate) const COMMAND_PALETTE_RECENT_HEADER: &str = "Recent";
 /// Group label shown above the everyday commands when the query is empty.
+#[cfg(test)]
 pub(crate) const COMMAND_PALETTE_COMMON_HEADER: &str = "Common";
 /// Group label of the trailing exit/destructive block.
+#[cfg(test)]
 pub(crate) const COMMAND_PALETTE_CAREFUL_HEADER: &str = "Clear, delete & exit";
 
 /// Everyday commands offered right after the recents, in this order.
@@ -62,11 +66,11 @@ impl EmptyQueryGroups {
     /// or `None` when its category names the group.
     pub(super) fn header(self, index: usize, action: Action) -> Option<&'static str> {
         if index < self.recent_len {
-            Some(COMMAND_PALETTE_RECENT_HEADER)
+            Some(tr("Recent"))
         } else if index < self.recent_len + self.common_len {
-            Some(COMMAND_PALETTE_COMMON_HEADER)
+            Some(tr("Common"))
         } else if command_is_exit_or_destructive(action) {
-            Some(COMMAND_PALETTE_CAREFUL_HEADER)
+            Some(tr("Clear, delete & exit"))
         } else {
             None
         }

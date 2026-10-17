@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -68,11 +70,11 @@ fn build_section(
     let header = build_header_row(index, layout.expanded, sender);
     section.append(&header.row);
 
-    let id = build_text_row("Board id", index, BoardItemTextField::Id, sender);
+    let id = build_text_row(tr("Board id"), index, BoardItemTextField::Id, sender);
     id.row.set_visible(layout.expanded);
     section.append(&id.row);
 
-    let name = build_text_row("Display name", index, BoardItemTextField::Name, sender);
+    let name = build_text_row(tr("Display name"), index, BoardItemTextField::Name, sender);
     name.row.set_visible(layout.expanded);
     section.append(&name.row);
 
@@ -81,7 +83,7 @@ fn build_section(
     section.append(&kind_row);
 
     let background = build_color_row(
-        "Background color (0-1)",
+        tr("Background color (0-1)"),
         ColorPickerId::BoardBackground(index),
         index,
         Message::BoardsBackgroundColorChanged,
@@ -99,7 +101,7 @@ fn build_section(
     section.append(&grid_spacing.row);
 
     let pen_enabled = adw::SwitchRow::builder()
-        .title("Override default pen color")
+        .title(tr("Override default pen color"))
         .active(layout.pen_enabled)
         .visible(layout.expanded)
         .build();
@@ -115,7 +117,7 @@ fn build_section(
     section.append(&pen_enabled);
 
     let pen = build_color_row(
-        "Pen color (0-1)",
+        tr("Pen color (0-1)"),
         ColorPickerId::BoardPen(index),
         index,
         Message::BoardsDefaultPenColorChanged,
@@ -126,13 +128,13 @@ fn build_section(
 
     for (title, field, active) in [
         (
-            "Auto-adjust pen",
+            tr("Auto-adjust pen"),
             BoardItemToggleField::AutoAdjustPen,
             layout.auto_adjust,
         ),
-        ("Persist", BoardItemToggleField::Persist, layout.persist),
+        (tr("Persist"), BoardItemToggleField::Persist, layout.persist),
         (
-            "Configured default pinned",
+            tr("Configured default pinned"),
             BoardItemToggleField::Pinned,
             layout.pinned,
         ),

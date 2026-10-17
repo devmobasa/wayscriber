@@ -1,5 +1,6 @@
 use crate::domain::Action;
 use crate::draw::PageDeleteOutcome;
+use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;
@@ -41,7 +42,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "page.nav",
-                        Toast::info("Already on the first page."),
+                        Toast::info(tr("Already on the first page.")),
                     );
                 }
                 true
@@ -53,7 +54,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "page.nav",
-                        Toast::info("Already on the last page."),
+                        Toast::info(tr("Already on the last page.")),
                     );
                 }
                 true
@@ -128,7 +129,7 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Info,
                         "page.nav",
-                        Toast::info("Board limit reached."),
+                        Toast::info(tr("Board limit reached.")),
                     );
                 }
                 true

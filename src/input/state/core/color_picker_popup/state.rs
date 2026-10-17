@@ -4,6 +4,7 @@ use crate::draw::TextMeasurer;
 use std::borrow::Cow;
 
 use crate::draw::Color;
+use crate::i18n::{tr, trf};
 use crate::input::state::InputState;
 use crate::input::state::QuickColorEdit;
 
@@ -224,15 +225,15 @@ impl InputState {
             Some(ColorPickerTarget::QuickColor(index)) => {
                 match self.style.quick_colors.entry(index) {
                     Some(entry) => {
-                        Cow::Owned(format!("Recolor {}", single_line_slot_label(&entry.label)))
+                        Cow::Owned(trf("Recolor {}", &[&single_line_slot_label(&entry.label)]))
                     }
-                    None => Cow::Borrowed("Recolor swatch"),
+                    None => Cow::Borrowed(tr("Recolor swatch")),
                 }
             }
-            Some(ColorPickerTarget::BoardPaper) => Cow::Borrowed("Paper Color"),
-            Some(ColorPickerTarget::Selection) => Cow::Borrowed("Selection Color"),
-            Some(ColorPickerTarget::SelectionFill) => Cow::Borrowed("Fill Color"),
-            Some(ColorPickerTarget::Tool) | None => Cow::Borrowed("Select Color"),
+            Some(ColorPickerTarget::BoardPaper) => Cow::Borrowed(tr("Paper Color")),
+            Some(ColorPickerTarget::Selection) => Cow::Borrowed(tr("Selection Color")),
+            Some(ColorPickerTarget::SelectionFill) => Cow::Borrowed(tr("Fill Color")),
+            Some(ColorPickerTarget::Tool) | None => Cow::Borrowed(tr("Select Color")),
         }
     }
 

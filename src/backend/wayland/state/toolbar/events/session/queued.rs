@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::{tr, trf};
 
 impl WaylandState {
     /// One toast names every queued command that will not run, since each
@@ -19,13 +20,14 @@ impl WaylandState {
                 .map(|(command, _)| queued_command_label(command))
                 .collect::<Vec<_>>();
             if !lost.is_empty() {
+                let body = trf(
+                    "Wayscriber closed before it could run: {}. Run them again after restarting.",
+                    &[&lost.join("; ")],
+                );
                 crate::notification::send_notification_async(
                     &self.tokio_handle,
-                    "Session Commands Not Run".to_string(),
-                    format!(
-                        "Wayscriber closed before it could run: {}. Run them again after restarting.",
-                        lost.join("; ")
-                    ),
+                    tr("Session Commands Not Run").to_string(),
+                    body,
                     Some("dialog-warning".to_string()),
                 );
             }
@@ -40,8 +42,9 @@ impl WaylandState {
                     .map(|(command, error)| format!("{}: {error:#}", queued_command_label(command)))
                     .collect::<Vec<_>>()
                     .join("; ");
-                self.set_session_toolbar_error(format!(
-                    "Queued session commands did not run: {summary}"
+                self.set_session_toolbar_error(trf(
+                    "Queued session commands did not run: {}",
+                    &[&summary],
                 ));
             }
         }
@@ -51,17 +54,17 @@ impl WaylandState {
 /// What a queued command would have done, for a report that it did not run.
 fn queued_command_label(command: &SessionCommand) -> String {
     match command {
-        SessionCommand::Open(path) => format!("open {}", session_display_name(path)),
-        SessionCommand::OpenHome(_) => "return to the home session".to_string(),
+        SessionCommand::Open(path) => trf("open {}", &[&session_display_name(path)]),
+        SessionCommand::OpenHome(_) => tr("return to the home session").to_string(),
         SessionCommand::SaveAs(path, _) | SessionCommand::CheckOverwrite(path) => {
-            format!("save as {}", session_display_name(path))
+            trf("save as {}", &[&session_display_name(path)])
         }
-        SessionCommand::Clear => "clear the session".to_string(),
-        SessionCommand::ClearTools(_) => "reset tool defaults".to_string(),
-        SessionCommand::Output { .. } => "switch the output session".to_string(),
-        SessionCommand::Inspect => "show session info".to_string(),
+        SessionCommand::Clear => tr("clear the session").to_string(),
+        SessionCommand::ClearTools(_) => tr("reset tool defaults").to_string(),
+        SessionCommand::Output { .. } => tr("switch the output session").to_string(),
+        SessionCommand::Inspect => tr("show session info").to_string(),
         SessionCommand::Forget(path) => {
-            format!("forget recent session {}", session_display_name(path))
+            trf("forget recent session {}", &[&session_display_name(path)])
         }
     }
 }

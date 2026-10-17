@@ -5,6 +5,7 @@ use super::color::{RecolorOpacity, recolored, set_opacity_to, shape_color_mut};
 use super::stroke::set_thickness;
 use crate::config::{ColorSpec, ToolPresetConfig};
 use crate::draw::{Color, PolygonKind, Shape, TextMeasurer};
+use crate::i18n::tr;
 use crate::input::Tool;
 use crate::input::state::core::base::{InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::state::core::properties::apply_selection::constants::{
@@ -209,7 +210,7 @@ impl InputState {
             apply_preset_style(shape, &preset)
         });
 
-        self.report_selection_apply_result(result, "preset")
+        self.report_selection_apply_result(result, tr("preset"))
     }
 
     /// The preset for the first editable selected shape a tool can draw.

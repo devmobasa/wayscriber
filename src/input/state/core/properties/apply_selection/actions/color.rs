@@ -1,5 +1,6 @@
 use crate::draw::TextMeasurer;
 use crate::draw::{Color, Shape};
+use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
     MAX_MARKER_OPACITY, MIN_OPACITY, OPACITY_STEP,
@@ -155,7 +156,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "color")
+        self.report_selection_apply_result(result, tr("color"))
     }
 
     /// Whether recoloring the selection to `target` would change any shape it
@@ -190,7 +191,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "opacity")
+        self.report_selection_apply_result(result, tr("opacity"))
     }
 
     /// Steps the selection's color through the quick-color palette, the same
@@ -215,7 +216,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
-                Toast::warning("The quick-color palette is empty."),
+                Toast::warning(tr("The quick-color palette is empty.")),
             );
             return false;
         };

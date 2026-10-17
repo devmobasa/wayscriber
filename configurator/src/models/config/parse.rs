@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use super::super::error::FormError;
 use super::super::util::parse_f64;
 
@@ -31,10 +33,10 @@ pub(super) fn parse_field_in_range<F>(
 {
     match parse_f64(value.trim()) {
         Ok(parsed) if !parsed.is_finite() => {
-            errors.push(FormError::new(field, "Expected a finite numeric value"));
+            errors.push(FormError::new(field, tr("Expected a finite numeric value")));
         }
         Ok(parsed) if parsed < min || parsed > max => {
-            errors.push(FormError::new(field, format!("Expected {min}-{max}")));
+            errors.push(FormError::new(field, trf("Expected {}-{}", &[&min, &max])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err)),
@@ -64,7 +66,7 @@ pub(super) fn parse_usize_in_range<F>(
 {
     match value.trim().parse::<usize>() {
         Ok(parsed) if parsed < min || parsed > max => {
-            errors.push(FormError::new(field, format!("Expected {min}-{max}")));
+            errors.push(FormError::new(field, trf("Expected {}-{}", &[&min, &max])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err.to_string())),
@@ -82,7 +84,7 @@ pub(super) fn parse_usize_at_least<F>(
 {
     match value.trim().parse::<usize>() {
         Ok(parsed) if parsed < min => {
-            errors.push(FormError::new(field, format!("Expected at least {min}")));
+            errors.push(FormError::new(field, trf("Expected at least {}", &[&min])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err.to_string())),
@@ -101,7 +103,7 @@ pub(super) fn parse_u8_in_range<F>(
 {
     match value.trim().parse::<u8>() {
         Ok(parsed) if parsed < min || parsed > max => {
-            errors.push(FormError::new(field, format!("Expected {min}-{max}")));
+            errors.push(FormError::new(field, trf("Expected {}-{}", &[&min, &max])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err.to_string())),
@@ -137,7 +139,7 @@ where
 {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        errors.push(FormError::new(field(), "Value is required"));
+        errors.push(FormError::new(field(), tr("Value is required")));
         return None;
     }
     match parse_f64(trimmed) {
@@ -193,7 +195,7 @@ pub(super) fn parse_u64_in_range<F>(
 {
     match value.trim().parse::<u64>() {
         Ok(parsed) if parsed < min || parsed > max => {
-            errors.push(FormError::new(field, format!("Expected {min}-{max}")));
+            errors.push(FormError::new(field, trf("Expected {}-{}", &[&min, &max])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err.to_string())),

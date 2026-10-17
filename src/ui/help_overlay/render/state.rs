@@ -1,3 +1,5 @@
+use crate::i18n::{tr, trf};
+
 use super::super::super::primitives::text_extents_for_with_engine;
 use super::super::content::HelpContentSnapshot;
 use super::super::fonts::resolve_help_font_family;
@@ -69,7 +71,11 @@ pub(super) fn build_overlay_layout(
     let page2 = visible(&section_sets.page2);
     let page_count = if quick_mode || page2.is_empty() { 1 } else { 2 };
     let page_index = page_index.min(page_count - 1);
-    let nav_title = if quick_mode { "Quick Ref" } else { "Controls" };
+    let nav_title = if quick_mode {
+        tr("Quick Ref")
+    } else {
+        tr("Controls")
+    };
 
     let sections = if quick_mode {
         visible(&section_sets.quick)
@@ -175,11 +181,11 @@ pub(super) fn build_overlay_layout(
     let grid_view_height = (inner_height - header_height - footer_height).max(0.0);
     let scroll_max = (grid.grid_height - grid_view_height).max(0.0);
     let scroll_offset = scroll_offset.clamp(0.0, scroll_max);
-    let page_label = format!("Page {}/{}", page_index + 1, page_count.max(1));
+    let page_label = trf("Page {}/{}", &[&(page_index + 1), &page_count.max(1)]);
     let note_text = if scroll_max > 0.0 {
-        format!(
+        trf(
             "{}  {}  {}  {}  Scroll: Mouse wheel",
-            note_text_base, BULLET, page_label, BULLET
+            &[&note_text_base, &BULLET, &page_label, &BULLET],
         )
     } else {
         format!("{}  {}  {}", note_text_base, BULLET, page_label)

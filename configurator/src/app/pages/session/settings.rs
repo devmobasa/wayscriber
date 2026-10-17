@@ -1,5 +1,7 @@
 //! Session persistence, storage, and autosave settings.
 
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{adw, gtk};
 
 use adw::prelude::*;
@@ -11,47 +13,47 @@ use super::super::super::search::SearchArea;
 use super::super::{PageBuilder, set_text_blocked};
 
 pub(super) fn add(page: &mut PageBuilder) {
-    page.group_in_area("Session Persistence", SearchArea::SessionPersistence)
+    page.group_in_area(tr("Session Persistence"), SearchArea::SessionPersistence)
         .switch_row(
-            "Persist transparent mode drawings",
+            tr("Persist transparent mode drawings"),
             "",
             |app| app.draft.session_persist_transparent,
             |value| Message::ToggleChanged(ToggleField::SessionPersistTransparent, value),
         )
         .switch_row(
-            "Persist whiteboard mode drawings",
+            tr("Persist whiteboard mode drawings"),
             "",
             |app| app.draft.session_persist_whiteboard,
             |value| Message::ToggleChanged(ToggleField::SessionPersistWhiteboard, value),
         )
         .switch_row(
-            "Persist blackboard mode drawings",
+            tr("Persist blackboard mode drawings"),
             "",
             |app| app.draft.session_persist_blackboard,
             |value| Message::ToggleChanged(ToggleField::SessionPersistBlackboard, value),
         )
         .switch_row(
-            "Persist undo/redo history",
+            tr("Persist undo/redo history"),
             "",
             |app| app.draft.session_persist_history,
             |value| Message::ToggleChanged(ToggleField::SessionPersistHistory, value),
         )
         .switch_row(
-            "Restore tool state on startup",
+            tr("Restore tool state on startup"),
             "",
             |app| app.draft.session_restore_tool_state,
             |value| Message::ToggleChanged(ToggleField::SessionRestoreToolState, value),
         )
         .switch_row(
-            "Per-output persistence",
+            tr("Per-output persistence"),
             "",
             |app| app.draft.session_per_output,
             |value| Message::ToggleChanged(ToggleField::SessionPerOutput, value),
         );
 
-    page.group_in_area("Storage", SearchArea::SessionPersistence)
+    page.group_in_area(tr("Storage"), SearchArea::SessionPersistence)
         .combo_row(
-            "Storage mode",
+            tr("Storage mode"),
             "",
             SessionStorageModeOption::list(),
             option_labels(SessionStorageModeOption::list(), |option| option.label()),
@@ -60,7 +62,7 @@ pub(super) fn add(page: &mut PageBuilder) {
         );
     custom_directory_row(page);
     page.combo_row(
-        "Compression",
+        tr("Compression"),
         "",
         SessionCompressionOption::list(),
         option_labels(SessionCompressionOption::list(), |option| option.label()),
@@ -68,55 +70,55 @@ pub(super) fn add(page: &mut PageBuilder) {
         Message::SessionCompressionChanged,
     )
     .entry_row_validated(
-        "Max shapes per frame",
+        tr("Max shapes per frame"),
         |app| app.draft.session_max_shapes_per_frame.clone(),
         |value| Message::TextChanged(TextField::SessionMaxShapesPerFrame, value),
         |app| validate_whole_number(&app.draft.session_max_shapes_per_frame, 1, u64::MAX),
     )
     .entry_row(
-        "Max persisted undo depth (blank = runtime limit)",
+        tr("Max persisted undo depth (blank = runtime limit)"),
         |app| app.draft.session_max_persisted_undo_depth.clone(),
         |value| Message::TextChanged(TextField::SessionMaxPersistedUndoDepth, value),
     )
     .entry_row_validated(
-        "Max file size (MB)",
+        tr("Max file size (MB)"),
         |app| app.draft.session_max_file_size_mb.clone(),
         |value| Message::TextChanged(TextField::SessionMaxFileSizeMb, value),
         |app| validate_whole_number(&app.draft.session_max_file_size_mb, 1, 1024),
     )
     .entry_row_validated(
-        "Auto-compress threshold (KB)",
+        tr("Auto-compress threshold (KB)"),
         |app| app.draft.session_auto_compress_threshold_kb.clone(),
         |value| Message::TextChanged(TextField::SessionAutoCompressThresholdKb, value),
         |app| validate_whole_number(&app.draft.session_auto_compress_threshold_kb, 1, u64::MAX),
     )
     .entry_row(
-        "Backup retention count",
+        tr("Backup retention count"),
         |app| app.draft.session_backup_retention.clone(),
         |value| Message::TextChanged(TextField::SessionBackupRetention, value),
     );
 
-    page.group_in_area("Autosave", SearchArea::SessionPersistence)
+    page.group_in_area(tr("Autosave"), SearchArea::SessionPersistence)
         .switch_row(
-            "Enable autosave",
+            tr("Enable autosave"),
             "",
             |app| app.draft.session_autosave_enabled,
             |value| Message::ToggleChanged(ToggleField::SessionAutosaveEnabled, value),
         )
         .entry_row_validated(
-            "Autosave idle (ms)",
+            tr("Autosave idle (ms)"),
             |app| app.draft.session_autosave_idle_ms.clone(),
             |value| Message::TextChanged(TextField::SessionAutosaveIdleMs, value),
             |app| validate_whole_number(&app.draft.session_autosave_idle_ms, 1000, u64::MAX),
         )
         .entry_row_validated(
-            "Autosave interval (ms)",
+            tr("Autosave interval (ms)"),
             |app| app.draft.session_autosave_interval_ms.clone(),
             |value| Message::TextChanged(TextField::SessionAutosaveIntervalMs, value),
             |app| validate_whole_number(&app.draft.session_autosave_interval_ms, 1000, u64::MAX),
         )
         .entry_row_validated(
-            "Autosave failure backoff (ms)",
+            tr("Autosave failure backoff (ms)"),
             |app| app.draft.session_autosave_failure_backoff_ms.clone(),
             |value| Message::TextChanged(TextField::SessionAutosaveFailureBackoffMs, value),
             |app| {
@@ -139,7 +141,9 @@ fn option_labels<O: Copy>(options: Vec<O>, label: impl Fn(&O) -> &'static str) -
 /// The custom directory only applies to one storage mode, so it is a row the
 /// mode shows rather than a row that is always there and usually inert.
 fn custom_directory_row(page: &mut PageBuilder) {
-    let row = adw::EntryRow::builder().title("Custom directory").build();
+    let row = adw::EntryRow::builder()
+        .title(tr("Custom directory"))
+        .build();
     let handler = {
         let sender = page.sender();
         row.connect_changed(move |row| {
@@ -166,15 +170,15 @@ fn custom_directory_row(page: &mut PageBuilder) {
 /// only the minimum, matching the legacy view's two validators.
 fn validate_whole_number(value: &str, min: u64, max: u64) -> Option<String> {
     let Ok(parsed) = value.trim().parse::<u64>() else {
-        return Some("Expected a whole number".to_string());
+        return Some(tr("Expected a whole number").to_string());
     };
     if (min..=max).contains(&parsed) {
         return None;
     }
     Some(if max == u64::MAX {
-        format!("Minimum: {min}")
+        trf("Minimum: {}", &[&min])
     } else {
-        format!("Range: {min}-{max}")
+        trf("Range: {}-{}", &[&min, &max])
     })
 }
 

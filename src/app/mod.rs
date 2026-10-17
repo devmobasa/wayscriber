@@ -1,4 +1,5 @@
 mod env;
+mod languages;
 mod session;
 mod usage;
 
@@ -200,6 +201,16 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
                 crate::runtime_capabilities::current_runtime_capabilities()
             )
         );
+        return Ok(());
+    }
+
+    // Before anything selects a language, so every selection in this run,
+    // and the overlays and About windows it starts, use it.
+    if let Some(language) = languages::given_language(&cli) {
+        crate::i18n::set_command_line_language(language);
+    }
+    if cli.list_languages {
+        languages::print_languages();
         return Ok(());
     }
 

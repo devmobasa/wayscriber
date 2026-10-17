@@ -270,7 +270,7 @@ impl StylePillControl {
 
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
-            Self::ColorChip => Cow::Borrowed("Color picker"),
+            Self::ColorChip => Cow::Borrowed(tr("Color picker")),
             Self::QuickSwatch(index) => Cow::Owned(
                 snapshot.quick_colors.rendered_entries()[index]
                     .label
@@ -279,26 +279,26 @@ impl StylePillControl {
             Self::Slider(StylePillSlider::Thickness) => {
                 Cow::Borrowed(ToolContext::from_snapshot(snapshot).thickness_label)
             }
-            Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed("Marker opacity"),
-            Self::PenFeelChip => Cow::Borrowed(super::pen_feel::PEN_FEEL_CHIP_LABEL),
-            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Cow::Borrowed("Smoothing"),
-            Self::ShapeSensitivityMeter => Cow::Borrowed("Shape detection"),
-            Self::ShapeSensitivityStepper => Cow::Borrowed("Sensitivity"),
+            Self::Slider(StylePillSlider::Opacity) => Cow::Borrowed(tr("Marker opacity")),
+            Self::PenFeelChip => Cow::Borrowed(super::pen_feel::pen_feel_chip_label()),
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Cow::Borrowed(tr("Smoothing")),
+            Self::ShapeSensitivityMeter => Cow::Borrowed(tr("Shape detection")),
+            Self::ShapeSensitivityStepper => Cow::Borrowed(tr("Sensitivity")),
             Self::Slider(StylePillSlider::SpotlightMagnification) => {
-                Cow::Borrowed("Spotlight magnification")
+                Cow::Borrowed(tr("Spotlight magnification"))
             }
-            Self::Slider(StylePillSlider::FontSize) => Cow::Borrowed("Text size"),
+            Self::Slider(StylePillSlider::FontSize) => Cow::Borrowed(tr("Text size")),
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
             Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
             Self::FillToggle => Cow::Borrowed(action_short_label(Action::ToggleFill)),
-            Self::ArrowStyleChip => Cow::Borrowed("Arrow style"),
-            Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
-            Self::CounterReset(_) => Cow::Borrowed("Reset"),
+            Self::ArrowStyleChip => Cow::Borrowed(tr("Arrow style")),
+            Self::AutoNumberToggle => Cow::Borrowed(tr("Auto-number")),
+            Self::CounterReset(_) => Cow::Borrowed(tr("Reset")),
             // The family in use, shortened: the pill is width-planned, and a
             // display face can be named at any length.
-            Self::FontWeightToggle => Cow::Borrowed("Bold"),
+            Self::FontWeightToggle => Cow::Borrowed(tr("Bold")),
             Self::FontFamilyPicker => Cow::Owned(short_family_label(&snapshot.font.family)),
-            Self::EraserModeSegment => Cow::Borrowed("Eraser mode"),
+            Self::EraserModeSegment => Cow::Borrowed(tr("Eraser mode")),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => Cow::Owned(
                 selection_entry(snapshot, kind)
                     .map(|entry| entry.label.clone())
@@ -309,7 +309,7 @@ impl StylePillControl {
 
     pub(crate) fn tooltip(self, snapshot: &ToolbarSnapshot) -> Option<String> {
         match self {
-            Self::ColorChip => Some("Color picker".to_string()),
+            Self::ColorChip => Some(tr("Color picker").to_string()),
             Self::QuickSwatch(index) => {
                 let entry = &snapshot.quick_colors.rendered_entries()[index];
                 let binding = QuickColorPalette::action_for_index(index)
@@ -318,16 +318,16 @@ impl StylePillControl {
             }
             // The numeral looks like a label, so its tooltip says it takes a
             // typed value and the wheel.
-            Self::ThicknessValue => Some(format!(
+            Self::ThicknessValue => Some(trf(
                 "{}: click to type, scroll to adjust",
-                ToolContext::from_snapshot(snapshot).thickness_label
+                &[&ToolContext::from_snapshot(snapshot).thickness_label],
             )),
             Self::FontSizeValue => {
-                Some("Text size: click to type, scroll to adjust".to_string())
+                Some(tr("Text size: click to type, scroll to adjust").to_string())
             }
-            Self::Slider(StylePillSlider::SpotlightMagnification) => {
-                Some("Magnification; Freeze first when using a transparent board.".to_string())
-            }
+            Self::Slider(StylePillSlider::SpotlightMagnification) => Some(
+                tr("Magnification; Freeze first when using a transparent board.").to_string(),
+            ),
             Self::FillToggle => Some(format_binding_label(
                 action_label(Action::ToggleFill),
                 snapshot
@@ -336,19 +336,19 @@ impl StylePillControl {
             )),
             // The open menu shows every style; a tooltip would only cover it.
             Self::ArrowStyleChip => (!snapshot.arrow_style_menu_open).then(|| {
-                format!(
+                trf(
                     "Arrow style: {} (click to choose)",
-                    snapshot.arrow_style.label()
+                    &[&snapshot.arrow_style.label()],
                 )
             }),
-            Self::AutoNumberToggle => Some("Auto-number arrows 1, 2, 3.".to_string()),
-            Self::CounterReset(StylePillCounter::Arrow) => Some(format!(
+            Self::AutoNumberToggle => Some(tr("Auto-number arrows 1, 2, 3.").to_string()),
+            Self::CounterReset(StylePillCounter::Arrow) => Some(trf(
                 "Reset numbering to 1 (next: {})",
-                snapshot.arrow_label_next
+                &[&snapshot.arrow_label_next],
             )),
-            Self::CounterReset(StylePillCounter::Step) => Some(format!(
+            Self::CounterReset(StylePillCounter::Step) => Some(trf(
                 "Reset numbering to 1 (next: {})",
-                snapshot.step_marker_next
+                &[&snapshot.step_marker_next],
             )),
             Self::SelectionCycle(kind) => selection_entry(snapshot, kind)
                 .map(|entry| format!("{}: {}", entry.label, entry.value)),
@@ -358,23 +358,23 @@ impl StylePillControl {
                 (!snapshot.pen_feel_open).then(|| Self::pen_feel_tooltip(snapshot))
             }
             Self::PenSmoothingMeter | Self::PenSmoothingStepper => Some(
-                "Smooth freehand and marker strokes when the pen lifts. Off keeps the exact path."
+                tr("Smooth freehand and marker strokes when the pen lifts. Off keeps the exact path.")
                     .to_string(),
             ),
             Self::ShapeSensitivityMeter => Some(
-                "How readily Shape Pen turns ink into shapes: Precise needs a careful stroke, Very forgiving accepts rough ones."
+                tr("How readily Shape Pen turns ink into shapes: Precise needs a careful stroke, Very forgiving accepts rough ones.")
                     .to_string(),
             ),
             Self::ShapeSensitivityStepper => Some(
-                "How readily Shape Pen turns ink into shapes: 0 is precise, 4 accepts rough strokes."
+                tr("How readily Shape Pen turns ink into shapes: 0 is precise, 4 accepts rough strokes.")
                     .to_string(),
             ),
             Self::FontWeightToggle => {
-                Some("Bold. Applies to selected text, or to the next label you type.".to_string())
+                Some(tr("Bold. Applies to selected text, or to the next label you type.").to_string())
             }
-            Self::FontFamilyPicker => Some(format!(
+            Self::FontFamilyPicker => Some(trf(
                 "{} - choose from every installed font",
-                snapshot.font.family
+                &[&snapshot.font.family],
             )),
             // The pill shows sliders as bare tracks with a numeral beside
             // them, so a hover is the only place they can say which is which.
@@ -382,19 +382,24 @@ impl StylePillControl {
             // targets the pen, the marker, or the eraser depending on what is
             // active.
             Self::Slider(StylePillSlider::Thickness) => {
-                Some(match ToolContext::from_snapshot(snapshot).thickness_label {
-                    "Eraser size" => "How wide the eraser rubs out.".to_string(),
-                    label => format!("{label} of the next stroke you draw."),
+                let context = ToolContext::from_snapshot(snapshot);
+                Some(if context.thickness_targets_eraser {
+                    tr("How wide the eraser rubs out.").to_string()
+                } else {
+                    trf(
+                        "{} of the next stroke you draw.",
+                        &[&context.thickness_label],
+                    )
                 })
             }
             // The pill shows the opacity as a swatch, so the number lives
             // here as the setting, which also multiplies the color's alpha.
-            Self::Slider(StylePillSlider::Opacity) => Some(format!(
+            Self::Slider(StylePillSlider::Opacity) => Some(trf(
                 "Marker opacity setting: {}. Lower lets more of the page show through.",
-                StylePillSlider::Opacity.formatter()(snapshot.marker_opacity)
+                &[&StylePillSlider::Opacity.formatter()(snapshot.marker_opacity)],
             )),
             Self::Slider(StylePillSlider::FontSize) => {
-                Some("Point size of the next label you type.".to_string())
+                Some(tr("Point size of the next label you type.").to_string())
             }
             Self::EraserModeSegment | Self::SelectionStepper(_) => None,
         }
@@ -410,9 +415,9 @@ impl StylePillControl {
     /// fixed caption slot; the full name stays the accessible label.
     pub(crate) fn caption(self) -> Option<&'static str> {
         match self {
-            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Some("Smooth"),
-            Self::ShapeSensitivityMeter => Some("Shapes"),
-            Self::ShapeSensitivityStepper => Some("Detect"),
+            Self::PenSmoothingMeter | Self::PenSmoothingStepper => Some(tr("Smooth")),
+            Self::ShapeSensitivityMeter => Some(tr("Shapes")),
+            Self::ShapeSensitivityStepper => Some(tr("Detect")),
             _ => None,
         }
     }
@@ -423,18 +428,18 @@ impl StylePillControl {
             Self::EraserModeSegment => Some([
                 StylePillSegment {
                     id: "top.style.eraser-mode.brush",
-                    label: "Brush",
+                    label: tr("Brush"),
                     event: ToolbarEvent::SetEraserMode(EraserMode::Brush),
                     active: snapshot.eraser_mode == EraserMode::Brush,
-                    tooltip: "Erase with the brush".to_string(),
+                    tooltip: tr("Erase with the brush").to_string(),
                 },
                 StylePillSegment {
                     id: "top.style.eraser-mode.stroke",
-                    label: "Stroke",
+                    label: tr("Stroke"),
                     event: ToolbarEvent::SetEraserMode(EraserMode::Stroke),
                     active: snapshot.eraser_mode == EraserMode::Stroke,
                     tooltip: format_binding_label(
-                        "Erase whole strokes",
+                        tr("Erase whole strokes"),
                         snapshot
                             .binding_hints
                             .binding_for_action(Action::ToggleEraserMode),

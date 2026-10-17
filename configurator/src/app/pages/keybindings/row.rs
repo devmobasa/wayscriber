@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -47,25 +49,25 @@ pub(super) fn binding_row(
         .row_spacing(6)
         .hexpand(true)
         .build();
-    let add = icon_button("input-keyboard-symbolic", "Add shortcut");
+    let add = icon_button("input-keyboard-symbolic", tr("Add shortcut"));
     connect_clicked(&add, sender, Message::ShortcutRecordingStarted(field));
     let record_sequence = gtk::Button::builder()
-        .label("Record Sequence")
+        .label(tr("Record Sequence"))
         .valign(gtk::Align::Center)
         .build();
-    set_accessible_label(&record_sequence, "Record sequence");
+    set_accessible_label(&record_sequence, tr("Record sequence"));
     set_tooltip(
         &record_sequence,
-        Some("Record a two- or three-chord keyboard sequence"),
+        Some(tr("Record a two- or three-chord keyboard sequence")),
     );
     connect_clicked(
         &record_sequence,
         sender,
         Message::ShortcutSequenceRecordingStarted(field),
     );
-    let reset = icon_button("view-refresh-symbolic", "Reset to default");
+    let reset = icon_button("view-refresh-symbolic", tr("Reset to default"));
     connect_clicked(&reset, sender, Message::ShortcutResetRequested(field));
-    let edit = icon_button("document-edit-symbolic", "Edit as text");
+    let edit = icon_button("document-edit-symbolic", tr("Edit as text"));
     connect_clicked(&edit, sender, Message::ShortcutTextEditStarted(field));
 
     let controls = gtk::Box::new(gtk::Orientation::Horizontal, 4);
@@ -85,10 +87,10 @@ pub(super) fn binding_row(
         .xalign(1.0)
         .build();
     let edit_shortcuts = gtk::Button::builder()
-        .label("Edit Shortcuts")
+        .label(tr("Edit Shortcuts"))
         .valign(gtk::Align::Center)
         .build();
-    set_accessible_label(&edit_shortcuts, "Edit shortcuts");
+    set_accessible_label(&edit_shortcuts, tr("Edit shortcuts"));
     let compact = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     compact.set_halign(gtk::Align::End);
     compact.append(&compact_summary);
@@ -208,7 +210,7 @@ pub(super) fn binding_row(
                     *seen_chips.borrow_mut() = labels;
                 }
                 let summary_text = if bindings.is_empty() {
-                    "Unbound".to_string()
+                    tr("Unbound").to_string()
                 } else {
                     serialize_bindings(bindings)
                 };
@@ -236,7 +238,7 @@ pub(super) fn binding_row(
         let caption_text = match &parse_error {
             Some(message) => message.clone(),
             None if manager_row.internal_conflict => {
-                "This action lists the same shortcut twice.".to_string()
+                tr("This action lists the same shortcut twice.").to_string()
             }
             None => {
                 let default = app
@@ -245,9 +247,9 @@ pub(super) fn binding_row(
                     .value_for(field)
                     .unwrap_or_default();
                 if default.trim().is_empty() {
-                    "Default: Unbound".to_string()
+                    tr("Default: Unbound").to_string()
                 } else {
-                    format!("Default: {default}")
+                    trf("Default: {}", &[&default])
                 }
             }
         };
@@ -336,7 +338,7 @@ fn shortcut_chip(
         .css_classes(["shortcut-chip-key"])
         .valign(gtk::Align::Center)
         .build();
-    let remove_label = format!("Remove {label_text}");
+    let remove_label = trf("Remove {}", &[&label_text]);
     let remove = gtk::Button::builder()
         .icon_name("edit-clear-symbolic")
         .tooltip_text(&remove_label)

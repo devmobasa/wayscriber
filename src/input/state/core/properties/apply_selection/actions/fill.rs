@@ -1,6 +1,7 @@
 use super::color::RecolorOpacity;
 use crate::draw::TextMeasurer;
 use crate::draw::{Color, Shape};
+use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -25,7 +26,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
-                Toast::warning("No fill shapes selected."),
+                Toast::warning(tr("No fill shapes selected.")),
             );
             return false;
         };
@@ -51,7 +52,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "fill")
+        self.report_selection_apply_result(result, tr("fill"))
     }
 
     /// Fills every editable selected closed shape with `paint`, or turns the
@@ -83,7 +84,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "fill")
+        self.report_selection_apply_result(result, tr("fill"))
     }
 
     /// The fill of the first editable selected closed shape, for the color

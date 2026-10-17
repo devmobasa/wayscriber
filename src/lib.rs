@@ -23,6 +23,7 @@ pub mod durable_io;
 pub mod env_vars;
 pub(crate) mod file_uri;
 pub mod help_overlay_interaction;
+pub mod i18n;
 pub(crate) mod image_decode;
 pub mod input;
 mod label_format;

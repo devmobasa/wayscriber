@@ -466,7 +466,7 @@ fn sequence_recording_rejects_device_buttons() {
     assert!(
         app.shortcuts
             .recorder()
-            .is_some_and(|recorder| recorder.prompt.contains("keyboard-only"))
+            .is_some_and(|recorder| recorder.prompt().contains("keyboard-only"))
     );
 }
 

@@ -19,6 +19,7 @@
 use super::super::primitives::{draw_pill, draw_rounded_rect};
 use super::super::theme::{self, overlay};
 use crate::config::StatusBarStyle;
+use crate::i18n::tr;
 use crate::input::{BoardBackground, InputState};
 use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle};
 
@@ -59,11 +60,15 @@ const ZOOM_CHIP_GLYPH_ARM_CAP_FRACTION: f64 = 0.575;
 /// digit cap height (lands them on the digits' optical middle).
 const ZOOM_CHIP_GLYPH_CENTER_CAP_FRACTION: f64 = 0.5;
 /// Reset-to-100% button label.
-const ZOOM_RESET_LABEL: &str = "Reset";
+fn zoom_reset_label() -> &'static str {
+    tr("Reset")
+}
 /// Opacity of a button that does nothing right now: zoom-out and Reset at 100%.
 const ZOOM_CHIP_DISABLED_ALPHA: f64 = 0.35;
 /// Zoom-lock toggle label (shown only while zoom is active).
-const ZOOM_LOCK_LABEL: &str = "Lock";
+fn zoom_lock_label() -> &'static str {
+    tr("Lock")
+}
 
 // ============================================================================
 // Layout types (cached on `InputState`, consumed by rendering, hit-testing,
@@ -296,14 +301,17 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
         (format!("{pct}%"), None),
         (String::new(), Some(ZoomChipButtonKind::In)),
         (
-            ZOOM_RESET_LABEL.to_string(),
+            zoom_reset_label().to_string(),
             Some(ZoomChipButtonKind::Reset),
         ),
     ];
     if input_state.zoom_active() {
         specs.insert(
             0,
-            (ZOOM_LOCK_LABEL.to_string(), Some(ZoomChipButtonKind::Lock)),
+            (
+                zoom_lock_label().to_string(),
+                Some(ZoomChipButtonKind::Lock),
+            ),
         );
     }
 
@@ -339,7 +347,7 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
     // separately, so they never set the line metrics. The Lock label counts
     // even while it is hidden, so the pill keeps one height and no button
     // shifts vertically when Lock appears.
-    let lock_extents = engine.measure(text_style, ZOOM_LOCK_LABEL, None)?;
+    let lock_extents = engine.measure(text_style, zoom_lock_label(), None)?;
     let mut ascent = -lock_extents.y_bearing();
     let mut descent = lock_extents.height() + lock_extents.y_bearing();
     for piece in &pieces {

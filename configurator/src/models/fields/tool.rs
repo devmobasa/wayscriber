@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::ColorSpec;
 use wayscriber::domain::{DragBindableTool, DragTool, Tool};
 
@@ -11,9 +13,9 @@ pub enum DragMouseButton {
 impl DragMouseButton {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Left => "Left button",
-            Self::Right => "Right button",
-            Self::Middle => "Middle button",
+            Self::Left => tr("Left button"),
+            Self::Right => tr("Right button"),
+            Self::Middle => tr("Middle button"),
         }
     }
 }
@@ -30,11 +32,11 @@ pub enum DragToolField {
 impl DragToolField {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Drag => "Drag",
-            Self::ShiftDrag => "Shift+Drag",
-            Self::CtrlDrag => "Ctrl+Drag",
-            Self::CtrlShiftDrag => "Ctrl+Shift+Drag",
-            Self::TabDrag => "Tab+Drag",
+            Self::Drag => tr("Drag"),
+            Self::ShiftDrag => tr("Shift+Drag"),
+            Self::CtrlDrag => tr("Ctrl+Drag"),
+            Self::CtrlShiftDrag => tr("Ctrl+Shift+Drag"),
+            Self::TabDrag => tr("Tab+Drag"),
         }
     }
 }
@@ -89,25 +91,25 @@ impl ToolOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Select => "Select",
-            Self::Pen => "Pen",
-            Self::LiveShape => "Shape Pen",
-            Self::Line => "Line",
-            Self::Rect => "Rectangle",
-            Self::Ellipse => "Ellipse",
-            Self::Triangle => "Triangle",
-            Self::Parallelogram => "Parallelogram",
-            Self::Rhombus => "Rhombus",
-            Self::RegularPolygon => "Regular polygon",
-            Self::FreeformPolygon => "Freeform polygon",
-            Self::Arrow => "Arrow",
-            Self::Blur => "Blur",
-            Self::Spotlight => "Spotlight",
-            Self::Marker => "Marker",
-            Self::StepMarker => "Step",
-            Self::Highlight => "Highlight",
-            Self::Laser => "Laser pointer",
-            Self::Eraser => "Eraser",
+            Self::Select => tr("Select"),
+            Self::Pen => tr("Pen"),
+            Self::LiveShape => tr("Shape Pen"),
+            Self::Line => tr("Line"),
+            Self::Rect => tr("Rectangle"),
+            Self::Ellipse => tr("Ellipse"),
+            Self::Triangle => tr("Triangle"),
+            Self::Parallelogram => tr("Parallelogram"),
+            Self::Rhombus => tr("Rhombus"),
+            Self::RegularPolygon => tr("Regular polygon"),
+            Self::FreeformPolygon => tr("Freeform polygon"),
+            Self::Arrow => tr("Arrow"),
+            Self::Blur => tr("Blur"),
+            Self::Spotlight => tr("Spotlight"),
+            Self::Marker => tr("Marker"),
+            Self::StepMarker => tr("Step"),
+            Self::Highlight => tr("Highlight"),
+            Self::Laser => tr("Laser pointer"),
+            Self::Eraser => tr("Eraser"),
         }
     }
 
@@ -226,24 +228,24 @@ impl DragToolOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Default => "Button default",
-            Self::Select => "Select",
-            Self::Pen => "Pen",
-            Self::LiveShape => "Shape Pen",
-            Self::Line => "Line",
-            Self::Rect => "Rectangle",
-            Self::Ellipse => "Ellipse",
-            Self::Triangle => "Triangle",
-            Self::Parallelogram => "Parallelogram",
-            Self::Rhombus => "Rhombus",
-            Self::RegularPolygon => "Regular polygon",
-            Self::Arrow => "Arrow",
-            Self::Blur => "Blur",
-            Self::Marker => "Marker",
-            Self::StepMarker => "Step",
-            Self::Highlight => "Highlight",
-            Self::Laser => "Laser pointer",
-            Self::Eraser => "Eraser",
+            Self::Default => tr("Button default"),
+            Self::Select => tr("Select"),
+            Self::Pen => tr("Pen"),
+            Self::LiveShape => tr("Shape Pen"),
+            Self::Line => tr("Line"),
+            Self::Rect => tr("Rectangle"),
+            Self::Ellipse => tr("Ellipse"),
+            Self::Triangle => tr("Triangle"),
+            Self::Parallelogram => tr("Parallelogram"),
+            Self::Rhombus => tr("Rhombus"),
+            Self::RegularPolygon => tr("Regular polygon"),
+            Self::Arrow => tr("Arrow"),
+            Self::Blur => tr("Blur"),
+            Self::Marker => tr("Marker"),
+            Self::StepMarker => tr("Step"),
+            Self::Highlight => tr("Highlight"),
+            Self::Laser => tr("Laser pointer"),
+            Self::Eraser => tr("Eraser"),
         }
     }
 
@@ -354,20 +356,20 @@ impl DragColorOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Current => "Current color",
-            Self::Red => "Red",
-            Self::Green => "Green",
-            Self::Blue => "Blue",
-            Self::Yellow => "Yellow",
-            Self::Orange => "Orange",
-            Self::Pink => "Pink",
-            Self::White => "White",
-            Self::Black => "Black",
+            Self::Current => tr("Current color"),
+            Self::Red => tr("Red"),
+            Self::Green => tr("Green"),
+            Self::Blue => tr("Blue"),
+            Self::Yellow => tr("Yellow"),
+            Self::Orange => tr("Orange"),
+            Self::Pink => tr("Pink"),
+            Self::White => tr("White"),
+            Self::Black => tr("Black"),
             // Covers every spec that is not a palette name: RGB and RGBA
             // arrays, and hex strings in either length. Selecting it keeps
             // whatever the file already holds, so naming one form would be
             // wrong for the others.
-            Self::Custom => "Custom",
+            Self::Custom => tr("Custom"),
         }
     }
 
@@ -393,14 +395,14 @@ impl DragColorOption {
         let name = match self {
             Self::Current => return None,
             Self::Custom => return existing,
-            Self::Red => "red",
-            Self::Green => "green",
-            Self::Blue => "blue",
-            Self::Yellow => "yellow",
-            Self::Orange => "orange",
-            Self::Pink => "pink",
-            Self::White => "white",
-            Self::Black => "black",
+            Self::Red => tr("red"),
+            Self::Green => tr("green"),
+            Self::Blue => tr("blue"),
+            Self::Yellow => tr("yellow"),
+            Self::Orange => tr("orange"),
+            Self::Pink => tr("pink"),
+            Self::White => tr("white"),
+            Self::Black => tr("black"),
         };
         Some(ColorSpec::Name(name.to_string()))
     }

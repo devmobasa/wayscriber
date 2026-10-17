@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::mapping::{MappingRow, build_add_mapping_row, build_mapping_row};
 use super::rows::{build_header_row, build_text_row};
 use relm4::{ComponentSender, gtk};
@@ -67,11 +69,16 @@ fn build_section(
         .build();
     section.append(&build_header_row(index, &title, sender));
 
-    let id = build_text_row("Profile id", index, RenderProfileTextField::Id, sender);
+    let id = build_text_row(tr("Profile id"), index, RenderProfileTextField::Id, sender);
     id.row.set_visible(layout.controls);
     section.append(&id.row);
 
-    let name = build_text_row("Display name", index, RenderProfileTextField::Name, sender);
+    let name = build_text_row(
+        tr("Display name"),
+        index,
+        RenderProfileTextField::Name,
+        sender,
+    );
     name.row.set_visible(layout.controls);
     section.append(&name.row);
 
@@ -89,7 +96,7 @@ fn build_section(
 
     let refresh: ProfileRowRefresh = Box::new(move |values| {
         let heading = if values.name.trim().is_empty() {
-            "Profile"
+            tr("Profile")
         } else {
             values.name.trim()
         };

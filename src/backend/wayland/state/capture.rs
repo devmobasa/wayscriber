@@ -1,6 +1,7 @@
 use super::*;
 use crate::backend::wayland::frozen::FrozenCaptureBackend;
 use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 
 mod backdrop;
@@ -147,7 +148,7 @@ impl WaylandState {
                     self.input_state.push_toast(
                         ToastPriority::Info,
                         "capture.region.refused",
-                        Toast::info("Finish or cancel the current screen selection first."),
+                        Toast::info(tr("Finish or cancel the current screen selection first.")),
                     );
                 }
                 return;
@@ -286,7 +287,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "capture",
-                Toast::warning("Capture is already preparing another overlay operation."),
+                Toast::warning(tr(
+                    "Capture is already preparing another overlay operation.",
+                )),
             );
             return;
         }
@@ -332,7 +335,7 @@ impl WaylandState {
         // physical resolution plus PNG encoding froze event dispatch for the
         // whole export on large surfaces.
         let snapshot = self.canvas_export_snapshot();
-        let subject = format!("Canvas '{}'", self.input_state.board_name());
+        let subject = trf("Canvas '{}'", &[&self.input_state.board_name()]);
         if let Err(error) = snapshot.validate_spotlight_source(&subject) {
             self.report_export_preflight_failure(
                 &error,
@@ -472,7 +475,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "capture",
-                    Toast::warning("Another capture operation is still in progress."),
+                    Toast::warning(tr("Another capture operation is still in progress.")),
                 );
                 false
             }
@@ -491,7 +494,10 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Critical,
             "capture",
-            Toast::error(format!("{} failed: {error}", operation.saved_log_label())),
+            Toast::error(trf(
+                "{} failed: {}",
+                &[&operation.saved_log_label(), &error],
+            )),
         );
     }
 }

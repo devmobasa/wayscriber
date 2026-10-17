@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use std::collections::HashMap;
 
 use wayscriber::config::{Config, MigrationPreview, PRESET_SLOTS_MAX};
@@ -88,20 +90,40 @@ impl ConfirmationPrompt {
     pub(crate) fn message(self) -> &'static str {
         match self {
             ConfirmationPrompt::LeaveDraft => {
-                "You have unsaved changes. Save them, discard them, or cancel to keep editing."
+                tr("You have unsaved changes. Save them, discard them, or cancel to keep editing.")
             }
-            ConfirmationPrompt::DefaultsReset => {
-                "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue."
-            }
-            ConfirmationPrompt::SessionClear => {
-                "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue."
-            }
-            ConfirmationPrompt::ShortcutResetVisible => {
-                "Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save."
-            }
-            ConfirmationPrompt::ShortcutResetAll => {
-                "Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save."
-            }
+            ConfirmationPrompt::DefaultsReset => tr(
+                "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.",
+            ),
+            ConfirmationPrompt::SessionClear => tr(
+                "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue.",
+            ),
+            ConfirmationPrompt::ShortcutResetVisible => tr(
+                "Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save.",
+            ),
+            ConfirmationPrompt::ShortcutResetAll => tr(
+                "Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save.",
+            ),
+        }
+    }
+}
+
+/// Work in progress that owns the status line until it finishes.
+///
+/// Typed for the same reason as [`ConfirmationPrompt`]: completion has to
+/// recognize its own notice in every language, and the notice re-renders when
+/// the language changes underneath it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProgressNotice {
+    LoadingConfiguration,
+    LoadingSessions,
+}
+
+impl ProgressNotice {
+    pub(crate) fn message(self) -> &'static str {
+        match self {
+            ProgressNotice::LoadingConfiguration => tr("Loading configuration..."),
+            ProgressNotice::LoadingSessions => tr("Loading sessions..."),
         }
     }
 }
@@ -113,6 +135,7 @@ pub(crate) enum StatusMessage {
     Success(String),
     Error(String),
     Warning(String),
+    Progress(ProgressNotice),
     Confirmation(ConfirmationPrompt),
 }
 
@@ -137,6 +160,10 @@ impl StatusMessage {
         StatusMessage::Warning(message.into())
     }
 
+    pub(crate) fn progress(notice: ProgressNotice) -> Self {
+        StatusMessage::Progress(notice)
+    }
+
     pub(crate) fn confirmation(prompt: ConfirmationPrompt) -> Self {
         StatusMessage::Confirmation(prompt)
     }
@@ -145,6 +172,13 @@ impl StatusMessage {
         matches!(self, StatusMessage::Confirmation(current) if *current == prompt)
     }
 
+    pub(crate) fn is_progress(&self, notice: ProgressNotice) -> bool {
+        matches!(self, StatusMessage::Progress(current) if *current == notice)
+    }
+
+    /// What the status strip shows. Production code renders through the view;
+    /// tests read the text directly.
+    #[cfg(test)]
     pub(crate) fn text(&self) -> Option<&str> {
         match self {
             StatusMessage::Idle => None,
@@ -152,6 +186,7 @@ impl StatusMessage {
             | StatusMessage::Success(text)
             | StatusMessage::Error(text)
             | StatusMessage::Warning(text) => Some(text.as_str()),
+            StatusMessage::Progress(notice) => Some(notice.message()),
             StatusMessage::Confirmation(prompt) => Some(prompt.message()),
         }
     }
@@ -166,6 +201,9 @@ impl StatusMessage {
             StatusMessage::Info(text)
             | StatusMessage::Success(text)
             | StatusMessage::Warning(text) => StatusMessage::warning(format!("{text}\n{note}")),
+            StatusMessage::Progress(notice) => {
+                StatusMessage::warning(format!("{}\n{note}", notice.message()))
+            }
             StatusMessage::Confirmation(prompt) => {
                 StatusMessage::warning(format!("{}\n{note}", prompt.message()))
             }
@@ -176,12 +214,24 @@ impl StatusMessage {
 }
 
 impl ConfiguratorApp {
+    /// Draws the window in the draft's language.
+    ///
+    /// Every transition that replaces the draft (a successful load, Defaults,
+    /// a finished save) and a pick in the Language row call this, before they
+    /// build their status text, so that text is in the language the window is
+    /// about to draw. A transition that fails keeps the language it found.
+    /// The shell notices the change and rebuilds its pages in that language.
+    pub(crate) fn apply_draft_language(&self) {
+        wayscriber::i18n::set_language(self.draft.ui_language.to_language());
+    }
+
     /// The app as a launch with no destination.
     ///
     /// Test-only: the binary always has a parsed launch request to pass, even
     /// when it is the empty one.
     #[cfg(test)]
     pub(crate) fn new_app() -> (Self, Vec<Effect>) {
+        crate::test_env::sanitize_language_environment();
         Self::new_app_with_startup(StartupRequest::default())
     }
 
@@ -198,7 +248,7 @@ impl ConfiguratorApp {
             baseline,
             defaults,
             document: super::document_workflow::DocumentWorkflow::loading(),
-            status: StatusMessage::info("Loading configuration..."),
+            status: StatusMessage::progress(ProgressNotice::LoadingConfiguration),
             active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,

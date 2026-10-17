@@ -9,7 +9,10 @@
 //! the page builders registered ([`super::pages`]).
 
 mod effects;
+mod rebuild;
 mod shell;
+#[cfg(test)]
+mod tests;
 mod view;
 
 use relm4::prelude::*;
@@ -87,6 +90,10 @@ pub(crate) struct AppWidgets {
     /// instead of on every refresh.
     seen_focus_serial: u64,
     bindings: Vec<Binding>,
+    /// The language the pages were built in. When the active language moves
+    /// away from it, the next refresh rebuilds them.
+    language: wayscriber::domain::Language,
+    chrome: shell::Chrome,
 }
 
 impl Component for ConfiguratorApp {
@@ -115,6 +122,9 @@ impl Component for ConfiguratorApp {
             spawn_effect(effect, &sender, &root);
         }
 
+        // The window opens in English: the config, and with it the saved
+        // language, arrives with the asynchronous first load, which applies
+        // that language and rebuilds the pages like any other change.
         let widgets = shell::build(&root, &sender);
         ComponentParts { model, widgets }
     }
@@ -136,7 +146,7 @@ impl Component for ConfiguratorApp {
         }
     }
 
-    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
-        view::refresh(self, widgets);
+    fn update_view(&self, widgets: &mut Self::Widgets, sender: ComponentSender<Self>) {
+        view::refresh(self, widgets, &sender);
     }
 }

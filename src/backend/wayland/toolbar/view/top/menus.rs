@@ -8,6 +8,7 @@
 //! proportional scrollbar. The tree painter has no clip, so rows are either
 //! fully inside the viewport or withheld entirely (paint and hits alike).
 
+use crate::i18n::{tr, trf};
 use crate::ui_text::UiTextEngine;
 
 use crate::backend::wayland::toolbar::events::HitKind;
@@ -287,7 +288,7 @@ fn session_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
             "top.menu.session.confirm-label",
             (0.0, y, MENU_CONTENT_W, MENU_CONFIRM_LABEL_H),
             WidgetKind::Label(LabelSpec::new(
-                format!("Replace {}?", truncate_middle(&confirmation.label, 20)),
+                trf("Replace {}?", &[&truncate_middle(&confirmation.label, 20)]),
                 MENU_META_FONT,
                 false,
             )),
@@ -297,13 +298,13 @@ fn session_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
         let actions = [
             (
                 "confirm-replace",
-                "Replace",
+                tr("Replace"),
                 confirmation.confirm_event(),
                 true,
             ),
             (
                 "confirm-cancel",
-                "Cancel",
+                tr("Cancel"),
                 confirmation.cancel_event(),
                 false,
             ),
@@ -394,7 +395,7 @@ fn session_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
             Some(Interaction::click(
                 recent.event(),
                 Some(format_binding_label(
-                    &format!("Open {}", recent.label),
+                    &trf("Open {}", &[&recent.label]),
                     Some(tooltip_path.as_str()),
                 )),
             )),
@@ -486,7 +487,7 @@ fn settings_menu_content(
         nodes.push(WidgetNode::decor(
             "top.menu.settings.groups-header",
             (0.0, y, MENU_CONTENT_W, MENU_HEADER_H),
-            WidgetKind::Label(LabelSpec::new("Choose a group", MENU_LABEL_FONT, true)),
+            WidgetKind::Label(LabelSpec::new(tr("Choose a group"), MENU_LABEL_FONT, true)),
         ));
         y += MENU_HEADER_H + MENU_ITEM_GAP;
         let group_w = row_item_width(MENU_CONTENT_W, 2, MENU_TOGGLE_GAP);
@@ -519,7 +520,7 @@ fn settings_menu_content(
     if !overrides.is_empty() {
         let header = snapshot
             .customize_items_group
-            .map_or("Uncheck items to hide", |group| group.label());
+            .map_or(tr("Uncheck items to hide"), |group| group.label());
         nodes.push(WidgetNode::decor(
             "top.menu.settings.items-header",
             (0.0, y, MENU_CONTENT_W, MENU_HEADER_H),
@@ -546,7 +547,7 @@ fn settings_menu_content(
                             id: item.id,
                             target_index: order.index,
                         },
-                        tooltip: Some(format!("Drag {} to reorder", item.label)),
+                        tooltip: Some(trf("Drag {} to reorder", &[&item.label])),
                     }),
                 ));
                 nodes.push(WidgetNode::decor(
@@ -595,7 +596,7 @@ fn settings_menu_content(
                         "^",
                         order.can_move_up,
                         &order.move_up,
-                        "Move up",
+                        tr("Move up"),
                     ),
                     (
                         "down",
@@ -603,7 +604,7 @@ fn settings_menu_content(
                         "v",
                         order.can_move_down,
                         &order.move_down,
-                        "Move down",
+                        tr("Move down"),
                     ),
                 ] {
                     nodes.push(text_button(
@@ -618,7 +619,7 @@ fn settings_menu_content(
                         enabled.then(|| {
                             Interaction::click(
                                 activation.clone(),
-                                Some(format!("{} {}", tooltip, item.label)),
+                                Some(format!("{tooltip} {}", item.label)),
                             )
                         }),
                     ));
@@ -852,7 +853,11 @@ fn push_canvas_step_row(
         format!("top.menu.canvas.step.{side}.apply"),
         (0.0, row_y, CANVAS_STEP_BTN_W, CANVAS_STEP_ROW_H),
         LabelSpec::new(
-            if is_undo { "Step Undo" } else { "Step Redo" },
+            if is_undo {
+                tr("Step Undo")
+            } else {
+                tr("Step Redo")
+            },
             MENU_META_FONT,
             true,
         ),
@@ -863,7 +868,14 @@ fn push_canvas_step_row(
             } else {
                 ToolbarEvent::CustomRedo
             },
-            Some(if is_undo { "Step undo" } else { "Step redo" }.to_string()),
+            Some(
+                if is_undo {
+                    tr("Step undo")
+                } else {
+                    tr("Step redo")
+                }
+                .to_string(),
+            ),
         )),
     ));
 
@@ -875,7 +887,11 @@ fn push_canvas_step_row(
         ButtonStyle::plain(),
         Some(Interaction::click(
             set_custom_steps_event(is_undo, steps.saturating_sub(1).max(1)),
-            Some(format!("Decrease {side} steps")),
+            Some(if is_undo {
+                tr("Decrease undo steps").to_string()
+            } else {
+                tr("Decrease redo steps").to_string()
+            }),
         )),
     ));
 
@@ -884,7 +900,7 @@ fn push_canvas_step_row(
         format!("top.menu.canvas.step.{side}.count"),
         (label_x, row_y, CANVAS_STEPS_LABEL_W, CANVAS_STEP_ROW_H),
         WidgetKind::Label(LabelSpec::new(
-            format!("{steps} steps"),
+            trf("{} steps", &[&steps]),
             MENU_META_FONT,
             true,
         )),
@@ -898,7 +914,11 @@ fn push_canvas_step_row(
         ButtonStyle::plain(),
         Some(Interaction::click(
             set_custom_steps_event(is_undo, steps.saturating_add(1)),
-            Some(format!("Increase {side} steps")),
+            Some(if is_undo {
+                tr("Increase undo steps").to_string()
+            } else {
+                tr("Increase redo steps").to_string()
+            }),
         )),
     ));
     *y += CANVAS_STEP_ROW_H + MENU_GAP;
@@ -919,11 +939,17 @@ fn push_canvas_step_row(
         } else {
             HitKind::DragCustomRedoDelay
         },
-        format!(
-            "{} step delay: {:.1}s (drag)",
-            if is_undo { "Undo" } else { "Redo" },
-            delay_ms as f64 / 1000.0
-        ),
+        if is_undo {
+            trf(
+                "Undo step delay: {}s (drag)",
+                &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+            )
+        } else {
+            trf(
+                "Redo step delay: {}s (drag)",
+                &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+            )
+        },
     );
 }
 
@@ -970,7 +996,7 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
     nodes.push(WidgetNode::decor(
         "top.menu.canvas.step.header",
         (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_HEADER_H),
-        WidgetKind::Label(LabelSpec::new("Step Undo/Redo", MENU_LABEL_FONT, true)),
+        WidgetKind::Label(LabelSpec::new(tr("Step Undo/Redo"), MENU_LABEL_FONT, true)),
     ));
     *y += MENU_HEADER_H + MENU_ITEM_GAP;
 
@@ -979,11 +1005,11 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
         (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_TOGGLE_H),
         WidgetKind::Checkbox {
             checked: snapshot.custom_section_enabled,
-            label: LabelSpec::new("Step buttons", MENU_META_FONT, true),
+            label: LabelSpec::new(tr("Step buttons"), MENU_META_FONT, true),
         },
         Some(Interaction::click(
             ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
-            Some("Step buttons: undo/redo several strokes at once.".to_string()),
+            Some(tr("Step buttons: undo/redo several strokes at once.").to_string()),
         )),
     ));
     *y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
@@ -993,11 +1019,11 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
         (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_TOGGLE_H),
         WidgetKind::Checkbox {
             checked: snapshot.show_delay_sliders,
-            label: LabelSpec::new("Delay sliders", MENU_META_FONT, true),
+            label: LabelSpec::new(tr("Delay sliders"), MENU_META_FONT, true),
         },
         Some(Interaction::click(
             ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
-            Some("Delay sliders: undo/redo delays.".to_string()),
+            Some(tr("Delay sliders: undo/redo delays.").to_string()),
         )),
     ));
     *y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
@@ -1017,11 +1043,17 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
                 format!("top.menu.canvas.step.global.{side}.label"),
                 (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_PATH_H),
                 WidgetKind::Label(LabelSpec::new(
-                    format!(
-                        "{} delay: {:.1}s",
-                        if is_undo { "Undo" } else { "Redo" },
-                        delay_ms as f64 / 1000.0
-                    ),
+                    if is_undo {
+                        trf(
+                            "Undo delay: {}s",
+                            &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+                        )
+                    } else {
+                        trf(
+                            "Redo delay: {}s",
+                            &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+                        )
+                    },
                     MENU_META_FONT,
                     false,
                 )),
@@ -1042,11 +1074,17 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
                 } else {
                     HitKind::DragRedoDelay
                 },
-                format!(
-                    "{}-all delay: {:.1}s (drag)",
-                    if is_undo { "Undo" } else { "Redo" },
-                    delay_ms as f64 / 1000.0
-                ),
+                if is_undo {
+                    trf(
+                        "Undo-all delay: {}s (drag)",
+                        &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+                    )
+                } else {
+                    trf(
+                        "Redo-all delay: {}s (drag)",
+                        &[&format!("{:.1}", delay_ms as f64 / 1000.0)],
+                    )
+                },
             );
         }
     }
@@ -1063,32 +1101,32 @@ fn canvas_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
     let sections = [
         (
             "actions",
-            "Actions",
-            "Action",
+            tr("Actions"),
+            tr("Action"),
             model::toolbar_actions_model_for_popover(snapshot),
         ),
         (
             "boards",
-            "Boards",
-            "Board",
+            tr("Boards"),
+            tr("Board"),
             model::toolbar_boards_model_for_popover(snapshot),
         ),
         (
             "pages",
-            "Pages",
-            "Page",
+            tr("Pages"),
+            tr("Page"),
             model::toolbar_pages_model_for_popover(snapshot),
         ),
         (
             "advanced",
-            "Advanced",
-            "Action",
+            tr("Advanced"),
+            tr("Action"),
             model::toolbar_advanced_group_for_popover(snapshot),
         ),
         (
             "zoom",
-            "Zoom",
-            "Zoom",
+            tr("Zoom"),
+            tr("Zoom"),
             model::toolbar_zoom_group_for_popover(snapshot),
         ),
     ];

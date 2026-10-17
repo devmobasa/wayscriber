@@ -62,6 +62,7 @@ pub const SHADOW_RGBA: Rgba = (0.0, 0.0, 0.0, 0.30);
 
 pub mod overlay {
     use super::{ACCENT_BRIGHT_RGB, ACCENT_RGB, Rgba, rgba};
+    use crate::i18n::tr;
 
     // ---- Overlay dimming ----
     /// Popover/quick overlay dimming (e.g., board picker quick mode)
@@ -325,24 +326,43 @@ pub mod overlay {
     pub const CURSOR_PREVIEW_OFFSET: f64 = 16.0;
 
     // ---- Keyboard navigation hint text ----
+    // Drawn text is translated where its literal lives, so these are functions
+    // rather than constants: the translation guard reads plain string literals
+    // and cannot see through a constant.
     /// Context menu navigation hint
-    pub const NAV_HINT_MENU: &str = "↑↓ to navigate • Enter to select • Esc to close";
+    pub fn nav_hint_menu() -> &'static str {
+        tr("↑↓ to navigate • Enter to select • Esc to close")
+    }
     /// Context menu navigation hint when a row opens a submenu
-    pub const NAV_HINT_MENU_SUBMENUS: &str = "↑↓ navigate • → open • Enter select • Esc close";
+    pub fn nav_hint_menu_submenus() -> &'static str {
+        tr("↑↓ navigate • → open • Enter select • Esc close")
+    }
     /// Context menu navigation hint while a submenu holds the selection
-    pub const NAV_HINT_SUBMENU: &str = "↑↓ navigate • ← back • Enter select • Esc close";
+    pub fn nav_hint_submenu() -> &'static str {
+        tr("↑↓ navigate • ← back • Enter select • Esc close")
+    }
     /// Board picker navigation hint
-    pub const NAV_HINT_BOARD_PICKER: &str = "↑↓ Navigate • Type to search";
+    pub fn nav_hint_board_picker() -> &'static str {
+        tr("↑↓ Navigate • Type to search")
+    }
     /// Modal close hint
-    pub const HINT_PRESS_ESC: &str = "Press Escape to close";
+    pub fn hint_press_esc() -> &'static str {
+        tr("Press Escape to close")
+    }
 
     // ---- Empty state messages ----
     /// Properties panel empty state
-    pub const EMPTY_PROPERTIES: &str = "Select a shape to view properties";
+    pub fn empty_properties() -> &'static str {
+        tr("Select a shape to view properties")
+    }
     /// Command palette no results - main message
-    pub const EMPTY_COMMAND_PALETTE: &str = "No matching commands";
+    pub fn empty_command_palette() -> &'static str {
+        tr("No matching commands")
+    }
     /// Command palette no results - suggestions
-    pub const EMPTY_COMMAND_SUGGESTIONS: &str = "Try: pen, color, undo, help";
+    pub fn empty_command_suggestions() -> &'static str {
+        tr("Try: pen, color, undo, help")
+    }
 }
 
 // ============================================================================

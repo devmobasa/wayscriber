@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use relm4::{ComponentSender, gtk};
 
 use gtk::glib::object::IsA;
@@ -28,7 +30,7 @@ impl TextEditorPopover {
             .hexpand(true)
             .width_chars(28)
             .build();
-        set_accessible_label(&entry, "Shortcut list");
+        set_accessible_label(&entry, tr("Shortcut list"));
         let entry_handler = {
             let sender = sender.clone();
             entry.connect_changed(move |entry| {
@@ -43,18 +45,18 @@ impl TextEditorPopover {
             .build();
 
         let apply = gtk::Button::builder()
-            .label("Apply")
+            .label(tr("Apply"))
             .css_classes(["suggested-action"])
             .build();
-        set_accessible_label(&apply, "Apply shortcut text");
+        set_accessible_label(&apply, tr("Apply shortcut text"));
         {
             let sender = sender.clone();
             apply.connect_clicked(move |_| {
                 sender.input(Message::ShortcutTextEditApplied);
             });
         }
-        let cancel = gtk::Button::builder().label("Cancel").build();
-        set_accessible_label(&cancel, "Cancel text editing");
+        let cancel = gtk::Button::builder().label(tr("Cancel")).build();
+        set_accessible_label(&cancel, tr("Cancel text editing"));
         {
             let sender = sender.clone();
             cancel.connect_clicked(move |_| {

@@ -37,7 +37,7 @@ fn region_picker_options_cover_the_core_enum() {
     );
 }
 use wayscriber::config::{
-    PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
+    Language, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
     PdfTransparentBackground, ReducedMotion, SessionCompression, SessionStorageMode,
     StatusPosition, UiTheme,
 };
@@ -99,6 +99,45 @@ fn reduced_motion_option_round_trips() {
         );
         assert_eq!(option.to_reduced_motion(), config_value);
     }
+}
+
+#[test]
+fn language_option_round_trips() {
+    for (config_value, option) in [
+        (Language::Auto, LanguageOption::Auto),
+        (Language::English, LanguageOption::English),
+        (
+            Language::SimplifiedChinese,
+            LanguageOption::SimplifiedChinese,
+        ),
+    ] {
+        assert_eq!(LanguageOption::from_language(config_value), option);
+        assert_eq!(option.to_language(), config_value);
+    }
+}
+
+#[test]
+fn language_option_labels_name_each_language_in_itself() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::language_option_labels_name_each_language_in_itself"
+        ),
+        || {
+            use wayscriber::domain::Language;
+
+            for language in [Language::English, Language::SimplifiedChinese] {
+                wayscriber::i18n::set_language(language);
+                // The way back from a preview reads the same in every UI language.
+                assert_eq!(LanguageOption::English.label(), "English");
+                assert_eq!(LanguageOption::SimplifiedChinese.label(), "简体中文");
+                assert_eq!(
+                    LanguageOption::Auto.label(),
+                    wayscriber::i18n::tr("Automatic (system locale)")
+                );
+            }
+        },
+    );
 }
 
 #[test]

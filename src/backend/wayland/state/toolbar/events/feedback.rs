@@ -1,4 +1,5 @@
 use crate::backend::wayland::runtime_ui_state::PreparedToolbarMutation;
+use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 use crate::ui::toolbar::ToolbarEvent;
@@ -19,16 +20,16 @@ impl ToolbarPinChange {
     pub(super) fn message(self, durability: ToolbarPinDurability) -> &'static str {
         match (self, durability) {
             (Self::Top(true), ToolbarPinDurability::StartupPersistent) => {
-                "Top toolbar will open at startup"
+                tr("Top toolbar will open at startup")
             }
             (Self::Top(false), ToolbarPinDurability::StartupPersistent) => {
-                "Top toolbar will be hidden at startup"
+                tr("Top toolbar will be hidden at startup")
             }
             (Self::Top(true), ToolbarPinDurability::LiveOnly) => {
-                "Top toolbar pinned for this run only"
+                tr("Top toolbar pinned for this run only")
             }
             (Self::Top(false), ToolbarPinDurability::LiveOnly) => {
-                "Top toolbar unpinned for this run only"
+                tr("Top toolbar unpinned for this run only")
             }
         }
     }

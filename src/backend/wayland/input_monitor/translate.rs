@@ -6,6 +6,7 @@
 use xkbcommon::xkb;
 
 use super::super::handlers::keyboard::keysym_to_key;
+use crate::i18n::{tr, trf};
 use crate::input::Modifiers;
 use crate::input::state::{input_hud_key_label, input_hud_mouse_label, input_hud_scroll_label};
 
@@ -41,10 +42,10 @@ pub(super) fn key_label(keysym: xkb::Keysym, modifiers: Modifiers) -> Option<(St
 /// Chip label for a pointer button press.
 pub(super) fn button_label(button: u32, modifiers: Modifiers) -> String {
     let name = match button {
-        BTN_LEFT => "Click".to_string(),
-        BTN_RIGHT => "Right Click".to_string(),
-        BTN_MIDDLE => "Middle Click".to_string(),
-        other => format!("Button {other}"),
+        BTN_LEFT => tr("Click").to_string(),
+        BTN_RIGHT => tr("Right Click").to_string(),
+        BTN_MIDDLE => tr("Middle Click").to_string(),
+        other => trf("Button {}", &[&other]),
     };
     input_hud_mouse_label(&name, modifiers)
 }

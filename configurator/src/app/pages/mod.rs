@@ -30,6 +30,8 @@ use relm4::{adw, gtk};
 use adw::prelude::*;
 use gtk::glib::SignalHandlerId;
 
+use wayscriber::i18n::trf;
+
 use crate::messages::Message;
 use crate::models::TabId;
 
@@ -45,6 +47,37 @@ use super::state::ConfiguratorApp;
 /// built beside it: the two are replaced together, so a row and the values it
 /// is handed cannot drift apart.
 pub(crate) type Binding = Box<dyn FnMut(&ConfiguratorApp, &AppSearchSummary)>;
+
+thread_local! {
+    static REPLACING_PAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Marks the pages as being replaced for as long as it lives.
+///
+/// A language change rebuilds every page from the model. Tearing the old
+/// pages down closes any popover they own, and a closing editor popover
+/// normally reports that as the user canceling the edit. While this guard is
+/// alive those signals are the rebuild's, not the user's, so they are not
+/// sent: the model keeps the edit, and the new page reopens it.
+pub(crate) struct ReplacingPages(());
+
+impl ReplacingPages {
+    pub(crate) fn begin() -> Self {
+        REPLACING_PAGES.with(|flag| flag.set(true));
+        Self(())
+    }
+}
+
+impl Drop for ReplacingPages {
+    fn drop(&mut self) {
+        REPLACING_PAGES.with(|flag| flag.set(false));
+    }
+}
+
+/// Whether the pages are being replaced right now; see [`ReplacingPages`].
+pub(crate) fn replacing_pages() -> bool {
+    REPLACING_PAGES.with(std::cell::Cell::get)
+}
 
 /// Writes editable text the model owns without reporting it as a user edit.
 ///
@@ -83,7 +116,7 @@ pub(crate) struct BuiltPage {
 /// Stable `GtkStack` child name for a tab (deep links and view sync key off
 /// the model's `active_tab`, never off these strings).
 pub(crate) fn stack_name(tab: TabId) -> &'static str {
-    tab.title()
+    tab.stack_name()
 }
 
 /// Builds every page in sidebar order.
@@ -117,7 +150,10 @@ pub(crate) fn build_all(sender: &ComponentSender<ConfiguratorApp>) -> Vec<(TabId
 pub(crate) fn validate_u32_range(value: &str, min: u32, max: u32) -> Option<String> {
     match value.trim().parse::<u32>() {
         Ok(parsed) if (min..=max).contains(&parsed) => None,
-        _ => Some(format!("Enter a whole number between {min} and {max}.")),
+        _ => Some(trf(
+            "Enter a whole number between {} and {}.",
+            &[&min, &max],
+        )),
     }
 }
 
@@ -384,3 +420,6 @@ impl PageBuilder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

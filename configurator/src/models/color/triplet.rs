@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::super::error::FormError;
 use super::super::util::{format_float, parse_f64};
 
@@ -26,7 +28,7 @@ impl ColorTripletInput {
             if trimmed.is_empty() {
                 return Err(FormError::new(
                     format!("{field}[{index}]"),
-                    "Value is required",
+                    tr("Value is required"),
                 ));
             }
             let parsed = parse_f64(trimmed)

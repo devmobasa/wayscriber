@@ -142,6 +142,7 @@ fn write_receipt() -> Result<()> {
         "reports": launched_with(crate::env_vars::OVERLAY_SESSION_REPORTS_ENV),
         "home": launched_with(crate::env_vars::OVERLAY_HOME_SESSION_ENV),
         "preferred": launched_with(crate::env_vars::OVERLAY_PREFERRED_SESSION_ENV),
+        "language": launched_with(crate::env_vars::OVERLAY_LANGUAGE_ENV),
         "pid": std::process::id(),
         "generation": std::env::var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV)?,
     });

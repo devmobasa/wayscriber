@@ -5,6 +5,8 @@
 //! contained a comma could not be typed back in — and made every entry a string
 //! the user had to spell exactly. Keeping the list a list removes both.
 
+use wayscriber::i18n::trf;
+
 use std::fmt;
 
 use wayscriber::draw::{families_match, system_font_families};
@@ -25,7 +27,11 @@ impl fmt::Display for FontCycleEditError {
             Self::BlankFamily => formatter.write_str("A font cycle entry cannot be blank"),
             Self::DuplicateFamily(family) => write!(
                 formatter,
-                "\"{family}\" is already in the font cycle; choose a different font or remove its other row"
+                "{}",
+                trf(
+                    "\"{}\" is already in the font cycle; choose a different font or remove its other row",
+                    &[&family],
+                )
             ),
             Self::NoInstalledFonts => {
                 formatter.write_str("No installed fonts are available to add")

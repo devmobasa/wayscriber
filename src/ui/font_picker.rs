@@ -5,6 +5,7 @@
 //! visible window is capped: only the rows on screen are ever laid out, so a
 //! system with 269 families costs the same as one with 12.
 
+use crate::i18n::{tr, trf};
 use crate::input::state::{
     FontPickerLayout, FontPickerRow, FontPickerTarget, InputState, font_picker_layout,
 };
@@ -125,7 +126,7 @@ fn query_line(
 
     let query = state.font_picker_query();
     let (text, dim) = if query.is_empty() {
-        ("Type to find a font".to_string(), true)
+        (tr("Type to find a font").to_string(), true)
     } else {
         (query.to_string(), false)
     };
@@ -258,7 +259,7 @@ fn empty_note(ctx: &cairo::Context, layout: FontPickerLayout) {
         layout.list_x + ROW_TEXT_INSET,
         layout.list_y + layout.list_height / 2.0 + CHROME_FONT_SIZE / 2.5,
         layout.list_width - ROW_TEXT_INSET * 2.0,
-        "No font matches that",
+        tr("No font matches that"),
     );
 }
 
@@ -271,7 +272,7 @@ fn loading_note(ctx: &cairo::Context, layout: FontPickerLayout) {
         layout.list_x + ROW_TEXT_INSET,
         layout.list_y + layout.list_height / 2.0 + CHROME_FONT_SIZE / 2.5,
         layout.list_width - ROW_TEXT_INSET * 2.0,
-        "Loading system fonts…",
+        tr("Loading system fonts…"),
     );
 }
 
@@ -284,7 +285,7 @@ fn unavailable_note(ctx: &cairo::Context, layout: FontPickerLayout) {
         layout.list_x + ROW_TEXT_INSET,
         layout.list_y + layout.list_height / 2.0 + CHROME_FONT_SIZE / 2.5,
         layout.list_width - ROW_TEXT_INSET * 2.0,
-        "System fonts could not be loaded",
+        tr("System fonts could not be loaded"),
     );
 }
 
@@ -296,12 +297,15 @@ fn caption(ctx: &cairo::Context, layout: FontPickerLayout, state: &InputState) {
     theme::set_color(ctx, overlay::TEXT_HINT);
 
     let size = CHROME_FONT_SIZE - 1.0;
-    let left = format!("{target} · Tab: {}", state.font_picker_filter().label());
-    const KEYS: &str = "Enter apply · Esc cancel";
+    let left = trf(
+        "{} · Tab: {}",
+        &[&target, &state.font_picker_filter().label()],
+    );
+    let keys = tr("Enter apply · Esc cancel");
     let (left_width, keys_width) = share_line(
         layout.query_width - TEXT_GAP,
         text_width(ctx, "Sans", size, &left),
-        text_width(ctx, "Sans", size, KEYS),
+        text_width(ctx, "Sans", size, keys),
     );
 
     draw_text_right(
@@ -311,7 +315,7 @@ fn caption(ctx: &cairo::Context, layout: FontPickerLayout, state: &InputState) {
         layout.query_x + layout.query_width,
         layout.caption_y,
         keys_width,
-        KEYS,
+        keys,
     );
     draw_text(
         ctx,

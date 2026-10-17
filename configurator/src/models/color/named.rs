@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorMode {
     Named,
@@ -34,28 +36,28 @@ impl NamedColorOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Red => "Red",
-            Self::Green => "Green",
-            Self::Blue => "Blue",
-            Self::Yellow => "Yellow",
-            Self::Orange => "Orange",
-            Self::Pink => "Pink",
-            Self::White => "White",
-            Self::Black => "Black",
-            Self::Custom => "Custom",
+            Self::Red => tr("Red"),
+            Self::Green => tr("Green"),
+            Self::Blue => tr("Blue"),
+            Self::Yellow => tr("Yellow"),
+            Self::Orange => tr("Orange"),
+            Self::Pink => tr("Pink"),
+            Self::White => tr("White"),
+            Self::Black => tr("Black"),
+            Self::Custom => tr("Custom"),
         }
     }
 
     pub fn as_value(&self) -> &'static str {
         match self {
-            Self::Red => "red",
-            Self::Green => "green",
-            Self::Blue => "blue",
-            Self::Yellow => "yellow",
-            Self::Orange => "orange",
-            Self::Pink => "pink",
-            Self::White => "white",
-            Self::Black => "black",
+            Self::Red => tr("red"),
+            Self::Green => tr("green"),
+            Self::Blue => tr("blue"),
+            Self::Yellow => tr("yellow"),
+            Self::Orange => tr("orange"),
+            Self::Pink => tr("pink"),
+            Self::White => tr("white"),
+            Self::Black => tr("black"),
             Self::Custom => "",
         }
     }

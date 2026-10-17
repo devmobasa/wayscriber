@@ -960,6 +960,12 @@ theme = "auto"
 # Options: "auto", "on", "off"
 reduced_motion = "auto"
 
+# UI language: overlay chrome, About window, background mode, configurator
+# Options: "auto", "en", "zh-CN" ("auto" follows the desktop locale and falls
+# back to English when that locale has no translation). Each process reads it
+# when it starts; background mode needs a restart.
+language = "auto"
+
 # Show the status bar and its configured contents
 show_status_bar = true
 
@@ -1130,9 +1136,10 @@ to save it.
 - `"bottom-left"`: Lower left corner (default)
 - `"bottom-right"`: Lower right corner
 
-**Theme & Motion:**
+**Theme, Motion & Language:**
 - **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome. The command palette supports `"light"` throughout its search, results, shortcut editing, and tooltips. Other popups retain their complete dark palette until migrated.
 - **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
+- **Language**: `language` selects the interface language — overlay chrome, the About window, background mode's tray and notices, and the configurator. `"auto"` (default) follows the desktop locale, `"en"` forces English, and `"zh-CN"` forces Simplified Chinese. A locale this build has no catalog for falls back to English, so `"auto"` is always safe. For one run, `wayscriber --active|--freeze|--daemon|--about --language CODE` overrides the setting without changing the file, and so does `WAYSCRIBER_LANGUAGE`; the flag wins over the variable. `wayscriber --list-languages` lists the codes and says which language is in effect and why. Picking a language in the configurator previews it there at once and is written on Save; the overlay and the About window use it the next time they open, and background mode after it restarts. `"auto"` follows each process's own locale, and a systemd user service can see a different one than your terminal. Canvas content you type or name stays exactly as you wrote it. See `docs/I18N.md` for the catalog format, local catalog overrides, and the surfaces that are not translated yet.
 
 **UI Styling:**
 - **Font sizes**: Customize text size for status bar and help overlay
@@ -1157,6 +1164,7 @@ to save it.
 **Defaults:**
 - Theme: auto (currently dark)
 - Reduced motion: auto (full motion)
+- Language: auto (follows the desktop locale)
 - Show status bar: true
 - Interactive status bar segments: true
 - Status bar content items: true, except the About/version chip (false); the output item appears only with two or more outputs
@@ -2688,6 +2696,8 @@ These override behavior at runtime. Bool-ish values treat anything except `0`, `
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
 - `WAYSCRIBER_ICON_THEME_PATH=/path/to/icons` replaces the icon theme path the tray advertises; an empty value advertises none (default: the install prefix's `share/icons` with the symbolic tray icon, unless the XDG data directories already cover it)
 - `WAYSCRIBER_RESUME_SESSION=1/0` forces session persistence on/off for the current run (default: unset; follows config)
+- `WAYSCRIBER_LANGUAGE=en|zh-CN|auto` sets the interface language for the current run (overrides `[ui] language`; `--language` overrides it)
+- `WAYSCRIBER_LOCALE_DIR=/path` names a directory of translation catalogs to merge over the built-in ones (default: `$XDG_DATA_HOME/wayscriber/locales`; see `docs/I18N.md`)
 - `WAYSCRIBER_CONFIGURATOR=/path/to/wayscriber-configurator` overrides the configurator executable path
 - `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` disables the background update check for this run (overrides `[updates] check`; `--check-update` still works)
 - `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)

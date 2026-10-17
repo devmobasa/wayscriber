@@ -3,6 +3,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use wayscriber::i18n::{tr, trf};
 use wayscriber::session::try_lock_exclusive;
 
 use crate::models::{
@@ -34,9 +35,9 @@ pub(super) async fn forget_session_catalog_entry(
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
             if removed {
-                "Forgot session metadata.".to_string()
+                tr("Forgot session metadata.").to_string()
             } else {
-                "Session was already absent from the catalog.".to_string()
+                tr("Session was already absent from the catalog.").to_string()
             },
             items,
         ))
@@ -57,9 +58,9 @@ pub(super) async fn rename_session_catalog_entry(
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
             if let Some(entry) = renamed {
-                format!("Renamed session to {}.", entry.display_name)
+                trf("Renamed session to {}.", &[&entry.display_name])
             } else {
-                "Session was already absent from the catalog.".to_string()
+                tr("Session was already absent from the catalog.").to_string()
             },
             items,
         ))
@@ -75,7 +76,7 @@ pub(super) async fn reveal_session_catalog_entry(
         reveal_path_parent(&item.path)?;
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
-            format!("Opened folder for {}.", item.display_name),
+            trf("Opened folder for {}.", &[&item.display_name]),
             items,
         ))
     })
@@ -99,9 +100,9 @@ pub(super) async fn clear_session_catalog_entry(
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
             if outcome.removed_any() {
-                format!("Cleared saved data for {}.", item.display_name)
+                trf("Cleared saved data for {}.", &[&item.display_name])
             } else {
-                format!("No saved data found for {}.", item.display_name)
+                trf("No saved data found for {}.", &[&item.display_name])
             },
             items,
         ))
@@ -154,7 +155,7 @@ fn find_session_catalog_item(id: &str) -> Result<SessionCatalogItem, String> {
     load_session_catalog_sync()?
         .into_iter()
         .find(|item| item.id == id)
-        .ok_or_else(|| "Session is no longer in the catalog.".to_string())
+        .ok_or_else(|| tr("Session is no longer in the catalog.").to_string())
 }
 
 fn named_session_options_for_catalog_item(
@@ -176,7 +177,7 @@ fn ensure_session_config_available_for_destructive_action(
 ) -> Result<(), String> {
     if loaded.section_failed("session") {
         return Err(
-            "Clear saved tool state is disabled because config.toml [session] could not be read; fix the section and retry"
+            tr("Clear saved tool state is disabled because config.toml [session] could not be read; fix the section and retry")
                 .to_string(),
         );
     }
@@ -189,19 +190,23 @@ fn clear_tool_state_catalog_message(
 ) -> String {
     match outcome {
         wayscriber::session::ClearToolStateOutcome::NoSession => {
-            format!("No saved session file found for {display_name}.")
+            trf("No saved session file found for {}.", &[&display_name])
         }
         wayscriber::session::ClearToolStateOutcome::NoToolState => {
-            format!("No saved tool state found for {display_name}.")
+            trf("No saved tool state found for {}.", &[&display_name])
         }
         wayscriber::session::ClearToolStateOutcome::Cleared {
             preserved_board_data: true,
-        } => format!(
-            "Cleared saved tool state for {display_name}. Boards and history were preserved."
+        } => trf(
+            tr("Cleared saved tool state for {}. Boards and history were preserved."),
+            &[&display_name],
         ),
         wayscriber::session::ClearToolStateOutcome::Cleared {
             preserved_board_data: false,
-        } => format!("Cleared saved tool state for {display_name}. No board data was present."),
+        } => trf(
+            "Cleared saved tool state for {}. No board data was present.",
+            &[&display_name],
+        ),
     }
 }
 
@@ -211,16 +216,16 @@ fn reveal_path_parent(path: &Path) -> Result<(), String> {
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     if !parent.exists() {
-        return Err(format!(
-            "Session folder does not exist: {}",
-            parent.display()
+        return Err(trf(
+            tr("Session folder does not exist: {}"),
+            &[&parent.display()],
         ));
     }
 
     Command::new("xdg-open")
         .arg(parent)
         .spawn()
-        .map_err(|err| format!("failed to launch xdg-open: {err}"))?;
+        .map_err(|err| trf("failed to launch xdg-open: {}", &[&err]))?;
     Ok(())
 }
 
@@ -240,8 +245,8 @@ impl RuntimeLockKind {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Daemon => "daemon",
-            Self::Overlay => "overlay",
+            Self::Daemon => tr("daemon"),
+            Self::Overlay => tr("overlay"),
         }
     }
 }

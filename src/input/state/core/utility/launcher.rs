@@ -1,6 +1,7 @@
 use super::super::base::InputState;
 use crate::config::Config;
 use crate::configurator_destination::ConfiguratorDestination;
+use crate::i18n::tr;
 use crate::input::state::{HelperLaunchRequest, PendingBackendAction, Toast, ToastPriority};
 use std::path::Path;
 
@@ -25,7 +26,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "launcher",
-                Toast::warning("No saved capture to open."),
+                Toast::warning(tr("No saved capture to open.")),
             );
             return;
         };
@@ -38,7 +39,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "launcher",
-                Toast::warning("Capture folder is unavailable."),
+                Toast::warning(tr("Capture folder is unavailable.")),
             );
             return;
         };
@@ -58,7 +59,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Critical,
                     "launcher",
-                    Toast::error("Unable to resolve config path."),
+                    Toast::error(tr("Unable to resolve config path.")),
                 );
                 return false;
             }

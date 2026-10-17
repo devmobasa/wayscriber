@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::{tr, trf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopToolbarControlId {
@@ -134,9 +135,9 @@ pub(super) fn utility_action(utility: TopToolbarUtility) -> Action {
 
 pub(super) fn utility_short_label(utility: TopToolbarUtility) -> &'static str {
     match utility {
-        TopToolbarUtility::Screenshot => "Capture",
-        TopToolbarUtility::Ocr => "Copy text",
-        TopToolbarUtility::Highlight => "Highlight",
+        TopToolbarUtility::Screenshot => tr("Capture"),
+        TopToolbarUtility::Ocr => tr("Copy text"),
+        TopToolbarUtility::Highlight => tr("Highlight"),
         _ => action_short_label(utility_action(utility)),
     }
 }
@@ -220,8 +221,8 @@ fn preset_color_label(snapshot: &ToolbarSnapshot, color: crate::draw::Color) -> 
 pub(super) fn preset_accessible_label(snapshot: &ToolbarSnapshot, index: usize) -> String {
     let slot = index + 1;
     match preset_summary(snapshot, index) {
-        Some(summary) => format!("Preset {slot}: {summary}"),
-        None => format!("Preset {slot} (empty)"),
+        Some(summary) => trf("Preset {}: {}", &[&slot, &summary]),
+        None => trf("Preset {} (empty)", &[&slot]),
     }
 }
 
@@ -232,14 +233,18 @@ pub(super) fn preset_tooltip(snapshot: &ToolbarSnapshot, index: usize) -> String
     let slot = index + 1;
     match preset_summary(snapshot, index) {
         Some(summary) => format_binding_label(
-            &format!("Preset {slot}: {summary}"),
+            &trf("Preset {}: {}", &[&slot, &summary]),
             snapshot.binding_hints.apply_preset(slot),
         ),
         None => match snapshot.binding_hints.save_preset(slot) {
-            Some(binding) => {
-                format!("Preset {slot} (empty): click or press {binding} to save the current tool")
-            }
-            None => format!("Preset {slot} (empty): click to save the current tool"),
+            Some(binding) => trf(
+                "Preset {} (empty): click or press {} to save the current tool",
+                &[&slot, &binding],
+            ),
+            None => trf(
+                "Preset {} (empty): click to save the current tool",
+                &[&slot],
+            ),
         },
     }
 }

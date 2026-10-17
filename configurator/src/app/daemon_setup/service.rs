@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -75,7 +77,7 @@ pub(super) fn require_systemctl_available() -> Result<(), String> {
     if command_available("systemctl") {
         Ok(())
     } else {
-        Err(format!("systemctl is not available in {PATH_ENV}."))
+        Err(trf("systemctl is not available in {}.", &[&PATH_ENV]))
     }
 }
 
@@ -99,16 +101,16 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     let binary_path = resolve_wayscriber_binary_path()?;
 
     let service_path = user_service_unit_path().ok_or_else(|| {
-        "Cannot resolve home directory; failed to determine user systemd service path.".to_string()
+        tr("Cannot resolve home directory; failed to determine user systemd service path.")
+            .to_string()
     })?;
     let service_dir = service_path
         .parent()
-        .ok_or_else(|| "Invalid user service path".to_string())?;
+        .ok_or_else(|| tr("Invalid user service path").to_string())?;
     fs::create_dir_all(service_dir).map_err(|err| {
-        format!(
+        trf(
             "Failed to create user service directory {}: {}",
-            service_dir.display(),
-            err
+            &[&service_dir.display(), &err],
         )
     })?;
 
@@ -119,10 +121,9 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
         AtomicWriteOptions::user_config_file(),
     )
     .map_err(|err| {
-        format!(
+        trf(
             "Failed to write user service file {}: {}",
-            service_path.display(),
-            err
+            &[&service_path.display(), &err],
         )
     })?;
 
@@ -245,21 +246,21 @@ fn query_wayscriber_runtime_capabilities(
         .arg(RUNTIME_CAPABILITIES_FLAG)
         .output()
         .map_err(|err| {
-            format!(
+            trf(
                 "Failed to execute `{}` with args [{}]: {}",
-                binary_path.display(),
-                RUNTIME_CAPABILITIES_FLAG,
-                err
+                &[&binary_path.display(), &RUNTIME_CAPABILITIES_FLAG, &err],
             )
         })?;
 
     if !output.status.success() {
-        return Err(format!(
+        return Err(trf(
             "`{}` failed with args [{}]\nstdout: {}\nstderr: {}",
-            binary_path.display(),
-            RUNTIME_CAPABILITIES_FLAG,
-            String::from_utf8_lossy(&output.stdout).trim(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            &[
+                &binary_path.display(),
+                &RUNTIME_CAPABILITIES_FLAG,
+                &String::from_utf8_lossy(&output.stdout).trim(),
+                &String::from_utf8_lossy(&output.stderr).trim(),
+            ],
         ));
     }
 
@@ -283,10 +284,9 @@ pub(super) fn remove_portal_shortcut_dropin() -> Result<bool, String> {
         return Ok(false);
     }
     fs::remove_file(&path).map_err(|err| {
-        format!(
+        trf(
             "Failed to remove portal shortcut drop-in {}: {}",
-            path.display(),
-            err
+            &[&path.display(), &err],
         )
     })?;
     Ok(true)
@@ -318,8 +318,9 @@ pub(super) fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
         return Ok(path);
     }
 
-    Err(format!(
-        "Unable to locate `wayscriber` binary. Set {BIN_ENV} or install `wayscriber` in {PATH_ENV}."
+    Err(trf(
+        "Unable to locate `wayscriber` binary. Set {} or install `wayscriber` in {}.",
+        &[&BIN_ENV, &PATH_ENV],
     ))
 }
 

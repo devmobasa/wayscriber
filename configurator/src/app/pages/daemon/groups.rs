@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -23,24 +25,26 @@ pub(super) fn overview_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Background Mode")
-        .description("Run wayscriber in the background and toggle it with a keyboard shortcut.")
+        .title(tr("Background Mode"))
+        .description(tr(
+            "Run wayscriber in the background and toggle it with a keyboard shortcut.",
+        ))
         .build();
 
     let body = column_box();
     let status_row = row_box();
     let status_label = body_label("");
     status_label.add_css_class("heading");
-    let refresh = action_button("Refresh", DaemonAction::RefreshStatus, sender);
+    let refresh = action_button(tr("Refresh"), DaemonAction::RefreshStatus, sender);
     status_row.append(&status_label);
     status_row.append(&refresh);
     body.append(&status_row);
 
     let feedback_label = body_label("");
     body.append(&feedback_label);
-    let busy_label = caption_label("Working...");
+    let busy_label = caption_label(tr("Working..."));
     body.append(&busy_label);
-    let loading_label = hint_label("Checking your system and background service status...");
+    let loading_label = hint_label(tr("Checking your system and background service status..."));
     body.append(&loading_label);
     group.add(&body);
 
@@ -51,14 +55,9 @@ pub(super) fn overview_group(
         set_visible(&status_row, shown_areas(summary).status);
         set_sensitive(&refresh, !app.daemon.is_busy());
 
-        match app
-            .daemon
-            .feedback
-            .as_ref()
-            .map(crate::app::daemon_workflow::DaemonFeedback::text)
-        {
+        match app.daemon.feedback.as_ref() {
             Some(feedback) => {
-                set_label(&feedback_label, feedback);
+                set_label(&feedback_label, &feedback.text());
                 apply_tone(&feedback_label, feedback_tone(feedback));
                 set_visible(&feedback_label, true);
             }
@@ -77,8 +76,8 @@ pub(super) fn install_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Step 1: Install the service")
-        .description("Install wayscriber as a background service.")
+        .title(tr("Step 1: Install the service"))
+        .description(tr("Install wayscriber as a background service."))
         .build();
 
     let row = row_box();
@@ -109,24 +108,26 @@ pub(super) fn shortcut_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Step 2: Set your shortcut")
+        .title(tr("Step 2: Set your shortcut"))
         .build();
 
-    let locked_label = hint_label("Install the background service first, then set your shortcut.");
+    let locked_label = hint_label(tr(
+        "Install the background service first, then set your shortcut.",
+    ));
     group.add(&locked_label);
 
     let body = column_box();
-    body.append(&body_label(
+    body.append(&body_label(tr(
         "Choose a keyboard shortcut to toggle drawing on/off.",
-    ));
-    body.append(&hint_label(
+    )));
+    body.append(&hint_label(tr(
         "The shortcut takes effect after the background service is installed and running.",
-    ));
+    )));
     let configured_label = hint_label("");
     body.append(&configured_label);
-    let manual_label = warning_label(
+    let manual_label = warning_label(tr(
         "Automatic shortcut setup is unavailable here. Add a manual keybind for `wayscriber --daemon-toggle`.",
-    );
+    ));
     body.append(&manual_label);
 
     let entry = gtk::Entry::builder().hexpand(true).build();
@@ -140,7 +141,7 @@ pub(super) fn shortcut_group(
     };
     body.append(&entry);
 
-    let apply = action_button("Apply Shortcut", DaemonAction::ApplyShortcut, sender);
+    let apply = action_button(tr("Apply Shortcut"), DaemonAction::ApplyShortcut, sender);
     apply.add_css_class("suggested-action");
     body.append(&apply);
     group.add(&body);
@@ -170,7 +171,7 @@ pub(super) fn shortcut_group(
             Some(configured) => {
                 set_label(
                     &configured_label,
-                    &format!("Current shortcut: {configured}"),
+                    &trf("Current shortcut: {}", &[&configured]),
                 );
                 set_visible(&configured_label, true);
             }
@@ -190,22 +191,24 @@ pub(super) fn light_controls_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Light passthrough controls")
-        .description("Install global controls for light passthrough and quick drawing.")
+        .title(tr("Light passthrough controls"))
+        .description(tr(
+            "Install global controls for light passthrough and quick drawing.",
+        ))
         .build();
 
     let path_label = hint_label("");
     group.add(&path_label);
 
     let native_body = column_box();
-    let service_warning = warning_label(
+    let service_warning = warning_label(tr(
         "Install the background service first so these bindings have a daemon to control.",
-    );
+    ));
     native_body.append(&service_warning);
     let native_row = row_box();
     let state_label = body_label("");
     let install = action_button(
-        "Install Hyprland Light Controls",
+        tr("Install Hyprland Light Controls"),
         DaemonAction::ApplyLightControls,
         sender,
     );
@@ -215,16 +218,16 @@ pub(super) fn light_controls_group(
     native_body.append(&native_row);
     group.add(&native_body);
 
-    let manual_label = warning_label(
+    let manual_label = warning_label(tr(
         "Automatic light controls setup is unavailable here. Add compositor bindings for `wayscriber --light-toggle` and `wayscriber --light-draw-toggle`.",
-    );
+    ));
     group.add(&manual_label);
 
     bindings.push(Box::new(move |app, _summary| {
         let status = app.daemon.status.as_ref();
         match status.and_then(|status| status.light_controls_config_path.as_deref()) {
             Some(path) => {
-                set_label(&path_label, &format!("Hyprland include: {path}"));
+                set_label(&path_label, &trf("Hyprland include: {}", &[&path]));
                 set_visible(&path_label, true);
             }
             None => set_visible(&path_label, false),
@@ -254,21 +257,21 @@ pub(super) fn start_group(
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
-        .title("Step 3: Start the service")
+        .title(tr("Step 3: Start the service"))
         .build();
 
-    let locked_label = hint_label("Install the background service first.");
+    let locked_label = hint_label(tr("Install the background service first."));
     group.add(&locked_label);
 
     let body = column_box();
-    body.append(&body_label("Enable and start the background service."));
+    body.append(&body_label(tr("Enable and start the background service.")));
     let state_label = body_label("");
     body.append(&state_label);
 
     let running_row = row_box();
-    let restart = action_button("Restart", DaemonAction::RestartService, sender);
+    let restart = action_button(tr("Restart"), DaemonAction::RestartService, sender);
     let stop = action_button(
-        "Stop & Disable",
+        tr("Stop & Disable"),
         DaemonAction::StopAndDisableService,
         sender,
     );
@@ -276,7 +279,7 @@ pub(super) fn start_group(
     running_row.append(&stop);
     body.append(&running_row);
 
-    let start = action_button("Start", DaemonAction::EnableAndStartService, sender);
+    let start = action_button(tr("Start"), DaemonAction::EnableAndStartService, sender);
     start.add_css_class("suggested-action");
     body.append(&start);
     group.add(&body);
@@ -307,10 +310,12 @@ pub(super) fn details_group(
     sender: &ComponentSender<ConfiguratorApp>,
     bindings: &mut Vec<Binding>,
 ) -> adw::PreferencesGroup {
-    let group = adw::PreferencesGroup::builder().title("Details").build();
+    let group = adw::PreferencesGroup::builder()
+        .title(tr("Details"))
+        .build();
 
     let body = column_box();
-    let detecting_label = hint_label("Detecting environment...");
+    let detecting_label = hint_label(tr("Detecting environment..."));
     let desktop_label = hint_label("");
     let backend_label = hint_label("");
     let shortcut_capability_label = hint_label("");
@@ -331,7 +336,7 @@ pub(super) fn details_group(
         body.append(label);
     }
 
-    let refresh = action_button("Refresh", DaemonAction::RefreshStatus, sender);
+    let refresh = action_button(tr("Refresh"), DaemonAction::RefreshStatus, sender);
     body.append(&refresh);
     group.add(&body);
 
@@ -357,7 +362,7 @@ pub(super) fn details_group(
         for (label, text) in [
             (
                 &desktop_label,
-                format!("Desktop: {}", status.desktop.label()),
+                trf("Desktop: {}", &[&status.desktop.label()]),
             ),
             (
                 &backend_label,
@@ -388,7 +393,7 @@ pub(super) fn details_group(
                 status
                     .service_unit_path
                     .as_deref()
-                    .map(|path| format!("Service file: {path}")),
+                    .map(|path| trf("Service file: {}", &[&path])),
             ),
             (&light_controls_label, light_controls_details(status)),
             (&missing_tools_label, missing_tools(status)),

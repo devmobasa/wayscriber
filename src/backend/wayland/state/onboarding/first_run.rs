@@ -1,6 +1,7 @@
 use crate::backend::wayland::state::WaylandState;
 use crate::config::{RadialMenuMouseBinding, keybindings::Action};
 use crate::draw::DirtyFullReason;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{DrawingState, Key, state::PendingOnboardingUsage};
 use crate::onboarding::{FirstRunStep, OnboardingState};
@@ -67,9 +68,9 @@ impl WaylandState {
                     self.input_state.push_toast(
                         ToastPriority::Info,
                         "onboarding.first_run",
-                        Toast::info(format!(
+                        Toast::info(trf(
                             "Background mode enabled. Service file: {}",
-                            summary.service_path.display()
+                            &[&summary.service_path.display()],
                         )),
                     );
                 }
@@ -79,9 +80,11 @@ impl WaylandState {
                         false,
                     );
                     self.save_onboarding_state();
-                    self.input_state.push_toast(ToastPriority::Critical, "onboarding.first_run", Toast::error(format!(
-                            "Background mode setup failed: {err}. You can set this up later in Background Mode settings."
-                        )));
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "onboarding.first_run",
+                        Toast::error(background_mode_setup_failed_message(&err)),
+                    );
                 }
             }
         } else {
@@ -90,7 +93,9 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "onboarding.first_run",
-                Toast::info("Tour complete. Set up background mode any time in the configurator."),
+                Toast::info(tr(
+                    "Tour complete. Set up background mode any time in the configurator.",
+                )),
             );
         }
 
@@ -127,7 +132,7 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Info,
             "onboarding.first_run",
-            Toast::info("Onboarding skipped."),
+            Toast::info(tr("Onboarding skipped.")),
         );
         self.mark_first_run_card_dirty();
         true
@@ -261,10 +266,17 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "onboarding.first_run",
-                Toast::info("Nice work. Onboarding complete."),
+                Toast::info(tr("Nice work. Onboarding complete.")),
             );
         }
     }
+}
+
+fn background_mode_setup_failed_message(err: &dyn std::fmt::Display) -> String {
+    trf(
+        "Background mode setup failed: {}. You can set this up later in Background Mode settings.",
+        &[err],
+    )
 }
 
 /// Folds this tick's teaching signals into the tour's checklist state.
@@ -546,7 +558,7 @@ pub(super) enum ReplayStart {
 /// on screen.
 pub(super) fn replay_start(presenter_mode: bool, zoom_engaged: bool) -> ReplayStart {
     if presenter_mode {
-        ReplayStart::Refuse("Leave presenter mode to replay the tour.")
+        ReplayStart::Refuse(tr("Leave presenter mode to replay the tour."))
     } else if zoom_engaged {
         ReplayStart::ExitZoomFirst
     } else {

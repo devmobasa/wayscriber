@@ -4,6 +4,7 @@ use super::{
     WAYSCRIBER_SELECTION_MIME, file_list, image, system,
 };
 use crate::draw::{EmbeddedImage, Shape};
+use crate::i18n::tr;
 use crate::input::state::{
     ClipboardFingerprint, ClipboardPasteRequest, WayscriberClipboardSelection,
 };
@@ -280,7 +281,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             TransferPlan::action(PasteAction::TryFreshLocalFallbackOrWarn {
                 request,
                 missing_warning: TransferWarning::ClipboardUnavailable,
-                fallback_message: "System clipboard unavailable; pasted local copy.",
+                fallback_message: tr("System clipboard unavailable; pasted local copy."),
             })
         }
         ClipboardPasteResult::NoSupportedMime { offered } => {
@@ -333,7 +334,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             TransferPlan::action(PasteAction::TryFreshLocalFallbackOrWarn {
                 request,
                 missing_warning: TransferWarning::ReadTimedOut,
-                fallback_message: "Clipboard read timed out; pasted local copy.",
+                fallback_message: tr("Clipboard read timed out; pasted local copy."),
             })
         }
         ClipboardPasteResult::ClipboardError(err) => {
@@ -341,7 +342,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             TransferPlan::action(PasteAction::TryFreshLocalFallbackOrWarn {
                 request,
                 missing_warning: TransferWarning::ClipboardError,
-                fallback_message: "Failed to read clipboard; pasted local copy.",
+                fallback_message: tr("Failed to read clipboard; pasted local copy."),
             })
         }
         ClipboardPasteResult::MalformedPrivateSelection(err) => {

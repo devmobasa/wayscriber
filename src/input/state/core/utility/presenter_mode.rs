@@ -10,6 +10,7 @@
 use super::super::base::InputState;
 use super::super::modes::PresenterRestore;
 use crate::domain::Action;
+use crate::i18n::tr;
 use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
@@ -104,7 +105,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "presenter",
-                Toast::info("Stopping Presenter Mode"),
+                Toast::info(tr("Stopping Presenter Mode")),
             );
         }
         self.dirty_tracker.mark_full();
@@ -178,7 +179,8 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Action,
                 "presenter",
-                Toast::info("Presenter Mode active").action("Exit", Action::TogglePresenterMode),
+                Toast::info(tr("Presenter Mode active"))
+                    .action(tr("Exit"), Action::TogglePresenterMode),
             );
         }
         self.dirty_tracker.mark_full();

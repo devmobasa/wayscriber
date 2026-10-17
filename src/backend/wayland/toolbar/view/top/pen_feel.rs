@@ -110,7 +110,11 @@ pub(super) fn push_pen_feel_panel(
     tree.push(WidgetNode::decor(
         "top.feel.title",
         (x, y, w, model::PEN_FEEL_TITLE_H),
-        WidgetKind::Label(LabelSpec::new(model::PEN_FEEL_TITLE, FONT_SIZE_LABEL, true)),
+        WidgetKind::Label(LabelSpec::new(
+            model::pen_feel_title(),
+            FONT_SIZE_LABEL,
+            true,
+        )),
     ));
     y += model::PEN_FEEL_TITLE_H;
 

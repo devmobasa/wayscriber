@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::rows::{connect_button, plain_row, row_content_box, side_label};
 use relm4::{ComponentSender, gtk};
 
@@ -63,7 +65,7 @@ pub(super) fn build_mapping_row(
     content.append(&to.swatch);
 
     let remove = gtk::Button::builder()
-        .label("Remove")
+        .label(tr("Remove"))
         .valign(gtk::Align::Center)
         .halign(gtk::Align::End)
         .hexpand(true)
@@ -138,7 +140,7 @@ pub(super) fn build_add_mapping_row(
 ) -> gtk::ListBoxRow {
     let content = row_content_box();
     let button = gtk::Button::builder()
-        .label("Add mapping")
+        .label(tr("Add mapping"))
         .halign(gtk::Align::Start)
         .build();
     connect_button(&button, Message::RenderProfileMappingAdd(index), sender);

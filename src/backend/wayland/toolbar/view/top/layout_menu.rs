@@ -7,6 +7,7 @@
 //! `model::layout_menu_entries`, so both frontends list the same presets
 //! with the same wording.
 
+use crate::i18n::trf;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
 use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
@@ -78,7 +79,7 @@ pub(super) fn push_layout_menu(
     let row_x = px + model::LAYOUT_MENU_PAD;
     let mut row_y = py + model::LAYOUT_MENU_PAD;
     for entry in model::layout_menu_entries(snapshot.layout_mode) {
-        let key = model::layout_mode_label(entry.mode).to_ascii_lowercase();
+        let key = model::layout_mode_id(entry.mode);
         let row = (
             row_x,
             row_y,
@@ -95,7 +96,7 @@ pub(super) fn push_layout_menu(
             },
             Some(Interaction::click(
                 entry.event.clone(),
-                Some(format!("Switch to the {} layout", entry.label)),
+                Some(trf("Switch to the {} layout", &[&entry.label])),
             )),
         ));
         let text_x = row_x + TEXT_INSET;
@@ -152,7 +153,7 @@ mod tests {
             assert!(tree.node_by_id(&"top.layout.panel".into()).is_some());
 
             for other in ToolbarLayoutMode::ALL {
-                let key = model::layout_mode_label(other).to_ascii_lowercase();
+                let key = model::layout_mode_id(other);
                 let row = tree
                     .node_by_id(&format!("top.layout.{key}").into())
                     .unwrap_or_else(|| panic!("{other:?} row"));

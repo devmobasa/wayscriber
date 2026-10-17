@@ -4,6 +4,7 @@ use super::{CommandEntry, CommandPaletteState, command_palette_entries};
 use crate::config::action_meta::{ActionCategory, ActionMeta};
 use crate::config::keybindings::canonical_key_names;
 use crate::domain::Action;
+use crate::i18n::tr;
 use crate::input::state::core::search::fuzzy_score;
 
 struct CommandMatch {
@@ -363,17 +364,17 @@ fn action_category_name(category: ActionCategory) -> &'static str {
 /// Human-cased category names for palette group headers.
 fn action_category_display_name(category: ActionCategory) -> &'static str {
     match category {
-        ActionCategory::Core => "Core",
-        ActionCategory::Drawing => "Drawing",
-        ActionCategory::Tools => "Tools",
-        ActionCategory::Colors => "Colors",
-        ActionCategory::UI => "Interface",
-        ActionCategory::Board => "Boards",
-        ActionCategory::Zoom => "Zoom",
-        ActionCategory::Capture => "Capture",
-        ActionCategory::Selection => "Selection",
-        ActionCategory::History => "History",
-        ActionCategory::Presets => "Presets",
+        ActionCategory::Core => tr("Core"),
+        ActionCategory::Drawing => tr("Drawing"),
+        ActionCategory::Tools => tr("Tools"),
+        ActionCategory::Colors => tr("Colors"),
+        ActionCategory::UI => tr("Interface"),
+        ActionCategory::Board => tr("Boards"),
+        ActionCategory::Zoom => tr("Zoom"),
+        ActionCategory::Capture => tr("Capture"),
+        ActionCategory::Selection => tr("Selection"),
+        ActionCategory::History => tr("History"),
+        ActionCategory::Presets => tr("Presets"),
     }
 }
 

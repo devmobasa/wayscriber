@@ -13,6 +13,7 @@ impl ConfigDraft {
     pub(super) fn apply_ui(&self, config: &mut Config, errors: &mut Vec<FormError>) {
         config.ui.theme = self.ui_theme.to_theme();
         config.ui.reduced_motion = self.ui_reduced_motion.to_reduced_motion();
+        config.ui.language = self.ui_language.to_language();
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.status_bar_interactive = self.ui_status_bar_interactive;
         config.ui.active_output_badge = self.ui_active_output_badge;

@@ -2,6 +2,7 @@ use super::super::primitives::{
     BADGE_PADDING, BADGE_STACK_GAP, BadgeAlign, draw_badge_with_engine,
 };
 use super::super::theme::overlay;
+use crate::i18n::{tr, trf};
 use crate::ui_text::UiTextEngine;
 
 /// Vertical inset of the floating page badge from the screen edge.
@@ -20,9 +21,15 @@ pub(crate) const EDITING_BADGE_TINT: [f64; 4] = [0.2, 0.55, 0.65, 0.9];
 // Shared badge specs (labels, font sizes, hint) consumed by both the
 // top-corner badges below and the HUD-stacked pills in `bar.rs`
 // (`layout_mode_badges`) so the two renderings cannot drift.
+//
+// The label and hint text is drawn, so it is translated here, in one place,
+// rather than at each surface: their literals must stay visible to the
+// translation guard, which cannot see through a constant.
 
 /// FROZEN badge label.
-pub(crate) const FROZEN_BADGE_LABEL: &str = "FROZEN";
+pub(crate) fn frozen_badge_label() -> &'static str {
+    tr("FROZEN")
+}
 /// FROZEN badge label font size.
 pub(crate) const FROZEN_BADGE_FONT_SIZE: f64 = 16.0;
 /// Zoom badge label font size.
@@ -30,19 +37,25 @@ pub(crate) const ZOOM_BADGE_FONT_SIZE: f64 = 15.0;
 /// Pan badge label font size.
 pub(crate) const PAN_BADGE_FONT_SIZE: f64 = 14.0;
 /// EDITING badge label.
-pub(crate) const EDITING_BADGE_LABEL: &str = "EDITING";
+pub(crate) fn editing_badge_label() -> &'static str {
+    tr("EDITING")
+}
 /// EDITING badge label font size.
 pub(crate) const EDITING_BADGE_FONT_SIZE: f64 = 15.0;
 /// EDITING badge hint line shown below the label.
-pub(crate) const EDITING_BADGE_HINT: (&str, f64) = ("Return=save  Esc=cancel", 11.0);
+pub(crate) fn editing_badge_hint() -> &'static str {
+    tr("Return=save  Esc=cancel")
+}
+/// EDITING badge hint font size.
+pub(crate) const EDITING_BADGE_HINT_FONT_SIZE: f64 = 11.0;
 
 /// Zoom badge label ("ZOOM {pct}%", plus " LOCKED" when the zoom is locked).
 pub(crate) fn zoom_badge_label(zoom_scale: f64, locked: bool) -> String {
     let pct = (zoom_scale * 100.0).round() as i32;
     if locked {
-        format!("ZOOM {pct}% LOCKED")
+        trf("ZOOM {}% LOCKED", &[&pct])
     } else {
-        format!("ZOOM {pct}%")
+        trf("ZOOM {}%", &[&pct])
     }
 }
 
@@ -50,9 +63,9 @@ pub(crate) fn zoom_badge_label(zoom_scale: f64, locked: bool) -> String {
 /// renders the same label uppercased.
 pub(crate) fn pan_badge_label(panned: bool) -> &'static str {
     if panned {
-        "PANNED Space+Drag"
+        tr("PANNED Space+Drag")
     } else {
-        "PAN Space+Drag"
+        tr("PAN Space+Drag")
     }
 }
 
@@ -73,7 +86,7 @@ pub(crate) fn render_frozen_badge_with_engine(
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
-        FROZEN_BADGE_LABEL,
+        frozen_badge_label(),
         FROZEN_BADGE_FONT_SIZE,
         None,
         FROZEN_BADGE_TINT,
@@ -199,9 +212,9 @@ pub(crate) fn render_editing_badge_with_engine(
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
-        EDITING_BADGE_LABEL,
+        editing_badge_label(),
         EDITING_BADGE_FONT_SIZE,
-        Some(EDITING_BADGE_HINT),
+        Some((editing_badge_hint(), EDITING_BADGE_HINT_FONT_SIZE)),
         EDITING_BADGE_TINT,
     );
 }
@@ -246,22 +259,23 @@ pub(crate) fn render_page_badge_with_engine(
     let truncated_name = crate::util::truncate_with_ellipsis(board_name, 20);
     let board_label = if !truncated_name.trim().is_empty() {
         if board_count > 1 {
-            Some(format!(
+            Some(trf(
                 "Board {}/{}: {}",
-                board_index + 1,
-                board_count.max(1),
-                truncated_name
+                &[&(board_index + 1), &board_count.max(1), &truncated_name],
             ))
         } else {
-            Some(format!("Board: {}", truncated_name))
+            Some(trf("Board: {}", &[&truncated_name]))
         }
     } else if board_count > 1 {
-        Some(format!("Board {}/{}", board_index + 1, board_count.max(1)))
+        Some(trf(
+            "Board {}/{}",
+            &[&(board_index + 1), &board_count.max(1)],
+        ))
     } else {
         None
     };
     let page_label = if page_count > 1 {
-        Some(format!("Page {}/{}", page_index + 1, page_count.max(1)))
+        Some(trf("Page {}/{}", &[&(page_index + 1), &page_count.max(1)]))
     } else {
         None
     };

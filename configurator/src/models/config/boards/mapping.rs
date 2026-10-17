@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use std::collections::HashSet;
 
 use wayscriber::config::{
@@ -110,7 +112,7 @@ impl BoardItemDraft {
             _ => {
                 errors.push(FormError::new(
                     format!("boards.items[{index}].grid.spacing"),
-                    "Enter a whole number from 8 to 200.",
+                    tr("Enter a whole number from 8 to 200."),
                 ));
                 return None;
             }

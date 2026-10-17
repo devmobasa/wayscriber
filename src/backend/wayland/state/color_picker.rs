@@ -4,6 +4,7 @@ use super::{HexCopyOutcome, WaylandState};
 use crate::backend::wayland::RuntimeOperationPoll;
 use crate::clipboard_text::{ClipboardTextError, read_clipboard_text_via_command};
 use crate::draw::Color;
+use crate::i18n::{tr, trf};
 use crate::input::state::{HexPasteTarget, Toast, ToastPriority};
 use crate::input::state::{color_to_hex, parse_hex_color};
 use std::time::Duration;
@@ -21,7 +22,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "color_picker",
-                Toast::warning("Failed to copy to clipboard"),
+                Toast::warning(tr("Failed to copy to clipboard")),
             );
         }
     }
@@ -37,7 +38,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",
-                    Toast::info(format!("Copied {hex}")),
+                    Toast::info(trf("Copied {}", &[&hex])),
                 );
             }
             RuntimeOperationPoll::Ready {
@@ -61,7 +62,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",
-                    Toast::warning("Failed to copy to clipboard"),
+                    Toast::warning(tr("Failed to copy to clipboard")),
                 );
             }
             RuntimeOperationPoll::Disconnected { context: hex, .. } => {
@@ -69,7 +70,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",
-                    Toast::warning("Failed to copy to clipboard"),
+                    Toast::warning(tr("Failed to copy to clipboard")),
                 );
             }
         }
@@ -82,7 +83,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "color_picker",
-                Toast::warning("Failed to copy to clipboard"),
+                Toast::warning(tr("Failed to copy to clipboard")),
             );
         }
     }
@@ -102,7 +103,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",
-                    Toast::warning("Clipboard empty"),
+                    Toast::warning(tr("Clipboard empty")),
                 );
                 return;
             }
@@ -111,7 +112,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",
-                    Toast::warning("Failed to paste from clipboard"),
+                    Toast::warning(tr("Failed to paste from clipboard")),
                 );
                 return;
             }
@@ -120,7 +121,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",
-                    Toast::warning("Failed to paste from clipboard"),
+                    Toast::warning(tr("Failed to paste from clipboard")),
                 );
                 return;
             }
@@ -148,15 +149,15 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "color_picker",
-                Toast::info(format!("Pasted {}", hex)),
+                Toast::info(trf("Pasted {}", &[&hex])),
             );
         } else {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "color_picker",
-                Toast::warning(format!(
+                Toast::warning(trf(
                     "Invalid hex: {}",
-                    clipboard.chars().take(20).collect::<String>()
+                    &[&clipboard.chars().take(20).collect::<String>()],
                 )),
             );
         }

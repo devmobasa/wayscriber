@@ -4,6 +4,7 @@ mod overlays;
 mod text;
 
 use super::super::*;
+use crate::i18n::tr;
 pub(super) use context::CanvasRenderCtx;
 
 const SPOTLIGHT_MAGNIFIER_TOAST_SOURCE: &str = "spotlight-magnifier";
@@ -22,9 +23,9 @@ impl WaylandState {
         if source.is_complete() {
             return;
         }
-        self.push_spotlight_magnifier_toast(
+        self.push_spotlight_magnifier_toast(tr(
             "Freeze the screen to preview Spotlight magnification.",
-        );
+        ));
         // This toast already says what the standing page warning would, so
         // adopt its dedup key: the next frame must not repeat it.
         self.spotlight.note_page_source(source, true, true);
@@ -47,9 +48,9 @@ impl WaylandState {
             .spotlight
             .note_page_source(source, has_magnified_region, show_toast)
         {
-            self.push_spotlight_magnifier_toast(
+            self.push_spotlight_magnifier_toast(tr(
                 "This page has magnified Spotlights. Freeze the screen to preview them.",
-            );
+            ));
         }
     }
 
@@ -226,14 +227,14 @@ impl WaylandState {
             }
             Ok(crate::draw::SpotlightMagnifierOutcome::AllocationFailed) => {
                 self.push_spotlight_magnifier_warning(
-                    "Spotlight magnification could not allocate its render buffer.",
+                    tr("Spotlight magnification could not allocate its render buffer."),
                     render_transients,
                 );
             }
             Err(error) => {
                 log::warn!("Spotlight magnifier render failed: {error}");
                 self.push_spotlight_magnifier_warning(
-                    "Spotlight magnification could not be rendered.",
+                    tr("Spotlight magnification could not be rendered."),
                     render_transients,
                 );
             }

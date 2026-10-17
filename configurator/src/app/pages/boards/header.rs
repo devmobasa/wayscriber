@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{ComponentSender, gtk};
 
 use gtk::prelude::*;
@@ -17,16 +19,16 @@ pub(super) struct HeaderRow {
 impl HeaderRow {
     pub(super) fn set_labels(&self, index: usize, id: &str, name: &str) {
         let title = if name.trim().is_empty() {
-            format!("Board {}", index + 1)
+            trf("Board {}", &[&(index + 1)])
         } else {
             name.trim().to_string()
         };
         set_label(&self.title, &title);
 
         let id_label = if id.trim().is_empty() {
-            "id: <unset>".to_string()
+            tr("id: <unset>").to_string()
         } else {
-            format!("id: {}", id.trim())
+            trf("id: {}", &[&id.trim()])
         };
         set_label(&self.id, &id_label);
     }
@@ -57,13 +59,17 @@ pub(super) fn build_header_row(
     content.append(&labels);
     for (label, message) in [
         (
-            if expanded { "Collapse" } else { "Expand" },
+            if expanded {
+                tr("Collapse")
+            } else {
+                tr("Expand")
+            },
             Message::BoardsCollapseToggled(index),
         ),
-        ("Up", Message::BoardsMoveItemUp(index)),
-        ("Down", Message::BoardsMoveItemDown(index)),
-        ("Duplicate", Message::BoardsDuplicateItem(index)),
-        ("Remove", Message::BoardsRemoveItem(index)),
+        (tr("Up"), Message::BoardsMoveItemUp(index)),
+        (tr("Down"), Message::BoardsMoveItemDown(index)),
+        (tr("Duplicate"), Message::BoardsDuplicateItem(index)),
+        (tr("Remove"), Message::BoardsRemoveItem(index)),
     ] {
         let button = gtk::Button::builder()
             .label(label)

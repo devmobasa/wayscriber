@@ -29,6 +29,8 @@ mod section;
 #[cfg(test)]
 mod tests;
 
+use wayscriber::i18n::tr;
+
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
@@ -57,15 +59,15 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         .map(|option| option.label().to_string())
         .collect();
 
-    page.group_in_area("Render Profiles", SearchArea::RenderProfilesGeneral)
+    page.group_in_area(tr("Render Profiles"), SearchArea::RenderProfilesGeneral)
         .switch_row(
-            "Preview canvas",
+            tr("Preview canvas"),
             "",
             |app| app.draft.render_profiles.apply_to_canvas,
             Message::RenderProfileApplyCanvasChanged,
         )
         .switch_row(
-            "Preview UI",
+            tr("Preview UI"),
             "",
             |app| app.draft.render_profiles.apply_to_ui,
             Message::RenderProfileApplyUiChanged,
@@ -74,7 +76,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     add_active_row(&mut page);
 
     page.combo_row(
-        "Canvas export profile",
+        tr("Canvas export profile"),
         "",
         export_options,
         export_labels,
@@ -91,7 +93,9 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 
 /// The startup profile: `Off` plus one entry per profile id.
 fn add_active_row(page: &mut PageBuilder) {
-    let row = adw::ComboRow::builder().title("Startup profile").build();
+    let row = adw::ComboRow::builder()
+        .title(tr("Startup profile"))
+        .build();
     row.set_model(Some(&gtk::StringList::new(&[])));
     let handler = {
         let sender = page.sender();
@@ -130,7 +134,7 @@ fn add_active_row(page: &mut PageBuilder) {
 /// mode was `Named profile`.
 fn add_export_profile_row(page: &mut PageBuilder) {
     let row = adw::ComboRow::builder()
-        .title("Named export profile")
+        .title(tr("Named export profile"))
         .build();
     row.set_model(Some(&gtk::StringList::new(&[])));
     // Hidden until the export mode asks for it, so it cannot flash on the
@@ -163,7 +167,7 @@ fn add_export_profile_row(page: &mut PageBuilder) {
 
 fn add_add_button(page: &mut PageBuilder) {
     let button = gtk::Button::builder()
-        .label("Add profile")
+        .label(tr("Add profile"))
         .halign(gtk::Align::Start)
         .margin_top(12)
         .build();

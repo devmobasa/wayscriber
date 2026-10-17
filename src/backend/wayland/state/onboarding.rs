@@ -1,5 +1,6 @@
 use crate::config::keybindings::Action;
 use crate::domain::OnboardingTip;
+use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastCommand, ToastPriority};
 use crate::onboarding::DEFERRED_HINT_REPEAT_MAX;
 use std::time::{Duration, Instant};
@@ -58,9 +59,9 @@ fn status_bar_board_picker_entry(input: &crate::input::InputState) -> Option<&'s
     let board = input.ui_visibility.show_status_board_badge && input.boards.show_badge();
     let page = input.ui_visibility.show_status_page_badge;
     match (board, page) {
-        (true, true) => Some("Board or Page"),
-        (true, false) => Some("Board"),
-        (false, true) => Some("Page"),
+        (true, true) => Some(tr("Board or Page")),
+        (true, false) => Some(tr("Board")),
+        (false, true) => Some(tr("Page")),
         (false, false) => None,
     }
 }
@@ -74,9 +75,12 @@ fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
 
 fn automatic_tip_toast(message: impl Into<String>, tip: OnboardingTip) -> Toast {
     Toast::info(message)
-        .command("Got it", ToastCommand::AcknowledgeTip { tip, then: None })
+        .command(
+            tr("Got it"),
+            ToastCommand::AcknowledgeTip { tip, then: None },
+        )
         .secondary_command(
-            "Tip settings…",
+            tr("Tip settings…"),
             ToastCommand::AcknowledgeTip {
                 tip,
                 then: Some(Action::OpenConfiguratorOnboardingHints),
@@ -402,50 +406,53 @@ impl WaylandState {
             let (tip, message) = match hint {
                 ContextualHint::Help => (
                     OnboardingTip::Help,
-                    format!(
+                    trf(
                         "Press {} for all shortcuts.",
-                        self.shortcut_label(Action::ToggleHelp, "Help")
+                        &[&self.shortcut_label(Action::ToggleHelp, tr("Help"))],
                     ),
                 ),
                 ContextualHint::CommandPalette => (
                     OnboardingTip::CommandPalette,
-                    format!(
+                    trf(
                         "Press {} to search actions.",
-                        self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
+                        &[&self
+                            .shortcut_label(Action::ToggleCommandPalette, tr("Command Palette"))],
                     ),
                 ),
                 ContextualHint::StatusBar(entry) => (
                     OnboardingTip::StatusBar,
-                    format!(
-                        "Click the {entry} segment in the status bar to switch boards and pages."
+                    trf(
+                        "Click the {} segment in the status bar to switch boards and pages.",
+                        &[&entry],
                     ),
                 ),
                 ContextualHint::CanvasPopover => (
                     OnboardingTip::CanvasPopover,
-                    "Open \u{201c}Canvas\u{2026}\u{201d} from the \u{2026} overflow for boards, \
-                     pages, zoom, and advanced controls."
-                        .to_string(),
+                    format!(
+                        "{} {}",
+                        tr("Open \u{201c}Canvas\u{2026}\u{201d} from the \u{2026} overflow"),
+                        tr("for boards, pages, zoom, and advanced controls.")
+                    ),
                 ),
                 ContextualHint::ZoomChip => (
                     OnboardingTip::ZoomChip,
                     match self.shortcut_label_opt(Action::ZoomIn) {
-                        Some(key) => {
-                            format!(
-                                "Zoom from the chip in the bottom-right corner, or press {key}."
-                            )
-                        }
-                        None => "Zoom from the chip in the bottom-right corner.".to_string(),
+                        Some(key) => trf(
+                            "Zoom from the chip in the bottom-right corner, or press {}.",
+                            &[&key],
+                        ),
+                        None => tr("Zoom from the chip in the bottom-right corner.").to_string(),
                     },
                 ),
                 ContextualHint::QuickAccess => {
                     let context = self.shortcut_label_opt(Action::OpenContextMenu);
                     let radial = self.shortcut_label_opt(Action::ToggleRadialMenu);
                     let message = match (context, radial) {
-                        (Some(c), Some(r)) => format!("Try quick access: {c} or {r}."),
-                        (Some(c), None) => format!("Try quick access: {c}."),
-                        (None, Some(r)) => format!("Try quick access: {r}."),
+                        (Some(c), Some(r)) => trf("Try quick access: {} or {}.", &[&c, &r]),
+                        (Some(c), None) => trf("Try quick access: {}.", &[&c]),
+                        (None, Some(r)) => trf("Try quick access: {}.", &[&r]),
                         (None, None) => {
-                            "Quick-access menus are available from toolbar actions.".to_string()
+                            tr("Quick-access menus are available from toolbar actions.").to_string()
                         }
                     };
                     (OnboardingTip::QuickAccess, message)
@@ -476,14 +483,14 @@ impl WaylandState {
             return;
         }
 
-        let toolbar_binding = self.shortcut_label(Action::ToggleToolbar, "Toggle toolbar");
+        let toolbar_binding = self.shortcut_label(Action::ToggleToolbar, tr("Toggle toolbar"));
         let outcome = self.input_state.push_toast(
             ToastPriority::Hint,
             "onboarding.toolbar",
-            Toast::info("Toolbars hidden")
-                .action(format!("Show ({toolbar_binding})"), Action::ToggleToolbar)
+            Toast::info(tr("Toolbars hidden"))
+                .action(trf("Show ({})", &[&toolbar_binding]), Action::ToggleToolbar)
                 .secondary_command(
-                    "Tip settings…",
+                    tr("Tip settings…"),
                     ToastCommand::AcknowledgeTip {
                         tip: OnboardingTip::ToolbarHidden,
                         then: Some(Action::OpenConfiguratorOnboardingHints),
@@ -521,8 +528,9 @@ impl WaylandState {
         self.input_state.push_toast(
             ToastPriority::Critical,
             "onboarding.persistence",
-            Toast::warning(format!(
-                "Automatic guidance is off because onboarding progress could not be saved: {error}"
+            Toast::warning(trf(
+                "Automatic guidance is off because onboarding progress could not be saved: {}",
+                &[&error],
             ))
             .once_per_content(),
         );

@@ -5,6 +5,7 @@ use super::super::base::{
 use super::super::feedback::ToastBounds;
 use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 use std::time::Instant;
 
 impl InputState {
@@ -174,7 +175,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Info,
                     "capture.save",
-                    Toast::warning("No pending image to save"),
+                    Toast::warning(tr("No pending image to save")),
                 );
                 self.trigger_blocked_feedback();
             }
@@ -217,8 +218,8 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Critical,
                     "capture.save",
-                    Toast::error(format!("Save failed: {message}"))
-                        .action("Retry", Action::SavePendingToFile),
+                    Toast::error(trf("Save failed: {}", &[&message]))
+                        .action(tr("Retry"), Action::SavePendingToFile),
                 );
                 self.trigger_blocked_feedback();
             }

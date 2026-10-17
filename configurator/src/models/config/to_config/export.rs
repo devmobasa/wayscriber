@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use super::super::draft::ConfigDraft;
 use crate::models::error::FormError;
 use crate::models::util::parse_f64;
@@ -128,7 +130,7 @@ fn optional_filename_template(
         Err(reason) => {
             errors.push(FormError::new(
                 field,
-                format!("Filename template: {reason}."),
+                trf("Filename template: {}.", &[&reason]),
             ));
             None
         }
@@ -141,7 +143,7 @@ fn validate_pdf_label_template_for_content(
 ) -> Result<bool, String> {
     let is_custom = content == PdfLabelContentMode::CustomTemplate;
     if is_custom && template.trim().is_empty() {
-        return Err("Expected a non-empty template".to_string());
+        return Err(tr("Expected a non-empty template").to_string());
     }
     match validate_pdf_label_template(template) {
         Ok(()) => Ok(true),
@@ -160,10 +162,10 @@ fn parse_pdf_number(
 ) {
     match parse_f64(value.trim()) {
         Ok(parsed) if !parsed.is_finite() => {
-            errors.push(FormError::new(field, "Expected a finite numeric value"));
+            errors.push(FormError::new(field, tr("Expected a finite numeric value")));
         }
         Ok(parsed) if parsed < min || parsed > max => {
-            errors.push(FormError::new(field, format!("Expected {min}-{max}")));
+            errors.push(FormError::new(field, trf("Expected {}-{}", &[&min, &max])));
         }
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err)),

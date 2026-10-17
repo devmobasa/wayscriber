@@ -5,6 +5,7 @@
 //! Invalid text stays in place until one of those replacements happens.
 
 use wayscriber::config::Shortcut;
+use wayscriber::i18n::{tr, trf};
 
 use super::draft::KeybindingsDraft;
 use super::field::KeybindingField;
@@ -121,11 +122,11 @@ fn apply_parsed_text(
 pub fn reset_tooltip(defaults: &KeybindingsDraft, field: KeybindingField) -> String {
     let default = defaults.value_for(field).unwrap_or("").trim();
     if default.is_empty() {
-        "Reset to default: Unbound".to_string()
+        tr("Reset to default: Unbound").to_string()
     } else if default.contains(',') {
-        format!("Reset to defaults: {default}")
+        trf("Reset to defaults: {}", &[&default])
     } else {
-        format!("Reset to default: {default}")
+        trf("Reset to default: {}", &[&default])
     }
 }
 

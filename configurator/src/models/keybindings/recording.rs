@@ -4,6 +4,8 @@
 //! module only translates a keyval or button event plus modifier flags into
 //! that type, so the recorder can be tested without a GTK display.
 
+use wayscriber::i18n::{tr, trf};
+
 #[cfg(feature = "tablet-input")]
 use wayscriber::config::StylusTrigger;
 use wayscriber::config::keybindings::MAX_SEQUENCE_STEPS;
@@ -51,12 +53,12 @@ impl KeyboardModifiers {
 /// Result of one recorder key event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordedKeyboard {
-    /// Bare modifiers: keep the recorder open and show `preview`.
-    Pending { preview: String },
+    /// Bare modifiers: keep the recorder open and preview them.
+    Pending { modifiers: KeyboardModifiers },
     /// A complete chord ready to add.
     Chord(KeyBinding),
     /// The key cannot be stored; the recorder stays open.
-    Unsupported { message: String },
+    Unsupported { reason: RecorderRejection },
 }
 
 /// GTK/GDK input source as the recorder needs it.
@@ -71,14 +73,70 @@ pub enum RecorderDeviceKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordedDevice {
     Trigger(ShortcutTrigger),
-    Unsupported { message: String },
+    Unsupported { reason: RecorderRejection },
+}
+
+/// Why the recorder turned an input down. Kept as the reason, not its text,
+/// so the prompt reads in the current UI language whenever it is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecorderRejection {
+    UnsupportedKey,
+    UnidentifiedDevice,
+    DrawingButton,
+    UnknownMouseButton,
+    #[cfg(not(feature = "tablet-input"))]
+    TabletUnavailable,
+    #[cfg(feature = "tablet-input")]
+    StylusTip,
+    #[cfg(feature = "tablet-input")]
+    UnknownStylusButton,
+    SequenceKeyboardOnly,
+}
+
+impl RecorderRejection {
+    pub fn message(self) -> String {
+        match self {
+            Self::UnsupportedKey => unsupported_key_message().to_string(),
+            Self::UnidentifiedDevice => device_unidentified_message(),
+            Self::DrawingButton => {
+                tr("Left, middle, and right already own drawing and toolbar input.").to_string()
+            }
+            Self::UnknownMouseButton => trf(
+                "Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{}.",
+                &[&MAX_POINTER_EXTRA],
+            ),
+            #[cfg(not(feature = "tablet-input"))]
+            Self::TabletUnavailable => tablet_unavailable_hint().to_string(),
+            #[cfg(feature = "tablet-input")]
+            Self::StylusTip => tr("The stylus tip cannot be bound as an action.").to_string(),
+            #[cfg(feature = "tablet-input")]
+            Self::UnknownStylusButton => {
+                tr("Unknown stylus button. Use StylusPrimary or StylusSecondary.").to_string()
+            }
+            Self::SequenceKeyboardOnly => sequence_keyboard_only_message().to_string(),
+        }
+    }
+}
+
+/// What the recorder's prompt says, rendered by
+/// [`ShortcutRecorderState::prompt`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecorderPrompt {
+    /// Waiting for a chord, or for the next chord of a sequence.
+    Waiting,
+    /// Modifiers held so far.
+    Pending(KeyboardModifiers),
+    Rejected(RecorderRejection),
 }
 
 /// Live recorder owned by [`crate::app::state::ConfiguratorApp`].
+///
+/// Holds the recording, never prompt text: the recorder can be open while
+/// the UI language changes, and its prompt must follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShortcutRecorderState {
     pub field: KeybindingField,
-    pub prompt: String,
+    prompt: RecorderPrompt,
     sequence_steps: Option<Vec<KeyBinding>>,
 }
 
@@ -86,7 +144,7 @@ impl ShortcutRecorderState {
     pub fn new(field: KeybindingField) -> Self {
         Self {
             field,
-            prompt: waiting_prompt(),
+            prompt: RecorderPrompt::Waiting,
             sequence_steps: None,
         }
     }
@@ -94,9 +152,27 @@ impl ShortcutRecorderState {
     pub fn new_sequence(field: KeybindingField) -> Self {
         Self {
             field,
-            prompt: sequence_waiting_prompt(&[]),
+            prompt: RecorderPrompt::Waiting,
             sequence_steps: Some(Vec::new()),
         }
+    }
+
+    /// The prompt in the current UI language.
+    pub fn prompt(&self) -> String {
+        match (self.prompt, self.sequence_steps.as_deref()) {
+            (RecorderPrompt::Rejected(reason), _) => reason.message(),
+            (RecorderPrompt::Waiting, None) => waiting_prompt(),
+            (RecorderPrompt::Waiting, Some(steps)) => sequence_waiting_prompt(steps),
+            (RecorderPrompt::Pending(modifiers), None) => pending_preview(modifiers),
+            (RecorderPrompt::Pending(modifiers), Some(steps)) => {
+                sequence_pending_prompt(steps, &pending_preview(modifiers))
+            }
+        }
+    }
+
+    /// Says why the last input was turned down, until the next one.
+    pub fn reject(&mut self, reason: RecorderRejection) {
+        self.prompt = RecorderPrompt::Rejected(reason);
     }
 
     pub fn is_sequence(&self) -> bool {
@@ -115,11 +191,9 @@ impl ShortcutRecorderState {
             .is_some_and(|steps| !steps.is_empty())
     }
 
-    pub fn apply_pending_preview(&mut self, preview: String) {
-        match &self.sequence_steps {
-            Some(steps) => self.prompt = sequence_pending_prompt(steps, &preview),
-            None => self.prompt = preview,
-        }
+    /// Previews the modifiers held so far.
+    pub fn show_pending(&mut self, modifiers: KeyboardModifiers) {
+        self.prompt = RecorderPrompt::Pending(modifiers);
     }
 
     /// Record a keyboard chord. Returns the finished shortcut when recording
@@ -132,7 +206,7 @@ impl ShortcutRecorderState {
         if steps.len() >= MAX_SEQUENCE_STEPS {
             return Some(Shortcut::Sequence(steps.clone()));
         }
-        self.prompt = sequence_waiting_prompt(steps);
+        self.prompt = RecorderPrompt::Waiting;
         None
     }
 
@@ -144,25 +218,25 @@ impl ShortcutRecorderState {
     pub fn remove_last_step(&mut self) {
         if let Some(steps) = self.sequence_steps.as_mut() {
             steps.pop();
-            self.prompt = sequence_waiting_prompt(steps);
+            self.prompt = RecorderPrompt::Waiting;
         }
     }
 }
 
 pub fn waiting_prompt() -> String {
-    "Press a shortcut.".to_string()
+    tr("Press a shortcut.").to_string()
 }
 
 fn sequence_waiting_prompt(steps: &[KeyBinding]) -> String {
     match steps {
-        [] => "Press the first chord.".to_string(),
-        [first] => format!("{first} then …"),
-        [first, second] => format!("{first} then {second} then …"),
+        [] => tr("Press the first chord.").to_string(),
+        [first] => trf("{} then …", &[&first]),
+        [first, second] => trf("{} then {} then …", &[&first, &second]),
         _ => steps
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
-            .join(" then "),
+            .join(tr(" then ")),
     }
 }
 
@@ -170,26 +244,28 @@ fn sequence_pending_prompt(steps: &[KeyBinding], preview: &str) -> String {
     if steps.is_empty() {
         preview.to_string()
     } else {
-        format!(
-            "{} then {preview}",
-            steps
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(" then ")
+        trf(
+            "{} then {}",
+            &[
+                &steps
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(tr(" then ")),
+                &preview,
+            ],
         )
     }
 }
 
 pub fn sequence_keyboard_only_message() -> &'static str {
-    "Sequences are keyboard-only."
+    tr("Sequences are keyboard-only.")
 }
 
 /// Map a GDK/X11 keyval and current modifiers onto the shared binding type.
 pub fn normalize_key_event(keyval: u32, modifiers: KeyboardModifiers) -> RecordedKeyboard {
     if is_supported_modifier_key(keyval) {
-        let preview = pending_preview(modifiers);
-        return RecordedKeyboard::Pending { preview };
+        return RecordedKeyboard::Pending { modifiers };
     }
 
     match key_name_from_keyval(keyval, modifiers.shift) {
@@ -204,7 +280,7 @@ pub fn normalize_key_event(keyval: u32, modifiers: KeyboardModifiers) -> Recorde
             RecordedKeyboard::Chord(binding)
         }
         None => RecordedKeyboard::Unsupported {
-            message: unsupported_key_message().to_string(),
+            reason: RecorderRejection::UnsupportedKey,
         },
     }
 }
@@ -219,17 +295,20 @@ pub fn pending_preview(modifiers: KeyboardModifiers) -> String {
 }
 
 pub fn super_consumed_hint() -> &'static str {
-    "If Super never appears, the desktop captured it. Use Edit as Text."
+    tr("If Super never appears, the desktop captured it. Use Edit as Text.")
 }
 
 #[cfg(not(feature = "tablet-input"))]
 pub fn tablet_unavailable_hint() -> &'static str {
-    "Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text."
+    tr(
+        "Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text.",
+    )
 }
 
 pub fn device_unidentified_message() -> String {
-    format!(
-        "This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{MAX_POINTER_EXTRA}, StylusPrimary, StylusSecondary."
+    trf(
+        "This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{}, StylusPrimary, StylusSecondary.",
+        &[&MAX_POINTER_EXTRA],
     )
 }
 
@@ -243,7 +322,7 @@ pub fn normalize_button_event(
         RecorderDeviceKind::Mouse => normalize_mouse_button(button, modifiers),
         RecorderDeviceKind::Pen => normalize_stylus_button(button, modifiers),
         RecorderDeviceKind::Other => RecordedDevice::Unsupported {
-            message: device_unidentified_message(),
+            reason: RecorderRejection::UnidentifiedDevice,
         },
     }
 }
@@ -258,12 +337,10 @@ fn normalize_mouse_button(button: u32, modifiers: KeyboardModifiers) -> Recorded
             logo: modifiers.super_held,
         })),
         None if (1..=3).contains(&button) => RecordedDevice::Unsupported {
-            message: "Left, middle, and right already own drawing and toolbar input.".to_string(),
+            reason: RecorderRejection::DrawingButton,
         },
         None => RecordedDevice::Unsupported {
-            message: format!(
-                "Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{MAX_POINTER_EXTRA}."
-            ),
+            reason: RecorderRejection::UnknownMouseButton,
         },
     }
 }
@@ -271,7 +348,7 @@ fn normalize_mouse_button(button: u32, modifiers: KeyboardModifiers) -> Recorded
 #[cfg(not(feature = "tablet-input"))]
 fn normalize_stylus_button(_button: u32, _modifiers: KeyboardModifiers) -> RecordedDevice {
     RecordedDevice::Unsupported {
-        message: tablet_unavailable_hint().to_string(),
+        reason: RecorderRejection::TabletUnavailable,
     }
 }
 
@@ -286,16 +363,16 @@ fn normalize_stylus_button(button: u32, modifiers: KeyboardModifiers) -> Recorde
             logo: modifiers.super_held,
         })),
         None if button == 1 => RecordedDevice::Unsupported {
-            message: "The stylus tip cannot be bound as an action.".to_string(),
+            reason: RecorderRejection::StylusTip,
         },
         None => RecordedDevice::Unsupported {
-            message: "Unknown stylus button. Use StylusPrimary or StylusSecondary.".to_string(),
+            reason: RecorderRejection::UnknownStylusButton,
         },
     }
 }
 
 pub fn unsupported_key_message() -> &'static str {
-    "This key cannot be recorded. Use Edit as Text if Wayscriber names it."
+    tr("This key cannot be recorded. Use Edit as Text if Wayscriber names it.")
 }
 
 fn is_supported_modifier_key(keyval: u32) -> bool {
@@ -353,10 +430,10 @@ fn named_key(keyval: u32) -> Option<&'static str> {
         keyval::ESCAPE => "Escape",
         keyval::RETURN | keyval::KP_ENTER => "Return",
         keyval::BACKSPACE => "Backspace",
-        keyval::MENU => "Menu",
-        keyval::DELETE | keyval::KP_DELETE => "Delete",
+        keyval::MENU => tr("Menu"),
+        keyval::DELETE | keyval::KP_DELETE => tr("Delete"),
         keyval::HOME | keyval::KP_HOME => "Home",
-        keyval::END | keyval::KP_END => "End",
+        keyval::END | keyval::KP_END => tr("End"),
         keyval::PAGE_UP | keyval::KP_PAGE_UP => "PageUp",
         keyval::PAGE_DOWN | keyval::KP_PAGE_DOWN => "PageDown",
         keyval::LEFT | keyval::KP_LEFT => "ArrowLeft",
@@ -576,8 +653,8 @@ mod tests {
             keyval::HYPER_L,
         ] {
             match normalize_key_event(keyval, mods(true, false, false, false)) {
-                RecordedKeyboard::Pending { preview } => {
-                    assert_eq!(preview, "Ctrl+…");
+                RecordedKeyboard::Pending { modifiers } => {
+                    assert_eq!(pending_preview(modifiers), "Ctrl+…");
                 }
                 other => panic!("modifier {keyval:#x} should stay pending, got {other:?}"),
             }
@@ -599,8 +676,9 @@ mod tests {
     #[test]
     fn unknown_keyvals_are_unsupported() {
         match normalize_key_event(0xffff_fffe, KeyboardModifiers::default()) {
-            RecordedKeyboard::Unsupported { message } => {
-                assert!(message.contains("cannot be recorded"));
+            RecordedKeyboard::Unsupported { reason } => {
+                assert_eq!(reason, RecorderRejection::UnsupportedKey);
+                assert!(reason.message().contains("cannot be recorded"));
             }
             other => panic!("expected unsupported, got {other:?}"),
         }
@@ -626,7 +704,9 @@ mod tests {
     #[test]
     fn bare_super_stays_pending() {
         match normalize_key_event(keyval::SUPER_L, mods(false, false, false, true)) {
-            RecordedKeyboard::Pending { preview } => assert_eq!(preview, "Super+…"),
+            RecordedKeyboard::Pending { modifiers } => {
+                assert_eq!(pending_preview(modifiers), "Super+…");
+            }
             other => panic!("expected Super to stay pending, got {other:?}"),
         }
     }
@@ -686,7 +766,9 @@ mod tests {
             other => panic!("expected Ctrl+MouseForward, got {other:?}"),
         }
         match normalize_button_event(1, RecorderDeviceKind::Mouse, KeyboardModifiers::default()) {
-            RecordedDevice::Unsupported { message } => {
+            RecordedDevice::Unsupported { reason } => {
+                assert_eq!(reason, RecorderRejection::DrawingButton);
+                let message = reason.message();
                 assert!(message.contains("Left, middle, and right"), "{message}");
             }
             other => panic!("expected primary-button rejection, got {other:?}"),
@@ -708,7 +790,8 @@ mod tests {
     #[test]
     fn unidentified_devices_keep_edit_as_text() {
         match normalize_button_event(8, RecorderDeviceKind::Other, KeyboardModifiers::default()) {
-            RecordedDevice::Unsupported { message } => {
+            RecordedDevice::Unsupported { reason } => {
+                let message = reason.message();
                 assert!(message.contains("Edit as Text"), "{message}");
                 assert!(message.contains("MouseBack"), "{message}");
             }
@@ -735,7 +818,8 @@ mod tests {
     #[test]
     fn pen_buttons_are_unavailable_without_tablet_input() {
         match normalize_button_event(2, RecorderDeviceKind::Pen, KeyboardModifiers::default()) {
-            RecordedDevice::Unsupported { message } => {
+            RecordedDevice::Unsupported { reason } => {
+                let message = reason.message();
                 assert!(message.contains("unavailable"), "{message}");
             }
             other => panic!("expected unavailable tablet message, got {other:?}"),
@@ -748,13 +832,13 @@ mod tests {
         assert!(recorder.is_sequence());
         assert!(!recorder.can_finish());
         assert!(!recorder.can_remove_last());
-        assert_eq!(recorder.prompt, "Press the first chord.");
+        assert_eq!(recorder.prompt(), "Press the first chord.");
 
         let first = chord(u32::from(b'k'), mods(true, false, false, false));
         assert!(recorder.push_keyboard_step(first).is_none());
         assert!(recorder.can_remove_last());
         assert!(!recorder.can_finish());
-        assert_eq!(recorder.prompt, "Ctrl+K then …");
+        assert_eq!(recorder.prompt(), "Ctrl+K then …");
 
         let second = chord(u32::from(b'c'), mods(true, false, false, false));
         assert!(recorder.push_keyboard_step(second).is_none());
@@ -781,6 +865,37 @@ mod tests {
         recorder.push_keyboard_step(first);
         recorder.remove_last_step();
         assert!(!recorder.can_remove_last());
-        assert_eq!(recorder.prompt, "Press the first chord.");
+        assert_eq!(recorder.prompt(), "Press the first chord.");
+    }
+
+    #[test]
+    fn the_prompt_follows_the_ui_language_while_the_recorder_is_open() {
+        crate::test_env::in_language_child(
+            concat!(
+                module_path!(),
+                "::the_prompt_follows_the_ui_language_while_the_recorder_is_open"
+            ),
+            || {
+                use wayscriber::domain::Language;
+                let mut sequence = ShortcutRecorderState::new_sequence(KeybindingField::Undo);
+                sequence
+                    .push_keyboard_step(chord(u32::from(b'k'), mods(true, false, false, false)));
+                let mut rejected = ShortcutRecorderState::new(KeybindingField::Undo);
+                rejected.reject(RecorderRejection::DrawingButton);
+                let waiting = ShortcutRecorderState::new(KeybindingField::Undo);
+                assert_eq!(sequence.prompt(), "Ctrl+K then …");
+
+                wayscriber::i18n::set_language(Language::SimplifiedChinese);
+
+                // The recording itself is untouched; only its words change.
+                assert_eq!(sequence.prompt(), "Ctrl+K 然后 …");
+                assert!(sequence.can_remove_last());
+                assert_eq!(
+                    rejected.prompt(),
+                    "左键、中键和右键已用于绘图和工具栏输入。"
+                );
+                assert_eq!(waiting.prompt(), "请按一个快捷键。");
+            },
+        );
     }
 }

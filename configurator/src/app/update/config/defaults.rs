@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use super::super::super::effects::Effect;
 use super::super::super::state::{
     ConfiguratorApp, ConfirmationPrompt, PendingConfirmation, StatusMessage,
@@ -42,7 +44,8 @@ impl ConfiguratorApp {
         self.sync_all_color_picker_hex();
         self.clear_defaults_confirmation();
         self.clear_shortcut_editing();
-        self.status = StatusMessage::info("Loaded default configuration (not saved).");
+        self.apply_draft_language();
+        self.status = StatusMessage::info(tr("Loaded default configuration (not saved)."));
         self.refresh_dirty_flag();
         Vec::new()
     }

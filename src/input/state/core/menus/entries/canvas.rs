@@ -2,6 +2,7 @@ use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, ContextMenuKind, MenuCommand};
 use crate::config::action_short_label;
 use crate::domain::Action;
+use crate::i18n::tr;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 impl InputState {
@@ -19,7 +20,7 @@ impl InputState {
 
         let frame = self.boards.active_frame();
         let undo = ContextMenuEntry::new(
-            "Undo",
+            tr("Undo"),
             self.shortcut_for_action(Action::Undo),
             frame.undo_stack_len() == 0,
             Some(MenuCommand::Undo),
@@ -30,7 +31,7 @@ impl InputState {
             undo.with_separator()
         });
         entries.push(ContextMenuEntry::new(
-            "Redo",
+            tr("Redo"),
             self.shortcut_for_action(Action::Redo),
             frame.redo_stack_len() == 0,
             Some(MenuCommand::Redo),
@@ -38,7 +39,7 @@ impl InputState {
 
         entries.push(self.paste_entry().with_separator());
         entries.push(ContextMenuEntry::new(
-            "Capture Region…",
+            tr("Capture Region…"),
             self.shortcut_for_action(Action::CaptureRegionInteractive),
             false,
             Some(MenuCommand::CaptureRegion),
@@ -48,7 +49,7 @@ impl InputState {
 
         entries.push(
             ContextMenuEntry::new(
-                "Command Palette",
+                tr("Command Palette"),
                 self.shortcut_for_action(Action::ToggleCommandPalette),
                 false,
                 Some(MenuCommand::OpenCommandPalette),
@@ -56,20 +57,20 @@ impl InputState {
             .with_separator(),
         );
         entries.push(ContextMenuEntry::new(
-            "Radial Menu",
+            tr("Radial Menu"),
             self.shortcut_for_action(Action::ToggleRadialMenu),
             false,
             Some(MenuCommand::OpenRadialMenu),
         ));
         self.push_chrome_recovery_entries(&mut entries);
         entries.push(ContextMenuEntry::new(
-            "Help",
+            tr("Help"),
             self.shortcut_for_action(Action::ToggleHelp),
             false,
             Some(MenuCommand::ToggleHelp),
         ));
         entries.push(ContextMenuEntry::new(
-            "Open Config File",
+            tr("Open Config File"),
             None::<String>,
             false,
             Some(MenuCommand::OpenConfigFile),
@@ -86,9 +87,9 @@ impl InputState {
         let has_locked = frame.shapes.iter().any(|shape| shape.locked);
         let has_unlocked = frame.shapes.iter().any(|shape| !shape.locked);
         let label = if has_locked {
-            "Clear Unlocked"
+            tr("Clear Unlocked")
         } else {
-            "Clear All"
+            tr("Clear All")
         };
         ContextMenuEntry::new(
             label,
@@ -105,14 +106,14 @@ impl InputState {
         // column. A zoomed menu already leads with the zoom controls.
         if !self.zoom_active() {
             entries.push(
-                ContextMenuEntry::new("Zoom", Some(self.zoom_summary()), false, None)
+                ContextMenuEntry::new(tr("Zoom"), Some(self.zoom_summary()), false, None)
                     .with_submenu(ContextMenuKind::Zoom),
             );
         }
         if self.boards.pan_enabled() && !self.board_is_transparent() {
             let reset_disabled = self.boards.active_frame().view_offset() == (0, 0);
             entries.push(ContextMenuEntry::new(
-                "Reset Canvas Position",
+                tr("Reset Canvas Position"),
                 Some("Space+Drag"),
                 reset_disabled,
                 Some(MenuCommand::ResetCanvasPosition),
@@ -126,11 +127,11 @@ impl InputState {
             Some(MenuCommand::ToggleHighlightTool),
         ));
         entries.push(
-            ContextMenuEntry::new("Boards", Some(self.boards_summary()), false, None)
+            ContextMenuEntry::new(tr("Boards"), Some(self.boards_summary()), false, None)
                 .with_submenu(ContextMenuKind::Boards),
         );
         entries.push(
-            ContextMenuEntry::new("Pages", Some(self.pages_summary()), false, None)
+            ContextMenuEntry::new(tr("Pages"), Some(self.pages_summary()), false, None)
                 .with_submenu(ContextMenuKind::Pages),
         );
         self.push_board_switch_entries(entries);
@@ -146,7 +147,7 @@ impl InputState {
         let has_blackboard = self.boards.has_board(BOARD_ID_BLACKBOARD);
         let whiteboard = || {
             ContextMenuEntry::new(
-                "Switch to Whiteboard",
+                tr("Switch to Whiteboard"),
                 self.shortcut_for_action(Action::ToggleWhiteboard),
                 false,
                 Some(MenuCommand::SwitchToWhiteboard),
@@ -154,7 +155,7 @@ impl InputState {
         };
         let blackboard = || {
             ContextMenuEntry::new(
-                "Switch to Blackboard",
+                tr("Switch to Blackboard"),
                 self.shortcut_for_action(Action::ToggleBlackboard),
                 false,
                 Some(MenuCommand::SwitchToBlackboard),
@@ -172,7 +173,7 @@ impl InputState {
         }
 
         entries.push(ContextMenuEntry::new(
-            "Return to Transparent",
+            tr("Return to Transparent"),
             self.shortcut_for_action(Action::ReturnToTransparent),
             false,
             Some(MenuCommand::ReturnToTransparent),

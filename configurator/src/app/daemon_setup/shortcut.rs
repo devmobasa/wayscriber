@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::fs;
 
 use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
@@ -59,7 +61,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
                     run_systemctl_user(&["restart", "wayscriber.service"])?;
                 }
             }
-            Ok(format!("Configured GNOME shortcut: {normalized}"))
+            Ok(trf("Configured GNOME shortcut: {}", &[&normalized]))
         }
         ShortcutApplyCapability::PortalServiceDropIn => {
             require_systemctl_available()?;
@@ -69,13 +71,13 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
             if query_service_active() {
                 run_systemctl_user(&["restart", "wayscriber.service"])?;
             }
-            Ok(format!(
-                "Configured portal shortcut: {normalized} (drop-in: {})",
-                dropin_path.display()
+            Ok(trf(
+                "Configured portal shortcut: {} (drop-in: {})",
+                &[&normalized, &dropin_path.display()],
             ))
         }
         ShortcutApplyCapability::Manual => Err(
-            "Automatic shortcut setup is not available in this desktop session; bind `wayscriber --daemon-toggle` manually."
+            tr("Automatic shortcut setup is not available in this desktop session; bind `wayscriber --daemon-toggle` manually.")
                 .to_string(),
         ),
     }
@@ -165,7 +167,7 @@ fn require_gsettings_available() -> Result<(), String> {
     if command_available("gsettings") {
         Ok(())
     } else {
-        Err(format!("gsettings is not available in {PATH_ENV}."))
+        Err(trf("gsettings is not available in {}.", &[&PATH_ENV]))
     }
 }
 
@@ -176,16 +178,15 @@ fn run_gsettings_command(args: &[&str]) -> Result<(), String> {
 
 fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, String> {
     let dropin_path = portal_shortcut_dropin_path().ok_or_else(|| {
-        "Cannot resolve home directory; failed to determine systemd drop-in path.".to_string()
+        tr("Cannot resolve home directory; failed to determine systemd drop-in path.").to_string()
     })?;
     let dropin_dir = dropin_path
         .parent()
-        .ok_or_else(|| "Invalid drop-in path".to_string())?;
+        .ok_or_else(|| tr("Invalid drop-in path").to_string())?;
     fs::create_dir_all(dropin_dir).map_err(|err| {
-        format!(
+        trf(
             "Failed to create service drop-in directory {}: {}",
-            dropin_dir.display(),
-            err
+            &[&dropin_dir.display(), &err],
         )
     })?;
 
@@ -198,10 +199,9 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
         AtomicWriteOptions::user_config_file(),
     )
     .map_err(|err| {
-        format!(
+        trf(
             "Failed to write portal shortcut drop-in {}: {}",
-            dropin_path.display(),
-            err
+            &[&dropin_path.display(), &err],
         )
     })?;
     Ok(dropin_path)
@@ -282,7 +282,7 @@ fn normalize_shortcut_for_portal(input: &str) -> Result<String, String> {
 fn normalize_shortcut(input: &str, gnome_style: bool) -> Result<String, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Err("Shortcut cannot be empty.".to_string());
+        return Err(tr("Shortcut cannot be empty.").to_string());
     }
     if trimmed.contains('<') && trimmed.contains('>') {
         return Ok(trimmed.to_string());
@@ -294,7 +294,7 @@ fn normalize_shortcut(input: &str, gnome_style: bool) -> Result<String, String> 
         .filter(|segment| !segment.is_empty())
         .collect();
     if parts.is_empty() {
-        return Err("Shortcut cannot be empty.".to_string());
+        return Err(tr("Shortcut cannot be empty.").to_string());
     }
     let key = normalize_key_name(parts[parts.len() - 1])?;
     let modifiers = &parts[..parts.len() - 1];
@@ -302,9 +302,9 @@ fn normalize_shortcut(input: &str, gnome_style: bool) -> Result<String, String> 
     let mut rendered_modifiers: Vec<&'static str> = Vec::new();
     for modifier in modifiers {
         let normalized = normalize_modifier(modifier, gnome_style).ok_or_else(|| {
-            format!(
+            trf(
                 "Unsupported modifier `{}`. Supported: Ctrl, Shift, Alt, Super/Meta.",
-                modifier
+                &[&modifier],
             )
         })?;
         if !rendered_modifiers.contains(&normalized) {
@@ -333,7 +333,7 @@ fn normalize_modifier(modifier: &str, gnome_style: bool) -> Option<&'static str>
 fn normalize_key_name(key: &str) -> Result<String, String> {
     let trimmed = key.trim();
     if trimmed.is_empty() {
-        return Err("Shortcut key is empty.".to_string());
+        return Err(tr("Shortcut key is empty.").to_string());
     }
     let upper = trimmed.to_ascii_uppercase();
     if upper.starts_with('F')

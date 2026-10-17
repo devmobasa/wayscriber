@@ -10,6 +10,7 @@ use super::super::capture::should_exit_after_capture;
 use super::render::{RegionRenderRequest, region_render_job};
 use super::{ActiveScreenRegion, FreezeOwnership, RegionCaptureIntent, RegionSelectionFinalize};
 use crate::backend::wayland::state::WaylandState;
+use crate::i18n::tr;
 
 const TOAST_SOURCE: &str = "capture";
 
@@ -130,7 +131,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Critical,
                 TOAST_SOURCE,
-                Toast::error("Could not apply the requested cut."),
+                Toast::error(tr("Could not apply the requested cut.")),
             );
             return true;
         };
@@ -142,7 +143,7 @@ impl WaylandState {
                     self.input_state.push_toast(
                         ToastPriority::Info,
                         TOAST_SOURCE,
-                        Toast::warning("Region is too large to add to the board."),
+                        Toast::warning(tr("Region is too large to add to the board.")),
                     );
                     return true;
                 }
@@ -151,7 +152,7 @@ impl WaylandState {
                     self.input_state.push_toast(
                         ToastPriority::Critical,
                         TOAST_SOURCE,
-                        Toast::error("Could not place that region on the board."),
+                        Toast::error(tr("Could not place that region on the board.")),
                     );
                     return true;
                 }
@@ -305,7 +306,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Critical,
                 TOAST_SOURCE,
-                Toast::error("Region capture state was inconsistent; try again."),
+                Toast::error(tr("Region capture state was inconsistent; try again.")),
             );
             return;
         };
@@ -348,7 +349,7 @@ impl WaylandState {
                         self.input_state.push_toast(
                             ToastPriority::Critical,
                             TOAST_SOURCE,
-                            Toast::error("Region was not added to the board."),
+                            Toast::error(tr("Region was not added to the board.")),
                         );
                     }
                 }

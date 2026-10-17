@@ -1,5 +1,6 @@
 use crate::draw::Shape;
 use crate::draw::TextMeasurer;
+use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
     MAX_FONT_SIZE, MIN_FONT_SIZE, SELECTION_FONT_SIZE_STEP,
@@ -30,7 +31,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "font size")
+        self.report_selection_apply_result(result, tr("font size"))
     }
 
     pub(in crate::input::state::core::properties) fn apply_selection_text_background(
@@ -53,7 +54,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "selection.apply",
-                Toast::warning("No text shapes selected."),
+                Toast::warning(tr("No text shapes selected.")),
             );
             return false;
         };
@@ -72,7 +73,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, "text background")
+        self.report_selection_apply_result(result, tr("text background"))
     }
 }
 

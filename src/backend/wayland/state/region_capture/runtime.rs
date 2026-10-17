@@ -274,9 +274,9 @@ impl WaylandState {
                 self.input_state.push_toast(
                     crate::input::state::ToastPriority::Info,
                     "measure.refused",
-                    crate::input::state::Toast::info(
+                    crate::input::state::Toast::info(crate::i18n::tr(
                         "Finish or cancel the current screen selection first.",
-                    ),
+                    )),
                 );
                 return;
             }

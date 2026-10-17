@@ -1,5 +1,7 @@
 //! Draft-wide shortcut conflict lookup and explicit replacement.
 
+use wayscriber::i18n::{tr, trf};
+
 use wayscriber::config::{Action, Shortcut, ShortcutTrigger, StylusButton, action_label};
 
 use super::draft::KeybindingsDraft;
@@ -13,10 +15,16 @@ pub enum BindingSource {
     LegacyTablet,
 }
 
+/// One action that already holds a shortcut.
+///
+/// Keeps who claims it, not their name: a pending conflict stays on screen
+/// across a language change, so the name is drawn by [`Self::label`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShortcutClaim {
     pub field: Option<KeybindingField>,
-    pub label: String,
+    /// The action a legacy tablet binding runs; set exactly when `field` is
+    /// not.
+    legacy_action: Option<Action>,
     pub source: BindingSource,
     pub held: Shortcut,
 }
@@ -25,7 +33,7 @@ impl ShortcutClaim {
     pub(crate) fn from_field(field: KeybindingField, held: Shortcut) -> Self {
         Self {
             field: Some(field),
-            label: field.label().to_string(),
+            legacy_action: None,
             source: BindingSource::Keybindings,
             held,
         }
@@ -34,9 +42,20 @@ impl ShortcutClaim {
     pub(super) fn legacy_tablet(action: Action, held: Shortcut) -> Self {
         Self {
             field: None,
-            label: format!("{} (legacy tablet barrel button)", action_label(action)),
+            legacy_action: Some(action),
             source: BindingSource::LegacyTablet,
             held,
+        }
+    }
+
+    /// The claimant's name in the current UI language.
+    pub fn label(&self) -> String {
+        match (self.field, self.legacy_action) {
+            (Some(field), _) => field.label().to_string(),
+            (None, Some(action)) => {
+                trf("{} (legacy tablet barrel button)", &[&action_label(action)])
+            }
+            (None, None) => unreachable!("a claim names its field or its legacy action"),
         }
     }
 }
@@ -73,10 +92,10 @@ impl PendingShortcutConflict {
                         .iter()
                         .all(|claim| claim.source == BindingSource::LegacyTablet) =>
             {
-                "Move Legacy Binding"
+                tr("Move Legacy Binding")
             }
-            Self::Recorded { .. } => "Replace",
-            Self::Text { .. } => "Resolve Conflicts",
+            Self::Recorded { .. } => tr("Replace"),
+            Self::Text { .. } => tr("Resolve Conflicts"),
         }
     }
 
@@ -261,14 +280,14 @@ fn later_internal_conflict_index(parts: &[String]) -> Option<usize> {
 }
 
 pub fn recorded_conflict_prompt(binding: &Shortcut, claimants: &[ShortcutClaim]) -> String {
-    let mut lines = vec![format!("{binding} is already assigned to:")];
+    let mut lines = vec![trf("{} is already assigned to:", &[&binding])];
     for claim in claimants {
         if claim.held == *binding {
-            lines.push(format!("- {}", claim.label));
+            lines.push(format!("- {}", claim.label()));
         } else {
             lines.push(format!(
                 "- {} ({})",
-                claim.label,
+                claim.label(),
                 claim.held.display_label()
             ));
         }
@@ -280,14 +299,16 @@ pub fn recorded_conflict_prompt(binding: &Shortcut, claimants: &[ShortcutClaim])
         && !claimants.is_empty()
     {
         lines.push(
-            "Move that legacy barrel-button assignment into this action's shortcuts?".to_string(),
+            tr("Move that legacy barrel-button assignment into this action's shortcuts?")
+                .to_string(),
         );
     } else if claimants.iter().any(|claim| claim.held != *binding) {
         lines.push(
-            "Replace those assignments? Prefix and extension shortcuts cannot coexist.".to_string(),
+            tr("Replace those assignments? Prefix and extension shortcuts cannot coexist.")
+                .to_string(),
         );
     } else {
-        lines.push("Replace those assignments?".to_string());
+        lines.push(tr("Replace those assignments?").to_string());
     }
     lines.join("\n")
 }
@@ -323,24 +344,24 @@ fn clear_legacy_for(draft: &mut KeybindingsDraft, binding: &Shortcut) {
 }
 
 fn text_conflict_prompt(conflicts: &[TextShortcutConflict]) -> String {
-    let mut lines = vec!["These shortcuts conflict:".to_string()];
+    let mut lines = vec![tr("These shortcuts conflict:").to_string()];
     for conflict in conflicts {
         let names = conflict
             .claimants
             .iter()
             .map(|claim| {
                 if claim.held == conflict.binding {
-                    claim.label.clone()
+                    claim.label()
                 } else {
-                    format!("{} ({})", claim.label, claim.held.display_label())
+                    trf("{} ({})", &[&claim.label(), &claim.held.display_label()])
                 }
             })
             .collect::<Vec<_>>()
             .join(", ");
-        lines.push(format!("- {}: {names}", conflict.binding.display_label()));
+        lines.push(format!("- {}: {}", conflict.binding.display_label(), names));
     }
     lines.push(String::new());
-    lines.push("Resolve those assignments?".to_string());
+    lines.push(tr("Resolve those assignments?").to_string());
     lines.join("\n")
 }
 
@@ -478,7 +499,7 @@ mod tests {
         let claimants = other_claimants(&draft, KeybindingField::Undo, &binding);
         assert_eq!(claimants.len(), 1);
         assert_eq!(claimants[0].source, BindingSource::LegacyTablet);
-        assert!(claimants[0].label.contains("legacy tablet"));
+        assert!(claimants[0].label().contains("legacy tablet"));
 
         let pending = PendingShortcutConflict::Recorded {
             target: KeybindingField::Undo,
@@ -620,5 +641,37 @@ mod tests {
             .expect("value");
         let parsed = parse_keybindings(value).expect("parses");
         assert_eq!(parsed, vec![binding]);
+    }
+
+    #[test]
+    fn a_pending_conflict_names_its_claimants_in_the_current_language() {
+        crate::test_env::in_language_child(
+            concat!(
+                module_path!(),
+                "::a_pending_conflict_names_its_claimants_in_the_current_language"
+            ),
+            || {
+                let binding = Shortcut::parse("E").expect("parses");
+                let conflict = PendingShortcutConflict::Recorded {
+                    target: KeybindingField::Undo,
+                    binding: binding.clone(),
+                    claimants: vec![ShortcutClaim::from_field(
+                        KeybindingField::ClearCanvas,
+                        binding,
+                    )],
+                };
+                assert!(
+                    conflict.prompt().contains("- Clear Canvas"),
+                    "{}",
+                    conflict.prompt()
+                );
+
+                wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+
+                let prompt = conflict.prompt();
+                assert!(prompt.contains("- 清空画布"), "{prompt}");
+                assert!(!prompt.contains("Clear Canvas"), "{prompt}");
+            },
+        );
     }
 }

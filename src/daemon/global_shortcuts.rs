@@ -12,6 +12,8 @@ use crate::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
 use std::sync::atomic::Ordering;
 
 #[cfg(feature = "portal")]
+use crate::i18n::tr;
+#[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "portal")]
 use log::{debug, info, warn};
@@ -34,7 +36,9 @@ const DEFAULT_PORTAL_APP_ID: &str = "wayscriber";
 #[cfg(feature = "portal")]
 const TOGGLE_SHORTCUT_ID: &str = "toggle-overlay";
 #[cfg(feature = "portal")]
-const TOGGLE_SHORTCUT_DESCRIPTION: &str = "Toggle Wayscriber overlay";
+fn toggle_shortcut_description() -> &'static str {
+    tr("Toggle Wayscriber overlay")
+}
 #[cfg(feature = "portal")]
 const PORTAL_KEY_ACTIVATION_TOKEN: &str = "activation_token";
 #[cfg(feature = "portal")]
@@ -436,7 +440,7 @@ async fn bind_toggle_shortcut(
     let mut shortcut_options: HashMap<String, Value<'static>> = HashMap::new();
     shortcut_options.insert(
         PORTAL_KEY_DESCRIPTION.to_string(),
-        Value::from(TOGGLE_SHORTCUT_DESCRIPTION.to_string()),
+        Value::from(toggle_shortcut_description().to_string()),
     );
     shortcut_options.insert(
         PORTAL_KEY_PREFERRED_TRIGGER.to_string(),

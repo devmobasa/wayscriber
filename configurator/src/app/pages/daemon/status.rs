@@ -1,9 +1,12 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::gtk;
 
 use gtk::prelude::*;
 
 use crate::models::{DaemonRuntimeStatus, ShortcutApplyCapability};
 
+use super::super::super::daemon_workflow::DaemonFeedback;
 use super::super::super::state::ConfiguratorApp;
 
 /// Emphasis for a status line, mapped to the Adwaita state classes that
@@ -31,18 +34,19 @@ impl Tone {
 
 pub(super) fn overall_status(status: Option<&DaemonRuntimeStatus>) -> (&'static str, Tone) {
     match status {
-        None => ("Status: Detecting...", Tone::Neutral),
-        Some(status) if status.service_active => ("Status: Running", Tone::Positive),
+        None => (tr("Status: Detecting..."), Tone::Neutral),
+        Some(status) if status.service_active => (tr("Status: Running"), Tone::Positive),
         Some(status) if status.service_installed => {
-            ("Status: Installed, not running", Tone::Caution)
+            (tr("Status: Installed, not running"), Tone::Caution)
         }
-        Some(_) => ("Status: Not installed", Tone::Neutral),
+        Some(_) => (tr("Status: Not installed"), Tone::Neutral),
     }
 }
 
-pub(super) fn feedback_tone(feedback: &str) -> Tone {
-    let feedback = feedback.to_ascii_lowercase();
-    if feedback.contains("failed") || feedback.contains("error") {
+/// The feedback's styling, from its outcome. The words are translated, so they
+/// are never inspected.
+pub(super) fn feedback_tone(feedback: &DaemonFeedback) -> Tone {
+    if feedback.is_failure() {
         Tone::Negative
     } else {
         Tone::Positive
@@ -51,51 +55,53 @@ pub(super) fn feedback_tone(feedback: &str) -> Tone {
 
 pub(super) fn install_status(installed: bool) -> (&'static str, Tone) {
     if installed {
-        ("Installed \u{2713}", Tone::Positive)
+        (tr("Installed \u{2713}"), Tone::Positive)
     } else {
-        ("Not installed", Tone::Neutral)
+        (tr("Not installed"), Tone::Neutral)
     }
 }
 
 pub(super) fn install_button_label(installed: bool) -> &'static str {
     if installed {
-        "Update Service"
+        tr("Update Service")
     } else {
-        "Install Service"
+        tr("Install Service")
     }
 }
 
 pub(super) fn light_controls_status(configured: bool) -> (&'static str, Tone) {
     if configured {
-        ("Configured \u{2713}", Tone::Positive)
+        (tr("Configured \u{2713}"), Tone::Positive)
     } else {
-        ("Not configured", Tone::Neutral)
+        (tr("Not configured"), Tone::Neutral)
     }
 }
 
 pub(super) fn service_status(running: bool, enabled: bool) -> (&'static str, Tone) {
     match (running, enabled) {
-        (true, true) => ("Running \u{2713}", Tone::Positive),
-        (true, false) => ("Running (not enabled)", Tone::Caution),
-        (false, true) => ("Enabled, not running", Tone::Caution),
-        (false, false) => ("Stopped and disabled", Tone::Neutral),
+        (true, true) => (tr("Running \u{2713}"), Tone::Positive),
+        (true, false) => (tr("Running (not enabled)"), Tone::Caution),
+        (false, true) => (tr("Enabled, not running"), Tone::Caution),
+        (false, false) => (tr("Stopped and disabled"), Tone::Neutral),
     }
 }
 
 pub(super) fn shortcut_placeholder(capability: Option<ShortcutApplyCapability>) -> &'static str {
     match capability {
-        Some(ShortcutApplyCapability::GnomeCustomShortcut) => "e.g. Super+G or <Super>g",
-        Some(ShortcutApplyCapability::PortalServiceDropIn) => "e.g. Ctrl+Shift+G or <Ctrl><Shift>g",
-        _ => "e.g. Ctrl+Shift+G",
+        Some(ShortcutApplyCapability::GnomeCustomShortcut) => tr("e.g. Super+G or <Super>g"),
+        Some(ShortcutApplyCapability::PortalServiceDropIn) => {
+            tr("e.g. Ctrl+Shift+G or <Ctrl><Shift>g")
+        }
+        _ => tr("e.g. Ctrl+Shift+G"),
     }
 }
 
 pub(super) fn light_controls_details(status: &DaemonRuntimeStatus) -> Option<String> {
     let path = status.light_controls_config_path.as_deref()?;
     Some(if status.light_controls_configured {
-        format!("Light controls: configured at {path}")
+        trf("Light controls: configured at {}", &[&path])
     } else {
-        format!("Light controls include: {path}")
+        trf("Light controls include: {}", &[&path])
     })
 }
 
@@ -108,7 +114,7 @@ pub(super) fn missing_tools(status: &DaemonRuntimeStatus) -> Option<String> {
     if !status.gsettings_available {
         missing.push("gsettings");
     }
-    (!missing.is_empty()).then(|| format!("Missing tools: {}", missing.join(", ")))
+    (!missing.is_empty()).then(|| trf("Missing tools: {}", &[&missing.join(", ")]))
 }
 
 pub(super) fn service_installed(app: &ConfiguratorApp) -> bool {

@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::config::{
     Config, RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode,
 };
@@ -31,9 +33,9 @@ impl RenderProfileExportOption {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Off => "Off",
-            Self::Active => "Active profile",
-            Self::Profile => "Named profile",
+            Self::Off => tr("Off"),
+            Self::Active => tr("Active profile"),
+            Self::Profile => tr("Named profile"),
         }
     }
 
@@ -271,7 +273,7 @@ fn normalized_hex(
     match parse_hex_rgb(value) {
         Some(color) => Some(format_hex_rgb(color)),
         None => {
-            errors.push(FormError::new(field, "Expected #RRGGBB hex color"));
+            errors.push(FormError::new(field, tr("Expected #RRGGBB hex color")));
             None
         }
     }

@@ -12,6 +12,7 @@
 use super::InputState;
 use crate::draw::TextMeasurer;
 use crate::draw::{FontDescriptor, families_match};
+use crate::i18n::{tr, trf};
 
 impl InputState {
     /// Install the configured list. Blank and repeated names are the config
@@ -56,7 +57,7 @@ impl InputState {
             self.push_toast(
                 super::ToastPriority::Info,
                 FONT_CYCLE_TOAST_SOURCE,
-                super::Toast::warning("No fonts configured to cycle through."),
+                super::Toast::warning(tr("No fonts configured to cycle through.")),
             );
             return false;
         }
@@ -82,7 +83,7 @@ impl InputState {
         self.push_toast(
             super::ToastPriority::Info,
             FONT_CYCLE_TOAST_SOURCE,
-            super::Toast::info(format!("Font: {next}")),
+            super::Toast::info(trf("Font: {}", &[&next])),
         );
         true
     }

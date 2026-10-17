@@ -1,3 +1,5 @@
+use wayscriber::i18n::tr;
+
 use wayscriber::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,9 +16,9 @@ impl PressureThicknessEditModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Disabled => "Disabled",
-            Self::Add => "Add thickness",
-            Self::Scale => "Scale thickness",
+            Self::Disabled => tr("Disabled"),
+            Self::Add => tr("Add thickness"),
+            Self::Scale => tr("Scale thickness"),
         }
     }
 
@@ -57,9 +59,9 @@ impl PressureThicknessEntryModeOption {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Never => "Never",
-            Self::PressureOnly => "Pressure-only",
-            Self::AnyPressure => "Any pressure",
+            Self::Never => tr("Never"),
+            Self::PressureOnly => tr("Pressure-only"),
+            Self::AnyPressure => tr("Any pressure"),
         }
     }
 

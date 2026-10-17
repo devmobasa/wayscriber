@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::{tr, trf};
 
 // ============================================================================
 // Helpers
@@ -36,12 +37,12 @@ pub(super) fn tool_display_name(input_state: &InputState, tool: Tool) -> &'stati
             TextInputMode::StickyNote => action_display_label(Action::EnterStickyNoteMode),
         },
         DrawingState::Drawing { tool, .. } => tool_action_label(*tool),
-        DrawingState::BuildingPolygon { .. } => "Freeform Polygon",
-        DrawingState::MovingSelection { .. } => "Move",
-        DrawingState::Selecting { .. } => "Select",
-        DrawingState::ResizingText { .. } | DrawingState::ResizingSelection { .. } => "Resize",
-        DrawingState::BendingArrow { .. } => "Bend",
-        DrawingState::AdjustingSpotlightMagnification { .. } => "Magnify",
+        DrawingState::BuildingPolygon { .. } => tr("Freeform Polygon"),
+        DrawingState::MovingSelection { .. } => tr("Move"),
+        DrawingState::Selecting { .. } => tr("Select"),
+        DrawingState::ResizingText { .. } | DrawingState::ResizingSelection { .. } => tr("Resize"),
+        DrawingState::BendingArrow { .. } => tr("Bend"),
+        DrawingState::AdjustingSpotlightMagnification { .. } => tr("Magnify"),
         DrawingState::PendingTextClick { .. } | DrawingState::Idle => tool_action_label(tool),
     }
 }
@@ -61,13 +62,13 @@ pub(super) fn help_binding_label(input_state: &InputState) -> String {
 pub(super) fn toolbar_hint_label(input_state: &InputState) -> String {
     let labels = input_state.action_binding_labels(Action::ToggleToolbar);
     match join_binding_labels(&labels) {
-        Some(binding) => format!("{binding} Toolbar"),
-        None => "Toolbar".to_string(),
+        Some(binding) => trf("{} Toolbar", &[&binding]),
+        None => tr("Toolbar").to_string(),
     }
 }
 
 fn tool_action_label(tool: Tool) -> &'static str {
     action_for_tool(tool)
         .map(action_display_label)
-        .unwrap_or("Select")
+        .unwrap_or(tr("Select"))
 }

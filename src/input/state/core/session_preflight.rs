@@ -3,6 +3,7 @@ use super::session_preflight_exact::{
     ClonePreflightAction, duplicate_board_id_for_preflight, exact_visible_save_allows,
 };
 use crate::draw::{BoardPages, Frame, Shape};
+use crate::i18n::{tr, trf};
 use crate::input::boards::BoardState;
 use crate::input::state::{Toast, ToastPriority};
 use crate::session::{CompressionMode, DEFAULT_MAX_EXPANDED_SESSION_BYTES, SessionOptions};
@@ -150,8 +151,8 @@ impl InputState {
                 board_index,
                 page_index,
             },
-            "Page",
-            "duplicate",
+            tr("Page"),
+            tr("duplicate"),
         )
     }
     pub(crate) fn session_allows_page_copy_between_boards(
@@ -197,8 +198,8 @@ impl InputState {
                 page_index,
                 target_board_index,
             },
-            "Page",
-            "copy",
+            tr("Page"),
+            tr("copy"),
         )
     }
     pub(crate) fn session_allows_board_duplicate(&mut self) -> bool {
@@ -223,8 +224,8 @@ impl InputState {
         self.session_allows_clone_heavy_storage(
             added,
             ClonePreflightAction::BoardDuplicate,
-            "Board",
-            "duplicate",
+            tr("Board"),
+            tr("duplicate"),
         )
     }
 
@@ -260,7 +261,7 @@ impl InputState {
                         toast_key,
                         action_label,
                         action_name,
-                        "session would exceed save limits.".to_string(),
+                        tr("session would exceed save limits.").to_string(),
                     );
                 }
                 None => {
@@ -268,7 +269,7 @@ impl InputState {
                         toast_key,
                         action_label,
                         action_name,
-                        "session size check failed.".to_string(),
+                        tr("session size check failed.").to_string(),
                     );
                 }
             }
@@ -292,8 +293,9 @@ impl InputState {
                 toast_key,
                 action_label,
                 action_name,
-                format!(
-                    "session would exceed {limit}. Remove images or raise session.max_file_size_mb."
+                trf(
+                    "session would exceed {}. Remove images or raise session.max_file_size_mb.",
+                    &[&limit],
                 ),
             );
         }
@@ -317,7 +319,7 @@ impl InputState {
                 toast_key,
                 action_label,
                 action_name,
-                format!("session would exceed the {limit} safety limit. Remove images or reduce duplicated content."),
+                expanded_safety_limit_reason(&limit),
             );
         }
         true
@@ -333,7 +335,10 @@ impl InputState {
         self.push_toast(
             ToastPriority::Info,
             toast_key,
-            Toast::warning(format!("{action_label} {action_name} blocked; {reason}")),
+            Toast::warning(trf(
+                "{} {} blocked; {}",
+                &[&action_label, &action_name, &reason],
+            )),
         );
         self.trigger_blocked_feedback();
         false
@@ -354,6 +359,13 @@ fn clone_action_toast_key(action: &ClonePreflightAction) -> &'static str {
 
 fn session_persistence_enabled(options: &SessionOptions) -> bool {
     options.any_enabled() || options.restore_tool_state || options.persist_history
+}
+
+fn expanded_safety_limit_reason(limit: &str) -> String {
+    trf(
+        "session would exceed the {} safety limit. Remove images or reduce duplicated content.",
+        &[&limit],
+    )
 }
 
 fn exceeds_expanded_safety_limit(

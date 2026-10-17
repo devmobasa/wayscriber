@@ -10,3 +10,4 @@ mod no_python;
 mod process_sites;
 mod shared_dependencies;
 mod source;
+mod translations;

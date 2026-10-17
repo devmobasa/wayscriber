@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use std::rc::Rc;
 
 use relm4::{ComponentSender, adw, gtk};
@@ -14,15 +16,15 @@ use super::super::{PageBuilder, set_selected_blocked};
 use super::{boxed_list, conditional_section, icon_button, section_entry_row};
 
 pub(super) fn build(page: &mut PageBuilder) {
-    page.group_in_area("Font", SearchArea::DrawingFont)
+    page.group_in_area(tr("Font"), SearchArea::DrawingFont)
         .entry_row_validated(
-            "Font family",
+            tr("Font family"),
             |app| app.draft.drawing_font_family.clone(),
             |value| Message::TextChanged(TextField::DrawingFontFamily, value),
             |app| validate_installed_family(&app.draft.drawing_font_family),
         )
         .combo_row(
-            "Font weight",
+            tr("Font weight"),
             "",
             FontWeightOption::list(),
             FontWeightOption::list()
@@ -33,12 +35,12 @@ pub(super) fn build(page: &mut PageBuilder) {
             Message::FontWeightOptionSelected,
         )
         .entry_row(
-            "Custom or numeric weight",
+            tr("Custom or numeric weight"),
             |app| app.draft.drawing_font_weight.clone(),
             |value| Message::TextChanged(TextField::DrawingFontWeight, value),
         )
         .combo_row(
-            "Font style",
+            tr("Font style"),
             "",
             FontStyleOption::list(),
             FontStyleOption::list()
@@ -55,7 +57,7 @@ pub(super) fn build(page: &mut PageBuilder) {
     section_entry_row(
         page,
         &custom_style,
-        "Custom style",
+        tr("Custom style"),
         |app| app.draft.drawing_font_style.clone(),
         |value| Message::TextChanged(TextField::DrawingFontStyle, value),
         |_app| None,
@@ -76,13 +78,13 @@ const NO_SELECTION: u32 = u32::MAX;
 /// removes both, and lets each row offer every installed family rather than
 /// asking the user to know what is installed.
 fn build_font_cycle(page: &mut PageBuilder) {
-    page.group_in_area("Font cycle", SearchArea::DrawingFont);
+    page.group_in_area(tr("Font cycle"), SearchArea::DrawingFont);
 
     // An activatable ActionRow rather than AdwButtonRow: ButtonRow needs
     // libadwaita 1.6 and the crate's feature floor is 1.4 (Ubuntu 24.04).
     let add = adw::ActionRow::builder()
-        .title("Add font")
-        .subtitle("Shift+T steps through this list in order")
+        .title(tr("Add font"))
+        .subtitle(tr("Shift+T steps through this list in order"))
         .activatable(true)
         .build();
     add.add_prefix(&gtk::Image::from_icon_name("list-add-symbolic"));
@@ -93,7 +95,9 @@ fn build_font_cycle(page: &mut PageBuilder) {
     page.custom(&add);
 
     let empty = gtk::Label::builder()
-        .label("No fonts listed: Shift+T does nothing until one is added.")
+        .label(tr(
+            "No fonts listed: Shift+T does nothing until one is added.",
+        ))
         .wrap(true)
         .xalign(0.0)
         .margin_top(6)
@@ -216,19 +220,19 @@ fn build_font_cycle_row(
         .build();
     row.set_list_factory(Some(&family_preview_factory()));
 
-    let up = icon_button("go-up-symbolic", "Move up");
+    let up = icon_button("go-up-symbolic", tr("Move up"));
     up.set_sensitive(layout.can_move_up);
     {
         let sender = sender.clone();
         up.connect_clicked(move |_| sender.input(Message::FontCycleMoved(index, -1)));
     }
-    let down = icon_button("go-down-symbolic", "Move down");
+    let down = icon_button("go-down-symbolic", tr("Move down"));
     down.set_sensitive(layout.can_move_down);
     {
         let sender = sender.clone();
         down.connect_clicked(move |_| sender.input(Message::FontCycleMoved(index, 1)));
     }
-    let remove = icon_button("user-trash-symbolic", "Remove");
+    let remove = icon_button("user-trash-symbolic", tr("Remove"));
     {
         let sender = sender.clone();
         remove.connect_clicked(move |_| sender.input(Message::FontCycleRemoved(index)));
@@ -335,8 +339,9 @@ fn validate_installed_family(value: &str) -> Option<String> {
     if trimmed.is_empty() || family_is_installed(trimmed) {
         return None;
     }
-    Some(format!(
-        "\"{trimmed}\" is not installed; text falls back to another font"
+    Some(trf(
+        tr("\"{}\" is not installed; text falls back to another font"),
+        &[&trimmed],
     ))
 }
 
@@ -351,7 +356,7 @@ fn missing_family_note(family: &str) -> Option<String> {
     if trimmed.is_empty() || family_is_installed(trimmed) {
         return None;
     }
-    Some(format!("\"{trimmed}\" is not installed on this system"))
+    Some(trf("\"{}\" is not installed on this system", &[&trimmed]))
 }
 
 #[cfg(test)]

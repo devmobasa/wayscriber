@@ -25,7 +25,8 @@ pub(super) fn build_search_summary(app: &ConfiguratorApp) -> AppSearchSummary {
 
 fn tab_summary(app: &ConfiguratorApp, tab: TabId) -> Option<TabSearchSummary> {
     let query = &app.search_query;
-    let direct_title_match = query.matches_text(tab.title());
+    // The title as displayed, and its English source in every language.
+    let direct_title_match = query.matches_parts([tab.title(), tab.source_title()]);
     let alias_match = tab_aliases(tab)
         .iter()
         .any(|alias| query.matches_text(alias));
@@ -165,6 +166,7 @@ fn performance_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
         ),
     ] {
         let mut parts = vec![identity];
+        parts.extend(area.section_titles());
         for metadata in PERFORMANCE_FIELD_METADATA
             .iter()
             .filter(|metadata| metadata.group == group)
@@ -187,7 +189,8 @@ fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
         UI_GENERAL_TERMS,
     );
     for tab in UiTabId::ALL {
-        let identity_parts = std::iter::once(tab.title())
+        let identity_parts = [tab.title(), tab.source_title()]
+            .into_iter()
             .chain(ui_tab_aliases(tab).iter().copied())
             .collect::<Vec<_>>();
         let field_terms = ui_tab_terms(tab);
@@ -364,7 +367,10 @@ fn session_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut Tab
     for item in &app.session_catalog.items {
         let text = format!(
             "session saved recent catalog {} {} {} {:?}",
-            item.display_name, item.path_label, item.created_label, item.path,
+            item.display_name,
+            item.path_label,
+            item.created_label(),
+            item.path,
         );
         if query.matches_text(&text) {
             summary.add_area(SearchArea::SessionCatalog);
@@ -375,7 +381,8 @@ fn session_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut Tab
 
 fn keybinding_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut TabSearchSummary) {
     for tab in KeybindingsTabId::ALL {
-        if query.matches_parts_scoped_to_tab(TabId::Keybindings, [tab.title()]) {
+        if query.matches_parts_scoped_to_tab(TabId::Keybindings, [tab.title(), tab.source_title()])
+        {
             summary.add_direct_keybinding_tab(tab);
         }
     }
@@ -386,13 +393,18 @@ fn keybinding_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut 
             .value_for(entry.field)
             .unwrap_or("");
         let mut text = format!(
-            "keybindings keybinding shortcut hotkey keyboard shortcut list {} {} {} {}",
+            "keybindings keybinding shortcut hotkey keyboard shortcut list {} {} {} {} {}",
             keybinding_tab(entry.field).title(),
+            keybinding_tab(entry.field).source_title(),
             entry.field.label(),
             entry.field.field_key(),
             entry.value,
         );
         if let Some(meta) = action_meta(entry.field.action()) {
+            // The English label, so an English search finds the row in
+            // every language; `field.label()` above is translated.
+            text.push(' ');
+            text.push_str(meta.label);
             text.push(' ');
             text.push_str(meta.description);
             text.push(' ');
@@ -415,7 +427,9 @@ fn add_area_if(
     area: SearchArea,
     terms: &[&str],
 ) {
-    if query.matches_parts_scoped_to_tab(tab, terms.iter().copied()) {
+    let titles = area.section_titles();
+    let parts = terms.iter().copied().chain(titles.iter().copied());
+    if query.matches_parts_scoped_to_tab(tab, parts) {
         summary.add_area(area);
     }
 }
@@ -436,10 +450,13 @@ impl ScopedSearchQuery for SearchQuery {
         parts: impl IntoIterator<Item = &'a str>,
     ) -> bool {
         let parts = parts.into_iter().collect::<Vec<_>>();
-        self.matches_parts(std::iter::once(tab.title()).chain(parts.iter().copied()))
-            || tab_scope_aliases(tab).iter().any(|alias| {
-                self.matches_parts(std::iter::once(*alias).chain(parts.iter().copied()))
-            })
+        self.matches_parts(
+            [tab.title(), tab.source_title()]
+                .into_iter()
+                .chain(parts.iter().copied()),
+        ) || tab_scope_aliases(tab)
+            .iter()
+            .any(|alias| self.matches_parts(std::iter::once(*alias).chain(parts.iter().copied())))
     }
 
     fn matches_any_raw_text(&self, values: &[&str]) -> bool {

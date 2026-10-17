@@ -1,6 +1,7 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
 use crate::domain::Action;
+use crate::i18n::{tr, trf};
 
 /// Maximum number of pages to show in the submenu before truncating.
 const MAX_VISIBLE_PAGES: usize = 8;
@@ -8,10 +9,12 @@ const MAX_VISIBLE_PAGES: usize = 8;
 impl InputState {
     /// The active page position, shown on the parent row of the pages submenu.
     pub(super) fn pages_summary(&self) -> String {
-        format!(
+        trf(
             "Page {}/{}",
-            self.boards.active_page_index() + 1,
-            self.boards.page_count().max(1)
+            &[
+                &(self.boards.active_page_index() + 1),
+                &self.boards.page_count().max(1),
+            ],
         )
     }
 
@@ -52,7 +55,7 @@ impl InputState {
         // page panel, like the boards submenu's overflow rows.
         if start > 0 {
             entries.push(ContextMenuEntry::new(
-                format!("  ... {} above (open picker)", start),
+                trf("  ... {} above (open picker)", &[&start]),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
                 Some(MenuCommand::OpenBoardPicker),
@@ -62,9 +65,9 @@ impl InputState {
         for i in start..end {
             let is_active = i == page_index;
             let label = if is_active {
-                format!("  Page {} (current)", i + 1)
+                trf("  Page {} (current)", &[&(i + 1)])
             } else {
-                format!("  Page {}", i + 1)
+                trf("  Page {}", &[&(i + 1)])
             };
             entries.push(ContextMenuEntry::new(
                 label,
@@ -76,7 +79,7 @@ impl InputState {
 
         if end < page_count {
             entries.push(ContextMenuEntry::new(
-                format!("  ... {} below (open picker)", page_count - end),
+                trf("  ... {} below (open picker)", &[&(page_count - end)]),
                 self.shortcut_for_action(Action::BoardPicker),
                 false,
                 Some(MenuCommand::OpenBoardPicker),
@@ -85,13 +88,13 @@ impl InputState {
 
         // Navigation
         entries.push(ContextMenuEntry::new(
-            "Previous Page",
+            tr("Previous Page"),
             self.shortcut_for_action(Action::PagePrev),
             !can_prev,
             Some(MenuCommand::PagePrev),
         ));
         entries.push(ContextMenuEntry::new(
-            "Next Page",
+            tr("Next Page"),
             self.shortcut_for_action(Action::PageNext),
             !can_next,
             Some(MenuCommand::PageNext),
@@ -99,19 +102,19 @@ impl InputState {
 
         // Management
         entries.push(ContextMenuEntry::new(
-            "New Page",
+            tr("New Page"),
             self.shortcut_for_action(Action::PageNew),
             false,
             Some(MenuCommand::PageNew),
         ));
         entries.push(ContextMenuEntry::new(
-            "Duplicate Page",
+            tr("Duplicate Page"),
             self.shortcut_for_action(Action::PageDuplicate),
             false,
             Some(MenuCommand::PageDuplicate),
         ));
         entries.push(ContextMenuEntry::new(
-            "Delete Page",
+            tr("Delete Page"),
             self.shortcut_for_action(Action::PageDelete),
             false,
             Some(MenuCommand::PageDelete),

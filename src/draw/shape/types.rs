@@ -9,6 +9,7 @@ use super::text::{bounding_box_for_sticky_note_with, bounding_box_for_text_with}
 use super::text_cache::TextMeasurer;
 use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
+use crate::i18n::tr;
 use crate::util::Rect;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::Arc;
@@ -68,10 +69,10 @@ impl BlurStyle {
     /// Short human-readable name for toolbars, menus, and toasts.
     pub fn label(self) -> &'static str {
         match self {
-            Self::Gaussian => "Blur",
-            Self::Pixelate => "Pixelate",
-            Self::Secure => "Secure",
-            Self::BlackOut => "Black out",
+            Self::Gaussian => tr("Blur"),
+            Self::Pixelate => tr("Pixelate"),
+            Self::Secure => tr("Secure"),
+            Self::BlackOut => tr("Black out"),
         }
     }
 
@@ -117,13 +118,25 @@ impl ArrowStyle {
     /// Every style, in the order the toolbar and cycling action step through them.
     pub const ALL: [Self; 4] = [Self::Standard, Self::Pointy, Self::Curved, Self::Double];
 
-    /// Short human-readable name for toolbars, menus, and toasts.
+    /// Stable name for identifiers, the same in every UI language; it matches
+    /// the serde spelling.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Pointy => "pointy",
+            Self::Curved => "curved",
+            Self::Double => "double",
+        }
+    }
+
+    /// Short human-readable name for toolbars, menus, and toasts. Translated;
+    /// use [`Self::id`] wherever a name must stay stable.
     pub fn label(self) -> &'static str {
         match self {
-            Self::Standard => "Standard",
-            Self::Pointy => "Pointy",
-            Self::Curved => "Curved",
-            Self::Double => "Double",
+            Self::Standard => tr("Standard"),
+            Self::Pointy => tr("Pointy"),
+            Self::Curved => tr("Curved"),
+            Self::Double => tr("Double"),
         }
     }
 
@@ -576,20 +589,20 @@ impl Shape {
     /// Returns a human-readable label for the shape variant.
     pub fn kind_name(&self) -> &'static str {
         match self {
-            Shape::Freehand { .. } | Shape::FreehandPressure { .. } => "Freehand",
-            Shape::Line { .. } => "Line",
-            Shape::Rect { .. } => "Rectangle",
-            Shape::Ellipse { .. } => "Ellipse",
-            Shape::Spotlight { .. } => "Spotlight",
+            Shape::Freehand { .. } | Shape::FreehandPressure { .. } => tr("Freehand"),
+            Shape::Line { .. } => tr("Line"),
+            Shape::Rect { .. } => tr("Rectangle"),
+            Shape::Ellipse { .. } => tr("Ellipse"),
+            Shape::Spotlight { .. } => tr("Spotlight"),
             Shape::Polygon { kind, .. } => kind.label(),
-            Shape::Arrow { .. } => "Arrow",
-            Shape::BlurRect { .. } => "Blur",
-            Shape::Text { .. } => "Text",
-            Shape::StickyNote { .. } => "Sticky Note",
-            Shape::MarkerStroke { .. } => "Marker",
-            Shape::StepMarker { .. } => "Step Marker",
-            Shape::EraserStroke { .. } => "Eraser",
-            Shape::Image { .. } => "Image",
+            Shape::Arrow { .. } => tr("Arrow"),
+            Shape::BlurRect { .. } => tr("Blur"),
+            Shape::Text { .. } => tr("Text"),
+            Shape::StickyNote { .. } => tr("Sticky Note"),
+            Shape::MarkerStroke { .. } => tr("Marker"),
+            Shape::StepMarker { .. } => tr("Step Marker"),
+            Shape::EraserStroke { .. } => tr("Eraser"),
+            Shape::Image { .. } => tr("Image"),
         }
     }
 }

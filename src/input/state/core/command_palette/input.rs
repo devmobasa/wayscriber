@@ -9,6 +9,7 @@ use super::{
 use crate::config::{KeyBinding, action_label, keybindings::default_keybindings};
 use crate::configurator_destination::keybindings_destination_for_action;
 use crate::domain::Action;
+use crate::i18n::trf;
 use crate::input::events::Key;
 use crate::input::state::actions::key_press::bindings::key_to_action_label;
 use std::time::{Duration, Instant};
@@ -40,9 +41,9 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "palette.shortcut",
-                Toast::warning(format!(
+                Toast::warning(trf(
                     "{} has no configurable keyboard shortcut.",
-                    action_label(action)
+                    &[&action_label(action)],
                 )),
             );
             return false;
@@ -68,9 +69,9 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "palette.shortcut",
-                Toast::warning(format!(
+                Toast::warning(trf(
                     "{} has no configurable keyboard shortcut.",
-                    action_label(action)
+                    &[&action_label(action)],
                 )),
             );
             return false;
@@ -92,9 +93,9 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "palette.shortcut",
-                Toast::warning(format!(
+                Toast::warning(trf(
                     "{} has no configurable keyboard shortcut.",
-                    action_label(action)
+                    &[&action_label(action)],
                 )),
             );
             return false;

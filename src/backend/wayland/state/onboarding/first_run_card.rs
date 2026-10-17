@@ -7,6 +7,7 @@
 
 use crate::backend::wayland::state::WaylandState;
 use crate::config::{RadialMenuMouseBinding, keybindings::Action};
+use crate::i18n::{tr, trf};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 use crate::ui::{
     OnboardingCard, OnboardingCardAction, OnboardingCardButton, OnboardingChecklistItem,
@@ -28,16 +29,19 @@ impl WaylandState {
         let card = match step {
             FirstRunStep::WaitDraw | FirstRunStep::DrawUndo => OnboardingCard {
                 eyebrow,
-                title: "Draw, then undo".to_string(),
-                body: "Drag anywhere on the screen to draw. Undo takes back the last change."
+                title: tr("Draw, then undo").to_string(),
+                body: tr("Drag anywhere on the screen to draw. Undo takes back the last change.")
                     .to_string(),
                 items: vec![
                     OnboardingChecklistItem {
-                        label: "Draw a stroke".to_string(),
+                        label: tr("Draw a stroke").to_string(),
                         done: state.first_stroke_done,
                     },
                     OnboardingChecklistItem {
-                        label: format!("Undo once ({})", self.shortcut_label(Action::Undo, "Undo")),
+                        label: trf(
+                            "Undo once ({})",
+                            &[&self.shortcut_label(Action::Undo, tr("Undo"))],
+                        ),
                         done: state.first_undo_done,
                     },
                 ],
@@ -46,7 +50,7 @@ impl WaylandState {
             },
             FirstRunStep::ToolbarExit => OnboardingCard {
                 eyebrow,
-                title: "Toolbar and exit".to_string(),
+                title: tr("Toolbar and exit").to_string(),
                 body: toolbar_exit_body(
                     &self.shortcut_label(Action::Exit, "Escape"),
                     self.shortcut_label_opt(Action::ToggleToolbar).as_deref(),
@@ -57,39 +61,44 @@ impl WaylandState {
             },
             FirstRunStep::ColorThickness => OnboardingCard {
                 eyebrow,
-                title: "Color and thickness".to_string(),
-                body: "Recolor and resize your strokes without leaving the canvas.".to_string(),
+                title: tr("Color and thickness").to_string(),
+                body: tr("Recolor and resize your strokes without leaving the canvas.").to_string(),
                 items: self.color_thickness_checklist_items(state),
                 buttons: vec![skip_tour_button()],
                 footer: String::new(),
             },
             FirstRunStep::QuickAccess => OnboardingCard {
                 eyebrow,
-                title: "Quick access at cursor".to_string(),
+                title: tr("Quick access at cursor").to_string(),
                 // Alt+click is a fixed mouse gesture, not a binding.
-                body: "Open quick actions near the pointer. Alt+click a shape to select it \
-                       without switching tools."
-                    .to_string(),
+                body: format!(
+                    "{} {}",
+                    tr("Open quick actions near the pointer."),
+                    tr("Alt+click a shape to select it without switching tools.")
+                ),
                 items: self.quick_access_checklist_items(state),
                 buttons: vec![skip_tour_button()],
                 footer: String::new(),
             },
             FirstRunStep::RadialFlick | FirstRunStep::Reference => OnboardingCard {
                 eyebrow,
-                title: "Find anything".to_string(),
-                body: "Search every command, or see all shortcuts at once.".to_string(),
+                title: tr("Find anything").to_string(),
+                body: tr("Search every command, or see all shortcuts at once.").to_string(),
                 items: vec![
                     OnboardingChecklistItem {
-                        label: format!(
+                        label: trf(
                             "Open Help ({})",
-                            self.shortcut_label(Action::ToggleHelp, "Help")
+                            &[&self.shortcut_label(Action::ToggleHelp, tr("Help"))],
                         ),
                         done: state.used_help_overlay,
                     },
                     OnboardingChecklistItem {
-                        label: format!(
+                        label: trf(
                             "Open Command Palette ({})",
-                            self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
+                            &[&self.shortcut_label(
+                                Action::ToggleCommandPalette,
+                                tr("Command Palette"),
+                            )],
                         ),
                         done: state.used_command_palette,
                     },
@@ -99,10 +108,13 @@ impl WaylandState {
             },
             FirstRunStep::BackgroundModeSetup => OnboardingCard {
                 eyebrow,
-                title: "Keep Wayscriber ready?".to_string(),
-                body: "Background mode keeps Wayscriber running, so your shortcut opens the \
-                       overlay instantly. You can change this later in the configurator."
-                    .to_string(),
+                title: tr("Keep Wayscriber ready?").to_string(),
+                body: format!(
+                    "{} {} {}",
+                    tr("Background mode keeps Wayscriber running,"),
+                    tr("so your shortcut opens the overlay instantly."),
+                    tr("You can change this later in the configurator.")
+                ),
                 items: Vec::new(),
                 buttons: background_mode_buttons(),
                 footer: String::new(),
@@ -133,14 +145,14 @@ impl WaylandState {
             Action::SetColorBlue,
             Action::SetColorYellow,
         ]) {
-            Some(hint) => format!("Change color ({hint})"),
-            None => "Change color".to_string(),
+            Some(hint) => trf("Change color ({})", &[&hint]),
+            None => tr("Change color").to_string(),
         };
         let thickness_label = match self
             .join_shortcut_labels(&[Action::IncreaseThickness, Action::DecreaseThickness])
         {
-            Some(hint) => format!("Adjust thickness ({hint})"),
-            None => "Adjust thickness".to_string(),
+            Some(hint) => trf("Adjust thickness ({})", &[&hint]),
+            None => tr("Adjust thickness").to_string(),
         };
 
         vec![
@@ -170,29 +182,29 @@ impl WaylandState {
             if matches!(radial_binding, RadialMenuMouseBinding::Right) && radial_available {
                 if let Some(label) = radial_label {
                     items.push(OnboardingChecklistItem {
-                        label: format!("Open radial menu ({label})"),
+                        label: trf("Open radial menu ({})", &[&label]),
                         done: state.used_radial_menu,
                     });
                 }
                 if let Some(label) = context_keyboard {
                     items.push(OnboardingChecklistItem {
-                        label: format!("Open context menu ({label})"),
+                        label: trf("Open context menu ({})", &[&label]),
                         done: state.used_context_menu_keyboard,
                     });
                 } else {
                     items.push(OnboardingChecklistItem {
-                        label: "Context menu keyboard shortcut not configured".to_string(),
+                        label: tr("Context menu keyboard shortcut not configured").to_string(),
                         done: true,
                     });
                 }
             } else {
                 items.push(OnboardingChecklistItem {
-                    label: "Open context menu (Right Click)".to_string(),
+                    label: tr("Open context menu (Right Click)").to_string(),
                     done: state.used_context_menu_right_click,
                 });
                 if let Some(label) = radial_label {
                     items.push(OnboardingChecklistItem {
-                        label: format!("Open radial menu ({label})"),
+                        label: trf("Open radial menu ({})", &[&label]),
                         done: state.used_radial_menu,
                     });
                 }
@@ -204,16 +216,16 @@ impl WaylandState {
             });
         } else {
             items.push(OnboardingChecklistItem {
-                label: "Quick-access menus disabled in config".to_string(),
+                label: tr("Quick-access menus disabled in config").to_string(),
                 done: true,
             });
         }
 
         if state.quick_access_requires_toolbar {
             items.push(OnboardingChecklistItem {
-                label: format!(
+                label: trf(
                     "Show toolbar ({})",
-                    self.shortcut_label(Action::ToggleToolbar, "Toggle toolbar")
+                    &[&self.shortcut_label(Action::ToggleToolbar, tr("Toggle toolbar"))],
                 ),
                 done: self.input_state.toolbar_visible() || state.used_toolbar_toggle,
             });
@@ -228,7 +240,7 @@ const SKIP_TOUR_KEY: &str = "Shift+Esc";
 
 fn skip_tour_button() -> OnboardingCardButton {
     OnboardingCardButton {
-        label: "Skip tour".to_string(),
+        label: tr("Skip tour").to_string(),
         key_hint: Some(SKIP_TOUR_KEY.to_string()),
         action: OnboardingCardAction::SkipTour,
         primary: false,
@@ -237,7 +249,7 @@ fn skip_tour_button() -> OnboardingCardButton {
 
 fn continue_button() -> OnboardingCardButton {
     OnboardingCardButton {
-        label: "Got it".to_string(),
+        label: tr("Got it").to_string(),
         key_hint: Some("Enter".to_string()),
         action: OnboardingCardAction::Continue,
         primary: true,
@@ -247,13 +259,13 @@ fn continue_button() -> OnboardingCardButton {
 fn background_mode_buttons() -> Vec<OnboardingCardButton> {
     vec![
         OnboardingCardButton {
-            label: "Set up".to_string(),
+            label: tr("Set up").to_string(),
             key_hint: Some("Y".to_string()),
             action: OnboardingCardAction::SetUpBackgroundMode,
             primary: true,
         },
         OnboardingCardButton {
-            label: "Not now".to_string(),
+            label: tr("Not now").to_string(),
             key_hint: Some("N".to_string()),
             action: OnboardingCardAction::SkipBackgroundMode,
             primary: false,
@@ -266,12 +278,15 @@ fn background_mode_buttons() -> Vec<OnboardingCardButton> {
 pub(super) fn toolbar_exit_body(exit: &str, toggle_toolbar: Option<&str>) -> String {
     match toggle_toolbar {
         Some(toggle) => format!(
-            "Tools, colors, and Undo live in the toolbar; {toggle} hides or shows it. \
-             Press {exit} to leave the overlay when you are done."
+            "{} {} {}",
+            tr("Tools, colors, and Undo live in the toolbar;"),
+            trf("{} hides or shows it.", &[&toggle]),
+            trf("Press {} to leave the overlay when you are done.", &[&exit])
         ),
         None => format!(
-            "Tools, colors, and Undo live in the toolbar. \
-             Press {exit} to leave the overlay when you are done."
+            "{} {}",
+            tr("Tools, colors, and Undo live in the toolbar."),
+            trf("Press {} to leave the overlay when you are done.", &[&exit])
         ),
     }
 }
@@ -292,5 +307,5 @@ pub(super) fn first_run_step_eyebrow(step: FirstRunStep, background_pending: boo
     } else {
         5
     };
-    format!("Step {number} / {total}")
+    trf("Step {} / {}", &[&number, &total])
 }

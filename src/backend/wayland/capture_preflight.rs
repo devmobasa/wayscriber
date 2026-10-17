@@ -5,6 +5,7 @@ pub(super) use retry::{CaptureLayoutRetry, LayoutRetryError};
 
 use super::frozen_geometry::OutputGeometry;
 use super::state::OverlaySuppression;
+use crate::i18n::{tr, trf};
 
 /// Stable target for capture diagnostics. It stays under the crate-wide
 /// `wayscriber` filter without matching the `wayscriber::capture` module filter.
@@ -99,11 +100,12 @@ pub(super) enum CapturePreflightError {
 impl CapturePreflightError {
     pub(super) fn message(&self, domain: &str) -> String {
         match self {
-            Self::StaleLayout => format!("{domain} failed after the display layout changed"),
-            Self::LayoutDidNotSettle => {
-                format!("{domain} failed because the display layout did not settle")
-            }
-            Self::LostSuppression => "Capture retry lost overlay suppression".to_string(),
+            Self::StaleLayout => trf("{} failed after the display layout changed", &[&domain]),
+            Self::LayoutDidNotSettle => trf(
+                "{} failed because the display layout did not settle",
+                &[&domain],
+            ),
+            Self::LostSuppression => tr("Capture retry lost overlay suppression").to_string(),
             Self::Backend(message) => message.clone(),
         }
     }
@@ -124,7 +126,7 @@ impl CapturePreflightError {
 
 impl std::fmt::Display for CapturePreflightError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.message("Screen capture"))
+        formatter.write_str(&self.message(tr("Screen capture")))
     }
 }
 

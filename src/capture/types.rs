@@ -1,5 +1,6 @@
 //! Data types for screenshot capture functionality.
 
+use crate::i18n::tr;
 use std::path::PathBuf;
 use std::{fmt, sync::Arc};
 
@@ -15,46 +16,46 @@ pub enum ImageOperationKind {
 impl ImageOperationKind {
     pub fn success_title(self) -> &'static str {
         match self {
-            Self::Screenshot => "Screenshot Captured",
-            Self::CanvasExport => "Canvas exported",
-            Self::BoardPdfExport => "Board exported",
-            Self::AllBoardsPdfExport => "Boards exported",
+            Self::Screenshot => tr("Screenshot Captured"),
+            Self::CanvasExport => tr("Canvas exported"),
+            Self::BoardPdfExport => tr("Board exported"),
+            Self::AllBoardsPdfExport => tr("Boards exported"),
         }
     }
 
     pub fn failure_title(self) -> &'static str {
         match self {
-            Self::Screenshot => "Screenshot Failed",
-            Self::CanvasExport => "Canvas export failed",
-            Self::BoardPdfExport => "Board PDF export failed",
-            Self::AllBoardsPdfExport => "All boards PDF export failed",
+            Self::Screenshot => tr("Screenshot Failed"),
+            Self::CanvasExport => tr("Canvas export failed"),
+            Self::BoardPdfExport => tr("Board PDF export failed"),
+            Self::AllBoardsPdfExport => tr("All boards PDF export failed"),
         }
     }
 
     pub fn save_failure_title(self) -> &'static str {
         match self {
-            Self::Screenshot => "Screenshot File Not Saved",
-            Self::CanvasExport => "Canvas file not saved",
-            Self::BoardPdfExport => "Board PDF not saved",
-            Self::AllBoardsPdfExport => "All boards PDF not saved",
+            Self::Screenshot => tr("Screenshot File Not Saved"),
+            Self::CanvasExport => tr("Canvas file not saved"),
+            Self::BoardPdfExport => tr("Board PDF not saved"),
+            Self::AllBoardsPdfExport => tr("All boards PDF not saved"),
         }
     }
 
     pub fn clipboard_failure_title(self) -> &'static str {
         match self {
-            Self::Screenshot => "Screenshot Clipboard Failed",
-            Self::CanvasExport => "Canvas clipboard failed",
-            Self::BoardPdfExport => "Board PDF clipboard failed",
-            Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
+            Self::Screenshot => tr("Screenshot Clipboard Failed"),
+            Self::CanvasExport => tr("Canvas clipboard failed"),
+            Self::BoardPdfExport => tr("Board PDF clipboard failed"),
+            Self::AllBoardsPdfExport => tr("All boards PDF clipboard failed"),
         }
     }
 
     pub fn fallback_toast(self) -> &'static str {
         match self {
-            Self::Screenshot => "Clipboard failed",
-            Self::CanvasExport => "Canvas clipboard failed",
-            Self::BoardPdfExport => "Board PDF clipboard failed",
-            Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
+            Self::Screenshot => tr("Clipboard failed"),
+            Self::CanvasExport => tr("Canvas clipboard failed"),
+            Self::BoardPdfExport => tr("Board PDF clipboard failed"),
+            Self::AllBoardsPdfExport => tr("All boards PDF clipboard failed"),
         }
     }
 

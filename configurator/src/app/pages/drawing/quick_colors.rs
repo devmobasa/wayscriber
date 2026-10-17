@@ -1,3 +1,5 @@
+use wayscriber::i18n::{tr, trf};
+
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
@@ -17,12 +19,12 @@ use super::{
 };
 
 pub(super) fn build(page: &mut PageBuilder) {
-    page.group_in_area("Quick colors", SearchArea::DrawingColor);
+    page.group_in_area(tr("Quick colors"), SearchArea::DrawingColor);
 
     // An activatable ActionRow rather than AdwButtonRow: ButtonRow needs
     // libadwaita 1.6 and the crate's feature floor is 1.4 (Ubuntu 24.04).
     let add = adw::ActionRow::builder()
-        .title("Add color")
+        .title(tr("Add color"))
         .activatable(true)
         .build();
     add.add_prefix(&gtk::Image::from_icon_name("list-add-symbolic"));
@@ -33,8 +35,9 @@ pub(super) fn build(page: &mut PageBuilder) {
     page.custom(&add);
 
     let warning = gtk::Label::builder()
-        .label(format!(
-            "Only the first {QUICK_COLOR_RENDER_LIMIT} quick colors are shown in toolbar and radial menus."
+        .label(trf(
+            tr("Only the first {} quick colors are shown in toolbar and radial menus."),
+            &[&QUICK_COLOR_RENDER_LIMIT],
         ))
         .wrap(true)
         .xalign(0.0)
@@ -178,22 +181,22 @@ fn build_quick_color_row(
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> QuickColorRow {
     let row = adw::ExpanderRow::builder()
-        .title(format!("Color {}", index + 1))
+        .title(trf("Color {}", &[&(index + 1)]))
         .build();
 
-    let up = icon_button("go-up-symbolic", "Move up");
+    let up = icon_button("go-up-symbolic", tr("Move up"));
     up.set_sensitive(layout.can_move_up);
     {
         let sender = sender.clone();
         up.connect_clicked(move |_| sender.input(Message::QuickColorMoved(index, -1)));
     }
-    let down = icon_button("go-down-symbolic", "Move down");
+    let down = icon_button("go-down-symbolic", tr("Move down"));
     down.set_sensitive(layout.can_move_down);
     {
         let sender = sender.clone();
         down.connect_clicked(move |_| sender.input(Message::QuickColorMoved(index, 1)));
     }
-    let remove = icon_button("user-trash-symbolic", "Remove");
+    let remove = icon_button("user-trash-symbolic", tr("Remove"));
     remove.set_sensitive(layout.can_remove);
     {
         let sender = sender.clone();
@@ -203,7 +206,7 @@ fn build_quick_color_row(
     row.add_suffix(&down);
     row.add_suffix(&remove);
 
-    let label = adw::EntryRow::builder().title("Label").build();
+    let label = adw::EntryRow::builder().title(tr("Label")).build();
     let label_handler = {
         let sender = sender.clone();
         label.connect_changed(move |row| {
@@ -218,8 +221,8 @@ fn build_quick_color_row(
     // The mode is part of the fingerprint, so it is selected before the
     // handler exists and never written again behind the user's back.
     let mode = combo_row_widget(
-        "Color mode",
-        &["Named or hex".to_string(), "RGB".to_string()],
+        tr("Color mode"),
+        &[tr("Named or hex").to_string(), "RGB".to_string()],
     );
     select_if_changed(&mode, &COLOR_MODES, layout.mode);
     connect_combo(&mode, sender.clone(), COLOR_MODES.to_vec(), move |value| {
@@ -228,7 +231,7 @@ fn build_quick_color_row(
     row.add_row(&mode);
 
     let named_options = NamedColorOption::list();
-    let named = combo_row_widget("Named color", &named_color_labels());
+    let named = combo_row_widget(tr("Named color"), &named_color_labels());
     named.set_visible(layout.mode == ColorMode::Named);
     let named_handler = {
         let sender = sender.clone();
@@ -242,7 +245,7 @@ fn build_quick_color_row(
     row.add_row(&named);
 
     let name = adw::EntryRow::builder()
-        .title("Color name or #RRGGBB[AA]")
+        .title(tr("Color name or #RRGGBB[AA]"))
         .build();
     name.set_visible(layout.mode == ColorMode::Named);
     let name_handler = {
@@ -257,7 +260,7 @@ fn build_quick_color_row(
     row.add_row(&name);
 
     let picker = ColorPickerId::QuickColor(index);
-    let hex = adw::EntryRow::builder().title("Custom color").build();
+    let hex = adw::EntryRow::builder().title(tr("Custom color")).build();
     hex.set_visible(layout.mode == ColorMode::Rgb);
     let hex_handler = {
         let sender = sender.clone();
@@ -316,7 +319,7 @@ fn build_quick_color_row(
 /// nothing, read off the values the row was handed.
 fn name_error(values: &QuickColorValues<'_>) -> Option<String> {
     let unresolved = values.preview.is_none() && !values.name.trim().is_empty();
-    unresolved.then(|| "Use a known color name, #RRGGBB, or #RRGGBBAA for alpha".to_string())
+    unresolved.then(|| tr("Use a known color name, #RRGGBB, or #RRGGBBAA for alpha").to_string())
 }
 
 fn picker_hex(app: &ConfiguratorApp, id: ColorPickerId) -> &str {

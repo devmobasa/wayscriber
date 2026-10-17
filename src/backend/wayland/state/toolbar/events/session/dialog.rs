@@ -2,6 +2,8 @@ use crate::backend::wayland::runtime_operation::{
     RuntimeOperationController, RuntimeOperationIdSource, RuntimeOperationPoll,
 };
 
+use crate::i18n::tr;
+
 use anyhow::{Result, anyhow};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -159,8 +161,8 @@ fn run_zenity_session_file_dialog(
         OsString::from("--file-selection"),
         OsString::from("--title"),
         OsString::from(match mode {
-            SessionFileDialogMode::Open => "Open Wayscriber Session",
-            SessionFileDialogMode::SaveAs => "Save Wayscriber Session As",
+            SessionFileDialogMode::Open => tr("Open Wayscriber Session"),
+            SessionFileDialogMode::SaveAs => tr("Save Wayscriber Session As"),
         }),
     ];
     match mode {

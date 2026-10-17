@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use super::base::InputState;
 use crate::domain::Action;
 use crate::draw::Shape;
+use crate::i18n::{tr, trf};
 use crate::util::Rect;
 
 /// How long the chip stays up, including its fade.
@@ -156,8 +157,8 @@ impl InputState {
     /// wording when undo has no binding.
     fn recognition_undo_hint(&self) -> String {
         match self.shortcut_for_action(Action::Undo) {
-            Some(shortcut) => format!("{shortcut} keeps ink"),
-            None => "Undo keeps ink".to_string(),
+            Some(shortcut) => trf("{} keeps ink", &[&shortcut]),
+            None => tr("Undo keeps ink").to_string(),
         }
     }
 }
@@ -169,9 +170,9 @@ fn recognized_shape_label(shape: &Shape) -> &'static str {
         Shape::Ellipse { rx, ry, .. } => {
             let (rx, ry) = (f64::from(rx.unsigned_abs()), f64::from(ry.unsigned_abs()));
             if (rx - ry).abs() <= rx.max(ry) * CIRCLE_RADIUS_TOLERANCE {
-                "Circle"
+                tr("Circle")
             } else {
-                "Ellipse"
+                tr("Ellipse")
             }
         }
         other => other.kind_name(),

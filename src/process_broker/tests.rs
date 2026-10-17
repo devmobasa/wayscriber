@@ -798,10 +798,11 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
 
 #[test]
 fn helpers_do_not_inherit_the_internal_process_markers() {
-    const MARKERS: [&str; 3] = [
+    const MARKERS: [&str; 4] = [
         crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
         crate::env_vars::DETACHED_ENV,
         crate::RESUME_SESSION_ENV,
+        crate::env_vars::OVERLAY_LANGUAGE_ENV,
     ];
     let _environment = crate::test_env::lock();
     let previous = MARKERS.map(std::env::var_os);
@@ -838,7 +839,7 @@ fn helpers_do_not_inherit_the_internal_process_markers() {
 
     let output = output.unwrap();
     assert_eq!(output.status, 0);
-    assert_eq!(output.stdout, b"unset,unset,unset");
+    assert_eq!(output.stdout, b"unset,unset,unset,unset");
 }
 
 #[test]
