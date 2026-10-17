@@ -52,6 +52,11 @@ pub fn onboarding_hints_destination() -> ConfiguratorDestination {
     ConfiguratorDestination::with_search(ConfiguratorScreen::UiToolbar, ONBOARDING_HINTS_SEARCH)
 }
 
+/// General UI, filtered to the interface language setting.
+pub fn language_destination() -> ConfiguratorDestination {
+    ConfiguratorDestination::with_search(ConfiguratorScreen::UiToolbar, "language")
+}
+
 /// A keybinding subtab, mirroring the configurator's own Keybindings sections.
 ///
 /// Duplicated rather than shared because the configurator's tab types are
@@ -257,7 +262,8 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::OpenConfiguratorPresets
         | Action::OpenConfiguratorBoards
         | Action::OpenConfiguratorQuickColors
-        | Action::OpenConfiguratorOnboardingHints => return None,
+        | Action::OpenConfiguratorOnboardingHints
+        | Action::OpenConfiguratorLanguage => return None,
     };
     Some(section)
 }
@@ -721,6 +727,7 @@ mod tests {
             Action::OpenConfiguratorBoards,
             Action::OpenConfiguratorQuickColors,
             Action::OpenConfiguratorOnboardingHints,
+            Action::OpenConfiguratorLanguage,
         ] {
             assert_eq!(
                 keybindings_section_for_action(action),
@@ -784,6 +791,14 @@ mod tests {
         assert_eq!(
             onboarding_hints_destination().as_arg(),
             "ui/toolbar?search=Show automatic guidance and tips"
+        );
+    }
+
+    #[test]
+    fn the_language_route_reveals_general_ui() {
+        assert_eq!(
+            language_destination().as_arg(),
+            "ui/toolbar?search=language"
         );
     }
 

@@ -300,6 +300,17 @@ impl ksni::Tray for WayscriberTray {
                     }
                     .into(),
                     StandardItem {
+                        label: action_label(Action::OpenConfiguratorLanguage).to_string(),
+                        icon_name: menu_icon_name("preferences-desktop-locale", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.launch_configurator(Some(
+                                crate::configurator_destination::language_destination(),
+                            ));
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
                         label: tr("Open Config File").to_string(),
                         icon_name: menu_icon_name("text-x-generic", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {

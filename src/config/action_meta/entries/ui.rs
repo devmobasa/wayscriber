@@ -289,6 +289,26 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        OpenConfiguratorLanguage,
+        "Interface Language…",
+        None,
+        "Open the configurator's interface language setting",
+        UI,
+        true,
+        false,
+        false,
+        &[
+            "language",
+            "locale",
+            "translation",
+            "chinese",
+            "english",
+            "简体中文",
+            "中文",
+            "语言"
+        ]
+    ),
+    meta!(
         OpenAbout,
         "About Wayscriber",
         Some("About"),

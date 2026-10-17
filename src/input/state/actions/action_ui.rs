@@ -1,6 +1,6 @@
 use crate::configurator_destination::{
-    ConfiguratorDestination, ConfiguratorScreen, onboarding_hints_destination,
-    quick_colors_destination,
+    ConfiguratorDestination, ConfiguratorScreen, language_destination,
+    onboarding_hints_destination, quick_colors_destination,
 };
 use crate::domain::Action;
 use crate::i18n::{tr, trf};
@@ -151,6 +151,10 @@ impl InputState {
             }
             Action::OpenConfiguratorOnboardingHints => {
                 self.launch_configurator(Some(onboarding_hints_destination()));
+                true
+            }
+            Action::OpenConfiguratorLanguage => {
+                self.launch_configurator(Some(language_destination()));
                 true
             }
             Action::OpenAbout => {

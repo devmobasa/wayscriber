@@ -639,11 +639,11 @@ systemctl --user enable --now wayscriber.service
 wayscriber --daemon-toggle
 ```
 
-Prefer a GUI? Open `wayscriber-configurator`, go to the **Daemon** tab, and click **Install/Update Service**, then **Enable + Start**.
+Prefer a GUI? Open `wayscriber-configurator`, go to the **Background Mode** tab, and click **Install Service** (**Update Service** when already installed), then **Start Service**.
 
 **Bind a toggle key:**
 
-Bind `wayscriber --daemon-toggle` to a global shortcut in your compositor or desktop environment. The configurator's **Daemon** tab can also do this: set a shortcut and click **Apply Shortcut** (GNOME: writes a GNOME custom shortcut; KDE/Plasma: writes the systemd drop-in env `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcuts).
+Bind `wayscriber --daemon-toggle` to a global shortcut in your compositor or desktop environment. The configurator's **Background Mode** tab can also do this: set a shortcut and click **Apply Shortcut** (GNOME: writes a GNOME custom shortcut; KDE/Plasma: writes the systemd drop-in env `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcuts).
 
 Hyprland Lua config (`~/.config/hypr/bindings.lua`):
 ```lua

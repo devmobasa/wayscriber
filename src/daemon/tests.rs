@@ -223,45 +223,53 @@ fn tray_menu_offers_session_settings_instead_of_a_session_toggle() {
 /// the tray handed it.
 #[cfg(feature = "tray")]
 #[test]
-fn tray_session_settings_item_opens_the_configurator_at_the_session_screen() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
-    let recorded = temp.path().join("arguments");
-    let recorder = crate::test_fake_helper::link(temp.path(), "recording-configurator");
-    // The configurator override makes the broker accept the stand-in; the
-    // config home keeps the launch failure path away from the developer's own
-    // file. The previous values come back before the assertion.
-    let mut variables = vec![
+fn tray_settings_items_open_their_configurator_destinations() {
+    for (label, expected) in [
+        ("Session persistence settings", "--open\nsession\n"),
         (
-            crate::env_vars::CONFIGURATOR_ENV,
-            Some(recorder.as_os_str()),
+            "Interface Language…",
+            "--open\nui/toolbar?search=language\n",
         ),
-        (
-            crate::env_vars::XDG_CONFIG_HOME_ENV,
-            Some(temp.path().as_os_str()),
-        ),
-    ];
-    variables.extend(crate::test_fake_helper::environment(
-        &recorder,
-        crate::test_fake_helper::Role::RecordArguments,
-        &recorded,
-    ));
+    ] {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let recorded = temp.path().join("arguments");
+        let recorder = crate::test_fake_helper::link(temp.path(), "recording-configurator");
+        // The configurator override makes the broker accept the stand-in; the
+        // config home keeps the launch failure path away from the developer's own
+        // file. The previous values come back before the assertion.
+        let mut variables = vec![
+            (
+                crate::env_vars::CONFIGURATOR_ENV,
+                Some(recorder.as_os_str()),
+            ),
+            (
+                crate::env_vars::XDG_CONFIG_HOME_ENV,
+                Some(temp.path().as_os_str()),
+            ),
+        ];
+        variables.extend(crate::test_fake_helper::environment(
+            &recorder,
+            crate::test_fake_helper::Role::RecordArguments,
+            &recorded,
+        ));
 
-    let launched = crate::test_env::with_env_vars(&variables, || {
-        let toggle = Arc::new(AtomicBool::new(false));
-        let quit = Arc::new(AtomicBool::new(false));
-        let mut tray = WayscriberTray::new_for_tests_with_configurator(
-            toggle,
-            quit,
-            recorder.to_string_lossy().into_owned(),
+        let launched = crate::test_env::with_env_vars(&variables, || {
+            let toggle = Arc::new(AtomicBool::new(false));
+            let quit = Arc::new(AtomicBool::new(false));
+            let mut tray = WayscriberTray::new_for_tests_with_configurator(
+                toggle,
+                quit,
+                recorder.to_string_lossy().into_owned(),
+            );
+            record_configurator_menu_launch(&mut tray, &recorded, label)
+        });
+
+        assert_eq!(
+            launched.as_deref(),
+            Some(expected),
+            "{label} must open its configurator destination"
         );
-        record_session_settings_launch(&mut tray, &recorded)
-    });
-
-    assert_eq!(
-        launched.as_deref(),
-        Some("--open\nsession\n"),
-        "the session item must open the configurator at its Session screen"
-    );
+    }
 }
 
 /// Click the item and wait for the stand-in configurator to record its
@@ -271,13 +279,14 @@ fn tray_session_settings_item_opens_the_configurator_at_the_session_screen() {
 /// broker test running in parallel can replace and then clear. Re-establishing
 /// the broker and clicking again keeps that race out of the assertion.
 #[cfg(feature = "tray")]
-fn record_session_settings_launch(
+fn record_configurator_menu_launch(
     tray: &mut WayscriberTray,
     recorded: &std::path::Path,
+    label: &str,
 ) -> Option<String> {
     for _ in 0..3 {
         let _broker = crate::process_broker::start_for_runtime().ok()?;
-        activate_menu_item(tray, "Session persistence settings");
+        activate_menu_item(tray, label);
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
         while std::time::Instant::now() < deadline {

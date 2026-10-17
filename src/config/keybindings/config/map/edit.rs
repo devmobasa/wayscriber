@@ -298,6 +298,7 @@ define_action_binding_accessors! {
         OpenConfiguratorBoards,
         OpenConfiguratorQuickColors,
         OpenConfiguratorOnboardingHints,
+        OpenConfiguratorLanguage,
     ]
 }
 

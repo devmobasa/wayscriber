@@ -4,6 +4,40 @@ use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 
 #[test]
+fn chinese_help_search_finds_undo_without_reordering_sections() {
+    crate::test_env::in_language_isolated_child(
+        concat!(
+            module_path!(),
+            "::chinese_help_search_finds_undo_without_reordering_sections"
+        ),
+        || {
+            crate::i18n::set_language(crate::domain::Language::SimplifiedChinese);
+            let sections =
+                build_section_sets(&HelpOverlayBindings::default(), false, false, true, true).all;
+            let titles: Vec<_> = sections.iter().map(|section| section.title).collect();
+            let filtered = super::filter_sections_for_search(sections, "撤销");
+            assert!(
+                filtered
+                    .iter()
+                    .flat_map(|section| &section.rows)
+                    .any(|row| row.action_id == Some(Action::Undo))
+            );
+
+            let positions: Vec<_> = filtered
+                .iter()
+                .map(|section| {
+                    titles
+                        .iter()
+                        .position(|title| *title == section.title)
+                        .expect("original section")
+                })
+                .collect();
+            assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+        },
+    );
+}
+
+#[test]
 fn gesture_hints_remain_present() {
     let bindings = HelpOverlayBindings::default();
     let sections = build_section_sets(&bindings, false, false, true, true).all;

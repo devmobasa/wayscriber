@@ -886,3 +886,33 @@ fn chinese_ui_search_matches_english_terms_and_displayed_titles() {
         },
     );
 }
+
+#[test]
+fn language_search_reveals_general_ui_in_either_language() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::language_search_reveals_general_ui_in_either_language"
+        ),
+        || {
+            for language in [
+                wayscriber::domain::Language::English,
+                wayscriber::domain::Language::SimplifiedChinese,
+            ] {
+                wayscriber::i18n::set_language(language);
+                let (mut app, _effects) = ConfiguratorApp::new_app();
+                for query in ["language", "locale", "English", "简体中文", "中文", "语言"] {
+                    app.search_query = SearchQuery::new(query);
+                    let summary = app.search_summary();
+                    let ui = summary
+                        .tab(TabId::Ui)
+                        .unwrap_or_else(|| panic!("{query:?} must find UI in {language:?}"));
+                    assert!(
+                        ui.area_matches(SearchArea::UiGeneral),
+                        "{query:?} must reveal the Language row in {language:?}"
+                    );
+                }
+            }
+        },
+    );
+}

@@ -430,10 +430,10 @@ fn named_key(keyval: u32) -> Option<&'static str> {
         keyval::ESCAPE => "Escape",
         keyval::RETURN | keyval::KP_ENTER => "Return",
         keyval::BACKSPACE => "Backspace",
-        keyval::MENU => tr("Menu"),
-        keyval::DELETE | keyval::KP_DELETE => tr("Delete"),
+        keyval::MENU => "Menu",
+        keyval::DELETE | keyval::KP_DELETE => "Delete",
         keyval::HOME | keyval::KP_HOME => "Home",
-        keyval::END | keyval::KP_END => tr("End"),
+        keyval::END | keyval::KP_END => "End",
         keyval::PAGE_UP | keyval::KP_PAGE_UP => "PageUp",
         keyval::PAGE_DOWN | keyval::KP_PAGE_DOWN => "PageDown",
         keyval::LEFT | keyval::KP_LEFT => "ArrowLeft",
@@ -736,6 +736,34 @@ mod tests {
         assert_eq!(
             chord(keyval::KP_DELETE, KeyboardModifiers::default()).to_string(),
             "Delete"
+        );
+    }
+
+    #[test]
+    fn named_keys_keep_keyboard_names_in_every_language() {
+        crate::test_env::in_language_child(
+            concat!(
+                module_path!(),
+                "::named_keys_keep_keyboard_names_in_every_language"
+            ),
+            || {
+                use wayscriber::domain::Language;
+
+                for language in [Language::English, Language::SimplifiedChinese] {
+                    wayscriber::i18n::set_language(language);
+                    for (keyval, name) in [
+                        (keyval::END, "End"),
+                        (keyval::KP_END, "End"),
+                        (keyval::MENU, "Menu"),
+                        (keyval::DELETE, "Delete"),
+                        (keyval::KP_DELETE, "Delete"),
+                    ] {
+                        let binding = chord(keyval, mods(true, false, false, false));
+                        assert_eq!(binding.to_string(), format!("Ctrl+{name}"), "{language:?}");
+                        assert!(binding.matches(name, true, false, false, false));
+                    }
+                }
+            },
         );
     }
 

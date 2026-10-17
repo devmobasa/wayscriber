@@ -17,14 +17,14 @@ The service keeps the daemon running in the background; you only need a keybind 
 
 If you installed `wayscriber-configurator`, you can set this up entirely in GUI:
 1. Open `wayscriber-configurator`.
-2. Go to the `Daemon` tab.
-3. Click `Install/Update Service`.
-4. Click `Enable + Start`.
-5. Set your shortcut and click `Apply Shortcut`.
+2. Go to the **Background Mode** tab.
+3. Click **Install Service** (**Update Service** when already installed).
+4. Click **Start Service**.
+5. Set your shortcut and click **Apply Shortcut**.
 
 Desktop-specific shortcut handling:
 - GNOME: creates/updates a GNOME custom shortcut that runs `wayscriber --daemon-toggle`.
-- GNOME migrations: `Install/Update Service` and `Apply Shortcut` remove stale `~/.config/systemd/user/wayscriber.service.d/shortcut.conf` files so old portal settings do not override GNOME behavior.
+- GNOME migrations: **Install Service** / **Update Service** and **Apply Shortcut** remove stale `~/.config/systemd/user/wayscriber.service.d/shortcut.conf` files so old portal settings do not override GNOME behavior.
 - KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1` and `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
 - Hyprland: light passthrough controls use native Hyprland bindings, not the portal shortcut path.
 
@@ -180,7 +180,7 @@ GNOME setup works for the normal overlay toggle:
 systemctl --user enable --now wayscriber.service
 ```
 
-Then use the configurator's Daemon tab, or create a GNOME custom shortcut that runs:
+Then use the configurator's **Background Mode** tab, or create a GNOME custom shortcut that runs:
 
 ```sh
 wayscriber --daemon-toggle

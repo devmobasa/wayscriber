@@ -162,6 +162,8 @@ pub enum Action {
     OpenConfiguratorQuickColors,
     /// Open General UI at the automatic-guidance preference.
     OpenConfiguratorOnboardingHints,
+    /// Open General UI at the interface language setting.
+    OpenConfiguratorLanguage,
     ClearSavedToolState,
     OpenAbout,
 

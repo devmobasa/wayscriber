@@ -279,7 +279,11 @@ pub(super) fn start_group(
     running_row.append(&stop);
     body.append(&running_row);
 
-    let start = action_button(tr("Start"), DaemonAction::EnableAndStartService, sender);
+    let start = action_button(
+        tr("Start Service"),
+        DaemonAction::EnableAndStartService,
+        sender,
+    );
     start.add_css_class("suggested-action");
     body.append(&start);
     group.add(&body);
