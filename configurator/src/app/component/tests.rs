@@ -24,7 +24,7 @@ use adw::prelude::*;
 
 use wayscriber::domain::Language;
 
-use crate::messages::Message;
+use crate::messages::{CommandMessage, Message};
 use crate::models::{KeybindingField, LanguageOption, StartupRequest, TabId, UiTabId};
 
 use super::super::state::ConfiguratorApp;
@@ -119,7 +119,80 @@ fn run_scenario() {
     navigation_works_after_a_language_change(&app);
     repeated_switches_leave_nothing_behind(&app, pages, bindings);
     a_load_that_changes_the_language_keeps_its_resets(&app);
+    service_buttons_describe_service_actions_in_each_language(&app);
     super::rebuild::assert_widget_paths_find_only_the_same_shape();
+}
+
+fn service_buttons_describe_service_actions_in_each_language(app: &Controller<ConfiguratorApp>) {
+    app.emit(Message::TabSelected(TabId::Daemon));
+    pump_until("the background service status", || {
+        app.model().daemon.status.is_some()
+    });
+    settle();
+
+    for (language, start, restart, stop) in [
+        (
+            LanguageOption::SimplifiedChinese,
+            "启动服务",
+            "重启",
+            "停止并禁用",
+        ),
+        (
+            LanguageOption::English,
+            "Start Service",
+            "Restart",
+            "Stop & Disable",
+        ),
+    ] {
+        app.emit(Message::UiLanguageChanged(language));
+        settle();
+
+        for running in [false, true] {
+            let mut status = app.model().daemon.status.clone().expect("service status");
+            status.service_installed = true;
+            status.service_active = running;
+            status.service_enabled = running;
+            let request_id = app.model().daemon.latest_status_request_id;
+            let effects = app
+                .state()
+                .get_mut()
+                .model
+                .update_command(CommandMessage::DaemonStatusLoaded(request_id, Ok(status)));
+            assert!(effects.is_empty());
+            settle();
+
+            // The page hides the Restart/Stop row, not its buttons, so a button
+            // counts as shown only when every container up to the page is.
+            let page = app.widgets().stack.visible_child().expect("visible page");
+            let buttons: Vec<_> = visible_page_descendants(app)
+                .into_iter()
+                .filter(|widget| {
+                    std::iter::successors(Some(widget.clone()), gtk::Widget::parent)
+                        .take_while(|ancestor| *ancestor != page)
+                        .all(|ancestor| ancestor.is_visible())
+                })
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .filter_map(|button| button.label().map(|label| label.to_string()))
+                .collect();
+            let (shown, hidden) = if running {
+                (vec![restart, stop], vec![start])
+            } else {
+                (vec![start], vec![restart, stop])
+            };
+            for label in shown {
+                assert!(
+                    buttons.iter().any(|button| button == label),
+                    "missing {label:?}: {buttons:?}"
+                );
+            }
+            for label in hidden {
+                assert!(
+                    !buttons.iter().any(|button| button == label),
+                    "unexpected {label:?}: {buttons:?}"
+                );
+            }
+        }
+    }
 }
 
 fn open_edits_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
