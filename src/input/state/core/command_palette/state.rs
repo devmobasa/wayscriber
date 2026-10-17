@@ -92,6 +92,7 @@ impl CommandPaletteState {
         let cached = self.results.borrow();
         let cached = cached.as_ref()?;
         (cached.query == self.query
+            && cached.language == crate::i18n::language()
             && cached.keymap_revision == revision
             && cached.recents == self.recent)
             .then(|| cached.results.clone())
@@ -99,6 +100,7 @@ impl CommandPaletteState {
     pub(super) fn cache_results(&self, revision: u64, results: Vec<&'static super::CommandEntry>) {
         *self.results.borrow_mut() = Some(CommandPaletteResults {
             query: self.query.clone(),
+            language: crate::i18n::language(),
             recents: self.recent.clone(),
             keymap_revision: revision,
             results,

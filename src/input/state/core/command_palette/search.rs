@@ -1,7 +1,9 @@
 use super::super::base::InputState;
 use super::empty_query::{EmptyQueryGroups, empty_query_commands, empty_query_groups};
 use super::{CommandEntry, CommandPaletteState, command_palette_entries};
-use crate::config::action_meta::{ActionCategory, ActionMeta};
+use crate::config::action_meta::{
+    ActionCategory, ActionMeta, action_description, action_label, action_short_label,
+};
 use crate::config::keybindings::canonical_key_names;
 use crate::domain::Action;
 use crate::i18n::tr;
@@ -40,6 +42,7 @@ impl CommandPaletteListRow {
 #[derive(Debug)]
 pub(in crate::input::state::core) struct CommandPaletteResults {
     pub(super) query: String,
+    pub(super) language: crate::domain::Language,
     pub(super) recents: Vec<Action>,
     pub(super) keymap_revision: u64,
     pub(super) results: Vec<&'static CommandEntry>,
@@ -52,7 +55,7 @@ impl CommandPaletteState {
     /// and the renderer asks for the row list twice per frame on top of every
     /// keystroke and repeat tick. The key is everything `score_command` reads:
     /// the query, the recents that bias it, and the keymap revision behind the
-    /// shortcut labels it folds in.
+    /// shortcut labels it folds in, and the active language of the metadata.
     pub(super) fn filtered_commands(
         &self,
         revision: u64,
@@ -289,8 +292,8 @@ pub(crate) fn command_palette_display_index(
         .unwrap_or(0)
 }
 
-/// Fuzzy-score a single query `token` against an action's static search model:
-/// its label, short label, description, category name, and search aliases. This
+/// Fuzzy-score a query `token` against English and active-language action text:
+/// its label, optional short label, description, category and search aliases. This
 /// is the command palette's per-token index minus the per-user shortcut labels
 /// (callers that have shortcut strings fold those in with their own
 /// [`fuzzy_score`]). Shared with the help overlay so alias queries like
@@ -298,13 +301,14 @@ pub(crate) fn command_palette_display_index(
 pub(crate) fn action_meta_token_score(meta: &ActionMeta, token: &str) -> i32 {
     let aliases = meta.search_aliases.join(" ");
     fuzzy_score(token, meta.label)
+        .max(fuzzy_score(token, action_label(meta.action)))
         .max(fuzzy_score(token, meta.description))
-        .max(fuzzy_score(token, action_category_name(meta.category)))
+        .max(fuzzy_score(token, action_description(meta.action)))
+        .max(action_category_score(meta.category, token))
         .max(fuzzy_score(token, &aliases))
-        .max(
-            meta.short_label
-                .map_or(0, |label| fuzzy_score(token, label)),
-        )
+        .max(meta.short_label.map_or(0, |label| {
+            fuzzy_score(token, label).max(fuzzy_score(token, action_short_label(meta.action)))
+        }))
 }
 
 /// Full-query bonus over an action's static search model, mirroring the
@@ -312,14 +316,28 @@ pub(crate) fn action_meta_token_score(meta: &ActionMeta, token: &str) -> i32 {
 /// [`action_meta_token_score`] so the two surfaces share one ranking model.
 fn action_meta_query_bonus(meta: &ActionMeta, query: &str) -> i32 {
     let aliases = meta.search_aliases.join(" ");
-    let mut bonus = fuzzy_score(query, meta.label) * 2;
-    bonus += fuzzy_score(query, meta.description);
+    let mut bonus =
+        fuzzy_score(query, meta.label).max(fuzzy_score(query, action_label(meta.action))) * 2;
+    bonus += fuzzy_score(query, meta.description)
+        .max(fuzzy_score(query, action_description(meta.action)));
     bonus += fuzzy_score(query, &aliases) * 2;
-    bonus += fuzzy_score(query, action_category_name(meta.category));
+    bonus += action_category_score(meta.category, query);
     if let Some(short_label) = meta.short_label {
-        bonus += fuzzy_score(query, short_label);
+        bonus += fuzzy_score(query, short_label)
+            .max(fuzzy_score(query, action_short_label(meta.action)));
     }
     bonus
+}
+
+fn action_category_score(category: ActionCategory, query: &str) -> i32 {
+    let source = fuzzy_score(query, action_category_name(category));
+    // English headings are different words from the keys (Interface / ui,
+    // Boards / board). Adding them would change existing English results.
+    if crate::i18n::language() == crate::domain::Language::English {
+        source
+    } else {
+        source.max(fuzzy_score(query, action_category_display_name(category)))
+    }
 }
 
 /// The shortcut haystack a query is scored against: the labels exactly as the
@@ -377,6 +395,9 @@ fn action_category_display_name(category: ActionCategory) -> &'static str {
         ActionCategory::Presets => tr("Presets"),
     }
 }
+
+#[cfg(test)]
+mod language_tests;
 
 #[cfg(test)]
 mod tests {
