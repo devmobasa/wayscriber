@@ -2,6 +2,7 @@
 
 mod builtin_contract;
 mod builtin_style_nodes;
+mod capture_render;
 mod expectations;
 mod gtk_contract;
 mod gtk_level_widgets;

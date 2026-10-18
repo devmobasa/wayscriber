@@ -208,6 +208,8 @@ impl CaptureSurfaceContent {
     }
 
     fn set_transparent(&self, transparent: bool) {
+        set_capture_transparent_class(&self.root, transparent);
+
         let opacity = if transparent { 0.0 } else { 1.0 };
         if let Some(content) = self.root.child()
             && (content.opacity() - opacity).abs() > f64::EPSILON
@@ -269,6 +271,28 @@ impl CaptureSurfaceContent {
     fn proof_serial(&self) -> u8 {
         self.proof_serial.get()
     }
+}
+
+fn set_capture_transparent_class(widget: &impl IsA<gtk4::Widget>, transparent: bool) {
+    if transparent {
+        widget.add_css_class(super::css::CAPTURE_TRANSPARENT_CLASS);
+    } else {
+        widget.remove_css_class(super::css::CAPTURE_TRANSPARENT_CLASS);
+    }
+}
+
+fn install_capture_css_provider(scale: f64) -> gtk4::CssProvider {
+    let provider = gtk4::CssProvider::new();
+    provider.load_from_string(&super::css::capture_stylesheet(scale));
+    if let Some(display) = gtk4::gdk::Display::default() {
+        gtk4::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_USER + 1,
+        );
+    }
+
+    provider
 }
 
 #[derive(Clone)]
@@ -447,6 +471,7 @@ pub(super) struct Windows {
     top: top_bar::TopBar,
     tooltip_capture: capture_suppression::TooltipCapture,
     css_provider: gtk4::CssProvider,
+    capture_css_provider: gtk4::CssProvider,
     css_scale_milli: i64,
     pinned_output: Option<String>,
     feedback: FeedbackSender,
@@ -468,6 +493,7 @@ impl Windows {
             top: top_bar::TopBar::new(feedback.clone()),
             tooltip_capture: capture_suppression::TooltipCapture::new(),
             css_provider,
+            capture_css_provider: install_capture_css_provider(1.0),
             css_scale_milli: 1000,
             pinned_output: None,
             feedback,
@@ -611,6 +637,8 @@ impl Windows {
         if milli != self.css_scale_milli {
             self.css_provider
                 .load_from_string(&super::css::stylesheet(scale));
+            self.capture_css_provider
+                .load_from_string(&super::css::capture_stylesheet(scale));
             self.css_scale_milli = milli;
         }
     }

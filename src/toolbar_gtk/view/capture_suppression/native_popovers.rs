@@ -232,22 +232,63 @@ fn rearm_proof(epoch: &Cell<u64>) {
     epoch.set(epoch.get().wrapping_add(1));
 }
 
+struct MenuScrollLayout {
+    scrolled: gtk4::ScrolledWindow,
+    propagate_width: bool,
+    propagate_height: bool,
+    policy: (gtk4::PolicyType, gtk4::PolicyType),
+}
+
+impl MenuScrollLayout {
+    fn hold(scrolled: &gtk4::ScrolledWindow) -> Self {
+        let layout = Self {
+            scrolled: scrolled.clone(),
+            propagate_width: scrolled.propagates_natural_width(),
+            propagate_height: scrolled.propagates_natural_height(),
+            policy: scrolled.policy(),
+        };
+        // The temporary model contains only the proof. Its natural size and
+        // scrollbar minimum lengths must not inflate the saved allocation.
+        scrolled.set_propagate_natural_width(false);
+        scrolled.set_propagate_natural_height(false);
+        scrolled.set_policy(gtk4::PolicyType::External, gtk4::PolicyType::External);
+
+        layout
+    }
+
+    fn restore(self) {
+        self.scrolled.set_policy(self.policy.0, self.policy.1);
+        self.scrolled
+            .set_propagate_natural_width(self.propagate_width);
+        self.scrolled
+            .set_propagate_natural_height(self.propagate_height);
+    }
+}
+
 enum NativePopoverContent {
     Wrapped(CaptureSurfaceContent),
     Menu {
         surface: CaptureSurfaceContent,
         proof_model: gtk4::gio::Menu,
         original_model: RefCell<Option<gtk4::gio::MenuModel>>,
+        original_child_size: RefCell<Option<(gtk4::Widget, i32, i32)>>,
+        original_scroll_layout: RefCell<Option<MenuScrollLayout>>,
     },
 }
 
 impl NativePopoverContent {
     fn new(popover: &gtk4::Popover) -> Self {
         if let Ok(menu) = popover.clone().downcast::<gtk4::PopoverMenu>() {
+            let surface = CaptureSurfaceContent::empty();
+            surface
+                .widget()
+                .add_css_class("wayscriber-capture-menu-proof");
             return Self::Menu {
-                surface: CaptureSurfaceContent::empty(),
+                surface,
                 proof_model: capture_menu_proof_model(),
                 original_model: RefCell::new(menu.menu_model()),
+                original_child_size: RefCell::new(None),
+                original_scroll_layout: RefCell::new(None),
             };
         }
 
@@ -290,6 +331,8 @@ impl NativePopoverContent {
             surface,
             proof_model,
             original_model,
+            original_child_size,
+            original_scroll_layout,
         } = self
         else {
             return;
@@ -303,6 +346,27 @@ impl NativePopoverContent {
         };
         let proof_model_object = proof_model.clone().upcast::<gtk4::gio::MenuModel>();
         if menu.menu_model().as_ref() != Some(&proof_model_object) {
+            // Keep the class-owned child's allocation while replacing its
+            // model. The proof slot must not resize the native popup, and the
+            // child itself remains owned and parented by GtkPopoverMenu.
+            if original_child_size.borrow().is_none()
+                && let Some(child) = menu.child()
+            {
+                let (width, height) = child.size_request();
+                // GTK's public outer-allocation getters include CSS margins.
+                // compute_bounds returns the border box and would shrink a
+                // CSS-margined child when used as its minimum request.
+                #[allow(deprecated)]
+                let allocation = (child.allocated_width(), child.allocated_height());
+                // The temporary model's natural requisition must not grow
+                // beyond that allocation. Restore normal model propagation
+                // together with its original minimum request afterward.
+                if let Some(scrolled) = child.downcast_ref::<gtk4::ScrolledWindow>() {
+                    original_scroll_layout.replace(Some(MenuScrollLayout::hold(scrolled)));
+                }
+                child.set_size_request(allocation.0, allocation.1);
+                original_child_size.replace(Some((child, width, height)));
+            }
             original_model.replace(menu.menu_model());
             menu.set_menu_model(Some(proof_model));
         }
@@ -310,6 +374,9 @@ impl NativePopoverContent {
             && !menu.add_child(surface.widget(), CAPTURE_MENU_PROOF_ID)
         {
             log::error!("could not install GTK menu capture proof widget");
+        }
+        if let Some(slot) = surface.widget().parent() {
+            slot.add_css_class("wayscriber-capture-menu-slot");
         }
     }
 
@@ -330,6 +397,8 @@ impl NativePopoverContent {
                 surface,
                 proof_model,
                 original_model,
+                original_child_size,
+                original_scroll_layout,
             } => {
                 let Ok(menu) = popover.clone().downcast::<gtk4::PopoverMenu>() else {
                     return;
@@ -337,9 +406,18 @@ impl NativePopoverContent {
                 let proof_model_object = proof_model.clone().upcast::<gtk4::gio::MenuModel>();
                 if menu.menu_model().as_ref() == Some(&proof_model_object) {
                     if surface.widget().parent().is_some() {
+                        if let Some(slot) = surface.widget().parent() {
+                            slot.remove_css_class("wayscriber-capture-menu-slot");
+                        }
                         menu.remove_child(surface.widget());
                     }
                     menu.set_menu_model(original_model.borrow().as_ref());
+                }
+                if let Some((child, width, height)) = original_child_size.take() {
+                    child.set_size_request(width, height);
+                }
+                if let Some(layout) = original_scroll_layout.take() {
+                    layout.restore();
                 }
             }
         }

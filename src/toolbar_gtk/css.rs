@@ -287,23 +287,6 @@ window.wayscriber-toolbar {{
     padding: {pad_popover}px;
     box-shadow: 0 {shadow_offset_y}px {shadow_blur}px {popover_shadow};
 }}
-/* A popover is its own native surface. Its contents and arrow CSS nodes paint
-   outside the application-provided child, so capture suppression must clear
-   their pixels too. Keep border and shadow dimensions unchanged to avoid a
-   resize while the transparent replacement buffer is being acknowledged. */
-.wayscriber-toolbar popover.{capture_transparent_class},
-.wayscriber-toolbar popover.{capture_transparent_class} > arrow {{
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-    outline-color: transparent;
-}}
-.wayscriber-toolbar popover.{capture_transparent_class} > contents {{
-    background: transparent;
-    border-color: transparent;
-    box-shadow: 0 {shadow_offset_y}px {shadow_blur}px {popover_shadow_clear};
-    outline-color: transparent;
-}}
 
 /* ===== Popover / strip shared chrome =================================== */
 .wayscriber-toolbar .section-title {{
@@ -358,16 +341,6 @@ tooltip {{
     padding: {spacing_xs}px {spacing_std}px;
     font-size: {font_tooltip}px;
 }}
-/* GtkTooltipWindow is a private GtkNative with its own popup surface. Its
-   native CSS node paints outside the application-provided custom widget, so
-   suppress the chrome without unmapping the popup. */
-tooltip.{capture_transparent_class} {{
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-    outline-color: transparent;
-    color: transparent;
-}}
 "#,
         panel = v.panel,
         panel_border = v.panel_border,
@@ -402,7 +375,6 @@ tooltip.{capture_transparent_class} {{
         badge_bg = v.badge_bg,
         badge_border = v.badge_border,
         popover_shadow = v.popover_shadow,
-        popover_shadow_clear = v.popover_shadow_clear,
         section_title = v.section_title,
         field_bg = v.field_bg,
         field_border = v.field_border,
@@ -411,7 +383,6 @@ tooltip.{capture_transparent_class} {{
         track_hover = v.track_hover,
         meter_bar_h = crate::ui::theme::css::scaled_px(8.0, scale),
         meter_bar_radius = crate::ui::theme::css::scaled_px(4.0, scale),
-        capture_transparent_class = CAPTURE_TRANSPARENT_CLASS,
         radius_panel = v.radius_panel,
         radius_button = v.radius_button,
         radius_sm = v.radius_sm,
@@ -446,6 +417,79 @@ tooltip.{capture_transparent_class} {{
         transition_ms = v.transition_ms,
         weight_semibold = v.weight_semibold,
         weight_bold = v.weight_bold,
+    )
+}
+
+/// Capture is required to clear every painted native root, including user CSS
+/// that overrides the ordinary application stylesheet. Install this separately
+/// above user priority. Popup shadow geometry is stable even outside capture:
+/// GTK may withdraw a native popup when its shadow extents change, losing the
+/// mapped surface whose transparent presentation the capture barrier requires.
+/// User shadow overrides are intentionally replaced by the application shadow;
+/// other user decoration returns when the capture class is removed.
+pub(super) fn capture_stylesheet(scale: f64) -> String {
+    let v = GtkStylesheetValues::new(scale);
+    format!(
+        r#"
+.wayscriber-toolbar popover > contents {{
+    box-shadow: 0 {shadow_offset_y}px {shadow_blur}px {popover_shadow};
+}}
+window.wayscriber-toolbar.{class},
+overlay.wayscriber-capture-surface-content.{class},
+overlay.wayscriber-capture-surface-content.{class} > picture,
+popover.{class},
+popover.{class} *,
+tooltip.{class},
+tooltip.{class} * {{
+    transition: none;
+    animation: none;
+    background: transparent;
+    border-color: transparent;
+    border-image-source: none;
+    box-shadow: none;
+    outline-color: transparent;
+}}
+/* The overlay proof does not participate in measurement. Keep its texture
+   area nonempty even when user CSS gives every picture a border or padding. */
+overlay.wayscriber-capture-surface-content.{class} > picture {{
+    border-width: 0;
+    padding: 0;
+    margin: 0;
+}}
+/* This empty widget exists only in GTK's temporary menu proof model. Its
+   decoration must not enlarge the menu's custom slot or consume its texture. */
+overlay.wayscriber-capture-menu-proof.{class} {{
+    min-width: 1px;
+    min-height: 1px;
+    border-width: 0;
+    padding: 0;
+    margin: 0;
+}}
+popover.{class} .wayscriber-capture-menu-slot {{
+    min-width: 0;
+    min-height: 0;
+    border-width: 0;
+    padding: 0;
+    margin: 0;
+}}
+/* Preserve the popup's border widths, padding and shadow extents while its
+   replacement buffer is being acknowledged. Its native CSS nodes paint
+   outside the child that CaptureSurfaceContent hides. */
+popover.{class} > contents {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: 0 {shadow_offset_y}px {shadow_blur}px {popover_shadow_clear};
+    outline-color: transparent;
+}}
+tooltip.{class} {{
+    color: transparent;
+}}
+"#,
+        class = CAPTURE_TRANSPARENT_CLASS,
+        shadow_offset_y = v.shadow_offset_y,
+        shadow_blur = v.shadow_blur,
+        popover_shadow = v.popover_shadow,
+        popover_shadow_clear = v.popover_shadow_clear,
     )
 }
 
@@ -597,7 +641,7 @@ mod tests {
 
     #[test]
     fn every_theme_token_color_appears_in_the_stylesheet() {
-        let css = stylesheet(1.0);
+        let css = stylesheet(1.0) + &capture_stylesheet(1.0);
         for (token, value) in emitted_colors() {
             assert!(
                 css.contains(&value),
@@ -608,7 +652,7 @@ mod tests {
 
     #[test]
     fn stylesheet_has_no_color_literal_outside_the_theme_tokens() {
-        let css = stylesheet(1.0);
+        let css = stylesheet(1.0) + &capture_stylesheet(1.0);
         let known: std::collections::HashSet<String> = emitted_colors()
             .into_iter()
             .map(|(_, value)| value)
@@ -629,7 +673,7 @@ mod tests {
 
     #[test]
     fn capture_suppression_clears_private_native_popup_chrome() {
-        let css = stylesheet(1.0);
+        let css = capture_stylesheet(1.0);
         assert!(css.contains(&format!("tooltip.{CAPTURE_TRANSPARENT_CLASS} {{")));
         assert!(css.contains(&format!(
             "popover.{CAPTURE_TRANSPARENT_CLASS} > contents {{"
