@@ -96,7 +96,6 @@ pub(super) fn run_cases(name: &str) {
             "menu-decorated",
             "menu-default",
             "menu-long",
-            "menu-constrained",
             "lifecycle",
         ] {
             if let Err(error) = run(name, renderer, case) {

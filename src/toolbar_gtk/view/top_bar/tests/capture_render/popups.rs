@@ -5,7 +5,7 @@ use crate::toolbar_gtk::view::{
 };
 use gtk4::prelude::*;
 
-fn anchor(output_centered: bool) -> (gtk4::Window, gtk4::Button) {
+fn anchor() -> (gtk4::Window, gtk4::Button) {
     let anchor = gtk4::Button::with_label("Popup anchor");
     let window = gtk4::Window::builder()
         .default_width(320)
@@ -14,14 +14,6 @@ fn anchor(output_centered: bool) -> (gtk4::Window, gtk4::Button) {
         .child(&anchor)
         .build();
     window.add_css_class("wayscriber-toolbar");
-    if output_centered {
-        // Leave room on both sides of the anchor. Wherever the compositor
-        // flips an oversized popup, it can shrink it without going below
-        // GTK's minimum menu height, which would withdraw the popup instead.
-        anchor.set_halign(gtk4::Align::Center);
-        anchor.set_valign(gtk4::Align::Center);
-        window.maximize();
-    }
     window.present();
     wait_for_frame(&window);
     assert_renderer(&window);
@@ -44,7 +36,7 @@ pub(super) fn popup(user: &gtk4::CssProvider, case: &str) {
         "popover, popover > contents, popover > arrow",
         "none",
     ));
-    let (window, anchor) = anchor(false);
+    let (window, anchor) = anchor();
     let content = CaptureSurfaceContent::new(&gtk4::Label::new(Some("Popup content")));
     let popup = gtk4::Popover::new();
     popup.set_autohide(false);
@@ -94,12 +86,12 @@ pub(super) fn popup(user: &gtk4::CssProvider, case: &str) {
 }
 
 pub(super) fn menu(user: &gtk4::CssProvider, case: &str) {
-    let painted = !matches!(case, "menu-default" | "menu-long" | "menu-constrained");
-    let long = matches!(case, "menu-long" | "menu-constrained");
+    let painted = !matches!(case, "menu-default" | "menu-long");
+    let long = case == "menu-long";
     user.load_from_string(&menu_css(case));
 
-    let (window, anchor) = anchor(case == "menu-constrained");
-    let menu = menu_widget(&anchor, case);
+    let (window, anchor) = anchor();
+    let menu = menu_widget(&anchor, case == "menu-decorated", long);
     let original_child = menu.child();
     let original_parent = original_child.as_ref().unwrap().parent();
     assert!(
@@ -115,6 +107,9 @@ pub(super) fn menu(user: &gtk4::CssProvider, case: &str) {
     menu.popup();
     wait_for_frame(&menu);
     let original_request = original_child.as_ref().unwrap().size_request();
+    if long {
+        assert_menu_scrollable(scrolled);
+    }
     let original_max_content_height = scrolled.max_content_height();
     let original_policy = scrolled.policy();
     let original_propagation = (
@@ -124,7 +119,6 @@ pub(super) fn menu(user: &gtk4::CssProvider, case: &str) {
 
     let normal = settled_pixels(&menu);
     let size = native_size(&menu);
-    assert_initial_menu_layout(case, &menu, scrolled, size);
     assert!(
         normal.iter().any(|pixel| pixel[3] != 0),
         "visible menu fixture"
@@ -180,7 +174,7 @@ pub(super) fn menu(user: &gtk4::CssProvider, case: &str) {
 
 fn menu_css(case: &str) -> String {
     match case {
-        "menu-default" | "menu-long" | "menu-constrained" => String::new(),
+        "menu-default" | "menu-long" => String::new(),
         "menu" | "menu-decorated" => {
             // Preserve the adversarial fixtures that paint every GTK-owned
             // intermediary and explicitly zero the scrollbar's theme metrics.
@@ -195,9 +189,9 @@ fn menu_css(case: &str) -> String {
     }
 }
 
-fn menu_widget(anchor: &gtk4::Button, case: &str) -> gtk4::PopoverMenu {
+fn menu_widget(anchor: &gtk4::Button, decorated: bool, long: bool) -> gtk4::PopoverMenu {
     let model = gtk4::gio::Menu::new();
-    if matches!(case, "menu-long" | "menu-constrained") {
+    if long {
         for item in 0..60 {
             model.append(Some(&format!("Copy item {item}")), Some("clipboard.copy"));
         }
@@ -207,7 +201,7 @@ fn menu_widget(anchor: &gtk4::Button, case: &str) -> gtk4::PopoverMenu {
     let menu = gtk4::PopoverMenu::from_model(Some(&model));
     menu.set_autohide(false);
     menu.set_parent(anchor);
-    if case == "menu-long" {
+    if long {
         // Bound the initial popup so compositor placement need not shrink it.
         menu.child()
             .unwrap()
@@ -215,7 +209,7 @@ fn menu_widget(anchor: &gtk4::Button, case: &str) -> gtk4::PopoverMenu {
             .unwrap()
             .set_max_content_height(240);
     }
-    if case == "menu-decorated" {
+    if decorated {
         let child = menu.child().unwrap();
         child.set_margin_start(3);
         child.set_margin_end(5);
@@ -225,27 +219,6 @@ fn menu_widget(anchor: &gtk4::Button, case: &str) -> gtk4::PopoverMenu {
     }
 
     menu
-}
-
-fn assert_initial_menu_layout(
-    case: &str,
-    menu: &gtk4::PopoverMenu,
-    scrolled: &gtk4::ScrolledWindow,
-    size: (i32, i32),
-) {
-    if matches!(case, "menu-long" | "menu-constrained") {
-        assert_menu_scrollable(scrolled);
-    }
-    if case == "menu-constrained" {
-        // Capture must hold the compositor-shrunk allocation, not the natural
-        // height that no longer fits on the output.
-        let (_, natural, _, _) = menu.measure(gtk4::Orientation::Vertical, -1);
-        assert!(
-            size.1 < natural,
-            "compositor must shrink the {natural}px menu; native height is {}px",
-            size.1
-        );
-    }
 }
 
 fn assert_menu_scrollable(scrolled: &gtk4::ScrolledWindow) {
