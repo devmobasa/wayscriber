@@ -37,7 +37,7 @@ impl RuntimeUiStateController {
         };
         let id = ControllerId(
             NEXT_CONTROLLER_ID
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                     current.checked_add(1)
                 })
                 .expect("controller id space exhausted"),
