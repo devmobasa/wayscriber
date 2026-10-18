@@ -395,14 +395,14 @@ impl DragColorOption {
         let name = match self {
             Self::Current => return None,
             Self::Custom => return existing,
-            Self::Red => tr("red"),
-            Self::Green => tr("green"),
-            Self::Blue => tr("blue"),
-            Self::Yellow => tr("yellow"),
-            Self::Orange => tr("orange"),
-            Self::Pink => tr("pink"),
-            Self::White => tr("white"),
-            Self::Black => tr("black"),
+            Self::Red => "red",
+            Self::Green => "green",
+            Self::Blue => "blue",
+            Self::Yellow => "yellow",
+            Self::Orange => "orange",
+            Self::Pink => "pink",
+            Self::White => "white",
+            Self::Black => "black",
         };
         Some(ColorSpec::Name(name.to_string()))
     }

@@ -65,6 +65,72 @@ fn font_weight_option_handles_custom_values() {
 }
 
 #[test]
+fn config_values_do_not_follow_the_interface_language() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::config_values_do_not_follow_the_interface_language"
+        ),
+        || {
+            use wayscriber::config::ColorSpec;
+            use wayscriber::domain::Language;
+
+            const STYLES: [&str; 4] = ["normal", "italic", "oblique", ""];
+            const WEIGHTS: [&str; 7] = [
+                "normal",
+                "bold",
+                "light",
+                "ultralight",
+                "heavy",
+                "ultrabold",
+                "",
+            ];
+            const COLORS: [&str; 8] = [
+                "red", "green", "blue", "yellow", "orange", "pink", "white", "black",
+            ];
+            for language in [Language::English, Language::SimplifiedChinese] {
+                wayscriber::i18n::set_language(language);
+                // The overlay parses these words; a translated one is an
+                // invalid font value or an unknown color.
+                let styles: Vec<_> = FontStyleOption::list()
+                    .iter()
+                    .map(FontStyleOption::canonical_value)
+                    .collect();
+                assert_eq!(styles, STYLES, "{language:?}");
+                let weights: Vec<_> = FontWeightOption::list()
+                    .iter()
+                    .map(FontWeightOption::canonical_value)
+                    .collect();
+                assert_eq!(weights, WEIGHTS, "{language:?}");
+                for option in FontStyleOption::list() {
+                    let value = option.canonical_value();
+                    assert_eq!(FontStyleOption::from_value(value).1, value, "{language:?}");
+                }
+                for option in FontWeightOption::list() {
+                    let value = option.canonical_value();
+                    assert_eq!(FontWeightOption::from_value(value).1, value, "{language:?}");
+                }
+
+                let named: Vec<_> = crate::models::NamedColorOption::list()
+                    .iter()
+                    .map(|option| option.as_value())
+                    .collect();
+                assert_eq!(named[..COLORS.len()], COLORS, "{language:?}");
+                let drag: Vec<_> = DragColorOption::list()
+                    .into_iter()
+                    .filter_map(|option| option.to_color_spec(None))
+                    .collect();
+                assert_eq!(
+                    drag,
+                    COLORS.map(|name| ColorSpec::Name(name.to_string())),
+                    "{language:?}"
+                );
+            }
+        },
+    );
+}
+
+#[test]
 fn status_position_option_round_trips() {
     let option = StatusPositionOption::from_status_position(StatusPosition::BottomRight);
     assert_eq!(option, StatusPositionOption::BottomRight);

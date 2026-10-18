@@ -630,6 +630,48 @@ fn config_draft_round_trips_quick_colors() {
     );
 }
 
+/// A save rebuilds the draft in the window's language, so a translated value
+/// would come back on the next save.
+#[test]
+fn a_config_saved_in_chinese_keeps_its_font_and_color_names() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::a_config_saved_in_chinese_keeps_its_font_and_color_names"
+        ),
+        || {
+            wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+            let mut config = Config::default();
+            config.drawing.font_style = "italic".to_string();
+            config.drawing.font_weight = "light".to_string();
+            config.drawing.default_color = ColorSpec::Name("blue".to_string());
+            config.drawing.quick_colors.entries = vec![QuickColorConfig {
+                label: "Leaf".to_string(),
+                color: ColorSpec::Name("green".to_string()),
+            }];
+
+            let draft = ConfigDraft::from_config(&config);
+            assert_eq!(draft.drawing_font_style, "italic");
+            assert_eq!(draft.drawing_font_weight, "light");
+            let saved = draft.to_config(&config).expect("unchanged draft");
+
+            assert_eq!(saved.drawing.font_style, "italic");
+            assert_eq!(saved.drawing.font_weight, "light");
+            assert_eq!(
+                saved.drawing.default_color,
+                ColorSpec::Name("blue".to_string())
+            );
+            assert_eq!(
+                saved.drawing.quick_colors.entries[0].color,
+                ColorSpec::Name("green".to_string())
+            );
+            if let Err(error) = saved.validate_for_save() {
+                panic!("{error}");
+            }
+        },
+    );
+}
+
 #[test]
 fn config_draft_preserves_implicit_quick_color_defaults() {
     let config = Config::default();

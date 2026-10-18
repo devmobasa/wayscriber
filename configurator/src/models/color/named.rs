@@ -50,14 +50,14 @@ impl NamedColorOption {
 
     pub fn as_value(&self) -> &'static str {
         match self {
-            Self::Red => tr("red"),
-            Self::Green => tr("green"),
-            Self::Blue => tr("blue"),
-            Self::Yellow => tr("yellow"),
-            Self::Orange => tr("orange"),
-            Self::Pink => tr("pink"),
-            Self::White => tr("white"),
-            Self::Black => tr("black"),
+            Self::Red => "red",
+            Self::Green => "green",
+            Self::Blue => "blue",
+            Self::Yellow => "yellow",
+            Self::Orange => "orange",
+            Self::Pink => "pink",
+            Self::White => "white",
+            Self::Black => "black",
             Self::Custom => "",
         }
     }
