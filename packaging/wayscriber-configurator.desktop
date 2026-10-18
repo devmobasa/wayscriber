@@ -1,8 +1,11 @@
 [Desktop Entry]
 Type=Application
 Name=Wayscriber Configurator
+Name[zh_CN]=Wayscriber 配置器
 GenericName=Application Preferences
+GenericName[zh_CN]=应用程序首选项
 Comment=Configure Wayscriber drawing options and shortcuts
+Comment[zh_CN]=配置 Wayscriber 绘图选项和快捷键
 Exec=wayscriber-configurator
 TryExec=wayscriber-configurator
 Icon=wayscriber-configurator
@@ -10,4 +13,5 @@ Terminal=false
 StartupWMClass=org.wayscriber.Configurator
 Categories=Settings;
 Keywords=settings;configuration;draw;annotate;wayland;wayscriber;
+Keywords[zh_CN]=设置;配置;绘图;标注;语言;settings;configuration;draw;annotate;language;wayland;wayscriber;
 StartupNotify=false
