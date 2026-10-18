@@ -7,8 +7,8 @@
 
 > 本页是英文 README 的机器辅助翻译。如中英文内容不一致，以[英文版](README.md)为准。非常欢迎中文流利的读者审阅并纠正翻译；您可以[提交问题](https://github.com/devmobasa/wayscriber/issues)或[提交拉取请求](https://github.com/devmobasa/wayscriber/pulls)。
 
-对应英文 README.md：`3177c552`（2026-10-18）。
-<!-- translated-from: README.md @ 3177c5529bd1e7ac55322cb51abff7bfa14703aa -->
+对应英文 README.md：`5f3a257f`（2026-10-18；发布版本 `0.9.27`）。
+<!-- translated-from: README.md @ 5f3a257f88fecc9f5e1884e094fa6dfae6b7bffc -->
 
 一款用 Rust 编写、类似 ZoomIt 的 Linux/Wayland 实时屏幕标注工具。
 
