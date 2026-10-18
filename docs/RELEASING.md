@@ -23,10 +23,15 @@ The version and tag steps use the C# repository tool. Build it once with
 3. Exercise the affected desktop flows on Wayland, including capture, keyboard
    focus, save/reopen, and configurator edits. Automated checks do not prove
    installed-binary or compositor behavior.
-4. Prepare the website's `docs-src/src/release-notes.md` and run its
+4. Sync `README.zh-CN.md` from the English README changes in
+   `git diff <translated-from commit>..HEAD -- README.md`. Update its visible
+   sync line and full-hash `translated-from` comment to the English commit used,
+   and name the actual release version in the visible line. Check heading and
+   code-block parity and links.
+5. Prepare the website's `docs-src/src/release-notes.md` and run its
    `build-docs.sh`. Keep the published `latest.json` on the previous release
    until the new downloads and package channels are available.
-5. If the tarball file layout changes, verify and publish the matching Arch
+6. If the tarball file layout changes, verify and publish the matching Arch
    installer before tagging, as described in [the packaging guide](../tools/README.md#packaging).
 
 ## Publish and verify
