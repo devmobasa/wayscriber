@@ -560,8 +560,7 @@ impl TopBar {
             } else {
                 self.hide_popovers_for_window_hide();
             }
-            self.capture_surface
-                .set_transparent(presentation.capture_transparent);
+            self.set_capture_transparent(presentation.capture_transparent);
             super::set_surface_input_enabled(&self.window, false);
             self.window.set_visible(false);
             if let Some(generation) = update.capture_suppression_generation {
@@ -620,8 +619,7 @@ impl TopBar {
         }
         self.window.set_visible(true);
         let presentation = presentation.with_idle_hidden(snapshot.top_strip_hidden());
-        self.capture_surface
-            .set_transparent(presentation.capture_transparent);
+        self.set_capture_transparent(presentation.capture_transparent);
         super::set_visual_hidden(
             &self.window,
             &self.root,
@@ -644,6 +642,11 @@ impl TopBar {
             );
         }
         true
+    }
+
+    fn set_capture_transparent(&self, transparent: bool) {
+        super::set_capture_transparent_class(&self.window, transparent);
+        self.capture_surface.set_transparent(transparent);
     }
 
     pub(in crate::toolbar_gtk::view) fn capture_target(&self) -> CaptureProofTarget {
