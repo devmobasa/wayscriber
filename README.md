@@ -3,6 +3,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.98.1%2B-orange.svg)](https://www.rust-lang.org/)
 
+**English** · [简体中文](README.zh-CN.md)
+
 A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rust.
 
 Draw over any app, present with callouts and zoom, keep your boards between sessions. Toggle the lightweight daemon with one keybind.
@@ -59,6 +61,7 @@ https://github.com/user-attachments/assets/be0e1bea-594b-4f03-a24e-a934b61a4716
 - [Controls reference](#controls-reference)
 - [Configuration](#configuration)
   - [Configurator (GUI)](#configurator-gui)
+  - [Interface language](#interface-language)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [Roadmap](#roadmap)
@@ -160,6 +163,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12. See
 - See [Session manager and persistence](#session-manager-and-persistence) for the full workflow
 
 ### Toolbar and UI
+- Interface in English and Simplified Chinese (简体中文). It follows your desktop locale; change it in the configurator or with `--language`. See [Interface language](#interface-language)
 - Unified floating toolbar (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro chip → hidden)
 - Two toolbar frontends: GTK4-rendered bars on layer-shell compositors (Hyprland, KWin, Wayfire, River, ...), with automatic fallback to the built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline mode, builds without the `toolbar-gtk` feature)
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
@@ -601,6 +605,10 @@ Once the overlay is up:
 - <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd>: command palette
 - <kbd>F11</kbd>: [configurator](#configurator-gui)
 - <kbd>Escape</kbd>: hide or exit. After Escape dismisses UI, further Escape presses are ignored for 400 ms.
+
+The interface follows your desktop locale. To choose a language, press
+<kbd>F11</kbd> and open **UI → Language**, or see
+[Interface language](#interface-language).
 
 The first launch shows a short tour card: draw and undo, the toolbar and how
 to leave, color and thickness, quick-access menus, and finding commands. It
@@ -1106,7 +1114,7 @@ item IDs still customize top-toolbar controls and must not be renamed.
 
 `wayscriber-configurator` is a native GTK4/libadwaita app built with Relm4, shipped as its own optional package. Open it any time with <kbd>F11</kbd> from the overlay, or run `wayscriber-configurator`.
 
-It covers most of `config.toml`: drawing and arrow defaults, rendering profiles and performance, UI and toolbar layout, presenter mode, history, capture and PDF export, boards, sessions, tablet input, presets, and keybindings. Some settings require manual edits: `[tray]`, `[updates]`, `[spotlight]`, the `[tablet.stylus_button]` action mappings, and full multi-board setup under `[boards]`. The configurator preserves these settings when it saves.
+It covers most of `config.toml`: drawing and arrow defaults, rendering profiles and performance, interface language, UI and toolbar layout, presenter mode, history, capture and PDF export, boards, sessions, tablet input, presets, and keybindings. Some settings require manual edits: `[tray]`, `[updates]`, `[spotlight]`, the `[tablet.stylus_button]` action mappings, and full multi-board setup under `[boards]`. The configurator preserves these settings when it saves.
 
 [![The wayscriber configurator editing settings on a Wayland desktop](https://wayscriber.com/img/poster-configurator.webp)](https://wayscriber.com/#configurator)
 

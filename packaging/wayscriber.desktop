@@ -2,11 +2,14 @@
 Type=Application
 Name=Wayscriber
 GenericName=Screen Annotation
+GenericName[zh_CN]=屏幕标注
 Comment=Draw and annotate on your Wayland desktop
+Comment[zh_CN]=在 Wayland 桌面上绘图和标注
 Exec=wayscriber --active
 TryExec=wayscriber
 Icon=wayscriber
 Terminal=false
 Categories=Graphics;
 Keywords=draw;annotate;screenshot;whiteboard;wayland;
+Keywords[zh_CN]=绘图;标注;截图;白板;draw;annotate;screenshot;whiteboard;wayland;
 StartupNotify=true
