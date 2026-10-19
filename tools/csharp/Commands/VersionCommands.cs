@@ -73,7 +73,7 @@ internal static partial class VersionCommands
 
     // Raise this floor only as a coordinated release-platform change.
     internal const string SupportedLibadwaitaFloor = "1.4";
-    internal const string ToolSdkVersion = "11.0.100-rc.1.26425.128";
+    internal const string ToolSdkVersion = "11.0.100-rc.2.26504.105";
     internal const string ToolSdkRollForward = "disable";
 
     public static IReadOnlyList<ToolCommand> Commands
