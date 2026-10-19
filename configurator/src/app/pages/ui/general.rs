@@ -15,10 +15,19 @@ use super::options;
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (themes, theme_labels) = options(UiThemeOption::list(), |value| value.label());
     let (motions, motion_labels) = options(ReducedMotionOption::list(), |value| value.label());
-    let (languages, language_labels) = options(LanguageOption::list(), |value| value.label());
 
     let mut page = PageBuilder::new(sender, TabId::Ui);
     page.group_in_area(tr("General UI"), SearchArea::UiGeneral)
+        // First, with an icon and a title in every language: the way back
+        // from an interface language the user cannot read.
+        .icon_combo_row(
+            LanguageOption::ROW_ICON,
+            &LanguageOption::row_title(),
+            tr("Previews here at once; Save keeps it. The overlay and the About window use it the next time they open, background mode after it restarts. \"Automatic\" follows your desktop locale."),
+            options(LanguageOption::list(), |value| value.label()),
+            |app| app.draft.ui_language,
+            Message::UiLanguageChanged,
+        )
         .combo_row(
             tr("Theme"),
             tr("\"Auto\" uses dark. \"Light\" supports the command palette, including shortcut editing and tooltips; other popups still use dark."),
@@ -34,14 +43,6 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             motion_labels,
             |app| app.draft.ui_reduced_motion,
             Message::UiReducedMotionChanged,
-        )
-        .combo_row(
-            tr("Language"),
-            tr("Previews here at once; Save keeps it. The overlay and the About window use it the next time they open, background mode after it restarts. \"Automatic\" follows your desktop locale."),
-            languages,
-            language_labels,
-            |app| app.draft.ui_language,
-            Message::UiLanguageChanged,
         )
         .entry_row(
             tr("Preferred output (GNOME fallback)"),

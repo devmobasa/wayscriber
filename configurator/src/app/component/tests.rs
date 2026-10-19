@@ -12,7 +12,9 @@
 //!   selection, and the visible page keeps its scroll;
 //! - navigation works in the new language (finding N1);
 //! - a load that changes the language keeps the resets it always makes;
-//! - repeated switches leave no extra pages or bindings behind.
+//! - repeated switches leave no extra pages or bindings behind;
+//! - the Language row comes first on the UI tab, with its icon and a title in
+//!   every supported language, whichever language is active.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -120,7 +122,37 @@ fn run_scenario() {
     repeated_switches_leave_nothing_behind(&app, pages, bindings);
     a_load_that_changes_the_language_keeps_its_resets(&app);
     service_buttons_describe_service_actions_in_each_language(&app);
+    the_language_row_leads_the_ui_tab_in_each_language(&app);
     super::rebuild::assert_widget_paths_find_only_the_same_shape();
+}
+
+fn the_language_row_leads_the_ui_tab_in_each_language(app: &Controller<ConfiguratorApp>) {
+    app.emit(Message::TabSelected(TabId::Ui));
+    for (language, title) in [
+        (LanguageOption::SimplifiedChinese, "语言 / Language"),
+        (LanguageOption::English, "Language / 语言"),
+    ] {
+        app.emit(Message::UiLanguageChanged(language));
+        settle();
+        let row = language_row(app).unwrap_or_else(|| panic!("no {title:?} row"));
+        assert_eq!(row.title(), title);
+        // The first row of General UI, which tops the UI tab.
+        let rows = row.parent().expect("the group's row list");
+        assert_eq!(
+            rows.first_child(),
+            Some(row.clone().upcast::<gtk::Widget>()),
+            "{title:?}"
+        );
+        let icons: Vec<_> = descendants(row.upcast())
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Image>().ok())
+            .filter_map(|image| image.icon_name().map(|icon| icon.to_string()))
+            .collect();
+        assert!(
+            icons.iter().any(|icon| icon == LanguageOption::ROW_ICON),
+            "{title:?} has no globe: {icons:?}"
+        );
+    }
 }
 
 fn service_buttons_describe_service_actions_in_each_language(app: &Controller<ConfiguratorApp>) {
@@ -289,7 +321,7 @@ fn focus_caret_and_scroll_survive_a_language_change(app: &Controller<Configurato
         "focus moved to {focused:?}"
     );
     assert_ne!(new_row, row, "the page was rebuilt");
-    assert_eq!(new_row.title(), "Language");
+    assert_eq!(new_row.title(), "Language / 语言");
 
     // An entry keeps its caret and selection.
     app.emit(Message::TabSelected(TabId::Drawing));
@@ -464,9 +496,13 @@ fn focus(app: &Controller<ConfiguratorApp>) -> Option<gtk::Widget> {
 }
 
 fn visible_page_descendants(app: &Controller<ConfiguratorApp>) -> Vec<gtk::Widget> {
-    let page = app.widgets().stack.visible_child().expect("visible page");
+    descendants(app.widgets().stack.visible_child().expect("visible page"))
+}
+
+/// `root` and every widget under it, hidden ones included.
+fn descendants(root: gtk::Widget) -> Vec<gtk::Widget> {
     let mut found = Vec::new();
-    let mut pending = vec![page];
+    let mut pending = vec![root];
     while let Some(widget) = pending.pop() {
         pending.extend(std::iter::successors(
             widget.first_child(),
@@ -487,11 +523,11 @@ fn visible_labels(app: &Controller<ConfiguratorApp>) -> Vec<String> {
 }
 
 fn language_row(app: &Controller<ConfiguratorApp>) -> Option<adw::ComboRow> {
-    let title = wayscriber::i18n::tr("Language");
+    let title = LanguageOption::row_title();
     visible_page_descendants(app)
         .into_iter()
         .filter_map(|widget| widget.downcast::<adw::ComboRow>().ok())
-        .find(|row| row.title() == title)
+        .find(|row| row.title() == title.as_str())
 }
 
 fn scrollable(app: &Controller<ConfiguratorApp>) -> Option<gtk::ScrolledWindow> {

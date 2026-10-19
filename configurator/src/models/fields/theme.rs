@@ -104,6 +104,9 @@ pub enum LanguageOption {
 }
 
 impl LanguageOption {
+    /// A globe, which marks the Language row in every interface language.
+    pub const ROW_ICON: &'static str = "preferences-desktop-locale-symbolic";
+
     pub fn list() -> Vec<Self> {
         vec![
             LanguageOption::Auto,
@@ -121,6 +124,22 @@ impl LanguageOption {
             Some(name) => name,
             None => tr("Automatic (system locale)"),
         }
+    }
+
+    /// The Language row's title: the word for "language" in the interface
+    /// language, then in each other supported language (`语言 / Language`),
+    /// so a user who cannot read the interface still recognizes the row.
+    pub fn row_title() -> String {
+        let active = wayscriber::i18n::language();
+        std::iter::once(active)
+            .chain(
+                Language::ALL
+                    .into_iter()
+                    .filter(|language| *language != active),
+            )
+            .filter_map(Language::word_for_language)
+            .collect::<Vec<_>>()
+            .join(" / ")
     }
 
     pub fn to_language(self) -> Language {

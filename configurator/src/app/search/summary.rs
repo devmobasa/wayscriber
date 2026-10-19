@@ -181,15 +181,17 @@ fn performance_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
 }
 
 fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
+    // Each language's own name and its word for "language" find the Language
+    // row even when the interface uses a different script.
     let general_terms: Vec<_> = UI_GENERAL_TERMS
         .iter()
         .copied()
         .chain(
             wayscriber::domain::Language::ALL
                 .into_iter()
-                .filter_map(wayscriber::domain::Language::native_name),
+                .flat_map(|language| [language.native_name(), language.word_for_language()])
+                .flatten(),
         )
-        .chain(LANGUAGE_SETTING_TERMS.iter().copied())
         .collect();
     add_area_if(
         query,
