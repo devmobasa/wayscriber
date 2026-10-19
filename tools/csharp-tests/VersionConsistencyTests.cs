@@ -26,8 +26,8 @@ public sealed class VersionConsistencyTests
     }
 
     [Theory]
-    [InlineData( """{"sdk":{"version":"11.0.100-rc.1.26425.128","rollForward":"disable","allowPrerelease":true}}""" )]
-    [InlineData( """{"sdk":{"version":" 11.0.100-rc.1.26425.128 ","rollForward":"disable","allowPrerelease":true}}""" )]
+    [InlineData( """{"sdk":{"version":"11.0.100-rc.2.26504.105","rollForward":"disable","allowPrerelease":true}}""" )]
+    [InlineData( """{"sdk":{"version":" 11.0.100-rc.2.26504.105 ","rollForward":"disable","allowPrerelease":true}}""" )]
     public async Task CompactGlobalJsonWithTheReviewedSdkPasses( string globalJson )
     {
         using var fixture = new VersionMetadataFixture( );
@@ -43,13 +43,13 @@ public sealed class VersionConsistencyTests
         "global.json SDK metadata is invalid: sdk.version must be a non-empty string" )]
     [InlineData( """{"sdk":{"version":11,"rollForward":"disable","allowPrerelease":true}}""",
         "global.json SDK metadata is invalid: sdk.version must be a non-empty string" )]
-    [InlineData( """{"sdk":{"version":"11.0.100-rc.1.26425.127","rollForward":"disable","allowPrerelease":true}}""",
-        "global.json SDK: expected 11.0.100-rc.1.26425.128, got 11.0.100-rc.1.26425.127" )]
-    [InlineData( """{"sdk":{"version":"11.0.100-rc.1.26425.128","rollForward":"latestPatch","allowPrerelease":false}}""",
+    [InlineData( """{"sdk":{"version":"11.0.100-rc.2.26504.104","rollForward":"disable","allowPrerelease":true}}""",
+        "global.json SDK: expected 11.0.100-rc.2.26504.105, got 11.0.100-rc.2.26504.104" )]
+    [InlineData( """{"sdk":{"version":"11.0.100-rc.2.26504.105","rollForward":"latestPatch","allowPrerelease":false}}""",
         "global.json SDK rollForward must be disable" )]
-    [InlineData( """{"sdk":{"version":"11.0.100-rc.1.26425.128","rollForward":"latestPatch","allowPrerelease":false}}""",
+    [InlineData( """{"sdk":{"version":"11.0.100-rc.2.26504.105","rollForward":"latestPatch","allowPrerelease":false}}""",
         "global.json SDK allowPrerelease must be true" )]
-    [InlineData( """{"sdk":{"version":"11.0.100-rc.1.26425.128","rollForward":"disable","allowPrerelease":"true"}}""",
+    [InlineData( """{"sdk":{"version":"11.0.100-rc.2.26504.105","rollForward":"disable","allowPrerelease":"true"}}""",
         "global.json SDK allowPrerelease must be true" )]
     public async Task GlobalJsonMustPinTheReviewedSdk( string globalJson, string expected )
     {
@@ -183,7 +183,7 @@ public sealed class VersionConsistencyTests
         var error = await fixture.CheckExpectingFailure( );
 
         Assert.Contains( "global.json SDK metadata is invalid", error, StringComparison.Ordinal );
-        Assert.Contains( "global.json SDK: expected 11.0.100-rc.1.26425.128, got missing", error, StringComparison.Ordinal );
+        Assert.Contains( "global.json SDK: expected 11.0.100-rc.2.26504.105, got missing", error, StringComparison.Ordinal );
     }
 
     [Theory]

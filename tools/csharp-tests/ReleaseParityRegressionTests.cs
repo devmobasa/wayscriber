@@ -10,7 +10,7 @@ public sealed class ReleaseParityRegressionTests
     private const string PassphraseVariable = EnvironmentVariables.AurSshPassphrase;
     private const string SyntheticPassphrase = "synthetic-passphrase";
     private const string RepositoryDeployKey = "repository-deploy-key";
-    private const string TestDotnetSdk = "11.0.100-rc.1.26425.128";
+    private const string TestDotnetSdk = "11.0.100-rc.2.26504.105";
     private const string CommandLogVariable = "WAYSCRIBER_COMMAND_LOG";
 
     [Fact]
