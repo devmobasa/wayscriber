@@ -186,9 +186,6 @@ pub(super) const HISTORY_CUSTOM_TERMS: &[&str] = &[
     "steps",
     "delay",
 ];
-/// Words for "language" stay searchable even when the current UI uses a
-/// different script. Add each supported language's word here.
-pub(super) const LANGUAGE_SETTING_TERMS: &[&str] = &["语言"];
 
 pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "general ui",

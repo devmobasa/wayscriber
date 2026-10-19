@@ -356,6 +356,43 @@ impl PageBuilder {
     where
         O: Copy + PartialEq + 'static,
     {
+        self.add_combo_row(title, subtitle, values, labels, get, to_message);
+        self
+    }
+
+    /// A [`combo_row`](Self::combo_row) with a symbolic icon before its
+    /// title, for a row that has to be found by sight: the icon reads the same
+    /// in every interface language. `choices` pairs the values with their
+    /// labels, as `options` builds them.
+    pub(crate) fn icon_combo_row<O>(
+        &mut self,
+        icon_name: &str,
+        title: &str,
+        subtitle: &str,
+        (values, labels): (Vec<O>, Vec<String>),
+        get: impl Fn(&ConfiguratorApp) -> O + 'static,
+        to_message: impl Fn(O) -> Message + 'static,
+    ) -> &mut Self
+    where
+        O: Copy + PartialEq + 'static,
+    {
+        let row = self.add_combo_row(title, subtitle, values, labels, get, to_message);
+        row.add_prefix(&gtk::Image::from_icon_name(icon_name));
+        self
+    }
+
+    fn add_combo_row<O>(
+        &mut self,
+        title: &str,
+        subtitle: &str,
+        values: Vec<O>,
+        labels: Vec<String>,
+        get: impl Fn(&ConfiguratorApp) -> O + 'static,
+        to_message: impl Fn(O) -> Message + 'static,
+    ) -> adw::ComboRow
+    where
+        O: Copy + PartialEq + 'static,
+    {
         let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
         let row = adw::ComboRow::builder()
             .title(title)
@@ -374,6 +411,7 @@ impl PageBuilder {
             })
         };
         self.group.add(&row);
+        let added = row.clone();
         self.bindings.push(Box::new(move |app, _summary| {
             let current = get(app);
             if let Some(index) = values.iter().position(|value| *value == current) {
@@ -387,7 +425,7 @@ impl PageBuilder {
                 }
             }
         }));
-        self
+        added
     }
 
     /// Adds a fully custom row or widget to the current group.

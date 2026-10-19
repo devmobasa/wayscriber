@@ -62,6 +62,17 @@ impl Language {
         }
     }
 
+    /// The language's word for "language", never translated, so the setting
+    /// that switches languages can be recognized from any of them. `None` for
+    /// `Auto`, which is not a language.
+    pub fn word_for_language(self) -> Option<&'static str> {
+        match self {
+            Self::Auto => None,
+            Self::English => Some("Language"),
+            Self::SimplifiedChinese => Some("语言"),
+        }
+    }
+
     /// The language's English name, for command-line output and logs.
     pub fn english_name(self) -> &'static str {
         match self {
@@ -108,5 +119,16 @@ mod tests {
             assert_eq!(language.native_name().is_none(), language.is_auto());
         }
         assert_eq!(Language::SimplifiedChinese.native_name(), Some("简体中文"));
+    }
+
+    #[test]
+    fn every_language_but_auto_has_its_own_word_for_language() {
+        for language in Language::ALL {
+            assert_eq!(language.word_for_language().is_none(), language.is_auto());
+        }
+        assert_eq!(
+            Language::SimplifiedChinese.word_for_language(),
+            Some("语言")
+        );
     }
 }

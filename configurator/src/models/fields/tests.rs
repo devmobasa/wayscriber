@@ -207,6 +207,29 @@ fn language_option_labels_name_each_language_in_itself() {
 }
 
 #[test]
+fn language_row_title_names_the_setting_in_every_language() {
+    crate::test_env::in_language_child(
+        concat!(
+            module_path!(),
+            "::language_row_title_names_the_setting_in_every_language"
+        ),
+        || {
+            use wayscriber::domain::Language;
+
+            // The interface language reads first, and the others follow, so
+            // the row is recognizable from any of them.
+            for (language, title) in [
+                (Language::English, "Language / 语言"),
+                (Language::SimplifiedChinese, "语言 / Language"),
+            ] {
+                wayscriber::i18n::set_language(language);
+                assert_eq!(LanguageOption::row_title(), title);
+            }
+        },
+    );
+}
+
+#[test]
 fn session_storage_and_compression_round_trip() {
     let storage = SessionStorageModeOption::from_mode(SessionStorageMode::Custom);
     assert_eq!(storage, SessionStorageModeOption::Custom);
