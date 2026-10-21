@@ -12,23 +12,11 @@
 
 一款用 Rust 编写、类似 ZoomIt 的 Linux/Wayland 实时屏幕标注工具。
 
-在任意应用上绘图，使用标注和缩放进行演示，并在会话之间保留画板。只需一个快捷键，即可切换轻量级后台进程。
+在任意应用上绘图，演示时可放大或冻结屏幕，并在会话之间保留画板。轻量级后台服务只需一个快捷键即可显示或隐藏叠层。
 
-**文档：** https://wayscriber.com/docs/ （英文）
+[安装](#安装) · [快速上手](#首次启动) · [操作参考](#操作参考) · [配置](#配置) · [故障排查](#故障排查) · [完整文档](https://wayscriber.com/docs/)（英文）
 
 ![在编辑器上使用 wayscriber 进行代码审查：用方框和步骤标记标出循环，高亮一行代码，用便签箭头指向内容，圈出表达式，并画上手绘对勾](https://wayscriber.com/img/hero-annotate.webp)
-
-<details>
-<summary>更多截图</summary>
-
-| | |
-| :---: | :---: |
-| ![径向工具菜单](https://wayscriber.com/img/radial-menu.webp)<br>**径向工具菜单** | ![画板与页面](https://wayscriber.com/img/boards-and-pages.webp)<br>**画板与页面** |
-| ![黑板模式](https://wayscriber.com/img/blackboard.webp)<br>**黑板 (Blackboard)** | ![白板模式](https://wayscriber.com/img/whiteboard.webp)<br>**白板 (Whiteboard)** |
-| ![高级工具栏](https://wayscriber.com/img/toolbar-advanced.webp)<br>**高级工具栏** | ![命令面板](https://wayscriber.com/img/command-palette.webp)<br>**命令面板** |
-| ![内置控件](https://wayscriber.com/img/controls-cheatsheet.webp)<br>**内置操作速查 (F1)** | ![简单工具栏](https://wayscriber.com/img/toolbar-simple.webp)<br>**简单工具栏** |
-
-</details>
 
 <details>
 <summary>演示视频</summary>
@@ -39,47 +27,7 @@ https://github.com/user-attachments/assets/be0e1bea-594b-4f03-a24e-a934b61a4716
 
 </details>
 
----
-
-## 目录
-
-- [为什么选择 wayscriber？](#为什么选择-wayscriber)
-- [功能](#功能)
-- [安装](#安装)
-  - [Debian 和 Ubuntu](#debian-和-ubuntu)
-  - [Fedora 和 RHEL](#fedora-和-rhel)
-  - [Arch Linux (AUR)](#arch-linux-aur)
-  - [NixOS 和 Nix](#nixos-和-nix)
-  - [GitHub Releases（单次安装）](#github-releases单次安装)
-  - [从源码构建](#从源码构建)
-  - [截图工具](#截图工具)
-- [首次启动](#首次启动)
-- [使用方法](#使用方法)
-  - [后台模式（推荐）](#后台模式推荐)
-  - [单次运行模式（替代方式）](#单次运行模式替代方式)
-  - [轻量穿透模式](#轻量穿透模式)
-  - [截图与导出](#截图与导出)
-- [获取帮助](#获取帮助)
-- [操作参考](#操作参考)
-- [配置](#配置)
-  - [配置器 (GUI)](#配置器-gui)
-  - [界面语言](#界面语言)
-- [故障排查](#故障排查)
-- [参与贡献](#参与贡献)
-- [路线图](#路线图)
-- [许可证与致谢](#许可证与致谢)
-
----
-
-## 为什么选择 wayscriber？
-
-- 在任意应用上**实时标注**，不中断现有工作流程
-- **专业演示工具**：演示模式、激光笔、编号标注、点击高亮、屏幕冻结和缩放
-- **持久化会话**，重启后仍可继续
-- **原生 Wayland 性能**，提供类似 ZoomIt 的操作方式
-- **轻量级后台进程**，通过快捷键即时切换
-
-### 平台支持
+## 平台支持
 
 | 平台 | 状态 | 说明 |
 |----------|--------|-------|
@@ -106,8 +54,181 @@ v0.9.23+ 的预编译 `wayscriber` 软件包需要 glibc 2.39 和 GTK 4.12。请
 
 </details>
 
+## 功能
+
+### 绘图
+
+拖动即可用画笔绘图。按住 <kbd>Shift</kbd> 画直线，按住 <kbd>Ctrl</kbd> 画矩形，按住 <kbd>Tab</kbd> 画椭圆，按住 <kbd>Ctrl+Shift</kbd> 画箭头。
+
+![径向菜单在带标注的代码审查画面上打开，工具位于中心，颜色位于外圈](https://wayscriber.com/img/radial-menu.webp)
+
+*<kbd>Middle-click</kbd> 在光标处打开径向菜单。*
+
+- 自由画笔、荧光笔，以及圆形／矩形橡皮擦
+- 形状笔（<kbd>S</kbd>）：明确的笔画会转换为可编辑的直线、圆、椭圆、矩形或三角形；其他笔画保留手绘效果，撤销一次即可将识别出的形状恢复为原始笔迹
+- 画笔平滑：在释放按键时清理已完成的画笔和马克笔笔画，因此实时线条不会落后于光标
+- 形状：直线、矩形、椭圆和多边形，支持填充开关
+- 四种箭头样式：标准、尖头、曲线和双端箭头；可选自动编号标签，并提供用于分步演示的步骤标记
+- 模糊工具有四种样式：柔化、像素化、安全遮盖（将区域变成一种纯色）和涂黑
+- 支持平滑显示的多行文本和便签，以及让标签在任意背景上保持可读的可选文本光晕
+- 颜色选择器、带放大像素取样窗口的屏幕取色器、调色板，以及通过快捷键或滚轮调整大小
+- 可浏览所有已安装字体的字体选择器，以及使用 <kbd>Shift+T</kbd> 循环切换的可配置字体列表
+- 预设：将工具、颜色、大小以及填充／不透明度／文本设置保存到 3–5 个槽位；应用：<kbd>1</kbd>–<kbd>5</kbd>，保存：<kbd>Shift+1</kbd>–<kbd>Shift+5</kbd>
+- 渲染颜色配置，用于打印、投影仪和浅色主题预览
+
 <details>
-<summary>与 ZoomIt 对比</summary>
+<summary>绘图详情</summary>
+
+- **形状笔：** 短暂显示的提示条（例如 "Circle · Ctrl+Z keeps ink"）会说明识别出的形状（`[drawing] shape_recognition_feedback`）。按 <kbd>S</kbd>，点击工具栏中画笔旁的按钮（简单模式下位于形状选择器中），或在命令面板中选择 **形状笔工具 (Shape Pen Tool)**。可以通过样式胶囊中的 **笔感 (Pen feel)** 面板（或根据 `[ui.toolbar] stroke_controls` 使用 **形状 (Shapes)** 刻度或 **识别 (Detect)** 步进控件）、`[drawing] shape_recognition_sensitivity`（0–4），或配置器的绘图页面调整识别灵敏度；该级别随会话保存。
+- **画笔平滑：** 设置 `[drawing] pen_smoothing`（0–6），或使用样式胶囊的 **笔感** 提示条，打开带平滑刻度和实时预览的面板；`[ui.toolbar] stroke_controls` 可将其替换为内嵌 **平滑 (Smooth)** 刻度或步进控件。保留绘图板压力值，平滑级别随会话保存。
+- **曲线箭头：** 拖动控制柄，让箭头绕开遮挡内容。
+- **文本光晕：** 光晕根据标签下方的背景选择对比度，让文本在画板、填充形状或冻结屏幕上保持可读。通过 `[drawing] text_halo_enabled = false` 禁用光晕。实时透明画板没有可采样的像素，因此回退到文本颜色。
+- **字体循环：** <kbd>Shift+T</kbd> 在 `[drawing] font_cycle` 中循环切换；选中文本时会修改其字体。
+- **字体选择器：** 在命令面板中选择 **字体选择器 (Font Picker)**，或点击工具栏的当前字体按钮。支持搜索、等宽字体筛选、滚轮滚动和加速方向键连发，每行均使用对应字体显示。
+- **径向菜单：** 快速选择工具／颜色、访问最近颜色，按下后轻扫并释放即可选择工具；还提供可拖动的外圈大小控制和滚轮调节。
+
+[![代码行旁的三张便签](https://wayscriber.com/img/poster-sticky-notes.webp)](https://wayscriber.com/media/sticky-notes.mp4)
+
+*便签的文本可以编辑：按 <kbd>N</kbd>，点击后输入。点击图片播放视频。*
+
+</details>
+
+### 选择与编辑
+
+按住 <kbd>Alt</kbd> 拖动或按 <kbd>V</kbd> 进行选择。双击形状可打开其属性。
+
+- 也可按 <kbd>Ctrl+Alt+P</kbd> 或右键 → **属性… (Properties…)** 打开属性面板；双击文本或便签则进入编辑
+- 修改颜色、粗细、不透明度、填充和箭头头部；锁定、调整层级、复制或删除选区（[观看选择演示视频](https://wayscriber.com/media/context-menu-selection-boards-1080p.mp4)）
+- 复制（<kbd>Ctrl+D</kbd>）、删除（<kbd>Delete</kbd>）、撤销／重做
+
+<details>
+<summary>属性面板详情</summary>
+
+- 快捷颜色色板，以及用于打开完整颜色选择器的 **+**。不透明色板改变色相并保留各形状的不透明度。
+- 粗细和不透明度滑块。一次拖动对应一次撤销。
+- 矩形、椭圆和多边形的填充行。首个色板为“无填充”，其余色板用自己的颜色填充，与边框独立。
+- −/+ 步进控件、开关、箭头起点／终点、图示箭头样式和锁定开关。
+- 置底、后移一层、前移一层、置顶、复制和删除按钮。
+- 预设行可将工具预设的样式应用到选区而保留当前工具；点击 **保存 (Save)** 再选槽位，即可将选区样式保存为该预设。
+- 在行上滚动可逐步调整。悬停标题可查看形状 ID 和创建时间。
+
+</details>
+
+### 演示工具
+
+按 <kbd>L</kbd> 使用激光笔，按 <kbd>Ctrl+Shift+F</kbd> 冻结屏幕，或用 <kbd>Ctrl</kbd> 加滚轮缩放。
+
+[![放大查看用红圈标出的代码行，旁边写着 one query per item](https://wayscriber.com/img/poster-zoom.webp)](https://wayscriber.com/media/zoom.mp4)
+
+*放大后仍可继续绘图。点击图片播放视频。*
+
+- 激光笔：发光笔迹跟随指针，释放后短暂保留并逐渐消失。激光笔迹不会保存、撤销、选择、导出或捕获
+- 使用 ZoomIt 风格的操作缩放
+- 屏幕冻结：暂停显示内容，但应用继续运行
+- 聚光灯：拖出椭圆，使其周围变暗；可叠加多个聚光灯来突出多个区域，并可选择 1×–4× 放大
+- 编号标注：自动编号的箭头标签和步骤标记；使用 <kbd>Ctrl+Shift+R</kbd> 重置箭头标签
+- 点击高亮，可配置颜色、半径和持续时间；点击高亮工具启用时持续显示圆环
+- 演示模式（<kbd>Ctrl+Shift+M</kbd>）：隐藏界面并强制启用点击高亮
+- 输入提示（<kbd>Ctrl+Shift+K</kbd>）：在屏幕上显示按键和点击提示，适合演示和录屏（[观看输入提示演示视频](https://wayscriber.com/media/input-hud.mp4)）
+- 轻量穿透（layer-shell）：绘图时，输入可以穿透到下层应用。参阅[轻量穿透模式](#轻量穿透模式)
+
+<details>
+<summary>演示工具详情</summary>
+
+- **激光笔：** 消失前绘制的笔画归为一组，并一起消失。颜色、宽度和时间可在 `[laser]` 或配置器的绘图页面中设置；在演示模式（即使锁定为高亮工具）和轻量穿透模式下仍可使用。参阅 [docs/CONFIG.md](docs/CONFIG.md#laser---laser-pointer)（英文）。
+- **缩放：**
+  - 放大／缩小：<kbd>Ctrl</kbd> 加滚轮（<kbd>Ctrl+Alt</kbd> 加滚轮同样有效），或 <kbd>Ctrl+Alt</kbd> 加 <kbd>+</kbd>/<kbd>-</kbd>
+  - 重置：<kbd>Ctrl+Alt+0</kbd>；锁定视图：<kbd>Ctrl+Alt+L</kbd>
+  - 平移：中键拖动或方向键
+  - 右键菜单：**缩放 (Zoom)** → 放大 (Zoom In) / 缩小 (Zoom Out) / 重置缩放 (Reset Zoom)；缩放期间，右键仍可打开菜单，开头显示 放大、缩小、退出缩放 (Exit Zoom) 和 锁定视图 (Lock View)
+- **屏幕冻结：** 优先使用合成器原生的 `wlr-screencopy` 或 `ext-image-copy-capture`，可用时回退到截图门户。
+- **聚光灯：** 每个聚光灯可将开口放大 1×–4×；暗化强度和边缘柔和度仍由 `[spotlight]` 统一设置。放大功能使用纯色画板、冻结、缩放或捕获／导出背景中的完整像素；实时透明画板仅显示普通开口，并提示您冻结屏幕。
+- **输入提示：** 可通过 `input-monitor` 构建特性启用系统范围捕获。参阅 [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks)（英文）。
+
+</details>
+
+### 画板
+
+<kbd>Ctrl+W</kbd> 切换白板，<kbd>Ctrl+B</kbd> 切换黑板，<kbd>Ctrl+Shift+B</kbd> 打开画板选择器。
+
+![白板图表上的画板选择器，列出五块画板及其快捷键，以及活动画板的页面](https://wayscriber.com/img/boards-and-pages.webp)
+
+*画板选择器列出每块画板的快捷键和页面。*
+
+- 命名画板，可使用透明叠层或自定义背景
+- 可调间距的笛卡尔方格纸、等距网格线和等距点阵
+- 每块画板有独立页面，画笔颜色自动适应背景对比度
+- 使用 <kbd>Space</kbd> 加左键拖动平移纯色画板；从上下文菜单重置（[观看平移演示视频](https://wayscriber.com/media/wayscriber-pan-around.mp4)）
+- 快速跳转槽位：<kbd>Ctrl+Shift+1..9</kbd>
+
+<details>
+<summary>更多画板截图</summary>
+
+| | |
+| :---: | :---: |
+| ![黑板模式](https://wayscriber.com/img/blackboard.webp)<br>**黑板 (Blackboard)** | ![白板模式](https://wayscriber.com/img/whiteboard.webp)<br>**白板 (Whiteboard)** |
+| ![带网格的 Blueprint 画板，上面画着构建、测试和部署流程](https://wayscriber.com/img/blueprint.webp)<br>**Blueprint（带网格纸的自定义画板）** | [![用圆圈、高亮、箭头和方框标注的代码](https://wayscriber.com/img/poster-pages-and-presets.webp)](https://wayscriber.com/media/pages-and-presets.mp4)<br>**页面与预设（视频）** |
+
+</details>
+
+### 捕获与截图
+
+<kbd>Ctrl+Shift+C</kbd> 选择区域后，可复制、保存、两者兼做，或添加到画板。
+
+- 保存全屏截图、截取活动窗口或捕获区域
+- 复制到剪贴板或保存到文件
+- 从屏幕复制文本（OCR）：按 <kbd>Ctrl+Shift+X</kbd> 并拖选屏幕区域，识别出的文本会复制到剪贴板。需要 `tesseract`（[观看 OCR 演示视频](https://wayscriber.com/media/ocr-copy-text.mp4)）
+- 将活动画板或所有画板导出为多页 PDF
+
+所有截图快捷键、文本识别、区域选择器和预览步骤见[截图与导出](#截图与导出)。
+
+### 会话与持久化
+
+画板、撤销／重做历史和工具状态在重启后仍会保留。会话持久化默认启用。
+
+- 支持每个输出的默认会话，以及通过 `--session-file` 指定的命名会话文件
+- 可通过叠层的会话面板、配置器会话标签页、托盘开关和 CLI 覆盖项控制
+- 完整流程请参阅[会话管理器与持久化](#会话管理器与持久化)
+
+### 工具栏与界面
+
+<kbd>Ctrl+K</kbd> 可搜索所有动作，<kbd>F1</kbd> 列出快捷键。
+
+- 界面支持英文和简体中文。默认跟随桌面区域设置；可在配置器中或通过 `--language` 切换。参阅[界面语言](#界面语言)
+- 统一的浮动工具栏（<kbd>F9</kbd> 切换可见性；<kbd>F2</kbd> 将顶部工具条在完整 → 微型提示条 → 隐藏之间切换），提供预设槽位以及图标或文本显示模式
+- 命令面板（也可按 <kbd>Ctrl+Shift+P</kbd>）：搜索、运行、编辑、取消绑定或重置动作快捷键
+- 录制快捷键：按住 <kbd>Ctrl</kbd>+<kbd>Shift</kbd> 并点击可绑定的工具栏控件
+- 快捷参考（<kbd>Shift+F1</kbd>）
+- 带扩展调色板和屏幕取色器的颜色选择器（工具栏、弹出窗口或命令面板）
+- 可分别配置各项目的状态栏
+
+<details>
+<summary>工具栏与界面详情</summary>
+
+![代码编辑器上方的命令面板正在搜索 “board”，列出画板相关动作及其快捷键](https://wayscriber.com/img/command-palette.webp)
+
+*命令面板按名称查找动作，并显示其快捷键。*
+
+- **工具栏前端：** 支持 layer-shell 的合成器（Hyprland、KWin、Wayfire、River 等）使用 GTK4 工具栏；其他环境（GNOME xdg 回退、强制内嵌模式、未启用 `toolbar-gtk` 的构建）自动回退到内置 Cairo 工具栏。可通过 `ui.toolbar.backend = "auto" | "gtk" | "builtin"` 或 `WAYSCRIBER_TOOLBAR_BACKEND` 显式选择前端。
+- **状态栏：** 可分别配置输出、选区、画板、页面、颜色、工具、大小、上下文、工具栏提示、帮助以及关于／版本项目；有两个或更多输出时显示输出项目，关于／版本需自行启用。
+- **帮助叠层：** 未绑定的动作默认隐藏，按 <kbd>Tab</kbd> 或点击 **显示未绑定 (Show Unbound)** 即可显示；搜索始终可以找到它们。
+- **快捷键录制：** 该 <kbd>Ctrl</kbd>+<kbd>Shift</kbd> 修饰键组合可以配置。Wayscriber 仅将该动作的设置写入 `config.toml`，并生成带时间戳的 `.bak` 备份。选中命令面板行后按 <kbd>Ctrl+Shift+E</kbd>，可在配置器中打开同一快捷键。
+
+| | |
+| :---: | :---: |
+| ![简单工具栏](https://wayscriber.com/img/toolbar-simple.webp)<br>**简单工具栏** | ![高级工具栏](https://wayscriber.com/img/toolbar-advanced.webp)<br>**高级工具栏** |
+| ![工具栏设置弹出菜单，包含布局模式以及预设、缩放、画板和页面开关](https://wayscriber.com/img/toolbar-settings.webp)<br>**工具栏设置** | ![选中便签旁的上下文菜单，包含编辑、复制、创建副本、排列、锁定、缩放和删除](https://wayscriber.com/img/context-menu.webp)<br>**上下文菜单** |
+
+</details>
+
+### 多显示器
+- 在显示器之间移动叠层焦点：<kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
+- 输出焦点变化时，工具栏和状态栏跟随活动输出
+- 有两个或更多输出时，状态栏显示活动输出标记（`ui.active_output_badge`；`ui.active_output_badge_always` 可使其在单输出时仍然显示）
+- `session.per_output = true` 时，按输出恢复会话
+- GNOME 回退模式可通过 `ui.preferred_output` 或 `WAYSCRIBER_XDG_OUTPUT` 固定输出
+
+### 与 ZoomIt 对比
 
 | 功能 | ZoomIt (Windows) | wayscriber |
 |---------|------------------|------------|
@@ -119,93 +240,6 @@ v0.9.23+ 的预编译 `wayscriber` 软件包需要 glibc 2.39 和 GTK 4.12。请
 | 帮助叠层 | ❌ | ✅ |
 | 缩放 | ✅ | ✅ |
 | 休息计时器 | ✅ | ❌ |
-
-</details>
-
----
-
-## 功能
-
-### 绘图与编辑
-- 自由画笔、荧光笔，以及圆形／矩形橡皮擦
-- 形状笔：自然绘画时，明确的笔画会显示预览，并转换为可编辑的直线、圆、椭圆、矩形或三角形；其他笔画保留手绘效果，撤销一次即可将识别出的形状恢复为原始笔迹。短暂显示的提示条（例如 "Circle · Ctrl+Z keeps ink"）会说明识别出的形状（`[drawing] shape_recognition_feedback`）。按 `S`，点击工具栏中画笔旁的按钮（简单模式下位于形状选择器中），或在命令面板中选择 **形状笔工具 (Shape Pen Tool)**。可以通过样式胶囊中的 **笔感 (Pen feel)** 面板（或根据 `[ui.toolbar] stroke_controls` 使用 **形状 (Shapes)** 刻度或 **识别 (Detect)** 步进控件）、`[drawing] shape_recognition_sensitivity`（0–4），或配置器的绘图页面调整识别灵敏度；该级别随会话保存。
-- 画笔平滑：在释放按键时清理已完成的画笔和马克笔笔画，因此实时线条不会落后于光标（`[drawing] pen_smoothing`，0–6；或使用样式胶囊的 **笔感** 提示条，打开带平滑刻度和实时预览的面板；`[ui.toolbar] stroke_controls` 可将其替换为内嵌 **平滑 (Smooth)** 刻度或步进控件）。保留绘图板压力值，平滑级别随会话保存
-- 形状：直线、矩形、椭圆和多边形，支持填充开关；属性面板可为填充单独设置颜色
-- 四种箭头样式：标准、尖头、曲线（拖动控制柄绕开遮挡内容）和双端箭头；可选自动编号标签，并提供用于分步演示的步骤标记
-- 模糊工具有四种样式：柔化、像素化、安全遮盖（将区域变成一种纯色）和涂黑
-- 聚光灯工具使绘制区域之外的内容变暗，并可选择 1×–4× 放大
-- 支持平滑显示的多行文本和便签；可选文本光晕根据标签下方的背景选择对比度，让文本在画板、填充形状或冻结屏幕上保持可读（通过 `[drawing] text_halo_enabled = false` 禁用；实时透明画板没有可采样的像素，因此回退到文本颜色）
-- 选择：使用 <kbd>Alt</kbd> 拖动、<kbd>V</kbd> 工具或属性面板（双击形状、<kbd>Ctrl+Alt+P</kbd>，或右键 → **属性… (Properties…)**；双击文本或便签则进入编辑）。面板提供快捷颜色色板及用于打开完整颜色选择器的 **+**（不透明色板改变色相并保留各形状的不透明度）、粗细和不透明度滑块（一次拖动对应一次撤销）、矩形／椭圆／多边形的填充行（首个色板为“无填充”，其余色板用自己的颜色填充，与边框独立）、−/+ 步进控件、开关、箭头起点／终点、图示箭头样式、锁定开关，以及置底、后移一层、前移一层、置顶、复制和删除按钮。预设行可将工具预设的样式应用到选区而保留当前工具；点击 **保存 (Save)** 再选槽位，即可将选区样式保存为该预设。在行上滚动可逐步调整，悬停标题可查看形状 ID 和创建时间
-- 复制（<kbd>Ctrl+D</kbd>）、删除（<kbd>Delete</kbd>）、撤销／重做
-- 颜色选择器、带放大像素取样窗口的屏幕取色器、调色板，以及通过快捷键或滚轮调整大小
-- 使用 <kbd>Shift+T</kbd> 在可配置的字体列表（`[drawing] font_cycle`）中循环切换；选中文本时会修改其字体
-- 字体选择器可浏览所有已安装字体：在命令面板中选择 **字体选择器 (Font Picker)**，或点击工具栏的当前字体按钮。支持搜索、等宽字体筛选、滚轮滚动和加速方向键连发，每行均使用对应字体显示
-- 渲染颜色配置，用于打印、投影仪和浅色主题预览
-- 光标位置的径向菜单（<kbd>Middle-click</kbd>）：快速选择工具／颜色、访问最近颜色，按下后轻扫并释放即可选择工具；还提供可拖动的外圈大小控制和滚轮调节
-
-### 画板
-- 命名画板，可使用透明叠层或自定义背景
-- 可调间距的笛卡尔方格纸、等距网格线和等距点阵
-- 每块画板有独立页面，画笔颜色自动适应背景对比度
-- 使用 <kbd>Space</kbd> 加左键拖动平移纯色画板；从上下文菜单重置
-- 快速跳转槽位：<kbd>Ctrl+Shift+1..9</kbd>
-- 切换白板／黑板
-- 画板选择器：<kbd>Ctrl+Shift+B</kbd>
-
-### 捕获与截图
-- 保存全屏截图、截取活动窗口或捕获区域
-- 复制到剪贴板或保存到文件
-- 使用 `grim`、`slurp`、`wl-clipboard`（deb/rpm/AUR 软件包会自动安装；回退方式为 xdg-desktop-portal）
-- 从屏幕复制文本（OCR）：按 <kbd>Ctrl+Shift+X</kbd>，拖选桌面区域，或按 <kbd>Ctrl+A</kbd> 识别整个桌面。识别出的文本会复制到剪贴板。需要 `tesseract`
-
-### 会话与持久化
-- 默认保存画板、撤销／重做历史和工具状态
-- 支持每个输出的默认会话，以及通过 `--session-file` 指定的命名会话文件
-- 可通过叠层的会话面板、配置器会话标签页、托盘开关和 CLI 覆盖项控制
-- 完整流程请参阅[会话管理器与持久化](#会话管理器与持久化)
-
-### 工具栏与界面
-- 界面支持英文和简体中文。默认跟随桌面区域设置；可在配置器中或通过 `--language` 切换。参阅[界面语言](#界面语言)
-- 统一的浮动工具栏（<kbd>F9</kbd> 切换可见性；<kbd>F2</kbd> 将顶部工具条在完整 → 微型提示条 → 隐藏之间切换）
-- 两种工具栏前端：支持 layer-shell 的合成器（Hyprland、KWin、Wayfire、River 等）使用 GTK4 工具栏；其他环境（GNOME xdg 回退、强制内嵌模式、未启用 `toolbar-gtk` 的构建）自动回退到内置 Cairo 工具栏
-- 可通过 `ui.toolbar.backend = "auto" | "gtk" | "builtin"` 或 `WAYSCRIBER_TOOLBAR_BACKEND` 显式选择前端
-- 预设槽位，以及图标或文本显示模式
-- 带扩展调色板和屏幕取色器的颜色选择器（工具栏、弹出窗口或命令面板）
-- 状态栏可分别配置输出、选区、画板、页面、颜色、工具、大小、上下文、工具栏提示、帮助以及关于／版本项目；有两个或更多输出时显示输出项目，关于／版本需自行启用
-- 帮助叠层（<kbd>F1</kbd>）和快捷参考（<kbd>Shift+F1</kbd>）。未绑定的动作默认隐藏，按 <kbd>Tab</kbd> 或点击 **显示未绑定 (Show Unbound)** 即可显示；搜索始终可以找到它们
-- 命令面板（<kbd>Ctrl+K</kbd> 或 <kbd>Ctrl+Shift+P</kbd>）
-- 从命令面板搜索、运行、编辑、取消绑定或重置动作快捷键。按住 <kbd>Ctrl</kbd>+<kbd>Shift</kbd> 并点击可绑定的工具栏控件，即可录制快捷键；该修饰键组合可以配置。Wayscriber 仅将该动作的设置写入 `config.toml`，并生成带时间戳的 `.bak` 备份。选中命令面板行后按 <kbd>Ctrl+Shift+E</kbd>，可在配置器中打开同一快捷键
-
-### 多显示器
-- 在显示器之间移动叠层焦点：<kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
-- 输出焦点变化时，工具栏和状态栏跟随活动输出
-- 有两个或更多输出时，状态栏显示活动输出标记（`ui.active_output_badge`；`ui.active_output_badge_always` 可使其在单输出时仍然显示）
-- `session.per_output = true` 时，按输出恢复会话
-- GNOME 回退模式可通过 `ui.preferred_output` 或 `WAYSCRIBER_XDG_OUTPUT` 固定输出
-
-### 预设
-- 将工具、颜色、大小以及填充／不透明度／文本设置保存到 3–5 个槽位
-- 应用：<kbd>1</kbd>–<kbd>5</kbd>；保存：<kbd>Shift+1</kbd>–<kbd>Shift+5</kbd>
-
-### 演示工具
-- 激光笔（<kbd>L</kbd>）：发光笔迹跟随指针，释放后短暂保留并逐渐消失。消失前绘制的笔画归为一组，并一起消失。激光笔迹不会保存、撤销、选择、导出或捕获。颜色、宽度和时间可在 `[laser]` 或配置器的绘图页面中设置；在演示模式（即使锁定为高亮工具）和轻量穿透模式下仍可使用。参阅 [docs/CONFIG.md](docs/CONFIG.md#laser---laser-pointer)（英文）
-- 点击高亮，可配置颜色、半径和持续时间
-- 点击高亮工具启用时持续显示圆环
-- 演示模式（<kbd>Ctrl+Shift+M</kbd>）：隐藏界面并强制启用点击高亮
-- 输入提示（<kbd>Ctrl+Shift+K</kbd>）：在屏幕上显示按键和点击提示，适合演示和录屏（可通过 `input-monitor` 构建特性启用系统范围捕获）。参阅 [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks)（英文）
-- 轻量穿透（layer-shell）：绘图时，输入可以穿透到下层应用。参阅[轻量穿透模式](#轻量穿透模式)
-- 屏幕冻结（<kbd>Ctrl+Shift+F</kbd>）：暂停显示内容，但应用继续运行。优先使用合成器原生的 `wlr-screencopy` 或 `ext-image-copy-capture`，可用时回退到截图门户
-- 聚光灯：拖出椭圆，使其周围变暗；可叠加多个聚光灯来突出多个区域。每个聚光灯可将开口放大 1×–4×；暗化强度和边缘柔和度仍由 `[spotlight]` 统一设置。放大功能使用纯色画板、冻结、缩放或捕获／导出背景中的完整像素；实时透明画板仅显示普通开口，并提示您冻结屏幕
-
-### 标注与缩放
-- **编号标注：** 自动编号的箭头标签和步骤标记；使用 <kbd>Ctrl+Shift+R</kbd> 重置箭头标签
-- **缩放：** 使用 ZoomIt 风格的操作突出细节
-  - 放大／缩小：<kbd>Ctrl</kbd> 加滚轮（<kbd>Ctrl+Alt</kbd> 加滚轮同样有效），或 <kbd>Ctrl+Alt</kbd> 加 <kbd>+</kbd>/<kbd>-</kbd>
-  - 重置：<kbd>Ctrl+Alt+0</kbd>；锁定视图：<kbd>Ctrl+Alt+L</kbd>
-  - 平移：中键拖动或方向键
-  - 右键菜单：**缩放 (Zoom)** → 放大 (Zoom In) / 缩小 (Zoom Out) / 重置缩放 (Reset Zoom)；缩放期间，右键仍可打开菜单，开头显示 放大、缩小、退出缩放 (Exit Zoom) 和 锁定视图 (Lock View)
-
----
 
 ## 安装
 
@@ -238,7 +272,11 @@ curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | gpg --dearmor | s
 echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
 sudo apt update
 sudo apt install wayscriber
-# Optional GUI configurator:
+```
+
+可选的 GUI 配置器：
+
+```bash
 sudo apt install wayscriber-configurator
 ```
 
@@ -263,7 +301,11 @@ gpgkey=https://wayscriber.com/rpm/RPM-GPG-KEY-wayscriber.asc
 EOF
 sudo dnf clean all
 sudo dnf install wayscriber
-# Optional GUI configurator:
+```
+
+可选的 GUI 配置器：
+
+```bash
 sudo dnf install wayscriber-configurator
 ```
 
@@ -272,20 +314,24 @@ sudo dnf install wayscriber-configurator
 
 ### Arch Linux (AUR)
 
-Manjaro、CachyOS 和其他 Arch 衍生发行版同样使用此方式。推荐 AUR，因为 pacman 会跟踪安装的文件，AUR 助手会负责升级。示例默认使用 `yay`，同时为每个软件包列出等效的 `paru` 命令。
+Manjaro、CachyOS 和其他 Arch 衍生发行版同样使用此方式。推荐 AUR，因为 pacman 会跟踪安装的文件，AUR 助手会负责升级。示例使用 `yay`；如使用 `paru`，将命令中的 `yay` 换成 `paru` 即可。
+
+预编译二进制包：
 
 ```bash
-# Prebuilt binary:
 yay -S wayscriber-bin
-paru -S wayscriber-bin
+```
 
-# Or build from source:
+或从源码构建：
+
+```bash
 yay -S wayscriber
-paru -S wayscriber
+```
 
-# Optional GUI configurator:
+可选的 GUI 配置器：
+
+```bash
 yay -S wayscriber-configurator
-paru -S wayscriber-configurator
 ```
 
 
@@ -294,11 +340,23 @@ paru -S wayscriber-configurator
 ```bash
 curl -fsSL https://wayscriber.com/arch-install.sh -o arch-install.sh
 sh arch-install.sh --dry-run
+```
+
+确认预演结果后再安装：
+
+```bash
 sh arch-install.sh
 ```
 
+<details>
+<summary>直接安装脚本的检查内容及更新方式</summary>
 
 预演会验证最新稳定版、校验和、安装清单、所需 Arch 软件包和文件所属软件包，不安装任何文件。预演和正式安装都会拒绝检测到的其他 Wayscriber 副本：`/usr` 下不受包管理器管理的文件、`~/.local/bin/wayscriber`，或 `ExecStart` 不是 `/usr/local/bin/wayscriber` 的用户单元／覆盖配置。已经指向安装目标的符号链接不算冲突。在上述命令中添加 `--replace-other`，可先移除其他副本。如果 `wayscriber.service` 已在运行，安装程序会重启它，使后台叠层使用 `/usr/local/bin/wayscriber`；添加 `--no-restart` 可保持当前单元运行。`--version` 显示 crate 版本而非 Git 哈希，因此安装后请检查已安装路径和运行服务的 `ExecStart`。更新此类安装时，请重新下载脚本并再次运行。
+
+</details>
+
+<details>
+<summary>从直接安装迁移到 AUR</summary>
 
 迁移到 AUR 前，请先卸载直接安装的版本。否则，`/usr/local/bin` 和 `/usr/local/lib/systemd/user` 仍会优先于 `/usr` 下的软件包文件：
 
@@ -306,13 +364,19 @@ sh arch-install.sh
 systemctl --user disable --now wayscriber.service
 curl -fsSL https://wayscriber.com/arch-install.sh -o arch-install.sh
 sh arch-install.sh --uninstall --dry-run
+```
+
+确认预演结果后，卸载并改用 AUR 软件包：
+
+```bash
 sh arch-install.sh --uninstall
 yay -S wayscriber-bin
 systemctl --user enable --now wayscriber.service
 ```
 
-
 卸载程序仅删除直接安装清单中位于 `/usr/local` 下、未由包管理器管理的文件。它保留 pacman 管理的文件以及您的配置和数据；服务仍在运行或启用时，它会拒绝实际删除。`/usr` 下残留的不受管理的 Git 构建会保留；仅在确实也要移除该 `/usr` 副本时才添加 `--remove-unmanaged-usr`。默认卸载不会删除 `~/.local/bin/wayscriber` 或用户单元／覆盖配置；如果它们仍指向 `/usr/local`，脚本会发出警告。
+
+</details>
 
 ### NixOS 和 Nix
 
@@ -366,12 +430,15 @@ Wayscriber 已打包到 [`nixpkgs`](https://search.nixos.org/packages?query=ways
 
 `nixpkgs` 构建安装 `wayscriber` 二进制文件。桌面入口、图标和 `wayscriber.service` systemd 用户单元由下文的 flake 软件包提供；它们也提供可选的 Configurator。
 
-**不安装直接试用：**
+**不安装直接试用**（nixpkgs 版本）：
 
 ```bash
-# The nixpkgs version:
 nix run nixpkgs#wayscriber -- --active
-# Or the current upstream development branch:
+```
+
+或使用当前上游开发分支：
+
+```bash
 nix run github:devmobasa/wayscriber -- --active
 ```
 
@@ -379,7 +446,8 @@ nix run github:devmobasa/wayscriber -- --active
 `nix run` 不会将 `wayscriber` 加入 `PATH`。
 
 <a id="latest-release-and-configurator"></a>
-**NixOS 上的最新发布版和 Configurator**
+<details>
+<summary>NixOS 上的最新发布版和 Configurator</summary>
 
 项目 flake 提供固定到发布版的软件包以及可选的 Configurator。将输入添加到现有 `flake.nix` 时，请把 `RELEASE_TAG` 替换为已发布的标签，例如[最新发布版](https://github.com/devmobasa/wayscriber/releases/latest)中显示的标签：
 
@@ -426,6 +494,7 @@ nix flake update wayscriber
 sudo nixos-rebuild switch --flake .#myhost
 ```
 
+</details>
 
 **其他 Linux 发行版上的 Nix。** 在 Ubuntu、Fedora 或其他 Linux 发行版上使用 Nix 时，可以安装到用户配置环境：
 
@@ -434,10 +503,15 @@ nix profile install nixpkgs#wayscriber
 ```
 
 
-如需当前上游开发分支和可选的 Configurator：
+如需当前上游开发分支：
 
 ```bash
 nix profile install github:devmobasa/wayscriber#wayscriber
+```
+
+同一分支的可选 Configurator：
+
+```bash
 nix profile install github:devmobasa/wayscriber#wayscriber-configurator
 ```
 
@@ -529,11 +603,15 @@ cargo --version
 
 **依赖：**
 
-```bash
-# Debian 13+ / Ubuntu 25.04+ (including Ubuntu 26.04 LTS)
-sudo apt-get install build-essential pkg-config libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev libgtk4-layer-shell-dev
+Debian 13+ / Ubuntu 25.04+（包括 Ubuntu 26.04 LTS）：
 
-# Fedora
+```bash
+sudo apt-get install build-essential pkg-config libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev libgtk4-layer-shell-dev
+```
+
+Fedora：
+
+```bash
 sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel gtk4-devel gtk4-layer-shell-devel
 ```
 
@@ -579,26 +657,40 @@ cargo build --release --no-default-features --features tablet-input,portal,tray
 
 deb/rpm/AUR 软件包会自动安装 `wl-clipboard`、`grim` 和 `slurp`。直接安装 Arch 发布版的脚本会检查这些软件是否已安装，缺失时打印所需的 `pacman` 命令。如果从源码构建或使用 tarball，请手动安装：
 
+Debian/Ubuntu：
+
 ```bash
-sudo apt-get install wl-clipboard grim slurp   # Debian/Ubuntu
-sudo dnf install wl-clipboard grim slurp       # Fedora
+sudo apt-get install wl-clipboard grim slurp
+```
+
+Fedora：
+
+```bash
+sudo dnf install wl-clipboard grim slurp
 ```
 
 
 ### 从屏幕复制文本 (OCR)
 
-`Copy text from screen`（<kbd>Ctrl+Shift+X</kbd>）识别拖选屏幕区域中的文本，并复制到剪贴板；在选择器中按 <kbd>Ctrl+A</kbd> 则读取整个屏幕。Tesseract 运行时，扫描带会扫过该区域，随后卡片显示结果。识别出的文本仅写入剪贴板。其工具栏按钮默认隐藏，需手动开启。请安装 Tesseract 以及 `[capture].ocr_languages` 中配置的语言数据（默认 `eng`）：
+[从屏幕复制文本](#截图与导出)需要 Tesseract 以及 `[capture].ocr_languages` 中配置的语言数据（默认 `eng`）：
 
-OCR 选区生效期间，如果显示的屏幕图像变化，选择会被取消，确保选区坐标不会应用到替换后的冻结或缩放像素上。
+Arch/Omarchy：
 
 ```bash
-sudo pacman -S tesseract tesseract-data-eng       # Arch/Omarchy
-sudo apt-get install tesseract-ocr                # Debian/Ubuntu
-sudo dnf install tesseract tesseract-langpack-eng # Fedora
+sudo pacman -S tesseract tesseract-data-eng
 ```
 
+Debian/Ubuntu：
 
----
+```bash
+sudo apt-get install tesseract-ocr
+```
+
+Fedora：
+
+```bash
+sudo dnf install tesseract tesseract-langpack-eng
+```
 
 ## 首次启动
 
@@ -616,19 +708,30 @@ wayscriber --active
 
 - <kbd>F1</kbd> 或 <kbd>F10</kbd>：帮助叠层
 - <kbd>Shift+F1</kbd>：快捷参考
-- <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd>：命令面板
+- <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd>：命令面板（搜索 `monitor` 或 `display` 可查找输出相关动作）
 - <kbd>F11</kbd>：[配置器](#配置器-gui)
 - <kbd>Escape</kbd>：隐藏或退出。Escape 关闭界面后，接下来的 400 ms 内会忽略进一步的 Escape 按键
 
 界面默认跟随桌面区域设置。如需选择语言，请按 <kbd>F11</kbd>，打开 **UI → 语言 (Language)**，或参阅[界面语言](#界面语言)。
 
-首次启动会显示简短的引导卡片：绘图与撤销、工具栏与退出方式、颜色和粗细、快捷菜单，以及查找命令；最后会提供后台模式设置入口。卡片上的每个动作都是按钮（**知道了 (Got it)**、**设置 (Set up)**、**暂不 (Not now)**、**跳过导览 (Skip tour)**），旁边标有对应按键；点击卡片绝不会绘图。<kbd>Shift+Escape</kbd> 可跳过引导。已经完成或跳过引导的用户配置文件不会再次自动显示；命令面板或帮助叠层页脚中的 **重播引导 (Replay Tour)** 可重新播放卡片。重放前会先退出缩放；在演示模式下，会等到您离开该模式后开始。
+首次启动会显示简短的引导卡片：绘图与撤销、工具栏与退出方式、颜色和粗细、快捷菜单，以及查找命令；最后会提供后台模式设置入口。<kbd>Shift+Escape</kbd> 可跳过引导；命令面板或帮助叠层页脚中的 **重播引导 (Replay Tour)** 可重新播放卡片。
+
+<details>
+<summary>引导与提示的行为</summary>
+
+卡片上的每个动作都是按钮（**知道了 (Got it)**、**设置 (Set up)**、**暂不 (Not now)**、**跳过导览 (Skip tour)**），旁边标有对应按键；点击卡片绝不会绘图。已经完成或跳过引导的用户配置文件不会再次自动显示。重播引导前会先退出缩放；在演示模式下，会等到您离开该模式后开始。
 
 功能发现提示和快捷键教学提示提供 **知道了** 与 **提示设置… (Tip settings…)** 控件。**知道了** 仅永久确认这一条提示；**提示设置…** 除此之外还会在配置器中打开全局自动引导开关。使用提示介绍的功能，也会阻止该提示再次出现。点击消息正文只会在本次运行中关闭提示；无人操作的提示最多出现三次。工具栏隐藏时的恢复提示保留 **显示 (Show)** 作为主要操作，并提供相同的设置入口。关闭自动引导会在后续叠层启动时生效；手动重放引导和真实的功能或配置警告仍然可用。
 
+</details>
+
 日常使用建议设置[后台模式](#后台模式推荐)：切换更快，会话状态也会在多次激活之间保留。
 
----
+### 获取帮助
+
+- **关于窗口：** `wayscriber --about`
+- **检查新版本：** `wayscriber --check-update`（Wayscriber 不会自行安装更新，只会提供适合您安装方式的操作说明）。使用 `[updates] check = false` 或 `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` 可关闭后台检查。参阅 https://wayscriber.com/docs/getting-started/updating.html （英文）
+- **完整文档：** https://wayscriber.com/docs/ （英文）
 
 ## 使用方法
 
@@ -703,17 +806,24 @@ KDE Plasma：
 - 打开日志文件夹
 - 打开配置器／打开配置文件／退出
 
+<details>
+<summary>托盘图标样式</summary>
+
 支持的桌面使用随主题适配的符号托盘图标。无法可靠解析命名图标的托盘宿主（包括 Omarchy/Quickshell、Noctalia/Quickshell 和 COSMIC）会自动获得适应缩放的彩色像素图，包括 48px 的 HiDPI 版本。将 `[tray].icon_style` 设置为 `"auto"`（默认）、`"symbolic"` 或 `"colored"` 可选择主托盘图标样式；修改后请重启后台进程。如果没有系统托盘，请使用 `--no-tray` 或 `WAYSCRIBER_NO_TRAY=1`。若图标仍为空白，或菜单显示方框占位符，请使用 `WAYSCRIBER_TRAY_FORCE_PIXMAP=1` 启动后台进程；该环境变量优先于 TOML 设置。
+
+</details>
 
 **替代方式：使用合成器自动启动，而非 systemd：**
 
-Hyprland Lua：在对应文件中添加以下内容：
+Hyprland Lua：在 `~/.config/hypr/autostart.lua` 中添加：
 
 ```lua
--- ~/.config/hypr/autostart.lua
 o.launch_on_start("wayscriber --daemon")
+```
 
--- ~/.config/hypr/bindings.lua
+然后在 `~/.config/hypr/bindings.lua` 中添加：
+
+```lua
 o.bind("SUPER + D", "Toggle Wayscriber", "wayscriber --daemon-toggle")
 ```
 
@@ -728,9 +838,21 @@ bind = SUPER, D, exec, wayscriber --daemon-toggle
 
 **服务命令：**
 
+查看状态：
+
 ```bash
 systemctl --user status wayscriber.service
+```
+
+重启服务：
+
+```bash
 systemctl --user restart wayscriber.service
+```
+
+跟踪日志：
+
+```bash
 journalctl --user -u wayscriber.service -f
 ```
 
@@ -741,9 +863,24 @@ journalctl --user -u wayscriber.service -f
 
 ```bash
 wayscriber --active
+```
+
+以白板启动：
+
+```bash
 wayscriber --active --mode whiteboard
+```
+
+以自定义画板启动：
+
+```bash
 wayscriber --active --mode blueprint
-wayscriber --freeze   # start with screen frozen
+```
+
+启动时冻结屏幕：
+
+```bash
+wayscriber --freeze
 ```
 
 
@@ -769,6 +906,10 @@ bind = SUPER, D, exec, wayscriber --active
 
 轻量穿透模式仅适用于 layer-shell 合成器。它让正常键盘和指针输入传递给下层应用，同时保持 wayscriber 可见以供绘图。
 
+[![代码编辑器上方粘贴的图表和标注](https://wayscriber.com/img/poster-paste-and-passthroughmode.webp)](https://wayscriber.com/media/paste-and-passthroughmode.mp4)
+
+*按 <kbd>Ctrl+Alt+V</kbd> 粘贴图片，再按 <kbd>F6</kbd>：点击和滚动会传递到下层应用，标注保持可见。点击图片播放视频。*
+
 - <kbd>F6</kbd> 从已聚焦叠层进入穿透模式。它是 wayscriber 内部快捷键，不是操作系统／全局快捷键。穿透启用后，wayscriber 可能不再接收到该按键
 - 如需可靠控制（包括退出穿透模式），请为 `wayscriber --light-toggle` 和 `wayscriber --light-draw-toggle` 绑定合成器／全局快捷键
 - 如需按住时绘图的快捷键，请在按下时运行 `wayscriber --light-draw-on`，在释放时运行 `wayscriber --light-draw-off`
@@ -792,27 +933,43 @@ bind = SUPER, D, exec, wayscriber --active
 | 未绑定 | 测量逻辑屏幕区域，不捕获图像（`measure_mode`） |
 | <kbd>Ctrl+Alt+O</kbd> | 打开上次截图所在文件夹 |
 
+标有“遵循 `capture.copy_to_clipboard`”的快捷键按 `config.toml` 的该设置决定输出到剪贴板还是文件；其他快捷键始终使用表中指定的目标。捕获需要[截图工具](#截图工具)，缺失时回退到 xdg-desktop-portal。
+
 捕获后，简短通知会显示保存的文件名。保存到文件时，**打开文件夹 (Open folder)** 和 **复制路径 (Copy path)** 按钮可打开截图文件夹或复制完整路径。
 
-区域快捷键默认使用 Wayscriber 原生的冻结图像选择器。设置 `capture.region.picker = "slurp"` 可使用外部选择器；没有可用屏幕捕获后端时，原生选择也会回退到 `slurp`。读数、快捷键图例和可选的放大像素取样窗口可在 `[capture.region]` 中配置。即使常规截图格式设为 JPEG，区域截图仍以 PNG 编码并命名。显式设置 `picker = "slurp"` 则保留配置的旧版截图格式。
+全屏和区域捕获默认包含活动画板上已经提交的绘图。设置 `[capture].include_drawings = false` 可获取原始桌面像素。未完成的笔画、选择控制柄、预览、工具栏和其他 Wayscriber 界面不会包含在结果中。透明画板上的全屏捕获和旧版 `slurp` 捕获会保留标注后的桌面；纯色画板则保留画布背景。原生区域选择器始终把已提交的绘图合成到冻结的桌面裁剪上。
 
-在 Hyprland 和 Sway 上，原生选择器中的 <kbd>Space</kbd> 可在自由区域选择和当前工作区窗口选择之间切换。指向并点击窗口，或使用 <kbd>Super</kbd> 加方向键及 <kbd>Enter</kbd>。合成器无法提供可靠几何信息时，不显示窗口控件；选择器复用旧的用户冻结或缩放图像时也不显示，仅为本次选择器新建的自动冻结图像提供窗口边界。显示候选窗口之前，会验证提供者结果是否与该图像源的输出及布局标识一致；不一致时仅禁用窗口模式。Wayland 在冻结时刻没有可移植的工作区标识，因此候选窗口反映的是执行合成器查询时可见的工作区。
+使用 `--exit-after-capture` / `--no-exit-after-capture` 可覆盖捕获后是否关闭叠层。
 
-`capture_region_interactive` 默认占用 <kbd>Ctrl+Shift+C</kbd>，也可从命令面板访问。这个组合键过去运行一步完成的 `capture_clipboard_selection`，后者现在默认未绑定；预览中的 **复制 (Copy)**（<kbd>Ctrl+C</kbd>）可得到相同的剪贴板结果，显式绑定 `capture_clipboard_selection` 可恢复一步复制。该动作始终使用原生选择器，确保外部选择器无法绕过预览。在预览中，**两者 (Both)**（或 <kbd>Enter</kbd>）始终同时复制 PNG 并保存文件。
+<details>
+<summary>区域选择器</summary>
 
-全屏和区域捕获默认包含活动画板上已经提交的绘图。设置 `[capture].include_drawings = false` 可获取原始桌面像素。未完成的笔画、选择控制柄、预览、工具栏和其他 Wayscriber 界面不会包含在结果中。在交互预览中，**导出时包含绘图 (Include drawings in exports)**（或 <kbd>D</kbd>）以配置值为默认值，可仅针对这次捕获覆盖；复制、保存、两者和画板都会遵循该设置。将带标注的裁剪图添加回其来源画板，会把这些标注的第二份扁平化副本写入图像；希望把原始裁剪放上画板时，请先关闭该开关。
+- 区域快捷键默认使用 Wayscriber 原生的冻结图像选择器。设置 `capture.region.picker = "slurp"` 可使用外部选择器；没有可用屏幕捕获后端时，原生选择也会回退到 `slurp`。
+- 读数、快捷键图例和可选的放大像素取样窗口可在 `[capture.region]` 中配置。
+- 即使常规截图格式设为 JPEG，区域截图仍以 PNG 编码并命名。显式设置 `picker = "slurp"` 则保留配置的旧版截图格式。
+- 原生区域选择器会在冻结桌面上显示已提交的绘图，使选择时的预览与带标注导出一致。
+- 在 Hyprland 和 Sway 上，原生选择器中的 <kbd>Space</kbd> 可在自由区域选择和当前工作区窗口选择之间切换。指向并点击窗口，或使用 <kbd>Super</kbd> 加方向键及 <kbd>Enter</kbd>。
+- 合成器无法提供可靠几何信息时，不显示窗口控件；选择器复用旧的用户冻结或缩放图像时也不显示，仅为本次选择器新建的自动冻结图像提供窗口边界。
+- 显示候选窗口之前，会验证提供者结果是否与该图像源的输出及布局标识一致；不一致时仅禁用窗口模式。Wayland 在冻结时刻没有可移植的工作区标识，因此候选窗口反映的是执行合成器查询时可见的工作区。
 
-原生区域选择器会在冻结桌面上显示已提交的绘图，使选择时的预览与带标注导出一致；在预览中关闭绘图，会立即恢复原始桌面像素预览。
+</details>
 
-预览中还可删除捕获像素中的行或列。点击 **剪切 (Cut)**（或 <kbd>X</kbd>）并在选区上拖动；后续切割基于已经折叠的输出。**撤销 (Undo)**（<kbd>Ctrl+Z</kbd>）、**重做 (Redo)**（<kbd>Ctrl+Y</kbd> 或 <kbd>Ctrl+Shift+Z</kbd>）和 **重置 (Reset)** 仅影响本次预览，绝不更改画板绘图。切割后，源裁剪区域会锁定，直到撤销所有切割或重置；切割工具待用或已有切割时，放大取样窗口隐藏。复制、保存、两者和画板均接收折叠后的结果；画板保留原来的左上角位置，并缩小到输出大小。
+<details>
+<summary>预览：复制、保存、两者、画板和剪切</summary>
 
-透明画板上的全屏捕获和旧版 `slurp` 捕获会保留标注后的桌面；纯色画板则保留画布背景。原生区域选择器始终把已提交的绘图合成到冻结的桌面裁剪上。
+- `capture_region_interactive` 默认占用 <kbd>Ctrl+Shift+C</kbd>，也可从命令面板访问。该动作始终使用原生选择器，确保外部选择器无法绕过预览。
+- 这个组合键过去运行一步完成的 `capture_clipboard_selection`，后者现在默认未绑定；预览中的 **复制 (Copy)**（<kbd>Ctrl+C</kbd>）可得到相同的剪贴板结果，显式绑定 `capture_clipboard_selection` 可恢复一步复制。
+- **两者 (Both)**（或 <kbd>Enter</kbd>）始终同时复制 PNG 并保存文件。
+- **导出时包含绘图 (Include drawings in exports)**（或 <kbd>D</kbd>）以配置值为默认值，可仅针对这次捕获覆盖；复制、保存、两者和画板都会遵循该设置。关闭绘图会立即恢复原始桌面像素预览。
+- 将带标注的裁剪图添加回其来源画板，会把这些标注的第二份扁平化副本写入图像；希望把原始裁剪放上画板时，请先关闭该开关。
+- **剪切 (Cut)**（或 <kbd>X</kbd>）可删除捕获像素中的行或列：在选区上拖动；后续切割基于已经折叠的输出。**撤销 (Undo)**（<kbd>Ctrl+Z</kbd>）、**重做 (Redo)**（<kbd>Ctrl+Y</kbd> 或 <kbd>Ctrl+Shift+Z</kbd>）和 **重置 (Reset)** 仅影响本次预览，绝不更改画板绘图。
+- 切割后，源裁剪区域会锁定，直到撤销所有切割或重置；切割工具待用或已有切割时，放大取样窗口隐藏。复制、保存、两者和画板均接收折叠后的结果；画板保留原来的左上角位置，并缩小到输出大小。
+
+</details>
 
 `measure_mode` 也以命令面板为主要入口，默认未绑定。它显示十字光标和逻辑像素尺寸，不冻结或捕获屏幕；按 <kbd>Esc</kbd> 或再次运行该动作即可退出。
 
-标有“遵循 `capture.copy_to_clipboard`”的快捷键按 `config.toml` 的该设置决定输出到剪贴板还是文件；其他快捷键始终使用表中指定的目标。捕获需要[截图工具](#截图工具)，缺失时回退到 xdg-desktop-portal。
-
-使用 `--exit-after-capture` / `--no-exit-after-capture` 可覆盖捕获后是否关闭叠层。
+**从屏幕复制文本 (OCR)：** 按 <kbd>Ctrl+Shift+X</kbd> 并拖选屏幕区域，或在选择器中按 <kbd>Ctrl+A</kbd> 读取整个屏幕。Tesseract 运行时，扫描带会扫过该区域，随后卡片显示结果。识别出的文本仅写入剪贴板。其工具栏按钮默认隐藏，需手动开启。OCR 选区生效期间，如果显示的屏幕图像变化，选择会被取消，确保选区坐标不会应用到替换后的冻结或缩放像素上。Tesseract 的安装方法见[从屏幕复制文本 (OCR)](#从屏幕复制文本-ocr)。
 
 <details>
 <summary>PDF 导出</summary>
@@ -821,22 +978,11 @@ bind = SUPER, D, exec, wayscriber --active
 
 </details>
 
----
-
-## 获取帮助
-
-- **帮助叠层：** <kbd>F1</kbd> 或 <kbd>F10</kbd>
-- **快捷参考：** <kbd>Shift+F1</kbd>
-- **命令面板：** <kbd>Ctrl+K</kbd> 或 <kbd>Ctrl+Shift+P</kbd>（搜索 `monitor` 或 `display` 可查找输出相关动作）
-- **关于窗口：** `wayscriber --about`
-- **检查新版本：** `wayscriber --check-update`（Wayscriber 不会自行安装更新，只会提供适合您安装方式的操作说明）。使用 `[updates] check = false` 或 `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` 可关闭后台检查。参阅 https://wayscriber.com/docs/getting-started/updating.html （英文）
-- **完整文档：** https://wayscriber.com/docs/ （英文）
-
----
-
 ## 操作参考
 
 按 <kbd>F1</kbd> 可查看完整的应用内操作速查表。
+
+![Wayscriber 操作速查帮助叠层，快捷键按绘图、动作、画板以及画笔与文本分组](https://wayscriber.com/img/controls-cheatsheet.webp)
 
 ### 常用快捷键
 
@@ -873,6 +1019,8 @@ bind = SUPER, D, exec, wayscriber --active
 | 文本模式 | <kbd>T</kbd>，<kbd>Click</kbd> 放置，输入文本，<kbd>Enter</kbd> 完成 |
 | 便签 | <kbd>N</kbd>，<kbd>Click</kbd> 放置，输入文本，<kbd>Enter</kbd> 完成 |
 
+![形状按钮下方展开的形状选择器](https://wayscriber.com/img/shape-picker.webp)
+
 **形状选择器的位置。** 顶部工具条直接显示常用工具，其余工具归入单个 **形状选择器** 按钮。简单工具条直接显示选择、画笔、马克笔、步骤标记和橡皮擦。常规工具条还显示形状笔、激光笔、直线和箭头，选择器内提供矩形、椭圆、模糊、聚光灯和多边形工具。高级工具条还直接显示矩形、椭圆、模糊和聚光灯，因此选择器中只保留多边形工具。可从工具条最右端的布局按钮选择布局。
 
 每种工具也都是独立的工具栏项目，可以通过设置弹出菜单（齿轮图标）或 `config.toml` 中的 `ui.toolbar.items` 显示、隐藏和排序。例如，撤销／重做旁的截图按钮默认可见，设置 `hidden = ["top.utility.screenshot"]` 可隐藏。
@@ -883,6 +1031,10 @@ bind = SUPER, D, exec, wayscriber --active
 
 <details>
 <summary>文本编辑</summary>
+
+[![放置在白板上的多行文本](https://wayscriber.com/img/poster-text-manipulation.webp)](https://wayscriber.com/media/text-manipulation.mp4)
+
+*放置多行文本、移动它、用 <kbd>Shift+T</kbd> 切换字体，之后双击即可编辑。点击图片播放视频。*
 
 编辑文本块或便签时，下列按键属于编辑器，不能配置。撤销、工具切换、画板导航和截图仍使用各自的常规绑定。
 
@@ -1041,8 +1193,6 @@ pick_screen_color = ["I"]
 - 预设槽位可从工具栏保存／清除；槽位立即更新，由后台任务写回 `config.toml`，文件写入完成后通知会确认。名称和高级字段可在配置器的预设标签页编辑
 - 模糊工具默认没有快捷键；如需直接用键盘访问，可在 `config.toml` 绑定 `select_blur_tool`
 
----
-
 ## 配置
 
 配置文件：`~/.config/wayscriber/config.toml`
@@ -1064,11 +1214,18 @@ wayscriber-configurator   # or press F11
 
 完整参考见 `docs/CONFIG.md`（英文）和 https://wayscriber.com/docs/ （英文）。
 
-`config.toml` 保存主动编写的默认设置，只有您明确编辑时才会变化。有两类操作会写入它：配置器的 **保存**，以及叠层中三个范围受限的编辑器（快捷键编辑、预设槽位和快捷颜色面板）。每个编辑器仅重写自己的键，并先将旧文件复制为带时间戳的 `.bak` 备份。运行、使用和退出 Wayscriber 都不会自行更改该文件。偶尔切换的偏好只作用于当前运行，并提供前往负责该默认值的配置器页面的入口。
+`config.toml` 保存您主动编写的默认设置，Wayscriber 不会自行更改它。有两类操作会写入它：配置器的 **保存**，以及叠层中的三个编辑器（快捷键编辑、预设槽位和快捷颜色面板）。每个叠层编辑器仅重写自己的键，并先将旧文件复制为带时间戳的 `.bak` 备份。
+
+<details>
+<summary>运行时偏好与已停用设置</summary>
+
+偶尔切换的偏好只作用于当前运行，并提供前往负责该默认值的配置器页面的入口。
 
 工具栏固定状态（固定按钮和工具栏显示／隐藏快捷键会更新它，使下次启动与当前屏幕状态一致）、拖动后的顶部工具条位置、顶部工具条显示形式及最小化状态、单项工具栏的可见性／顺序，以及在叠层中更改的画板固定状态，均属于直接交互状态，单独保存在自动生成的 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` 中。可从叠层设置弹出菜单查看、恢复或重置这些运行时偏好（**详情 (Details)** 显示路径，**重置工具栏更改 (Reset toolbar changes)** 恢复配置的默认值）；参阅[配置指南](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences)（英文）。
 
 统一顶部工具栏是唯一布局。旧的面板键（例如 `side_layout`）仍可读取，保存时也会保留，但不再影响运行中的叠层；配置器会将其列为可删除的已停用设置。沿用历史名称的 `side.*` 项目 ID 仍用于自定义顶部工具栏控件，不得重命名。
+
+</details>
 
 ### 配置器 (GUI)
 
@@ -1163,16 +1320,45 @@ size = 3.0
 
 会话持久化默认启用。可在配置器中管理（<kbd>F11</kbd> → 会话标签页，也可通过托盘的 **会话持久化设置… (Session persistence settings…)** 进入），或使用下列 CLI 参数仅针对本次运行覆盖。
 
-```bash
-wayscriber --resume-session      # force resume (persist/restore all boards + history/tool state)
-wayscriber --no-resume-session   # disable resume for this run
-wayscriber --session-info        # inspect saved sessions
-wayscriber --clear-session       # remove stored boards
-wayscriber --clear-tool-state    # reset saved tool defaults, keep boards/history
+强制恢复（持久化并恢复所有画板、历史和工具状态）：
 
-# Named session files — --session-file combines with any of the flags above
-# and with --active / --freeze / --daemon:
+```bash
+wayscriber --resume-session
+```
+
+本次运行禁用恢复：
+
+```bash
+wayscriber --no-resume-session
+```
+
+查看已保存的会话：
+
+```bash
+wayscriber --session-info
+```
+
+删除已保存的画板：
+
+```bash
+wayscriber --clear-session
+```
+
+重置已保存的工具默认值，保留画板和历史：
+
+```bash
+wayscriber --clear-tool-state
+```
+
+命名会话文件：`--session-file` 可与上述任意参数组合，也可与 `--active`、`--freeze` 或 `--daemon` 组合。例如，在单次运行的叠层中打开讲座会话：
+
+```bash
 wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session
+```
+
+或通过后台进程打开会议会话：
+
+```bash
 wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session
 ```
 
@@ -1219,16 +1405,26 @@ language = "zh-CN"   # "auto" (default), "en", or "zh-CN"
 
 叠层和关于窗口在下次打开时使用已保存的语言，后台模式则在重启后使用。如果仅为本次运行选择语言，不修改 `config.toml`，或查看当前生效的语言：
 
+列出可选语言，以及当前生效的语言及其原因：
+
 ```bash
-wayscriber --list-languages                 # the choices, and the language in effect and why
-wayscriber --active --language zh-CN        # this overlay only
-wayscriber --daemon --language en           # background mode and every overlay it opens
+wayscriber --list-languages
+```
+
+仅为本次叠层使用某种语言：
+
+```bash
+wayscriber --active --language zh-CN
+```
+
+为后台模式及其打开的所有叠层使用某种语言：
+
+```bash
+wayscriber --daemon --language en
 ```
 
 
 `--language` 也适用于 `--freeze` 和 `--about`，其优先级高于 `[ui] language` 和 `WAYSCRIBER_LANGUAGE`。您输入的文本、画板名称以及其他自建内容不会翻译。翻译、本地翻译文件覆盖和添加语言的说明见 [docs/I18N.md](docs/I18N.md)（英文）。
-
----
 
 ## 故障排查
 
@@ -1257,9 +1453,21 @@ exec-once = wayscriber --daemon
 
 ### 服务无法启动
 
+查看状态：
+
 ```bash
 systemctl --user status wayscriber.service
+```
+
+跟踪日志：
+
+```bash
 journalctl --user -u wayscriber.service -f
+```
+
+重启服务：
+
+```bash
 systemctl --user restart wayscriber.service
 ```
 
@@ -1342,47 +1550,13 @@ ui_animation_fps = 30
 
 如果无撕裂显示、较低功耗或安静运行比输入延迟更重要，请设置 `enable_vsync = true`。垂直同步通常会带来由帧节奏决定的延迟下限，尤其在 60 Hz 显示器上；禁用它能降低输入延迟，但可能出现撕裂，并增加 CPU/GPU 使用量。
 
----
-
 ## 参与贡献
 
 贡献原则：wayscriber 以礼物交换的方式分享，而不是合同。欢迎提出请求，但不保证完成时间，也不承担支持义务。完整原则见 https://wayscriber.com/docs/ethos/gift-exchange.html （英文）。
 
 开发环境设置、项目结构和工作流程说明见 [CONTRIBUTING.md](CONTRIBUTING.md)（英文）。
 
-## 路线图
-
-- [x] 原生 Wayland layer-shell
-- [x] 带系统托盘的后台模式
-- [x] 多个可自定义画板／背景
-- [x] 会话管理器与持久化（命名会话、叠层动作、配置器目录、CLI 覆盖、托盘导航）
-- [x] 荧光笔与橡皮擦
-- [x] 更多形状（填充形状）
-- [x] 选择工具与属性面板
-- [x] 模糊工具
-- [x] 支持压力的绘图板／触笔输入
-- [x] 颜色选择器
-- [x] 屏幕取色器：从屏幕选择绘图颜色
-- [x] 渲染颜色配置
-- [x] 缩放（ZoomIt 风格操作）
-- [x] 预设（工具／颜色／大小槽位）
-- [x] 便签
-- [x] 画板页面（多页画板）
-- [x] 演示模式
-- [x] 点击高亮
-- [x] 带渐隐笔迹的激光笔
-- [x] 屏幕冻结
-- [x] 轻量穿透模式
-- [x] 命令面板
-- [x] 径向菜单
-- [x] 编号标注（递增箭头标签）
-- [x] 多显示器支持
-- [x] 将标注保存为图像
-- [x] 多页画板 PDF 导出
-
 未来计划在 [GitHub issues](https://github.com/devmobasa/wayscriber/issues) 中跟踪。
-
----
 
 ## 许可证与致谢
 
