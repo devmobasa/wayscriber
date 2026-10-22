@@ -27,11 +27,11 @@ pub(super) fn render_board_rows(
     BoardRowsRenderer::new(engine, ctx, input_state, layout, board_count, max_count).render();
 }
 
-struct BoardRowsRenderer<'a> {
-    engine: &'a UiTextEngine,
-    ctx: &'a cairo::Context,
-    input: &'a InputState,
-    layout: &'a BoardPickerLayout,
+struct BoardRowsRenderer<'render> {
+    engine: &'render UiTextEngine,
+    ctx: &'render cairo::Context,
+    input: &'render InputState,
+    layout: &'render BoardPickerLayout,
     board_count: usize,
     max_count: usize,
     rows_top: f64,
@@ -43,17 +43,17 @@ struct BoardRowsRenderer<'a> {
     highlight_index: Option<usize>,
     selected_index: Option<usize>,
     active_board_index: usize,
-    edit_state: Option<(BoardPickerEditMode, usize, &'a str)>,
+    edit_state: Option<(BoardPickerEditMode, usize, &'render str)>,
     pinned_count: usize,
     body_style: UiTextStyle<'static>,
 }
 
-impl<'a> BoardRowsRenderer<'a> {
+impl<'render> BoardRowsRenderer<'render> {
     fn new(
-        engine: &'a UiTextEngine,
-        ctx: &'a cairo::Context,
-        input: &'a InputState,
-        layout: &'a BoardPickerLayout,
+        engine: &'render UiTextEngine,
+        ctx: &'render cairo::Context,
+        input: &'render InputState,
+        layout: &'render BoardPickerLayout,
         board_count: usize,
         max_count: usize,
     ) -> Self {

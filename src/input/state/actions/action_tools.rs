@@ -1,4 +1,6 @@
+use crate::config;
 use crate::domain::Action;
+use crate::draw::{TextMeasurer, shape};
 use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
@@ -16,7 +18,7 @@ impl InputState {
             return;
         }
         let level = self.style.pen_smoothing;
-        let max = crate::draw::shape::MAX_PEN_SMOOTHING;
+        let max = shape::MAX_PEN_SMOOTHING;
         info!("Pen smoothing set to {level}/{max}");
         let message = if level == 0 {
             tr("Pen smoothing off").to_string()
@@ -33,7 +35,7 @@ impl InputState {
             return;
         }
         let level = self.style.shape_recognition_sensitivity;
-        let max = crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
+        let max = config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
         info!("Shape Pen sensitivity set to {level}/{max}");
         self.push_toast(
             ToastPriority::Info,
@@ -44,7 +46,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_tool_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         if let Some(tool) = Tool::from_select_action(action) {

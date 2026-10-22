@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 use std::fs;
 use std::io::Write;
@@ -28,7 +30,7 @@ fn create_new_reject_options() -> AtomicWriteOptions {
 #[cfg(unix)]
 #[test]
 fn replacing_existing_file_preserves_mode() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("state.toml");
     fs::write(&path, "old").unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
@@ -45,7 +47,7 @@ fn replacing_existing_file_preserves_mode() {
 #[cfg(unix)]
 #[test]
 fn creating_new_file_uses_fixed_mode() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("created.toml");
 
     write_text_atomic(&path, "created", create_new_reject_options()).unwrap();
@@ -59,7 +61,7 @@ fn creating_new_file_uses_fixed_mode() {
 
 #[test]
 fn create_new_reports_existing_destination() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("existing.txt");
     fs::write(&path, "old").unwrap();
 
@@ -71,7 +73,7 @@ fn create_new_reports_existing_destination() {
 
 #[test]
 fn temporary_file_creation_skips_colliding_paths() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first = temp.path().join(".first.tmp");
     let second = temp.path().join(".second.tmp");
     fs::write(&first, "existing").unwrap();
@@ -88,8 +90,8 @@ fn temporary_file_creation_skips_colliding_paths() {
 
 #[test]
 fn temporary_names_are_recognised_by_the_file_they_were_meant_for() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let generated = next_temp_path(temp.path(), std::ffi::OsStr::new("admission.json"));
+    let temp = test_temp::tempdir().unwrap();
+    let generated = next_temp_path(temp.path(), OsStr::new("admission.json"));
     let generated = generated.file_name().unwrap().to_str().unwrap();
 
     assert_eq!(temp_file_target(generated), Some("admission.json"));
@@ -112,7 +114,7 @@ fn temporary_names_are_recognised_by_the_file_they_were_meant_for() {
 #[cfg(unix)]
 #[test]
 fn temporary_file_creation_skips_symlink_collisions() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("target");
     let link = temp.path().join(".link.tmp");
     let second = temp.path().join(".second.tmp");
@@ -128,7 +130,7 @@ fn temporary_file_creation_skips_symlink_collisions() {
 #[cfg(unix)]
 #[test]
 fn follows_existing_symlink_and_preserves_link() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("target.toml");
     let link = temp.path().join("config.toml");
     fs::write(&target, "old").unwrap();
@@ -143,16 +145,13 @@ fn follows_existing_symlink_and_preserves_link() {
             .file_type()
             .is_symlink()
     );
-    assert_eq!(
-        fs::read_link(&link).unwrap(),
-        std::path::PathBuf::from("target.toml")
-    );
+    assert_eq!(fs::read_link(&link).unwrap(), PathBuf::from("target.toml"));
 }
 
 #[cfg(unix)]
 #[test]
 fn followed_symlink_change_is_rejected_before_finalization() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first = temp.path().join("first.toml");
     let second = temp.path().join("second.toml");
     let link = temp.path().join("config.toml");
@@ -174,7 +173,7 @@ fn followed_symlink_change_is_rejected_before_finalization() {
 #[cfg(unix)]
 #[test]
 fn followed_symlink_target_replacement_is_rejected_before_finalization() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("target.toml");
     let link = temp.path().join("config.toml");
     fs::write(&target, "old").unwrap();
@@ -193,7 +192,7 @@ fn followed_symlink_target_replacement_is_rejected_before_finalization() {
 #[cfg(unix)]
 #[test]
 fn follow_policy_detects_replaced_regular_file() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("config.toml");
     fs::write(&path, "old").unwrap();
     let options = AtomicWriteOptions::user_config_file();
@@ -209,7 +208,7 @@ fn follow_policy_detects_replaced_regular_file() {
 
 #[test]
 fn caller_expectation_detects_an_in_place_content_change() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("config.toml");
     fs::write(&path, "old").unwrap();
     let identity = FileIdentity::of(&fs::metadata(&path).unwrap());
@@ -281,7 +280,7 @@ fn a_conditional_create_that_loses_the_final_race_reports_a_changed_destination(
 #[cfg(unix)]
 #[test]
 fn reject_policy_rejects_destination_symlink() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("target");
     let link = temp.path().join("state");
     fs::write(&target, "target").unwrap();
@@ -296,7 +295,7 @@ fn reject_policy_rejects_destination_symlink() {
 #[cfg(unix)]
 #[test]
 fn reject_policy_rejects_final_path_changed_to_symlink() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("state");
     let target = temp.path().join("target");
     fs::write(&path, "old").unwrap();
@@ -314,7 +313,7 @@ fn reject_policy_rejects_final_path_changed_to_symlink() {
 #[cfg(unix)]
 #[test]
 fn reject_policy_detects_replaced_regular_file() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("state");
     fs::write(&path, "old").unwrap();
     let options = replace_reject_options();
@@ -330,7 +329,7 @@ fn reject_policy_detects_replaced_regular_file() {
 
 #[test]
 fn reject_policy_detects_created_regular_file_after_missing_inspect() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("state");
     let options = replace_reject_options();
     let destination = inspect_destination(&path, options).unwrap();
@@ -351,7 +350,7 @@ fn reject_policy_detects_created_regular_file_after_missing_inspect() {
 #[cfg(unix)]
 #[test]
 fn dangling_followed_symlink_creates_target_and_preserves_link() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let link = temp.path().join("config.toml");
     let target = temp.path().join("missing-target.toml");
     symlink("missing-target.toml", &link).unwrap();
@@ -370,7 +369,7 @@ fn dangling_followed_symlink_creates_target_and_preserves_link() {
 #[cfg(unix)]
 #[test]
 fn follows_multi_level_symlink_chain() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("target.toml");
     let middle = temp.path().join("middle.toml");
     let link = temp.path().join("config.toml");
@@ -398,7 +397,7 @@ fn follows_multi_level_symlink_chain() {
 #[cfg(unix)]
 #[test]
 fn changed_intermediate_symlink_is_rejected_before_finalization() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first = temp.path().join("first.toml");
     let second = temp.path().join("second.toml");
     let middle = temp.path().join("middle.toml");
@@ -422,7 +421,7 @@ fn changed_intermediate_symlink_is_rejected_before_finalization() {
 #[cfg(unix)]
 #[test]
 fn parent_directory_sync_succeeds() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("state");
     fs::write(&path, "state").unwrap();
 

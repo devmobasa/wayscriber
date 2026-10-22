@@ -6,14 +6,17 @@ use crate::draw::{BoardPages, Frame, PageDeleteOutcome as CanvasPageDeleteOutcom
 use std::collections::HashSet;
 
 impl BoardManager {
+    #[must_use]
     pub fn board_count(&self) -> usize {
         self.boards.len()
     }
 
+    #[must_use]
     pub fn active_index(&self) -> usize {
         self.active_index
     }
 
+    #[must_use]
     pub fn board_identity_generation(&self) -> BoardIdentityGeneration {
         self.identity_generation
     }
@@ -23,6 +26,7 @@ impl BoardManager {
         self.identity_generation
     }
 
+    #[must_use]
     pub fn active_board(&self) -> &BoardState {
         &self.boards[self.active_index]
     }
@@ -31,10 +35,12 @@ impl BoardManager {
         &mut self.boards[self.active_index]
     }
 
+    #[must_use]
     pub fn active_board_id(&self) -> &str {
         &self.active_board().spec.id
     }
 
+    #[must_use]
     pub fn has_board(&self, id: &str) -> bool {
         self.boards.iter().any(|board| board.spec.id == id)
     }
@@ -66,14 +72,17 @@ impl BoardManager {
         true
     }
 
+    #[must_use]
     pub fn active_board_name(&self) -> &str {
         &self.active_board().spec.name
     }
 
+    #[must_use]
     pub fn active_background(&self) -> &BoardBackground {
         &self.active_board().spec.background
     }
 
+    #[must_use]
     pub fn active_pages(&self) -> &BoardPages {
         &self.active_board().pages
     }
@@ -82,6 +91,7 @@ impl BoardManager {
         &mut self.active_board_mut().pages
     }
 
+    #[must_use]
     pub fn active_frame(&self) -> &Frame {
         self.active_pages().active_frame()
     }
@@ -90,35 +100,43 @@ impl BoardManager {
         self.active_pages_mut().active_frame_mut()
     }
 
+    #[must_use]
     pub fn show_badge(&self) -> bool {
         self.show_badge
     }
 
+    #[must_use]
     pub fn pan_enabled(&self) -> bool {
         self.pan_enabled
     }
 
+    #[must_use]
     pub fn show_pan_badge(&self) -> bool {
         self.show_pan_badge
     }
 
+    #[must_use]
     pub fn max_count(&self) -> usize {
         self.max_count
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn default_board_id(&self) -> &str {
         &self.default_board_id
     }
 
+    #[must_use]
     pub fn page_count(&self) -> usize {
         self.active_pages().page_count()
     }
 
+    #[must_use]
     pub fn active_page_index(&self) -> usize {
         self.active_pages().active_index()
     }
 
+    #[must_use]
     pub fn active_page_generation(&self) -> u64 {
         self.active_pages().generation()
     }
@@ -180,6 +198,7 @@ impl BoardManager {
         &mut self.boards
     }
 
+    #[must_use]
     pub fn board_states(&self) -> &[BoardState] {
         &self.boards
     }

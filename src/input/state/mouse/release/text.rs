@@ -1,15 +1,16 @@
 use std::time::Instant;
 
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::input::InputState;
 
 use super::super::{TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
 pub(super) fn handle_pending_text_click(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     x: i32,
     y: i32,
-    shape_id: crate::draw::ShapeId,
+    shape_id: ShapeId,
 ) {
     let is_double = state.text_editing.register_click(
         shape_id,

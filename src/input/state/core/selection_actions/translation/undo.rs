@@ -1,12 +1,12 @@
-use crate::draw::ShapeId;
 use crate::draw::frame::ShapeSnapshot;
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::input::InputState;
 use crate::input::state::core::editing::CanvasEdit;
 
 impl InputState {
     pub(crate) fn push_translation_undo(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         before: Vec<(ShapeId, ShapeSnapshot)>,
     ) -> bool {
         let effects = CanvasEdit::from_snapshots(before).commit(

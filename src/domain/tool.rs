@@ -131,6 +131,7 @@ pub enum DragBindableTool {
 }
 
 impl DragBindableTool {
+    #[must_use]
     pub fn to_drag_tool(self) -> DragTool {
         match self {
             Self::Select => DragTool::Select,
@@ -153,6 +154,7 @@ impl DragBindableTool {
         }
     }
 
+    #[must_use]
     pub fn to_tool(self) -> Tool {
         match self {
             Self::Select => Tool::Select,
@@ -175,6 +177,7 @@ impl DragBindableTool {
         }
     }
 
+    #[must_use]
     pub fn from_tool(tool: Tool) -> Option<Self> {
         match tool {
             Tool::Select => Some(Self::Select),
@@ -200,6 +203,7 @@ impl DragBindableTool {
         }
     }
 
+    #[must_use]
     pub fn from_drag_tool(tool: DragTool) -> Option<Self> {
         match tool {
             DragTool::Default => None,

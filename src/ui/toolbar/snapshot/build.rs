@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::input::state::PRESET_FEEDBACK_DURATION_MS;
-use crate::input::{BoardBackground, InputState};
+use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, TopMenuState};
+use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
 
 use super::super::bindings::ToolbarBindingHints;
 use super::types::{PresetFeedbackSnapshot, PresetSlotSnapshot, ToolbarSnapshot};
@@ -29,10 +29,10 @@ impl ToolbarSnapshot {
         };
         let page_count = state.boards.page_count();
         let page_index = state.boards.active_page_index();
-        let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
-            && state.text_editing.mode() == crate::input::TextInputMode::Plain;
-        let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
-            && state.text_editing.mode() == crate::input::TextInputMode::StickyNote;
+        let text_active = matches!(state.state, DrawingState::TextInput { .. })
+            && state.text_editing.mode() == TextInputMode::Plain;
+        let note_active = matches!(state.state, DrawingState::TextInput { .. })
+            && state.text_editing.mode() == TextInputMode::StickyNote;
         let override_tool = state.tool_override();
         let thickness_targets_eraser = active_tool.uses_eraser_size()
             || override_tool
@@ -198,22 +198,14 @@ impl ToolbarSnapshot {
             presets,
             active_preset_slot: state.preset_slots.active(),
             preset_feedback,
-            shape_picker_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::ShapePicker,
-            top_overflow_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::TopOverflow,
-            session_popover_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::SessionPopover,
-            settings_popover_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::SettingsPopover,
-            canvas_popover_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::CanvasPopover,
-            layout_menu_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::LayoutMenu,
-            pen_feel_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::PenFeelPanel,
-            arrow_style_menu_open: state.toolbar_top_menu()
-                == crate::input::state::TopMenuState::ArrowStyleMenu,
+            shape_picker_open: state.toolbar_top_menu() == TopMenuState::ShapePicker,
+            top_overflow_open: state.toolbar_top_menu() == TopMenuState::TopOverflow,
+            session_popover_open: state.toolbar_top_menu() == TopMenuState::SessionPopover,
+            settings_popover_open: state.toolbar_top_menu() == TopMenuState::SettingsPopover,
+            canvas_popover_open: state.toolbar_top_menu() == TopMenuState::CanvasPopover,
+            layout_menu_open: state.toolbar_top_menu() == TopMenuState::LayoutMenu,
+            pen_feel_open: state.toolbar_top_menu() == TopMenuState::PenFeelPanel,
+            arrow_style_menu_open: state.toolbar_top_menu() == TopMenuState::ArrowStyleMenu,
             exit_hides_overlay: false,
             top_popover_scroll: state.toolbar_top_popover_scroll(),
             top_minimized: state.toolbar_top_minimized(),
@@ -221,7 +213,7 @@ impl ToolbarSnapshot {
             // Fade is owned by the backend engine; renderers see 1.0 until
             // the backend publishes the animated value.
             top_fade: 1.0,
-            selection_properties: if active_tool == crate::input::Tool::Select {
+            selection_properties: if active_tool == Tool::Select {
                 state.build_selection_property_entries_from_resolved(
                     state.selected_shape_ids(),
                     &selected,
@@ -254,7 +246,8 @@ mod tests {
     use super::*;
     use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
     use crate::draw::Color;
-    use crate::input::state::{TopMenuState, test_support::make_test_input_state};
+    use crate::input::state::TopMenuState;
+    use crate::input::state::test_support::make_test_input_state;
 
     #[test]
     fn snapshot_carries_input_state_quick_colors() {
@@ -336,19 +329,23 @@ mod tests {
 
 #[cfg(test)]
 mod measurement {
+    use std::hint;
+
+    use crate::input::state::test_support;
+
     use super::*;
 
     #[test]
     #[ignore = "release timing workload; run with --release --ignored --nocapture"]
     fn measure_unchanged_toolbar_snapshot() {
-        let state = crate::input::state::test_support::make_test_input_state();
+        let state = test_support::make_test_input_state();
         let start = Instant::now();
         let mut changes = 0;
         let mut previous = ToolbarSnapshot::from_input(&state);
         for _ in 0..10_000 {
             let snapshot = ToolbarSnapshot::from_input(&state);
             changes += usize::from(snapshot != previous);
-            previous = std::hint::black_box(snapshot);
+            previous = hint::black_box(snapshot);
         }
         eprintln!(
             "P05 constructions=10000 changed={changes} mean_us={:.2}",

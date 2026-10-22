@@ -5,6 +5,7 @@ mod builder;
 mod tests;
 
 pub use bindings::HelpOverlayBindings;
+pub use builder::HelpContentOptions;
 pub(crate) use builder::{
     SectionSets, build_section_sets, filter_sections_for_search, hide_unbound_rows,
 };

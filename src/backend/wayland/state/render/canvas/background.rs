@@ -1,13 +1,18 @@
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use super::super::super::*;
+use crate::backend::wayland::state::WaylandState;
 use crate::backend::wayland::state::screen_image::{
     ScreenImageKind, ScreenSourceToken, current_screen_source_token, displayed_screen_image,
 };
-use crate::draw::Color;
+use crate::domain::{BoardGrid, BoardGridKind};
+use crate::draw::{BoardPaper, Color, EraserReplayContext, SpotlightMagnifierSource};
+use crate::input::BoardBackground;
+use anyhow::{Context, Result};
+use log::warn;
 
 pub(super) struct CanvasEraserContext {
-    paper: Option<crate::draw::BoardPaper>,
+    paper: Option<BoardPaper>,
     surface: Option<cairo::ImageSurface>,
     pattern: Option<cairo::SurfacePattern>,
     backdrop_cache_key: Option<u64>,
@@ -18,7 +23,7 @@ pub(super) struct CanvasEraserContext {
     /// same call that decided whether the capture below could be painted at
     /// all, and carried here so the pixels on the surface and the availability
     /// the loupe and the toolbar report cannot come from different facts.
-    magnifier_source: crate::draw::SpotlightMagnifierSource,
+    magnifier_source: SpotlightMagnifierSource,
 }
 
 impl CanvasEraserContext {
@@ -31,36 +36,29 @@ impl CanvasEraserContext {
             bg_color,
             logical_to_image_scale_x: 1.0,
             logical_to_image_scale_y: 1.0,
-            magnifier_source: crate::draw::SpotlightMagnifierSource::from_backdrop(
-                None,
-                bg_color.is_some(),
-            ),
+            magnifier_source: SpotlightMagnifierSource::from_backdrop(None, bg_color.is_some()),
         }
     }
 
-    pub(super) fn prepare_paper(
-        &mut self,
-        ctx: &cairo::Context,
-        grid: crate::domain::BoardGrid,
-    ) -> Result<()> {
+    pub(super) fn prepare_paper(&mut self, ctx: &cairo::Context, grid: BoardGrid) -> Result<()> {
         if let Some(color) = self.bg_color {
-            if grid.kind == crate::domain::BoardGridKind::None {
+            if grid.kind == BoardGridKind::None {
                 ctx.set_source_rgba(color.r, color.g, color.b, color.a);
                 ctx.paint()?;
             } else {
-                let paper = crate::draw::BoardPaper::for_context(color, grid, ctx)?;
+                let paper = BoardPaper::for_context(color, grid, ctx)?;
                 paper.paint(ctx)?;
                 self.paper = Some(paper);
             }
         }
         Ok(())
     }
-    pub(super) fn replay_context(&self) -> crate::draw::EraserReplayContext<'_> {
+    pub(super) fn replay_context(&self) -> EraserReplayContext<'_> {
         crate::draw::EraserReplayContext {
             pattern: self
                 .paper
                 .as_ref()
-                .map(crate::draw::BoardPaper::pattern)
+                .map(BoardPaper::pattern)
                 .or_else(|| self.pattern.as_ref().map(|p| p as &cairo::Pattern)),
             surface: self.surface.as_ref(),
             backdrop_cache_key: self.backdrop_cache_key,
@@ -72,7 +70,7 @@ impl CanvasEraserContext {
         }
     }
 
-    pub(super) fn magnifier_source(&self) -> crate::draw::SpotlightMagnifierSource {
+    pub(super) fn magnifier_source(&self) -> SpotlightMagnifierSource {
         self.magnifier_source
     }
 }
@@ -84,7 +82,7 @@ impl CanvasEraserContext {
 /// all yield a different id. It is what makes the availability descriptor name
 /// a specific capture rather than merely "some raster".
 fn raster_source_id(token: &ScreenSourceToken) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let mut hasher = DefaultHasher::new();
     token.output_id.hash(&mut hasher);
     token.output_layout_generation.hash(&mut hasher);
     match token.kind {
@@ -114,8 +112,8 @@ fn raster_source_id(token: &ScreenSourceToken) -> u64 {
 fn resolve_backdrop_provenance(
     raster_token: Option<&ScreenSourceToken>,
     board_is_transparent: bool,
-) -> (bool, crate::draw::SpotlightMagnifierSource) {
-    let source = crate::draw::SpotlightMagnifierSource::from_backdrop(
+) -> (bool, SpotlightMagnifierSource) {
+    let source = SpotlightMagnifierSource::from_backdrop(
         raster_token.map(raster_source_id),
         !board_is_transparent,
     );
@@ -150,7 +148,7 @@ impl WaylandState {
     /// caller can disagree about whether a loupe can preview.
     pub(in crate::backend::wayland::state) fn current_spotlight_magnifier_source(
         &self,
-    ) -> crate::draw::SpotlightMagnifierSource {
+    ) -> SpotlightMagnifierSource {
         resolve_backdrop_provenance(
             self.current_screen_source_token().as_ref(),
             self.input_state.board_is_transparent(),
@@ -254,12 +252,12 @@ impl WaylandState {
             backdrop_cache_key = Some(cache_key);
         } else {
             let color = match self.input_state.boards.active_background() {
-                crate::input::BoardBackground::Solid(color) => Some(*color),
-                crate::input::BoardBackground::Transparent => None,
+                BoardBackground::Solid(color) => Some(*color),
+                BoardBackground::Transparent => None,
             };
             let mut backdrop = CanvasEraserContext::for_board(color);
             if paint_board {
-                backdrop.prepare_paper(ctx, crate::domain::BoardGrid::default())?;
+                backdrop.prepare_paper(ctx, BoardGrid::default())?;
             }
             return Ok(backdrop);
         }
@@ -337,10 +335,7 @@ mod tests {
         // painting it while merely disabling the loupe is not.
         let (paint, source) = resolve_backdrop_provenance(None, true);
         assert!(!paint, "a stale capture must not reach the surface");
-        assert_eq!(
-            source,
-            crate::draw::SpotlightMagnifierSource::IncompleteTransparent
-        );
+        assert_eq!(source, SpotlightMagnifierSource::IncompleteTransparent);
 
         // A valid token paints and magnifies, and the descriptor names that
         // exact capture rather than merely reporting "some raster".
@@ -356,20 +351,18 @@ mod tests {
         // pixel itself, so the loupe keeps a complete source.
         let (paint, source) = resolve_backdrop_provenance(None, false);
         assert!(!paint);
-        assert_eq!(source, crate::draw::SpotlightMagnifierSource::CompleteSolid);
+        assert_eq!(source, SpotlightMagnifierSource::CompleteSolid);
     }
 
     #[test]
     fn a_transparent_board_without_valid_pixels_is_incomplete() {
         assert_eq!(
-            crate::draw::SpotlightMagnifierSource::from_backdrop(None, false),
-            crate::draw::SpotlightMagnifierSource::IncompleteTransparent
+            SpotlightMagnifierSource::from_backdrop(None, false),
+            SpotlightMagnifierSource::IncompleteTransparent
         );
         // Same board, valid capture: the loupe has a source again without the
         // shape's requested factor ever being rewritten.
         let live = raster_source_id(&token(ScreenImageKind::Frozen, 1, 1));
-        assert!(
-            crate::draw::SpotlightMagnifierSource::from_backdrop(Some(live), false).is_complete()
-        );
+        assert!(SpotlightMagnifierSource::from_backdrop(Some(live), false).is_complete());
     }
 }

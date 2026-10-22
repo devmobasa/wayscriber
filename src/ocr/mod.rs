@@ -162,7 +162,7 @@ pub(crate) type OcrOutcome = Result<OcrSuccess, OcrFailure>;
 /// is created and consumed inside a single stack frame and is dropped before
 /// the outcome travels back to the event loop.
 fn run_request(
-    request: OcrRequest,
+    request: &OcrRequest,
     recognizer: &dyn TextRecognizer,
     publisher: &dyn OcrTextPublisher,
 ) -> OcrOutcome {
@@ -191,6 +191,9 @@ pub(crate) struct RecognizedOutput {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::sync::Mutex;
+
     use super::*;
 
     struct StubRecognizer(fn() -> Result<RecognizedOutput, OcrFailure>);
@@ -205,7 +208,7 @@ mod tests {
         }
     }
 
-    struct RecordingPublisher(std::sync::Mutex<Vec<String>>);
+    struct RecordingPublisher(Mutex<Vec<String>>);
 
     impl OcrTextPublisher for RecordingPublisher {
         fn publish(&self, text: &str) -> Result<(), OcrFailure> {
@@ -227,7 +230,7 @@ mod tests {
             width,
             height,
             (width * 4) as i32,
-            vec![0xFF; (width * height * 4) as usize],
+            vec![0xff; (width * height * 4) as usize],
         )
         .unwrap()
     }
@@ -260,9 +263,9 @@ mod tests {
 
     #[test]
     fn empty_recognition_does_not_publish_an_empty_clipboard_value() {
-        let publisher = RecordingPublisher(std::sync::Mutex::new(Vec::new()));
+        let publisher = RecordingPublisher(Mutex::new(Vec::new()));
         let outcome = run_request(
-            request(),
+            &request(),
             &StubRecognizer(|| {
                 Ok(RecognizedOutput {
                     text: RecognizedText::trimmed("   \n\t "),
@@ -278,9 +281,9 @@ mod tests {
 
     #[test]
     fn successful_recognition_publishes_text_but_reports_only_a_character_count() {
-        let publisher = RecordingPublisher(std::sync::Mutex::new(Vec::new()));
+        let publisher = RecordingPublisher(Mutex::new(Vec::new()));
         let outcome = run_request(
-            request(),
+            &request(),
             &StubRecognizer(|| {
                 Ok(RecognizedOutput {
                     text: RecognizedText::trimmed("hello\n"),
@@ -304,7 +307,7 @@ mod tests {
     #[test]
     fn clipboard_failure_is_distinct_from_engine_failure() {
         let outcome = run_request(
-            request(),
+            &request(),
             &StubRecognizer(|| {
                 Ok(RecognizedOutput {
                     text: RecognizedText::trimmed("hello"),
@@ -337,7 +340,7 @@ mod tests {
             OcrFailure::ClipboardFailed,
         ]
         .map(|failure| failure.message());
-        let unique: std::collections::BTreeSet<_> = messages.iter().collect();
+        let unique: BTreeSet<_> = messages.iter().collect();
 
         assert_eq!(unique.len(), messages.len());
         assert!(messages[1].contains("deu"));
@@ -349,9 +352,9 @@ mod tests {
             pixels: pixels(0, 4),
             languages: OcrLanguages::from_validated("eng".to_string()),
         };
-        let publisher = RecordingPublisher(std::sync::Mutex::new(Vec::new()));
+        let publisher = RecordingPublisher(Mutex::new(Vec::new()));
         let outcome = run_request(
-            request,
+            &request,
             &StubRecognizer(|| panic!("empty pixels must not reach the recognizer")),
             &publisher,
         );

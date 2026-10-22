@@ -1,9 +1,13 @@
+use std::f64::consts;
+
+use crate::draw::TextMeasurer;
+
 use super::*;
 use crate::draw::ArrowStyle;
 
 #[test]
 fn erase_stroke_samples_sparse_path() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     state.style.eraser_size = 4.0;
@@ -57,7 +61,7 @@ fn erase_stroke_includes_release_segment() {
 
 #[test]
 fn erase_stroke_skips_locked_shapes() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     state.style.eraser_size = 4.0;
@@ -102,7 +106,7 @@ fn erase_stroke_skips_locked_shapes() {
 
 #[test]
 fn erase_stroke_samples_randomized_crossings() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     fn next_unit(seed: &mut u64) -> f64 {
         *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -131,7 +135,7 @@ fn erase_stroke_samples_randomized_crossings() {
         });
 
         let unit = next_unit(&mut seed);
-        let angle = std::f64::consts::PI * (0.35 + unit * 0.3);
+        let angle = consts::PI * (0.35 + unit * 0.3);
         let dx = angle.cos();
         let dy = angle.sin();
         let length = 80.0;
@@ -159,7 +163,7 @@ fn erase_stroke_samples_randomized_crossings() {
 
 #[test]
 fn erase_stroke_hits_various_shapes() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let cases = vec![
         (
@@ -238,7 +242,7 @@ fn erase_stroke_hits_various_shapes() {
 /// Uses a low threshold to force the grid path to be exercised.
 #[test]
 fn spatial_grid_eraser_hits_after_add_move_delete() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     state.style.eraser_size = 10.0;
@@ -324,7 +328,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
 /// Tests that tolerance larger than cell size still finds shapes.
 #[test]
 fn spatial_grid_large_tolerance_finds_distant_shapes() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.set_hit_test_threshold(2);
     state.set_hit_test_tolerance(100.0); // Larger than cell size (64)

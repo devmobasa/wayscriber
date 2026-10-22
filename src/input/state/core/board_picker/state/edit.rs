@@ -1,6 +1,7 @@
-use crate::draw::Color;
+use crate::draw::{Color, TextMeasurer};
 use crate::i18n::{tr, trf};
 use crate::input::BoardBackground;
+use crate::input::events::Key;
 use crate::input::state::{Toast, ToastPriority};
 
 use super::super::super::base::InputState;
@@ -108,7 +109,7 @@ impl InputState {
 
     pub(crate) fn board_picker_commit_page_edit_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
     ) -> bool {
         let Some(edit) = self.board_picker.page_edit.take() else {
             return false;
@@ -301,10 +302,7 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn board_picker_rename_selected_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn board_picker_rename_selected_with_measurer(&mut self, measurer: &TextMeasurer) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
         };
@@ -326,7 +324,7 @@ impl InputState {
     /// Opens the paper sheet for a board, opening the full picker when needed.
     pub(crate) fn board_picker_edit_board_paper_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         board_index: usize,
     ) {
         if !self.is_board_picker_open() || self.board_picker_is_quick() {
@@ -341,7 +339,7 @@ impl InputState {
 
     pub(crate) fn board_picker_edit_color_selected_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
     ) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
@@ -395,7 +393,7 @@ impl InputState {
         let trimmed = buffer.trim();
         match mode {
             BoardPickerEditMode::Name => {
-                if !self.set_board_name(board_index, trimmed.to_string()) {
+                if !self.set_board_name(board_index, trimmed) {
                     return false;
                 }
             }
@@ -424,7 +422,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_backspace(&mut self) {
-        if self.board_appearance_key(crate::input::events::Key::Backspace) {
+        if self.board_appearance_key(Key::Backspace) {
             return;
         }
         if let Some(edit) = self.board_picker_edit_buffer_mut() {
@@ -434,7 +432,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_append(&mut self, ch: char) {
-        if self.board_appearance_key(crate::input::events::Key::Char(ch)) {
+        if self.board_appearance_key(Key::Char(ch)) {
             return;
         }
         let Some(edit) = self.board_picker_edit_buffer_mut() else {

@@ -8,6 +8,7 @@ use super::super::bindings::{
     HelpOverlayBindings, action_row, binding_or_fallback, bindings_compact_or_fallback,
     bindings_or_fallback, joined_labels, primary_or_fallback,
 };
+use super::HelpContentOptions;
 
 pub(super) struct MainSections {
     pub(super) board_modes: Option<Section>,
@@ -31,11 +32,15 @@ fn color_badge(bindings: &HelpOverlayBindings, index: usize) -> Option<Badge> {
 
 pub(super) fn build_main_sections(
     bindings: &HelpOverlayBindings,
-    frozen_enabled: bool,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
+    options: HelpContentOptions,
 ) -> MainSections {
+    let HelpContentOptions {
+        frozen_enabled,
+        context_filter,
+        board_enabled,
+        capture_enabled,
+    } = options;
+
     let board_modes = (!context_filter || board_enabled).then(|| Section {
         title: tr("Boards"),
         rows: vec![
@@ -163,7 +168,7 @@ pub(super) fn build_main_sections(
             action_row(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
         ],
-        badges: color_badges.clone(),
+        badges: color_badges,
         icon: Some(toolbar_icons::draw_icon_select),
     };
 

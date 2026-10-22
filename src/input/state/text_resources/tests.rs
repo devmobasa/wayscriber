@@ -1,16 +1,21 @@
+use crate::draw;
+use crate::input::state::test_support;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
+
 use super::*;
 use crate::draw::{FontDescriptor, Shape, ShapeId};
 use crate::input::{DrawingState, InputState, Tool};
 
 fn editing_state(measurer: &TextMeasurer) -> (InputState, ShapeId, Shape) {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.view.set_screen_dimensions(1000, 800);
     let original = Shape::Text {
         x: 100,
         y: 200,
         text: "Wrapped original שלום".into(),
         size: 24.0,
-        color: crate::draw::RED,
+        color: draw::RED,
         font_descriptor: FontDescriptor::default(),
         background_enabled: true,
         wrap_width: Some(140),
@@ -46,12 +51,7 @@ fn explicit_page_transition_restores_text_before_changing_the_active_frame() {
         measurer: &measurer,
         ui_engine: &ui_engine,
     };
-    assert!(
-        state.apply_toolbar_event_with_resources(
-            resources,
-            crate::ui::toolbar::ToolbarEvent::PageNew
-        )
-    );
+    assert!(state.apply_toolbar_event_with_resources(resources, ToolbarEvent::PageNew));
     assert!(matches!(state.state, DrawingState::Idle));
     assert_eq!(state.boards.active_page_index(), 1);
     assert!(state.boards.active_frame().shapes.is_empty());
@@ -187,7 +187,7 @@ fn explicit_precision_enter_uses_toolbar_clamping_and_escape_leaves_value_alone(
         measurer: &measurer,
         ui_engine: &ui_engine,
     };
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     assert!(state.apply_toolbar_event_with_resources(
         resources,
         ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::Thickness)
@@ -199,7 +199,7 @@ fn explicit_precision_enter_uses_toolbar_clamping_and_escape_leaves_value_alone(
     assert!(!state.is_precision_entry_open());
     assert_eq!(
         state.thickness_for_active_tool(),
-        crate::ui::toolbar::model::ToolbarSliderSpec::THICKNESS.max
+        ToolbarSliderSpec::THICKNESS.max
     );
     assert!(state.is_session_dirty());
 

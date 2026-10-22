@@ -1,5 +1,4 @@
-use crate::draw::PageDeleteOutcome;
-use crate::draw::TextMeasurer;
+use crate::draw::{PageDeleteOutcome, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};

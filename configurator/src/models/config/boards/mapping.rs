@@ -3,8 +3,10 @@ use wayscriber::i18n::tr;
 use std::collections::HashSet;
 
 use wayscriber::config::{
-    BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig, Config,
+    BoardBackgroundConfig, BoardColorConfig, BoardGridConfig, BoardItemConfig, BoardsConfig, Config,
 };
+use wayscriber::domain;
+use wayscriber::domain::BoardGridKind;
 
 use crate::models::color::ColorTripletInput;
 use crate::models::error::FormError;
@@ -103,8 +105,8 @@ impl BoardItemDraft {
 
         let spacing = match self.grid_spacing.trim().parse::<i64>() {
             Ok(value)
-                if (i64::from(wayscriber::domain::BOARD_GRID_MIN_SPACING)
-                    ..=i64::from(wayscriber::domain::BOARD_GRID_MAX_SPACING))
+                if (i64::from(domain::BOARD_GRID_MIN_SPACING)
+                    ..=i64::from(domain::BOARD_GRID_MAX_SPACING))
                     .contains(&value) =>
             {
                 value
@@ -117,9 +119,9 @@ impl BoardItemDraft {
                 return None;
             }
         };
-        let grid = wayscriber::config::BoardGridConfig {
+        let grid = BoardGridConfig {
             kind: if background.is_transparent() {
-                wayscriber::domain::BoardGridKind::None
+                BoardGridKind::None
             } else {
                 self.grid_kind
             }
@@ -230,8 +232,8 @@ impl BoardsDraft {
             name,
             background_kind: BoardBackgroundOption::Color,
             background_color: ColorTripletInput::from([0.992, 0.992, 0.992]),
-            grid_kind: wayscriber::domain::BoardGridKind::None,
-            grid_spacing: wayscriber::domain::BOARD_GRID_DEFAULT_SPACING.to_string(),
+            grid_kind: BoardGridKind::None,
+            grid_spacing: domain::BOARD_GRID_DEFAULT_SPACING.to_string(),
             default_pen_color: OptionalTripletInput::from_option(
                 Some(&BoardColorConfig::Rgb([0.0, 0.0, 0.0])),
                 [0.0, 0.0, 0.0],

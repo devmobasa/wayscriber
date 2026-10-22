@@ -13,8 +13,11 @@
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::{env, fs};
 
 use crate::i18n::{tr, trf};
+use crate::process_broker;
+use crate::process_broker::HelperKind;
 
 use super::manifest::MAX_MANIFEST_BYTES;
 
@@ -62,10 +65,10 @@ fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, Fe
     };
 
     let arguments = fetch_arguments(program, url, timeout);
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.run(
-                crate::process_broker::HelperKind::UpdateFetcher,
+                HelperKind::UpdateFetcher,
                 program_path.as_os_str(),
                 &arguments,
                 Vec::new(),
@@ -100,8 +103,8 @@ fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, Fe
 }
 
 fn find_in_path(program: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH").unwrap_or_else(|| "/bin:/usr/bin".into());
-    std::env::split_paths(&path)
+    let path = env::var_os("PATH").unwrap_or_else(|| "/bin:/usr/bin".into());
+    env::split_paths(&path)
         .map(|directory| directory.join(program))
         .find(|candidate| is_executable_file(candidate))
 }
@@ -110,7 +113,7 @@ fn find_in_path(program: &str) -> Option<PathBuf> {
 fn is_executable_file(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
-    std::fs::metadata(path)
+    fs::metadata(path)
         .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
 }
 

@@ -4,9 +4,30 @@
 //! popovers synchronized without rebuilding content on unrelated snapshot
 //! changes.
 
-use super::*;
+use gtk4::accessible::Property;
+use gtk4::cairo::Region;
+
+use crate::config::toolbar_item_ids;
+
+use super::super::{CaptureProofTarget, CaptureSurfaceContent, Updater};
+use super::popover_owner::PopoverResources;
+use super::{
+    CANVAS_MENU_CONTENT_W, COMPACT_BUTTON, CanvasMenuContentKey, GAP, ICON_BUTTON, ICON_SIZE,
+    MENU_CONTENT_W, MENU_MAX_CONTENT_H, SessionMenuContentKey, SettingsMenuContentKey,
+    TEXT_BUTTON_H, TEXT_BUTTON_W, TopBar, control_face_button, effective_scale,
+    set_prefixed_control_widget_id, set_semantic_widget_id,
+};
+use crate::config::{Action, action_short_label};
 use crate::i18n::{tr, trf};
+use crate::input::Tool;
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
+use crate::toolbar_gtk::widgets::{
+    FeedbackSender, add_button_shortcut_hint, install_click_modifier_capture, send_event,
+    set_active_class, text_button,
+};
+use crate::ui::toolbar::model::TopStripPlan;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use gtk4::prelude::*;
 
 pub(super) fn set_popover_capture_transparent(
     popover: &gtk4::Popover,
@@ -61,7 +82,7 @@ fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
         match region {
             PopoverInputRegion::Keep => {}
             PopoverInputRegion::Empty => {
-                let empty = gtk4::cairo::Region::create();
+                let empty = Region::create();
                 surface.set_input_region(Some(&empty));
             }
             PopoverInputRegion::Restore => {
@@ -404,7 +425,7 @@ impl TopBar {
                 );
                 set_prefixed_control_widget_id(&button, "top.picker.", control);
                 let accessible_label = control.accessible_label(snapshot);
-                button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                button.update_property(&[Property::Label(&accessible_label)]);
                 let badge = control.shortcut_badge(snapshot);
                 add_button_shortcut_hint(&button, badge.as_deref(), use_icons);
                 set_active_class(&button, control.active(snapshot));
@@ -422,10 +443,7 @@ impl TopBar {
         // using them must not close it (GTK popovers keep inside clicks).
         if model::top_fill_visible(snapshot) {
             let fill = gtk4::CheckButton::with_label(action_short_label(Action::ToggleFill));
-            set_semantic_widget_id(
-                &fill,
-                crate::config::toolbar_item_ids::TOP_UTILITY_FILL.as_str(),
-            );
+            set_semantic_widget_id(&fill, toolbar_item_ids::TOP_UTILITY_FILL.as_str());
             fill.set_tooltip_text(Some(&model::action_tooltip(snapshot, Action::ToggleFill)));
             // set_active runs before connect_toggled, so every later
             // toggle is user input and forwards unconditionally.
@@ -504,7 +522,7 @@ impl TopBar {
             );
             set_prefixed_control_widget_id(&button, "top.overflow.", control);
             let accessible_label = control.accessible_label(snapshot);
-            button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+            button.update_property(&[Property::Label(&accessible_label)]);
             if button_size.0 > COMPACT_BUTTON * scale {
                 let badge = control.shortcut_badge(snapshot);
                 add_button_shortcut_hint(&button, badge.as_deref(), use_icons);

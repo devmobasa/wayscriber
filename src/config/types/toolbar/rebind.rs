@@ -14,6 +14,7 @@ pub enum ToolbarRebindModifier {
 }
 
 impl ToolbarRebindModifier {
+    #[must_use]
     pub fn matches(self, ctrl: bool, shift: bool, alt: bool) -> bool {
         match self {
             Self::Disabled => false,
@@ -28,6 +29,7 @@ impl ToolbarRebindModifier {
     /// `None` when rebind-by-click is disabled. The single source of truth for
     /// shortcut-rebind copy across the onboarding surfaces (the first-run
     /// cards), so no key strings are ever hardcoded.
+    #[must_use]
     pub fn click_label(self) -> Option<&'static str> {
         match self {
             Self::Disabled => None,

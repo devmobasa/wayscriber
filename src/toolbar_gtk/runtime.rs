@@ -2,6 +2,9 @@
 //! toolbar windows. Nothing in here touches backend state; all traffic
 //! goes through the bridge channels.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk4::glib;
 use std::future::Future;
 
@@ -13,7 +16,7 @@ use super::bridge::{BridgeHealth, FeedbackPublisher, LatestValueReceiver};
 /// panics and an unexpectedly exiting main loop restore the built-in bars.
 struct FailureGuard {
     health: BridgeHealth,
-    clean: std::cell::Cell<bool>,
+    clean: Cell<bool>,
 }
 
 fn spawn_monitored_local<F, C>(context: &glib::MainContext, future: F, completed: C)
@@ -42,11 +45,11 @@ impl Drop for FailureGuard {
 pub(super) fn run(
     mut updates: LatestValueReceiver<GtkToolbarUpdate>,
     feedback: FeedbackPublisher,
-    health: BridgeHealth,
+    health: &BridgeHealth,
 ) {
-    let guard = std::rc::Rc::new(FailureGuard {
+    let guard = Rc::new(FailureGuard {
         health: health.clone(),
-        clean: std::cell::Cell::new(false),
+        clean: Cell::new(false),
     });
 
     if health.stopping() {
@@ -130,11 +133,11 @@ mod tests {
 
     #[test]
     fn unexpected_runtime_exit_publishes_failure_before_wake() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let health = BridgeHealth::new(wake.handle());
         drop(FailureGuard {
             health: health.clone(),
-            clean: std::cell::Cell::new(false),
+            clean: Cell::new(false),
         });
 
         let mut pollfd = libc::pollfd {
@@ -151,11 +154,11 @@ mod tests {
 
     #[test]
     fn clean_runtime_exit_does_not_publish_failure() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let health = BridgeHealth::new(wake.handle());
         drop(FailureGuard {
             health: health.clone(),
-            clean: std::cell::Cell::new(true),
+            clean: Cell::new(true),
         });
 
         assert!(!health.failed());

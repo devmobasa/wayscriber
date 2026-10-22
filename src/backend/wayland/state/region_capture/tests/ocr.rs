@@ -1,3 +1,6 @@
+use crate::config::ChordModifiers;
+use crate::draw::TextMeasurer;
+
 use super::lifecycle_and_measure::ocr_region;
 use super::*;
 
@@ -115,11 +118,7 @@ fn production_ocr_event_adapter_uses_release_endpoint_at_every_scale() {
                 };
                 let mut backend = Some(ocr_region(scale));
                 let mut input = make_test_input_state();
-                input.activate_region_with(
-                    &crate::draw::TextMeasurer::default(),
-                    RegionPurposeTag::Ocr,
-                    1,
-                );
+                input.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, 1);
 
                 assert!(begin_region_selection_event(
                     &mut backend,
@@ -173,12 +172,11 @@ fn production_ocr_event_adapter_uses_release_endpoint_at_every_scale() {
 fn production_ocr_event_adapter_rearms_small_drag_and_ignores_shift_square_policy() {
     let mut backend = Some(ocr_region(1.0));
     let mut input = make_test_input_state();
-    input.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
-        RegionPurposeTag::Ocr,
-        1,
-    );
-    input.sync_modifiers(true, false, false, false);
+    input.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, 1);
+    input.sync_modifiers(ChordModifiers {
+        shift: true,
+        ..ChordModifiers::default()
+    });
 
     assert!(begin_region_selection_event(
         &mut backend,
@@ -203,11 +201,7 @@ fn production_ocr_event_adapter_rearms_small_drag_and_ignores_shift_square_polic
 
     let mut backend = Some(ocr_region(1.0));
     let mut input = make_test_input_state();
-    input.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
-        RegionPurposeTag::Ocr,
-        1,
-    );
+    input.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, 1);
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,

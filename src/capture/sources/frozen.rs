@@ -1,9 +1,11 @@
+use std::io::Cursor;
+
 use crate::capture::types::CaptureError;
 
 /// Decode a PNG buffer into raw ARGB8888 bytes.
 #[allow(dead_code)]
 pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureError> {
-    let decoder = png::Decoder::new(std::io::Cursor::new(data));
+    let decoder = png::Decoder::new(Cursor::new(data));
     let mut reader = decoder
         .read_info()
         .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;
@@ -27,7 +29,7 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
         png::ColorType::Rgb => Box::new(buf[..info.buffer_size()].as_chunks::<3>().0.iter().map(
             |c| {
                 let [r, g, b] = *c;
-                (r, g, b, 0xFF)
+                (r, g, b, 0xff)
             },
         )),
         other => {

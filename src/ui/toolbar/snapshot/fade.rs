@@ -37,6 +37,7 @@ pub const TOP_STRIP_FADE_TICK: Duration = Duration::from_millis(16);
 
 /// Whether a published `top_fade` value is the fully hidden strip, which
 /// must not intercept pointer input.
+#[must_use]
 pub fn top_strip_hidden(fade: f64) -> bool {
     fade <= TOP_STRIP_HIDDEN_LEVEL
 }
@@ -88,6 +89,7 @@ impl Default for TopStripFade {
 }
 
 impl TopStripFade {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             envelope: Envelope::new(TOP_STRIP_SHOWN_LEVEL),
@@ -127,11 +129,13 @@ impl TopStripFade {
 
     /// Current fade value ([`TOP_STRIP_SHOWN_LEVEL`] = shown,
     /// [`TOP_STRIP_HIDDEN_LEVEL`] = hidden).
+    #[must_use]
     pub fn value(&self) -> f64 {
         self.envelope.value()
     }
 
     /// Whether a transition is still in flight.
+    #[must_use]
     pub fn animating(&self) -> bool {
         !self.envelope.settled()
     }
@@ -143,6 +147,7 @@ impl TopStripFade {
     /// motion, a key, a menu), which wakes the loop on its own. The idle
     /// deadline applies under reduced motion too: the snap still has to
     /// happen on time.
+    #[must_use]
     pub fn wake_after(&self, inputs: &TopStripFadeInputs, now: Instant) -> Option<Duration> {
         if self.animating() {
             return Some(TOP_STRIP_FADE_TICK);

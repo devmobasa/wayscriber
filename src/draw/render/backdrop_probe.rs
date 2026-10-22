@@ -34,6 +34,7 @@ const MIN_OPAQUE_FRACTION: f64 = 0.5;
 
 /// Relative luminance of what is painted under `bounds`, in user-space
 /// coordinates, or `None` when too little of it is opaque to judge.
+#[must_use]
 pub fn painted_luminance(ctx: &cairo::Context, bounds: (f64, f64, f64, f64)) -> Option<f64> {
     let (x, y, width, height) = bounds;
     if !(x.is_finite() && y.is_finite() && width.is_finite() && height.is_finite())
@@ -127,6 +128,7 @@ fn average_luminance(probe: &mut cairo::ImageSurface) -> Option<f64> {
 /// and answers a different question for the overlay chrome. The two disagree
 /// most on green, so a shared name for both would be a bug waiting to be
 /// written: keep the names apart and pick by what is being contrasted.
+#[must_use]
 pub fn perceived_luminance(red: f64, green: f64, blue: f64) -> f64 {
     red * 0.299 + green * 0.587 + blue * 0.114
 }

@@ -3,7 +3,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use gtk4::gio::{Menu, MenuItem, MenuModel};
 use gtk4::glib::variant::ToVariant;
+use gtk4::glib::{SignalHandlerId, WeakRef};
 use gtk4::prelude::*;
 
 use super::set_native_widget_input_enabled;
@@ -108,14 +110,14 @@ impl NativePopoverCapture {
 }
 
 struct NativePopoverSurface {
-    popover: gtk4::glib::WeakRef<gtk4::Popover>,
+    popover: WeakRef<gtk4::Popover>,
     content: NativePopoverContent,
     selected_for_capture: Rc<Cell<bool>>,
     proof_epoch: Rc<Cell<u64>>,
     proven_epoch: Cell<u64>,
     in_flight_epoch: Cell<Option<u64>>,
-    map_handler: gtk4::glib::SignalHandlerId,
-    unmap_handler: gtk4::glib::SignalHandlerId,
+    map_handler: SignalHandlerId,
+    unmap_handler: SignalHandlerId,
 }
 
 impl NativePopoverSurface {
@@ -269,8 +271,8 @@ enum NativePopoverContent {
     Wrapped(CaptureSurfaceContent),
     Menu {
         surface: CaptureSurfaceContent,
-        proof_model: gtk4::gio::Menu,
-        original_model: RefCell<Option<gtk4::gio::MenuModel>>,
+        proof_model: Menu,
+        original_model: RefCell<Option<MenuModel>>,
         original_child_size: RefCell<Option<(gtk4::Widget, i32, i32)>>,
         original_scroll_layout: RefCell<Option<MenuScrollLayout>>,
     },
@@ -344,7 +346,7 @@ impl NativePopoverContent {
         let Ok(menu) = popover.clone().downcast::<gtk4::PopoverMenu>() else {
             return;
         };
-        let proof_model_object = proof_model.clone().upcast::<gtk4::gio::MenuModel>();
+        let proof_model_object = proof_model.clone().upcast::<MenuModel>();
         if menu.menu_model().as_ref() != Some(&proof_model_object) {
             // Keep the class-owned child's allocation while replacing its
             // model. The proof slot must not resize the native popup, and the
@@ -403,7 +405,7 @@ impl NativePopoverContent {
                 let Ok(menu) = popover.clone().downcast::<gtk4::PopoverMenu>() else {
                     return;
                 };
-                let proof_model_object = proof_model.clone().upcast::<gtk4::gio::MenuModel>();
+                let proof_model_object = proof_model.clone().upcast::<MenuModel>();
                 if menu.menu_model().as_ref() == Some(&proof_model_object) {
                     if surface.widget().parent().is_some() {
                         if let Some(slot) = surface.widget().parent() {
@@ -424,9 +426,9 @@ impl NativePopoverContent {
     }
 }
 
-fn capture_menu_proof_model() -> gtk4::gio::Menu {
-    let model = gtk4::gio::Menu::new();
-    let item = gtk4::gio::MenuItem::new(None, None);
+fn capture_menu_proof_model() -> Menu {
+    let model = Menu::new();
+    let item = MenuItem::new(None, None);
     item.set_attribute_value("custom", Some(&CAPTURE_MENU_PROOF_ID.to_variant()));
     model.append_item(&item);
     model

@@ -1,6 +1,22 @@
-use super::control_meta::*;
-use super::*;
+use crate::config::TopDisplayMode;
+
+use super::super::{
+    active_tool_in_shape_picker, layout_mode_label, semantic_icon_for_tool,
+    toolbar_item_id_for_tool,
+};
+use super::control_meta::{
+    TopToolbarControlId, TopToolbarControlRole, TopToolbarIcon, TopToolbarUtility, action_tooltip,
+    preset_accessible_label, preset_slot, preset_tooltip, tool_tooltip, utility_accessible_label,
+    utility_action, utility_event, utility_short_label,
+};
+use super::ids;
+use crate::config::{Action, action_label, action_short_label};
 use crate::i18n::{tr, trf};
+use crate::input::Tool;
+use crate::label_format::format_binding_label;
+use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopToolbarNode {
@@ -144,7 +160,7 @@ impl TopToolbarControl {
     pub(crate) fn event(self, snapshot: &ToolbarSnapshot) -> ToolbarEvent {
         match self {
             Self::Restore => ToolbarEvent::SetTopMinimized(false),
-            Self::MicroChip => ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Full),
+            Self::MicroChip => ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full),
             Self::DragHandle => ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
             Self::Tool(tool) => ToolbarEvent::SelectTool(tool),
             Self::ShapePicker => ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),

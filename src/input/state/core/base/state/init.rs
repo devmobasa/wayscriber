@@ -1,14 +1,23 @@
+use crate::config::PresenterModeConfig;
+use crate::input::state::UiVisibility;
+use crate::input::state::core::{
+    DrawingStyle, EyedropperUiState, HistoryLimits, RegionSelectUiState, ToolbarInteraction,
+};
+use crate::input::state::laser::LaserInk;
+use crate::render_profiles::RenderProfileSet;
+
+use super::super::super::selection::{SelectionClipboard, SelectionInteraction};
 use super::super::super::{
     BoardTransitions, CanvasIndex, ChromeModes, Keymap, PointerTracking, SessionFlags, ViewState,
-    selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
 use super::structs::InputState;
 use crate::config::BoardsConfig;
 use crate::draw::DirtyTracker;
+use crate::input::BoardManager;
+use crate::input::modifiers::Modifiers;
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::state::input_hud::{InputHudSettings, InputHudState};
-use crate::input::{BoardManager, modifiers::Modifiers};
 
 /// Runtime values needed to construct an [`InputState`].
 ///
@@ -17,14 +26,14 @@ use crate::input::{BoardManager, modifiers::Modifiers};
 /// cannot accidentally transpose same-typed positional arguments.
 #[derive(Clone)]
 pub(in crate::input::state) struct InputStateSeed {
-    pub(in crate::input::state) style: crate::input::state::core::DrawingStyle,
-    pub(in crate::input::state) ui_visibility: crate::input::state::UiVisibility,
+    pub(in crate::input::state) style: DrawingStyle,
+    pub(in crate::input::state) ui_visibility: UiVisibility,
     pub(in crate::input::state) boards_config: BoardsConfig,
     pub(in crate::input::state) keymap: Keymap,
     pub(in crate::input::state) canvas_index: CanvasIndex,
     pub(in crate::input::state) click_highlight_settings: ClickHighlightSettings,
-    pub(in crate::input::state) history_limits: crate::input::state::core::HistoryLimits,
-    pub(in crate::input::state) presenter_mode_config: crate::config::PresenterModeConfig,
+    pub(in crate::input::state) history_limits: HistoryLimits,
+    pub(in crate::input::state) presenter_mode_config: PresenterModeConfig,
 }
 
 impl InputState {
@@ -66,9 +75,9 @@ impl InputState {
             ui_visibility,
             zoom_chip: Default::default(),
             modes: ChromeModes::new(presenter_mode_config),
-            render_profiles: crate::render_profiles::RenderProfileSet::default(),
+            render_profiles: RenderProfileSet::default(),
             status_hud: Default::default(),
-            toolbar: crate::input::state::core::ToolbarInteraction::default(),
+            toolbar: ToolbarInteraction::default(),
             precision_entry: None,
             board_transitions: BoardTransitions::default(),
             dirty_tracker: DirtyTracker::new(),
@@ -76,7 +85,7 @@ impl InputState {
             pending_onboarding_usage: PendingOnboardingUsage::default(),
             zoom_action_anchor: None,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
-            laser: crate::input::state::laser::LaserInk::new(Default::default()),
+            laser: LaserInk::new(Default::default()),
             input_hud: InputHudState::new(InputHudSettings::default()),
             selection_interaction: SelectionInteraction::default(),
             context_menu: Default::default(),
@@ -87,8 +96,8 @@ impl InputState {
             ocr_scan: None,
             selection_clipboard: SelectionClipboard::default(),
             properties: Default::default(),
-            eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
-            region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,
+            eyedropper_ui_state: EyedropperUiState::Inactive,
+            region_select_ui_state: RegionSelectUiState::Inactive,
             preset_slots: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
             recognition_feedback: Default::default(),

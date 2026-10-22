@@ -5,11 +5,12 @@
 //! names are reserved and never stored as key names. Sequences use `>` between
 //! keyboard chords (`Ctrl+K > Ctrl+C`).
 
-use std::fmt;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::{fmt, mem, slice};
 
 use super::binding::{
-    ChordParts, KeyBinding, format_modifiers, parse_chord_parts, suggest_key_name,
+    ChordModifiers, ChordParts, KeyBinding, format_modifiers, parse_chord_parts, suggest_key_name,
 };
 
 /// Highest `MouseExtraN` index accepted in this release (`MouseExtra1`..=`MouseExtra4`).
@@ -57,6 +58,7 @@ impl PointerButton {
         Err(format!("Unknown mouse button `{name}`."))
     }
 
+    #[must_use]
     pub fn name(self) -> String {
         match self {
             Self::Back => "MouseBack".to_string(),
@@ -89,6 +91,7 @@ impl StylusButton {
         Err(format!("Unknown stylus button `{name}`."))
     }
 
+    #[must_use]
     pub fn name(self) -> &'static str {
         match self {
             Self::Primary => "StylusPrimary",
@@ -105,6 +108,19 @@ pub struct PointerTrigger {
     pub shift: bool,
     pub alt: bool,
     pub logo: bool,
+}
+
+impl PointerTrigger {
+    /// The modifier keys this trigger requires.
+    #[must_use]
+    pub fn modifiers(&self) -> ChordModifiers {
+        ChordModifiers {
+            ctrl: self.ctrl,
+            shift: self.shift,
+            alt: self.alt,
+            logo: self.logo,
+        }
+    }
 }
 
 impl PartialEq for PointerTrigger {
@@ -135,6 +151,19 @@ pub struct StylusTrigger {
     pub shift: bool,
     pub alt: bool,
     pub logo: bool,
+}
+
+impl StylusTrigger {
+    /// The modifier keys this trigger requires.
+    #[must_use]
+    pub fn modifiers(&self) -> ChordModifiers {
+        ChordModifiers {
+            ctrl: self.ctrl,
+            shift: self.shift,
+            alt: self.alt,
+            logo: self.logo,
+        }
+    }
 }
 
 impl PartialEq for StylusTrigger {
@@ -178,7 +207,7 @@ impl PartialEq for ShortcutTrigger {
 
 impl Hash for ShortcutTrigger {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(self).hash(state);
+        mem::discriminant(self).hash(state);
         match self {
             Self::Keyboard(binding) => binding.hash(state),
             Self::Pointer(trigger) => trigger.hash(state),
@@ -218,6 +247,7 @@ impl ShortcutTrigger {
         Ok(Self::Keyboard(key_binding_from_parts(parts)))
     }
 
+    #[must_use]
     pub fn as_key_binding(&self) -> Option<&KeyBinding> {
         match self {
             Self::Keyboard(binding) => Some(binding),
@@ -226,6 +256,7 @@ impl ShortcutTrigger {
     }
 
     /// Whether an input event can currently deliver this trigger.
+    #[must_use]
     pub fn is_deliverable(&self) -> bool {
         match self {
             Self::Keyboard(binding) => super::binding::is_deliverable_key_name(&binding.key),
@@ -237,6 +268,7 @@ impl ShortcutTrigger {
         }
     }
 
+    #[must_use]
     pub fn unknown_key_suggestion(&self) -> Option<String> {
         match self {
             Self::Keyboard(binding) => suggest_key_name(&binding.key),
@@ -244,6 +276,7 @@ impl ShortcutTrigger {
         }
     }
 
+    #[must_use]
     pub fn unknown_key_name(&self) -> Option<String> {
         match self {
             Self::Keyboard(binding) => Some(binding.key.clone()),
@@ -257,22 +290,12 @@ impl fmt::Display for ShortcutTrigger {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Keyboard(binding) => write!(f, "{binding}"),
-            Self::Pointer(trigger) => write_device_binding(
-                f,
-                trigger.ctrl,
-                trigger.shift,
-                trigger.alt,
-                trigger.logo,
-                &trigger.button.name(),
-            ),
-            Self::Stylus(trigger) => write_device_binding(
-                f,
-                trigger.ctrl,
-                trigger.shift,
-                trigger.alt,
-                trigger.logo,
-                trigger.button.name(),
-            ),
+            Self::Pointer(trigger) => {
+                write_device_binding(f, trigger.modifiers(), &trigger.button.name())
+            }
+            Self::Stylus(trigger) => {
+                write_device_binding(f, trigger.modifiers(), trigger.button.name())
+            }
         }
     }
 }
@@ -299,7 +322,7 @@ impl PartialEq for Shortcut {
 
 impl Hash for Shortcut {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(self).hash(state);
+        mem::discriminant(self).hash(state);
         match self {
             Self::Single(trigger) => trigger.hash(state),
             Self::Sequence(steps) => steps.hash(state),
@@ -340,6 +363,7 @@ impl Shortcut {
         parse_keyboard_sequence(&parts)
     }
 
+    #[must_use]
     pub fn as_trigger(&self) -> Option<&ShortcutTrigger> {
         match self {
             Self::Single(trigger) => Some(trigger),
@@ -352,9 +376,10 @@ impl Shortcut {
     }
 
     /// Keyboard chords that make up this shortcut, if it is keyboard-only.
+    #[must_use]
     pub fn keyboard_steps(&self) -> Option<&[KeyBinding]> {
         match self {
-            Self::Single(ShortcutTrigger::Keyboard(binding)) => Some(std::slice::from_ref(binding)),
+            Self::Single(ShortcutTrigger::Keyboard(binding)) => Some(slice::from_ref(binding)),
             Self::Sequence(steps) => Some(steps.as_slice()),
             Self::Single(_) => None,
         }
@@ -364,6 +389,7 @@ impl Shortcut {
     ///
     /// A standalone chord that starts a sequence, or a shorter sequence that
     /// starts a longer one, cannot be dispatched without delaying the prefix.
+    #[must_use]
     pub fn prefix_conflicts_with(&self, other: &Self) -> bool {
         let Some(left) = self.keyboard_steps() else {
             return false;
@@ -391,6 +417,7 @@ impl Shortcut {
         }
     }
 
+    #[must_use]
     pub fn is_deliverable(&self) -> bool {
         match self {
             Self::Single(trigger) => trigger.is_deliverable(),
@@ -400,6 +427,7 @@ impl Shortcut {
         }
     }
 
+    #[must_use]
     pub fn unknown_key_suggestion(&self) -> Option<String> {
         match self {
             Self::Single(trigger) => trigger.unknown_key_suggestion(),
@@ -407,6 +435,7 @@ impl Shortcut {
         }
     }
 
+    #[must_use]
     pub fn unknown_key_name(&self) -> Option<String> {
         match self {
             Self::Single(trigger) => trigger.unknown_key_name(),
@@ -417,10 +446,8 @@ impl Shortcut {
     }
 
     /// Action that already claims this identity or a keyboard prefix/extension.
-    pub fn claimed_by(
-        &self,
-        claimed: &std::collections::HashMap<Self, super::Action>,
-    ) -> Option<super::Action> {
+    #[must_use]
+    pub fn claimed_by(&self, claimed: &HashMap<Self, super::Action>) -> Option<super::Action> {
         if let Some(owner) = claimed.get(self) {
             return Some(*owner);
         }
@@ -485,13 +512,10 @@ fn parse_keyboard_sequence(parts: &[&str]) -> Result<Shortcut, String> {
 
 fn write_device_binding(
     f: &mut fmt::Formatter<'_>,
-    ctrl: bool,
-    shift: bool,
-    alt: bool,
-    logo: bool,
+    modifiers: ChordModifiers,
     name: &str,
 ) -> fmt::Result {
-    let mut parts = format_modifiers(ctrl, shift, alt, logo);
+    let mut parts = format_modifiers(modifiers);
     parts.push(name);
     write!(f, "{}", parts.join("+"))
 }
@@ -546,6 +570,7 @@ pub mod linux {
     pub const BTN_STYLUS: u32 = 0x14b;
     pub const BTN_STYLUS2: u32 = 0x14c;
 
+    #[must_use]
     pub fn pointer_button(code: u32) -> Option<PointerButton> {
         match code {
             BTN_SIDE | BTN_BACK => Some(PointerButton::Back),
@@ -558,6 +583,7 @@ pub mod linux {
         }
     }
 
+    #[must_use]
     pub fn stylus_button(code: u32) -> Option<StylusButton> {
         match code {
             BTN_STYLUS => Some(StylusButton::Primary),
@@ -575,6 +601,7 @@ pub mod linux {
 pub mod gdk {
     use super::{MAX_POINTER_EXTRA, PointerButton, StylusButton};
 
+    #[must_use]
     pub fn pointer_button(button: u32) -> Option<PointerButton> {
         match button {
             8 | 11 => Some(PointerButton::Back),
@@ -587,6 +614,7 @@ pub mod gdk {
     }
 
     /// Barrel buttons on a GDK tablet/pen source. Tip (1) is not bindable here.
+    #[must_use]
     pub fn stylus_button(button: u32) -> Option<StylusButton> {
         match button {
             2 => Some(StylusButton::Primary),

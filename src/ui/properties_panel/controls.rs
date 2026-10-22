@@ -1,6 +1,7 @@
 //! Painters for the properties panel's controls. Each takes the rectangles
 //! the panel geometry laid out, so drawing never re-derives a position.
 
+use std::f64::consts;
 use std::f64::consts::{PI, TAU};
 
 use cairo::FontWeight;
@@ -16,6 +17,7 @@ use crate::input::state::{
 };
 use crate::toolbar_icons::draw_arrow_style_preview;
 use crate::ui::primitives::{checkerboard_behind, draw_rounded_rect};
+use crate::ui::theme;
 use crate::ui::theme::overlay::{
     ACCENT_BRIGHT, ACCENT_PRIMARY, BG_HOVER, BG_HOVER_WASH, PANEL_BG_PROPERTIES, RADIUS_MD,
     RADIUS_SM, RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
@@ -34,7 +36,7 @@ const QUIET_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.16);
 /// A locked selection's padlock: the same amber the toolbar uses for "held".
 const LOCK_ACTIVE: Rgba = (0.965, 0.827, 0.176, 1.0);
 /// The stroke across the "no fill" swatch: the destructive red, as "none".
-const NO_FILL_STRIKE: Rgba = crate::ui::theme::rgba(crate::ui::theme::DESTRUCTIVE_RGB, 0.9);
+const NO_FILL_STRIKE: Rgba = theme::rgba(theme::DESTRUCTIVE_RGB, 0.9);
 /// How much of its color a control keeps while its row is locked.
 const DISABLED_ALPHA: f64 = 0.35;
 const GLYPH_WIDTH: f64 = 1.6;
@@ -213,7 +215,7 @@ fn draw_no_fill(ctx: &cairo::Context, rect: PanelRect, selected: bool, state: Co
     );
     ctx.set_line_width(1.5);
     let _ = ctx.stroke();
-    let reach = radius * std::f64::consts::FRAC_1_SQRT_2;
+    let reach = radius * consts::FRAC_1_SQRT_2;
     set_color(ctx, state.fade(NO_FILL_STRIKE));
     round_line(ctx, (cx - reach, cy + reach), (cx + reach, cy - reach));
     if selected {

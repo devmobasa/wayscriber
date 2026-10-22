@@ -16,6 +16,7 @@ pub enum SessionArtifactKind {
     UnreadableCopy,
 }
 
+#[must_use]
 pub fn named_session_artifact_kind(primary: &Path, path: &Path) -> Option<SessionArtifactKind> {
     let artifacts = named_session_artifact_paths(primary);
     let name = path.file_name()?;

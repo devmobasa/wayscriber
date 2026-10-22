@@ -11,8 +11,8 @@
 //! those layers each kept their own list, they disagreed: the pointer showed a
 //! resize arrow over a grip that a click would bend. Both now ask this.
 
-use crate::draw::ShapeId;
 use crate::draw::frame::ShapeSnapshot;
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::input::InputState;
 use crate::input::state::core::base::SelectionHandle;
 
@@ -39,7 +39,7 @@ impl InputState {
     /// loupe with the Spotlight tool still active.
     pub(crate) fn hit_idle_handle_with(
         &self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
     ) -> Option<IdleHandle> {

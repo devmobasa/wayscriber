@@ -1,3 +1,6 @@
+use crate::config::ConfigDocument;
+use crate::{config, test_temp};
+
 use super::*;
 
 /// The persistence fixture: hand-authored text the write must respect.
@@ -52,7 +55,7 @@ fn write_fixture(dir: &Path) -> PathBuf {
 /// otherwise byte-identical, comments and all.
 #[test]
 fn a_shortcut_write_changes_exactly_its_own_key() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
 
     persist_keybinding_edit_at(
@@ -76,7 +79,7 @@ fn a_shortcut_write_changes_exactly_its_own_key() {
 /// Unbind and reset write through the same one-key path.
 #[test]
 fn unbinding_and_resetting_also_change_exactly_their_own_key() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
 
     persist_keybinding_edit_at(&path, Action::SelectPenTool, &[])
@@ -112,7 +115,7 @@ fn unbinding_and_resetting_also_change_exactly_their_own_key() {
 
 #[test]
 fn a_shortcut_write_leaves_a_timestamped_backup() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
 
     let outcome = persist_keybinding_edit_at(
@@ -134,7 +137,7 @@ fn a_shortcut_write_leaves_a_timestamped_backup() {
 /// an action the file omitted has to come back explicit once it is written.
 #[test]
 fn a_written_shortcut_reloads_as_explicitly_authored() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
     assert!(
         !AUTHORED_FILE.contains("select_step_marker_tool"),
@@ -148,8 +151,7 @@ fn a_written_shortcut_reloads_as_explicitly_authored() {
     )
     .expect("the write should succeed");
 
-    let reloaded = crate::config::ConfigDocument::load_from_path(&path)
-        .expect("the written config should reload");
+    let reloaded = ConfigDocument::load_from_path(&path).expect("the written config should reload");
     assert!(
         reloaded
             .keybinding_authorship()
@@ -171,7 +173,7 @@ fn a_written_shortcut_reloads_as_explicitly_authored() {
 /// happened. Most actions are in this state: the file simply omits them.
 #[test]
 fn resetting_an_omitted_action_already_at_its_default_writes_nothing() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
     assert!(
         !AUTHORED_FILE.contains("select_marker_tool"),
@@ -211,7 +213,7 @@ fn resetting_an_omitted_action_already_at_its_default_writes_nothing() {
 /// build changing the shipped value.
 #[test]
 fn resetting_an_authored_shortcut_writes_the_default_and_reports_it() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
     let default = KeybindingsConfig::default()
         .bindings_for_action(Action::SelectPenTool)
@@ -243,7 +245,7 @@ fn resetting_an_authored_shortcut_writes_the_default_and_reports_it() {
 /// the caller reported a save failure over a file it had just changed.
 #[test]
 fn a_chord_claimed_on_disk_since_the_edit_is_refused_without_writing() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = config_in(temp.path());
     fs::write(&path, CLAIMED_ON_DISK_FILE).expect("the fixture should be written");
     assert!(
@@ -294,7 +296,7 @@ fn a_chord_claimed_on_disk_since_the_edit_is_refused_without_writing() {
 /// worker does with two of them, not how they got past the palette.
 #[test]
 fn an_overlapping_edit_onto_the_chord_the_first_took_is_refused_by_the_file() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
     let running = KeybindingsConfig::default();
     let contested = "Ctrl+Alt+Shift+X";
@@ -341,7 +343,7 @@ fn an_overlapping_edit_onto_the_chord_the_first_took_is_refused_by_the_file() {
 /// must not pin it into the file, in either direction.
 #[test]
 fn an_edit_leaves_the_omitted_default_that_stood_down_alone() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = config_in(temp.path());
     let authored = "[keybindings]\ntoggle_input_hud = [\"Ctrl+Z\"]\n";
     fs::write(&path, authored).expect("the fixture should be written");
@@ -366,7 +368,7 @@ fn an_edit_leaves_the_omitted_default_that_stood_down_alone() {
 fn a_read_only_config_fails_the_write_and_leaves_the_file_alone() {
     use std::os::unix::fs::PermissionsExt;
 
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
     // The file mode alone would not stop it: the write is an atomic
     // replace, so it is the directory that has to refuse the new entry
@@ -385,6 +387,7 @@ fn a_read_only_config_fails_the_write_and_leaves_the_file_alone() {
     fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o755)).expect("restore dir");
     fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("restore file");
 
+    // SAFETY: geteuid has no preconditions and cannot fail.
     if unsafe { libc::geteuid() } == 0 {
         // Root ignores these modes; the scenario cannot be staged.
         return;
@@ -406,7 +409,7 @@ fn a_read_only_config_fails_the_write_and_leaves_the_file_alone() {
 /// with the damage on screen — never as a side effect of a rebind.
 #[test]
 fn an_unparseable_config_is_refused_rather_than_rebuilt_from_defaults() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = config_in(temp.path());
     fs::write(&path, "[keybindings\nundo = broken").expect("the fixture should be written");
 
@@ -431,10 +434,10 @@ fn an_unparseable_config_is_refused_rather_than_rebuilt_from_defaults() {
 /// so this stages that save rather than trusting the wording.
 #[test]
 fn a_stale_document_is_recognised_and_retried() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = write_fixture(temp.path());
 
-    let document = crate::config::ConfigDocument::load_from_path(&path).expect("load");
+    let document = ConfigDocument::load_from_path(&path).expect("load");
     fs::write(&path, format!("{AUTHORED_FILE}\n# a second writer\n")).expect("outside write");
     let error = document
         .save_with_backup(document.config().clone())
@@ -464,13 +467,13 @@ fn a_stale_document_is_recognised_and_retried() {
 #[test]
 fn a_fresh_load_returns_the_written_shortcut() {
     with_temp_config_home(|config_root| {
-        let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+        let config_dir = config_root.join(config::PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).expect("test config directory");
         let path = config_dir.join("config.toml");
         fs::write(&path, AUTHORED_SHORTCUTS).expect("test config should be written");
 
         // Through the environment-resolved entry point the overlay calls,
-        // so the wiring from `Config::get_config_path` is covered too.
+        // so the wiring from `Config::config_path` is covered too.
         persist_keybinding_edit(Action::SelectPenTool, &["Ctrl+Alt+Shift+K".to_string()])
             .expect("the write should succeed");
 

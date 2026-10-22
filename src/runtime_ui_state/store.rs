@@ -52,7 +52,7 @@ impl RuntimeUiStateInspection {
             let (controller, incident) = RuntimeUiStateController::new_startup_unhealthy(
                 seeds,
                 self.observation,
-                RuntimeStateIoError::new("startup runtime-state file is malformed"),
+                &RuntimeStateIoError::new("startup runtime-state file is malformed"),
                 Vec::new(),
                 RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::Untouched),
             );

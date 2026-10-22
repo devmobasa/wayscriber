@@ -3,6 +3,7 @@ use std::f64::consts::PI;
 use crate::config::Action;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::InputState;
+use crate::label_format;
 use crate::ui::constants::{self, ICON_DRAG_HANDLE, ICON_SUBMENU_ARROW};
 use crate::ui::theme::Rgba;
 
@@ -55,7 +56,7 @@ pub(super) fn board_slot_hint(state: &InputState, index: usize) -> Option<String
     let label = state.action_binding_label(action);
     // The unbound sentinel stays in the source language: it is compared, never
     // drawn, so it is not translated and needs no catalog entry.
-    if label == crate::label_format::NOT_BOUND_LABEL {
+    if label == label_format::NOT_BOUND_LABEL {
         None
     } else {
         Some(label)

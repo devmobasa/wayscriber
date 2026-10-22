@@ -2,11 +2,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use std::env;
+use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use crate::domain::Language;
 use crate::env_vars::{LANGUAGE_OVERRIDE_ENV, XDG_CONFIG_HOME_ENV};
 use crate::test_temp::TempDir;
+use crate::{i18n, test_env};
 
 /// Runs `f` with a fresh config home, and with the UI language under the
 /// test's control: loading a config at startup selects its `[ui] language`,
@@ -16,17 +20,17 @@ pub(crate) fn with_temp_config_home<F, T>(f: F) -> T
 where
     F: FnOnce(&Path) -> T,
 {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
     let temp = TempDir::new().expect("tempdir");
     let _restore = RestoreConfigHome {
-        config_home: std::env::var_os(XDG_CONFIG_HOME_ENV),
-        language_override: std::env::var_os(LANGUAGE_OVERRIDE_ENV),
-        language: crate::i18n::language(),
+        config_home: env::var_os(XDG_CONFIG_HOME_ENV),
+        language_override: env::var_os(LANGUAGE_OVERRIDE_ENV),
+        language: i18n::language(),
     };
     // SAFETY: tests serialize process environment access and restore the previous value.
     unsafe {
-        std::env::set_var(XDG_CONFIG_HOME_ENV, temp.path());
-        std::env::remove_var(LANGUAGE_OVERRIDE_ENV);
+        env::set_var(XDG_CONFIG_HOME_ENV, temp.path());
+        env::remove_var(LANGUAGE_OVERRIDE_ENV);
     }
 
     f(temp.path())
@@ -34,9 +38,9 @@ where
 
 /// What [`with_temp_config_home`] changed, put back on drop.
 struct RestoreConfigHome {
-    config_home: Option<std::ffi::OsString>,
-    language_override: Option<std::ffi::OsString>,
-    language: crate::domain::Language,
+    config_home: Option<OsString>,
+    language_override: Option<OsString>,
+    language: Language,
 }
 
 impl Drop for RestoreConfigHome {
@@ -48,13 +52,13 @@ impl Drop for RestoreConfigHome {
                 (LANGUAGE_OVERRIDE_ENV, self.language_override.take()),
             ] {
                 match value {
-                    Some(value) => std::env::set_var(key, value),
-                    None => std::env::remove_var(key),
+                    Some(value) => env::set_var(key, value),
+                    None => env::remove_var(key),
                 }
             }
         }
         // The override is back, so restore the resolved language directly.
-        crate::i18n::restore_language(self.language);
+        i18n::restore_language(self.language);
     }
 }
 

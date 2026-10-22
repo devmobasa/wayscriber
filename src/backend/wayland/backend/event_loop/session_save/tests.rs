@@ -1,20 +1,29 @@
+use std::fs;
+
+use crate::config::Config;
+use crate::draw::TextMeasurer;
+use crate::input::MouseButton;
+use crate::test_temp;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::backend::wayland::session::{PersistenceController, PersistenceOperation};
 use crate::config::Action;
 use crate::draw::Shape;
-use crate::input::state::{SpotlightWheelOutcome, test_support::make_test_input_state};
+use crate::input::state::SpotlightWheelOutcome;
+use crate::input::state::test_support::make_test_input_state;
 use crate::session::SaveSnapshotOutcome;
 use std::path::PathBuf;
 
 #[test]
 fn clean_failed_initial_load_exits_without_a_save_failure_or_a_source_write() {
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = session::SessionOptions::new(temp.path().to_path_buf(), "failed-startup");
     options.persist_transparent = true;
     options.set_named_file_target(temp.path().join("failed.wayscriber-session"));
-    std::fs::write(options.session_file_path(), b"unreadable").unwrap();
-    std::fs::write(
+    fs::write(options.session_file_path(), b"unreadable").unwrap();
+    fs::write(
         session::append_path_suffix(
             &options.session_file_path(),
             ".corrupt-18446744073709551615",
@@ -22,7 +31,7 @@ fn clean_failed_initial_load_exits_without_a_save_failure_or_a_source_write() {
         b"occupied",
     )
     .unwrap();
-    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    let mut fixture = HandlerFixture::new(Config::default());
     fixture.state.session = SessionState::new(Some(options.clone()));
     fixture
         .state
@@ -31,7 +40,7 @@ fn clean_failed_initial_load_exits_without_a_save_failure_or_a_source_write() {
     assert!(!fixture.state.session.is_dirty());
     persist_session(&mut fixture.state).unwrap();
     assert_eq!(
-        std::fs::read(options.session_file_path()).unwrap(),
+        fs::read(options.session_file_path()).unwrap(),
         b"unreadable"
     );
     assert!(!options.backup_file_path().exists());
@@ -50,14 +59,14 @@ fn drawings_a_never_loaded_session_refuses_are_saved_beside_it_at_exit() {
 
 fn assert_refused_drawings_are_saved_beside_the_session(worker_lost: bool, oversized: bool) {
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = session::SessionOptions::new(temp.path().to_path_buf(), "failed-startup");
     options.persist_transparent = true;
     options.set_named_file_target(temp.path().join("failed.wayscriber-session"));
     options.compression = session::CompressionMode::Off;
     options.max_file_size_bytes = 4096;
-    std::fs::write(options.session_file_path(), b"unreadable").unwrap();
-    std::fs::write(
+    fs::write(options.session_file_path(), b"unreadable").unwrap();
+    fs::write(
         session::append_path_suffix(
             &options.session_file_path(),
             ".corrupt-18446744073709551615",
@@ -65,7 +74,7 @@ fn assert_refused_drawings_are_saved_beside_the_session(worker_lost: bool, overs
         b"occupied",
     )
     .unwrap();
-    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    let mut fixture = HandlerFixture::new(Config::default());
     fixture.state.session = SessionState::new(Some(options.clone()));
     fixture
         .state
@@ -75,9 +84,9 @@ fn assert_refused_drawings_are_saved_beside_the_session(worker_lost: bool, overs
     for stroke in 0..strokes {
         let y = 100 + stroke;
         let input = &mut fixture.state.input_state;
-        input.on_mouse_press(crate::input::MouseButton::Left, 600, y);
+        input.on_mouse_press(MouseButton::Left, 600, y);
         input.on_mouse_motion(620, y + 20);
-        input.on_mouse_release(crate::input::MouseButton::Left, 620, y + 20);
+        input.on_mouse_release(MouseButton::Left, 620, y + 20);
     }
     if worker_lost {
         fixture
@@ -107,7 +116,7 @@ fn assert_refused_drawings_are_saved_beside_the_session(worker_lost: bool, overs
     assert_eq!(kept.boards[0].pages.pages[0].shapes.len(), strokes as usize);
     assert_eq!(saved.recovery, oversized.then(|| side.recovery_file_path()));
     assert_eq!(
-        std::fs::read(options.session_file_path()).unwrap(),
+        fs::read(options.session_file_path()).unwrap(),
         b"unreadable",
         "the session that never loaded is not written"
     );
@@ -136,20 +145,22 @@ fn final_save_does_not_retry_through_an_unhealthy_worker() {
 
 #[test]
 fn pointer_and_stylus_both_gate_persistence_transitions() {
-    assert!(persistence_interaction_active(
-        true, false, false, false, false, false
-    ));
-    assert!(persistence_interaction_active(
-        false, false, false, false, false, true
-    ));
+    assert!(persistence_interaction_active(PersistenceInteractions {
+        input: true,
+        ..PersistenceInteractions::default()
+    }));
+    assert!(persistence_interaction_active(PersistenceInteractions {
+        stylus_tip: true,
+        ..PersistenceInteractions::default()
+    }));
     assert!(!persistence_interaction_active(
-        false, false, false, false, false, false
+        PersistenceInteractions::default()
     ));
 }
 
 #[test]
 fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = make_test_input_state();
     input.boards.active_frame_mut().add_shape(Shape::Spotlight {
@@ -188,8 +199,8 @@ fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
 
 #[test]
 fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -216,10 +227,10 @@ fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
     options.persist_transparent = true;
     options.persist_history = true;
     let snapshot = input
-        .snapshot_for_persistence_with(&crate::draw::TextMeasurer::default(), &options)
+        .snapshot_for_persistence_with(&TextMeasurer::default(), &options)
         .expect("changed loupe snapshot");
     let mut restored = make_test_input_state();
-    crate::session::apply_snapshot(&mut restored, snapshot, &options);
+    session::apply_snapshot(&mut restored, snapshot, &options);
     restored.handle_action_with_resources(test_text_resources, Action::Undo);
     let Shape::Spotlight { magnification, .. } = restored
         .boards
@@ -374,7 +385,7 @@ fn record_autosave_failure_notifies_only_once_until_saved() {
     options.autosave_interval = Duration::from_millis(1);
     options.autosave_failure_backoff = Duration::from_millis(50);
 
-    let mut state = crate::backend::wayland::session::SessionState::new(Some(options.clone()));
+    let mut state = SessionState::new(Some(options.clone()));
     let now = Instant::now();
     state.record_input_dirty(now, true);
 
@@ -395,7 +406,7 @@ fn record_autosave_success_clears_dirty_state_when_saved() {
     options.autosave_idle = Duration::from_millis(1);
     options.autosave_interval = Duration::from_millis(1);
 
-    let mut state = crate::backend::wayland::session::SessionState::new(Some(options.clone()));
+    let mut state = SessionState::new(Some(options.clone()));
     state.commit_output_options(state.options().unwrap().clone(), true);
     let now = Instant::now();
     state.record_input_dirty(now, true);

@@ -17,9 +17,12 @@ impl Tool {
 
     pub(crate) fn finish_polygon_stroke(
         self,
-        snapshot: PolygonStrokeSnapshot,
+        snapshot: &PolygonStrokeSnapshot,
     ) -> FinishedToolStroke {
-        debug_assert_eq!(self, snapshot.tool);
+        debug_assert_eq!(
+            self, snapshot.tool,
+            "finish a polygon stroke with the tool that captured its snapshot"
+        );
         let Some(template) = self.polygon_template() else {
             debug_assert!(false, "non-polygon tool cannot finish a polygon stroke");
             return FinishedToolStroke::Noop;
@@ -29,9 +32,12 @@ impl Tool {
 
     pub(crate) fn provisional_polygon_stroke(
         self,
-        snapshot: PolygonProvisionalSnapshot,
+        snapshot: &PolygonProvisionalSnapshot,
     ) -> ProvisionalToolStroke<'static> {
-        debug_assert_eq!(self, snapshot.tool);
+        debug_assert_eq!(
+            self, snapshot.tool,
+            "preview a polygon stroke with the tool that captured its snapshot"
+        );
         let Some(template) = self.polygon_template() else {
             debug_assert!(false, "non-polygon tool cannot preview a polygon stroke");
             return ProvisionalToolStroke::None;
@@ -41,7 +47,7 @@ impl Tool {
 }
 
 fn finish_polygon(
-    snapshot: PolygonStrokeSnapshot,
+    snapshot: &PolygonStrokeSnapshot,
     usage: ToolUsage,
     template: PolygonTemplate,
 ) -> FinishedToolStroke {
@@ -69,7 +75,7 @@ fn finish_polygon(
 }
 
 fn provisional_polygon(
-    snapshot: PolygonProvisionalSnapshot,
+    snapshot: &PolygonProvisionalSnapshot,
     template: PolygonTemplate,
 ) -> ProvisionalToolStroke<'static> {
     let points = generated_points(

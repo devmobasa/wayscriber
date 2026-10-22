@@ -8,9 +8,8 @@
 
 use crate::env_vars::ICON_THEME_PATH_ENV;
 use crate::paths;
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 /// The `IconThemePath` to advertise.
 ///
@@ -62,16 +61,20 @@ fn installed_icon_theme_path(exe_path: &Path, standard_icon_dirs: &[PathBuf]) ->
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix;
+
+    use crate::test_temp;
+
     use super::installed_icon_theme_path;
     use std::fs;
 
     #[test]
     fn installed_icon_dir_is_withheld_when_hosts_already_search_it() {
-        let root = crate::test_temp::tempdir().unwrap();
+        let root = test_temp::tempdir().unwrap();
         let share = root.path().join("usr/share");
         fs::create_dir_all(share.join("icons")).unwrap();
         let linked_share = root.path().join("linked-share");
-        std::os::unix::fs::symlink(&share, &linked_share).unwrap();
+        unix::fs::symlink(&share, &linked_share).unwrap();
         let exe = root.path().join("usr/bin/wayscriber");
 
         assert_eq!(
@@ -86,7 +89,7 @@ mod tests {
 
     #[test]
     fn installed_icon_dir_is_advertised_for_a_private_prefix() {
-        let root = crate::test_temp::tempdir().unwrap();
+        let root = test_temp::tempdir().unwrap();
         let private_icons = root.path().join("opt/wayscriber/share/icons");
         let system_icons = root.path().join("usr/share/icons");
         fs::create_dir_all(&private_icons).unwrap();

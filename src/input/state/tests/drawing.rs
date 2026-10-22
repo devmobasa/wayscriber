@@ -1,3 +1,10 @@
+use std::f64::consts;
+
+use crate::draw::{PolygonKind, TextMeasurer, shape};
+use crate::input::DragTool;
+use crate::ui_text::UiTextEngine;
+use crate::util::Rect;
+
 use super::*;
 use crate::draw::BlurStyle;
 use crate::input::{DragBinding, DragButtonBindings, DragToolBindings};
@@ -99,7 +106,7 @@ fn live_shape_strokes_preview_and_commit_lines_and_circles() {
 
     state.on_mouse_press(MouseButton::Left, 120, 80);
     for index in 1..=32 {
-        let angle = std::f64::consts::TAU * f64::from(index) / 32.0;
+        let angle = consts::TAU * f64::from(index) / 32.0;
         state.on_mouse_motion(
             80 + (40.0 * angle.cos()).round() as i32,
             80 + (40.0 * angle.sin()).round() as i32,
@@ -229,7 +236,7 @@ fn live_shape_previews_and_commits_hand_drawn_rectangles_and_ovals() {
     state.style.shape_recognition_sensitivity = 0;
     state.on_mouse_press(MouseButton::Left, 260, 80);
     for index in 1..=32 {
-        let angle = std::f64::consts::TAU * f64::from(index) / 32.0;
+        let angle = consts::TAU * f64::from(index) / 32.0;
         state.on_mouse_motion(
             200 + (60.0 * angle.cos()).round() as i32,
             80 + (35.0 * angle.sin()).round() as i32,
@@ -303,7 +310,7 @@ fn live_shape_sensitivity_controls_rough_closed_shapes() {
     ];
     let oval: Vec<_> = (0..=32)
         .map(|index| {
-            let angle = std::f64::consts::TAU * f64::from(index) / 32.0;
+            let angle = consts::TAU * f64::from(index) / 32.0;
             let wobble = 1.0 + 0.13 * (3.0 * angle).sin();
             (
                 200 + (50.0 * wobble * angle.cos()).round() as i32,
@@ -449,7 +456,7 @@ fn regular_polygon_drag_stores_concrete_points_and_side_metadata() {
     let shape = &state.boards.active_frame().shapes[0].shape;
     match shape {
         Shape::Polygon {
-            kind: crate::draw::PolygonKind::Regular { sides },
+            kind: PolygonKind::Regular { sides },
             points,
             ..
         } => {
@@ -462,7 +469,7 @@ fn regular_polygon_drag_stores_concrete_points_and_side_metadata() {
     assert!(state.set_polygon_sides(3));
     match &state.boards.active_frame().shapes[0].shape {
         Shape::Polygon {
-            kind: crate::draw::PolygonKind::Regular { sides },
+            kind: PolygonKind::Regular { sides },
             points,
             ..
         } => {
@@ -497,7 +504,7 @@ fn invalid_drag_polygon_tools_do_not_commit_ghost_shapes() {
 fn alt_click_selects_filled_polygon_interior() {
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Polygon {
-        kind: crate::draw::PolygonKind::Triangle,
+        kind: PolygonKind::Triangle,
         points: vec![(10, 10), (40, 10), (25, 40)],
         fill: true,
         fill_color: None,
@@ -524,7 +531,7 @@ fn freeform_polygon_double_click_finishes_without_duplicate_vertex() {
     assert!(matches!(state.state, DrawingState::Idle));
     match &state.boards.active_frame().shapes[0].shape {
         Shape::Polygon {
-            kind: crate::draw::PolygonKind::Freeform,
+            kind: PolygonKind::Freeform,
             points,
             ..
         } => assert_eq!(points, &vec![(0, 0), (20, 0), (20, 20)]),
@@ -534,7 +541,7 @@ fn freeform_polygon_double_click_finishes_without_duplicate_vertex() {
 
 #[test]
 fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
 
@@ -556,7 +563,7 @@ fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
 
 #[test]
 fn freeform_polygon_commit_records_first_stroke_onboarding() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
@@ -580,7 +587,7 @@ fn freeform_polygon_preview_dirty_has_antialias_padding() {
     let DrawingState::BuildingPolygon { thick, .. } = state.state else {
         panic!("expected polygon building state");
     };
-    let base = crate::draw::shape::bounding_box_for_points(&[(10, 10), (20, 20)], thick)
+    let base = shape::bounding_box_for_points(&[(10, 10), (20, 20)], thick)
         .expect("preview should have bounds");
     assert_eq!(
         state.provisional_bounds(),
@@ -603,11 +610,11 @@ fn append_path_motion_dirties_only_new_tail_segment() {
     state.on_mouse_motion(30, 10);
     let dirty = state.take_dirty_regions();
     let thick = state.thickness_for_tool(Tool::Pen);
-    let tail_bounds = crate::draw::shape::bounding_box_for_points(&[(20, 10), (30, 10)], thick)
+    let tail_bounds = shape::bounding_box_for_points(&[(20, 10), (30, 10)], thick)
         .expect("tail segment should have bounds");
-    let full_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
+    let full_bounds = shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
         .expect("full provisional stroke should have bounds");
-    let head_probe = crate::util::Rect::new(10, 10, 1, 1).unwrap();
+    let head_probe = Rect::new(10, 10, 1, 1).unwrap();
 
     assert!(
         dirty
@@ -640,9 +647,8 @@ fn append_path_long_diagonal_motion_splits_tail_damage() {
     state.on_mouse_motion(900, 900);
     let dirty = state.take_dirty_regions();
     let thick = state.thickness_for_tool(Tool::Pen);
-    let full_tail_bounds =
-        crate::draw::shape::bounding_box_for_points(&[(10, 10), (900, 900)], thick)
-            .expect("long tail segment should have bounds");
+    let full_tail_bounds = shape::bounding_box_for_points(&[(10, 10), (900, 900)], thick)
+        .expect("long tail segment should have bounds");
 
     assert!(
         dirty.len() > 1,
@@ -675,9 +681,8 @@ fn append_path_long_diagonal_release_splits_finished_path_damage() {
     state.on_mouse_release(MouseButton::Left, 900, 900);
     let dirty = state.take_dirty_regions();
     let thick = state.thickness_for_tool(Tool::Pen);
-    let full_path_bounds =
-        crate::draw::shape::bounding_box_for_points(&[(10, 10), (900, 900)], thick)
-            .expect("long finished path should have bounds");
+    let full_path_bounds = shape::bounding_box_for_points(&[(10, 10), (900, 900)], thick)
+        .expect("long finished path should have bounds");
 
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
     assert_eq!(state.provisional_bounds(), None);
@@ -727,13 +732,13 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     let _ = state.take_dirty_regions();
 
     state.on_mouse_press(MouseButton::Left, 10, 100);
-    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 32.0);
+    state.set_pressure_thickness_for_active_tool_with(&TextMeasurer::default(), 32.0);
     state.on_mouse_motion(900, 100);
     let wide_preview_bounds = state
         .provisional_bounds()
         .expect("wide pressure preview should track cleanup bounds");
-    let wide_only_probe = crate::util::Rect::new(450, wide_preview_bounds.y, 1, 1).unwrap();
-    let final_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 100), (900, 100)], 2.0)
+    let wide_only_probe = Rect::new(450, wide_preview_bounds.y, 1, 1).unwrap();
+    let final_bounds = shape::bounding_box_for_points(&[(10, 100), (900, 100)], 2.0)
         .expect("final freehand should have bounds");
     assert!(
         !test_rects_intersect(final_bounds, wide_only_probe),
@@ -741,7 +746,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     );
     let _ = state.take_dirty_regions();
 
-    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 2.0);
+    state.set_pressure_thickness_for_active_tool_with(&TextMeasurer::default(), 2.0);
     let _ = state.take_dirty_regions();
     state.on_mouse_release(MouseButton::Left, 900, 100);
     let dirty = state.take_dirty_regions();
@@ -807,10 +812,10 @@ fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
     let old_full_bounds = state
         .provisional_bounds()
         .expect("initial pressure preview should have bounds");
-    let old_only_probe = crate::util::Rect::new(10, old_full_bounds.y, 1, 1).unwrap();
+    let old_only_probe = Rect::new(10, old_full_bounds.y, 1, 1).unwrap();
     let _ = state.take_dirty_regions();
 
-    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 2.0);
+    state.set_pressure_thickness_for_active_tool_with(&TextMeasurer::default(), 2.0);
     state.on_mouse_motion(30, 10);
     let dirty = state.take_dirty_regions();
 
@@ -836,13 +841,12 @@ fn marker_size_increase_updates_accumulated_cleanup_bounds() {
     assert!(state.set_thickness(32.0));
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
+    state.cancel_active_interaction_with(&TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let marker_width = (32.0f64 * 1.35).max(32.0 + 1.0);
-    let expanded_bounds =
-        crate::draw::shape::bounding_box_for_points(&[(10, 10), (20, 10)], marker_width)
-            .expect("expanded marker preview should have bounds");
-    let expanded_only_probe = crate::util::Rect::new(10, expanded_bounds.y, 1, 1).unwrap();
+    let expanded_bounds = shape::bounding_box_for_points(&[(10, 10), (20, 10)], marker_width)
+        .expect("expanded marker preview should have bounds");
+    let expanded_only_probe = Rect::new(10, expanded_bounds.y, 1, 1).unwrap();
 
     assert!(
         dirty
@@ -867,11 +871,11 @@ fn eraser_size_increase_updates_accumulated_cleanup_bounds() {
     assert!(state.set_eraser_size(32.0));
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
+    state.cancel_active_interaction_with(&TextMeasurer::default());
     let dirty = state.take_dirty_regions();
-    let expanded_bounds = crate::draw::shape::bounding_box_for_eraser(&[(10, 10), (20, 10)], 32.0)
+    let expanded_bounds = shape::bounding_box_for_eraser(&[(10, 10), (20, 10)], 32.0)
         .expect("expanded eraser preview should have bounds");
-    let expanded_only_probe = crate::util::Rect::new(10, expanded_bounds.y, 1, 1).unwrap();
+    let expanded_only_probe = Rect::new(10, expanded_bounds.y, 1, 1).unwrap();
 
     assert!(
         dirty
@@ -893,10 +897,10 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
     state.on_mouse_motion(30, 10);
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
+    state.cancel_active_interaction_with(&TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let thick = state.thickness_for_tool(Tool::Pen);
-    let full_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
+    let full_bounds = shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
         .expect("full provisional stroke should have bounds");
 
     assert!(
@@ -910,12 +914,12 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
 
 #[test]
 fn freeform_polygon_freezes_style_on_first_click() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
     let original = state.style.current_color;
-    let changed = crate::draw::Color {
+    let changed = Color {
         r: 0.0,
         g: 0.0,
         b: 1.0,
@@ -1078,7 +1082,7 @@ fn drag_binding_color_overrides_stroke_without_changing_current_color() {
         a: 1.0,
     };
     let mut bindings = DragToolBindings::default();
-    bindings.right.drag = DragBinding::new(crate::input::DragTool::Pen, Some(blue));
+    bindings.right.drag = DragBinding::new(DragTool::Pen, Some(blue));
     assert!(state.set_drag_tool_bindings(bindings));
 
     state.on_mouse_press(MouseButton::Right, 0, 0);
@@ -1094,8 +1098,8 @@ fn drag_binding_color_overrides_stroke_without_changing_current_color() {
 
 #[test]
 fn toggle_click_highlight_action_changes_state() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -1149,8 +1153,8 @@ fn toolbar_select_highlight_sticks_when_highlight_is_active_via_modifier() {
 
 #[test]
 fn highlight_tool_prevents_drawing() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -1244,10 +1248,10 @@ fn provisional_shape_readout_excludes_freehand_and_non_size_badge_tools() {
     let mut state = create_test_input_state();
 
     // A single Shape Pen point is still ink, so it has no readout either.
-    for tool in Tool::ALL
+    let tools_without_readout = Tool::ALL
         .into_iter()
-        .filter(|tool| !matches!(tool, Tool::Rect | Tool::Ellipse))
-    {
+        .filter(|tool| !matches!(tool, Tool::Rect | Tool::Ellipse));
+    for tool in tools_without_readout {
         state.state = DrawingState::Drawing {
             tool,
             start_x: 10,
@@ -1263,7 +1267,7 @@ fn provisional_shape_readout_excludes_freehand_and_non_size_badge_tools() {
     assert_eq!(state.provisional_shape_readout(40, 70), None);
 }
 
-fn test_rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {
+fn test_rects_intersect(a: Rect, b: Rect) -> bool {
     let a_right = a.x.saturating_add(a.width);
     let a_bottom = a.y.saturating_add(a.height);
     let b_right = b.x.saturating_add(b.width);

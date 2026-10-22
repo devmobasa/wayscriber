@@ -11,8 +11,8 @@ pub enum NotificationError {
     Delivery(String),
 }
 
-impl std::fmt::Display for NotificationError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for NotificationError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unavailable => formatter.write_str("desktop notifications are unavailable"),
             Self::Delivery(message) => formatter.write_str(message),
@@ -20,12 +20,14 @@ impl std::fmt::Display for NotificationError {
     }
 }
 
-impl std::error::Error for NotificationError {}
+impl error::Error for NotificationError {}
 
 #[cfg(feature = "dbus")]
 mod real {
     use std::collections::HashMap;
 
+    use tokio::runtime::Handle;
+    use zbus::zvariant::Value;
     use zbus::{Connection, proxy};
 
     use super::NotificationError;
@@ -59,7 +61,7 @@ mod real {
             summary: &str,
             body: &str,
             actions: Vec<&str>,
-            hints: HashMap<&str, zbus::zvariant::Value<'_>>,
+            hints: HashMap<&str, Value<'_>>,
             expire_timeout: i32,
         ) -> zbus::Result<u32>;
     }
@@ -109,7 +111,7 @@ mod real {
     }
 
     pub fn send_notification_async(
-        runtime_handle: &tokio::runtime::Handle,
+        runtime_handle: &Handle,
         summary: String,
         body: String,
         icon: Option<String>,
@@ -123,7 +125,7 @@ mod real {
     }
 
     pub fn send_notification_with_timeout_async(
-        runtime_handle: &tokio::runtime::Handle,
+        runtime_handle: &Handle,
         summary: String,
         body: String,
         icon: Option<String>,
@@ -142,6 +144,8 @@ mod real {
 
 #[cfg(not(feature = "dbus"))]
 mod real {
+    use tokio::runtime::Handle;
+
     use super::NotificationError;
 
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
@@ -165,7 +169,7 @@ mod real {
 
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
     pub fn send_notification_async(
-        _runtime_handle: &tokio::runtime::Handle,
+        _runtime_handle: &Handle,
         _summary: String,
         _body: String,
         _icon: Option<String>,
@@ -175,7 +179,7 @@ mod real {
 
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
     pub fn send_notification_with_timeout_async(
-        _runtime_handle: &tokio::runtime::Handle,
+        _runtime_handle: &Handle,
         _summary: String,
         _body: String,
         _icon: Option<String>,
@@ -185,6 +189,9 @@ mod real {
     }
 }
 
+use std::fmt::{Display, Formatter};
+use std::{error, fmt};
+
 #[allow(unused_imports)]
 pub use real::{
     send_notification, send_notification_async, send_notification_with_timeout,
@@ -193,11 +200,13 @@ pub use real::{
 
 #[cfg(all(test, not(feature = "dbus")))]
 mod tests {
+    use tokio::runtime::Builder;
+
     use super::*;
 
     #[test]
     fn notification_without_dbus_reports_unavailable() {
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        let runtime = Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("test runtime");

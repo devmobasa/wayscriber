@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_capture_active_window, default_capture_clipboard_full,
+    default_capture_clipboard_region, default_capture_clipboard_selection,
+    default_capture_file_full, default_capture_file_region, default_capture_file_selection,
+    default_capture_full_screen, default_capture_region_interactive, default_capture_selection,
+    default_copy_text_from_screen, default_export_all_boards_pdf_file,
+    default_export_board_pdf_file, default_export_canvas_clipboard,
+    default_export_canvas_clipboard_and_file, default_export_canvas_file, default_measure_mode,
+    default_open_capture_folder,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

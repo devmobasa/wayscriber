@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::*;
 
 fn button(
@@ -142,7 +144,7 @@ fn buttons_wrap_instead_of_leaving_a_narrow_card() {
     for hit in &layout.buttons {
         assert!(hit.x + hit.width <= layout.x + layout.width, "{hit:?}");
     }
-    let rows: std::collections::BTreeSet<i64> = layout
+    let rows: BTreeSet<i64> = layout
         .buttons
         .iter()
         .map(|hit| hit.y.round() as i64)

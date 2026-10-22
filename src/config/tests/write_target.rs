@@ -25,6 +25,12 @@
 //! checked is carried down to the rename, which refuses to land on any other.
 //! Both are stale sources, and both are recovered the same way: reload, reapply.
 
+use std::ffi::OsStr;
+use std::process;
+
+use crate::input::Tool;
+use crate::{session, test_temp};
+
 use super::super::io::{is_stale_source_error, persist_preset_slot_at};
 use super::super::{ColorSpec, ConfigDocument, ToolPresetConfig};
 use crate::domain::Color;
@@ -48,7 +54,7 @@ setting_from_a_later_release = 7
 fn preset(name: &str) -> ToolPresetConfig {
     ToolPresetConfig {
         name: Some(name.to_string()),
-        tool: crate::input::Tool::Pen,
+        tool: Tool::Pen,
         color: ColorSpec::from(Color {
             r: 0.13,
             g: 0.27,
@@ -120,7 +126,7 @@ fn hold_config_write_lock(destination: &Path) -> File {
     let destination = &fs::canonicalize(destination).expect("a fixture this test created");
     let name = destination
         .file_name()
-        .and_then(std::ffi::OsStr::to_str)
+        .and_then(OsStr::to_str)
         .expect("the fixture path this test built has a file name");
     let path = destination.with_file_name(format!("{name}.lock"));
     let file = OpenOptions::new()
@@ -130,7 +136,7 @@ fn hold_config_write_lock(destination: &Path) -> File {
         .truncate(false)
         .open(&path)
         .expect("the lock file beside a fixture this test created");
-    crate::session::try_lock_exclusive(&file)
+    session::try_lock_exclusive(&file)
         .expect("nothing else can hold the lock on a directory this test just made");
     file
 }
@@ -153,7 +159,7 @@ struct RelativeRoot {
 
 impl RelativeRoot {
     fn new(label: &str) -> Self {
-        let name = format!("wayscriber-test-{label}-{}", std::process::id());
+        let name = format!("wayscriber-test-{label}-{}", process::id());
         let absolute = fs::canonicalize(".")
             .expect("the working directory this suite was started in")
             .join(&name);
@@ -188,7 +194,7 @@ impl Drop for RelativeRoot {
 /// file's contents.
 #[test]
 fn a_retarget_after_the_last_check_still_writes_the_file_the_window_was_about() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     const BYSTANDER: &str = "# A file this save has nothing to do with.\n";
     let fixture = linked(temp.path(), BYSTANDER);
 
@@ -245,7 +251,7 @@ fn a_retarget_after_the_last_check_still_writes_the_file_the_window_was_about() 
 /// reapplying onto the file that is there now is exactly the right recovery.
 #[test]
 fn a_file_swapped_in_under_the_checked_name_is_refused_rather_than_overwritten() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     const REPLACEMENT: &str = "# Another editor's file, left at the same name.\n";
     let directory = temp.path().join("swapped");
     fs::create_dir_all(&directory).expect("the fixture directory this test named");
@@ -319,7 +325,7 @@ fn a_file_swapped_in_under_the_checked_name_is_refused_rather_than_overwritten()
 /// the edit on top of what the other editor wrote.
 #[test]
 fn an_in_place_change_after_the_last_check_is_refused_and_reapplied() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     const REPLACEMENT: &str = "\
 # Another editor rewrote this same file in place.\n\
 [ui]\n\
@@ -375,7 +381,7 @@ show_status_bar = false\n";
 /// do; overwriting would spend their file to say this one succeeded.
 #[test]
 fn a_file_created_under_a_missing_name_during_the_window_is_refused() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     const FIRST_WRITE: &str = "# Somebody else's first config, written just now.\n";
     let path = temp.path().join("fresh/config.toml");
 
@@ -426,7 +432,7 @@ fn a_file_created_under_a_missing_name_during_the_window_is_refused() {
 /// editors' reload-and-reapply retry recognises.
 #[test]
 fn a_retarget_to_identical_bytes_is_still_a_stale_source() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let fixture = linked(temp.path(), ORIGINAL);
 
     let document = ConfigDocument::load_from_path(&fixture.link).expect("load through the link");
@@ -477,7 +483,7 @@ fn a_retarget_to_identical_bytes_is_still_a_stale_source() {
 /// editors already run must then land the edit on the profile in force.
 #[test]
 fn a_retargeted_parent_directory_is_a_stale_source_the_retry_reapplies_through() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let first = temp.path().join("profileA");
     let second = temp.path().join("profileB");
     fs::create_dir_all(&first).expect("the first profile this test named");
@@ -550,7 +556,7 @@ fn a_retargeted_parent_directory_is_a_stale_source_the_retry_reapplies_through()
 /// on disk.
 #[test]
 fn a_path_with_no_links_on_it_is_written_exactly_where_it_was_named() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let directory = temp.path().join("plain");
     fs::create_dir_all(&directory).expect("the fixture directory this test named");
     let path = directory.join("config.toml");
@@ -603,7 +609,7 @@ fn a_path_with_no_links_on_it_is_written_exactly_where_it_was_named() {
 /// as the thing that changed it.
 #[test]
 fn a_second_save_through_the_document_the_first_returned_is_not_a_change_on_disk() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("config.toml");
     fs::write(&path, ORIGINAL).expect("the fixture this test named");
 
@@ -643,7 +649,7 @@ fn a_second_save_through_the_document_the_first_returned_is_not_a_change_on_disk
 /// disk. The deepest ancestor that does exist is what both derivations agree on.
 #[test]
 fn a_first_save_into_a_directory_that_does_not_exist_yet_is_not_a_change_on_disk() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("not-made-yet/wayscriber/config.toml");
 
     let document = ConfigDocument::load_from_path(&path).expect("a missing config loads defaults");
@@ -676,7 +682,7 @@ fn a_first_save_into_a_directory_that_does_not_exist_yet_is_not_a_change_on_disk
 /// back — the editor that never reloads.
 #[test]
 fn a_dot_dot_below_a_missing_directory_saves_twice_without_reporting_itself() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("missing/../target/config.toml");
 
     let document = ConfigDocument::load_from_path(&path).expect("a missing config loads defaults");
@@ -711,7 +717,7 @@ fn a_dot_dot_below_a_missing_directory_saves_twice_without_reporting_itself() {
 /// which is what the kernel does with it too.
 #[test]
 fn a_dot_dot_climbing_past_the_existing_ancestor_pins_where_the_save_creates_it() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let inner = temp.path().join("inner");
     fs::create_dir_all(&inner).expect("the deepest directory this test lets exist");
     let path = inner.join("missing/../../outside/config.toml");
@@ -796,7 +802,7 @@ fn a_relative_path_with_no_existing_ancestor_saves_twice_without_reporting_itsel
 /// every byte it had.
 #[test]
 fn an_edit_that_waits_for_the_lock_reapplies_onto_the_retargeted_file() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     const REPLACEMENT: &str = "# The file the link points at by the time the editor wakes.\n";
     let fixture = linked(temp.path(), REPLACEMENT);
 
@@ -840,11 +846,11 @@ fn an_edit_that_waits_for_the_lock_reapplies_onto_the_retargeted_file() {
 /// through the file, and one without leaves no trace of the field.
 #[test]
 fn a_preset_keeps_its_fill_color_through_the_config_file() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("config.toml");
     fs::write(&path, ORIGINAL).expect("seed config");
     let mut filled = preset("Filled");
-    filled.tool = crate::input::Tool::Rect;
+    filled.tool = Tool::Rect;
     filled.fill_enabled = Some(true);
     filled.fill_color = Some(ColorSpec::from(Color {
         r: 0.0,
@@ -859,6 +865,6 @@ fn a_preset_keeps_its_fill_color_through_the_config_file() {
     let written = fs::read_to_string(&path).expect("readable");
     assert_eq!(written.matches("fill_color").count(), 1, "{written}");
     let loaded: super::super::Config = toml::from_str(&written).expect("parse");
-    assert_eq!(loaded.presets.get_slot(1), Some(&filled));
-    assert_eq!(loaded.presets.get_slot(2), Some(&preset("Plain")));
+    assert_eq!(loaded.presets.slot(1), Some(&filled));
+    assert_eq!(loaded.presets.slot(2), Some(&preset("Plain")));
 }

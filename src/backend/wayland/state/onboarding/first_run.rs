@@ -1,9 +1,14 @@
+use std::fmt::Display;
+use std::mem;
+
 use crate::backend::wayland::state::WaylandState;
-use crate::config::{RadialMenuMouseBinding, keybindings::Action};
+use crate::config::RadialMenuMouseBinding;
+use crate::config::keybindings::Action;
+use crate::daemon::setup;
 use crate::draw::DirtyFullReason;
 use crate::i18n::{tr, trf};
-use crate::input::state::{Toast, ToastPriority};
-use crate::input::{DrawingState, Key, state::PendingOnboardingUsage};
+use crate::input::state::{PendingOnboardingUsage, Toast, ToastPriority};
+use crate::input::{DrawingState, Key};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 use crate::ui::OnboardingCardAction;
 
@@ -58,7 +63,7 @@ impl WaylandState {
         }
 
         if enable {
-            match crate::daemon::setup::setup_background_mode() {
+            match setup::setup_background_mode() {
                 Ok(summary) => {
                     mark_background_mode_prompt(
                         self.preferences.onboarding_mut().state_mut(),
@@ -207,18 +212,18 @@ impl WaylandState {
         {
             return false;
         }
-        !first_run_card_hidden_by_ui_state(
-            self.input_state.presenter_mode_active(),
-            self.input_state.command_palette.is_open(),
-            self.input_state.help_overlay.is_visible(),
-            self.input_state.is_radial_menu_open(),
-            self.input_state.is_context_menu_open(),
-            self.zoom.is_engaged(),
-        )
+        !first_run_card_hidden_by_ui_state(FirstRunCardUiState {
+            presenter_mode: self.input_state.presenter_mode_active(),
+            command_palette_open: self.input_state.command_palette.is_open(),
+            show_help: self.input_state.help_overlay.is_visible(),
+            radial_menu_open: self.input_state.is_radial_menu_open(),
+            context_menu_open: self.input_state.is_context_menu_open(),
+            zoom_engaged: self.zoom.is_engaged(),
+        })
     }
 
     pub(super) fn apply_first_run_progress(&mut self) {
-        let usage = std::mem::take(&mut self.input_state.pending_onboarding_usage);
+        let usage = mem::take(&mut self.input_state.pending_onboarding_usage);
         let environment = FirstRunEnvironment {
             context_enabled: self.input_state.context_menu_enabled(),
             radial_binding: self.input_state.radial_menu.mouse_binding(),
@@ -272,7 +277,7 @@ impl WaylandState {
     }
 }
 
-fn background_mode_setup_failed_message(err: &dyn std::fmt::Display) -> String {
+fn background_mode_setup_failed_message(err: &dyn Display) -> String {
     trf(
         "Background mode setup failed: {}. You can set this up later in Background Mode settings.",
         &[err],
@@ -355,14 +360,7 @@ pub(super) fn advance_first_run_steps(
                 FirstRunStep::QuickAccess
             }
             FirstRunStep::QuickAccess => {
-                if !quick_access_completed(
-                    state,
-                    environment.context_enabled,
-                    environment.radial_binding,
-                    environment.radial_available,
-                    environment.context_keyboard_available,
-                    environment.toolbar_visible,
-                ) {
+                if !quick_access_completed(state, environment) {
                     break;
                 }
                 state.quick_access_requires_toolbar = false;
@@ -440,26 +438,22 @@ pub(super) fn color_thickness_completed(state: &OnboardingState) -> bool {
 
 pub(super) fn quick_access_completed(
     state: &OnboardingState,
-    context_enabled: bool,
-    radial_binding: RadialMenuMouseBinding,
-    radial_available: bool,
-    context_keyboard_available: bool,
-    toolbar_visible: bool,
+    environment: FirstRunEnvironment,
 ) -> bool {
     let mut done = true;
-    if radial_available {
+    if environment.radial_available {
         done &= state.used_radial_menu;
     }
     done &= quick_access_context_done(
         state,
-        context_enabled,
-        radial_binding,
-        radial_available,
-        context_keyboard_available,
+        environment.context_enabled,
+        environment.radial_binding,
+        environment.radial_available,
+        environment.context_keyboard_available,
     );
 
     if state.quick_access_requires_toolbar {
-        done &= toolbar_visible || state.used_toolbar_toggle;
+        done &= environment.toolbar_visible || state.used_toolbar_toggle;
     }
 
     done
@@ -572,18 +566,22 @@ pub(super) fn first_run_holds_toolbar(state: &OnboardingState) -> bool {
     state.first_run_active() || state.sessions_seen <= 1
 }
 
-pub(super) fn first_run_card_hidden_by_ui_state(
-    presenter_mode: bool,
-    command_palette_open: bool,
-    show_help: bool,
-    radial_menu_open: bool,
-    context_menu_open: bool,
-    zoom_engaged: bool,
-) -> bool {
-    presenter_mode
-        || command_palette_open
-        || show_help
-        || radial_menu_open
-        || context_menu_open
-        || zoom_engaged
+/// Overlay UI that takes the screen from the first-run card while it shows.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct FirstRunCardUiState {
+    pub(super) presenter_mode: bool,
+    pub(super) command_palette_open: bool,
+    pub(super) show_help: bool,
+    pub(super) radial_menu_open: bool,
+    pub(super) context_menu_open: bool,
+    pub(super) zoom_engaged: bool,
+}
+
+pub(super) fn first_run_card_hidden_by_ui_state(ui: FirstRunCardUiState) -> bool {
+    ui.presenter_mode
+        || ui.command_palette_open
+        || ui.show_help
+        || ui.radial_menu_open
+        || ui.context_menu_open
+        || ui.zoom_engaged
 }

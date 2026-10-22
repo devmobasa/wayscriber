@@ -6,6 +6,7 @@
 //! inline fallback (overlay-layer canvas on niri/sway, forced inline)
 //! would cover separate GTK surfaces just the same.
 
+use std::env;
 use std::sync::OnceLock;
 
 use crate::config::{Config, ToolbarBackendKind};
@@ -97,7 +98,7 @@ fn parse_backend_env(raw: &str) -> Option<ToolbarBackendKind> {
 fn backend_env_override() -> Option<ToolbarBackendKind> {
     static OVERRIDE: OnceLock<Option<ToolbarBackendKind>> = OnceLock::new();
     *OVERRIDE.get_or_init(|| {
-        std::env::var(TOOLBAR_BACKEND_ENV)
+        env::var(TOOLBAR_BACKEND_ENV)
             .ok()
             .and_then(|raw| parse_backend_env(&raw))
     })

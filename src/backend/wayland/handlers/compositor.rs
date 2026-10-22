@@ -2,10 +2,8 @@
 // can throttle rendering; invoked by smithay through the delegate in `mod.rs`.
 use log::{debug, info};
 use smithay_client_toolkit::compositor::CompositorHandler;
-use wayland_client::{
-    Connection, Dispatch, QueueHandle,
-    protocol::{wl_callback, wl_output, wl_surface},
-};
+use wayland_client::protocol::{wl_callback, wl_output, wl_surface};
+use wayland_client::{Connection, Dispatch, QueueHandle};
 
 use super::super::state::{FullDamageReason, WaylandState};
 use super::super::surface::MainSurfaceFrameCallback;
@@ -154,13 +152,15 @@ impl CompositorHandler for WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+
     use super::*;
     use crate::backend::wayland::frozen::FrozenImage;
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
 
     #[test]
     fn reenter_and_neighbour_leave_preserve_installed_freeze_and_zoom() {
-        let mut fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 2);
+        let mut fixture = HandlerFixture::with_outputs(Config::default(), 2);
         let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
         let qh = fixture.queue.handle();
         let surface = fixture.state.surface.wl_surface().unwrap().clone();

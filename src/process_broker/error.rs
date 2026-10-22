@@ -1,4 +1,5 @@
-use std::fmt;
+use std::io::ErrorKind;
+use std::{error, fmt, io};
 
 use serde::{Deserialize, Serialize};
 
@@ -28,10 +29,10 @@ impl BrokerError {
         }
     }
 
-    pub(super) fn spawn(error: std::io::Error) -> anyhow::Error {
+    pub(super) fn spawn(error: io::Error) -> anyhow::Error {
         let kind = match error.kind() {
-            std::io::ErrorKind::NotFound => BrokerErrorKind::MissingExecutable,
-            std::io::ErrorKind::PermissionDenied => BrokerErrorKind::Denied,
+            ErrorKind::NotFound => BrokerErrorKind::MissingExecutable,
+            ErrorKind::PermissionDenied => BrokerErrorKind::Denied,
             _ => BrokerErrorKind::Rejected,
         };
         anyhow::Error::new(error).context(Self::new(kind, "broker helper spawn failed"))
@@ -44,7 +45,7 @@ impl fmt::Display for BrokerError {
     }
 }
 
-impl std::error::Error for BrokerError {}
+impl error::Error for BrokerError {}
 
 pub(crate) fn error_kind(error: &anyhow::Error) -> Option<BrokerErrorKind> {
     error.downcast_ref::<BrokerError>().map(|error| error.kind)

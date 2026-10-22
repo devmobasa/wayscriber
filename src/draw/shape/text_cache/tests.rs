@@ -1,3 +1,5 @@
+use crate::draw;
+
 use super::*;
 
 fn measurement(width: f64) -> TextMeasurement {
@@ -52,7 +54,7 @@ fn hit_test_result_is_always_a_char_boundary() {
 
 #[test]
 fn caret_geometry_advances_left_to_right_and_has_height() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     let start = measurer
         .caret_geometry_text("hello", "Sans 20", None, 0)
         .unwrap();
@@ -69,7 +71,7 @@ fn caret_geometry_advances_left_to_right_and_has_height() {
 
 #[test]
 fn caret_geometry_works_on_empty_text() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     // An empty buffer still needs a visible caret at the origin.
     let geom = measurer
         .caret_geometry_text("", "Sans 20", None, 0)
@@ -80,7 +82,7 @@ fn caret_geometry_works_on_empty_text() {
 
 #[test]
 fn caret_geometry_snaps_off_boundary_indices_down() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     // Byte 2 is inside the 3-byte '你'; it must resolve like byte 0, not panic.
     let at_zero = measurer
         .caret_geometry_text("你a", "Sans 20", None, 0)
@@ -93,7 +95,7 @@ fn caret_geometry_snaps_off_boundary_indices_down() {
 
 #[test]
 fn test_cache_returns_same_measurement() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     let text = "Hello World";
     let font = "Sans 12";
 
@@ -113,7 +115,7 @@ fn test_cache_returns_same_measurement() {
 
 #[test]
 fn test_different_sizes_use_different_cache_keys() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     // Verify that measurements for different sizes are cached with different keys
     // by checking that both requests succeed (cache doesn't confuse them)
     let text = "Test";
@@ -190,14 +192,14 @@ fn test_insert_existing_key_updates_cached_measurement() {
 
 #[test]
 fn test_empty_text_returns_none() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     let result = measurer.measure("", "Sans 12", 12.0, None);
     assert!(result.is_none());
 }
 
 #[test]
 fn test_wrap_width_affects_cache_key() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = draw::TextMeasurer::default();
     let text = "A very long text that would wrap";
     let font = "Sans 12";
 

@@ -10,8 +10,7 @@
 //! blur tools already use for their variants.
 
 use super::InputState;
-use crate::draw::TextMeasurer;
-use crate::draw::{FontDescriptor, families_match};
+use crate::draw::{FontDescriptor, TextMeasurer, families_match};
 use crate::i18n::{tr, trf};
 
 impl InputState {
@@ -112,6 +111,8 @@ const FONT_CYCLE_TOAST_SOURCE: &str = "font-cycle";
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::Color;
+
     use super::*;
     use crate::draw::Shape;
     use crate::input::state::test_support::make_test_input_state;
@@ -170,7 +171,7 @@ mod tests {
 
     #[test]
     fn an_empty_list_turns_the_action_off_rather_than_panicking() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.set_font_cycle(Vec::new());
 
@@ -180,7 +181,7 @@ mod tests {
 
     #[test]
     fn cycling_with_nothing_selected_sets_what_the_next_label_uses() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = state_with_cycle();
         let before = state.style.font_descriptor.family.clone();
 
@@ -197,14 +198,14 @@ mod tests {
 
     #[test]
     fn cycling_with_text_selected_restyles_that_text_and_leaves_the_tool_alone() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = state_with_cycle();
         let tool_font = state.style.font_descriptor.family.clone();
         let id = state.boards.active_frame_mut().add_shape(Shape::Text {
             x: 10,
             y: 10,
             text: "hello".to_string(),
-            color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+            color: Color::new(1.0, 1.0, 1.0, 1.0),
             size: 24.0,
             font_descriptor: FontDescriptor::new(
                 "Sans".to_string(),
@@ -234,7 +235,7 @@ mod tests {
 
     #[test]
     fn a_selection_with_no_text_in_it_falls_through_to_the_tool_font() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = state_with_cycle();
         let before = state.style.font_descriptor.family.clone();
         let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -244,7 +245,7 @@ mod tests {
             h: 10,
             fill: false,
             fill_color: None,
-            color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+            color: Color::new(1.0, 1.0, 1.0, 1.0),
             thick: 2.0,
         });
         state.set_selection(vec![id]);

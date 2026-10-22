@@ -200,7 +200,7 @@ impl InputState {
                 );
 
                 if self.boards.active_board_id() != active_id_before {
-                    self.finish_board_transition_from(current_spec, &active_id_before, false);
+                    self.finish_board_transition_from(&current_spec, &active_id_before, false);
                 } else {
                     self.mark_board_surface_changed();
                 }
@@ -274,7 +274,7 @@ impl InputState {
             } => {
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
                 self.queue_board_identity_available(&restored_id);
-                self.finish_board_transition_from(current_spec, &current_id, false);
+                self.finish_board_transition_from(&current_spec, &current_id, false);
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",

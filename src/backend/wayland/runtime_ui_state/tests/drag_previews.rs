@@ -1,8 +1,10 @@
+use crate::test_temp;
+
 use super::*;
 
 #[test]
 fn item_drag_commit_accepts_one_revision_and_cancel_accepts_none() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -109,7 +111,7 @@ fn unavailable_persistence_position_drag_cancel_restores_starting_offsets() {
 
 #[test]
 fn persistence_barrier_blocks_updates_without_consuming_untouched_drag_sessions() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -148,7 +150,7 @@ fn persistence_barrier_blocks_updates_without_consuming_untouched_drag_sessions(
 
 #[test]
 fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config_a = Config::default();
     let mut input = input_from_config(&config_a);
@@ -164,7 +166,7 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
     assert!(input.start_toolbar_item_drag(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN,));
     assert!(input.drag_toolbar_item_over(ToolbarItemOrderGroup::TopTools, 5));
 
-    let mut config_b = config_a.clone();
+    let mut config_b = config_a;
     assert!(config_b.ui.toolbar.items.move_item_to_index(
         ToolbarItemOrderGroup::TopTools,
         ids::TOP_TOOL_PEN,
@@ -179,8 +181,8 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -210,8 +212,8 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
     config_c.ui.toolbar.top_offset = 100.0;
     config_c.ui.toolbar.top_offset_y = 101.0;
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_c,
         &mut input,
         &mut positions,
@@ -227,7 +229,7 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
 
 #[test]
 fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scope() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config_a = Config::default();
     let original_top = (
@@ -244,8 +246,8 @@ fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scop
     config_b.ui.toolbar.top_minimized = !config_b.ui.toolbar.top_minimized;
 
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -266,7 +268,7 @@ fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scop
 
 #[test]
 fn release_during_barrier_is_consumed_once_and_never_replayed() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -302,7 +304,7 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
         id: reset.id,
         error: RuntimeStateIoError::new("test reset failure"),
         active: Some(RuntimeStateSourceObservation::missing(
-            reset.expected_source.clone(),
+            reset.expected_source,
         )),
         recovery_artifacts: Vec::new(),
         path_effect: RuntimeStateFailurePathEffect::Known(
@@ -312,8 +314,8 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
     let drain = runtime.drain_writer_completions();
     assert_eq!(drain.rollbacks.len(), 1);
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &drain.rollbacks[0],
@@ -341,7 +343,7 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
 
 #[test]
 fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     assert!(config.ui.toolbar.top_pinned);
@@ -396,8 +398,8 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     assert!(drain.rebuild_live);
     assert!(drain.rollbacks.is_empty());
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
     );

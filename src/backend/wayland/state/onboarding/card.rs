@@ -7,6 +7,7 @@
 //! button when the release lands on the same button.
 
 use crate::backend::wayland::state::WaylandState;
+use crate::draw::DirtyFullReason;
 use crate::ui::{OnboardingCardAction, OnboardingCardLayout, OnboardingCardPress};
 
 /// The rectangles painted this frame, the hovered button, and the stylus
@@ -135,7 +136,7 @@ impl WaylandState {
         // Hover only recolors a button, and the card repaints as a whole.
         self.input_state
             .dirty_tracker
-            .mark_full_for(crate::draw::DirtyFullReason::FirstRunOnboarding);
+            .mark_full_for(DirtyFullReason::FirstRunOnboarding);
         self.input_state.needs_redraw = true;
     }
 

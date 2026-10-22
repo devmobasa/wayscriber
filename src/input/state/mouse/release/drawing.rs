@@ -1,8 +1,11 @@
+use std::time::Instant;
+
 use log::warn;
 
-use crate::draw::Shape;
+use crate::draw;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::shape::bounding_box_for_points;
+use crate::draw::{Shape, TextMeasurer};
 use crate::input::tool::{
     FinishedToolStroke, PolygonStrokeSnapshot, ToolStrokeSnapshot, ToolUsage,
 };
@@ -20,7 +23,7 @@ pub(super) struct DrawingRelease {
 
 pub(super) fn finish_drawing(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     tool: Tool,
     release: DrawingRelease,
 ) {
@@ -59,7 +62,7 @@ pub(super) fn finish_drawing(
             fill_enabled: state.style.fill_enabled,
             regular_sides: state.style.polygon_sides,
         };
-        tool.finish_polygon_stroke(snapshot)
+        tool.finish_polygon_stroke(&snapshot)
     } else {
         let snapshot = ToolStrokeSnapshot {
             tool,
@@ -226,12 +229,12 @@ fn follow_committed_stroke(
 ) {
     state.record_first_stroke_done_for_onboarding();
     if recognized {
-        state.show_recognition_chip(shape, bounds, std::time::Instant::now());
+        state.show_recognition_chip(shape, bounds, Instant::now());
     }
     if matches!(
         shape,
         Shape::Spotlight { magnification, .. }
-            if crate::draw::spotlight_magnification_is_active(*magnification)
+            if draw::spotlight_magnification_is_active(*magnification)
     ) {
         state.request_spotlight_magnifier_feedback();
     }
@@ -363,6 +366,10 @@ fn append_segment_damage_regions(
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::shape;
+    use crate::input::MouseButton;
+    use crate::util::Rect;
+
     use super::raw_preview_damage_regions;
     use crate::draw::Shape;
     use crate::input::Tool;
@@ -407,11 +414,11 @@ mod tests {
         let path = shaky_path();
         let first = path[0];
         let last = *path.last().unwrap();
-        state.on_mouse_press(crate::input::MouseButton::Left, first.0, first.1);
+        state.on_mouse_press(MouseButton::Left, first.0, first.1);
         for &(x, y) in &path[1..] {
             state.on_mouse_motion(x, y);
         }
-        state.on_mouse_release(crate::input::MouseButton::Left, last.0, last.1);
+        state.on_mouse_release(MouseButton::Left, last.0, last.1);
 
         let shape = state
             .boards
@@ -467,23 +474,23 @@ mod tests {
     }
 
     /// Draw the shaky path at `level` and return the damage the release left.
-    fn damage_after_drawing(level: u8) -> Vec<crate::util::Rect> {
+    fn damage_after_drawing(level: u8) -> Vec<Rect> {
         let mut state = make_test_input_state();
         state.set_pen_smoothing(level);
         state.set_tool_override(Some(Tool::Pen));
         let path = shaky_path();
         let first = path[0];
         let last = *path.last().unwrap();
-        state.on_mouse_press(crate::input::MouseButton::Left, first.0, first.1);
+        state.on_mouse_press(MouseButton::Left, first.0, first.1);
         for &(x, y) in &path[1..] {
             state.on_mouse_motion(x, y);
         }
         let _ = state.take_dirty_regions();
-        state.on_mouse_release(crate::input::MouseButton::Left, last.0, last.1);
+        state.on_mouse_release(MouseButton::Left, last.0, last.1);
         state.take_dirty_regions()
     }
 
-    fn covers(regions: &[crate::util::Rect], x: i32, y: i32) -> bool {
+    fn covers(regions: &[Rect], x: i32, y: i32) -> bool {
         regions.iter().any(|rect| rect.contains(x, y))
     }
 
@@ -507,7 +514,7 @@ mod tests {
         // on a long diagonal stroke is most of the screen.
         let regions = damage_after_drawing(6);
         let path = shaky_path();
-        let full = crate::draw::shape::bounding_box_for_points(&path, 64.0).unwrap();
+        let full = shape::bounding_box_for_points(&path, 64.0).unwrap();
 
         assert!(
             !regions.iter().any(|rect| rect.width >= full.width

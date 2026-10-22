@@ -1,3 +1,7 @@
+use std::process;
+
+use crate::durable_io;
+
 use super::{
     DaemonToggleCommand, DaemonToggleCommands, DaemonToggleEnvelope, DaemonToggleRequest,
     MAX_DAEMON_TOGGLE_REQUEST_AGE, current_unix_millis,
@@ -12,7 +16,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub(super) fn clear_file(path: &std::path::Path) -> Result<()> {
+pub(super) fn clear_file(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
@@ -110,7 +114,7 @@ fn clear_legacy_command_files() -> Result<()> {
     }
 }
 
-fn next_daemon_toggle_request_path() -> Result<std::path::PathBuf> {
+fn next_daemon_toggle_request_path() -> Result<PathBuf> {
     let dir = daemon_command_dir();
     fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create runtime directory {}", dir.display()))?;
@@ -118,7 +122,7 @@ fn next_daemon_toggle_request_path() -> Result<std::path::PathBuf> {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    Ok(dir.join(format!("{:032x}-{:08x}.json", stamp, std::process::id())))
+    Ok(dir.join(format!("{:032x}-{:08x}.json", stamp, process::id())))
 }
 
 fn daemon_toggle_response_path_for_request(path: &Path) -> Result<PathBuf> {
@@ -131,12 +135,12 @@ fn daemon_toggle_response_path_for_request(path: &Path) -> Result<PathBuf> {
     Ok(parent.join("responses").join(file_name))
 }
 
-pub(super) fn write_file_atomic(path: &std::path::Path, payload: &[u8]) -> Result<()> {
+pub(super) fn write_file_atomic(path: &Path, payload: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create runtime directory {}", parent.display()))?;
     }
-    crate::durable_io::write_atomic(path, payload, AtomicWriteOptions::private_runtime_file())
+    durable_io::write_atomic(path, payload, AtomicWriteOptions::private_runtime_file())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 

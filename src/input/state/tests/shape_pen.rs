@@ -1,3 +1,9 @@
+use std::f64::consts;
+
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+use crate::util::Rect;
+
 use super::*;
 use crate::config::ToolbarLayoutMode;
 use crate::input::tool::ProvisionalToolStroke;
@@ -43,13 +49,13 @@ fn release_at_end(state: &mut InputState, path: &[(i32, i32)]) {
     state.on_mouse_release(MouseButton::Left, last.0, last.1);
 }
 
-fn overlaps(a: crate::util::Rect, b: crate::util::Rect) -> bool {
+fn overlaps(a: Rect, b: Rect) -> bool {
     a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
 fn run_action(state: &mut InputState, action: Action) {
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     state.handle_action_with_resources(
         crate::input::state::InputTextResources {
             measurer: &measurer,
@@ -95,8 +101,8 @@ fn overlapping_ovals_keep_their_preview_and_commit_as_ellipses() {
                     let end = samples * 3 / 2;
                     let path: Vec<_> = (0..=end)
                         .map(|step| {
-                            let angle = start
-                                + direction * std::f64::consts::TAU * step as f64 / samples as f64;
+                            let angle =
+                                start + direction * consts::TAU * step as f64 / samples as f64;
                             let sway = wobble * (7.0 * angle).sin();
                             (
                                 (200.0 + (rx + sway) * angle.cos()).round() as i32,
@@ -322,7 +328,7 @@ fn recognized_preview_keeps_a_faint_copy_of_the_ink_underneath() {
     // The preview paints the ink as well as the shape, so the damage it
     // reports must cover every ink point.
     let bounds = preview
-        .bounds_with(&crate::draw::TextMeasurer::default())
+        .bounds_with(&TextMeasurer::default())
         .expect("preview bounds");
     for &(x, y) in &RECTANGLE {
         assert!(bounds.contains(x, y), "({x}, {y}) outside {bounds:?}");
@@ -373,9 +379,8 @@ fn preview_damage_and_readout_share_one_recognition_per_point() {
 
 #[test]
 fn ink_previews_damage_only_their_new_tail() {
-    let near_start = crate::util::Rect::new(0, 0, 12, 12).expect("probe");
-    let touches_start =
-        |dirty: &[crate::util::Rect]| dirty.iter().any(|rect| overlaps(*rect, near_start));
+    let near_start = Rect::new(0, 0, 12, 12).expect("probe");
+    let touches_start = |dirty: &[Rect]| dirty.iter().any(|rect| overlaps(*rect, near_start));
 
     // A sawtooth is neither a line nor a closed shape, so it stays ink.
     let mut state = shape_pen_state();
@@ -391,7 +396,7 @@ fn ink_previews_damage_only_their_new_tail() {
     // A recognized rectangle can move anywhere, so its whole preview repaints,
     // including the corner farthest from the new segment.
     let mut state = shape_pen_state();
-    let far_corner = crate::util::Rect::new(106, 86, 8, 8).expect("probe");
+    let far_corner = Rect::new(106, 86, 8, 8).expect("probe");
     draw_path(&mut state, &RECTANGLE[..RECTANGLE.len() - 1]);
     let _ = state.take_dirty_regions();
     state.on_mouse_motion(10, 10);
@@ -433,7 +438,7 @@ fn releasing_as_ink_repaints_where_the_shape_preview_was() {
     );
 
     // The preview's left edge sat on x = 40, outside the ink.
-    let left_edge = crate::util::Rect::new(37, 75, 3, 10).expect("probe");
+    let left_edge = Rect::new(37, 75, 3, 10).expect("probe");
     let dirty = state.take_dirty_regions();
     assert!(
         dirty.iter().any(|rect| overlaps(*rect, left_edge)),

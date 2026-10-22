@@ -7,7 +7,7 @@ use wayscriber::i18n::{tr, trf};
 
 use crate::models::{
     DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment,
-    LightShortcutApplyCapability, ShortcutBackend,
+    LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,
 };
 
 use command::command_available;
@@ -139,7 +139,7 @@ pub(super) fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, S
         read_portal_shortcut_dropin_state(),
         portal_runtime_supported,
     );
-    let shortcut_apply_capability = crate::models::ShortcutApplyCapability::from_environment(
+    let shortcut_apply_capability = ShortcutApplyCapability::from_environment(
         desktop,
         gsettings_available,
         systemctl_available,

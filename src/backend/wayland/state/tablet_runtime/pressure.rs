@@ -1,6 +1,9 @@
+use crate::input::DrawingState;
+
 use super::TabletState;
 use crate::draw::TextMeasurer;
-use crate::input::{InputState, tablet::try_apply_pressure_to_state_with};
+use crate::input::InputState;
+use crate::input::tablet::try_apply_pressure_to_state_with;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland) enum StylusDownAdmission {
@@ -55,7 +58,7 @@ impl TabletState {
             || !self.is_canvas_gesture()
             || input.screen_modal_is_active()
             || input.command_palette_is_engaged()
-            || !matches!(input.state, crate::input::DrawingState::Drawing { .. })
+            || !matches!(input.state, DrawingState::Drawing { .. })
             || pressure == 0
         {
             return;
@@ -84,11 +87,13 @@ impl TabletState {
 
 #[cfg(test)]
 mod tests {
+    use std::mem;
+
     use super::*;
     use crate::backend::wayland::state::contact_owner::ContactOwner;
-    use crate::input::{
-        MouseButton, state::test_support::make_test_input_state, tablet::TabletSettings,
-    };
+    use crate::input::MouseButton;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::tablet::TabletSettings;
 
     #[test]
     fn a_hard_strip_tap_cannot_change_tool_thickness_or_the_next_light_canvas_stroke() {
@@ -122,7 +127,7 @@ mod tests {
         input.on_mouse_press(MouseButton::Left, 600, 400);
         tablet.pending_frame.pressure = Some(4096);
         tablet.pending_frame.down = true;
-        let pending = std::mem::take(&mut tablet.pending_frame);
+        let pending = mem::take(&mut tablet.pending_frame);
         tablet.bind_tip(ContactOwner::Canvas);
         tablet.apply_canvas_pressure(&measurer, &mut input, pending.pressure.unwrap());
         assert!(tablet.peak_thickness.unwrap() < 3.0);

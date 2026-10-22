@@ -8,6 +8,7 @@
 //! replace all of it.
 
 use anyhow::{Context, Result};
+use toml::de;
 
 use super::Config;
 use super::io::ConfigSectionError;
@@ -33,7 +34,7 @@ pub(super) struct SalvagedConfig {
 /// from — and fails the call.
 pub(super) fn deserialize_salvaging(
     input: &str,
-    mut deserialize: impl FnMut(toml::Table) -> Result<Config, toml::de::Error>,
+    mut deserialize: impl FnMut(toml::Table) -> Result<Config, de::Error>,
 ) -> Result<SalvagedConfig> {
     let table = input
         .parse::<toml::Table>()
@@ -156,7 +157,7 @@ fn can_split(path: &[String]) -> bool {
 /// Only a table whose empty form maps is ever split (see [`can_split`]), so
 /// every table above `path` fills in its other keys with defaults around the
 /// probe.
-fn probe(path: &[String], value: toml::Value) -> Result<(), toml::de::Error> {
+fn probe(path: &[String], value: toml::Value) -> Result<(), de::Error> {
     let mut nested = value;
     for key in path.iter().rev() {
         let mut table = toml::Table::new();

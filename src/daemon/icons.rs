@@ -1,4 +1,7 @@
 #[cfg(feature = "tray")]
+use std::io::Cursor;
+
+#[cfg(feature = "tray")]
 use log::warn;
 #[cfg(feature = "tray")]
 use png::Decoder;
@@ -24,7 +27,7 @@ pub(crate) fn decode_tray_icon_png() -> Option<Vec<ksni::Icon>> {
 
 #[cfg(feature = "tray")]
 fn decode_icon_png(bytes: &[u8]) -> Option<ksni::Icon> {
-    let mut decoder = Decoder::new(std::io::Cursor::new(bytes));
+    let mut decoder = Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().ok()?;
     let mut buf = vec![0; reader.output_buffer_size()?];

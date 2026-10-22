@@ -17,17 +17,23 @@
 //!   every supported language, whichever language is active.
 
 use std::path::Path;
+use std::process::Command;
 use std::time::{Duration, Instant};
+use std::{env, fs, iter, thread};
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
 use adw::prelude::*;
 
+use gtk::glib::MainContext;
+use gtk::prelude::GtkWindowExt;
 use wayscriber::domain::Language;
+use wayscriber::{env_vars, i18n};
 
 use crate::messages::{CommandMessage, Message};
 use crate::models::{KeybindingField, LanguageOption, StartupRequest, TabId, UiTabId};
+use crate::test_temp;
 
 use super::super::state::ConfiguratorApp;
 
@@ -37,14 +43,14 @@ const CHILD_ENV: &str = "WAYSCRIBER_CONFIGURATOR_GTK_CHILD";
 #[test]
 fn language_changes_rebuild_the_window_in_place() {
     // A window is allowed only on the dedicated test compositor.
-    if std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none()
-        || std::env::var("WAYLAND_DISPLAY").as_deref() != Ok("wayscriber-widget-tests")
+    if env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none()
+        || env::var("WAYLAND_DISPLAY").as_deref() != Ok("wayscriber-widget-tests")
     {
         eprintln!("skipping configurator GTK test: not on the private test compositor");
         return;
     }
 
-    if std::env::var_os(CHILD_ENV).is_none() {
+    if env::var_os(CHILD_ENV).is_none() {
         run_in_child();
         return;
     }
@@ -57,8 +63,8 @@ fn language_changes_rebuild_the_window_in_place() {
 /// homes, so nothing reads or writes the user's files, no setup tool runs,
 /// and the catalogs load from the embedded copies.
 fn run_in_child() {
-    let homes = crate::test_temp::tempdir().expect("child homes");
-    let mut command = std::process::Command::new(std::env::current_exe().expect("test binary"));
+    let homes = test_temp::tempdir().expect("child homes");
+    let mut command = Command::new(env::current_exe().expect("test binary"));
     command
         .args([
             concat!(
@@ -72,21 +78,21 @@ fn run_in_child() {
             "--nocapture",
         ])
         .env(CHILD_ENV, "1")
-        .env_remove(wayscriber::env_vars::LANGUAGE_OVERRIDE_ENV);
+        .env_remove(env_vars::LANGUAGE_OVERRIDE_ENV);
     for (key, directory) in [
         ("XDG_CONFIG_HOME", "config"),
         ("XDG_DATA_HOME", "data"),
         ("XDG_STATE_HOME", "state"),
         ("XDG_CACHE_HOME", "cache"),
-        (wayscriber::env_vars::LOCALE_DIR_ENV, "locales"),
+        (env_vars::LOCALE_DIR_ENV, "locales"),
         // No setup tool (systemctl, gsettings) is reachable from here.
         ("PATH", "bin"),
     ] {
         let path = homes.path().join(directory);
-        std::fs::create_dir_all(&path).expect("child home");
+        fs::create_dir_all(&path).expect("child home");
         command.env(key, path);
     }
-    for key in wayscriber::env_vars::LOCALE_ENV_KEYS {
+    for key in env_vars::LOCALE_ENV_KEYS {
         command.env_remove(key);
     }
     write_config(&homes.path().join("config"), "[ui]\nlanguage = \"en\"\n");
@@ -97,8 +103,8 @@ fn run_in_child() {
 
 fn write_config(config_home: &Path, contents: &str) {
     let directory = config_home.join("wayscriber");
-    std::fs::create_dir_all(&directory).expect("config directory");
-    std::fs::write(directory.join("config.toml"), contents).expect("write config");
+    fs::create_dir_all(&directory).expect("config directory");
+    fs::write(directory.join("config.toml"), contents).expect("write config");
 }
 
 fn run_scenario() {
@@ -111,7 +117,7 @@ fn run_scenario() {
         !app.model().document.is_loading()
     });
     settle();
-    assert_eq!(wayscriber::i18n::language(), Language::English);
+    assert_eq!(i18n::language(), Language::English);
     assert_eq!(sidebar_label(&app, TabId::Drawing), "Drawing");
     let pages = app.widgets().stack.observe_children().n_items();
     let bindings = app.widgets().bindings.len();
@@ -199,7 +205,7 @@ fn service_buttons_describe_service_actions_in_each_language(app: &Controller<Co
             let buttons: Vec<_> = visible_page_descendants(app)
                 .into_iter()
                 .filter(|widget| {
-                    std::iter::successors(Some(widget.clone()), gtk::Widget::parent)
+                    iter::successors(Some(widget.clone()), gtk::Widget::parent)
                         .take_while(|ancestor| *ancestor != page)
                         .all(|ancestor| ancestor.is_visible())
                 })
@@ -430,7 +436,7 @@ fn a_load_that_changes_the_language_keeps_its_resets(app: &Controller<Configurat
     app.emit(Message::ShortcutRecordingStarted(KeybindingField::Undo));
     settle();
     write_config(
-        Path::new(&std::env::var_os("XDG_CONFIG_HOME").expect("child config home")),
+        Path::new(&env::var_os("XDG_CONFIG_HOME").expect("child config home")),
         "[ui]\nlanguage = \"zh-CN\"\n",
     );
 
@@ -440,8 +446,7 @@ fn a_load_that_changes_the_language_keeps_its_resets(app: &Controller<Configurat
     settle();
     app.emit(Message::LeaveDiscardRequested);
     pump_until("the reload", || {
-        !app.model().document.is_loading()
-            && wayscriber::i18n::language() == Language::SimplifiedChinese
+        !app.model().document.is_loading() && i18n::language() == Language::SimplifiedChinese
     });
     settle();
 
@@ -492,7 +497,7 @@ fn assert_caret(
 }
 
 fn focus(app: &Controller<ConfiguratorApp>) -> Option<gtk::Widget> {
-    gtk::prelude::GtkWindowExt::focus(app.widget())
+    GtkWindowExt::focus(app.widget())
 }
 
 fn visible_page_descendants(app: &Controller<ConfiguratorApp>) -> Vec<gtk::Widget> {
@@ -504,7 +509,7 @@ fn descendants(root: gtk::Widget) -> Vec<gtk::Widget> {
     let mut found = Vec::new();
     let mut pending = vec![root];
     while let Some(widget) = pending.pop() {
-        pending.extend(std::iter::successors(
+        pending.extend(iter::successors(
             widget.first_child(),
             gtk::Widget::next_sibling,
         ));
@@ -542,25 +547,25 @@ fn scrollable(app: &Controller<ConfiguratorApp>) -> Option<gtk::ScrolledWindow> 
 
 /// Runs the main loop until `done`, failing after a generous timeout.
 fn pump_until(what: &str, mut done: impl FnMut() -> bool) {
-    let context = gtk::glib::MainContext::default();
+    let context = MainContext::default();
     let deadline = Instant::now() + Duration::from_secs(30);
     while !done() {
         assert!(Instant::now() < deadline, "timed out waiting for {what}");
         while context.pending() {
             context.iteration(false);
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
 /// Lets queued messages, refreshes and a few frames run.
 fn settle() {
-    let context = gtk::glib::MainContext::default();
+    let context = MainContext::default();
     let until = Instant::now() + Duration::from_millis(300);
     while Instant::now() < until {
         while context.pending() {
             context.iteration(false);
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }

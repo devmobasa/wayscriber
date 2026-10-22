@@ -1,17 +1,31 @@
 #[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
+use crate::about_window;
+#[cfg(feature = "tray")]
 use crate::config::Config;
 #[cfg(feature = "tray")]
 use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
 #[cfg(feature = "tray")]
 use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
 #[cfg(feature = "tray")]
+use crate::desktop_open;
+#[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
 #[cfg(feature = "tray")]
 use crate::i18n::tr;
 #[cfg(feature = "tray")]
+use crate::notification;
+#[cfg(feature = "tray")]
 use crate::paths::log_dir;
+#[cfg(feature = "tray")]
+use crate::process_broker;
+#[cfg(feature = "tray")]
+use crate::process_broker::BrokerChild;
+#[cfg(feature = "tray")]
+use crate::process_broker::HelperKind;
+#[cfg(feature = "tray")]
+use crate::process_broker::HelperLifetime;
 #[cfg(feature = "tray")]
 use crate::session::{clear_session, options_from_config};
 #[cfg(feature = "tray")]
@@ -24,16 +38,20 @@ use std::env;
 use std::ffi::{OsStr, OsString};
 #[cfg(feature = "tray")]
 use std::fs;
+#[cfg(feature = "tray")]
+use tokio::runtime::Handle;
+#[cfg(feature = "tray")]
+use tokio::runtime::Runtime;
 
 #[cfg(feature = "tray")]
 fn spawn_detached(
-    kind: crate::process_broker::HelperKind,
+    kind: HelperKind,
     program: &OsStr,
     arguments: &[OsString],
-) -> anyhow::Result<crate::process_broker::BrokerChild> {
-    crate::process_broker::current()?.spawn(
+) -> anyhow::Result<BrokerChild> {
+    process_broker::current()?.spawn(
         kind,
-        crate::process_broker::HelperLifetime::DetachedAfterExec,
+        HelperLifetime::DetachedAfterExec,
         program,
         arguments,
         Vec::new(),
@@ -53,10 +71,10 @@ fn configurator_fallback_body(opened_config: bool) -> &'static str {
 #[cfg(feature = "tray")]
 impl WayscriberTray {
     /// Open the configurator, optionally at the screen for the menu item used.
-    pub(super) fn launch_configurator(&self, destination: Option<ConfiguratorDestination>) {
-        let arguments = configurator_launch_arguments(destination.as_ref());
+    pub(super) fn launch_configurator(&self, destination: Option<&ConfiguratorDestination>) {
+        let arguments = configurator_launch_arguments(destination);
         match spawn_detached(
-            crate::process_broker::HelperKind::Configurator,
+            HelperKind::Configurator,
             OsStr::new(&self.configurator_binary),
             &arguments,
         ) {
@@ -80,16 +98,16 @@ impl WayscriberTray {
                 #[cfg(feature = "dbus")]
                 {
                     let body = configurator_fallback_body(opened_config);
-                    match tokio::runtime::Handle::try_current() {
-                        Ok(handle) => crate::notification::send_notification_async(
+                    match Handle::try_current() {
+                        Ok(handle) => notification::send_notification_async(
                             &handle,
                             tr("Configurator unavailable").to_string(),
                             body.to_string(),
                             Some("dialog-error".to_string()),
                         ),
                         Err(_) => {
-                            if let Ok(rt) = tokio::runtime::Runtime::new() {
-                                let _ = rt.block_on(crate::notification::send_notification(
+                            if let Ok(rt) = Runtime::new() {
+                                let _ = rt.block_on(notification::send_notification(
                                     tr("Configurator unavailable"),
                                     body,
                                     Some("dialog-error"),
@@ -115,9 +133,9 @@ impl WayscriberTray {
         };
 
         match spawn_detached(
-            crate::process_broker::HelperKind::About,
+            HelperKind::About,
             exe.as_os_str(),
-            &crate::about_window::launch_arguments(),
+            &about_window::launch_arguments(),
         ) {
             Ok(child) => {
                 info!("Launched About window (pid {})", child.id());
@@ -131,14 +149,14 @@ impl WayscriberTray {
     /// Open the update instructions the watcher recorded. The URL comes from
     /// `update_check`, which only ever hands out validated wayscriber.com links.
     pub(super) fn open_update_instructions(&self, url: &str) {
-        let invocation = match crate::desktop_open::trusted_url(url) {
+        let invocation = match desktop_open::trusted_url(url) {
             Ok(invocation) => invocation,
             Err(err) => {
                 warn!("Refused to open update instructions {url:?}: {err:#}");
                 return;
             }
         };
-        match crate::desktop_open::open_in_background(invocation) {
+        match desktop_open::open_in_background(invocation) {
             Ok(_worker) => info!("Opening update instructions"),
             Err(err) => warn!("Failed to open update instructions {url}: {err}"),
         }
@@ -193,15 +211,15 @@ impl WayscriberTray {
             return;
         }
 
-        let invocation = crate::desktop_open::path(&dir);
-        match crate::desktop_open::open_in_background(invocation) {
+        let invocation = desktop_open::path(&dir);
+        match desktop_open::open_in_background(invocation) {
             Ok(_worker) => info!("Opening log directory via desktop integration"),
             Err(err) => warn!("Failed to open log directory {}: {}", dir.display(), err),
         }
     }
 
     pub(super) fn open_config_file(&self) -> bool {
-        let path = match Config::get_config_path() {
+        let path = match Config::config_path() {
             Ok(p) => p,
             Err(err) => {
                 warn!("Unable to resolve config path: {}", err);
@@ -209,8 +227,8 @@ impl WayscriberTray {
             }
         };
 
-        let invocation = crate::desktop_open::path(&path);
-        match crate::desktop_open::open_in_background(invocation) {
+        let invocation = desktop_open::path(&path);
+        match desktop_open::open_in_background(invocation) {
             Ok(_worker) => {
                 info!("Opening config file at {}", path.display());
                 true

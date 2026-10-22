@@ -1,10 +1,12 @@
 use std::ffi::{CString, OsStr, OsString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
+use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::PathBuf;
+use std::process;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -135,7 +137,7 @@ impl PinnedPath {
 
     fn exists_nofollow(&self) -> io::Result<bool> {
         let leaf = os_str_c_string(&self.leaf)?;
-        let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+        let mut stat = MaybeUninit::<libc::stat>::uninit();
         // SAFETY: the pointers are valid and stat points to writable storage.
         let result = unsafe {
             libc::fstatat(
@@ -219,7 +221,7 @@ where
         let candidate = path.parent.join(OsString::from(format!(
             ".{}.wayscriber-{suffix}-{}-{id}",
             path.leaf.to_string_lossy(),
-            std::process::id()
+            process::id()
         )))?;
         if reserve(&candidate)? {
             return Ok(candidate);

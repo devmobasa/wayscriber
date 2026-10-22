@@ -3,6 +3,9 @@
 mod grid;
 mod owner;
 
+#[cfg(test)]
+use std::cell::Cell;
+
 use super::base::InputState;
 use crate::draw::{ShapeId, TextMeasurer};
 use owner::ActiveFrameOrderGuard;
@@ -18,7 +21,7 @@ impl InputState {
 
     #[cfg(test)]
     pub(crate) fn spatial_shape_index_build_count() -> usize {
-        SPATIAL_SHAPE_INDEX_BUILDS.with(std::cell::Cell::get)
+        SPATIAL_SHAPE_INDEX_BUILDS.with(Cell::get)
     }
 
     /// Returns all shapes intersecting any of the provided points within tolerance.

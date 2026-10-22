@@ -78,12 +78,14 @@ impl OutputMembership {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+
     use super::*;
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
 
     #[test]
     fn layer_placement_takes_precedence_and_falls_back_to_remaining_output() {
-        let fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 2);
+        let fixture = HandlerFixture::with_outputs(Config::default(), 2);
         let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
         let mut membership = OutputMembership::for_layer(Some(outputs[1].clone()));
 
@@ -107,7 +109,7 @@ mod tests {
 
     #[test]
     fn assumed_output_survives_unrelated_removal_until_the_first_enter() {
-        let fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 3);
+        let fixture = HandlerFixture::with_outputs(Config::default(), 3);
         let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
         let mut membership = OutputMembership::default();
         membership.assume(outputs[0].clone());
@@ -124,7 +126,7 @@ mod tests {
 
     #[test]
     fn unrelated_removal_preserves_pre_enter_placement_but_target_loss_releases_it() {
-        let fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 2);
+        let fixture = HandlerFixture::with_outputs(Config::default(), 2);
         let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
         let mut membership = OutputMembership::default();
         membership.request_output(outputs[0].clone());

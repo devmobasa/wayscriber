@@ -1,5 +1,7 @@
 //! Oval fitting and shared polar geometry for angular coverage.
 
+use std::f64::consts;
+
 use super::{Bounds, ClosedFit};
 use crate::draw::{Color, Shape};
 
@@ -20,13 +22,13 @@ pub(super) fn angular_travel(points: &[(i32, i32)], bounds: Bounds) -> Option<An
         let angle = y.atan2(x);
         if let Some(previous) = previous_angle {
             let delta = angle_delta(previous, angle);
-            if delta.abs() > std::f64::consts::FRAC_PI_2 + 0.1 {
+            if delta.abs() > consts::FRAC_PI_2 + 0.1 {
                 return None;
             }
             winding += delta;
             travel += delta.abs();
             // Allow only floating-point summation error at the lap boundary.
-            if first_lap_end.is_none() && winding.abs() >= std::f64::consts::TAU - 1e-9 {
+            if first_lap_end.is_none() && winding.abs() >= consts::TAU - 1e-9 {
                 first_lap_end = Some(index);
             }
         }
@@ -55,8 +57,7 @@ pub(super) fn fit_ellipse(
         return None;
     }
 
-    let circumference =
-        std::f64::consts::PI * (3.0 * (rx + ry) - ((3.0 * rx + ry) * (rx + 3.0 * ry)).sqrt());
+    let circumference = consts::PI * (3.0 * (rx + ry) - ((3.0 * rx + ry) * (rx + 3.0 * ry)).sqrt());
     if !(circumference * (0.74 - 0.03 * level)..=circumference * (1.3 + 0.05 * level))
         .contains(&length)
     {
@@ -137,6 +138,5 @@ fn normalized_point(point: (i32, i32), bounds: Bounds) -> (f64, f64) {
 }
 
 pub(super) fn angle_delta(previous: f64, angle: f64) -> f64 {
-    (angle - previous + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
-        - std::f64::consts::PI
+    (angle - previous + consts::PI).rem_euclid(consts::TAU) - consts::PI
 }

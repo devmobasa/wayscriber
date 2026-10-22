@@ -1,3 +1,6 @@
+use std::cmp::Ordering;
+use std::ops::Range;
+
 use crate::draw::TextMeasurer;
 use log::warn;
 
@@ -6,8 +9,8 @@ use crate::draw::shape::VisualCaretDirection;
 use crate::input::events::Key;
 use crate::input::state::core::TextEditing;
 use crate::input::state::{
-    DrawingState, InputEffect, InputState, TextClipboardRequest, TextCutTarget, TextInputMode,
-    TextPasteEdit, TextPasteTarget,
+    DrawingState, InputEffect, InputState, InputTextResources, TextClipboardRequest, TextCutTarget,
+    TextInputMode, TextPasteEdit, TextPasteTarget,
 };
 
 use super::bindings::{fallback_unshifted_label, key_to_action_label};
@@ -16,7 +19,7 @@ use super::caret_edit::{self, MAX_TEXT_LENGTH, TextNavigation};
 impl InputState {
     pub(in crate::input::state) fn handle_text_input_key_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         key: Key,
     ) {
         // Editing and caret navigation own their keys in text mode, ahead of
@@ -293,7 +296,7 @@ impl InputState {
 }
 
 impl TextEditing {
-    fn selected_text(&self, state: &DrawingState) -> Option<(std::ops::Range<usize>, String)> {
+    fn selected_text(&self, state: &DrawingState) -> Option<(Range<usize>, String)> {
         let DrawingState::TextInput {
             buffer,
             caret,
@@ -519,9 +522,9 @@ pub(super) fn move_horizontal_caret(
     }
 
     match adjacent.cmp(caret) {
-        std::cmp::Ordering::Less => caret_edit::move_word_left(buffer, caret, anchor, extend),
-        std::cmp::Ordering::Greater => caret_edit::move_word_right(buffer, caret, anchor, extend),
-        std::cmp::Ordering::Equal => caret_edit::move_to_offset(caret, anchor, extend, adjacent),
+        Ordering::Less => caret_edit::move_word_left(buffer, caret, anchor, extend),
+        Ordering::Greater => caret_edit::move_word_right(buffer, caret, anchor, extend),
+        Ordering::Equal => caret_edit::move_to_offset(caret, anchor, extend, adjacent),
     }
 }
 

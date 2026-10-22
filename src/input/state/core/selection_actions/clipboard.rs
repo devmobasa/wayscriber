@@ -1,8 +1,7 @@
 use super::super::base::{ClipboardPasteRequest, InputState, PasteAnchor};
 use super::super::selection::LocalSelectionContext;
-use crate::draw::Shape;
-use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
+use crate::draw::{Shape, TextMeasurer};
 use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;

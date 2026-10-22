@@ -1,3 +1,10 @@
+use std::f64::consts;
+
+use crate::config::{KeybindingsConfig, QuickColorPalette, QuickColorPaletteEntry};
+use crate::input::state;
+use crate::input::state::RadialMenuState;
+use crate::ui::UiRenderCaches;
+
 use super::*;
 use crate::draw::Color;
 use crate::input::Tool;
@@ -123,8 +130,8 @@ fn palette_recents_and_active_changes_replace_rendered_base() {
     let theme = theme::Theme::dark();
     let mut cache = RadialBaseCache::default();
     paint(&engine, &mut cache, &state, &theme, 1.0);
-    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(vec![
-        crate::config::QuickColorPaletteEntry {
+    state.set_quick_colors(QuickColorPalette::from_entries(vec![
+        QuickColorPaletteEntry {
             label: "Transparent".into(),
             color: Color::new(1.0, 0.0, 0.0, 0.0),
         },
@@ -146,7 +153,7 @@ fn bindings_replace_rendered_base() {
     use crate::config::{Action, Shortcut};
     use crate::input::state::test_support::make_test_input_state_with_action_bindings;
     let state = state();
-    let mut bindings = crate::config::KeybindingsConfig::default()
+    let mut bindings = KeybindingsConfig::default()
         .build_action_bindings()
         .unwrap();
     bindings.insert(Action::SelectPenTool, vec![Shortcut::parse("F9").unwrap()]);
@@ -164,9 +171,9 @@ fn bindings_replace_rendered_base() {
 fn transparent_swatches_keep_checkerboard_across_themes_and_densities() {
     let engine = UiTextEngine::default();
     let mut state = state();
-    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(
+    state.set_quick_colors(QuickColorPalette::from_entries(
         (0..8)
-            .map(|index| crate::config::QuickColorPaletteEntry {
+            .map(|index| QuickColorPaletteEntry {
                 label: format!("Clear {index}"),
                 color: Color::new(1.0, 0.0, 0.0, 0.0),
             })
@@ -181,7 +188,7 @@ fn transparent_swatches_keep_checkerboard_across_themes_and_densities() {
             let stride = (500.0 * scale) as usize * 4;
             let covered = (0..64)
                 .filter(|index| {
-                    let angle = std::f64::consts::TAU * f64::from(*index) / 64.0;
+                    let angle = consts::TAU * f64::from(*index) / 64.0;
                     let x = ((layout.center_x + radius * angle.cos()) * scale).round() as usize;
                     let y = ((layout.center_y + radius * angle.sin()) * scale).round() as usize;
                     let offset = y * stride + x * 4;
@@ -257,7 +264,7 @@ fn failed_allocation_paints_directly_without_replacing_cache_and_can_retry() {
 
 fn paint_full(
     engine: &UiTextEngine,
-    caches: &mut crate::ui::UiRenderCaches,
+    caches: &mut UiRenderCaches,
     input: &InputState,
     theme: &theme::Theme,
     scale: f64,
@@ -289,12 +296,12 @@ fn paint_full(
 #[test]
 fn dynamic_hover_sub_ring_and_center_labels_match_fresh_owners() {
     let engine = UiTextEngine::default();
-    let mut caches = crate::ui::UiRenderCaches::default();
+    let mut caches = UiRenderCaches::default();
     let mut input = state();
     let layout = input.radial_menu.layout().unwrap();
-    let parent = crate::input::state::RADIAL_COMPASS_SLICES
+    let parent = state::RADIAL_COMPASS_SLICES
         .iter()
-        .position(|slice| matches!(slice.kind, crate::input::state::RadialSliceKind::Parent(_)))
+        .position(|slice| matches!(slice.kind, RadialSliceKind::Parent(_)))
         .unwrap();
     let (segment, offset, _) = super::super::compass_geometry(&layout);
     let (x, y) = super::super::compass_wedge_midpoint(
@@ -315,7 +322,7 @@ fn dynamic_hover_sub_ring_and_center_labels_match_fresh_owners() {
     );
     assert!(matches!(
         input.radial_menu.state(),
-        crate::input::state::RadialMenuState::Open {
+        RadialMenuState::Open {
             expanded_sub_ring: Some(_),
             ..
         }
@@ -325,7 +332,7 @@ fn dynamic_hover_sub_ring_and_center_labels_match_fresh_owners() {
             let actual = paint_full(&engine, &mut caches, &input, &theme, scale);
             let expected = paint_full(
                 &UiTextEngine::default(),
-                &mut crate::ui::UiRenderCaches::default(),
+                &mut UiRenderCaches::default(),
                 &input,
                 &theme,
                 scale,
@@ -348,7 +355,7 @@ fn dynamic_hover_sub_ring_and_center_labels_match_fresh_owners() {
         paint_full(&engine, &mut caches, &input, &theme, 1.0)
             == paint_full(
                 &UiTextEngine::default(),
-                &mut crate::ui::UiRenderCaches::default(),
+                &mut UiRenderCaches::default(),
                 &input,
                 &theme,
                 1.0

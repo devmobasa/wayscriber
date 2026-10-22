@@ -1,3 +1,5 @@
+use std::panic;
+
 use super::{
     CLIPBOARD_READ_TIMEOUT, ClipboardPasteCompletion, ClipboardPasteResult,
     ClipboardPublishCompletion, ClipboardReadError, MAX_CLIPBOARD_SELECTION_BYTES,
@@ -78,7 +80,7 @@ pub(in crate::backend::wayland) enum PasteAction {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland) enum TransferWarning {
     PublishSelectionTooLarge,
     PublishUnavailable,
@@ -95,9 +97,13 @@ pub(in crate::backend::wayland) enum TransferWarning {
     MalformedPrivateSelection,
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "defense in depth: a panic in the clipboard helper is logged and reported as a failed copy instead of ending the overlay"
+)]
 pub(in crate::backend::wayland) fn resolve_selection_clipboard_publish(
     generation: u64,
-    payload_json: String,
+    payload_json: &str,
 ) -> ClipboardPublishCompletion {
     if payload_json.len() > MAX_CLIPBOARD_SELECTION_BYTES {
         return ClipboardPublishCompletion {
@@ -108,18 +114,17 @@ pub(in crate::backend::wayland) fn resolve_selection_clipboard_publish(
         };
     }
 
-    let copied =
-        match std::panic::catch_unwind(|| system::publish_selection_clipboard(&payload_json)) {
-            Ok(Ok(())) => true,
-            Ok(Err(err)) => {
-                log::warn!("Selection clipboard publish failed: {}", err);
-                false
-            }
-            Err(_) => {
-                log::error!("Selection clipboard publish panicked");
-                false
-            }
-        };
+    let copied = match panic::catch_unwind(|| system::publish_selection_clipboard(payload_json)) {
+        Ok(Ok(())) => true,
+        Ok(Err(err)) => {
+            log::warn!("Selection clipboard publish failed: {}", err);
+            false
+        }
+        Err(_) => {
+            log::error!("Selection clipboard publish panicked");
+            false
+        }
+    };
 
     ClipboardPublishCompletion {
         generation,
@@ -179,7 +184,7 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     }
 
     if file_list::is_uri_list_mime(&mime_type) {
-        return file_list::decode_clipboard_uri_list(&mime_type, bytes, offered);
+        return file_list::decode_clipboard_uri_list(&mime_type, &bytes, offered);
     }
 
     image::decode_clipboard_image(&mime_type, bytes)
@@ -212,11 +217,11 @@ pub(in crate::backend::wayland) fn plan_paste_start(
 pub(in crate::backend::wayland) fn plan_after_fingerprint_probe(
     request: ClipboardPasteRequest,
     generation: u64,
-    expected: Option<ClipboardFingerprint>,
-    current: Option<ClipboardFingerprint>,
+    expected: Option<&ClipboardFingerprint>,
+    current: Option<&ClipboardFingerprint>,
     local_shapes: Option<Vec<Shape>>,
 ) -> TransferPlan<PasteAction> {
-    match (expected.as_ref(), current.as_ref()) {
+    match (expected, current) {
         (Some(previous), Some(current)) if previous == current => {
             if let Some(shapes) = local_shapes {
                 TransferPlan::action(PasteAction::UseLocalShapes {

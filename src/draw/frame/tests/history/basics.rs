@@ -1,5 +1,6 @@
+use crate::draw::color::BLACK;
 use crate::draw::frame::{Frame, ImageBoundsSnapshot, UndoAction};
-use crate::draw::{EmbeddedImage, Shape, color::BLACK};
+use crate::draw::{EmbeddedImage, Shape};
 
 fn rect_at(x: i32) -> Shape {
     Shape::Rect {
@@ -26,7 +27,7 @@ fn undo_and_redo_cycle_shapes() {
         thick: 2.0,
     };
 
-    let id = frame.add_shape(shape.clone());
+    let id = frame.add_shape(shape);
     frame.push_undo_action(
         UndoAction::Create {
             shapes: vec![(

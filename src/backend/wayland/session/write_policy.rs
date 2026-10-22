@@ -1,7 +1,12 @@
 //! Which drawings may be written to the source session file.
 
+use std::fmt::{Display, Formatter};
+use std::{error, fmt};
+
 use anyhow::Result;
 use std::path::Path;
+
+use crate::i18n;
 
 use super::{PersistenceOutcome, SessionState, stored_session};
 
@@ -71,17 +76,17 @@ pub(in crate::backend::wayland) enum SourceWriteRefused {
     NotPreserved,
 }
 
-impl std::fmt::Display for SourceWriteRefused {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SourceWriteRefused {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::NotLoaded => crate::i18n::tr(
+            Self::NotLoaded => i18n::tr(
                 "the source session has not loaded; new drawings are kept on screen and saved drawings are untouched; use Save As to keep new drawings elsewhere, or Clear before reloading",
             ),
-            Self::NotPreserved => crate::i18n::tr(
+            Self::NotPreserved => i18n::tr(
                 "unreadable session data was not preserved; repair and reload its files or use Save As before replacing these drawings",
             ),
         })
     }
 }
 
-impl std::error::Error for SourceWriteRefused {}
+impl error::Error for SourceWriteRefused {}

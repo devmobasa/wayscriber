@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use wayscriber::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,7 +65,7 @@ impl NamedColorOption {
         }
     }
 
-    pub fn from_str(value: &str) -> Self {
+    pub fn from_name(value: &str) -> Self {
         match value.trim().to_lowercase().as_str() {
             "red" => Self::Red,
             "green" => Self::Green,
@@ -77,8 +80,8 @@ impl NamedColorOption {
     }
 }
 
-impl std::fmt::Display for NamedColorOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for NamedColorOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

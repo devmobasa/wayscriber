@@ -1,4 +1,20 @@
-use super::*;
+use super::super::{
+    ControllerBarrierPhase, RecoveryAttemptStep, RecoveryCommandId, RuntimeStateFailurePathEffect,
+    RuntimeStateInspectionError, RuntimeStateIoError, RuntimeStateObservedEnvelope,
+    RuntimeStateObservedPathEffect, RuntimeStateSourceObservation, RuntimeUiFileStatus,
+    RuntimeUiStateController, RuntimeUiWireState, SourceMutationId, SourceMutationKind,
+    SourceMutationRequest, SourceMutationResult,
+};
+use super::protocol::{
+    allocate_counter, merge_artifacts, reinspection_writer_observation,
+    source_mutation_observation_for_protocol_error,
+};
+use super::{
+    ActiveRecoveryCommand, PersistenceAuthoritySnapshot, RecoveryAttemptKind,
+    RecoveryCanonicalWritePurpose, RecoveryCleanupState, RecoveryCommandExpectation,
+    RecoveryInspection, RecoveryIoCommand, RecoveryIoOperation, RecoverySourceMutationKind,
+    SubmitPersistenceRecoveryResult,
+};
 
 impl RuntimeUiStateController {
     pub(super) fn integrate_recovery_inspection(
@@ -236,7 +252,7 @@ impl RuntimeUiStateController {
         if !dirty {
             if let Some(cleanup) = cleanup {
                 self.pipeline
-                    .settle_persisted([cleanup], self.pipeline.stable_source().clone());
+                    .settle_persisted([cleanup], &self.pipeline.stable_source().clone());
             }
             if let Some(incident) = &mut self.incident {
                 incident.cleanup = RecoveryCleanupState::Clean;
@@ -280,7 +296,10 @@ impl RuntimeUiStateController {
             retry_desired_through: retry,
             cleanup_through: cleanup,
         };
-        debug_assert!(purpose.is_valid());
+        debug_assert!(
+            purpose.is_valid(),
+            "a canonical recovery write must retry or clean up a revision, got {purpose:?}"
+        );
         let result = self.dispatch_recovery_source_command(
             recovery_command_id.expect("dirty recovery allocated a command id"),
             request,
@@ -473,7 +492,7 @@ impl RuntimeUiStateController {
                         return self.finish_recovery_shutdown();
                     }
                     let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                    self.finish_cancelled_attempt(Some(observation.clone()));
+                    self.finish_cancelled_attempt(Some(observation));
                     return SubmitPersistenceRecoveryResult::Terminal { attempt };
                 }
                 if matches!(
@@ -549,7 +568,7 @@ impl RuntimeUiStateController {
                     incident.path_effect_history.push(path_effect);
                 }
                 self.pipeline
-                    .settle_failed(integrated.covered.iter().copied(), error.clone());
+                    .settle_failed(integrated.covered.iter().copied(), &error);
                 self.note_recovery_write_failed(purpose);
                 if cancel_requested {
                     if self.shutting_down {
@@ -566,7 +585,7 @@ impl RuntimeUiStateController {
 
     pub(super) fn integrate_protocol_failure_source_completion(
         &mut self,
-        result: SourceMutationResult,
+        result: &SourceMutationResult,
     ) -> SubmitPersistenceRecoveryResult {
         let cancel_requested = self
             .active_recovery
@@ -586,18 +605,18 @@ impl RuntimeUiStateController {
             }
         });
         let active_observation = source_mutation_observation_for_protocol_error(
-            &result,
+            result,
             if preserve_invalid {
                 RuntimeStateObservedEnvelope::PresentWithoutReadableVersion
             } else {
                 RuntimeStateObservedEnvelope::Version(1)
             },
         );
-        self.retain_recovery_mutation_evidence(&result);
+        self.retain_recovery_mutation_evidence(result);
 
         if !preserve_invalid {
             match self.pipeline.integrate(result.clone()) {
-                Ok(integrated) => match &result {
+                Ok(integrated) => match result {
                     SourceMutationResult::Applied { .. } => {
                         if matches!(&integrated.request.kind, SourceMutationKind::Replace(_)) {
                             self.file_status = RuntimeUiFileStatus::Supported;
@@ -610,7 +629,7 @@ impl RuntimeUiStateController {
                     }
                     SourceMutationResult::Failed { error, .. } => {
                         self.pipeline
-                            .settle_failed(integrated.covered.iter().copied(), error.clone());
+                            .settle_failed(integrated.covered.iter().copied(), error);
                         self.note_recovery_write_failed(purpose);
                     }
                 },

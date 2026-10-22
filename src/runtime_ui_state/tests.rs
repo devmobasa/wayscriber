@@ -101,10 +101,10 @@ fn commit_bool(
     value: bool,
 ) -> AcceptedStateRevision {
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
+        .begin_mutation(&RuntimeUiMutationScope::one(target.clone()))
         .unwrap();
     let values = RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(value)).unwrap();
-    match controller.commit(permit, values) {
+    match controller.commit(permit, &values) {
         CommitResult::Accepted { through } => through,
         result => panic!("expected accepted mutation, got {result:?}"),
     }

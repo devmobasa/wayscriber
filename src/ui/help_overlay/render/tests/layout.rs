@@ -1,21 +1,32 @@
+use crate::input::state::test_support;
+use crate::ui::primitives;
+
 use super::*;
 use crate::config::{Action, HelpOverlayStyle, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
-use crate::ui::HelpOverlayBindings;
+use crate::ui::{HelpContentOptions, HelpOverlayBindings};
 
 fn build(query: &str, page: usize, show_unbound: bool, width: u32, height: u32) -> OverlayLayout {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
-    let input = crate::input::state::test_support::make_test_input_state();
+    let input = test_support::make_test_input_state();
     let bindings = HelpOverlayBindings::from_input_state(&input);
     build_overlay_layout(
-        &crate::ui_text::UiTextEngine::default(),
+        &UiTextEngine::default(),
         &ctx,
         &HelpOverlayStyle::default(),
         width,
         height,
         page,
-        &HelpContentSnapshot::from_bindings(&bindings, true, false, true, true),
+        &HelpContentSnapshot::from_bindings(
+            &bindings,
+            HelpContentOptions {
+                frozen_enabled: true,
+                context_filter: false,
+                board_enabled: true,
+                capture_enabled: true,
+            },
+        ),
         query,
         0.0,
         "Wayscriber Controls",
@@ -82,7 +93,7 @@ fn key_column_starts_after_the_widest_label() {
     let metrics = layout.metrics;
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
 
     for measured in layout.grid.rows.iter().flatten() {
         let widest_label = measured
@@ -90,7 +101,7 @@ fn key_column_starts_after_the_widest_label() {
             .rows
             .iter()
             .map(|row| {
-                crate::ui::primitives::text_extents_for_with_engine(
+                primitives::text_extents_for_with_engine(
                     &engine,
                     &ctx,
                     &layout.help_font_family,

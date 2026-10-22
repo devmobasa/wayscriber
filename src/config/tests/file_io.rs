@@ -1,3 +1,7 @@
+use crate::config::{QuickColorWrite, ToolbarStrokeControls};
+use crate::domain::Color;
+use crate::test_env;
+
 use super::super::*;
 use super::{save_through_document, save_through_document_with_backup};
 use crate::config::test_helpers::with_temp_config_home;
@@ -273,7 +277,7 @@ fn an_unknown_stroke_controls_style_falls_back_to_the_default_panel() {
         assert_eq!(loaded.config.drawing.default_thickness, 7.0);
         assert_eq!(
             loaded.config.ui.toolbar.stroke_controls,
-            crate::config::ToolbarStrokeControls::Panel
+            ToolbarStrokeControls::Panel
         );
         assert_eq!(loaded.section_errors.len(), 1);
         assert_eq!(
@@ -403,7 +407,7 @@ color = "#00FF00"
         .unwrap();
 
         Config::update_file(|config| {
-            let crimson = crate::domain::Color {
+            let crimson = Color {
                 r: 220.0 / 255.0,
                 g: 20.0 / 255.0,
                 b: 60.0 / 255.0,
@@ -411,7 +415,7 @@ color = "#00FF00"
             };
             assert_eq!(
                 config.drawing.quick_colors.set_color_at(1, crimson),
-                crate::config::QuickColorWrite::Written
+                QuickColorWrite::Written
             );
         })
         .expect("save the recolored quick color");
@@ -423,7 +427,7 @@ color = "#00FF00"
         let palette = QuickColorPalette::from_config(&reloaded.drawing.quick_colors);
         assert_eq!(
             palette.color_for_index(1),
-            Some(crate::domain::Color {
+            Some(Color {
                 r: 220.0 / 255.0,
                 g: 20.0 / 255.0,
                 b: 60.0 / 255.0,
@@ -438,7 +442,7 @@ color = "#00FF00"
         );
         assert_eq!(
             palette.color_for_index(0),
-            Some(crate::domain::Color {
+            Some(Color {
                 r: 1.0,
                 g: 0.0,
                 b: 0.0,
@@ -721,7 +725,7 @@ fn config_example_values_equal_the_compiled_defaults() {
     // example runs serde's default functions for every key it omits, and some
     // of those consult the desktop environment, so computing one side under
     // GNOME and the other without it compares two different machines.
-    let (example, defaults) = crate::test_env::with_scrubbed_desktop_env(|| {
+    let (example, defaults) = test_env::with_scrubbed_desktop_env(|| {
         let example = include_str!("../../../config.example.toml");
         let example: Config = toml::from_str(example).expect("config.example.toml should parse");
         (
@@ -810,7 +814,7 @@ fn an_empty_table_resolves_to_its_section_default() {
     //   binds to the tool wheel.
     const EMPTY_MEANS_SOMETHING: &[&str] = &["tablet.stylus_button"];
 
-    let drifts = crate::test_env::with_scrubbed_desktop_env(|| {
+    let drifts = test_env::with_scrubbed_desktop_env(|| {
         let mut defaults = Config::default();
         defaults.validate_and_clamp();
         let defaults = toml::Value::try_from(&defaults).expect("serialize default config");

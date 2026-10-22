@@ -6,6 +6,7 @@
 //! Neither input is a command-line flag, so an older overlay ignores both and
 //! keeps starting in the session its `--session-file` names.
 
+use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -54,7 +55,7 @@ impl SessionLaunch {
     /// The inputs for an overlay launched with `startup_file` as its
     /// `--session-file`.
     pub(in crate::backend::wayland) fn from_environment(startup_file: Option<&Path>) -> Self {
-        Self::from_lookup(startup_file, |name| std::env::var_os(name))
+        Self::from_lookup(startup_file, |name| env::var_os(name))
     }
 
     fn from_lookup(startup_file: Option<&Path>, lookup: impl Fn(&str) -> Option<OsString>) -> Self {

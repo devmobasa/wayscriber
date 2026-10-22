@@ -17,6 +17,11 @@ pub(crate) use pointer::{route_pointer_motion, route_pointer_press, route_pointe
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::{ShapeId, TextMeasurer};
+    use crate::input::boards::PendingBoardRuntimeUiAction;
+    use crate::input::state::{DrawingState, InputState};
+    use crate::ui_text::UiTextEngine;
+
     use super::actions::classify_action;
     use super::active::active_interaction_kind;
     use super::outcome::{
@@ -26,12 +31,13 @@ mod tests {
     use super::*;
     use crate::config::Action;
     use crate::draw::Shape;
-    use crate::input::state::{TopMenuState, test_support::make_test_input_state};
+    use crate::input::state::TopMenuState;
+    use crate::input::state::test_support::make_test_input_state;
     use crate::input::{BOARD_ID_BLACKBOARD, EraserMode, Key, MouseButton, Tool};
 
-    fn route_key_press(state: &mut crate::input::state::InputState, key: Key) -> RoutingOutcome {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+    fn route_key_press(state: &mut InputState, key: Key) -> RoutingOutcome {
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         route_key_press_with_resources(
             state,
             crate::input::state::InputTextResources {
@@ -46,7 +52,7 @@ mod tests {
         PointerPoints::new(ScreenPoint::new(10, 20), CanvasPoint::new(10, 20))
     }
 
-    fn add_rect(state: &mut crate::input::state::InputState) -> crate::draw::ShapeId {
+    fn add_rect(state: &mut InputState) -> ShapeId {
         state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 10,
             y: 20,
@@ -65,7 +71,7 @@ mod tests {
 
         assert_eq!(active_interaction_kind(&state), None);
 
-        state.state = crate::input::state::DrawingState::Drawing {
+        state.state = DrawingState::Drawing {
             tool: Tool::Pen,
             start_x: 1,
             start_y: 2,
@@ -77,7 +83,7 @@ mod tests {
             Some(ActiveInteractionKind::Drawing)
         );
 
-        state.state = crate::input::state::DrawingState::text_input(1, 2, String::new());
+        state.state = DrawingState::text_input(1, 2, String::new());
         assert_eq!(
             active_interaction_kind(&state),
             Some(ActiveInteractionKind::TextInput)
@@ -99,7 +105,7 @@ mod tests {
 
     #[test]
     fn properties_panel_unhandled_key_is_consumed() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         let id = add_rect(&mut state);
         state.set_selection(vec![id]);
@@ -200,15 +206,15 @@ mod tests {
 
     #[test]
     fn right_click_cancels_active_interaction_before_context_menu_policy() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let pointer_ui_engine = UiTextEngine::default();
         let pointer_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &pointer_ui_engine,
         };
 
         let mut state = make_test_input_state();
-        state.state = crate::input::state::DrawingState::Drawing {
+        state.state = DrawingState::Drawing {
             tool: Tool::Pen,
             start_x: 1,
             start_y: 2,
@@ -227,10 +233,7 @@ mod tests {
                 ActiveInteractionKind::Drawing
             ))
         );
-        assert!(matches!(
-            state.state,
-            crate::input::state::DrawingState::Idle
-        ));
+        assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.pointer_drag_active());
     }
 
@@ -238,8 +241,8 @@ mod tests {
     /// view like anywhere else.
     #[test]
     fn right_click_opens_the_context_menu_while_zoomed() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let pointer_ui_engine = UiTextEngine::default();
         let pointer_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &pointer_ui_engine,
@@ -260,8 +263,8 @@ mod tests {
 
     #[test]
     fn right_click_suppression_paths_return_named_side_effects() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let pointer_ui_engine = UiTextEngine::default();
         let pointer_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &pointer_ui_engine,
@@ -283,8 +286,8 @@ mod tests {
 
     #[test]
     fn radial_menu_release_is_consumed() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let pointer_ui_engine = UiTextEngine::default();
         let pointer_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &pointer_ui_engine,
@@ -306,7 +309,7 @@ mod tests {
 
     #[test]
     fn idle_eraser_hover_returns_named_pointer_side_effect() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let pointer_measurer = TextMeasurer::default();
 
         let mut state = make_test_input_state();
         state.style.eraser_mode = EraserMode::Stroke;
@@ -340,8 +343,8 @@ mod tests {
 
     #[test]
     fn dismissing_picker_menus_consumes_release_without_activating_the_picker() {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         let resources = crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
@@ -433,8 +436,8 @@ mod tests {
     fn board_picker_row_menu_gets_hover_and_clicks_before_the_picker() {
         use crate::input::state::core::ContextMenuState;
 
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         let resources = crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
@@ -474,7 +477,7 @@ mod tests {
             (menu.origin_y + menu.height) as i32,
         );
         // Entries: the board name, Edit Paper, Rename Board, then Pin Board.
-        let entry_at = |state: &crate::input::state::InputState, index: usize| {
+        let entry_at = |state: &InputState, index: usize| {
             let y = (menu_y..menu_bottom)
                 .find(|&y| state.context_menu_index_at(menu_x, y) == Some(index))
                 .unwrap();
@@ -517,7 +520,7 @@ mod tests {
         assert!(state.is_board_picker_open() && !state.is_context_menu_open());
         assert!(matches!(
             state.take_pending_board_runtime_ui_actions().as_slice(),
-            [crate::input::boards::PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
+            [PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
                 if board_id == BOARD_ID_BLACKBOARD
         ));
     }

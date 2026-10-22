@@ -1,3 +1,6 @@
+use crate::draw;
+use crate::util::Rect;
+
 use super::{color_to_hex, parse_hex_color};
 use crate::domain::{
     BOARD_GRID_MAX_SPACING, BOARD_GRID_MIN_SPACING, BoardBackground, BoardGrid, BoardGridKind,
@@ -233,7 +236,7 @@ impl BoardAppearanceEdit {
     pub(crate) fn preview(&self) -> (Color, BoardGrid) {
         let base = match self.original.background {
             BoardBackground::Solid(color) => color,
-            _ => crate::draw::WHITE,
+            _ => draw::WHITE,
         };
         (
             if self.color_is_dirty() {
@@ -330,21 +333,20 @@ impl InputState {
 
     pub(crate) fn apply_board_appearance(&mut self) -> bool {
         self.mark_board_appearance_region();
-        let Some(edit) = &self.board_picker.appearance else {
+        let Some(edit) = self.board_picker.appearance.as_mut() else {
             return false;
         };
+        let identity_current = self.boards.board_identity_generation() == edit.generation;
         let index = self
             .boards
             .board_states()
             .iter()
             .position(|b| b.spec.id == edit.id);
-        if self.boards.board_identity_generation() != edit.generation || index.is_none() {
-            self.board_picker.appearance.as_mut().unwrap().error =
-                Some(tr("Board identity changed. Cancel and reopen to edit it.").into());
+        let Some(index) = index.filter(|_| identity_current) else {
+            edit.error = Some(tr("Board identity changed. Cancel and reopen to edit it.").into());
             self.needs_redraw = true;
             return false;
-        }
-        let index = index.unwrap();
+        };
         let current = BoardAppearance::from_spec(&self.boards.board_states()[index].spec);
         let proposed = if current.background.is_transparent() {
             Err(tr("Paper patterns require a solid board."))
@@ -354,12 +356,12 @@ impl InputState {
         let desired = match proposed {
             Ok(desired) => desired,
             Err(error) => {
-                self.board_picker.appearance.as_mut().unwrap().error = Some(error.into());
+                edit.error = Some(error.into());
                 self.needs_redraw = true;
                 return false;
             }
         };
-        self.apply_board_appearance_value(index, desired);
+        self.apply_board_appearance_value(index, &desired);
         self.board_picker_clear_edit();
         self.needs_redraw = true;
         true
@@ -597,7 +599,7 @@ impl InputState {
             let (left, top, width, height) = frame.bounds();
             let bottom = top + height + SHEET_SHADOW * frame.scale;
             let (x, y) = ((left - 4.0).floor(), (top - 4.0).floor());
-            crate::util::Rect::new(
+            Rect::new(
                 x as i32,
                 y as i32,
                 ((left + width + 4.0).ceil() - x) as i32,
@@ -731,7 +733,11 @@ impl InputState {
 
         let in_color_field = header.is_some_and(|header| rect_contains(header.color_field, point));
         let ((x, y), width) = (point, frame.width);
-        let edit = self.board_picker.appearance.as_mut().unwrap();
+        let edit = self
+            .board_picker
+            .appearance
+            .as_mut()
+            .expect("the appearance frame exists only while an edit is open");
         match y.floor() as i32 {
             -65..=-35 => {
                 if in_color_field {

@@ -1,7 +1,7 @@
 use crate::input::InputState;
 use crate::input::state::{ContextMenuEntry, ContextMenuLayout, ContextMenuState, SubmenuSide};
 use crate::ui::primitives::draw_rounded_rect;
-use crate::ui::theme::Rgba;
+use crate::ui::theme::{Rgba, popup};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
@@ -58,7 +58,7 @@ pub(crate) fn render_context_menu_with_engine(
         &layout,
         &entries,
         MenuStyle {
-            surface: crate::ui::theme::popup::bg_context_menu(),
+            surface: popup::bg_context_menu(),
             arrow_side: side,
             shadow: false,
         },
@@ -81,7 +81,7 @@ pub(crate) fn render_context_menu_with_engine(
             pane,
             &submenu_entries,
             MenuStyle {
-                surface: crate::ui::theme::popup::bg_context_submenu(),
+                surface: popup::bg_context_submenu(),
                 arrow_side: side,
                 shadow: true,
             },
@@ -172,7 +172,7 @@ fn draw_menu(
     );
     constants::set_color(ctx, style.surface);
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_context_menu());
+    constants::set_color(ctx, popup::border_context_menu());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -355,6 +355,8 @@ fn draw_hint_footer(
 
 #[cfg(test)]
 mod engine_tests {
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::input::state::ContextMenuKind;
 
@@ -378,7 +380,7 @@ mod engine_tests {
     #[ignore = "isolated by tools/lint-and-test.sh; Cairo race: https://gitlab.freedesktop.org/cairo/cairo/-/merge_requests/81"]
     fn retained_context_menu_owner_preserves_layout_pixels_and_row_hits() {
         let engine = UiTextEngine::default();
-        let mut state = crate::input::state::test_support::make_test_input_state();
+        let mut state = test_support::make_test_input_state();
         for (kind, density) in [
             (ContextMenuKind::Canvas, 1),
             (ContextMenuKind::Zoom, 2),

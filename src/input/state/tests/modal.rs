@@ -5,6 +5,10 @@
 //! of another and starve it in the key-routing chain. These tests pin the
 //! rule (open closes everything else) and its one deliberate exception.
 
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
+use crate::input::state::{DrawingState, EyedropperCaptureSource};
+
 use super::helpers::create_test_input_state;
 use crate::input::state::core::modal::ModalSurface;
 
@@ -26,7 +30,7 @@ fn opening_help_closes_the_color_picker_popup() {
 #[test]
 fn opening_help_closes_the_board_picker() {
     let mut state = create_test_input_state();
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(state.is_board_picker_open());
 
     state.toggle_help_overlay();
@@ -40,7 +44,7 @@ fn opening_help_closes_the_board_picker() {
 #[test]
 fn a_context_menu_keeps_the_board_picker_open() {
     let mut state = create_test_input_state();
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(state.is_board_picker_open());
 
     state.open_page_context_menu((10, 10), 0, 0);
@@ -57,11 +61,7 @@ fn a_context_menu_keeps_the_board_picker_open() {
 /// fixture can open.
 #[test]
 fn openers_leave_no_excluded_surface_behind() {
-    type Opener = (
-        &'static str,
-        ModalSurface,
-        fn(&mut crate::input::InputState),
-    );
+    type Opener = (&'static str, ModalSurface, fn(&mut InputState));
 
     let openers: &[Opener] = &[
         ("palette", ModalSurface::CommandPalette, |state| {
@@ -80,7 +80,7 @@ fn openers_leave_no_excluded_surface_behind() {
             state.open_page_context_menu((10, 10), 0, 0)
         }),
         ("board picker", ModalSurface::BoardPicker, |state| {
-            state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default())
+            state.open_board_picker_with_measurer(&TextMeasurer::default())
         }),
     ];
 
@@ -130,10 +130,10 @@ fn popups_text_editor_and_pending_screen_modals_own_pointer_shortcuts() {
     assert!(state.modal_owns_pointer_shortcuts());
     state.close_color_picker_popup(true);
 
-    state.state = crate::input::state::DrawingState::text_input(0, 0, String::new());
+    state.state = DrawingState::text_input(0, 0, String::new());
     assert!(state.modal_owns_pointer_shortcuts());
-    state.state = crate::input::state::DrawingState::Idle;
+    state.state = DrawingState::Idle;
 
-    state.set_eyedropper_pending_capture(crate::input::state::EyedropperCaptureSource::Frozen);
+    state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
     assert!(state.modal_owns_pointer_shortcuts());
 }

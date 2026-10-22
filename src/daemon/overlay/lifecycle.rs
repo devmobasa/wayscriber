@@ -7,6 +7,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 
+use crate::process_broker::{HelperKind, HelperLifetime};
+use crate::{i18n, process_broker};
+
 use super::super::protocol_v2::{OverlayChildOwner, ReportedSession};
 use super::super::types::{BackendRunner, OverlaySpawnCandidate, OverlayState};
 use super::launch::{OverlayLaunchRequest, build_overlay_launch};
@@ -78,7 +81,7 @@ impl OverlayLifecycle {
         resume_override: &AtomicU8,
         remembered_session_file: Option<&Path>,
         daemon_token: &str,
-    ) -> std::result::Result<u32, OverlayStartFailure> {
+    ) -> Result<u32, OverlayStartFailure> {
         self.child
             .reserve()
             .map_err(OverlayStartFailure::BeforeAttempt)?;
@@ -94,14 +97,14 @@ impl OverlayLifecycle {
             crate::decode_session_override(resume_override.load(Ordering::Acquire)),
             self.child.generation(),
             remembered_session_file,
-            crate::i18n::command_line_language(),
+            i18n::command_line_language(),
         );
 
         let attempt = (|| -> Result<u32> {
             let daemon_watchdog = super::super::protocol_v2::open_daemon_watchdog()?;
-            let child = crate::process_broker::current()?.spawn_with_watchdog(
-                crate::process_broker::HelperKind::Overlay,
-                crate::process_broker::HelperLifetime::OwnedChild,
+            let child = process_broker::current()?.spawn_with_watchdog(
+                HelperKind::Overlay,
+                HelperLifetime::OwnedChild,
                 &candidate.program,
                 &launch.arguments,
                 launch.environment,
@@ -141,7 +144,11 @@ impl OverlayLifecycle {
     }
 
     pub(super) fn mark_hidden(&mut self) {
-        debug_assert!(self.child.display_pid().is_none());
+        debug_assert!(
+            self.child.display_pid().is_none(),
+            "release the overlay child before marking it hidden, got pid {:?}",
+            self.child.display_pid()
+        );
         self.state = OverlayState::Hidden;
         self.active_named_session_file = None;
         self.active.store(false, Ordering::Release);

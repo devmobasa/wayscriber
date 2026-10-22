@@ -1,5 +1,5 @@
-use crate::draw::TextMeasurer;
-use crate::draw::{SPOTLIGHT_MAGNIFICATION_STEP, Shape};
+use crate::draw;
+use crate::draw::{SPOTLIGHT_MAGNIFICATION_STEP, Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 
@@ -16,12 +16,10 @@ impl InputState {
             |shape| matches!(shape, Shape::Spotlight { .. }),
             |shape| match shape {
                 Shape::Spotlight { magnification, .. } => {
-                    let next =
-                        crate::draw::normalize_spotlight_magnification(*magnification + delta);
+                    let next = draw::normalize_spotlight_magnification(*magnification + delta);
                     if (next - *magnification).abs() > f64::EPSILON {
                         *magnification = next;
-                        changed_to_magnified |=
-                            crate::draw::spotlight_magnification_is_active(next);
+                        changed_to_magnified |= draw::spotlight_magnification_is_active(next);
                         true
                     } else {
                         false
@@ -31,7 +29,7 @@ impl InputState {
             },
         );
 
-        let applied = self.report_selection_apply_result(result, tr("Spotlight magnification"));
+        let applied = self.report_selection_apply_result(&result, tr("Spotlight magnification"));
         if applied && changed_to_magnified {
             self.request_spotlight_magnifier_feedback();
         }

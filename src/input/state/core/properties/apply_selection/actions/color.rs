@@ -1,5 +1,4 @@
-use crate::draw::TextMeasurer;
-use crate::draw::{Color, Shape};
+use crate::draw::{Color, Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
@@ -156,7 +155,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("color"))
+        self.report_selection_apply_result(&result, tr("color"))
     }
 
     /// Whether recoloring the selection to `target` would change any shape it
@@ -191,7 +190,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("opacity"))
+        self.report_selection_apply_result(&result, tr("opacity"))
     }
 
     /// Steps the selection's color through the quick-color palette, the same
@@ -210,7 +209,7 @@ impl InputState {
             .collect();
         let current = self
             .selection_primary_color()
-            .and_then(|color| palette_position(palette.iter().copied(), color));
+            .and_then(|color| palette_position(&palette.iter().copied(), color));
         let offset = if direction < 0 { -1 } else { 1 };
         let Some(first) = palette_step(palette.len(), current, offset) else {
             self.push_toast(
@@ -238,16 +237,19 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::ShapeId;
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::draw::RED;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     #[test]
     fn apply_selection_color_value_preserves_marker_alpha() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = make_state();
         let marker_id = state
             .boards
@@ -286,7 +288,7 @@ mod tests {
         }
     }
 
-    fn add_rect(state: &mut InputState, color: Color) -> crate::draw::ShapeId {
+    fn add_rect(state: &mut InputState, color: Color) -> ShapeId {
         state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 0,
             y: 0,
@@ -299,7 +301,7 @@ mod tests {
         })
     }
 
-    fn rect_color(state: &InputState, id: crate::draw::ShapeId) -> Color {
+    fn rect_color(state: &InputState, id: ShapeId) -> Color {
         match &state.boards.active_frame().shape(id).expect("rect").shape {
             Shape::Rect { color, .. } => *color,
             other => panic!("expected rect, got {other:?}"),

@@ -1,3 +1,6 @@
+use crate::draw;
+use crate::input::Tool;
+
 use super::base::{DrawingState, InputState};
 use crate::draw::shape::{CaretGeometry, LogicalBounds, bounding_box_for_points};
 use crate::draw::{Shape, TextMeasurer};
@@ -113,7 +116,7 @@ impl InputState {
     /// shape, or a switch between ink and shape, can change anywhere.
     fn provisional_grows_at_tail(&mut self, current_x: i32, current_y: i32) -> bool {
         let DrawingState::Drawing {
-            tool: crate::input::Tool::LiveShape,
+            tool: Tool::LiveShape,
             ..
         } = &self.state
         else {
@@ -142,7 +145,7 @@ impl InputState {
             ToolMotionBehavior::AccumulatePath {
                 size_source: ToolMotionSizeSource::ToolSize,
             } => {
-                if *tool == crate::input::Tool::Marker {
+                if *tool == Tool::Marker {
                     let size = self.thickness_for_tool(*tool);
                     (size * 1.35).max(size + 1.0)
                 } else if point_thicknesses.len() == points.len() && !point_thicknesses.is_empty() {
@@ -370,7 +373,7 @@ impl InputState {
 /// rounding it first and then subtracting a whole-pixel half-width can move the
 /// rectangle off the leftmost column the stroke actually touches.
 fn caret_damage_rect(geom: CaretGeometry, x: i32, y: i32, size: f64) -> Option<Rect> {
-    let half_w = crate::draw::caret_outline_width(size) / 2.0;
+    let half_w = draw::caret_outline_width(size) / 2.0;
     let caret_x = f64::from(x) + geom.x;
     let left = (caret_x - half_w).floor() as i32 - 1;
     let right = (caret_x + half_w).ceil() as i32 + 1;
@@ -606,7 +609,7 @@ mod tests {
         let rect = state
             .caret_damage_rect_for(&measurer, "hi", 100, 100, 1)
             .expect("caret has a damage rect");
-        let half = crate::draw::caret_outline_width(state.style.current_font_size) / 2.0;
+        let half = draw::caret_outline_width(state.style.current_font_size) / 2.0;
         let painted_left = 100.0 + geom.x - half;
         let painted_right = 100.0 + geom.x + half;
         assert!(

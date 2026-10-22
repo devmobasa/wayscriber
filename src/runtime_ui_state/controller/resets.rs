@@ -1,4 +1,12 @@
-use super::*;
+use super::super::{
+    ActiveControllerBarrier, ControllerBarrierOperation, ControllerBarrierPhase, DurabilityOutcome,
+    RuntimeStateIoError, RuntimeUiFileStatus, UnsupportedResetConfirmationId,
+};
+use super::{
+    CancelUnsupportedResetConfirmationResult, ConfirmUnsupportedResetResult, RequestResetResult,
+    RuntimeUiStateController, SupportedResetAuthorityState, SupportedResetTransaction,
+    UnsupportedResetConfirmation,
+};
 
 impl RuntimeUiStateController {
     #[allow(
@@ -86,7 +94,7 @@ impl RuntimeUiStateController {
                     DurabilityOutcome::Failed(reset_error.clone()),
                 ) {
                     self.pipeline
-                        .settle_failed([transaction.through], reset_error);
+                        .settle_failed([transaction.through], &reset_error);
                 }
                 let held_by_reset = transaction.held_by_reset;
                 if let Err(restore_error) = self
@@ -95,7 +103,7 @@ impl RuntimeUiStateController {
                 {
                     self.pipeline.settle_held_failed(
                         &held_by_reset,
-                        RuntimeStateIoError::new(format!(
+                        &RuntimeStateIoError::new(format!(
                             "failed to restore reset-held state: {restore_error:?}"
                         )),
                     );
@@ -113,10 +121,10 @@ impl RuntimeUiStateController {
 
     pub(crate) fn cancel_unsupported_reset_confirmation(
         &mut self,
-        confirmation: UnsupportedResetConfirmation,
+        confirmation: &UnsupportedResetConfirmation,
     ) -> CancelUnsupportedResetConfirmationResult {
         self.drain_lifecycle_controls();
-        if !self.unsupported_reset_confirmation_is_current(&confirmation) {
+        if !self.unsupported_reset_confirmation_is_current(confirmation) {
             return CancelUnsupportedResetConfirmationResult::RejectedToken;
         }
         self.pending_unsupported_reset_confirmation = None;
@@ -183,7 +191,7 @@ impl RuntimeUiStateController {
                     DurabilityOutcome::Failed(reset_error.clone()),
                 ) {
                     self.pipeline
-                        .settle_failed([transaction.through], reset_error);
+                        .settle_failed([transaction.through], &reset_error);
                 }
                 let held_by_reset = transaction.held_by_reset;
                 if let Err(restore_error) = self
@@ -192,7 +200,7 @@ impl RuntimeUiStateController {
                 {
                     self.pipeline.settle_held_failed(
                         &held_by_reset,
-                        RuntimeStateIoError::new(format!(
+                        &RuntimeStateIoError::new(format!(
                             "failed to restore unsupported-reset-held state: {restore_error:?}"
                         )),
                     );

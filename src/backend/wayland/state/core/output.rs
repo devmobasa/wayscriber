@@ -1,13 +1,8 @@
-use crate::input::state::{Toast, ToastPriority};
-use log::{info, warn};
-use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Anchor};
 use std::time::{Duration, Instant};
 
-use super::super::*;
-use crate::{
-    backend::wayland::backend::event_loop::session_save, input::state::OutputFocusAction,
-    notification, session,
-};
+use super::super::WaylandState;
+use super::super::buffer_damage::FullDamageReason;
+use wayland_client::protocol::wl_output;
 
 mod focus;
 mod identity;
@@ -74,14 +69,30 @@ enum OutputTransitionStart {
     ResolveTransition,
 }
 
-fn output_transition_start(
+/// What the session knows when the surface reports a physical output.
+#[derive(Debug, Clone, Copy, Default)]
+struct OutputTransitionContext {
     loaded: bool,
+    /// The output differs from the session's current logical target.
     target_changed: bool,
+    /// A pending transition from this epoch already targets this output.
     matching_pending: bool,
+    /// A transition from the current target epoch is pending.
     same_epoch_pending: bool,
     live_source_resolution_pending: bool,
     interaction_active: bool,
-) -> OutputTransitionStart {
+}
+
+fn output_transition_start(context: OutputTransitionContext) -> OutputTransitionStart {
+    let OutputTransitionContext {
+        loaded,
+        target_changed,
+        matching_pending,
+        same_epoch_pending,
+        live_source_resolution_pending,
+        interaction_active,
+    } = context;
+
     let superseding_pending_destination = same_epoch_pending && !matching_pending;
     if !target_changed
         && (loaded || superseding_pending_destination || live_source_resolution_pending)
@@ -102,16 +113,22 @@ fn output_transition_retry_at(backoff: Duration) -> Instant {
     Instant::now() + backoff
 }
 
-fn live_source_reconciliation_ready(
+/// What the session knows when it checks for an idle moment to resolve its
+/// live source.
+#[derive(Debug, Clone, Copy)]
+struct LiveSourceReconcileContext {
     live_source_resolution_pending: bool,
     output_transition_pending: bool,
     interaction_active: bool,
+    /// The persistence worker can accept operations.
     worker_healthy: bool,
-) -> bool {
-    live_source_resolution_pending
-        && !output_transition_pending
-        && !interaction_active
-        && worker_healthy
+}
+
+fn live_source_reconciliation_ready(context: LiveSourceReconcileContext) -> bool {
+    context.live_source_resolution_pending
+        && !context.output_transition_pending
+        && !context.interaction_active
+        && context.worker_healthy
 }
 
 #[cfg(test)]

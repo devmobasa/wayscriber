@@ -1,4 +1,21 @@
-use super::*;
+use super::super::compression::{ExpandedSessionTooLarge, is_gzip, maybe_decompress_with_limit};
+use super::super::history::{
+    apply_history_policies, enforce_shape_limits, max_history_depth, strip_history_fields,
+};
+use super::super::types::{
+    BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
+};
+use super::corrupt::preserve_newer_version_session;
+use super::{LoadedSnapshot, NewerVersionAction, NewerVersionPreservationFailed};
+use crate::draw::Frame;
+use crate::draw::frame::MAX_COMPOUND_DEPTH;
+use crate::session::options::SessionOptions;
+use anyhow::{Context, Result, anyhow};
+use log::{debug, warn};
+use serde_json::Value;
+use std::fs;
+use std::io::Read;
+use std::path::Path;
 
 pub(super) fn load_snapshot_opened_with_expanded_limit(
     session_path: &Path,

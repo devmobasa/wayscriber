@@ -1,6 +1,8 @@
 //! The panel's actions area: the four ordering buttons, and Duplicate and
 //! Delete under them.
 
+use std::f64::consts;
+
 use cairo::FontWeight;
 
 use crate::draw::Color;
@@ -124,7 +126,7 @@ fn draw_preset_chip(
     let left = cx - (dot * 2.0 + gap + number_width) / 2.0;
 
     ctx.new_path();
-    ctx.arc(left + dot, cy, dot, 0.0, std::f64::consts::TAU);
+    ctx.arc(left + dot, cy, dot, 0.0, consts::TAU);
     match color {
         Some(color) => {
             set_color(ctx, (color.r, color.g, color.b, color.a.max(0.35)));

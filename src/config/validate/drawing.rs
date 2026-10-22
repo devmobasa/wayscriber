@@ -1,11 +1,16 @@
-use super::{Config, float::finite_or_default};
+use std::collections::BTreeSet;
+
+use crate::config::DrawingConfig;
+
+use super::Config;
+use super::float::finite_or_default;
 use crate::config::types::{DEFAULT_HIT_TEST_TOLERANCE, MAX_SHAPE_RECOGNITION_SENSITIVITY};
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 
 impl Config {
     pub(super) fn validate_drawing(&mut self) {
-        let defaults = crate::config::DrawingConfig::default();
+        let defaults = DrawingConfig::default();
         for (field, value, fallback) in [
             (
                 "drawing.default_thickness",
@@ -40,7 +45,7 @@ impl Config {
         // Repeats are judged without case, the way fontconfig resolves a family
         // name. `["Sans", "sans"]` is one font written twice, and keeping both
         // would leave a step that changes only the spelling.
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = BTreeSet::new();
         let before = self.drawing.font_cycle.len();
         self.drawing.font_cycle.retain(|family| {
             let trimmed = family.trim();

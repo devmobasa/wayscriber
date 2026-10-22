@@ -2,17 +2,22 @@
 //! `wayland-protocols`: core Wayland and stable xdg-shell, as the overlay links them.
 
 use std::collections::HashMap;
+use std::ptr;
 
 use anyhow::{Context, Result};
 use wayland_client::Proxy;
 use wayland_client::backend::protocol::{
     ANONYMOUS_INTERFACE, ArgumentType, Interface, MessageDesc,
 };
-use wayland_client::protocol::{
-    wl_compositor::WlCompositor, wl_data_device_manager::WlDataDeviceManager,
-    wl_display::WlDisplay, wl_fixes::WlFixes, wl_output::WlOutput, wl_seat::WlSeat,
-    wl_shell::WlShell, wl_shm::WlShm, wl_subcompositor::WlSubcompositor,
-};
+use wayland_client::protocol::wl_compositor::WlCompositor;
+use wayland_client::protocol::wl_data_device_manager::WlDataDeviceManager;
+use wayland_client::protocol::wl_display::WlDisplay;
+use wayland_client::protocol::wl_fixes::WlFixes;
+use wayland_client::protocol::wl_output::WlOutput;
+use wayland_client::protocol::wl_seat::WlSeat;
+use wayland_client::protocol::wl_shell::WlShell;
+use wayland_client::protocol::wl_shm::WlShm;
+use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
 /// Interfaces by name.
@@ -50,7 +55,7 @@ pub(super) fn schema() -> Schema {
         XdgWmBase::interface(),
     ];
     while let Some(interface) = pending.pop() {
-        if std::ptr::eq(interface, &ANONYMOUS_INTERFACE)
+        if ptr::eq(interface, &ANONYMOUS_INTERFACE)
             || schema.insert(interface.name, interface).is_some()
         {
             continue;
@@ -125,8 +130,8 @@ pub(super) fn decode(message: &MessageDesc, payload: &[u8]) -> Result<Arguments>
     Ok(arguments)
 }
 
-struct Payload<'a> {
-    bytes: &'a [u8],
+struct Payload<'bytes> {
+    bytes: &'bytes [u8],
     offset: usize,
 }
 

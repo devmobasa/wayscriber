@@ -31,6 +31,7 @@ impl KeybindingAuthorship {
     /// keys is exactly the set of authored actions, and a key that no action
     /// owns is harmless here (the document loader reports it as an unknown
     /// setting separately).
+    #[must_use]
     pub fn from_toml_source(input: &str) -> Self {
         let Ok(root) = input.parse::<toml::Table>() else {
             // Unreachable from the loaders, which both parse this same text
@@ -81,6 +82,7 @@ impl KeybindingAuthorship {
     }
 
     /// Whether the source spelled out one `[keybindings]` key.
+    #[must_use]
     pub fn is_explicit(&self, config_key: &str) -> bool {
         match self {
             Self::AllExplicit => true,

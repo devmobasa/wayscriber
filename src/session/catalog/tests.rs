@@ -1,25 +1,29 @@
+use crate::test_env::LeaseGuard;
+use crate::{session, test_env, test_temp};
+
 use super::*;
 use crate::draw::{Color, Frame, Shape};
 use crate::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV};
 use crate::session::{BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::MutexGuard;
 
 struct EnvGuard {
-    _guard: MutexGuard<'static, ()>,
-    catalog_hooks: Option<std::ffi::OsString>,
-    xdg_data_home: Option<std::ffi::OsString>,
+    _guard: LeaseGuard<'static>,
+    catalog_hooks: Option<OsString>,
+    xdg_data_home: Option<OsString>,
 }
 
 impl EnvGuard {
     fn set_xdg_data_home(path: &Path) -> Self {
-        let guard = crate::test_env::lock();
-        let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
-        let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
+        let guard = test_env::lock();
+        let catalog_hooks = env::var_os(CATALOG_HOOKS_TEST_ENV);
+        let xdg_data_home = env::var_os(XDG_DATA_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex in `guard`, which
+        // the returned value keeps until it restores both variables.
         unsafe {
-            std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
-            std::env::set_var(XDG_DATA_HOME_ENV, path);
+            env::set_var(CATALOG_HOOKS_TEST_ENV, path);
+            env::set_var(XDG_DATA_HOME_ENV, path);
         }
         Self {
             _guard: guard,
@@ -31,13 +35,17 @@ impl EnvGuard {
 
 impl Drop for EnvGuard {
     fn drop(&mut self) {
-        match self.catalog_hooks.take() {
-            Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
-            None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
-        }
-        match self.xdg_data_home.take() {
-            Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
+        // SAFETY: fields drop only after this body returns, so `_guard` still
+        // holds the test environment mutex here.
+        unsafe {
+            match self.catalog_hooks.take() {
+                Some(value) => env::set_var(CATALOG_HOOKS_TEST_ENV, value),
+                None => env::remove_var(CATALOG_HOOKS_TEST_ENV),
+            }
+            match self.xdg_data_home.take() {
+                Some(value) => env::set_var(XDG_DATA_HOME_ENV, value),
+                None => env::remove_var(XDG_DATA_HOME_ENV),
+            }
         }
     }
 }
@@ -81,7 +89,7 @@ fn named_options(temp: &Path, name: &str) -> SessionOptions {
 
 #[test]
 fn catalog_path_honors_xdg_data_home() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
 
     assert_eq!(
@@ -95,7 +103,7 @@ fn catalog_path_honors_xdg_data_home() {
 fn catalog_file_and_its_new_directories_are_private() {
     use std::os::unix::fs::PermissionsExt;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let data_home = temp.path().join("data");
     let _env = EnvGuard::set_xdg_data_home(&data_home);
     let session = temp.path().join("lecture.wayscriber-session");
@@ -112,7 +120,7 @@ fn catalog_file_and_its_new_directories_are_private() {
 
 #[test]
 fn malformed_catalog_is_not_clobbered_by_upsert_failure() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let path = catalog_path();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -129,7 +137,7 @@ fn malformed_catalog_is_not_clobbered_by_upsert_failure() {
 
 #[test]
 fn equivalent_existing_paths_dedupe_after_canonicalization() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let sessions = temp.path().join("sessions");
     fs::create_dir(&sessions).unwrap();
@@ -151,7 +159,7 @@ fn equivalent_existing_paths_dedupe_after_canonicalization() {
 
 #[test]
 fn missing_target_identity_uses_canonical_parent_plus_filename() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let parent = temp.path().join("sessions");
     fs::create_dir(&parent).unwrap();
     let missing = parent.join("new-session.wayscriber-session");
@@ -176,7 +184,7 @@ fn missing_target_identity_uses_canonical_parent_plus_filename() {
 
 #[test]
 fn duplicate_display_names_are_allowed_for_distinct_paths() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let left = temp.path().join("left");
     let right = temp.path().join("right");
@@ -201,7 +209,7 @@ fn duplicate_display_names_are_allowed_for_distinct_paths() {
 
 #[test]
 fn upsert_with_display_name_creates_distinct_named_entry() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let source = temp.path().join("source.wayscriber-session");
     let duplicate = temp.path().join("duplicate.wayscriber-session");
@@ -221,11 +229,11 @@ fn upsert_with_display_name_creates_distinct_named_entry() {
 
 #[test]
 fn forget_by_path_removes_metadata_only() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let session = temp.path().join("session.wayscriber-session");
     let backup = {
-        let mut raw = std::ffi::OsString::from(session.as_os_str());
+        let mut raw = OsString::from(session.as_os_str());
         raw.push(".bak");
         PathBuf::from(raw)
     };
@@ -242,7 +250,7 @@ fn forget_by_path_removes_metadata_only() {
 
 #[test]
 fn rename_display_name_changes_metadata_only_and_allows_duplicates() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let left = temp.path().join("left.wayscriber-session");
     let right = temp.path().join("right.wayscriber-session");
@@ -270,7 +278,7 @@ fn rename_display_name_changes_metadata_only_and_allows_duplicates() {
 
 #[test]
 fn move_session_path_by_id_preserves_id_and_display_name() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let source = temp.path().join("lecture.wayscriber-session");
     let target = temp.path().join("archive.wayscriber-session");
@@ -300,7 +308,7 @@ fn move_session_path_by_id_preserves_id_and_display_name() {
 
 #[test]
 fn move_session_path_by_id_rejects_catalog_target_collision() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let source = temp.path().join("lecture.wayscriber-session");
     let target = temp.path().join("archive.wayscriber-session");
@@ -323,7 +331,7 @@ fn move_session_path_by_id_rejects_catalog_target_collision() {
 
 #[test]
 fn renamed_display_name_survives_later_upsert() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let session = temp.path().join("lecture.wayscriber-session");
     fs::write(&session, b"{}").unwrap();
@@ -341,7 +349,7 @@ fn renamed_display_name_survives_later_upsert() {
 
 #[test]
 fn rename_display_name_rejects_empty_names() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let session = temp.path().join("lecture.wayscriber-session");
     fs::write(&session, b"{}").unwrap();
@@ -355,7 +363,7 @@ fn rename_display_name_rejects_empty_names() {
 
 #[test]
 fn rename_display_name_by_path_changes_metadata_only() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let session = temp.path().join("lecture.wayscriber-session");
     fs::write(&session, b"{}").unwrap();
@@ -373,7 +381,7 @@ fn rename_display_name_by_path_changes_metadata_only() {
 
 #[test]
 fn rename_display_name_by_path_returns_none_for_unknown_path() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let missing = temp.path().join("missing.wayscriber-session");
 
@@ -384,7 +392,7 @@ fn rename_display_name_by_path_returns_none_for_unknown_path() {
 
 #[test]
 fn failed_temp_write_leaves_existing_catalog_intact() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("sessions.json");
     fs::write(&path, br#"{"version":1,"sessions":[]}"#).unwrap();
     let tmp_path = temp.path().join("missing").join("sessions.json.tmp");
@@ -406,13 +414,13 @@ fn failed_temp_write_leaves_existing_catalog_intact() {
 
 #[test]
 fn named_backup_fallback_load_records_catalog_open() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let options = named_options(temp.path(), "backup-open");
-    crate::session::save_snapshot(&sample_snapshot(), &options).unwrap();
+    session::save_snapshot(&sample_snapshot(), &options).unwrap();
     fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
 
-    let loaded = crate::session::load_snapshot(&options)
+    let loaded = session::load_snapshot(&options)
         .unwrap()
         .expect("backup fallback should load");
 
@@ -427,13 +435,13 @@ fn named_backup_fallback_load_records_catalog_open() {
 
 #[test]
 fn named_recovery_fallback_load_records_catalog_open() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let options = named_options(temp.path(), "recovery-open");
-    crate::session::save_snapshot(&sample_snapshot(), &options).unwrap();
+    session::save_snapshot(&sample_snapshot(), &options).unwrap();
     fs::rename(options.session_file_path(), options.recovery_file_path()).unwrap();
 
-    let loaded = crate::session::load_snapshot(&options)
+    let loaded = session::load_snapshot(&options)
         .unwrap()
         .expect("recovery fallback should load");
 

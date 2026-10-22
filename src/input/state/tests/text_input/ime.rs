@@ -3,6 +3,8 @@
 //! `ime_apply_done` coordinator, and assert the caret-aware editor buffer and
 //! transient preedit follow the protocol's batch-then-done model.
 
+use crate::draw::TextMeasurer;
+
 use super::super::*;
 
 fn enter_text_mode(state: &mut InputState) {
@@ -378,7 +380,7 @@ fn preedit_replacing_a_forward_selection_has_one_effective_preview_and_cursor() 
 
 #[test]
 fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.state = DrawingState::text_input(0, 0, "hello world".to_string());
     if let DrawingState::TextInput {

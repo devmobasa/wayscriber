@@ -1,5 +1,7 @@
+use wayscriber::config;
+use wayscriber::config::{KeybindingAuthorship, ToolbarSectionVisibility};
+
 use super::super::super::color::{ColorInput, ColorQuadInput};
-use super::super::super::fields::ZoomChipDisplayOption;
 use super::super::super::fields::{
     ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, LanguageOption, PdfFitModeOption, PdfLabelContentModeOption,
@@ -7,7 +9,7 @@ use super::super::super::fields::{
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
     ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
-    UiThemeOption,
+    UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -31,7 +33,7 @@ impl ConfigDraft {
             FontWeightOption::from_value(&config.drawing.font_weight);
         let drawing_drag_tools = config.drawing.effective_drag_tools();
         let mut toolbar_items = config.ui.toolbar.items.clone();
-        let mut legacy_toolbar_visibility = wayscriber::config::ToolbarSectionVisibility {
+        let mut legacy_toolbar_visibility = ToolbarSectionVisibility {
             show_actions_section: config.ui.toolbar.show_actions_section,
             show_actions_advanced: config.ui.toolbar.show_actions_advanced,
             show_zoom_actions: config.ui.toolbar.show_zoom_actions,
@@ -48,13 +50,13 @@ impl ConfigDraft {
                 .mode_overrides
                 .for_mode(config.ui.toolbar.layout_mode),
         );
-        wayscriber::config::fold_legacy_section_flags(
+        config::fold_legacy_section_flags(
             &legacy_toolbar_visibility,
             config.ui.toolbar.layout_mode,
             &config.ui.toolbar.mode_overrides,
             &mut toolbar_items,
         );
-        let toolbar_visibility = wayscriber::config::resolve_section_visibility(
+        let toolbar_visibility = config::resolve_section_visibility(
             config.ui.toolbar.layout_mode,
             &config.ui.toolbar.mode_overrides,
             &toolbar_items.resolved(),
@@ -311,14 +313,12 @@ impl ConfigDraft {
             session_persist_history: config.session.persist_history,
             session_restore_tool_state: config.session.restore_tool_state,
             session_per_output: config.session.per_output,
-            session_storage_mode: SessionStorageModeOption::from_mode(
-                config.session.storage.clone(),
-            ),
+            session_storage_mode: SessionStorageModeOption::from_mode(config.session.storage),
             session_custom_directory: config.session.custom_directory.clone().unwrap_or_default(),
             session_max_shapes_per_frame: config.session.max_shapes_per_frame.to_string(),
             session_max_file_size_mb: config.session.max_file_size_mb.to_string(),
             session_compression: SessionCompressionOption::from_compression(
-                config.session.compress.clone(),
+                config.session.compress,
             ),
             session_auto_compress_threshold_kb: config
                 .session
@@ -373,8 +373,8 @@ impl ConfigDraft {
                     // Built-in and in-memory configs are AllExplicit for
                     // validation. The UI treats them as omitted defaults so
                     // Reset All / Defaults does not badge every row Authored.
-                    wayscriber::config::KeybindingAuthorship::AllExplicit => {
-                        wayscriber::config::KeybindingAuthorship::FromFile(Default::default())
+                    KeybindingAuthorship::AllExplicit => {
+                        KeybindingAuthorship::FromFile(Default::default())
                     }
                     from_file => from_file.clone(),
                 });

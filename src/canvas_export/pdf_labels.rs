@@ -4,6 +4,7 @@ use crate::config::{
     PDF_LABEL_PAGE_NAME, PDF_LABEL_PAGES, PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition,
     validate_pdf_label_template,
 };
+use crate::ui_text::UiTextStyle;
 
 use super::pdf::PdfPageMetadata;
 use crate::ui_text::UiTextEngine;
@@ -190,7 +191,7 @@ fn label_value<'a>(name: &str, metadata: &'a PdfPageMetadata) -> Option<&'a str>
 /// API's idea of its width.
 fn ellipsize_to_width(
     engine: &UiTextEngine,
-    style: &crate::ui_text::UiTextStyle<'_>,
+    style: &UiTextStyle<'_>,
     text: &str,
     max_width: f64,
 ) -> Option<String> {
@@ -281,7 +282,7 @@ mod tests {
         assert_eq!(text, "5/12");
     }
 
-    fn label_style() -> crate::ui_text::UiTextStyle<'static> {
+    fn label_style() -> UiTextStyle<'static> {
         crate::ui_text::UiTextStyle {
             family: "Sans",
             slant: cairo::FontSlant::Normal,

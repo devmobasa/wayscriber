@@ -90,6 +90,8 @@ fn rect_contains(rect: Rect, position: (f64, f64)) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::update_check::Freshness;
+
     use super::*;
     use crate::update_check::{AvailableUpdate, DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL};
 
@@ -101,7 +103,7 @@ mod tests {
                 update_url: DEFAULT_UPDATE_URL.to_string(),
                 notes_url: DEFAULT_NOTES_URL.to_string(),
             }),
-            freshness: crate::update_check::Freshness {
+            freshness: Freshness {
                 checked_seconds_ago: Some(0),
                 last_attempt_failed: false,
             },
@@ -111,10 +113,7 @@ mod tests {
     #[test]
     fn focus_order_runs_content_first_and_close_last() {
         let content = AboutContent::build();
-        let elements = focus_order(
-            &content,
-            &UpdateState::Unknown(crate::update_check::Freshness::default()),
-        );
+        let elements = focus_order(&content, &UpdateState::Unknown(Freshness::default()));
 
         assert_eq!(elements.first(), Some(&Element::UpdateCard));
         assert_eq!(elements.last(), Some(&Element::Close));
@@ -134,10 +133,7 @@ mod tests {
         let checking = focus_order(&content, &UpdateState::Checking);
         assert!(!checking.contains(&Element::UpdateCard));
 
-        let idle = focus_order(
-            &content,
-            &UpdateState::Unknown(crate::update_check::Freshness::default()),
-        );
+        let idle = focus_order(&content, &UpdateState::Unknown(Freshness::default()));
         assert_eq!(idle.len(), checking.len() + 1);
     }
 
@@ -145,10 +141,7 @@ mod tests {
     fn hit_testing_matches_the_planned_rectangles() {
         let content = AboutContent::build();
         let plan = super::super::layout::plan(&content);
-        let elements = focus_order(
-            &content,
-            &UpdateState::Unknown(crate::update_check::Freshness::default()),
-        );
+        let elements = focus_order(&content, &UpdateState::Unknown(Freshness::default()));
 
         let card = plan.update_card;
         let inside = (card.0 + card.2 / 2.0, card.1 + card.3 / 2.0);

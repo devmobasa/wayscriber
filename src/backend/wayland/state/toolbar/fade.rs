@@ -10,7 +10,13 @@
 
 use std::time::{Duration, Instant};
 
-use super::*;
+use crate::config::TopDisplayMode;
+use crate::input::state::InputState;
+use crate::util::Rect;
+
+use super::super::WaylandState;
+use super::geometry;
+use crate::backend::wayland::toolbar::layout::top_size;
 use crate::draw::Color;
 use crate::input::Tool;
 use crate::ui::toolbar::snapshot::fade::TopStripFadeInputs;
@@ -25,7 +31,7 @@ pub(super) struct StripRevealKey {
 }
 
 impl StripRevealKey {
-    fn of(input: &crate::input::state::InputState) -> Self {
+    fn of(input: &InputState) -> Self {
         let tool = input.tool_override();
         Self {
             tool,
@@ -54,7 +60,7 @@ impl WaylandState {
         // step must damage their rect and request a canvas redraw itself.
         if before != after && self.inline_toolbars_render_active() {
             if let Some((x, y, w, h)) = self.toolbar_chrome.inline_rect()
-                && let Some(rect) = crate::util::Rect::new(
+                && let Some(rect) = Rect::new(
                     x.floor() as i32 - 1,
                     y.floor() as i32 - 1,
                     w.ceil() as i32 + 2,
@@ -84,7 +90,7 @@ impl WaylandState {
         // already the quiet form, and a hidden strip has nothing to fade.
         let reduced_chrome = !input.toolbar_top_visible()
             || input.toolbar_top_minimized()
-            || input.toolbar_top_display_mode() == crate::config::TopDisplayMode::Micro;
+            || input.toolbar_top_display_mode() == TopDisplayMode::Micro;
         let menus_open = top_menus_open(input);
         let idle_fade_enabled = top_strip_idle_fade_enabled(input, self.first_run_holds_toolbar());
         let on_strip = self.toolbar_chrome.strip_engaged() || self.toolbar.top_pointer_present();
@@ -150,32 +156,35 @@ impl WaylandState {
 
 /// Keep the toolbar visible while first-run guidance holds it, without
 /// changing the idle-fade preference.
-fn top_strip_idle_fade_enabled(
-    input: &crate::input::state::InputState,
-    first_run_holds_toolbar: bool,
-) -> bool {
+fn top_strip_idle_fade_enabled(input: &InputState, first_run_holds_toolbar: bool) -> bool {
     input.ui_visibility.idle_fade && !first_run_holds_toolbar
 }
 
 /// True while any top-strip-anchored menu or popover is open. Open menus
 /// hold the idle fade: the strip (and the popover hosted on its surface)
 /// must stay visible while one is up, even with the pointer away.
-fn top_menus_open(input: &crate::input::state::InputState) -> bool {
+fn top_menus_open(input: &InputState) -> bool {
     input.toolbar_top_menu().is_open() || input.is_color_picker_popup_open()
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::Color;
+    use crate::ui::toolbar::snapshot::fade::{TopStripFade, TopStripFadeInputs};
+
+    use std::time::{Duration, Instant};
+
     use super::{StripRevealKey, top_menus_open, top_strip_idle_fade_enabled};
     use crate::input::Tool;
-    use crate::input::state::{TopMenuState, test_support::make_test_input_state};
+    use crate::input::state::TopMenuState;
+    use crate::input::state::test_support::make_test_input_state;
 
     /// Opacity after `idle_for` without drawing, pointer away, no menus open.
     fn idle_opacity(idle_fade_enabled: bool) -> f64 {
-        let now = std::time::Instant::now();
-        let mut fade = crate::ui::toolbar::snapshot::fade::TopStripFade::new();
-        let inputs = crate::ui::toolbar::snapshot::fade::TopStripFadeInputs {
-            idle_for: std::time::Duration::from_secs(10),
+        let now = Instant::now();
+        let mut fade = TopStripFade::new();
+        let inputs = TopStripFadeInputs {
+            idle_for: Duration::from_secs(10),
             pointer_near: false,
             menus_open: false,
             reduced_chrome: false,
@@ -183,7 +192,7 @@ mod tests {
         };
 
         fade.update(&inputs, now);
-        fade.update(&inputs, now + std::time::Duration::from_secs(10))
+        fade.update(&inputs, now + Duration::from_secs(10))
     }
 
     /// While first-run guidance holds the toolbar, the strip stays fully
@@ -245,7 +254,7 @@ mod tests {
         let marker = StripRevealKey::of(&input);
         assert_ne!(marker, initial, "tool shortcut");
 
-        let color = crate::draw::Color {
+        let color = Color {
             r: 0.1,
             g: 0.8,
             b: 0.3,

@@ -1,21 +1,20 @@
+use std::mem;
+
+use crate::input::state::InputTextResources;
+use crate::input::{InputState, MouseButton};
+
 use super::contact_owner::{ContactMotion, ContactOwner, held_motion};
 use contacts::PointerContacts;
 use log::warn;
 use smithay_client_toolkit::seat::pointer::{CursorIcon, PointerData, ThemedPointer};
-use wayland_client::{
-    Connection, Proxy,
-    protocol::{wl_pointer, wl_seat, wl_surface, wl_touch},
-};
-use wayland_protocols::wp::{
-    pointer_constraints::zv1::client::zwp_locked_pointer_v1::ZwpLockedPointerV1,
-    relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
-};
+use wayland_client::protocol::{wl_pointer, wl_seat, wl_surface, wl_touch};
+use wayland_client::{Connection, Proxy};
+use wayland_protocols::wp::pointer_constraints::zv1::client::zwp_locked_pointer_v1::ZwpLockedPointerV1;
+use wayland_protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1;
 
 use super::seat_devices::SeatDevices;
-use crate::{
-    input::state::{RegionInputSource, ToastPress},
-    ui::{OnboardingCardPress, ZoomChipPress},
-};
+use crate::input::state::{RegionInputSource, ToastPress};
+use crate::ui::{OnboardingCardPress, ZoomChipPress};
 
 mod chrome;
 mod contacts;
@@ -91,7 +90,7 @@ impl ReleaseSuppression {
     }
 
     fn take(&mut self, source: RegionInputSource) -> bool {
-        self.slot_mut(source).is_some_and(std::mem::take)
+        self.slot_mut(source).is_some_and(mem::take)
     }
 }
 
@@ -138,10 +137,10 @@ impl PointerRuntime {
 
     pub(in crate::backend::wayland) fn route_canvas_press(
         &mut self,
-        input: &mut crate::input::InputState,
-        resources: crate::input::state::InputTextResources<'_>,
+        input: &mut InputState,
+        resources: InputTextResources<'_>,
         button: u32,
-        mouse_button: crate::input::MouseButton,
+        mouse_button: MouseButton,
         (sx, sy): (i32, i32),
         (wx, wy): (f64, f64),
     ) {
@@ -153,14 +152,14 @@ impl PointerRuntime {
     pub(in crate::backend::wayland) fn take_contact(
         &mut self,
         button: u32,
-        input: &crate::input::InputState,
+        input: &InputState,
     ) -> Option<(ContactOwner, bool)> {
         self.contacts.take(button, input)
     }
 
     pub(in crate::backend::wayland) fn reconcile_contacts(
         &mut self,
-        input: &crate::input::InputState,
+        input: &InputState,
         zoom_pan: bool,
         toolbar_drag: bool,
     ) {

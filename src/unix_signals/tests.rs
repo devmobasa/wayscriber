@@ -1,11 +1,14 @@
+use std::fs;
+
+use crate::backend::wayland::RuntimeWakeSource;
+
 use super::listener::MAX_SIGNAL_PIPE_BYTES_PER_PASS;
 use super::*;
-use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
-use std::thread;
 use std::time::{Duration, Instant};
+use std::{io, thread};
 
 const TEST_SIGNAL: libc::c_int = libc::SIGWINCH;
 
@@ -115,7 +118,7 @@ fn pending_state_survives_an_unavailable_self_pipe() {
 #[test]
 fn wake_before_listener_wait_is_retained_and_callback_precedes_owner_wake() {
     let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let owner_wake = RuntimeWakeSource::try_new().unwrap();
     let wake_handle = owner_wake.handle();
     let callback_published = Arc::new(AtomicBool::new(false));
     let callback_state = Arc::clone(&callback_published);
@@ -137,7 +140,7 @@ fn wake_before_listener_wait_is_retained_and_callback_precedes_owner_wake() {
 #[test]
 fn signal_delivered_while_listener_is_blocked_wakes_owner() {
     let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let owner_wake = RuntimeWakeSource::try_new().unwrap();
     let wake_handle = owner_wake.handle();
     let callbacks = Arc::new(AtomicUsize::new(0));
     let callback_count = Arc::clone(&callbacks);
@@ -195,7 +198,7 @@ fn signal_burst_coalesces_while_callback_is_in_flight() {
 #[test]
 fn read_error_publishes_failure_before_owner_wake_and_retains_endpoints() {
     let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let owner_wake = RuntimeWakeSource::try_new().unwrap();
     let wake_handle = owner_wake.handle();
     let mut listener =
         spawn_listener(&[TEST_SIGNAL], |_| {}, move || wake_handle.wake().unwrap()).unwrap();
@@ -221,7 +224,7 @@ fn read_error_publishes_failure_before_owner_wake_and_retains_endpoints() {
 #[test]
 fn callback_panic_publishes_failure_before_independent_owner_wake() {
     let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let owner_wake = RuntimeWakeSource::try_new().unwrap();
     let wake_handle = owner_wake.handle();
     let mut listener = spawn_listener(
         &[TEST_SIGNAL],
@@ -387,7 +390,7 @@ fn listener_pass_is_explicitly_bounded() {
     assert_eq!(MAX_SIGNAL_PIPE_BYTES_PER_PASS, 4096);
 }
 
-fn wait_for_owner_wake(source: &crate::backend::wayland::RuntimeWakeSource) {
+fn wait_for_owner_wake(source: &RuntimeWakeSource) {
     let mut pollfd = libc::pollfd {
         fd: source.poll_fd().as_raw_fd(),
         events: libc::POLLIN,
@@ -407,7 +410,7 @@ fn wait_until_listener_blocks(listener: &SignalListener) {
         if tid == 0 {
             return false;
         }
-        std::fs::read_to_string(format!("/proc/self/task/{tid}/stat"))
+        fs::read_to_string(format!("/proc/self/task/{tid}/stat"))
             .ok()
             .and_then(|stat| {
                 stat.rsplit_once(") ")
@@ -473,9 +476,9 @@ fn set_errno(value: libc::c_int) {
 
 fn current_sigaction(signal: libc::c_int) -> io::Result<libc::sigaction> {
     // SAFETY: Zeroed sigaction is filled by libc when the query succeeds.
-    let mut action = unsafe { std::mem::zeroed::<libc::sigaction>() };
+    let mut action = unsafe { mem::zeroed::<libc::sigaction>() };
     // SAFETY: Null new action queries the current handler for `signal`.
-    if unsafe { libc::sigaction(signal, std::ptr::null(), &mut action) } != 0 {
+    if unsafe { libc::sigaction(signal, ptr::null(), &mut action) } != 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(action)

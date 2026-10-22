@@ -1,10 +1,8 @@
 use super::marker::{MarkerKind, read_marker_generation};
 use super::probe::probe_payload_header;
 use super::{Generation, MAX_GENERATION};
-use crate::session::{
-    SessionOptions,
-    primary::{is_non_regular_session_artifact, open_session_artifact_for_probe},
-};
+use crate::session::SessionOptions;
+use crate::session::primary::{is_non_regular_session_artifact, open_session_artifact_for_probe};
 use anyhow::{Result, anyhow};
 use log::warn;
 use std::path::{Path, PathBuf};

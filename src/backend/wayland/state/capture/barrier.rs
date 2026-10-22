@@ -1,15 +1,19 @@
-use super::super::*;
+use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
+use crate::backend::wayland::zoom::ZoomState;
+use crate::input::InputState;
+
+use super::super::WaylandState;
+use super::super::buffer_damage::FullDamageReason;
+use super::super::core::overlay::OverlaySuppression;
 use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
+use wayland_client::QueueHandle;
 
 const MAIN_SURFACE_FRAME_TIMEOUT: Duration = Duration::from_secs(1);
 
-fn push_capture_preflight_cancellation_toast(
-    input_state: &mut crate::input::InputState,
-    message: &str,
-) {
+fn push_capture_preflight_cancellation_toast(input_state: &mut InputState, message: &str) {
     input_state.push_toast(ToastPriority::Critical, "capture", Toast::warning(message));
 }
 
@@ -17,14 +21,14 @@ fn push_capture_preflight_cancellation_toast(
 /// event-loop router owns that report; an uncorrelated standalone failure has
 /// no terminal, so its caller must retain the immediate capture toast.
 fn finish_zoom_preflight_cancellation(
-    zoom: &mut crate::backend::wayland::zoom::ZoomState,
-    input_state: &mut crate::input::InputState,
+    zoom: &mut ZoomState,
+    input_state: &mut InputState,
     message: &str,
 ) -> bool {
     let terminal_will_report = zoom.current_capture_id().is_some();
     zoom.finish_preflight_failure(
         input_state,
-        CapturePreflightError::Backend(message.to_string()),
+        &CapturePreflightError::Backend(message.to_string()),
     );
     terminal_will_report
 }
@@ -392,7 +396,7 @@ impl WaylandState {
                     log::warn!("Frozen preflight capture failed: {err}");
                     if self.frozen.has_acquisition_attempt() {
                         self.frozen.finish_preflight_failure(
-                            CapturePreflightError::from_backend(err),
+                            &CapturePreflightError::from_backend(err),
                             &mut self.input_state,
                         );
                     } else {
@@ -425,7 +429,7 @@ impl WaylandState {
                     log::warn!("Zoom preflight capture failed: {err}");
                     self.zoom.finish_preflight_failure(
                         &mut self.input_state,
-                        CapturePreflightError::from_backend(err),
+                        &CapturePreflightError::from_backend(err),
                     );
                 }
             }
@@ -466,7 +470,7 @@ impl WaylandState {
                 let acquisition_terminal = self.frozen.has_acquisition_attempt();
                 if acquisition_terminal {
                     self.frozen.finish_acquisition(
-                        crate::backend::wayland::acquisition::ScreenAcquisitionOutcome::Failed(
+                        ScreenAcquisitionOutcome::Failed(
                             frozen_message
                                 .unwrap_or("Freeze capture could not start.")
                                 .to_string(),
@@ -498,6 +502,8 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::zoom::ZoomCaptureBackend;
+
     use super::*;
     use crate::backend::wayland::state::acquisition::report_zoom_terminal_to;
     use crate::backend::wayland::zoom::ZoomWaiterOwner;
@@ -735,9 +741,9 @@ mod tests {
     #[tokio::test]
     async fn zoom_preflight_failure_has_exactly_one_report_with_or_without_a_waiter() {
         for owner in [Some(ZoomWaiterOwner::Ocr), None] {
-            let mut zoom = crate::backend::wayland::zoom::ZoomState::new(None);
+            let mut zoom = ZoomState::new(None);
             let mut input_state = make_test_input_state();
-            zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
+            zoom.start_capture(ZoomCaptureBackend::WlrScreencopy)
                 .expect("identified zoom capture");
 
             assert!(finish_zoom_preflight_cancellation(
@@ -761,7 +767,7 @@ mod tests {
 
     #[test]
     fn standalone_zoom_preflight_failure_keeps_the_caller_report() {
-        let mut zoom = crate::backend::wayland::zoom::ZoomState::new(None);
+        let mut zoom = ZoomState::new(None);
         let mut input_state = make_test_input_state();
 
         assert!(!finish_zoom_preflight_cancellation(

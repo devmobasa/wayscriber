@@ -1,9 +1,12 @@
+use std::path::PathBuf;
+
 use super::super::base::{
     CompositorCapabilities, InputState, Toast, ToastCommand, ToastPress, ToastPriority,
     ToastPushOutcome, UiToastState,
 };
 use super::super::feedback::ToastBounds;
-use crate::capture::{ImageOperationKind, file::FileSaveConfig};
+use crate::capture::ImageOperationKind;
+use crate::capture::file::FileSaveConfig;
 use crate::domain::Action;
 use crate::i18n::{tr, trf};
 use std::time::Instant;
@@ -190,7 +193,7 @@ impl InputState {
     pub(crate) fn complete_clipboard_fallback_save(
         &mut self,
         id: u64,
-        result: Result<std::path::PathBuf, String>,
+        result: Result<PathBuf, String>,
     ) {
         let Some(fallback) = self
             .selection_clipboard
@@ -245,11 +248,12 @@ mod tests {
         TEXT_EDIT_ENTRY_DURATION_MS, TextEditEntryFeedback,
     };
 
+    use crate::input::state::test_support;
     use crate::ui::toolbar::ToolbarEvent;
     use std::time::Duration;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     #[test]

@@ -1,4 +1,7 @@
-use super::{Config, float::finite_or_default};
+use crate::config::BoardConfig;
+
+use super::Config;
+use super::float::finite_or_default;
 
 impl Config {
     pub(super) fn validate_board(&mut self) {
@@ -14,7 +17,7 @@ impl Config {
             self.board.default_mode = "transparent".to_string();
         }
 
-        let defaults = crate::config::BoardConfig::default();
+        let defaults = BoardConfig::default();
         for (field, color, fallback) in [
             (
                 "board.whiteboard_color",

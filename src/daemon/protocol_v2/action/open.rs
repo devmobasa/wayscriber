@@ -1,4 +1,21 @@
-use super::*;
+use crate::durable_io;
+
+use super::super::linux::create_private_directory;
+use super::super::wire::{ACTION_ENVELOPE_PROTOCOL_VERSION, fresh_id, validate_id, validate_token};
+use super::super::{BootClock, BootIdentity, NamespaceIdentity};
+#[cfg(test)]
+use super::{ANONYMOUS_PUBLISH_FAILURES, ClaimedAction, consume_anonymous_publish_failure};
+use super::{
+    ActionClaimOutcome, ActionJournal, ActionOwner, ActionRecord, JournalHighWater, JournalState,
+    MAX_ACTION_QUARANTINE, MAX_ACTIONS, PreparedAction, action_name, action_root, digest_payload,
+    open_journal_lock, parse_action_name, quarantine_dir, queue_dir, read_record, unlock,
+    validate_record, write_record,
+};
+use crate::tray_action::TrayAction;
+use anyhow::{Context, Result, anyhow, bail};
+use std::collections::BTreeMap;
+use std::fs;
+use std::io::ErrorKind;
 
 impl ActionJournal {
     pub(crate) fn open() -> Result<Self> {
@@ -27,7 +44,7 @@ impl ActionJournal {
     pub(crate) fn fail_next_anonymous_publications(&self, count: usize) {
         let mut failures = ANONYMOUS_PUBLISH_FAILURES
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("injected publish failures");
         if count == 0 {
             failures.remove(&self.root);
         } else {
@@ -48,7 +65,7 @@ impl ActionJournal {
             // Every journal write holds this lock, so a temporary for an
             // action record is what a writer that died before its rename
             // left behind, not work in progress.
-            if crate::durable_io::temp_file_target(&name)
+            if durable_io::temp_file_target(&name)
                 .is_some_and(|target| parse_action_name(target).is_ok())
             {
                 match fs::remove_file(entry.path()) {

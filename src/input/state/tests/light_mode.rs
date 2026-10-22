@@ -1,8 +1,12 @@
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
+use crate::ui_text::UiTextEngine;
+
 use super::{create_test_input_state, create_test_input_state_with_click_highlight};
 use crate::config::Action;
 use crate::input::{ClickHighlightSettings, Tool};
 
-fn create_light_mode_test_state() -> crate::input::InputState {
+fn create_light_mode_test_state() -> InputState {
     let mut state = create_test_input_state();
     state.compositor_capabilities.layer_shell = true;
     state
@@ -10,7 +14,7 @@ fn create_light_mode_test_state() -> crate::input::InputState {
 
 fn create_light_mode_test_state_with_click_highlight(
     click_highlight_settings: ClickHighlightSettings,
-) -> crate::input::InputState {
+) -> InputState {
     let mut state = create_test_input_state_with_click_highlight(click_highlight_settings);
     state.compositor_capabilities.layer_shell = true;
     state
@@ -18,8 +22,8 @@ fn create_light_mode_test_state_with_click_highlight(
 
 #[test]
 fn light_mode_enters_passthrough_and_hides_heavy_ui() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -45,8 +49,8 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
 
 #[test]
 fn light_mode_keeps_an_active_laser_instead_of_switching_to_the_pen() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -65,8 +69,8 @@ fn light_mode_keeps_an_active_laser_instead_of_switching_to_the_pen() {
 
 #[test]
 fn light_mode_drawing_toggle_disables_passthrough_without_exiting() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -100,8 +104,8 @@ fn light_draw_off_does_not_enter_light_mode() {
 
 #[test]
 fn light_mode_restores_previous_ui_and_tool_on_exit() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -128,8 +132,8 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
 
 #[test]
 fn light_mode_force_enables_click_highlight_by_default_and_restores_on_exit() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -151,8 +155,8 @@ fn light_mode_force_enables_click_highlight_by_default_and_restores_on_exit() {
 
 #[test]
 fn light_mode_can_leave_click_highlight_disabled() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -175,8 +179,8 @@ fn light_mode_can_leave_click_highlight_disabled() {
 
 #[test]
 fn light_mode_and_presenter_mode_are_mutually_exclusive() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -195,8 +199,8 @@ fn light_mode_and_presenter_mode_are_mutually_exclusive() {
 
 #[test]
 fn light_mode_does_not_enter_without_layer_shell() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,

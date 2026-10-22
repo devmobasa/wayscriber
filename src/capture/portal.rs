@@ -1,5 +1,12 @@
 //! xdg-desktop-portal integration for screenshot capture.
 
+use tokio::time;
+use tokio::time::Instant;
+use zbus::fdo;
+use zbus::zvariant::Value;
+
+use crate::zbus_stream;
+
 use super::types::{CaptureError, CaptureType};
 use std::collections::HashMap;
 use std::future::Future;
@@ -44,8 +51,8 @@ trait Screenshot {
     async fn screenshot(
         &self,
         parent_window: &str,
-        options: HashMap<String, zbus::zvariant::Value<'_>>,
-    ) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
+        options: HashMap<String, Value<'_>>,
+    ) -> zbus::Result<OwnedObjectPath>;
 }
 
 /// D-Bus proxy for org.freedesktop.portal.Request interface.
@@ -69,7 +76,7 @@ trait Request {
 
 struct PortalAttempt {
     label: &'static str,
-    options: HashMap<String, zbus::zvariant::Value<'static>>,
+    options: HashMap<String, Value<'static>>,
 }
 
 const PORTAL_RESULT_URI_KEY: &str = "uri";
@@ -145,12 +152,12 @@ fn portal_attempts(capture_type: CaptureType) -> Vec<PortalAttempt> {
 async fn capture_once(
     connection: &Connection,
     proxy: &ScreenshotProxy<'_>,
-    mut options: HashMap<String, zbus::zvariant::Value<'static>>,
+    mut options: HashMap<String, Value<'static>>,
 ) -> Result<String, CaptureError> {
     // The overlay stays hidden until this returns, so a portal that accepts
     // the request and never answers must not keep it hidden for good.
     let response_timeout = response_timeout(&options);
-    let deadline = tokio::time::Instant::now() + response_timeout;
+    let deadline = Instant::now() + response_timeout;
 
     let handle_token = next_handle_token()?;
     let request_path = portal_request_path(connection, &handle_token)?;
@@ -197,7 +204,7 @@ async fn capture_once(
         within_deadline(
             deadline,
             response_timeout,
-            crate::zbus_stream::next(&mut response_stream),
+            zbus_stream::next(&mut response_stream),
             close,
         )
         .await?
@@ -220,7 +227,7 @@ async fn capture_once(
         within_deadline(
             deadline,
             response_timeout,
-            crate::zbus_stream::next(&mut returned_response_stream),
+            zbus_stream::next(&mut returned_response_stream),
             close,
         )
         .await?
@@ -241,7 +248,7 @@ async fn capture_once(
 }
 
 /// The time a request may wait for the portal's answer.
-fn response_timeout(options: &HashMap<String, zbus::zvariant::Value<'static>>) -> Duration {
+fn response_timeout(options: &HashMap<String, Value<'static>>) -> Duration {
     let interactive =
         options.get(PORTAL_OPTION_INTERACTIVE_KEY) == Some(&zbus::zvariant::Value::from(true));
     if interactive {
@@ -256,12 +263,12 @@ fn response_timeout(options: &HashMap<String, zbus::zvariant::Value<'static>>) -
 /// On expiry the request is closed, so its dialog does not outlive the
 /// capture, and the capture fails instead of waiting forever.
 async fn within_deadline<T>(
-    deadline: tokio::time::Instant,
+    deadline: Instant,
     limit: Duration,
     step: impl Future<Output = T>,
     close: impl Future<Output = ()>,
 ) -> Result<T, CaptureError> {
-    match tokio::time::timeout_at(deadline, step).await {
+    match time::timeout_at(deadline, step).await {
         Ok(value) => Ok(value),
         Err(_) => {
             log::warn!(
@@ -286,7 +293,7 @@ async fn close_request(connection: &Connection, path: OwnedObjectPath) {
             .await
     };
 
-    match tokio::time::timeout(PORTAL_CLOSE_TIMEOUT, close).await {
+    match time::timeout(PORTAL_CLOSE_TIMEOUT, close).await {
         Ok(Ok(())) => log::debug!("Closed the unanswered screenshot portal request"),
         Ok(Err(error)) => log::warn!("Could not close the screenshot portal request: {error}"),
         Err(_) => log::warn!("Closing the screenshot portal request timed out"),
@@ -382,7 +389,7 @@ fn parse_response(
 fn map_portal_call_error(err: zbus::Error) -> CaptureError {
     let error_name = match &err {
         zbus::Error::MethodError(name, _, _) => Some(name.as_str()),
-        zbus::Error::FDO(fdo_error) if matches!(**fdo_error, zbus::fdo::Error::AccessDenied(_)) => {
+        zbus::Error::FDO(fdo_error) if matches!(**fdo_error, fdo::Error::AccessDenied(_)) => {
             Some(DBUS_ERROR_ACCESS_DENIED)
         }
         _ => None,
@@ -405,9 +412,7 @@ fn map_portal_call_error(err: zbus::Error) -> CaptureError {
 }
 
 /// Build portal options based on capture type.
-fn build_portal_options(
-    capture_type: CaptureType,
-) -> HashMap<String, zbus::zvariant::Value<'static>> {
+fn build_portal_options(capture_type: CaptureType) -> HashMap<String, Value<'static>> {
     let mut options = HashMap::new();
 
     match capture_type {
@@ -427,7 +432,7 @@ fn build_portal_options(
 }
 
 /// Active-window capture options (user picks window interactively).
-fn build_active_window_interactive_options() -> HashMap<String, zbus::zvariant::Value<'static>> {
+fn build_active_window_interactive_options() -> HashMap<String, Value<'static>> {
     let mut options = HashMap::new();
     options.insert(PORTAL_OPTION_INTERACTIVE_KEY.to_string(), true.into());
     options
@@ -448,6 +453,11 @@ pub async fn is_portal_available() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::future;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use crate::capture::CaptureFailureKind;
+
     use super::*;
 
     #[test]
@@ -575,40 +585,34 @@ mod tests {
     #[tokio::test]
     async fn an_unanswered_portal_request_is_closed_and_fails() {
         let limit = Duration::from_millis(20);
-        let closed = std::sync::atomic::AtomicBool::new(false);
+        let closed = AtomicBool::new(false);
 
         let result = within_deadline(
-            tokio::time::Instant::now() + limit,
+            Instant::now() + limit,
             limit,
-            std::future::pending::<()>(),
-            async { closed.store(true, std::sync::atomic::Ordering::SeqCst) },
+            future::pending::<()>(),
+            async { closed.store(true, Ordering::SeqCst) },
         )
         .await;
 
         let error = result.expect_err("a silent portal must not be awaited forever");
         assert!(matches!(error, CaptureError::PortalTimeout(_)), "{error}");
-        assert_eq!(
-            error.failure_kind(),
-            crate::capture::CaptureFailureKind::PortalError
-        );
-        assert!(closed.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(error.failure_kind(), CaptureFailureKind::PortalError);
+        assert!(closed.load(Ordering::SeqCst));
     }
 
     #[tokio::test]
     async fn an_answered_portal_request_is_left_open() {
         let limit = Duration::from_secs(5);
-        let closed = std::sync::atomic::AtomicBool::new(false);
+        let closed = AtomicBool::new(false);
 
-        let result = within_deadline(
-            tokio::time::Instant::now() + limit,
-            limit,
-            std::future::ready(7),
-            async { closed.store(true, std::sync::atomic::Ordering::SeqCst) },
-        )
+        let result = within_deadline(Instant::now() + limit, limit, future::ready(7), async {
+            closed.store(true, Ordering::SeqCst)
+        })
         .await;
 
         assert_eq!(result.expect("answered in time"), 7);
-        assert!(!closed.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(!closed.load(Ordering::SeqCst));
     }
 
     #[test]
@@ -616,10 +620,7 @@ mod tests {
         let error = parse_response(2, &HashMap::new()).expect_err("response 2 must fail");
 
         assert!(matches!(error, CaptureError::PortalResponse(2)));
-        assert_eq!(
-            error.failure_kind(),
-            crate::capture::CaptureFailureKind::PortalError
-        );
+        assert_eq!(error.failure_kind(), CaptureFailureKind::PortalError);
     }
 
     fn method_error(name: &str, detail: &str) -> zbus::Error {

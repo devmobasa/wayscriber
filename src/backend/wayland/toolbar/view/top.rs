@@ -16,7 +16,9 @@
 use crate::ui_text::UiTextEngine;
 
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::ToolbarLayoutMode;
 use crate::input::Tool;
+use crate::ui::theme::toolbar;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
 use super::tree::WidgetTree;
@@ -34,7 +36,7 @@ const TOP_LABEL_FONT_SIZE: f64 = 14.0;
 /// Caption text size of the tool meters and steppers ("Smooth"). The GTK
 /// `.meter-caption`/`.stepper-caption` labels read the same token
 /// (`font_tooltip`), so both toolbars draw the word at one size.
-const CAPTION_FONT_SIZE: f64 = crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP;
+const CAPTION_FONT_SIZE: f64 = toolbar::FONT_SIZE_TOOLTIP;
 const MINI_LABEL_FONT_SIZE: f64 = 10.0; // FONT_SIZE_SMALL
 
 /// Extra advance consumed by a group divider (the 1px line plus breathing
@@ -53,7 +55,7 @@ const TOP_COMPACT_MARGIN_RIGHT: f64 = 8.0;
 /// The pad shares its number with the GTK `.pill.compact` padding via
 /// `theme::toolbar::COMPACT_ISLAND_PAD`.
 const TOP_COMPACT_ISLAND_GAP: f64 = 4.0;
-const TOP_COMPACT_ISLAND_PAD: f64 = crate::ui::theme::toolbar::COMPACT_ISLAND_PAD;
+const TOP_COMPACT_ISLAND_PAD: f64 = toolbar::COMPACT_ISLAND_PAD;
 
 pub(crate) use model::TopStripPlan;
 
@@ -85,7 +87,7 @@ pub fn plan_top_strip(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> TopS
     }
     let visible_utilities = model::visible_top_utility_buttons(
         snapshot,
-        snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple,
+        snapshot.layout_mode == ToolbarLayoutMode::Simple,
         snapshot.use_icons,
     );
     let visible_tools: Vec<_> =

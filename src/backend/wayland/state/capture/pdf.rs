@@ -1,5 +1,20 @@
-use super::super::*;
-use crate::backend::wayland::capture::CaptureLayoutContext;
+use crate::capture::{DocumentRenderJob, RenderedDocumentDeliveryRequest};
+use crate::config::PdfTransparentBackground;
+
+use super::super::WaylandState;
+use super::super::core::overlay::OverlaySuppression;
+use crate::backend::wayland::capture::{
+    CaptureLayoutContext, CapturePreflightRequest, PendingPdfExport,
+};
+use crate::canvas_export::{
+    BoardPdfExportSnapshot, CanvasExportBackdropSnapshot, render_board_pdf,
+};
+use crate::capture::file::{FileSaveConfig, expand_tilde};
+use crate::capture::{
+    CaptureDestination, DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult,
+    ImageOperationKind, RenderedDocument,
+};
+use crate::config::Action;
 use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -180,7 +195,7 @@ impl WaylandState {
         // Render on the capture worker, not here: an all-boards export
         // renders every page of every board plus PDF encoding, which stalled
         // event dispatch for seconds on multi-board sessions.
-        let render: crate::capture::DocumentRenderJob = Box::new(move || {
+        let render: DocumentRenderJob = Box::new(move || {
             render_board_pdf(&snapshot).map(|bytes| RenderedDocument {
                 bytes,
                 extension: "pdf".to_string(),
@@ -191,7 +206,7 @@ impl WaylandState {
         self.capture.set_exit_on_success(exit_on_success);
         self.capture.mark_in_progress();
 
-        let request = crate::capture::RenderedDocumentDeliveryRequest {
+        let request = RenderedDocumentDeliveryRequest {
             render,
             destination: CaptureDestination::FileOnly,
             save_config: Some(save_config),
@@ -224,8 +239,7 @@ impl WaylandState {
     }
 
     fn should_capture_desktop_for_pdf_export(&self, action: Action) -> bool {
-        self.config.export.pdf.transparent_background
-            == crate::config::PdfTransparentBackground::Desktop
+        self.config.export.pdf.transparent_background == PdfTransparentBackground::Desktop
             && self.board_pdf_export_scope_has_transparent_pages(action)
     }
 

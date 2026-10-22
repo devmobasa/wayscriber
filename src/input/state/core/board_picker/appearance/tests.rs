@@ -1,3 +1,6 @@
+use crate::input::{MouseButton, Tool};
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::draw::{BLUE, RED};
 use crate::input::state::test_support::TestInputStateBuilder;
@@ -5,8 +8,8 @@ use crate::input::state::test_support::TestInputStateBuilder;
 fn editing() -> InputState {
     let mut input = TestInputStateBuilder::default().build();
     input.switch_board_force("whiteboard");
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     input.clear_session_dirty();
     input
 }
@@ -15,19 +18,19 @@ fn editing() -> InputState {
 fn appearance_preview_cancel_and_noop_never_change_board_or_session() {
     let mut input = editing();
     let original = BoardAppearance::from_spec(&input.boards.active_board().spec);
-    let pen = input.color_for_tool(crate::input::Tool::Pen);
+    let pen = input.color_for_tool(Tool::Pen);
     input.board_appearance_palette(RED);
     input.board_picker.appearance.as_mut().unwrap().preview();
     assert_eq!(
         BoardAppearance::from_spec(&input.boards.active_board().spec),
         original
     );
-    assert_eq!(input.color_for_tool(crate::input::Tool::Pen), pen);
+    assert_eq!(input.color_for_tool(Tool::Pen), pen);
     assert!(!input.is_session_dirty());
     input.board_appearance_key(Key::Escape);
     assert!(input.board_appearance_edit().is_none());
     assert!(!input.boards.active_board().appearance_explicit);
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     assert!(input.apply_board_appearance());
     assert!(!input.is_session_dirty());
 }
@@ -62,7 +65,7 @@ fn reverting_draft_fields_preserves_later_external_changes() {
 #[test]
 fn appearance_apply_merges_untouched_fields_and_preserves_history_and_pen_for_grid_only() {
     let mut input = editing();
-    let pen = input.color_for_tool(crate::input::Tool::Pen);
+    let pen = input.color_for_tool(Tool::Pen);
     let frame = input.boards.active_frame();
     let history = (
         frame.shapes.len(),
@@ -78,7 +81,7 @@ fn appearance_apply_merges_untouched_fields_and_preserves_history_and_pen_for_gr
         input.boards.active_board().spec.grid,
         BoardGrid::new(BoardGridKind::IsometricDots, 63)
     );
-    assert_eq!(input.color_for_tool(crate::input::Tool::Pen), pen);
+    assert_eq!(input.color_for_tool(Tool::Pen), pen);
     assert!(input.is_session_dirty());
     assert!(input.boards.active_board().appearance_explicit);
     let frame = input.boards.active_frame();
@@ -128,7 +131,7 @@ fn appearance_keyboard_edits_spacing_and_pattern_and_selection_cancels() {
         input.boards.active_board().spec.grid,
         BoardGrid::new(BoardGridKind::Cartesian, 20)
     );
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(0);
     assert!(input.board_appearance_edit().is_none());
 }
@@ -146,7 +149,7 @@ fn appearance_preview_and_cancel_damage_the_sheet_without_changing_the_board() {
         // Unrelated UI damage must not suppress the sheet through a nonempty clip.
         input
             .dirty_tracker
-            .mark_rect(crate::util::Rect::new(0, 0, 10, 10).unwrap());
+            .mark_rect(Rect::new(0, 0, 10, 10).unwrap());
         assert!(input.board_appearance_key(key));
         let regions = input.dirty_tracker.take_regions(900, 700);
         assert!(regions.iter().any(|rect| {
@@ -226,8 +229,8 @@ fn dragging_the_size_slider_updates_the_draft_until_release() {
     use crate::input::state::interaction::{
         CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press,
     };
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     let start = (track_x as i32 + 1, middle_y);
     let slider_press = route_pointer_press(
         &mut input,
@@ -236,7 +239,7 @@ fn dragging_the_size_slider_updates_the_draft_until_release() {
             ui_engine: &ui_engine,
         },
         PointerPress::new(
-            crate::input::MouseButton::Left,
+            MouseButton::Left,
             PointerPoints::new(
                 ScreenPoint::new(start.0, start.1),
                 CanvasPoint::new(start.0, start.1),
@@ -317,7 +320,7 @@ fn cancel_sits_before_apply_and_both_buttons_work() {
         BoardGridKind::None
     );
 
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     input.board_picker.appearance.as_mut().unwrap().kind = BoardGridKind::Cartesian;
     let (x, y) = center(&input, buttons.apply);
     assert!(input.board_appearance_click(x, y));
@@ -415,7 +418,7 @@ fn sheet_header_close_cancels_and_color_field_takes_focus() {
 #[test]
 fn opening_and_closing_the_sheet_damage_the_whole_surface() {
     let mut input = laid_out(900, 700);
-    let full = |regions: &[crate::util::Rect]| {
+    let full = |regions: &[Rect]| {
         regions
             .iter()
             .any(|rect| rect.x <= 0 && rect.y <= 0 && rect.width >= 900 && rect.height >= 700)
@@ -425,7 +428,7 @@ fn opening_and_closing_the_sheet_damage_the_whole_surface() {
     input.board_appearance_key(Key::Escape);
     assert!(full(&input.dirty_tracker.take_regions(900, 700)));
 
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     assert!(input.board_appearance_edit().is_some());
     assert!(full(&input.dirty_tracker.take_regions(900, 700)));
 }
@@ -434,8 +437,8 @@ fn opening_and_closing_the_sheet_damage_the_whole_surface() {
 fn command_palette_edit_board_paper_opens_the_sheet_on_the_active_board() {
     use crate::domain::Action;
 
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &ui_engine,
@@ -536,7 +539,7 @@ fn the_wheel_does_not_reach_the_size_control_under_the_paper_picker() {
 fn picker_edits_preview_on_the_draft_and_cancel_restores_it() {
     let mut input = editing();
     let original = input.board_appearance_edit().unwrap().color.clone();
-    let pen = input.color_for_tool(crate::input::Tool::Pen);
+    let pen = input.color_for_tool(Tool::Pen);
     open_paper_picker(&mut input);
 
     input.color_picker_popup_set_color(RED);
@@ -550,7 +553,7 @@ fn picker_edits_preview_on_the_draft_and_cancel_restores_it() {
         input.boards.active_board().spec.background,
         BoardBackground::Solid(RED)
     );
-    assert_eq!(input.color_for_tool(crate::input::Tool::Pen), pen);
+    assert_eq!(input.color_for_tool(Tool::Pen), pen);
     assert!(!input.is_session_dirty());
 
     input.close_color_picker_popup(true);
@@ -562,7 +565,7 @@ fn picker_edits_preview_on_the_draft_and_cancel_restores_it() {
 #[test]
 fn picker_ok_keeps_the_draft_color_and_only_apply_writes_the_board() {
     let mut input = editing();
-    let pen = input.color_for_tool(crate::input::Tool::Pen);
+    let pen = input.color_for_tool(Tool::Pen);
     let recents = input.recent_colors().len();
     open_paper_picker(&mut input);
 
@@ -574,7 +577,7 @@ fn picker_ok_keeps_the_draft_color_and_only_apply_writes_the_board() {
         input.board_appearance_edit().unwrap().color,
         color_to_hex(BLUE)
     );
-    assert_eq!(input.color_for_tool(crate::input::Tool::Pen), pen);
+    assert_eq!(input.color_for_tool(Tool::Pen), pen);
     assert_eq!(
         input.recent_colors().len(),
         recents,
@@ -594,7 +597,7 @@ fn picker_ok_keeps_the_draft_color_and_only_apply_writes_the_board() {
 fn ok_with_the_opening_color_typed_back_undoes_an_earlier_preview() {
     let mut input = editing();
     // A color with a three-digit spelling, so it is only parsed on OK.
-    assert!(input.board_appearance_palette(crate::draw::WHITE));
+    assert!(input.board_appearance_palette(draw::WHITE));
     open_paper_picker(&mut input);
     input.color_picker_popup_set_color(RED);
     assert_eq!(
@@ -653,7 +656,7 @@ fn closing_the_sheet_or_picker_takes_the_paper_picker_with_it() {
     assert!(!input.is_color_picker_popup_open());
     assert!(input.is_board_picker_open());
 
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     open_paper_picker(&mut input);
     input.close_board_picker();
     assert!(!input.is_color_picker_popup_open());

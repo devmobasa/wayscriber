@@ -1,16 +1,17 @@
 use super::*;
 use crate::config::InputHudConfig;
-use crate::input::state::{InputHudSettings, test_support::make_test_input_state};
+use crate::input::state::InputHudSettings;
+use crate::input::state::test_support::make_test_input_state;
 use crate::input::{Key, Modifiers};
 
-fn state_with(config: InputHudConfig) -> InputState {
+fn state_with(config: &InputHudConfig) -> InputState {
     let mut state = make_test_input_state();
-    state.init_input_hud_from_config(InputHudSettings::from(&config));
+    state.init_input_hud_from_config(InputHudSettings::from(config));
     state
 }
 
 fn enabled_state() -> InputState {
-    state_with(InputHudConfig {
+    state_with(&InputHudConfig {
         enabled: true,
         ..InputHudConfig::default()
     })
@@ -18,7 +19,7 @@ fn enabled_state() -> InputState {
 
 #[test]
 fn hidden_hud_has_no_geometry() {
-    let state = state_with(InputHudConfig::default());
+    let state = state_with(&InputHudConfig::default());
     assert!(input_hud_geometry(&state, 1920, 1080).is_none());
 
     let empty = enabled_state();
@@ -53,7 +54,7 @@ fn anchors_place_the_row_on_the_requested_edges() {
         InputHudPosition::BottomLeft,
         InputHudPosition::BottomRight,
     ] {
-        let mut state = state_with(InputHudConfig {
+        let mut state = state_with(&InputHudConfig {
             enabled: true,
             position,
             ..InputHudConfig::default()
@@ -86,7 +87,7 @@ fn anchors_place_the_row_on_the_requested_edges() {
 /// the label at the box edge) so the row never leaves the surface.
 #[test]
 fn the_newest_chip_clamps_to_the_available_width() {
-    let mut state = state_with(InputHudConfig {
+    let mut state = state_with(&InputHudConfig {
         enabled: true,
         font_size: 72.0,
         ..InputHudConfig::default()
@@ -196,7 +197,7 @@ fn paint(engine: &UiTextEngine, layout: &InputHudLayout, density: i32) -> Vec<u8
 #[test]
 fn retained_owner_matches_fresh_geometry_and_faded_clipped_pixels_across_densities() {
     let engine = UiTextEngine::default();
-    let mut state = state_with(InputHudConfig {
+    let mut state = state_with(&InputHudConfig {
         enabled: true,
         font_size: 18.0,
         ..InputHudConfig::default()
@@ -236,13 +237,13 @@ fn retained_owner_matches_fresh_geometry_and_faded_clipped_pixels_across_densiti
             "resolved fade changes output"
         );
         let stride = 360 * density as usize * 4;
-        for (index, _) in actual
+        let painted_pixels = actual
             .as_chunks::<4>()
             .0
             .iter()
             .enumerate()
-            .filter(|(_, p)| p[3] != 0)
-        {
+            .filter(|(_, p)| p[3] != 0);
+        for (index, _) in painted_pixels {
             let x = (index * 4 % stride) as f64 / (4.0 * f64::from(density));
             let y = (index * 4 / stride) as f64 / f64::from(density);
             assert!(

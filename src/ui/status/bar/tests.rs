@@ -1,3 +1,5 @@
+use crate::input::state::test_support;
+
 use super::*;
 use crate::config::{StatusBarItem, StatusBarStyle};
 use crate::draw::{Color, Shape};
@@ -12,7 +14,7 @@ const CLUSTER_LINE_HEIGHT: f64 = 21.0;
 const DOT_DIAMETER: f64 = 12.0;
 
 fn make_state() -> InputState {
-    crate::input::state::test_support::make_test_input_state()
+    test_support::make_test_input_state()
 }
 
 fn measure(

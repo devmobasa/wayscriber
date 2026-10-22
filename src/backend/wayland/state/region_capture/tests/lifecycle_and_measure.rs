@@ -1,3 +1,8 @@
+use wayland_client::protocol::wl_output::Transform;
+
+use crate::backend::wayland::state::screen_image::ScreenImageKind;
+use crate::draw::TextMeasurer;
+
 use super::capture_selection::capture_region;
 use super::*;
 
@@ -17,13 +22,13 @@ fn pending_and_ready_region_state_preserve_generation_and_freeze_ownership() {
         source: ScreenSourceToken {
             output_id: 1,
             output_layout_generation: 0,
-            kind: crate::backend::wayland::state::screen_image::ScreenImageKind::Frozen,
+            kind: ScreenImageKind::Frozen,
             image_generation: 44,
             image_size: (100, 80),
             stride: 400,
             surface: (100, 80),
             output_scale: 1,
-            output_transform: wayland_client::protocol::wl_output::Transform::Normal,
+            output_transform: Transform::Normal,
             zoom_transformed: false,
             zoom_scale: 1.0,
             zoom_view_offset: (0.0, 0.0),
@@ -55,7 +60,7 @@ fn measure_mode_owns_logical_geometry_without_a_screen_image() {
         phase: RegionInteractionPhase::Armed,
     });
     let mut input = make_test_input_state();
-    input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 7);
+    input.activate_measure_mode_with(&TextMeasurer::default(), 7);
 
     assert!(begin_region_selection_event(
         &mut backend,
@@ -132,7 +137,7 @@ fn lost_measure_drag_rearms_for_another_device() {
         phase: RegionInteractionPhase::Armed,
     });
     let mut input = make_test_input_state();
-    input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 8);
+    input.activate_measure_mode_with(&TextMeasurer::default(), 8);
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -165,7 +170,7 @@ fn reversed_measure_drag_uses_outward_integer_edges() {
         phase: RegionInteractionPhase::Armed,
     });
     let mut input = make_test_input_state();
-    input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 9);
+    input.activate_measure_mode_with(&TextMeasurer::default(), 9);
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -272,13 +277,13 @@ pub(super) fn ocr_region(scale: f64) -> ActiveScreenRegion {
         source: ScreenSourceToken {
             output_id: 1,
             output_layout_generation: 0,
-            kind: crate::backend::wayland::state::screen_image::ScreenImageKind::Frozen,
+            kind: ScreenImageKind::Frozen,
             image_generation: 1,
             image_size: ((100.0 * scale) as u32, (80.0 * scale) as u32),
             stride: (400.0 * scale) as i32,
             surface: (100, 80),
             output_scale: 1,
-            output_transform: wayland_client::protocol::wl_output::Transform::Normal,
+            output_transform: Transform::Normal,
             zoom_transformed: false,
             zoom_scale: 1.0,
             zoom_view_offset: (0.0, 0.0),

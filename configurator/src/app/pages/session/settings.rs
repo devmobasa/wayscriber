@@ -56,7 +56,7 @@ pub(super) fn add(page: &mut PageBuilder) {
             tr("Storage mode"),
             "",
             SessionStorageModeOption::list(),
-            option_labels(SessionStorageModeOption::list(), |option| option.label()),
+            &option_labels(&SessionStorageModeOption::list(), |option| option.label()),
             |app| app.draft.session_storage_mode,
             Message::SessionStorageModeChanged,
         );
@@ -65,7 +65,7 @@ pub(super) fn add(page: &mut PageBuilder) {
         tr("Compression"),
         "",
         SessionCompressionOption::list(),
-        option_labels(SessionCompressionOption::list(), |option| option.label()),
+        &option_labels(&SessionCompressionOption::list(), |option| option.label()),
         |app| app.draft.session_compression,
         Message::SessionCompressionChanged,
     )
@@ -131,7 +131,7 @@ pub(super) fn add(page: &mut PageBuilder) {
         );
 }
 
-fn option_labels<O: Copy>(options: Vec<O>, label: impl Fn(&O) -> &'static str) -> Vec<String> {
+fn option_labels<O: Copy>(options: &[O], label: impl Fn(&O) -> &'static str) -> Vec<String> {
     options
         .iter()
         .map(|option| label(option).to_string())

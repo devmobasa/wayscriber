@@ -1,7 +1,8 @@
 use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
-use super::*;
+use super::super::route::{InputSurface, RoutedInput};
+use crate::backend::wayland::state::WaylandState;
 use crate::backend::wayland::toolbar::ToolbarCursorHint;
 use crate::input::{
     BoardPickerCursorHint, ColorPickerCursorHint, CommandPaletteCursorHint, ContextMenuCursorHint,
@@ -373,16 +374,18 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::SelectionGrab;
+
     use super::{CursorHint, ScreenModalCursorContext, drawing_state_cursor, screen_modal_cursor};
-    use crate::{
-        backend::wayland::toolbar::ToolbarCursorHint,
-        draw::{Shape, color::BLACK, frame::ShapeSnapshot},
-        input::{
-            BoardPickerCursorHint, ColorPickerCursorHint, CommandPaletteCursorHint,
-            ContextMenuCursorHint, DrawingState, HelpOverlayCursorHint, SelectionHandle, Tool,
-        },
-        util::Rect,
+    use crate::backend::wayland::toolbar::ToolbarCursorHint;
+    use crate::draw::Shape;
+    use crate::draw::color::BLACK;
+    use crate::draw::frame::ShapeSnapshot;
+    use crate::input::{
+        BoardPickerCursorHint, ColorPickerCursorHint, CommandPaletteCursorHint,
+        ContextMenuCursorHint, DrawingState, HelpOverlayCursorHint, SelectionHandle, Tool,
     };
+    use crate::util::Rect;
     use smithay_client_toolkit::seat::pointer::CursorIcon;
     use std::sync::Arc;
 
@@ -470,7 +473,7 @@ mod tests {
             ),
             (
                 DrawingState::MovingSelection {
-                    grab: crate::input::state::SelectionGrab::new(0, 0, 0),
+                    grab: SelectionGrab::new(0, 0, 0),
                     last_x: 0,
                     last_y: 0,
                     snapshots: Vec::new(),

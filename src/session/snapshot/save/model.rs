@@ -1,3 +1,5 @@
+use std::error;
+
 use super::payload::is_near_limit;
 use log::debug;
 use std::fmt;
@@ -129,7 +131,7 @@ impl fmt::Display for SavePayloadTooLarge {
     }
 }
 
-impl std::error::Error for SavePayloadTooLarge {}
+impl error::Error for SavePayloadTooLarge {}
 
 pub(super) fn log_near_limit(report: &SaveSnapshotReport) {
     if report.is_near_limit() {

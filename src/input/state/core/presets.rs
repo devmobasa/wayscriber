@@ -134,7 +134,7 @@ impl Default for PresetSlots {
 impl From<&PresetSlotsConfig> for PresetSlots {
     fn from(config: &PresetSlotsConfig) -> Self {
         let mut presets = (1..=PRESET_SLOTS_MAX)
-            .map(|slot| config.get_slot(slot).cloned())
+            .map(|slot| config.slot(slot).cloned())
             .collect::<Vec<_>>();
         presets.resize_with(PRESET_SLOTS_MAX, || None);
 
@@ -149,13 +149,16 @@ impl From<&PresetSlotsConfig> for PresetSlots {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::ColorSpec;
+    use crate::input::Tool;
+
     use super::*;
 
     fn marker_preset() -> ToolPresetConfig {
         ToolPresetConfig {
             name: Some("Marker".into()),
-            tool: crate::input::Tool::Marker,
-            color: crate::config::ColorSpec::Name("yellow".into()),
+            tool: Tool::Marker,
+            color: ColorSpec::Name("yellow".into()),
             size: 8.0,
             tool_settings: None,
             eraser_kind: None,

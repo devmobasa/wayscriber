@@ -28,6 +28,7 @@ pub const SWATCH_OUTLINE_WIDTH: f64 = 1.5;
 /// Not [`super::relative_luminance`], which weights the channels without
 /// linearizing them: close enough to pick light or dark chrome, but it rates
 /// the palette's black three times brighter than it is.
+#[must_use]
 pub fn srgb_luminance(color: Rgb) -> f64 {
     fn linear(channel: f64) -> f64 {
         let channel = channel.clamp(0.0, 1.0);
@@ -42,6 +43,7 @@ pub fn srgb_luminance(color: Rgb) -> f64 {
 }
 
 /// WCAG contrast ratio between two colors, from 1.0 (identical) to 21.0.
+#[must_use]
 pub fn contrast_ratio(first: Rgb, second: Rgb) -> f64 {
     let first = srgb_luminance(first);
     let second = srgb_luminance(second);
@@ -59,6 +61,7 @@ pub fn contrast_ratio(first: Rgb, second: Rgb) -> f64 {
 /// A translucent fill is judged as it shows over the chrome. The ring takes
 /// the tone that contrasts with the chrome, not with the fill: it has to be
 /// seen against the chrome to draw the swatch's edge.
+#[must_use]
 pub fn swatch_contrast_outline(fill: Rgba, background: Rgb) -> Option<Rgba> {
     let alpha = fill.3.clamp(0.0, 1.0);
     let shown = (
@@ -81,6 +84,7 @@ pub fn swatch_contrast_outline(fill: Rgba, background: Rgb) -> Option<Rgba> {
 
 /// Edge stroke for a swatch: the contrast ring when the fill needs one,
 /// otherwise the surface's own quiet `hairline` at `hairline_width`.
+#[must_use]
 pub fn swatch_edge_stroke(
     fill: Rgba,
     background: Rgb,
@@ -94,12 +98,15 @@ pub fn swatch_edge_stroke(
 }
 
 /// The RGB of a chrome surface token, for use as a swatch `background`.
+#[must_use]
 pub const fn chrome_rgb(surface: Rgba) -> Rgb {
     (surface.0, surface.1, surface.2)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::Color;
+
     use super::*;
     use crate::domain::color::{
         PALETTE_BLACK, PALETTE_BLUE, PALETTE_GREEN, PALETTE_ORANGE, PALETTE_PINK, PALETTE_RED,
@@ -107,7 +114,7 @@ mod tests {
     };
     use crate::ui::theme::{Theme, toolbar};
 
-    fn rgba(color: crate::domain::Color) -> Rgba {
+    fn rgba(color: Color) -> Rgba {
         (color.r, color.g, color.b, color.a)
     }
 

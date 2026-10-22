@@ -16,6 +16,8 @@ pub use size_ring::{
     SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START, size_ring_angle_for_value, size_ring_value_for_angle,
 };
 
+use crate::draw::Color;
+
 /// How long an open radial menu stays unpainted. Layout and hit-testing are
 /// live from the moment of opening so a press-flick-release commits without
 /// the menu ever appearing; only painting waits out this window. This is an
@@ -76,7 +78,7 @@ pub enum RadialSegmentId {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RadialRingSwatch {
     /// Swatch fill color.
-    pub color: crate::draw::Color,
+    pub color: Color,
     /// True for the appended recent-color segments.
     pub recent: bool,
 }

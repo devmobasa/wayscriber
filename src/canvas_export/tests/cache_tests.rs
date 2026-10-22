@@ -1,4 +1,9 @@
+use std::fs;
+use std::fs::File;
 use std::sync::Arc;
+
+use crate::draw::{FontDescriptor, TextMeasurer};
+use crate::{draw, test_temp};
 
 use super::page::{
     CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, draw_canvas_page_with_measurer,
@@ -23,7 +28,7 @@ fn pixels(page: &CanvasPageExportSnapshot, caches: &mut RenderCaches) -> Vec<u8>
     {
         let cairo = cairo::Context::new(&surface).unwrap();
         draw_canvas_page_with_measurer(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             &mut RenderCtx::new(&cairo, caches),
             page,
             1.0,
@@ -192,9 +197,9 @@ fn pdf_pages_keep_distinct_blurred_backdrops_when_rasterized() {
         labels: Default::default(),
     })
     .unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("pages.pdf");
-    std::fs::write(&path, pdf).unwrap();
+    fs::write(&path, pdf).unwrap();
     let prefix = temp.path().join("page");
     let result = Command::new("pdftoppm")
         .args(["-png", "-r", "72"])
@@ -208,7 +213,7 @@ fn pdf_pages_keep_distinct_blurred_backdrops_when_rasterized() {
         String::from_utf8_lossy(&result.stderr)
     );
     for (index, expected) in [(1, 0xffff0000u32), (2, 0xff0000ffu32)] {
-        let mut file = std::fs::File::open(temp.path().join(format!("page-{index}.png"))).unwrap();
+        let mut file = File::open(temp.path().join(format!("page-{index}.png"))).unwrap();
         let mut image = cairo::ImageSurface::create_from_png(&mut file).unwrap();
         let offset = 10 * image.stride() as usize + 10 * 4;
         let data = image.data().unwrap();
@@ -256,7 +261,7 @@ fn png_and_region_entries_preserve_embedded_image_and_text_pixels() {
         x: 42,
         y: 54,
         text: "Cache".into(),
-        color: crate::draw::BLACK,
+        color: draw::BLACK,
         size: 24.0,
         font_descriptor: Default::default(),
         background_enabled: false,
@@ -270,7 +275,7 @@ fn png_and_region_entries_preserve_embedded_image_and_text_pixels() {
             origin_x: 10,
             origin_y: 20,
         },
-        backdrop: CanvasExportBackdropSnapshot::Solid(crate::draw::WHITE),
+        backdrop: CanvasExportBackdropSnapshot::Solid(draw::WHITE),
         board: BoardExportSnapshot {
             frame: frame.clone_without_history(),
         },
@@ -356,16 +361,13 @@ fn mixed_image_and_wrapped_text_pages_reuse_measurement_across_output_scales() {
         x: 20,
         y: 35,
         text: "Page 測試 العربية wrapped text".into(),
-        color: crate::draw::WHITE,
+        color: draw::WHITE,
         size: 16.0,
-        font_descriptor: crate::draw::FontDescriptor::default(),
+        font_descriptor: FontDescriptor::default(),
         background_enabled: false,
         wrap_width: Some(140),
     });
-    let mut page = page(
-        frame,
-        CanvasExportBackdropSnapshot::Solid(crate::draw::WHITE),
-    );
+    let mut page = page(frame, CanvasExportBackdropSnapshot::Solid(draw::WHITE));
     page.viewport_width = 220;
     page.viewport_height = 130;
     let mut image_only = page.clone();
@@ -374,7 +376,7 @@ fn mixed_image_and_wrapped_text_pages_reuse_measurement_across_output_scales() {
         .shapes
         .retain(|shape| matches!(shape.shape, Shape::Image { .. }));
     let paint = |page: &CanvasPageExportSnapshot,
-                 measurer: &crate::draw::TextMeasurer,
+                 measurer: &TextMeasurer,
                  caches: &mut RenderCaches,
                  scale: i32| {
         let mut surface =
@@ -391,13 +393,13 @@ fn mixed_image_and_wrapped_text_pages_reuse_measurement_across_output_scales() {
         }
         surface.data().unwrap().to_vec()
     };
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut caches = RenderCaches::default();
     for scale in [1, 2, 1] {
         let actual = paint(&page, &measurer, &mut caches, scale);
         let fresh = paint(
             &page,
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             &mut RenderCaches::default(),
             scale,
         );

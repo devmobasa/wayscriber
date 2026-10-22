@@ -1,5 +1,4 @@
-use crate::draw::Shape;
-use crate::draw::TextMeasurer;
+use crate::draw::{Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
@@ -31,7 +30,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("font size"))
+        self.report_selection_apply_result(&result, tr("font size"))
     }
 
     pub(in crate::input::state::core::properties) fn apply_selection_text_background(
@@ -73,16 +72,18 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("text background"))
+        self.report_selection_apply_result(&result, tr("text background"))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     #[test]

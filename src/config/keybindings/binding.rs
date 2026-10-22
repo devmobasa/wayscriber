@@ -1,10 +1,21 @@
-use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::{fmt, iter};
 
 /// A single keybinding: a key character with optional modifiers.
 #[derive(Debug, Clone, Eq)]
 pub struct KeyBinding {
     pub key: String,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    /// Super / Meta / Windows (Wayland logo modifier). Displayed as `Super`.
+    pub logo: bool,
+}
+
+/// The modifier keys a shortcut chord can carry. Keyboard, pointer, and
+/// stylus triggers share this set; Tab is a drag-tool modifier only.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct ChordModifiers {
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
@@ -97,6 +108,7 @@ const KEY_DISPLAY_NAMES: &[(&str, &str)] = &[
 /// Case-insensitive like every other key-name comparison, so a config that
 /// spells `arrowleft` still displays `←`. Anything without a display form —
 /// single characters, `+`, `Space`, the function keys — comes back unchanged.
+#[must_use]
 pub fn key_display_name(key: &str) -> &str {
     KEY_DISPLAY_NAMES
         .iter()
@@ -113,6 +125,7 @@ pub fn key_display_name(key: &str) -> &str {
 /// rendered label is what lets pre-formatted label text — joined alternatives,
 /// compacted ranges, `then` sequences — stay searchable without every surface
 /// carrying a second string.
+#[must_use]
 pub fn canonical_key_names(label: &str) -> Option<String> {
     let mut restored: Option<String> = None;
     for (name, display) in KEY_DISPLAY_NAMES {
@@ -167,6 +180,7 @@ fn starts_with_word_char(text: &str) -> bool {
 /// Single characters come through as themselves, so any one-character key is
 /// deliverable; everything else has to be one of [`NAMED_KEYS`]. Matching is
 /// case-insensitive because so is [`KeyBinding::matches`].
+#[must_use]
 pub fn is_deliverable_key_name(key: &str) -> bool {
     key.chars().count() == 1
         || NAMED_KEYS
@@ -179,6 +193,7 @@ pub fn is_deliverable_key_name(key: &str) -> bool {
 /// Covers the two mistakes that actually happen: a misspelled modifier, which
 /// the parser folds into the key because it does not recognise it, and a
 /// near-miss on a named key.
+#[must_use]
 pub fn suggest_key_name(key: &str) -> Option<String> {
     if let Some((head, rest)) = key.split_once('+') {
         // The parser only leaves a `+` in the key when a segment was not a
@@ -287,23 +302,18 @@ pub(crate) fn parse_chord_parts(s: &str) -> Result<ChordParts, String> {
     })
 }
 
-pub(crate) fn format_modifiers(
-    ctrl: bool,
-    shift: bool,
-    alt: bool,
-    logo: bool,
-) -> Vec<&'static str> {
+pub(crate) fn format_modifiers(modifiers: ChordModifiers) -> Vec<&'static str> {
     let mut parts = Vec::new();
-    if ctrl {
+    if modifiers.ctrl {
         parts.push("Ctrl");
     }
-    if shift {
+    if modifiers.shift {
         parts.push("Shift");
     }
-    if alt {
+    if modifiers.alt {
         parts.push("Alt");
     }
-    if logo {
+    if modifiers.logo {
         parts.push("Super");
     }
     parts
@@ -329,21 +339,30 @@ impl KeyBinding {
     ///
     /// [`fmt::Display`] stays the canonical config spelling, because that is
     /// what gets written back to `config.toml`.
+    #[must_use]
     pub fn display_label(&self) -> String {
-        format_modifiers(self.ctrl, self.shift, self.alt, self.logo)
+        format_modifiers(self.modifiers())
             .into_iter()
-            .chain(std::iter::once(key_display_name(&self.key)))
+            .chain(iter::once(key_display_name(&self.key)))
             .collect::<Vec<_>>()
             .join("+")
     }
 
+    /// The modifier keys this chord requires.
+    #[must_use]
+    pub fn modifiers(&self) -> ChordModifiers {
+        ChordModifiers {
+            ctrl: self.ctrl,
+            shift: self.shift,
+            alt: self.alt,
+            logo: self.logo,
+        }
+    }
+
     /// Check if this keybinding matches the current input state.
-    pub fn matches(&self, key: &str, ctrl: bool, shift: bool, alt: bool, logo: bool) -> bool {
-        self.key.eq_ignore_ascii_case(key)
-            && self.ctrl == ctrl
-            && self.shift == shift
-            && self.alt == alt
-            && self.logo == logo
+    #[must_use]
+    pub fn matches(&self, key: &str, modifiers: ChordModifiers) -> bool {
+        self.key.eq_ignore_ascii_case(key) && self.modifiers() == modifiers
     }
 }
 
@@ -352,9 +371,9 @@ impl fmt::Display for KeyBinding {
         write!(
             f,
             "{}",
-            format_modifiers(self.ctrl, self.shift, self.alt, self.logo)
+            format_modifiers(self.modifiers())
                 .into_iter()
-                .chain(std::iter::once(self.key.as_str()))
+                .chain(iter::once(self.key.as_str()))
                 .collect::<Vec<_>>()
                 .join("+")
         )

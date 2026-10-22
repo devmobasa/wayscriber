@@ -4,9 +4,14 @@ use std::io::{self, ErrorKind};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+use serde::de::DeserializeOwned;
+
+use crate::durable_io::AtomicWriteOptions;
+use crate::{durable_io, paths};
 
 pub(super) use super::super::linux::create_private_directory;
 use super::super::wire::{
@@ -20,7 +25,7 @@ use super::{
 };
 
 pub(crate) fn command_root() -> PathBuf {
-    crate::paths::daemon_command_dir().join("v2")
+    paths::daemon_command_dir().join("v2")
 }
 
 pub(super) fn creating_dir(root: &Path) -> PathBuf {
@@ -117,7 +122,7 @@ fn check_root_shape(root: &Path, collect_temps: bool) -> Result<()> {
         if allowed.contains(name.as_str()) {
             continue;
         }
-        if !crate::durable_io::is_temp_file_for(&name, "admission.json") {
+        if !durable_io::is_temp_file_for(&name, "admission.json") {
             bail!("unexpected v2 command-root entry {name}");
         }
 
@@ -311,7 +316,7 @@ pub(super) fn try_lock_until(
                 if BootClock::now()? >= deadline {
                     return Ok(false);
                 }
-                std::thread::sleep(LOCK_RETRY);
+                thread::sleep(LOCK_RETRY);
             }
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => return Err(error).context("failed to acquire protocol lock"),
@@ -345,15 +350,11 @@ pub(super) fn try_admission_lock(root: &Path, deadline: BootDeadline) -> Result<
 
 pub(super) fn write_record<T: serde::Serialize>(path: &Path, value: &T, cap: usize) -> Result<()> {
     let bytes = canonical_json(value, cap)?;
-    crate::durable_io::write_atomic(
-        path,
-        &bytes,
-        crate::durable_io::AtomicWriteOptions::private_runtime_file(),
-    )
-    .with_context(|| format!("failed to publish protocol record {}", path.display()))
+    durable_io::write_atomic(path, &bytes, AtomicWriteOptions::private_runtime_file())
+        .with_context(|| format!("failed to publish protocol record {}", path.display()))
 }
 
-pub(super) fn read_record<T: serde::de::DeserializeOwned + serde::Serialize>(
+pub(super) fn read_record<T: DeserializeOwned + serde::Serialize>(
     path: &Path,
     cap: usize,
 ) -> Result<T> {

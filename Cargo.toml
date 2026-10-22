@@ -14,6 +14,24 @@ default-members = ["."]
 
 [workspace.lints.clippy]
 cognitive_complexity = "warn"
+# Rules from the Google Rust style guide that Clippy can check. CI promotes
+# these warnings to errors; clippy.toml holds their settings.
+absolute_paths = "warn"
+enum_glob_use = "warn"
+fn_params_excessive_bools = "warn"
+missing_assert_message = "warn"
+missing_panics_doc = "warn"
+must_use_candidate = "warn"
+needless_for_each = "warn"
+needless_pass_by_value = "warn"
+redundant_clone = "warn"
+ref_option = "warn"
+return_self_not_must_use = "warn"
+string_add = "warn"
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unwrap_used = "warn"
+wildcard_imports = "warn"
 
 [lints]
 workspace = true

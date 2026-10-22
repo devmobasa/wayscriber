@@ -1,3 +1,5 @@
+use wayscriber::domain::BoardGridKind;
+
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
 };
@@ -9,7 +11,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_boards_grid_kind_changed(
         &mut self,
         index: usize,
-        value: wayscriber::domain::BoardGridKind,
+        value: BoardGridKind,
     ) -> Vec<Effect> {
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.grid_kind = value;

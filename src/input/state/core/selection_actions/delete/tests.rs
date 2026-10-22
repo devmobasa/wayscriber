@@ -1,8 +1,10 @@
+use crate::input::state::test_support::TestInputStateBuilder;
+
 use super::*;
 use crate::draw::FontDescriptor;
 
 fn create_test_input_state() -> InputState {
-    crate::input::state::test_support::TestInputStateBuilder::default()
+    TestInputStateBuilder::default()
         .thickness(3.0)
         .eraser_size(12.0)
         .font_descriptor(FontDescriptor {
@@ -31,7 +33,7 @@ fn sample_eraser_path_points_returns_borrowed_for_single_point() {
     let points = vec![(5, 7)];
     let sampled = state.sample_eraser_path_points(&points);
 
-    assert!(matches!(sampled, std::borrow::Cow::Borrowed(_)));
+    assert!(matches!(sampled, Cow::Borrowed(_)));
     assert_eq!(sampled.as_ref(), points.as_slice());
 }
 
@@ -41,7 +43,7 @@ fn sample_eraser_path_points_returns_borrowed_for_dense_segments() {
     let points = vec![(0, 0), (2, 0), (4, 0)];
     let sampled = state.sample_eraser_path_points(&points);
 
-    assert!(matches!(sampled, std::borrow::Cow::Borrowed(_)));
+    assert!(matches!(sampled, Cow::Borrowed(_)));
     assert_eq!(sampled.as_ref(), points.as_slice());
 }
 
@@ -51,7 +53,7 @@ fn sample_eraser_path_points_avoids_duplicate_points_when_sampling() {
     let points = vec![(0, 0), (0, 20), (0, 20), (0, 40)];
     let sampled = state.sample_eraser_path_points(&points);
 
-    assert!(matches!(sampled, std::borrow::Cow::Owned(_)));
+    assert!(matches!(sampled, Cow::Owned(_)));
     for pair in sampled.windows(2) {
         assert_ne!(pair[0], pair[1]);
     }

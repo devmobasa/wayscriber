@@ -210,7 +210,7 @@ impl InputState {
             apply_preset_style(shape, &preset)
         });
 
-        self.report_selection_apply_result(result, tr("preset"))
+        self.report_selection_apply_result(&result, tr("preset"))
     }
 
     /// The preset for the first editable selected shape a tool can draw.

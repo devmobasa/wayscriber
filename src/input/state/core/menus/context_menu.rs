@@ -1,3 +1,4 @@
+use std::mem;
 use std::time::Instant;
 
 use super::super::board_picker::BoardPickerPageTarget;
@@ -82,7 +83,7 @@ impl ContextMenuPanel {
     }
 
     pub(in crate::input::state) fn take_dismissal_release_pending(&mut self) -> bool {
-        std::mem::take(&mut self.dismissal_release_pending)
+        mem::take(&mut self.dismissal_release_pending)
     }
 
     /// Closes the menu and any submenu. The frame damage history repaints the

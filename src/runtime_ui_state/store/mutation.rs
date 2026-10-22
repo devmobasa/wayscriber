@@ -1,9 +1,7 @@
 use super::{RuntimeUiStateInspection, RuntimeUiStateStore, fs as store_fs, inspection};
 use crate::runtime_ui_state::{
-    AcceptedStateRevision, RuntimeStateFailurePathEffect, RuntimeStateIoError,
-    RuntimeStateObservedPathEffect, RuntimeStatePathIdentity, RuntimeStatePostClaimPathEffect,
-    RuntimeStateRecoveryArtifact, RuntimeStateSourceObservation, RuntimeStateSourceRevision,
-    RuntimeUiFileStatus, SourceMutationId, SourceMutationKind, SourceMutationRequest,
+    AcceptedStateRevision, RuntimeStateFailurePathEffect, RuntimeStatePathIdentity,
+    RuntimeStateSourceRevision, SourceMutationId, SourceMutationKind, SourceMutationRequest,
     SourceMutationResult, encode_runtime_ui_file,
 };
 
@@ -12,7 +10,7 @@ mod replace;
 mod reset;
 mod result;
 
-use result::*;
+use result::{applied, failed, status_allowed, untouched};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MutationMode {
@@ -32,9 +30,9 @@ struct MutationTarget {
     expected_path: RuntimeStatePathIdentity,
 }
 
-struct PreparedReplacement<'a> {
-    temp: &'a mut store_fs::CleanupPath,
-    bytes: &'a [u8],
+struct PreparedReplacement<'write> {
+    temp: &'write mut store_fs::CleanupPath,
+    bytes: &'write [u8],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,7 +106,7 @@ impl RuntimeUiStateStore {
                     accepted_through,
                     expected_source,
                     MutationMode::Replace,
-                    Some(bytes),
+                    Some(&bytes),
                     hook,
                 )
             }
@@ -148,7 +146,7 @@ impl RuntimeUiStateStore {
         applied_through: AcceptedStateRevision,
         expected: RuntimeStateSourceRevision,
         mode: MutationMode,
-        replacement: Option<Vec<u8>>,
+        replacement: Option<&[u8]>,
         hook: &mut dyn FnMut(MutationPoint),
     ) -> SourceMutationResult {
         if expected.path_identity().source_path() != self.path() {
@@ -212,7 +210,7 @@ impl RuntimeUiStateStore {
             expected_path,
         };
 
-        let mut temp = match replacement.as_deref() {
+        let mut temp = match replacement {
             Some(bytes) => match store_fs::create_synced_temp(&target.operation_path, bytes) {
                 Ok(temp) => Some(temp),
                 Err(error) => {
@@ -250,9 +248,9 @@ impl RuntimeUiStateStore {
                     id,
                     applied_through,
                     &target,
-                    PreparedReplacement {
+                    &mut PreparedReplacement {
                         temp: temp.as_mut().expect("replacement temp"),
-                        bytes: replacement.as_deref().expect("replacement bytes"),
+                        bytes: replacement.expect("replacement bytes"),
                     },
                     hook,
                 ),
@@ -342,9 +340,9 @@ impl RuntimeUiStateStore {
                     quarantine,
                     inspection: claimed,
                 },
-                PreparedReplacement {
+                &mut PreparedReplacement {
                     temp: temp.as_mut().expect("replacement temp"),
-                    bytes: replacement.as_deref().expect("replacement bytes"),
+                    bytes: replacement.expect("replacement bytes"),
                 },
                 hook,
             ),

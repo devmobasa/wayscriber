@@ -1,4 +1,18 @@
-use super::*;
+use crate::draw;
+use crate::ui::toolbar::PrecisionEntryTarget;
+
+use super::super::ToolbarSliderSpec;
+use super::slider::StylePillSlider;
+use super::{
+    StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, selection_entry,
+    selection_kind_slug,
+};
+use crate::config::{Action, QuickColorPalette, action_label, action_short_label};
+use crate::i18n::{tr, trf};
+use crate::input::{EraserMode, SelectionPropertyKind};
+use crate::label_format::{format_binding_label, format_quick_color_tooltip};
+use crate::ui::toolbar::{ToolContext, ToolbarEvent, ToolbarSnapshot};
+use std::borrow::Cow;
 
 impl StylePillControl {
     pub(crate) fn id(self) -> Cow<'static, str> {
@@ -96,12 +110,10 @@ impl StylePillControl {
             Self::CounterReset(StylePillCounter::Arrow) => ToolbarEvent::ResetArrowLabelCounter,
             Self::CounterReset(StylePillCounter::Step) => ToolbarEvent::ResetStepMarkerCounter,
             // The numerals open the precise-entry popup on the overlay.
-            Self::ThicknessValue => ToolbarEvent::OpenPrecisionEntry(
-                crate::ui::toolbar::PrecisionEntryTarget::Thickness,
-            ),
-            Self::FontSizeValue => {
-                ToolbarEvent::OpenPrecisionEntry(crate::ui::toolbar::PrecisionEntryTarget::FontSize)
+            Self::ThicknessValue => {
+                ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::Thickness)
             }
+            Self::FontSizeValue => ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::FontSize),
             // A cycle click is a forward step through the same apply
             // machinery the properties popup uses.
             Self::SelectionCycle(kind) => {
@@ -262,7 +274,7 @@ impl StylePillControl {
             }
             _ => None,
         }?;
-        if !crate::draw::spotlight_magnification_is_active(displayed_magnification) {
+        if !draw::spotlight_magnification_is_active(displayed_magnification) {
             return None;
         }
         snapshot.spotlight_magnifier_source?.unavailable_reason()

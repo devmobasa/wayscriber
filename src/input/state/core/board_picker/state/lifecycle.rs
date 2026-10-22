@@ -1,3 +1,5 @@
+use crate::input::state::core::modal::ModalSurface;
+
 use super::super::super::base::InputState;
 use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerPageNavMode, BoardPickerState};
 use crate::draw::TextMeasurer;
@@ -26,7 +28,7 @@ impl InputState {
 
     fn open_board_picker_in_mode(&mut self, measurer: &TextMeasurer, mode: BoardPickerMode) {
         self.pending_onboarding_usage.used_board_picker = true;
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::BoardPicker);
+        self.close_modals_for_open(ModalSurface::BoardPicker);
         self.cancel_active_interaction_with(measurer);
         let active_index = self.boards.active_index();
         let active_page = self.boards.active_page_index();
@@ -327,6 +329,7 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::TextMeasurer;
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
@@ -334,13 +337,13 @@ mod tests {
         let mut state = make_test_input_state();
 
         state.open_radial_menu(320.0, 240.0);
-        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_with_measurer(&TextMeasurer::default());
         assert!(state.is_board_picker_open());
         assert!(!state.is_radial_menu_open());
 
         state.close_board_picker();
         state.open_radial_menu(320.0, 240.0);
-        state.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_quick_with_measurer(&TextMeasurer::default());
         assert!(state.is_board_picker_open());
         assert!(state.board_picker_is_quick());
         assert!(!state.is_radial_menu_open());

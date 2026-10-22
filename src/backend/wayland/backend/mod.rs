@@ -2,6 +2,7 @@
 // rendering & protocol state to `WaylandState` and its handler modules.
 use anyhow::{Context, Result};
 use std::path::PathBuf;
+use tokio::runtime::Runtime;
 
 use crate::backend::ExitAfterCaptureMode;
 
@@ -21,18 +22,18 @@ pub struct WaylandBackend {
     pub(super) exit_after_capture_mode: ExitAfterCaptureMode,
     pub(super) named_session_file: Option<PathBuf>,
     /// Tokio runtime for async capture operations
-    pub(super) tokio_runtime: tokio::runtime::Runtime,
+    pub(super) tokio_runtime: Runtime,
 }
 
 impl WaylandBackend {
-    pub fn new(
+    pub fn try_new(
         initial_mode: Option<String>,
         freeze_on_start: bool,
         exit_after_capture_mode: ExitAfterCaptureMode,
         named_session_file: Option<PathBuf>,
     ) -> Result<Self> {
-        let tokio_runtime = tokio::runtime::Runtime::new()
-            .context("Failed to create Tokio runtime for capture operations")?;
+        let tokio_runtime =
+            Runtime::new().context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,
             freeze_on_start,

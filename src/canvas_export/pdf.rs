@@ -1,6 +1,8 @@
 use crate::capture::CaptureError;
-use crate::config::{PdfExportConfig, PdfFitMode, PdfOrientation, PdfPageSize};
-use crate::draw::{RenderCaches, RenderCtx};
+use crate::config::{PdfExportConfig, PdfFitMode, PdfLabelConfig, PdfOrientation, PdfPageSize};
+use crate::draw;
+use crate::draw::{RenderCaches, RenderCtx, TextMeasurer};
+use crate::ui_text::UiTextEngine;
 
 use super::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
@@ -17,7 +19,7 @@ const LETTER_HEIGHT: f64 = 792.0;
 #[derive(Debug, Clone)]
 pub struct BoardPdfExportSnapshot {
     pub pages: Vec<PdfPageExportSnapshot>,
-    pub labels: crate::config::PdfLabelConfig,
+    pub labels: PdfLabelConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +78,7 @@ pub struct PdfPageMetadata {
 
 impl PdfPageMetadata {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         app_board_index: usize,
         app_board_count: usize,
@@ -144,8 +147,8 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
         .map_err(|err| CaptureError::ImageError(format!("Failed to create PDF context: {err}")))?;
 
     let mut caches = RenderCaches::default();
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_text = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_text = UiTextEngine::default();
     for page in &snapshot.pages {
         let layout = page.layout;
         validate_page_size(layout.page_width, layout.page_height)?;
@@ -155,7 +158,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
                 CaptureError::ImageError(format!("Failed to set PDF page size: {err}"))
             })?;
         paint_pdf_page_background(&ctx, &page.page, layout.page_width, layout.page_height);
-        let backdrop = ExportBackdrop::new(&page.page.backdrop)?;
+        let backdrop = ExportBackdrop::try_new(&page.page.backdrop)?;
         if frame_has_magnified_spotlight(&page.page.frame) {
             render_magnified_page_raster(
                 &measurer,
@@ -206,7 +209,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
 }
 
 fn render_magnified_page_raster(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
@@ -240,7 +243,7 @@ fn render_magnified_page_raster(
     )?;
     drop(raster_ctx);
 
-    crate::draw::with_saved_state(pdf_ctx, || {
+    draw::with_saved_state(pdf_ctx, || {
         pdf_ctx.rectangle(
             layout.destination_rect.x,
             layout.destination_rect.y,

@@ -1,3 +1,8 @@
+use crate::config::ToolbarLayoutMode;
+use crate::input::state::TopMenuState;
+use crate::test_temp;
+use crate::ui::toolbar::ToolbarItemCustomizeGroup;
+
 use super::*;
 
 #[test]
@@ -19,7 +24,7 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
     ] {
         assert!(seeds.get(&target).is_some(), "missing seed for {target:?}");
     }
-    for flag in crate::config::ToolbarSectionFlag::ALL {
+    for flag in ToolbarSectionFlag::ALL {
         assert!(
             seeds
                 .get(&InteractionSeedTarget::SectionVisibility(flag))
@@ -34,7 +39,7 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
                 .is_some()
         );
     }
-    for flag in crate::config::ToolbarSectionFlag::ALL {
+    for flag in ToolbarSectionFlag::ALL {
         assert!(
             seeds
                 .get(&InteractionSeedTarget::ItemVisibility(flag.item_id()))
@@ -54,8 +59,8 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
 #[test]
 fn toolbar_section_visibility_is_not_seeded_into_runtime_state() {
     let mut config = Config::default();
-    config.ui.toolbar.layout_mode = crate::config::ToolbarLayoutMode::Regular;
-    config.ui.toolbar.items = crate::config::ToolbarItemsConfig::default();
+    config.ui.toolbar.layout_mode = ToolbarLayoutMode::Regular;
+    config.ui.toolbar.items = ToolbarItemsConfig::default();
     config.ui.toolbar.show_zoom_actions = false;
 
     let board_pin_seeds = board_pin_seeds_from_input(&input_from_config(&config));
@@ -63,7 +68,7 @@ fn toolbar_section_visibility_is_not_seeded_into_runtime_state() {
     assert!(
         seeds
             .get(&InteractionSeedTarget::ItemVisibility(
-                crate::config::ToolbarSectionFlag::ZoomActions.item_id(),
+                ToolbarSectionFlag::ZoomActions.item_id(),
             ))
             .is_none()
     );
@@ -71,7 +76,7 @@ fn toolbar_section_visibility_is_not_seeded_into_runtime_state() {
 
 #[test]
 fn runtime_rebuild_reuses_minimize_transition_cleanup() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut source = input_from_config(&config);
@@ -88,34 +93,31 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
 
     for menu in [
-        crate::input::state::TopMenuState::ShapePicker,
-        crate::input::state::TopMenuState::TopOverflow,
-        crate::input::state::TopMenuState::CanvasPopover,
-        crate::input::state::TopMenuState::SessionPopover,
-        crate::input::state::TopMenuState::SettingsPopover,
-        crate::input::state::TopMenuState::PenFeelPanel,
+        TopMenuState::ShapePicker,
+        TopMenuState::TopOverflow,
+        TopMenuState::CanvasPopover,
+        TopMenuState::SessionPopover,
+        TopMenuState::SettingsPopover,
+        TopMenuState::PenFeelPanel,
     ] {
         let mut rebuilt = input_from_config(&config);
         rebuilt.test_set_toolbar_menu_state(menu, rebuilt.toolbar_top_popover_scroll());
         rebuilt.test_set_toolbar_customization(
             true,
-            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools),
+            Some(ToolbarItemCustomizeGroup::TopTools),
             false,
         );
         let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
         runtime.apply_live_state(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             &mut rebuilt,
             &mut positions,
         );
 
         assert!(rebuilt.toolbar_top_minimized());
-        assert_eq!(
-            rebuilt.toolbar_top_menu(),
-            crate::input::state::TopMenuState::Closed
-        );
+        assert_eq!(rebuilt.toolbar_top_menu(), TopMenuState::Closed);
         assert!(!rebuilt.toolbar_customize_items_open());
         assert!(rebuilt.toolbar_customize_items_group().is_none());
     }
@@ -124,7 +126,7 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
 
 #[test]
 fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -162,8 +164,8 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
 
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -172,7 +174,7 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
 
 #[test]
 fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let artifact_path = temp.path().join("runtime-ui.wayscriber-recovery-test.toml");
     let config = Config::default();
@@ -223,7 +225,7 @@ fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
 
 #[test]
 fn unsupported_runtime_reset_requires_confirmation_and_preserves_exact_source() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let unsupported = b"version = 73\nfuture = 'preserve exactly'\n";
     fs::write(&runtime_path, unsupported).unwrap();
@@ -252,7 +254,7 @@ fn unsupported_runtime_reset_requires_confirmation_and_preserves_exact_source() 
     assert!(
         runtime.handle_persistence_lifecycle_event(&ToolbarEvent::ConfirmUnsupportedRuntimeUiReset)
     );
-    let snapshot = wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Missing);
+    let snapshot = wait_for_runtime_mode(&mut runtime, &RuntimeUiPersistenceMode::Missing);
     assert!(!runtime_path.exists());
     assert_eq!(snapshot.recovery_artifacts.len(), 1);
     assert_eq!(
@@ -263,7 +265,7 @@ fn unsupported_runtime_reset_requires_confirmation_and_preserves_exact_source() 
 
 #[test]
 fn invalid_runtime_reset_keeps_the_incident_handle_paired_with_confirmation() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let invalid = b"this is not = valid = toml\n";
     fs::write(&runtime_path, invalid).unwrap();
@@ -285,7 +287,7 @@ fn invalid_runtime_reset_keeps_the_incident_handle_paired_with_confirmation() {
     );
     wait_for_runtime_mode(
         &mut runtime,
-        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
+        &RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
     );
     assert!(
         runtime
@@ -304,14 +306,14 @@ fn invalid_runtime_reset_keeps_the_incident_handle_paired_with_confirmation() {
     );
     wait_for_runtime_mode(
         &mut runtime,
-        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
+        &RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
     );
     assert!(
         runtime.handle_persistence_lifecycle_event(
             &ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
         )
     );
-    let snapshot = wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Missing);
+    let snapshot = wait_for_runtime_mode(&mut runtime, &RuntimeUiPersistenceMode::Missing);
     assert!(!runtime_path.exists());
     assert_eq!(snapshot.recovery_artifacts.len(), 1);
     assert_eq!(fs::read(&snapshot.recovery_artifacts[0]).unwrap(), invalid);
@@ -319,7 +321,7 @@ fn invalid_runtime_reset_keeps_the_incident_handle_paired_with_confirmation() {
 
 #[test]
 fn cancelling_read_only_recovery_returns_the_same_incident_to_the_actor() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let invalid = b"not valid runtime state";
     fs::write(&runtime_path, invalid).unwrap();
@@ -333,7 +335,7 @@ fn cancelling_read_only_recovery_returns_the_same_incident_to_the_actor() {
     );
     assert!(runtime.has_retained_recovery_client());
     assert!(runtime.handle_persistence_lifecycle_event(&ToolbarEvent::CancelRuntimeUiRecovery));
-    wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Unhealthy);
+    wait_for_runtime_mode(&mut runtime, &RuntimeUiPersistenceMode::Unhealthy);
     assert!(!runtime.has_retained_recovery_client());
     assert_eq!(fs::read(&runtime_path).unwrap(), invalid);
 
@@ -347,13 +349,13 @@ fn cancelling_read_only_recovery_returns_the_same_incident_to_the_actor() {
     );
     wait_for_runtime_mode(
         &mut runtime,
-        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
+        &RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
     );
 }
 
 #[test]
 fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(&runtime_path, b"not valid runtime state").unwrap();
     let config_a = Config::default();
@@ -374,8 +376,8 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
     let mut config_b = config_a;
     config_b.ui.toolbar.top_pinned = false;
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -393,8 +395,8 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
         "synchronous cancellation must publish the staged live authority"
     );
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -406,11 +408,11 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
 fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
     const AUTHORED: &[u8] =
         b"# keep this formatting and comment\n[ui.toolbar]\ntop_pinned = true\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
-    let config: Config = toml::from_str(std::str::from_utf8(AUTHORED).unwrap()).unwrap();
+    let config: Config = toml::from_str(str::from_utf8(AUTHORED).unwrap()).unwrap();
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
 
@@ -434,9 +436,9 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
             }
             ToolbarRuntimeUiPersistenceTarget::TopDisplayMode => {
                 input.set_top_display_mode_with_resources(
-                    &crate::ui_text::UiTextEngine::default(),
-                    &crate::draw::TextMeasurer::default(),
-                    crate::config::TopDisplayMode::Micro,
+                    &UiTextEngine::default(),
+                    &TextMeasurer::default(),
+                    TopDisplayMode::Micro,
                 );
             }
             _ => unreachable!(),

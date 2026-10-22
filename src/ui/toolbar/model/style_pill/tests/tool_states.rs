@@ -1,3 +1,9 @@
+use crate::config::TopDisplayMode;
+use crate::draw::{FontDescriptor, SpotlightMagnifierSource};
+use crate::input::SelectionPropertyValue;
+use crate::ui::toolbar::PrecisionEntryTarget;
+use crate::{config, draw};
+
 use super::*;
 use crate::config::ToolbarStrokeControls;
 
@@ -73,7 +79,7 @@ fn the_smoothing_meter_names_its_level_and_keeps_events_on_its_bars() {
     assert_eq!(meter.value_text(&snapshot).as_deref(), Some("Medium"));
 
     let bars = meter.required_meter(&snapshot).segments;
-    assert_eq!(bars.len(), usize::from(crate::draw::MAX_PEN_SMOOTHING));
+    assert_eq!(bars.len(), usize::from(draw::MAX_PEN_SMOOTHING));
     assert_eq!(bars[3].event, ToolbarEvent::SetPenSmoothing(4));
 
     // Zero passes is a state, not a quantity.
@@ -139,7 +145,7 @@ fn bold_has_a_control_of_its_own() {
     assert_eq!(toggle.role(), StylePillRole::Toggle);
     assert_eq!(toggle.label(&snapshot), "Bold");
 
-    snapshot.font = crate::draw::FontDescriptor::new(
+    snapshot.font = FontDescriptor::new(
         "Sans".to_string(),
         "normal".to_string(),
         "normal".to_string(),
@@ -150,11 +156,8 @@ fn bold_has_a_control_of_its_own() {
         Some(ToolbarEvent::SetFontBold(true))
     );
 
-    snapshot.font = crate::draw::FontDescriptor::new(
-        "Sans".to_string(),
-        "Bold".to_string(),
-        "normal".to_string(),
-    );
+    snapshot.font =
+        FontDescriptor::new("Sans".to_string(), "Bold".to_string(), "normal".to_string());
     assert!(
         toggle.active(&snapshot),
         "the weight is compared without case, like every other font identity"
@@ -173,11 +176,8 @@ fn a_numeric_weight_does_not_read_as_bold() {
     // The toggle writes words. A config asking for 700 is asking for something
     // a two-state control cannot say, so it must not claim to be showing it.
     let mut snapshot = snapshot();
-    snapshot.font = crate::draw::FontDescriptor::new(
-        "Sans".to_string(),
-        "700".to_string(),
-        "normal".to_string(),
-    );
+    snapshot.font =
+        FontDescriptor::new("Sans".to_string(), "700".to_string(), "normal".to_string());
 
     assert!(!StylePillControl::FontWeightToggle.active(&snapshot));
 }
@@ -232,7 +232,7 @@ fn the_smoothing_meter_stops_at_both_ends_of_the_range() {
         ToolbarEvent::SetPenSmoothing(1)
     );
 
-    snapshot.pen_smoothing = crate::draw::MAX_PEN_SMOOTHING;
+    snapshot.pen_smoothing = draw::MAX_PEN_SMOOTHING;
     assert_eq!(meter.meter_wheel_event(&snapshot, 1), None);
     assert!(
         meter
@@ -312,7 +312,7 @@ fn the_shape_detection_meter_is_shape_pen_only_and_stays_in_range() {
         ToolbarEvent::SetShapeRecognitionSensitivity(3)
     );
 
-    let max = crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
+    let max = config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
     snapshot.shape_recognition_sensitivity = 0;
     assert_eq!(meter.meter_wheel_event(&snapshot, -1), None);
     snapshot.shape_recognition_sensitivity = max;
@@ -323,7 +323,7 @@ fn the_shape_detection_meter_is_shape_pen_only_and_stays_in_range() {
 fn the_font_button_shows_the_family_in_use_and_opens_the_picker() {
     let mut snapshot = snapshot();
     snapshot.text_active = true;
-    snapshot.font = crate::draw::FontDescriptor::new(
+    snapshot.font = FontDescriptor::new(
         "Noto Sans CJK JP Black".to_string(),
         "normal".to_string(),
         "normal".to_string(),
@@ -373,8 +373,7 @@ fn a_squeezed_pill_sheds_its_extras_before_it_sheds_the_color_chip() {
 fn spotlight_state_exposes_an_inline_missing_source_hint() {
     let mut snapshot = snapshot_for_tool(Tool::Spotlight);
     snapshot.spotlight_magnification = 2.25;
-    snapshot.spotlight_magnifier_source =
-        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+    snapshot.spotlight_magnifier_source = Some(SpotlightMagnifierSource::IncompleteTransparent);
 
     let slider = StylePillControl::Slider(StylePillSlider::SpotlightMagnification);
     assert_eq!(
@@ -382,8 +381,7 @@ fn spotlight_state_exposes_an_inline_missing_source_hint() {
         Some("Freeze screen to preview")
     );
 
-    snapshot.spotlight_magnifier_source =
-        Some(crate::draw::SpotlightMagnifierSource::CompleteSolid);
+    snapshot.spotlight_magnifier_source = Some(SpotlightMagnifierSource::CompleteSolid);
     assert_eq!(slider.status_text(&snapshot), None);
 
     // No backend has answered, so the control says nothing rather than
@@ -399,8 +397,7 @@ fn a_compact_strip_drops_the_pill_and_with_it_the_unavailable_status() {
     // has to decide what to do with a hint it cannot fit.
     let mut snapshot = snapshot_for_tool(Tool::Spotlight);
     snapshot.spotlight_magnification = 2.25;
-    snapshot.spotlight_magnifier_source =
-        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+    snapshot.spotlight_magnifier_source = Some(SpotlightMagnifierSource::IncompleteTransparent);
 
     let mut compact = plan();
     compact.compact = true;
@@ -432,7 +429,7 @@ fn minimized_and_micro_strips_hide_the_pill() {
     );
 
     let mut micro = snapshot();
-    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+    micro.top_display_mode = TopDisplayMode::Micro;
     assert_eq!(
         StylePillSpec::state_of(&micro, &plan()),
         StylePillState::Hidden
@@ -443,7 +440,7 @@ fn minimized_and_micro_strips_hide_the_pill() {
 #[test]
 fn an_unconstrained_pill_offers_the_whole_built_in_palette() {
     let snapshot = snapshot_for_tool(Tool::Pen);
-    let palette = crate::config::QuickColorPalette::default();
+    let palette = QuickColorPalette::default();
     assert!(palette.rendered_entries().len() <= StylePillSpec::MAX_SWATCHES);
 
     let spec = StylePillSpec::build(&snapshot, &plan());
@@ -512,7 +509,7 @@ fn stroke_state_orders_chip_swatches_slider_and_numeral() {
     assert_eq!(
         numeral.event(&snapshot),
         Some(ToolbarEvent::OpenPrecisionEntry(
-            crate::ui::toolbar::PrecisionEntryTarget::Thickness
+            PrecisionEntryTarget::Thickness
         ))
     );
     assert_eq!(
@@ -552,7 +549,7 @@ fn hiding_quick_colors_hides_the_pill_swatches_but_keeps_the_chip() {
     );
 
     // A Text-state pill (also color-bearing) honours the same gate.
-    let mut text = snapshot.clone();
+    let mut text = snapshot;
     text.text_active = true;
     let text_ids = control_ids(&StylePillSpec::build(&text, &plan()));
     assert_eq!(
@@ -796,7 +793,7 @@ fn text_state_is_swatches_size_and_one_font_control() {
     assert_eq!(
         numeral.event(&snapshot),
         Some(ToolbarEvent::OpenPrecisionEntry(
-            crate::ui::toolbar::PrecisionEntryTarget::FontSize
+            PrecisionEntryTarget::FontSize
         ))
     );
     assert_eq!(
@@ -906,24 +903,19 @@ fn text_controls_appear_only_where_text_is_drawn_while_the_pill_adapts() {
 fn the_docked_selection_control_reports_on_the_selected_shape_not_the_tool_default() {
     let mut snapshot = snapshot_for_tool(Tool::Select);
     // The next Spotlight the user draws would be unmagnified...
-    snapshot.spotlight_magnification = crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION;
+    snapshot.spotlight_magnification = draw::DEFAULT_SPOTLIGHT_MAGNIFICATION;
     // ...but the shape they have selected is not.
     snapshot.selection_spotlight_magnification = Some(3.0);
-    snapshot.spotlight_magnifier_source =
-        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
-    snapshot
-        .selection_properties
-        .push(crate::input::SelectionPropertyEntry {
-            label: "Magnification".to_string(),
-            value: "3x".to_string(),
-            kind: crate::input::SelectionPropertyKind::SpotlightMagnification,
-            state: crate::input::SelectionPropertyValue::Number(Some(3.0)),
-            disabled: false,
-        });
+    snapshot.spotlight_magnifier_source = Some(SpotlightMagnifierSource::IncompleteTransparent);
+    snapshot.selection_properties.push(SelectionPropertyEntry {
+        label: "Magnification".to_string(),
+        value: "3x".to_string(),
+        kind: SelectionPropertyKind::SpotlightMagnification,
+        state: SelectionPropertyValue::Number(Some(3.0)),
+        disabled: false,
+    });
 
-    let stepper = StylePillControl::SelectionStepper(
-        crate::input::SelectionPropertyKind::SpotlightMagnification,
-    );
+    let stepper = StylePillControl::SelectionStepper(SelectionPropertyKind::SpotlightMagnification);
     assert!(stepper.has_status_slot());
     assert_eq!(
         stepper.status_text(&snapshot),
@@ -938,7 +930,7 @@ fn the_docked_selection_control_reports_on_the_selected_shape_not_the_tool_defau
     );
 
     // An unmagnified selection has nothing to warn about either.
-    snapshot.selection_spotlight_magnification = Some(crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION);
+    snapshot.selection_spotlight_magnification = Some(draw::DEFAULT_SPOTLIGHT_MAGNIFICATION);
     assert_eq!(stepper.status_text(&snapshot), None);
 }
 

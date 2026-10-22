@@ -43,7 +43,7 @@ impl PaletteRecentsWriter {
         let worker_shutdown = Arc::clone(&shutdown);
         let worker = thread::Builder::new()
             .name("palette-recents".to_string())
-            .spawn(move || run_writer(store, worker_pending, worker_shutdown, receiver));
+            .spawn(move || run_writer(store, &worker_pending, &worker_shutdown, &receiver));
 
         match worker {
             Ok(worker) => Self {
@@ -83,7 +83,7 @@ impl PaletteRecentsWriter {
         *self
             .pending
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(latest);
+            .expect("the pending recents slot is never locked across a panic") = Some(latest);
 
         match wake.try_send(()) {
             Ok(()) | Err(TrySendError::Full(())) => true,
@@ -109,9 +109,9 @@ impl Drop for PaletteRecentsWriter {
 
 fn run_writer(
     mut store: PaletteRecentsStore,
-    pending: Arc<Mutex<Option<Vec<Action>>>>,
-    shutdown: Arc<AtomicBool>,
-    receiver: Receiver<()>,
+    pending: &Mutex<Option<Vec<Action>>>,
+    shutdown: &AtomicBool,
+    receiver: &Receiver<()>,
 ) {
     let mut retry_delay = INITIAL_RETRY_DELAY;
 
@@ -119,7 +119,7 @@ fn run_writer(
         loop {
             let desired = pending
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .expect("the pending recents slot is never locked across a panic")
                 .take();
             let Some(desired) = desired else {
                 break;
@@ -134,7 +134,7 @@ fn run_writer(
             // otherwise restore the failed snapshot for the timed retry.
             let mut queued = pending
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                .expect("the pending recents slot is never locked across a panic");
             if queued.is_none() {
                 *queued = Some(desired);
             }
@@ -158,12 +158,14 @@ fn run_writer(
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
     use std::path::PathBuf;
 
     #[test]
     fn writer_flushes_the_latest_queued_snapshot_before_drop_returns() {
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp.path().join("wayscriber").join("palette_recents.toml");
         let store = PaletteRecentsStore::load_from_path(path.clone());
         let writer = PaletteRecentsWriter::new(store);

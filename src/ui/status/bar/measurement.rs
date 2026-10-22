@@ -18,7 +18,8 @@ pub(super) fn cluster_line_metrics(
 ) -> ClusterLineMetrics {
     let mut ascent = (-sep_extents.y_bearing()).max(0.0);
     let mut descent = (sep_extents.height() + sep_extents.y_bearing()).max(0.0);
-    for extents in pieces.iter().filter_map(|piece| piece.extents.as_ref()) {
+    let piece_extents = pieces.iter().filter_map(|piece| piece.extents.as_ref());
+    for extents in piece_extents {
         ascent = ascent.max(-extents.y_bearing());
         descent = descent.max(extents.height() + extents.y_bearing());
     }
@@ -48,7 +49,7 @@ pub(super) struct StatusBarMeasurement {
 /// cluster pieces (the cluster cannot re-wrap the way the M0 suffix could).
 pub(super) fn measure_status_bar(
     engine: &UiTextEngine,
-    style: &crate::config::StatusBarStyle,
+    style: &StatusBarStyle,
     prefix_text: &str,
     cluster_width: f64,
     cluster_line_height: f64,
@@ -210,5 +211,20 @@ pub(super) fn layout_mode_badges(
     }
     badges
 }
+use crate::config::StatusBarStyle;
+
+use super::super::badges::{
+    EDITING_BADGE_FONT_SIZE, EDITING_BADGE_HINT_FONT_SIZE, EDITING_BADGE_TINT,
+    FROZEN_BADGE_FONT_SIZE, FROZEN_BADGE_TINT, PAN_BADGE_FONT_SIZE, PAN_BADGE_TINT,
+    ZOOM_BADGE_FONT_SIZE, ZOOM_BADGE_TINT, editing_badge_hint, editing_badge_label,
+    frozen_badge_label, pan_badge_label, zoom_badge_label,
+};
 use super::content::{StatusHudPiece, status_text_style};
-use super::*;
+use super::{
+    MIN_INTERACTIVE_HEIGHT, MIN_PREFIX_BUDGET_FRACTION, SEGMENT_SEPARATOR,
+    STATUS_BAR_MAX_WIDTH_FRACTION, StatusHudBadge,
+};
+use crate::config::StatusPosition;
+use crate::input::{DrawingState, InputState};
+use crate::ui::primitives::{BADGE_STACK_GAP, measure_badge_with_engine};
+use crate::ui_text::{UiTextEngine, UiTextExtents};

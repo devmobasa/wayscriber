@@ -1,3 +1,7 @@
+use crate::toolbar_icons;
+use crate::toolbar_icons::ToolbarIconPainter;
+use crate::ui_text::UiTextEngine;
+
 use super::header;
 use crate::config::{Action, action_label};
 use crate::i18n::tr;
@@ -34,11 +38,11 @@ pub(super) struct FooterPill {
     pub(super) target: FooterTarget,
     pub(super) label: &'static str,
     pub(super) key_hint: Option<&'static str>,
-    pub(super) icon: crate::toolbar_icons::ToolbarIconPainter,
+    pub(super) icon: ToolbarIconPainter,
 }
 
 impl FooterPill {
-    fn action(action: Action, icon: crate::toolbar_icons::ToolbarIconPainter) -> Self {
+    fn action(action: Action, icon: ToolbarIconPainter) -> Self {
         Self {
             target: FooterTarget::Action(action),
             label: action_label(action),
@@ -52,8 +56,8 @@ impl FooterPill {
 /// action registry, never a hardcoded string.
 pub(super) fn footer_pills(show_unbound: bool) -> [FooterPill; 3] {
     [
-        FooterPill::action(Action::ReplayTour, crate::toolbar_icons::draw_icon_refresh),
-        FooterPill::action(Action::OpenAbout, crate::toolbar_icons::draw_icon_info),
+        FooterPill::action(Action::ReplayTour, toolbar_icons::draw_icon_refresh),
+        FooterPill::action(Action::OpenAbout, toolbar_icons::draw_icon_info),
         FooterPill {
             target: FooterTarget::ToggleUnbound,
             label: if show_unbound {
@@ -62,7 +66,7 @@ pub(super) fn footer_pills(show_unbound: bool) -> [FooterPill; 3] {
                 tr("Show Unbound")
             },
             key_hint: Some(TOGGLE_UNBOUND_KEY),
-            icon: crate::toolbar_icons::draw_icon_visibility,
+            icon: toolbar_icons::draw_icon_visibility,
         },
     ]
 }
@@ -74,14 +78,14 @@ pub(super) struct FooterHit {
 }
 
 /// Geometry and styling shared by every footer pill.
-pub(super) struct FooterPillLayout<'a> {
+pub(super) struct FooterPillLayout<'font> {
     pub(super) inner_x: f64,
     pub(super) inner_width: f64,
     pub(super) top_y: f64,
     pub(super) pill_height: f64,
     pub(super) font_size: f64,
     pub(super) key_font_size: f64,
-    pub(super) font_family: &'a str,
+    pub(super) font_family: &'font str,
     pub(super) accent: [f64; 4],
     pub(super) accent_muted: [f64; 4],
 }
@@ -92,7 +96,7 @@ struct PillWidths {
 }
 
 fn measure_pill(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     font_size: f64,
@@ -127,7 +131,7 @@ fn measure_pill(
 /// Width the whole footer pill row occupies, so the overlay box can grow to
 /// fit it.
 pub(super) fn measure_footer_pills(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     font_size: f64,
@@ -144,9 +148,9 @@ pub(super) fn measure_footer_pills(
 /// Draw the footer pills as one centred row and return their clickable rects,
 /// each tagged with what a click should do.
 pub(super) fn draw_footer_pills(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
-    layout: FooterPillLayout<'_>,
+    layout: &FooterPillLayout<'_>,
     pills: &[FooterPill],
 ) -> Vec<FooterHit> {
     let icon_size = layout.font_size;

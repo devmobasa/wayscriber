@@ -1,4 +1,12 @@
-use super::*;
+use super::super::RuntimeUiStateStore;
+use super::result::{
+    applied, artifact_for, failed, is_expected_missing, observation_changed_retained, untouched,
+};
+use super::{ClaimedSource, MutationPoint, MutationTarget, PreparedReplacement, store_fs};
+use crate::runtime_ui_state::{
+    AcceptedStateRevision, RuntimeStateFailurePathEffect, RuntimeStatePathIdentity,
+    RuntimeUiFileStatus, SourceMutationId, SourceMutationResult,
+};
 
 impl RuntimeUiStateStore {
     pub(super) fn install_at_missing(
@@ -6,7 +14,7 @@ impl RuntimeUiStateStore {
         id: SourceMutationId,
         applied_through: AcceptedStateRevision,
         target: &MutationTarget,
-        replacement: PreparedReplacement<'_>,
+        replacement: &mut PreparedReplacement<'_>,
         hook: &mut dyn FnMut(MutationPoint),
     ) -> SourceMutationResult {
         hook(MutationPoint::BeforeInstall);
@@ -84,7 +92,7 @@ impl RuntimeUiStateStore {
         applied_through: AcceptedStateRevision,
         target: &MutationTarget,
         claimed: ClaimedSource,
-        replacement: PreparedReplacement<'_>,
+        replacement: &mut PreparedReplacement<'_>,
         hook: &mut dyn FnMut(MutationPoint),
     ) -> SourceMutationResult {
         let ClaimedSource {
@@ -95,13 +103,13 @@ impl RuntimeUiStateStore {
         match self.inspect() {
             Ok(active) if is_expected_missing(&active, &target.expected_path) => {}
             Ok(active) => {
-                return observation_changed_retained(id, active.observation, quarantine, claimed);
+                return observation_changed_retained(id, active.observation, &quarantine, &claimed);
             }
             Err(error) => {
                 return self.retained_after_claim(
                     id,
-                    quarantine,
-                    claimed,
+                    &quarantine,
+                    &claimed,
                     format!(
                         "could not verify the claimed runtime-state path before install: {}",
                         error.message()
@@ -114,8 +122,8 @@ impl RuntimeUiStateStore {
         {
             return self.retained_after_claim(
                 id,
-                quarantine,
-                claimed,
+                &quarantine,
+                &claimed,
                 format!("active path changed before runtime-state install: {error}"),
             );
         }
@@ -126,7 +134,7 @@ impl RuntimeUiStateStore {
                 id,
                 format!("runtime-state replacement has an uncertain durability outcome: {error}"),
                 self.inspect().ok().map(|inspection| inspection.observation),
-                artifact_for(quarantine, claimed),
+                artifact_for(&quarantine, &claimed),
                 RuntimeStateFailurePathEffect::UnknownAfterMutation,
             );
         }
@@ -141,7 +149,7 @@ impl RuntimeUiStateStore {
                         error.message()
                     ),
                     None,
-                    artifact_for(quarantine, claimed),
+                    artifact_for(&quarantine, &claimed),
                     RuntimeStateFailurePathEffect::UnknownAfterMutation,
                 );
             }
@@ -151,12 +159,12 @@ impl RuntimeUiStateStore {
             || active.observation.revision.path_identity() != &target.expected_path
             || active.observation.revision.bytes() != Some(replacement.bytes)
         {
-            return observation_changed_retained(id, active.observation, quarantine, claimed);
+            return observation_changed_retained(id, active.observation, &quarantine, &claimed);
         }
 
         let cleanup_artifact = match store_fs::remove_file(&quarantine) {
             Ok(()) => Vec::new(),
-            Err(_) => artifact_for(quarantine.clone(), claimed),
+            Err(_) => artifact_for(&quarantine, &claimed),
         };
         if let Err(error) = target.operation_path.sync_parent() {
             return failed(

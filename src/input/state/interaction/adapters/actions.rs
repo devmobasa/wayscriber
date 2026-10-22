@@ -1,3 +1,5 @@
+use crate::input::state::InputTextResources;
+
 use super::super::outcome::ActionRoute;
 use crate::domain::Action;
 use crate::input::state::InputState;
@@ -8,7 +10,7 @@ pub(crate) fn close_properties_panel_before_action(state: &mut InputState) {
 
 pub(crate) fn dispatch_action(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     action: Action,
     route: ActionRoute,
 ) {

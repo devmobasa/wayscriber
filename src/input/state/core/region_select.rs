@@ -1,3 +1,6 @@
+#[cfg(test)]
+use crate::draw::TextMeasurer;
+
 use super::InputState;
 
 /// Why the generalized screen-region selector is engaged.
@@ -17,24 +20,29 @@ pub struct SelectionPolicy {
 }
 
 impl SelectionPolicy {
+    #[must_use]
     pub const fn min_submit_logical_px(self) -> Option<f64> {
         self.min_submit_logical_px
     }
 
+    #[must_use]
     pub const fn allow_square(self) -> bool {
         self.allow_square
     }
 
+    #[must_use]
     pub const fn snap_anchor(self) -> bool {
         self.snap_anchor
     }
 }
 
 impl RegionPurposeTag {
+    #[must_use]
     pub const fn is_capture(self) -> bool {
         matches!(self, Self::CaptureDeliver | Self::CaptureInteractive)
     }
 
+    #[must_use]
     pub const fn selection_policy(self) -> SelectionPolicy {
         match self {
             Self::Ocr => SelectionPolicy {
@@ -131,6 +139,7 @@ pub enum RegionSelectUiState {
 }
 
 impl RegionSelectUiState {
+    #[must_use]
     pub fn is_active(self) -> bool {
         matches!(
             self,
@@ -141,27 +150,33 @@ impl RegionSelectUiState {
         )
     }
 
+    #[must_use]
     pub fn is_pending(self) -> bool {
         matches!(self, Self::PendingCapture { .. })
     }
 
+    #[must_use]
     pub fn is_engaged(self) -> bool {
         self.is_active() || self.is_pending()
     }
 
+    #[must_use]
     pub fn is_selecting(self) -> bool {
         matches!(self, Self::Selecting { .. })
     }
 
+    #[must_use]
     pub fn is_review(self) -> bool {
         matches!(self, Self::Review { .. })
     }
 
+    #[must_use]
     pub fn is_measured(self) -> bool {
         matches!(self, Self::Measured { .. })
     }
 
     /// The region drag in logical screen coordinates, if one is in progress.
+    #[must_use]
     pub fn selection(self) -> Option<RegionSelection> {
         match self {
             Self::Selecting { start, current, .. } => Some(RegionSelection {
@@ -174,6 +189,7 @@ impl RegionSelectUiState {
     }
 
     /// The device dragging the region, if one is in progress.
+    #[must_use]
     pub fn selection_owner(self) -> Option<RegionInputSource> {
         match self {
             Self::Selecting { owner, .. } => Some(owner),
@@ -185,6 +201,7 @@ impl RegionSelectUiState {
         }
     }
 
+    #[must_use]
     pub fn pending_source(self) -> Option<ScreenCaptureSource> {
         match self {
             Self::PendingCapture { source, .. } => Some(source),
@@ -196,6 +213,7 @@ impl RegionSelectUiState {
         }
     }
 
+    #[must_use]
     pub fn purpose(self) -> Option<RegionPurposeTag> {
         match self {
             Self::PendingCapture { purpose, .. }
@@ -207,6 +225,7 @@ impl RegionSelectUiState {
         }
     }
 
+    #[must_use]
     pub fn generation(self) -> Option<u64> {
         match self {
             Self::PendingCapture { generation, .. }
@@ -267,11 +286,7 @@ impl InputState {
 
 #[cfg(test)]
 impl InputState {
-    pub(crate) fn activate_measure_mode_with(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-        generation: u64,
-    ) {
+    pub(crate) fn activate_measure_mode_with(&mut self, measurer: &TextMeasurer, generation: u64) {
         self.activate_region_with(measurer, RegionPurposeTag::Measure, generation);
     }
 
@@ -290,7 +305,7 @@ impl InputState {
 
     pub(crate) fn activate_region_with(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         purpose: RegionPurposeTag,
         generation: u64,
     ) {
@@ -478,6 +493,9 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::Action;
+    use crate::ui_text::UiTextEngine;
+
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::state::{InputEffect, InputEffectDrain};
@@ -489,11 +507,7 @@ mod tests {
     // interaction, tool, and history guarantees at their generalized seam.
 
     fn activate_ocr_region(state: &mut InputState, generation: u64) {
-        state.activate_region_with(
-            &crate::draw::TextMeasurer::default(),
-            RegionPurposeTag::Ocr,
-            generation,
-        );
+        state.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, generation);
     }
 
     #[test]
@@ -596,7 +610,7 @@ mod tests {
     #[test]
     fn measure_mode_keeps_the_completed_rectangle_without_capture_state() {
         let mut state = make_test_input_state();
-        state.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 7);
+        state.activate_measure_mode_with(&TextMeasurer::default(), 7);
         assert!(state.start_region_selection(RegionInputSource::Pointer, (12.0, 18.0)));
         state.update_region_selection(RegionInputSource::Pointer, (42.0, 63.0));
 
@@ -833,8 +847,8 @@ mod tests {
     /// remove the stroke drawn before it, proving no region history entry was added.
     #[test]
     fn the_selector_lifecycle_adds_no_shape_and_no_history_entry() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &test_text_measurer,
             ui_engine: &test_ui_engine,
@@ -852,7 +866,7 @@ mod tests {
         state.cancel_region_ui_only();
         assert_eq!(state.boards.active_frame().shapes.len(), 1);
 
-        state.handle_action_with_resources(test_text_resources, crate::domain::Action::Undo);
+        state.handle_action_with_resources(test_text_resources, Action::Undo);
 
         assert_eq!(state.boards.active_frame().shapes.len(), 0);
     }

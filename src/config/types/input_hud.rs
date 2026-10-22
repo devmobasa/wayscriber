@@ -106,21 +106,25 @@ pub enum InputHudPosition {
 
 impl InputHudPosition {
     /// Whether the row is anchored to the top edge of the screen.
+    #[must_use]
     pub fn is_top(self) -> bool {
         matches!(self, Self::TopLeft | Self::TopCenter | Self::TopRight)
     }
 
     /// Whether the row is vertically centered (the middle grid line).
+    #[must_use]
     pub fn is_middle(self) -> bool {
         matches!(self, Self::CenterLeft | Self::Center | Self::CenterRight)
     }
 
     /// Whether the row is horizontally centered.
+    #[must_use]
     pub fn is_center(self) -> bool {
         matches!(self, Self::TopCenter | Self::Center | Self::BottomCenter)
     }
 
     /// Whether the row is anchored to the right edge of the screen.
+    #[must_use]
     pub fn is_right(self) -> bool {
         matches!(self, Self::TopRight | Self::CenterRight | Self::BottomRight)
     }

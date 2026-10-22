@@ -17,12 +17,12 @@ pub(super) struct FrameProfile {
 }
 
 /// A flushed ARGB8888 target and its physical damage regions.
-pub(super) struct PixelBuffer<'a> {
-    pub data: &'a mut [u8],
+pub(super) struct PixelBuffer<'buffer> {
+    pub data: &'buffer mut [u8],
     pub width: i32,
     pub height: i32,
     pub stride: i32,
-    pub damage: &'a [Rect],
+    pub damage: &'buffer [Rect],
 }
 
 impl FrameProfile {
@@ -55,7 +55,7 @@ impl FrameProfile {
     /// Returns whether Cairo must be notified of rewritten canvas pixels.
     pub(super) fn before_ui(
         &self,
-        pixels: PixelBuffer<'_>,
+        pixels: &mut PixelBuffer<'_>,
         baseline: &mut Vec<u8>,
         render_ui: bool,
     ) -> bool {
@@ -83,7 +83,7 @@ impl FrameProfile {
     }
 
     /// Called after UI painting with the same visibility decision used by `before_ui`.
-    pub(super) fn after_ui(&self, pixels: PixelBuffer<'_>, baseline: &[u8], render_ui: bool) {
+    pub(super) fn after_ui(&self, pixels: &mut PixelBuffer<'_>, baseline: &[u8], render_ui: bool) {
         let Some(profile) = self.profile.as_ref() else {
             return;
         };

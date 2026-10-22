@@ -1,3 +1,6 @@
+use crate::domain::Language;
+use crate::i18n;
+
 use super::super::base::InputState;
 use super::empty_query::{EmptyQueryGroups, empty_query_commands, empty_query_groups};
 use super::{CommandEntry, CommandPaletteState, command_palette_entries};
@@ -29,6 +32,7 @@ pub enum CommandPaletteListRow {
 }
 
 impl CommandPaletteListRow {
+    #[must_use]
     pub fn command_index(&self) -> Option<usize> {
         match self {
             Self::Header(_) => None,
@@ -42,7 +46,7 @@ impl CommandPaletteListRow {
 #[derive(Debug)]
 pub(in crate::input::state::core) struct CommandPaletteResults {
     pub(super) query: String,
-    pub(super) language: crate::domain::Language,
+    pub(super) language: Language,
     pub(super) recents: Vec<Action>,
     pub(super) keymap_revision: u64,
     pub(super) results: Vec<&'static CommandEntry>,
@@ -333,7 +337,7 @@ fn action_category_score(category: ActionCategory, query: &str) -> i32 {
     let source = fuzzy_score(query, action_category_name(category));
     // English headings are different words from the keys (Interface / ui,
     // Boards / board). Adding them would change existing English results.
-    if crate::i18n::language() == crate::domain::Language::English {
+    if i18n::language() == Language::English {
         source
     } else {
         source.max(fuzzy_score(query, action_category_display_name(category)))
@@ -485,6 +489,8 @@ mod tests {
 
 #[cfg(test)]
 mod cache_tests {
+    use std::collections::HashMap;
+
     use crate::config::keybindings::Action;
     use crate::input::state::test_support::make_test_input_state;
 
@@ -526,7 +532,7 @@ mod cache_tests {
         // Shortcut labels are scored, so replacing the keymap must invalidate.
         state.command_palette.query = "undo".to_string();
         let _ = state.filtered_commands();
-        state.set_action_bindings(std::collections::HashMap::new());
+        state.set_action_bindings(HashMap::new());
         assert!(
             !state.filtered_commands().is_empty(),
             "a keymap change must produce a fresh ranking, not a stale one"

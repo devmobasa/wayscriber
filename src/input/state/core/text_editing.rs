@@ -1,3 +1,6 @@
+use std::mem;
+use std::time::Instant;
+
 use super::base::{DrawingState, TextInputMode};
 use super::ime::ImeCompositionState;
 use crate::draw::frame::{Frame, ShapeSnapshot, UndoAction};
@@ -11,7 +14,7 @@ pub(crate) struct TextClickState {
     pub(crate) shape_id: ShapeId,
     pub(crate) x: i32,
     pub(crate) y: i32,
-    pub(crate) at: std::time::Instant,
+    pub(crate) at: Instant,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -22,7 +25,7 @@ pub(crate) struct TextBlockDrag {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextEditEntryFeedback {
-    pub(crate) started: std::time::Instant,
+    pub(crate) started: Instant,
 }
 
 /// Text-editor mode, asynchronous identity, composition, and pointer state.
@@ -118,7 +121,7 @@ impl TextEditing {
         self.text_edit_entry_feedback = feedback;
     }
 
-    pub(crate) fn expire_edit_entry_feedback(&mut self, now: std::time::Instant) -> bool {
+    pub(crate) fn expire_edit_entry_feedback(&mut self, now: Instant) -> bool {
         let Some(feedback) = &self.text_edit_entry_feedback else {
             return false;
         };
@@ -131,7 +134,7 @@ impl TextEditing {
         false
     }
 
-    pub(crate) fn edit_entry_progress(&self, now: std::time::Instant) -> Option<f64> {
+    pub(crate) fn edit_entry_progress(&self, now: Instant) -> Option<f64> {
         let feedback = self.text_edit_entry_feedback.as_ref()?;
         let elapsed = now.saturating_duration_since(feedback.started).as_millis() as f64;
         let total = TEXT_EDIT_ENTRY_DURATION_MS as f64;
@@ -193,7 +196,7 @@ impl TextEditing {
         shape_id: ShapeId,
         x: i32,
         y: i32,
-        now: std::time::Instant,
+        now: Instant,
         max_delay_ms: u64,
         max_distance: i32,
     ) -> bool {
@@ -217,7 +220,7 @@ impl TextEditing {
     }
 
     pub(crate) fn replace_preview_bounds(&mut self, bounds: Option<Rect>) -> Option<Rect> {
-        std::mem::replace(&mut self.last_text_preview_bounds, bounds)
+        mem::replace(&mut self.last_text_preview_bounds, bounds)
     }
 
     pub(crate) fn mark_cursor_rect_dirty(&mut self) {
@@ -235,11 +238,11 @@ impl TextEditing {
     }
 
     pub(crate) fn take_cursor_rect_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.text_input_cursor_rect_dirty)
+        mem::take(&mut self.text_input_cursor_rect_dirty)
     }
 
     pub(crate) fn take_external_change_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.text_input_external_change_dirty)
+        mem::take(&mut self.text_input_external_change_dirty)
     }
 
     pub(crate) fn reset_composition_and_pointer(&mut self) {
@@ -254,7 +257,7 @@ impl TextEditing {
         measurer: &TextMeasurer,
         frame: &mut Frame,
         shape_id: ShapeId,
-        now: std::time::Instant,
+        now: Instant,
     ) -> Option<TextEditStart> {
         let drawn = frame.shape(shape_id)?;
         if drawn.locked {
@@ -390,6 +393,8 @@ impl TextEditing {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw;
+
     use super::*;
 
     #[test]
@@ -416,7 +421,7 @@ mod tests {
             x: 20,
             y: 30,
             text: text.to_string(),
-            color: crate::draw::RED,
+            color: draw::RED,
             size: 24.0,
             font_descriptor: FontDescriptor::default(),
             background_enabled: false,
@@ -432,7 +437,7 @@ mod tests {
         let mut editing = TextEditing::default();
 
         let started = editing
-            .begin_existing(&measurer, &mut frame, shape_id, std::time::Instant::now())
+            .begin_existing(&measurer, &mut frame, shape_id, Instant::now())
             .expect("editable text shape");
 
         assert_eq!(started.text, "before");
@@ -460,7 +465,7 @@ mod tests {
         let measurer = TextMeasurer::default();
         let mut editing = TextEditing::default();
         editing
-            .begin_existing(&measurer, &mut frame, shape_id, std::time::Instant::now())
+            .begin_existing(&measurer, &mut frame, shape_id, Instant::now())
             .expect("editable text shape");
 
         editing

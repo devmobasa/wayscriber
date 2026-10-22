@@ -1,4 +1,15 @@
-use super::*;
+use crate::backend::wayland::state::screen_image;
+
+use super::super::screen_image::{ScreenSourceToken, image_point_for_screen_point};
+use super::geometry;
+use super::geometry::{RegionPickerMeasurement, RegionSelectionGeometry};
+use super::measure::{RegionSelectionFinalize, measure_anchor};
+use super::review_state::ReviewResizeGrip;
+use crate::backend::wayland::acquisition::ScreenAcquisitionId;
+use crate::input::state::{
+    RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
+};
+use crate::screen_pixels::{ImagePixelRect, ImagePoint};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland::state) enum FreezeOwnership {
@@ -301,9 +312,7 @@ impl ActiveScreenRegion {
             return None;
         };
         let image_rect = self.stored_review_rect()?;
-        let display = crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(
-            &source, image_rect,
-        )?;
+        let display = screen_image::screen_rect_for_image_rect(&source, image_rect)?;
         Some(RegionSelectionGeometry::review(
             purpose,
             image_rect,

@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
-use std::io;
+use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::time::Duration;
+use std::{io, mem, ptr};
 
 use anyhow::{Context, Result, anyhow, bail};
 
@@ -27,7 +28,7 @@ pub(super) fn set_socket_timeout(fd: RawFd, timeout: Duration) -> io::Result<()>
                 libc::SOL_SOCKET,
                 option,
                 (&value as *const libc::timeval).cast(),
-                std::mem::size_of::<libc::timeval>() as libc::socklen_t,
+                mem::size_of::<libc::timeval>() as libc::socklen_t,
             )
         } != 0
         {
@@ -241,7 +242,7 @@ fn sealed_memfd(bytes: &[u8]) -> Result<OwnedFd> {
 }
 
 fn validate_sealed_memfd(descriptor: &OwnedFd, length: usize) -> Result<()> {
-    let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    let mut stat = MaybeUninit::<libc::stat>::uninit();
     // SAFETY: stat points to writable storage for fstat.
     if unsafe { libc::fstat(descriptor.as_raw_fd(), stat.as_mut_ptr()) } != 0 {
         return Err(io::Error::last_os_error()).context("failed to inspect broker memfd");
@@ -274,11 +275,12 @@ pub(super) fn send_packet(fd: RawFd, packet: &[u8], descriptors: &[RawFd]) -> io
         let control_len = if descriptors.is_empty() {
             0
         } else {
-            unsafe { libc::CMSG_SPACE(std::mem::size_of_val(descriptors) as libc::c_uint) as usize }
+            // SAFETY: CMSG_SPACE only performs arithmetic on its argument.
+            unsafe { libc::CMSG_SPACE(mem::size_of_val(descriptors) as libc::c_uint) as usize }
         };
-        let mut control = vec![0_usize; control_len.div_ceil(std::mem::size_of::<usize>())];
+        let mut control = vec![0_usize; control_len.div_ceil(mem::size_of::<usize>())];
         // SAFETY: zero is a valid initial state for msghdr.
-        let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
+        let mut message: libc::msghdr = unsafe { mem::zeroed() };
         message.msg_iov = &mut iovec;
         message.msg_iovlen = 1;
         if !descriptors.is_empty() {
@@ -290,8 +292,8 @@ pub(super) fn send_packet(fd: RawFd, packet: &[u8], descriptors: &[RawFd]) -> io
                 (*header).cmsg_level = libc::SOL_SOCKET;
                 (*header).cmsg_type = libc::SCM_RIGHTS;
                 (*header).cmsg_len =
-                    libc::CMSG_LEN(std::mem::size_of_val(descriptors) as libc::c_uint) as usize;
-                std::ptr::copy_nonoverlapping(
+                    libc::CMSG_LEN(mem::size_of_val(descriptors) as libc::c_uint) as usize;
+                ptr::copy_nonoverlapping(
                     descriptors.as_ptr(),
                     libc::CMSG_DATA(header).cast::<RawFd>(),
                     descriptors.len(),
@@ -321,14 +323,14 @@ pub(super) fn recv_packet(fd: RawFd) -> io::Result<(Vec<u8>, Vec<OwnedFd>)> {
             iov_base: buffer.as_mut_ptr().cast(),
             iov_len: buffer.len(),
         };
+        // SAFETY: CMSG_SPACE only performs arithmetic on its argument.
         let control_len = unsafe {
-            libc::CMSG_SPACE(
-                (MAX_PACKET_DESCRIPTORS * std::mem::size_of::<RawFd>()) as libc::c_uint,
-            ) as usize
+            libc::CMSG_SPACE((MAX_PACKET_DESCRIPTORS * mem::size_of::<RawFd>()) as libc::c_uint)
+                as usize
         };
-        let mut control = vec![0_usize; control_len.div_ceil(std::mem::size_of::<usize>())];
+        let mut control = vec![0_usize; control_len.div_ceil(mem::size_of::<usize>())];
         // SAFETY: zero is a valid initial state for msghdr.
-        let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
+        let mut message: libc::msghdr = unsafe { mem::zeroed() };
         message.msg_iov = &mut iovec;
         message.msg_iovlen = 1;
         message.msg_control = control.as_mut_ptr().cast();
@@ -358,13 +360,13 @@ pub(super) fn recv_packet(fd: RawFd) -> io::Result<(Vec<u8>, Vec<OwnedFd>)> {
                         ));
                     }
                     let data_len = (*header).cmsg_len - base_len;
-                    if !data_len.is_multiple_of(std::mem::size_of::<RawFd>()) {
+                    if !data_len.is_multiple_of(mem::size_of::<RawFd>()) {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,
                             "misaligned broker descriptor payload",
                         ));
                     }
-                    let count = data_len / std::mem::size_of::<RawFd>();
+                    let count = data_len / mem::size_of::<RawFd>();
                     let data = libc::CMSG_DATA(header).cast::<RawFd>();
                     for index in 0..count {
                         descriptors.push(OwnedFd::from_raw_fd(*data.add(index)));

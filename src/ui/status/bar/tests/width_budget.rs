@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::util;
+
 use super::*;
 
 #[test]
@@ -48,7 +51,7 @@ fn each_core_content_flag_removes_only_its_segment() {
         state.ui_visibility.show_status_about = true;
         assert!(state.set_status_bar_item_visible_with_resources(
             &UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             item,
             false
         ));
@@ -87,35 +90,32 @@ fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
     state.set_selection(vec![shape_id]);
 
     assert_eq!(
-        build_prefix_text(&state, &crate::draw::TextMeasurer::default()).as_deref(),
+        build_prefix_text(&state, &TextMeasurer::default()).as_deref(),
         Some("Output: DP-3 · 34×44px")
     );
 
     state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::ActiveOutput,
         false,
     );
     assert_eq!(
-        build_prefix_text(&state, &crate::draw::TextMeasurer::default()).as_deref(),
+        build_prefix_text(&state, &TextMeasurer::default()).as_deref(),
         Some("34×44px")
     );
     state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::SelectionInfo,
         false,
     );
-    assert_eq!(
-        build_prefix_text(&state, &crate::draw::TextMeasurer::default()),
-        None
-    );
+    assert_eq!(build_prefix_text(&state, &TextMeasurer::default()), None);
 }
 
 #[test]
 fn output_item_needs_two_outputs_unless_always_is_set() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = make_state();
     state.ui_visibility.show_active_output_badge = true;
     assert!(state.set_active_output_label(Some("WAYLAND-1".to_string())));
@@ -180,7 +180,7 @@ fn context_indicator_flag_gates_transient_status_text() {
 
     state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::ContextIndicators,
         false,
     );
@@ -197,14 +197,14 @@ fn shedding_the_last_optional_piece_does_not_leave_an_empty_pill() {
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_resources(
             &UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             item,
             false,
         );
     }
     state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::About,
         true,
     );
@@ -322,7 +322,7 @@ fn width_budget_degrades_board_label_then_drops_help() {
         first_text(&wide),
         format!(
             "{} {}/{}",
-            crate::util::truncate_with_ellipsis(LONG_BOARD_NAME, BOARD_NAME_MAX_CHARS),
+            util::truncate_with_ellipsis(LONG_BOARD_NAME, BOARD_NAME_MAX_CHARS),
             index,
             count
         )
@@ -427,7 +427,7 @@ fn the_size_segment_follows_the_tool() {
 
     state.set_tool_override(Some(Tool::Pen));
     state.style.current_font_size = 32.0;
-    state.state = crate::input::DrawingState::text_input(10, 10, String::new());
+    state.state = DrawingState::text_input(10, 10, String::new());
     assert_eq!(
         segment_text(&state, StatusHudSegmentKind::Size).as_deref(),
         Some("32px")

@@ -1,5 +1,6 @@
+use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError, sync_channel};
+use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError, TrySendError, sync_channel};
 use std::thread::{self, JoinHandle};
 
 use super::{
@@ -40,19 +41,12 @@ impl RuntimeUiStateWriter {
     pub(crate) fn spawn_with_completion_notifier(
         store: RuntimeUiStateStore,
         notify_completion: impl Fn() + Send + 'static,
-    ) -> std::io::Result<Self> {
+    ) -> io::Result<Self> {
         let (command_tx, command_rx) = sync_channel(WRITER_COMMAND_CAPACITY);
         let (completion_tx, completion_rx) = sync_channel(WRITER_COMMAND_CAPACITY);
         let worker = thread::Builder::new()
             .name("wayscriber-runtime-state-writer".to_string())
-            .spawn(move || {
-                run_writer(
-                    store,
-                    command_rx,
-                    completion_tx,
-                    Box::new(notify_completion),
-                )
-            })?;
+            .spawn(move || run_writer(&store, &command_rx, &completion_tx, &notify_completion))?;
         Ok(Self {
             commands: Some(command_tx),
             completions: completion_rx,
@@ -82,7 +76,7 @@ impl RuntimeUiStateWriter {
         }
     }
 
-    pub(crate) fn recv(&self) -> Result<RuntimeStateWriterCompletion, std::sync::mpsc::RecvError> {
+    pub(crate) fn recv(&self) -> Result<RuntimeStateWriterCompletion, RecvError> {
         self.completions.recv()
     }
 
@@ -109,23 +103,31 @@ impl Drop for RuntimeUiStateWriter {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a panicking completion notifier must not stop the writer from serving later commands"
+)]
 fn run_writer(
-    store: RuntimeUiStateStore,
-    commands: Receiver<RuntimeStateWriterCommand>,
-    completions: SyncSender<RuntimeStateWriterCompletion>,
-    notify_completion: Box<dyn Fn() + Send>,
+    store: &RuntimeUiStateStore,
+    commands: &Receiver<RuntimeStateWriterCommand>,
+    completions: &SyncSender<RuntimeStateWriterCompletion>,
+    notify_completion: &dyn Fn(),
 ) {
     while let Ok(command) = commands.recv() {
-        let completion = execute_catching_panics(&store, command);
+        let completion = execute_catching_panics(store, command);
         if completions.send(completion).is_err() {
             break;
         }
-        if catch_unwind(AssertUnwindSafe(&notify_completion)).is_err() {
+        if catch_unwind(AssertUnwindSafe(notify_completion)).is_err() {
             log::error!("Runtime UI completion notifier panicked; writer will continue");
         }
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a panicking mutation or recovery must still produce its completion, so the controller never waits forever"
+)]
 fn execute_catching_panics(
     store: &RuntimeUiStateStore,
     command: RuntimeStateWriterCommand,

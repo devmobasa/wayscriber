@@ -5,7 +5,11 @@
 //! visible window is capped: only the rows on screen are ever laid out, so a
 //! system with 269 families costs the same as one with 12.
 
+use pangocairo::functions;
+
+use crate::draw::font;
 use crate::i18n::{tr, trf};
+use crate::input::state;
 use crate::input::state::{
     FontPickerLayout, FontPickerRow, FontPickerTarget, InputState, font_picker_layout,
 };
@@ -33,7 +37,7 @@ pub fn render_font_picker(ctx: &cairo::Context, state: &InputState, width: u32, 
     let families = state.font_picker_families();
     let layout = font_picker_layout(width, height, families.len());
     let current = state.font_picker_current_family();
-    let rows = crate::input::state::font_picker_rows(
+    let rows = state::font_picker_rows(
         layout,
         &families,
         state.font_picker_scroll(),
@@ -361,8 +365,8 @@ fn bounded_layout(
     max_width: f64,
     text: &str,
 ) -> pango::Layout {
-    let layout = pangocairo::functions::create_layout(ctx);
-    let description = crate::draw::font::family_description(family, size);
+    let layout = functions::create_layout(ctx);
+    let description = font::family_description(family, size);
     layout.set_font_description(Some(&description));
     layout.set_text(text);
     layout.set_ellipsize(pango::EllipsizeMode::End);
@@ -372,8 +376,8 @@ fn bounded_layout(
 
 /// Natural width of `text`, for callers dividing a row between two labels.
 fn text_width(ctx: &cairo::Context, family: &str, size: f64, text: &str) -> f64 {
-    let layout = pangocairo::functions::create_layout(ctx);
-    let description = crate::draw::font::family_description(family, size);
+    let layout = functions::create_layout(ctx);
+    let description = font::family_description(family, size);
     layout.set_font_description(Some(&description));
     layout.set_text(text);
     f64::from(layout.extents().1.width()) / f64::from(pango::SCALE)
@@ -394,7 +398,7 @@ fn draw_text(
     let layout = bounded_layout(ctx, family, size, max_width, text);
     let baseline = f64::from(layout.baseline()) / f64::from(pango::SCALE);
     ctx.move_to(x, y - baseline);
-    pangocairo::functions::show_layout(ctx, &layout);
+    functions::show_layout(ctx, &layout);
 }
 
 fn draw_text_right(
@@ -413,7 +417,7 @@ fn draw_text_right(
     let width = (f64::from(layout.extents().1.width()) / f64::from(pango::SCALE)).min(max_width);
     let baseline = f64::from(layout.baseline()) / f64::from(pango::SCALE);
     ctx.move_to(right - width, y - baseline);
-    pangocairo::functions::show_layout(ctx, &layout);
+    functions::show_layout(ctx, &layout);
 }
 
 #[cfg(test)]

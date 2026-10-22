@@ -100,12 +100,12 @@ fn scan_header(bytes: &[u8]) -> Option<u64> {
     found
 }
 
-struct HeaderCursor<'a> {
-    bytes: &'a [u8],
+struct HeaderCursor<'bytes> {
+    bytes: &'bytes [u8],
     offset: usize,
 }
 
-impl<'a> HeaderCursor<'a> {
+impl<'bytes> HeaderCursor<'bytes> {
     fn peek(&self) -> Option<u8> {
         self.bytes.get(self.offset).copied()
     }
@@ -128,7 +128,7 @@ impl<'a> HeaderCursor<'a> {
         Some(())
     }
 
-    fn string(&mut self, limit: usize, key: bool) -> Option<&'a [u8]> {
+    fn string(&mut self, limit: usize, key: bool) -> Option<&'bytes [u8]> {
         self.expect(b'"')?;
         let start = self.offset;
         while let Some(byte) = self.peek() {
@@ -165,6 +165,6 @@ impl<'a> HeaderCursor<'a> {
         {
             return None;
         }
-        std::str::from_utf8(digits).ok()?.parse().ok()
+        str::from_utf8(digits).ok()?.parse().ok()
     }
 }

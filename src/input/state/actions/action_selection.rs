@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::draw::TextMeasurer;
 use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use log::info;
@@ -11,7 +12,7 @@ const KEYBOARD_NUDGE_LARGE: i32 = 32;
 impl InputState {
     pub(in crate::input::state) fn handle_selection_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         match action {
@@ -85,7 +86,7 @@ impl InputState {
 
     fn handle_selection_content_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         match action {
@@ -115,7 +116,7 @@ impl InputState {
         true
     }
 
-    fn select_all_shapes_with(&mut self, measurer: &crate::draw::TextMeasurer) {
+    fn select_all_shapes_with(&mut self, measurer: &TextMeasurer) {
         let ids: Vec<_> = self
             .boards
             .active_frame()
@@ -136,7 +137,7 @@ impl InputState {
 
     fn handle_selection_nudge_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         let shifted_step = if self.modifiers.shift {

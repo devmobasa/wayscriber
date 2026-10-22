@@ -1,5 +1,10 @@
+use crate::input::state::RegionSelectUiState;
+
+use super::super::WaylandState;
+use super::super::buffer_damage::FullDamageReason;
 use super::super::capture::OverlayCaptureBarrier;
-use super::super::*;
+use crate::backend::wayland::overlay_passthrough::set_surface_clickthrough;
+use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(in crate::backend::wayland) enum OverlaySuppression {
@@ -244,7 +249,7 @@ impl WaylandState {
     }
 }
 
-fn capture_picker_chrome_suppressed_for(region: crate::input::state::RegionSelectUiState) -> bool {
+fn capture_picker_chrome_suppressed_for(region: RegionSelectUiState) -> bool {
     region.is_engaged() && region.purpose().is_some_and(|purpose| purpose.is_capture())
 }
 

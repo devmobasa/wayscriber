@@ -4,10 +4,14 @@
 //! [`crate::input::state::SpotlightMagnificationTrack`], and the caller decides
 //! when the control is visible.
 
+use std::f64::consts;
+
+use crate::draw;
 use crate::input::state::SpotlightMagnificationTrack;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use crate::ui::theme::{self, overlay};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
+use crate::util::Rect;
 
 /// Height of the drawn track bar, which is thinner than the knob it carries.
 const TRACK_BAR_HEIGHT: f64 = 4.0;
@@ -32,7 +36,7 @@ pub(crate) fn render_spotlight_magnification_control(
     track: SpotlightMagnificationTrack,
     magnification: f64,
     unavailable_reason: Option<&str>,
-    visible: crate::util::Rect,
+    visible: Rect,
 ) {
     let bounds = track.track;
     let knob = track.knob;
@@ -73,7 +77,7 @@ pub(crate) fn render_spotlight_magnification_control(
         f64::from(knob.y) + radius,
         radius,
         0.0,
-        std::f64::consts::TAU,
+        consts::TAU,
     );
     theme::set_color(ctx, overlay::TEXT_WHITE);
     let _ = ctx.fill_preserve();
@@ -84,9 +88,9 @@ pub(crate) fn render_spotlight_magnification_control(
     let label = match unavailable_reason {
         Some(reason) => format!(
             "{} - {reason}",
-            crate::draw::format_spotlight_magnification(magnification)
+            draw::format_spotlight_magnification(magnification)
         ),
-        None => crate::draw::format_spotlight_magnification(magnification),
+        None => draw::format_spotlight_magnification(magnification),
     };
     let style = UiTextStyle {
         family: "Sans",

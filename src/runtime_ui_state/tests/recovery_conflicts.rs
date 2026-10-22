@@ -446,7 +446,7 @@ fn reload_during_external_cleanup_is_applied_before_reconciliation_closes() {
             result => panic!("unexpected result: {result:?}"),
         };
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, false)),
+        controller.update_seeds(&test_seeds(true, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     let RuntimeUiWireState { model, passthrough } = wire_with_top_pinned(true);
@@ -462,7 +462,7 @@ fn reload_during_external_cleanup_is_applied_before_reconciliation_closes() {
     assert!(installed.cleanup_through.is_some());
     let cleanup = controller.take_source_mutation().unwrap();
     assert!(matches!(
-        controller.update_seeds(test_seeds(false, false)),
+        controller.update_seeds(&test_seeds(false, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
 
@@ -511,7 +511,7 @@ fn shutdown_during_external_cleanup_closes_after_a_late_reload() {
         controller.finish_preview(preview, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::AbandonedDuringBarrier { barrier }
     );
-    controller.update_seeds(test_seeds(true, false));
+    controller.update_seeds(&test_seeds(true, false));
     let RuntimeUiWireState { model, passthrough } = external_wire;
     controller
         .install_external_authority(
@@ -523,7 +523,7 @@ fn shutdown_during_external_cleanup_closes_after_a_late_reload() {
         )
         .unwrap();
     let cleanup = controller.take_source_mutation().unwrap();
-    controller.update_seeds(test_seeds(true, true));
+    controller.update_seeds(&test_seeds(true, true));
     controller.request_shutdown().unwrap();
 
     apply_request(&mut controller, &cleanup, present_revision("cleaned"));

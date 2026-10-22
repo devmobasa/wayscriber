@@ -1,7 +1,6 @@
-use crate::draw::PageDeleteOutcome;
+use crate::draw::{PageDeleteOutcome, TextMeasurer};
 use crate::input::events::Key;
-use crate::input::state::BoardPickerFocus;
-use crate::input::state::InputState;
+use crate::input::state::{BoardPickerFocus, InputState, InputTextResources};
 
 const PROPERTIES_PANEL_COARSE_STEP: i32 = 5;
 
@@ -66,7 +65,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_board_picker_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
     ) -> bool {
         if !self.is_board_picker_open() {
@@ -144,7 +143,7 @@ impl InputState {
 
     fn handle_board_picker_board_list_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
     ) -> bool {
         if self.board_picker_is_quick() {
@@ -253,7 +252,7 @@ impl InputState {
 
     fn handle_board_picker_page_panel_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
     ) -> bool {
         let (page_count, current) = self.board_picker_page_panel_position();
@@ -410,7 +409,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_properties_panel_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
     ) -> bool {
         // A key pressed mid-drag ends the drag first, so what it changes is
@@ -447,7 +446,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_context_menu_key_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         key: Key,
     ) -> bool {
         match key {

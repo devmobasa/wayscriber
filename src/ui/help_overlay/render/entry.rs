@@ -1,21 +1,30 @@
-use super::{HelpOverlayBindings, HelpRenderResult, render_help_overlay_result_with_context};
+use crate::config::HelpOverlayStyle;
+use crate::ui::UiRenderCaches;
+use crate::ui::theme::Theme;
+use crate::ui_text::UiTextEngine;
+
+use super::{
+    HelpContentOptions, HelpOverlayBindings, HelpRenderResult,
+    render_help_overlay_result_with_context,
+};
 
 /// Render help overlay showing all keybindings with call-local paint resources.
 /// Returns the maximum scroll offset and discards interaction geometry.
 /// Interactive callers should use [`render_help_overlay_result`] instead.
 #[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "painting is the purpose; drawing-only callers may ignore the scroll range"
+)]
 pub fn render_help_overlay(
     ctx: &cairo::Context,
-    style: &crate::config::HelpOverlayStyle,
+    style: &HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
-    frozen_enabled: bool,
+    options: HelpContentOptions,
     page_index: usize,
     bindings: &HelpOverlayBindings,
     search_query: &str,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
     scroll_offset: f64,
     quick_mode: bool,
 ) -> f64 {
@@ -24,13 +33,10 @@ pub fn render_help_overlay(
         style,
         screen_width,
         screen_height,
-        frozen_enabled,
+        options,
         page_index,
         bindings,
         search_query,
-        context_filter,
-        board_enabled,
-        capture_enabled,
         scroll_offset,
         quick_mode,
     )
@@ -45,24 +51,22 @@ pub fn render_help_overlay(
 /// that input owner's click and cursor queries. Each caller retains its own map;
 /// painting another overlay cannot replace it.
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn render_help_overlay_result(
     ctx: &cairo::Context,
-    style: &crate::config::HelpOverlayStyle,
+    style: &HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
-    frozen_enabled: bool,
+    options: HelpContentOptions,
     page_index: usize,
     bindings: &HelpOverlayBindings,
     search_query: &str,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
     scroll_offset: f64,
     quick_mode: bool,
 ) -> HelpRenderResult {
-    let engine = crate::ui_text::UiTextEngine::default();
-    let mut caches = crate::ui::UiRenderCaches::default();
-    let theme = crate::ui::theme::Theme::dark();
+    let engine = UiTextEngine::default();
+    let mut caches = UiRenderCaches::default();
+    let theme = Theme::dark();
     render_help_overlay_result_with_context(
         &engine,
         &mut crate::ui::UiRenderCtx {
@@ -73,13 +77,10 @@ pub fn render_help_overlay_result(
         style,
         screen_width,
         screen_height,
-        frozen_enabled,
+        options,
         page_index,
         bindings,
         search_query,
-        context_filter,
-        board_enabled,
-        capture_enabled,
         scroll_offset,
         quick_mode,
         false,

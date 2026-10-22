@@ -1,3 +1,18 @@
+#[cfg(feature = "tray")]
+use crate::backend::wayland::RuntimeWakeSource;
+#[cfg(feature = "tray")]
+use crate::env_vars;
+#[cfg(feature = "tray")]
+use crate::process_broker;
+#[cfg(feature = "tray")]
+use crate::test_env;
+#[cfg(feature = "tray")]
+use crate::test_fake_helper;
+#[cfg(feature = "tray")]
+use crate::test_fake_helper::Role;
+#[cfg(feature = "tray")]
+use crate::test_temp;
+
 use super::core::Daemon;
 #[cfg(feature = "tray")]
 use super::tray::WayscriberTray;
@@ -8,9 +23,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 #[cfg(feature = "tray")]
-use ksni::{Tray, menu::MenuItem};
+use ksni::Tray;
+#[cfg(feature = "tray")]
+use ksni::menu::MenuItem;
 #[cfg(feature = "tray")]
 use std::sync::atomic::AtomicBool;
+#[cfg(feature = "tray")]
+use std::thread;
+#[cfg(feature = "tray")]
+use std::time::Duration;
+#[cfg(feature = "tray")]
+use std::time::Instant;
 
 #[test]
 fn daemon_session_resume_override_reflects_constructor_value() {
@@ -135,12 +158,12 @@ fn menu_labels(tray: &WayscriberTray) -> Vec<String> {
 fn tray_toggle_action_sets_flag() {
     let toggle = Arc::new(AtomicBool::new(false));
     let quit = Arc::new(AtomicBool::new(false));
-    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let wake = RuntimeWakeSource::try_new().unwrap();
     let mut tray = WayscriberTray::new_for_tests_with_wake(toggle.clone(), quit, wake.handle());
 
     activate_menu_item(&mut tray, "Toggle Overlay");
     assert!(toggle.load(AtomicOrdering::SeqCst));
-    assert!(wake.wait_readable(Some(std::time::Duration::ZERO)).unwrap());
+    assert!(wake.wait_readable(Some(Duration::ZERO)).unwrap());
 }
 
 #[cfg(feature = "tray")]
@@ -185,12 +208,12 @@ fn tray_menu_groups_actions_to_fit_short_displays() {
 fn tray_quit_action_sets_quit_flag() {
     let toggle = Arc::new(AtomicBool::new(false));
     let quit = Arc::new(AtomicBool::new(false));
-    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let wake = RuntimeWakeSource::try_new().unwrap();
     let mut tray = WayscriberTray::new_for_tests_with_wake(toggle, quit.clone(), wake.handle());
 
     activate_menu_item(&mut tray, "Quit");
     assert!(quit.load(AtomicOrdering::SeqCst));
-    assert!(wake.wait_readable(Some(std::time::Duration::ZERO)).unwrap());
+    assert!(wake.wait_readable(Some(Duration::ZERO)).unwrap());
 }
 
 /// The tray used to answer a session-resume click by rewriting `[session]`. It
@@ -231,29 +254,23 @@ fn tray_settings_items_open_their_configurator_destinations() {
             "--open\nui/toolbar?search=language\n",
         ),
     ] {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let recorded = temp.path().join("arguments");
-        let recorder = crate::test_fake_helper::link(temp.path(), "recording-configurator");
+        let recorder = test_fake_helper::link(temp.path(), "recording-configurator");
         // The configurator override makes the broker accept the stand-in; the
         // config home keeps the launch failure path away from the developer's own
         // file. The previous values come back before the assertion.
         let mut variables = vec![
-            (
-                crate::env_vars::CONFIGURATOR_ENV,
-                Some(recorder.as_os_str()),
-            ),
-            (
-                crate::env_vars::XDG_CONFIG_HOME_ENV,
-                Some(temp.path().as_os_str()),
-            ),
+            (env_vars::CONFIGURATOR_ENV, Some(recorder.as_os_str())),
+            (env_vars::XDG_CONFIG_HOME_ENV, Some(temp.path().as_os_str())),
         ];
-        variables.extend(crate::test_fake_helper::environment(
+        variables.extend(test_fake_helper::environment(
             &recorder,
-            crate::test_fake_helper::Role::RecordArguments,
+            Role::RecordArguments,
             &recorded,
         ));
 
-        let launched = crate::test_env::with_env_vars(&variables, || {
+        let launched = test_env::with_env_vars(&variables, || {
             let toggle = Arc::new(AtomicBool::new(false));
             let quit = Arc::new(AtomicBool::new(false));
             let mut tray = WayscriberTray::new_for_tests_with_configurator(
@@ -281,19 +298,19 @@ fn tray_settings_items_open_their_configurator_destinations() {
 #[cfg(feature = "tray")]
 fn record_configurator_menu_launch(
     tray: &mut WayscriberTray,
-    recorded: &std::path::Path,
+    recorded: &Path,
     label: &str,
 ) -> Option<String> {
     for _ in 0..3 {
-        let _broker = crate::process_broker::start_for_runtime().ok()?;
+        let _broker = process_broker::start_for_runtime().ok()?;
         activate_menu_item(tray, label);
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-        while std::time::Instant::now() < deadline {
-            if let Ok(arguments) = std::fs::read_to_string(recorded) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if let Ok(arguments) = fs::read_to_string(recorded) {
                 return Some(arguments);
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
         }
     }
     None

@@ -2,6 +2,7 @@ use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
 
+use gtk::prelude::GtkWindowExt;
 use wayscriber::i18n::tr;
 
 use super::super::pages;
@@ -78,7 +79,7 @@ fn write_widgets(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     let leave_pending = app.pending_leave().is_some();
     let leave_was_pending = widgets.leave_actions.get_visible();
     if leave_pending && !leave_was_pending {
-        widgets.leave_previous_focus = gtk::prelude::GtkWindowExt::focus(&widgets.root);
+        widgets.leave_previous_focus = GtkWindowExt::focus(&widgets.root);
     }
     set_visible(&widgets.leave_actions, leave_pending);
     if leave_pending && !leave_was_pending {

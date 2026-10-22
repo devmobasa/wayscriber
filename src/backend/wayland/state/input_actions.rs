@@ -1,11 +1,9 @@
+use crate::input::state::ZoomAnchor;
+
 use super::WaylandState;
-use crate::{
-    config::Action,
-    input::{
-        InputState, Key,
-        state::{InputEffect, InputEffectDrain, InputTextResources},
-    },
-};
+use crate::config::Action;
+use crate::input::state::{InputEffect, InputEffectDrain, InputTextResources};
+use crate::input::{InputState, Key};
 
 /// The input HUD's live state, before and after an input update.
 ///
@@ -55,7 +53,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn dispatch_input_action_anchored(
         &mut self,
         action: Action,
-        anchor: crate::input::state::ZoomAnchor,
+        anchor: ZoomAnchor,
     ) {
         self.apply_input_update(|input_state, resources| {
             input_state.handle_action_anchored(resources, action, anchor)

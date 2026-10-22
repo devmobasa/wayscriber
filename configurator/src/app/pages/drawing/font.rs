@@ -5,6 +5,7 @@ use std::rc::Rc;
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
+use gtk::pango::{AttrFontDesc, AttrList, FontDescription};
 
 use crate::messages::Message;
 use crate::models::{FontStyleOption, FontWeightOption, TextField};
@@ -27,10 +28,10 @@ pub(super) fn build(page: &mut PageBuilder) {
             tr("Font weight"),
             "",
             FontWeightOption::list(),
-            FontWeightOption::list()
+            &FontWeightOption::list()
                 .iter()
                 .map(|option| option.label().to_string())
-                .collect(),
+                .collect::<Vec<_>>(),
             |app| app.draft.drawing_font_weight_option,
             Message::FontWeightOptionSelected,
         )
@@ -43,10 +44,10 @@ pub(super) fn build(page: &mut PageBuilder) {
             tr("Font style"),
             "",
             FontStyleOption::list(),
-            FontStyleOption::list()
+            &FontStyleOption::list()
                 .iter()
                 .map(|option| option.label().to_string())
-                .collect(),
+                .collect::<Vec<_>>(),
             |app| app.draft.drawing_font_style_option,
             Message::FontStyleOptionSelected,
         );
@@ -130,7 +131,7 @@ fn build_font_cycle(page: &mut PageBuilder) {
             .map(|row| row.layout)
             .eq(layouts.iter().copied())
         {
-            rows = rebuild_font_cycle(&list, &families, Rc::clone(&installed), &layouts, &sender);
+            rows = rebuild_font_cycle(&list, &families, &installed, &layouts, &sender);
         }
         for (family, row) in app
             .draft
@@ -177,7 +178,7 @@ struct BoundFontRow {
 fn rebuild_font_cycle(
     list: &gtk::ListBox,
     families: &gtk::StringList,
-    family_names: Rc<[String]>,
+    family_names: &Rc<[String]>,
     layouts: &[FontCycleLayout],
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> Vec<BoundFontRow> {
@@ -189,7 +190,7 @@ fn rebuild_font_cycle(
         .iter()
         .map(|layout| {
             let (row, refresh) =
-                build_font_cycle_row(*layout, families, Rc::clone(&family_names), sender);
+                build_font_cycle_row(*layout, families, Rc::clone(family_names), sender);
             list.append(&row);
             BoundFontRow {
                 layout: *layout,
@@ -292,8 +293,8 @@ fn family_preview_factory() -> gtk::SignalListItemFactory {
             return;
         };
         label.set_label(&family);
-        let attributes = gtk::pango::AttrList::new();
-        attributes.insert(gtk::pango::AttrFontDesc::new(&family_preview_font(&family)));
+        let attributes = AttrList::new();
+        attributes.insert(AttrFontDesc::new(&family_preview_font(&family)));
         label.set_attributes(Some(&attributes));
     });
     factory
@@ -304,8 +305,8 @@ fn family_preview_factory() -> gtk::SignalListItemFactory {
 /// Built field by field: `FontDescription::from_string` reads trailing style,
 /// weight, and stretch words off the family, so "Roboto Condensed" would preview
 /// in Roboto and "Archivo Black" in Archivo.
-fn family_preview_font(family: &str) -> gtk::pango::FontDescription {
-    let mut description = gtk::pango::FontDescription::new();
+fn family_preview_font(family: &str) -> FontDescription {
+    let mut description = FontDescription::new();
     description.set_family(family);
     description
 }
@@ -361,10 +362,13 @@ fn missing_family_note(family: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use gtk::pango::{Stretch, Weight};
+    use wayscriber::draw;
+
     use super::*;
 
     fn installed() -> String {
-        wayscriber::draw::system_font_families()
+        draw::system_font_families()
             .first()
             .expect("at least one family")
             .clone()
@@ -403,8 +407,8 @@ mod tests {
             let description = family_preview_font(family);
 
             assert_eq!(description.family().as_deref(), Some(family));
-            assert_eq!(description.weight(), gtk::pango::Weight::Normal);
-            assert_eq!(description.stretch(), gtk::pango::Stretch::Normal);
+            assert_eq!(description.weight(), Weight::Normal);
+            assert_eq!(description.stretch(), Stretch::Normal);
         }
     }
 

@@ -1,9 +1,14 @@
-use super::{Config, float::finite_or_default};
+use std::mem;
+
+use crate::config::TabletInputConfig;
+
+use super::Config;
+use super::float::finite_or_default;
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 impl Config {
     pub(super) fn validate_tablet(&mut self) {
-        let defaults = crate::config::TabletInputConfig::default();
+        let defaults = TabletInputConfig::default();
         for (field, value, fallback) in [
             (
                 "tablet.min_thickness",
@@ -30,7 +35,7 @@ impl Config {
         }
 
         if self.tablet.min_thickness > self.tablet.max_thickness {
-            std::mem::swap(
+            mem::swap(
                 &mut self.tablet.min_thickness,
                 &mut self.tablet.max_thickness,
             );

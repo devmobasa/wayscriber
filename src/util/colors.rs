@@ -1,4 +1,8 @@
-use crate::draw::{Color, color::*};
+use crate::draw::Color;
+use crate::draw::color::{
+    PALETTE_BLACK, PALETTE_BLUE, PALETTE_GREEN, PALETTE_ORANGE, PALETTE_PINK, PALETTE_RED,
+    PALETTE_WHITE, PALETTE_YELLOW,
+};
 use crate::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +28,7 @@ pub enum ConfigHexColorError {
 /// # Returns
 /// - `Some(Color)` if the name matches a predefined color
 /// - `None` if the name is not recognized
+#[must_use]
 pub fn name_to_color(name: &str) -> Option<Color> {
     match name.to_lowercase().as_str() {
         "red" => Some(PALETTE_RED),
@@ -82,6 +87,7 @@ pub fn parse_config_hex_color(value: &str) -> Result<Color, ConfigHexColorError>
 /// # Returns
 /// A static string with the color name, or "Custom" if the color doesn't
 /// match any predefined color.
+#[must_use]
 pub fn color_to_name(color: &Color) -> &'static str {
     // Match the tuned palette first so named colors and quick color defaults
     // report their names instead of "Custom".

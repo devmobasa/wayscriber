@@ -1,14 +1,13 @@
 use crate::backend::wayland::acquisition::ScreenAcquisitionOwner;
+use crate::backend::wayland::capture::{CapturePreflightRequest, RegionCapturePhase};
 use crate::backend::wayland::zoom::ZoomWaiterOwner;
-use crate::capture::{
-    CaptureDestination, CaptureType,
-    file::{FileSaveConfig, expand_tilde},
-};
+use crate::capture::file::{FileSaveConfig, expand_tilde};
+use crate::capture::{CaptureDestination, CaptureRequest, CaptureType};
 use crate::config::{Action, RegionPicker};
 use crate::input::state::{RegionPurposeTag, ScreenCaptureSource, Toast, ToastPriority};
 
 use super::super::capture::{overlay_suppression_for_screenshot, should_exit_after_capture};
-use super::super::screen_image::displayed_screen_image;
+use super::super::screen_image::{ScreenSourceConditions, displayed_screen_image};
 use super::{ActiveScreenRegion, FreezeOwnership, RegionCaptureIntent, RegionPickerOptions};
 use crate::backend::wayland::state::WaylandState;
 use crate::i18n::tr;
@@ -25,13 +24,15 @@ pub(super) enum RegionPickerEntry {
     ZoomImageUnavailable,
 }
 
-pub(super) fn region_picker_entry(
-    has_source: bool,
-    board_is_transparent: bool,
-    zoom_engaged: bool,
-    zoom_active: bool,
-    frozen_enabled: bool,
-) -> RegionPickerEntry {
+pub(super) fn region_picker_entry(conditions: ScreenSourceConditions) -> RegionPickerEntry {
+    let ScreenSourceConditions {
+        has_source,
+        board_is_transparent,
+        zoom_engaged,
+        zoom_active,
+        frozen_enabled,
+    } = conditions;
+
     if has_source {
         RegionPickerEntry::Activate
     } else if !board_is_transparent && zoom_engaged {
@@ -66,10 +67,8 @@ pub(super) fn region_destination(
     }
 }
 
-pub(super) fn legacy_region_request(
-    intent: &RegionCaptureIntent,
-) -> crate::capture::CaptureRequest {
-    crate::capture::CaptureRequest {
+pub(super) fn legacy_region_request(intent: &RegionCaptureIntent) -> CaptureRequest {
+    CaptureRequest {
         capture_type: CaptureType::Selection {
             x: 0,
             y: 0,
@@ -181,13 +180,13 @@ impl WaylandState {
             self.input_state.board_is_transparent(),
         )
         .is_some();
-        match region_picker_entry(
+        match region_picker_entry(ScreenSourceConditions {
             has_source,
-            self.input_state.board_is_transparent(),
-            self.zoom.is_engaged(),
-            self.zoom.active,
-            self.frozen.enabled(),
-        ) {
+            board_is_transparent: self.input_state.board_is_transparent(),
+            zoom_engaged: self.zoom.is_engaged(),
+            zoom_active: self.zoom.active,
+            frozen_enabled: self.frozen.enabled(),
+        }) {
             RegionPickerEntry::Activate => {
                 if !self.activate_screen_region(
                     purpose,
@@ -294,12 +293,10 @@ impl WaylandState {
             FreezeOwnership::PreExisting
         };
         let include_drawings = match self.capture.region_phase() {
-            crate::backend::wayland::capture::RegionCapturePhase::Reserved(intent) => {
-                intent.include_drawings()
-            }
-            crate::backend::wayland::capture::RegionCapturePhase::Idle
-            | crate::backend::wayland::capture::RegionCapturePhase::Submitting(_)
-            | crate::backend::wayland::capture::RegionCapturePhase::Accepted => return false,
+            RegionCapturePhase::Reserved(intent) => intent.include_drawings(),
+            RegionCapturePhase::Idle
+            | RegionCapturePhase::Submitting(_)
+            | RegionCapturePhase::Accepted => return false,
         };
         self.activate_screen_region(
             region.purpose(),
@@ -366,7 +363,11 @@ impl WaylandState {
             self.capture.finish_capture_lifecycle();
             return;
         };
-        debug_assert!(intent.purpose().is_capture());
+        debug_assert!(
+            intent.purpose().is_capture(),
+            "a reserved region intent is always a capture, got {:?}",
+            intent.purpose()
+        );
         self.capture.set_exit_on_success(should_exit_after_capture(
             intent.exit_mode(),
             intent.destination(),
@@ -392,9 +393,8 @@ impl WaylandState {
             return;
         }
         let request = legacy_region_request(&intent);
-        self.capture.queue_preflight(
-            crate::backend::wayland::capture::CapturePreflightRequest::Screenshot(request),
-        );
+        self.capture
+            .queue_preflight(CapturePreflightRequest::Screenshot(request));
     }
 
     pub(super) fn cancel_region_capture_for_source_change(&mut self) {

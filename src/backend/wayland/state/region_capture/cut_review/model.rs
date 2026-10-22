@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use crate::backend::wayland::state::screen_image::ScreenSourceToken;
+use crate::canvas_export::SpotlightPassSnapshot;
 use crate::capture::{CutAxis, CutBand};
 use crate::input::state::{RegionInputSource, RegionSelection};
-use crate::screen_pixels::ImagePixelRect;
+use crate::screen_pixels::{ImagePixelRect, PackedArgb32};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland::state::region_capture) enum PreviewApply {
@@ -40,8 +43,7 @@ pub(in crate::backend::wayland::state::region_capture) struct RegionAnnotatedRen
     pub(in crate::backend::wayland::state::region_capture) canvas_content_generation: u64,
     pub(in crate::backend::wayland::state::region_capture) board_view_offset: (f64, f64),
     pub(in crate::backend::wayland::state::region_capture) text_halo_enabled: bool,
-    pub(in crate::backend::wayland::state::region_capture) spotlight:
-        crate::canvas_export::SpotlightPassSnapshot,
+    pub(in crate::backend::wayland::state::region_capture) spotlight: SpotlightPassSnapshot,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,16 +89,14 @@ pub(in crate::backend::wayland) struct CutPreviewKey {
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) struct RegionCutPreview {
     pub(in crate::backend::wayland::state::region_capture) key: CutPreviewKey,
-    pub(in crate::backend::wayland::state::region_capture) pixels:
-        std::sync::Arc<crate::screen_pixels::PackedArgb32>,
+    pub(in crate::backend::wayland::state::region_capture) pixels: Arc<PackedArgb32>,
     pub(in crate::backend::wayland::state::region_capture) display: RegionSelection,
 }
 
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) struct RegionCutBase {
     pub(in crate::backend::wayland::state::region_capture) fingerprint: RegionRenderFingerprint,
-    pub(in crate::backend::wayland::state::region_capture) pixels:
-        std::sync::Arc<crate::screen_pixels::PackedArgb32>,
+    pub(in crate::backend::wayland::state::region_capture) pixels: Arc<PackedArgb32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,26 +1,16 @@
+use std::mem;
+
 use anyhow::{Context, Result};
 use log::{debug, warn};
-use smithay_client_toolkit::shm::{
-    Shm,
-    slot::{Buffer, SlotPool},
-};
-use wayland_client::{
-    Dispatch, QueueHandle, WEnum,
-    protocol::{wl_output, wl_shm},
-};
-use wayland_protocols::ext::{
-    image_capture_source::v1::client::{
-        ext_image_capture_source_v1::ExtImageCaptureSourceV1,
-        ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
-    },
-    image_copy_capture::v1::client::{
-        ext_image_copy_capture_frame_v1::{
-            Event as FrameEvent, ExtImageCopyCaptureFrameV1, FailureReason,
-        },
-        ext_image_copy_capture_manager_v1::{ExtImageCopyCaptureManagerV1, Options},
-        ext_image_copy_capture_session_v1::{Event as SessionEvent, ExtImageCopyCaptureSessionV1},
-    },
-};
+use smithay_client_toolkit::shm::Shm;
+use smithay_client_toolkit::shm::slot::{Buffer, SlotPool};
+use wayland_client::{Dispatch, QueueHandle, WEnum};
+use wayland_client::protocol::{wl_output, wl_shm};
+use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
+use wayland_protocols::ext::image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1;
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::{Event as FrameEvent, ExtImageCopyCaptureFrameV1, FailureReason};
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::{ExtImageCopyCaptureManagerV1, Options};
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::{Event as SessionEvent, ExtImageCopyCaptureSessionV1};
 
 use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
@@ -112,7 +102,7 @@ impl ConstraintTracker {
     }
 
     fn finish_batch(&mut self, frame_pending: bool) -> Option<ExtBufferConstraints> {
-        let batch = std::mem::take(&mut self.pending);
+        let batch = mem::take(&mut self.pending);
         if frame_pending {
             self.replacement = Some(batch);
             None
@@ -190,7 +180,7 @@ impl FrozenState {
 
     pub(in crate::backend::wayland) fn handle_ext_session_event<State>(
         &mut self,
-        event: SessionEvent,
+        event: &SessionEvent,
         qh: &QueueHandle<State>,
     ) -> bool
     where
@@ -204,7 +194,7 @@ impl FrozenState {
             return false;
         }
 
-        let result = match event {
+        let result = match *event {
             SessionEvent::BufferSize { width, height } => {
                 let capture = self.ext_capture_mut();
                 capture.map(|capture| capture.constraints.record_size(width, height))
@@ -237,7 +227,7 @@ impl FrozenState {
             capture.constraints.finish_batch(capture.frame.is_some())
         };
         if let Some(constraints) = constraints {
-            self.submit_ext_frame(qh, constraints)?;
+            self.submit_ext_frame(qh, &constraints)?;
         } else {
             debug!("Deferred replacement ext-image-copy constraints until the current frame ends");
         }
@@ -247,7 +237,7 @@ impl FrozenState {
     fn submit_ext_frame<State>(
         &mut self,
         qh: &QueueHandle<State>,
-        constraints: ExtBufferConstraints,
+        constraints: &ExtBufferConstraints,
     ) -> Result<()>
     where
         State: Dispatch<ExtImageCopyCaptureFrameV1, ()> + 'static,
@@ -290,7 +280,7 @@ impl FrozenState {
 
     pub(in crate::backend::wayland) fn handle_ext_frame_event<State>(
         &mut self,
-        event: FrameEvent,
+        event: &FrameEvent,
         qh: &QueueHandle<State>,
         input_state: &mut InputState,
     ) -> bool
@@ -305,7 +295,7 @@ impl FrozenState {
             return false;
         }
 
-        match event {
+        match *event {
             FrameEvent::Ready => match self.finish_ext_frame() {
                 Ok(true) => input_state.needs_redraw = true,
                 Ok(false) => {
@@ -375,7 +365,7 @@ impl FrozenState {
 
         let replacement = replacement?;
         debug!("Retrying ext-image-copy with replacement buffer constraints");
-        self.submit_ext_frame(qh, replacement)
+        self.submit_ext_frame(qh, &replacement)
     }
 
     fn finish_ext_frame(&mut self) -> Result<bool> {

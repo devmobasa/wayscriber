@@ -15,9 +15,10 @@ impl ConfiguratorApp {
         value: String,
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
-        self.color_picker_hex.insert(id, value.clone());
+        let parsed = parse_hex(&value);
+        self.color_picker_hex.insert(id, value);
 
-        if let Some((rgb, alpha)) = parse_hex(&value) {
+        if let Some((rgb, alpha)) = parsed {
             let alpha = if id.uses_alpha() {
                 alpha.or_else(|| self.current_alpha_for_id(id))
             } else {
@@ -169,41 +170,41 @@ impl ConfiguratorApp {
                 }
             }
             ColorPickerId::StatusBarBg => {
-                self.apply_quad_rgb(QuadField::StatusBarBg, values, alpha);
+                self.apply_quad_rgb(QuadField::StatusBarBg, &values, alpha);
             }
             ColorPickerId::StatusBarText => {
-                self.apply_quad_rgb(QuadField::StatusBarText, values, alpha);
+                self.apply_quad_rgb(QuadField::StatusBarText, &values, alpha);
             }
             ColorPickerId::HighlightFill => {
-                self.apply_quad_rgb(QuadField::HighlightFill, values, alpha);
+                self.apply_quad_rgb(QuadField::HighlightFill, &values, alpha);
             }
             ColorPickerId::HighlightOutline => {
-                self.apply_quad_rgb(QuadField::HighlightOutline, values, alpha);
+                self.apply_quad_rgb(QuadField::HighlightOutline, &values, alpha);
             }
             ColorPickerId::LaserColor => {
-                self.apply_quad_rgb(QuadField::LaserColor, values, alpha);
+                self.apply_quad_rgb(QuadField::LaserColor, &values, alpha);
             }
             ColorPickerId::HelpBg => {
-                self.apply_quad_rgb(QuadField::HelpBg, values, alpha);
+                self.apply_quad_rgb(QuadField::HelpBg, &values, alpha);
             }
             ColorPickerId::HelpBorder => {
-                self.apply_quad_rgb(QuadField::HelpBorder, values, alpha);
+                self.apply_quad_rgb(QuadField::HelpBorder, &values, alpha);
             }
             ColorPickerId::HelpText => {
-                self.apply_quad_rgb(QuadField::HelpText, values, alpha);
+                self.apply_quad_rgb(QuadField::HelpText, &values, alpha);
             }
             ColorPickerId::ExportPdfLabelText => {
-                self.apply_quad_rgb(QuadField::ExportPdfLabelText, values, alpha);
+                self.apply_quad_rgb(QuadField::ExportPdfLabelText, &values, alpha);
             }
             ColorPickerId::ExportPdfLabelBackground => {
-                self.apply_quad_rgb(QuadField::ExportPdfLabelBackground, values, alpha);
+                self.apply_quad_rgb(QuadField::ExportPdfLabelBackground, &values, alpha);
             }
         }
 
         self.sync_color_picker_hex_for_id(id);
     }
 
-    fn apply_quad_rgb(&mut self, field: QuadField, values: [String; 3], alpha: Option<f64>) {
+    fn apply_quad_rgb(&mut self, field: QuadField, values: &[String; 3], alpha: Option<f64>) {
         for (component, value) in values.iter().enumerate() {
             self.draft.set_quad(field, component, value.to_string());
         }

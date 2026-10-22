@@ -1,3 +1,4 @@
+use std::mem;
 use std::time::{Duration, Instant};
 
 use crate::config::{StatusBarStyle, StatusPosition};
@@ -115,7 +116,7 @@ impl StatusHudState {
     }
 
     pub(in crate::input::state) fn take_press_pending(&mut self) -> bool {
-        std::mem::take(&mut self.press_pending)
+        mem::take(&mut self.press_pending)
     }
 }
 

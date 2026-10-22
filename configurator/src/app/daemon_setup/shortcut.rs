@@ -1,6 +1,8 @@
+use wayscriber::durable_io;
 use wayscriber::i18n::{tr, trf};
 
 use std::fs;
+use std::path::PathBuf;
 
 use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
 use wayscriber::durable_io::AtomicWriteOptions;
@@ -176,7 +178,7 @@ fn run_gsettings_command(args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, String> {
+fn write_portal_shortcut_dropin(shortcut: &str) -> Result<PathBuf, String> {
     let dropin_path = portal_shortcut_dropin_path().ok_or_else(|| {
         tr("Cannot resolve home directory; failed to determine systemd drop-in path.").to_string()
     })?;
@@ -193,7 +195,7 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
     let escaped_shortcut = escape_systemd_env_value(shortcut);
     let escaped_app_id = escape_systemd_env_value(PORTAL_APP_ID);
     let contents = render_portal_shortcut_dropin(&escaped_shortcut, &escaped_app_id);
-    wayscriber::durable_io::write_text_atomic(
+    durable_io::write_text_atomic(
         &dropin_path,
         &contents,
         AtomicWriteOptions::user_config_file(),

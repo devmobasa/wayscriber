@@ -1,11 +1,24 @@
 //! Background disk operations and completion-before-wake publication.
+use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 
-use super::*;
-use crate::session::SaveSnapshotOutcome;
+use crate::draw::Shape;
+
+use super::{
+    PersistenceCompletion, PersistenceOperation, PersistenceOutcome, PersistenceRequest,
+    SaveCompletion, SaveStrategy,
+};
+use crate::backend::wayland::backend::runtime_wake::RuntimeWakeHandle;
+use crate::session;
+use crate::session::{LoadSnapshotOutcome, SaveSnapshotOutcome, SessionOptions, SessionSnapshot};
+use anyhow::{Context, Result, anyhow};
+use std::sync::mpsc::{Receiver, SyncSender};
+use std::thread;
+use std::time::Instant;
 
 pub(super) fn worker_main(
-    request_rx: Receiver<PersistenceRequest>,
+    request_rx: &Receiver<PersistenceRequest>,
     completion_tx: SyncSender<PersistenceCompletion>,
     wake: RuntimeWakeHandle,
 ) {
@@ -210,9 +223,9 @@ fn load_home(options: &SessionOptions) -> Result<PersistenceOutcome> {
 
 /// A session file that a save can replace: a regular file, or none yet.
 fn require_replaceable_session_file(path: &Path) -> Result<()> {
-    let metadata = match std::fs::symlink_metadata(path) {
+    let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
         Err(error) => {
             return Err(error)
                 .with_context(|| format!("failed to inspect session file {}", path.display()));
@@ -306,7 +319,7 @@ fn log_snapshot_summary(
             redo_entries += redo;
             max_history_depth = max_history_depth.max(undo.max(redo));
             for drawn in &frame.shapes {
-                if let crate::draw::Shape::Image { data, .. } = &drawn.shape {
+                if let Shape::Image { data, .. } = &drawn.shape {
                     visible_image_shapes += 1;
                     visible_image_bytes = visible_image_bytes.saturating_add(data.bytes.len());
                 }

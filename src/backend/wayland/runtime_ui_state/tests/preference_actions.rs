@@ -1,3 +1,6 @@
+use crate::config::ToolbarItemVisibilitySetting;
+use crate::{config, test_temp};
+
 use super::*;
 
 /// The click highlight and its tool ring persist together, from the toolbar
@@ -7,7 +10,7 @@ use super::*;
 #[test]
 fn click_highlight_survives_restart_from_either_path() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -32,7 +35,7 @@ fn click_highlight_survives_restart_from_either_path() {
     assert!(input.set_click_highlight_enabled(enabled));
     let rollback = click_highlight_values(previous_enabled, previous_ring).expect("valid rollback");
     let prepared = runtime
-        .begin_toolbar_mutation_with_rollback(target, rollback)
+        .begin_toolbar_mutation_with_rollback(target, &rollback)
         .expect("keyboard permit");
     let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
     assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
@@ -42,8 +45,8 @@ fn click_highlight_survives_restart_from_either_path() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -60,7 +63,7 @@ fn click_highlight_survives_restart_from_either_path() {
 #[test]
 fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -105,7 +108,7 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
         let rollback = RuntimeUiMutationValues::one(seed, InteractionSeedValue::Bool(previous))
             .expect("valid rollback");
         let prepared = runtime
-            .begin_toolbar_mutation_with_rollback(target, rollback)
+            .begin_toolbar_mutation_with_rollback(target, &rollback)
             .unwrap_or_else(|| panic!("{target:?} permit"));
         let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
         assert!(
@@ -120,8 +123,8 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -259,7 +262,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
         ),
     ];
 
-    let mut values = std::collections::BTreeMap::new();
+    let mut values = BTreeMap::new();
     for (target, read, _) in &bools {
         values.insert(target.clone(), InteractionSeedValue::Bool(read(&input)));
     }
@@ -270,7 +273,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     );
     values.insert(
         InteractionSeedTarget::SectionVisibility(ToolbarSectionFlag::Presets),
-        InteractionSeedValue::Visibility(crate::config::ToolbarItemVisibilitySetting::Default),
+        InteractionSeedValue::Visibility(ToolbarItemVisibilitySetting::Default),
     );
 
     for (_, _, flip) in &bools {
@@ -282,8 +285,8 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     input.apply_toolbar_event(section_toggle(ToolbarSectionFlag::Presets, false));
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &PreviewRollbackSnapshot {
@@ -302,11 +305,11 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     }
     assert_eq!(input.toolbar_layout_mode(), original_layout);
     assert_eq!(
-        crate::config::item_visibility_setting(
+        config::item_visibility_setting(
             input.resolved_toolbar_items(),
             ToolbarSectionFlag::Presets.item_id()
         ),
-        crate::config::ToolbarItemVisibilitySetting::Default,
+        ToolbarItemVisibilitySetting::Default,
         "the section override was not rolled back"
     );
 }

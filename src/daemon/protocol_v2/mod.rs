@@ -8,13 +8,16 @@ mod runtime;
 mod session_target;
 mod wire;
 
-pub(crate) use child::OverlayChildOwner;
+use std::fs;
+use std::io::ErrorKind;
+
 #[cfg(test)]
 pub(crate) use child::{ActiveGeneration, active_generation_from_environment};
 pub(crate) use child::{
-    open_daemon_watchdog, recover_stale_child_records, start_daemon_watchdog_from_environment,
+    OverlayChildOwner, open_daemon_watchdog, publish_ready_from_environment,
+    publish_signal_ready_from_environment, recover_stale_child_records,
+    start_daemon_watchdog_from_environment,
 };
-pub(crate) use child::{publish_ready_from_environment, publish_signal_ready_from_environment};
 pub(crate) use command::{
     ClientCommand, CommandOwner, FinalEffect, TerminalCommandResult, command_root,
 };
@@ -28,12 +31,13 @@ pub(crate) use runtime::{ClassifiedRuntimeRecord, read_runtime_record, write_run
 pub(crate) use session_target::{
     ReportedSession, clear_stale_session_reports, publish_session_from_environment,
 };
-pub(crate) use wire::EffectKind;
-pub(crate) use wire::{DaemonRequestV2, DaemonRuntimeRecordV2};
+pub(crate) use wire::{DaemonRequestV2, DaemonRuntimeRecordV2, EffectKind};
 
 #[cfg(test)]
 mod tests;
 pub(crate) use action::{ActionClaimOutcome, ActionFinishOutcome, ActionJournal, ClaimedAction};
+
+use crate::paths;
 
 pub(crate) fn try_claim_overlay_action() -> anyhow::Result<ActionClaimOutcome> {
     let enabled_daemon_token = match child::active_generation_from_environment()? {
@@ -41,10 +45,10 @@ pub(crate) fn try_claim_overlay_action() -> anyhow::Result<ActionClaimOutcome> {
         child::ActiveGeneration::Pending => return Ok(ActionClaimOutcome::Deferred),
         child::ActiveGeneration::Enabled { daemon_token } => daemon_token,
     };
-    let runtime_path = crate::paths::daemon_pid_file();
-    match std::fs::symlink_metadata(&runtime_path) {
+    let runtime_path = paths::daemon_pid_file();
+    match fs::symlink_metadata(&runtime_path) {
         Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+        Err(error) if error.kind() == ErrorKind::NotFound => {
             return Ok(ActionClaimOutcome::Idle);
         }
         Err(error) => return Err(error.into()),
@@ -64,10 +68,10 @@ pub(crate) fn try_claim_overlay_action() -> anyhow::Result<ActionClaimOutcome> {
 
 pub(crate) fn prepare_rollback_compatibility() -> anyhow::Result<()> {
     let root = command_root();
-    match std::fs::symlink_metadata(&root) {
+    match fs::symlink_metadata(&root) {
         Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
         Ok(_) => anyhow::bail!("v2 command root is not a no-follow directory"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(error.into()),
     }
     let token = ProtocolToken::generate()?.to_string();

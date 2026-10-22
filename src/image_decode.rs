@@ -1,5 +1,7 @@
 use std::io::Cursor;
 
+use zune_jpeg::zune_core::bytestream::ZCursor;
+
 use crate::screen_pixels::EmbeddedImageLimits;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,8 +191,7 @@ fn normalize_png_rgba(
 
 #[allow(dead_code)]
 fn jpeg_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
-    let mut decoder =
-        zune_jpeg::JpegDecoder::new(zune_jpeg::zune_core::bytestream::ZCursor::new(bytes));
+    let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(bytes));
     decoder.decode_headers().map_err(|err| err.to_string())?;
     let info = decoder
         .info()
@@ -245,6 +246,8 @@ fn pixel_count(width: u32, height: u32) -> Result<usize, String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::base64;
+
     use super::{DecodeLimits, EncodedImageFormat, decode_rgba};
     use crate::screen_pixels::EmbeddedImageLimits;
 
@@ -347,7 +350,7 @@ mod tests {
 
     #[test]
     fn decode_jpeg_rgba_preserves_cmyk_jpeg_colors() {
-        let bytes = crate::base64::decode_standard(CMYK_RED_JPEG).unwrap();
+        let bytes = base64::decode_standard(CMYK_RED_JPEG).unwrap();
 
         let image = decode_rgba(
             EncodedImageFormat::Jpeg,
@@ -401,7 +404,7 @@ mod tests {
 
     #[test]
     fn jpeg_header_over_the_budget_is_rejected_before_decoding() {
-        let bytes = crate::base64::decode_standard(CMYK_RED_JPEG).unwrap();
+        let bytes = base64::decode_standard(CMYK_RED_JPEG).unwrap();
 
         let err = decode_rgba(
             EncodedImageFormat::Jpeg,

@@ -12,12 +12,14 @@ const OVERRIDE: &str = "WAYSCRIBER_LANGUAGE";
 const LOCALE_DIR: &str = "WAYSCRIBER_LOCALE_DIR";
 
 fn set_env(name: &str, value: &str) {
-    // Safe here: this test binary runs one test at a time and owns the
-    // variables it touches.
+    // SAFETY: this test binary holds a single test, which spawns no threads,
+    // so nothing else in the process reads or writes the environment.
     unsafe { env::set_var(name, value) };
 }
 
 fn unset_env(name: &str) {
+    // SAFETY: this test binary holds a single test, which spawns no threads,
+    // so nothing else in the process reads or writes the environment.
     unsafe { env::remove_var(name) };
 }
 

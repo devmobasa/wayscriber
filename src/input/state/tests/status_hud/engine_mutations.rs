@@ -1,3 +1,6 @@
+use crate::config::{PresenterToolbarMode, TopDisplayMode};
+use crate::domain;
+
 use super::*;
 use crate::ui_text::UiTextEngine;
 
@@ -5,11 +8,10 @@ fn seeded(engine: &UiTextEngine) -> InputState {
     let mut input = create_test_input_state();
     input.compositor_capabilities.layer_shell = true;
     input.presenter_mode_config_mut_for_test().hide_toolbars = true;
-    input.presenter_mode_config_mut_for_test().toolbar_mode =
-        crate::config::PresenterToolbarMode::Micro;
+    input.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
     input.update_status_hud_layout_for_pointer_with_resources(
         crate::input::state::InputTextResources {
-            measurer: &crate::draw::TextMeasurer::default(),
+            measurer: &TextMeasurer::default(),
             ui_engine: engine,
         },
         StatusPosition::BottomLeft,
@@ -32,7 +34,7 @@ fn explicit_mutations_rebuild_immediately_and_preserve_no_op_results() {
     input.needs_redraw = false;
     assert!(input.set_status_bar_item_visible_with_resources(
         &engine,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::Help,
         false
     ));
@@ -50,17 +52,13 @@ fn explicit_mutations_rebuild_immediately_and_preserve_no_op_results() {
     input.needs_redraw = false;
     assert!(!input.set_status_bar_item_visible_with_resources(
         &engine,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::Help,
         false
     ));
     assert!(!input.needs_redraw);
 
-    assert!(input.set_toolbar_visible_with_resources(
-        &engine,
-        &crate::draw::TextMeasurer::default(),
-        false
-    ));
+    assert!(input.set_toolbar_visible_with_resources(&engine, &TextMeasurer::default(), false));
     assert!(
         input
             .status_hud_layout()
@@ -70,17 +68,13 @@ fn explicit_mutations_rebuild_immediately_and_preserve_no_op_results() {
             .any(|s| s.kind == StatusHudSegmentKind::Toolbar)
     );
     input.needs_redraw = false;
-    assert!(!input.set_toolbar_visible_with_resources(
-        &engine,
-        &crate::draw::TextMeasurer::default(),
-        false
-    ));
+    assert!(!input.set_toolbar_visible_with_resources(&engine, &TextMeasurer::default(), false));
     assert!(!input.needs_redraw);
 
     let mut unpainted = create_test_input_state();
     assert!(unpainted.set_status_bar_item_visible_with_resources(
         &engine,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         StatusBarItem::Help,
         false
     ));
@@ -117,7 +111,7 @@ fn assert_same_chrome(actual: &InputState, expected: &InputState) {
 #[test]
 fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &engine,
@@ -166,17 +160,17 @@ fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
 #[test]
 fn explicit_focus_rescue_and_display_cycle_refresh_saved_geometry() {
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &engine,
     };
     let mut input = seeded(&engine);
-    input.set_toolbar_visible_with_resources(&engine, &crate::draw::TextMeasurer::default(), false);
+    input.set_toolbar_visible_with_resources(&engine, &TextMeasurer::default(), false);
     input.ui_visibility.show_status_bar = false;
     input.ui_visibility.show_floating_badge = false;
     input.ui_visibility.show_zoom_chip = false;
-    input.refresh_status_hud_layout_with_resources(&engine, &crate::draw::TextMeasurer::default());
+    input.refresh_status_hud_layout_with_resources(&engine, &TextMeasurer::default());
     assert!(!input.focus_mode_active());
     input.toggle_focus_mode_with_resources(resources);
     assert!(input.toolbar_visible(), "Focus rescues fully hidden chrome");
@@ -186,35 +180,29 @@ fn explicit_focus_rescue_and_display_cycle_refresh_saved_geometry() {
     assert!(input.status_hud_layout().is_none());
     input.set_top_display_mode_with_resources(
         &engine,
-        &crate::draw::TextMeasurer::default(),
-        crate::config::TopDisplayMode::Full,
+        &TextMeasurer::default(),
+        TopDisplayMode::Full,
     );
     assert!(input.status_hud_layout().is_some());
     assert_eq!(
-        input.cycle_top_toolbar_display_with_resources(
-            &engine,
-            &crate::draw::TextMeasurer::default()
-        ),
-        crate::config::TopDisplayMode::Micro
+        input.cycle_top_toolbar_display_with_resources(&engine, &TextMeasurer::default()),
+        TopDisplayMode::Micro
     );
-    input.derive_toolbar_visibility_from_pins_with_resources(
-        &engine,
-        &crate::draw::TextMeasurer::default(),
-    );
+    input.derive_toolbar_visibility_from_pins_with_resources(&engine, &TextMeasurer::default());
     assert!(input.status_hud_layout().is_some());
 }
 
 #[test]
 fn explicit_action_and_toolbar_routes_refresh_status_geometry_before_another_frame() {
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &engine,
     };
     let mut input = seeded(&engine);
-    input.set_toolbar_visible_with_resources(&engine, &crate::draw::TextMeasurer::default(), true);
-    input.handle_action_with_resources(resources, crate::domain::Action::ToggleToolbar);
+    input.set_toolbar_visible_with_resources(&engine, &TextMeasurer::default(), true);
+    input.handle_action_with_resources(resources, domain::Action::ToggleToolbar);
     assert!(!input.toolbar_visible());
     assert!(
         input
@@ -230,7 +218,7 @@ fn explicit_action_and_toolbar_routes_refresh_status_geometry_before_another_fra
     assert_eq!(input.status_hud.hover, Some(StatusHudSegmentKind::Help));
     assert!(input.apply_toolbar_event_with_resources(
         resources,
-        crate::ui::toolbar::ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Help, false)
+        ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Help, false)
     ));
     assert_eq!(input.status_hud.hover, None);
     assert!(

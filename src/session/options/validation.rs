@@ -1,9 +1,9 @@
 use std::error::Error;
-use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::{fmt, path, process};
 
 use anyhow::{Context, Result, anyhow};
 
@@ -29,6 +29,7 @@ impl MissingNamedSessionFile {
         }
     }
 
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -60,6 +61,7 @@ impl MissingNamedSessionParent {
         }
     }
 
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -77,7 +79,8 @@ impl fmt::Display for MissingNamedSessionParent {
 
 impl Error for MissingNamedSessionParent {}
 
-pub fn normalize_named_session_file_arg(raw: &str) -> std::path::PathBuf {
+#[must_use]
+pub fn normalize_named_session_file_arg(raw: &str) -> PathBuf {
     expand_tilde(raw)
 }
 
@@ -205,7 +208,7 @@ fn write_probe_path(parent: &Path) -> PathBuf {
     let id = NEXT_WRITE_PROBE_ID.fetch_add(1, Ordering::Relaxed);
     parent.join(format!(
         ".wayscriber-session-write-test-{}-{id}",
-        std::process::id()
+        process::id()
     ))
 }
 
@@ -255,7 +258,7 @@ fn has_trailing_separator(path: &Path) -> bool {
     path.as_os_str()
         .as_encoded_bytes()
         .last()
-        .is_some_and(|last| *last == std::path::MAIN_SEPARATOR as u8)
+        .is_some_and(|last| *last == path::MAIN_SEPARATOR as u8)
 }
 
 fn validate_existing_parent_if_present(path: &Path, operation: &str) -> Result<Option<PathBuf>> {

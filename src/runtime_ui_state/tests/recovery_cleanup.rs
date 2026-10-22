@@ -10,11 +10,11 @@ fn recovery_prunes_override_when_board_id_is_removed_and_readded_with_same_seed(
     let mut removed = test_seeds(false, false);
     removed.remove(&target);
     assert!(matches!(
-        controller.update_seeds(removed),
+        controller.update_seeds(&removed),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     assert!(matches!(
-        controller.update_seeds(test_seeds(false, false)),
+        controller.update_seeds(&test_seeds(false, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
 
@@ -80,7 +80,7 @@ fn recovery_captures_replacements_fenced_by_a_flush_before_closing_barrier() {
     let flush = controller.request_flush(second).unwrap();
     let (_, incident) = fail_current_replace(&mut controller, "first write failed");
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, false)),
+        controller.update_seeds(&test_seeds(true, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
 
@@ -237,7 +237,7 @@ fn reload_cleanup_is_written_even_when_failed_reset_has_no_retry_snapshot() {
         controller.receipt(reset_through),
         Some(DurabilityOutcome::Failed(_))
     ));
-    controller.update_seeds(test_seeds(true, false));
+    controller.update_seeds(&test_seeds(true, false));
 
     let (_client, inspection) = begin_recovery(
         &mut controller,
@@ -300,7 +300,7 @@ fn reload_during_cleanup_acknowledgement_recomputes_and_writes_again() {
         SubmitSourceMutationResult::PersistenceUnhealthy { incident, .. } => incident,
         result => panic!("unexpected reset failure: {result:?}"),
     };
-    controller.update_seeds(test_seeds(true, false));
+    controller.update_seeds(&test_seeds(true, false));
     let (client, inspection) = begin_recovery(
         &mut controller,
         incident,
@@ -322,7 +322,7 @@ fn reload_during_cleanup_acknowledgement_recomputes_and_writes_again() {
         operation => panic!("unexpected operation: {operation:?}"),
     };
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, true)),
+        controller.update_seeds(&test_seeds(true, true)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     assert!(matches!(
@@ -406,7 +406,7 @@ fn failed_recovery_cleanup_receipt_stays_failed_and_retry_allocates_a_new_one() 
         SubmitSourceMutationResult::PersistenceUnhealthy { incident, .. } => incident,
         result => panic!("unexpected reset failure: {result:?}"),
     };
-    controller.update_seeds(test_seeds(true, false));
+    controller.update_seeds(&test_seeds(true, false));
     let (client, inspection) = begin_recovery(
         &mut controller,
         incident,
@@ -521,7 +521,7 @@ fn external_conflict_pruning_keeps_recovery_barrier_until_cleanup_ack() {
         .take_recovery_io_command()
         .expect("external authority reinspection");
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, false)),
+        controller.update_seeds(&test_seeds(true, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     let authority = observation(present_revision("fresh-external"));
@@ -600,7 +600,7 @@ fn external_reinspection_settles_an_abandoned_cleanup_receipt_after_reload() {
         SubmitSourceMutationResult::PersistenceUnhealthy { incident, .. } => incident,
         result => panic!("unexpected prerequisite failure: {result:?}"),
     };
-    controller.update_seeds(test_seeds(true, false));
+    controller.update_seeds(&test_seeds(true, false));
     let (client, inspection) = begin_recovery(
         &mut controller,
         incident,
@@ -637,7 +637,7 @@ fn external_reinspection_settles_an_abandoned_cleanup_receipt_after_reload() {
         result => panic!("unexpected invalid acknowledgement result: {result:?}"),
     };
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, true)),
+        controller.update_seeds(&test_seeds(true, true)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     let retry = match controller.begin_persistence_recovery(PersistenceRecoveryRequest {
@@ -695,7 +695,7 @@ fn preserve_invalid_settles_an_abandoned_cleanup_receipt() {
         SubmitSourceMutationResult::PersistenceUnhealthy { incident, .. } => incident,
         result => panic!("unexpected prerequisite failure: {result:?}"),
     };
-    controller.update_seeds(test_seeds(true, false));
+    controller.update_seeds(&test_seeds(true, false));
     let (client, inspection) = begin_recovery(
         &mut controller,
         incident,

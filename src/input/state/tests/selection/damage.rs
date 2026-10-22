@@ -1,3 +1,6 @@
+use crate::draw::ShapeId;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::draw::TextMeasurer;
 use crate::util::Rect;
@@ -13,7 +16,7 @@ fn damage_state() -> InputState {
     state
 }
 
-fn add_filled_rect(state: &mut InputState, x: i32, y: i32) -> crate::draw::ShapeId {
+fn add_filled_rect(state: &mut InputState, x: i32, y: i32) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Rect {
         x,
         y,
@@ -26,7 +29,7 @@ fn add_filled_rect(state: &mut InputState, x: i32, y: i32) -> crate::draw::Shape
     })
 }
 
-fn chrome_of(state: &InputState, id: crate::draw::ShapeId) -> Rect {
+fn chrome_of(state: &InputState, id: ShapeId) -> Rect {
     let measurer = TextMeasurer::default();
     state
         .boards
@@ -139,7 +142,7 @@ fn reselecting_the_same_shapes_adds_no_damage() {
 #[test]
 fn undo_repaints_the_chrome_where_it_was_drawn_before_the_step() {
     let test_text_measurer = TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_ui_engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,

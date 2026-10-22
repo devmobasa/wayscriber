@@ -25,6 +25,7 @@ impl StatusBarItem {
     ///
     /// Persisted, so these strings are a compatibility surface: renaming one
     /// silently drops the user's saved choice for that item.
+    #[must_use]
     pub fn config_id(self) -> &'static str {
         match self {
             Self::ActiveOutput => "active_output",
@@ -42,6 +43,7 @@ impl StatusBarItem {
     }
 
     /// The item a persisted identifier names, if this build still has it.
+    #[must_use]
     pub fn from_config_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|item| item.config_id() == id)
     }

@@ -1,11 +1,18 @@
-use super::{FeedbackSender, TopBar, support::*};
+use std::sync::mpsc;
+
+use gtk4::prelude::GtkWindowExt;
+
+use crate::input::state::test_support;
+
+use super::support::*;
+use super::{FeedbackSender, TopBar};
 use crate::toolbar_gtk::GtkToolbarUpdate;
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
 use gtk4::prelude::*;
 
 pub(super) fn apply_paths(user: &gtk4::CssProvider) {
     user.load_from_string(&painted_css("window", "0 2px 6px #58c0e8"));
-    let state = crate::input::state::test_support::make_test_input_state();
+    let state = test_support::make_test_input_state();
     let mut update = GtkToolbarUpdate {
         snapshot: ToolbarSnapshot::from_input_with_bindings(
             &state,
@@ -23,7 +30,7 @@ pub(super) fn apply_paths(user: &gtk4::CssProvider) {
         capture_suppressed: false,
         capture_suppression_generation: None,
     };
-    let (tx, _) = std::sync::mpsc::channel();
+    let (tx, _) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
     top.window.set_decorated(false);
 
@@ -72,8 +79,8 @@ fn visible_capture_and_restore(
     // Weston may assign initial keyboard focus to the first slider after the
     // map callback. Capture releases that focus; compare an unfocused normal
     // toolbar so its Cairo focus ring is not part of the styling fixture.
-    gtk4::prelude::GtkWindowExt::set_focus(&top.window, gtk4::Widget::NONE);
-    assert!(gtk4::prelude::GtkWindowExt::focus(&top.window).is_none());
+    GtkWindowExt::set_focus(&top.window, gtk4::Widget::NONE);
+    assert!(GtkWindowExt::focus(&top.window).is_none());
 
     assert_renderer(&top.window);
     let normal = settled_pixels(&top.window);

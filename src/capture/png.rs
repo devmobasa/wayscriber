@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn packed_argb32_png_preserves_alpha_and_premultiplied_channels() {
         let source_data = native_argb(&[
-            0xFF00_00FF, // opaque blue
+            0xff00_00ff, // opaque blue
             0x0000_0000, // fully transparent
             0x8040_4040, // half-alpha premultiplied grey
         ]);

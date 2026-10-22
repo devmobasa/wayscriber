@@ -1,4 +1,4 @@
-use std::fs;
+use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
@@ -9,6 +9,7 @@ use std::process::{Command, Output};
 use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
+use std::{env, fs};
 use wayscriber::env_vars::{
     HOME_ENV, NO_DETACH_ENV, WAYLAND_DISPLAY_ENV, XDG_CONFIG_HOME_ENV, XDG_CURRENT_DESKTOP_ENV,
     XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV, XDG_SESSION_DESKTOP_ENV,
@@ -20,6 +21,13 @@ use wayscriber::env_vars::{
 use wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG;
 
 use tempfile::TempDir;
+use wayscriber::config::Config;
+use wayscriber::draw::{Color, EraserKind, FontDescriptor, Frame, Shape};
+use wayscriber::input::EraserMode;
+use wayscriber::session::{
+    BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot, ToolStateSnapshot,
+};
+use wayscriber::{build_info, draw, runtime_capabilities, session, shortcut_hint};
 
 struct CommandOutput {
     output: Output,
@@ -160,7 +168,7 @@ fn run_command_with_timeout(
 
 fn write_session_config(temp: &TempDir, custom_dir: &Path) {
     let config_dir = temp.path().join("wayscriber");
-    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&config_dir).expect("create test config directory");
     let config_contents = format!(
         r#"
 [session]
@@ -178,12 +186,12 @@ backup_retention = 1
 "#,
         custom_dir.display()
     );
-    fs::write(config_dir.join("config.toml"), config_contents).unwrap();
+    fs::write(config_dir.join("config.toml"), config_contents).expect("write test session config");
 }
 
 fn write_disabled_session_config(temp: &TempDir, custom_dir: &Path) {
     let config_dir = temp.path().join("wayscriber");
-    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&config_dir).expect("create test config directory");
     let config_contents = format!(
         r#"
 [session]
@@ -202,12 +210,12 @@ backup_retention = 1
 "#,
         custom_dir.display()
     );
-    fs::write(config_dir.join("config.toml"), config_contents).unwrap();
+    fs::write(config_dir.join("config.toml"), config_contents).expect("write test session config");
 }
 
-fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
-    wayscriber::session::ToolStateSnapshot {
-        current_color: wayscriber::draw::Color {
+fn saved_tool_state() -> ToolStateSnapshot {
+    ToolStateSnapshot {
+        current_color: Color {
             r: 0.0,
             g: 1.0,
             b: 0.0,
@@ -215,8 +223,8 @@ fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
         },
         current_thickness: 3.0,
         eraser_size: 12.0,
-        eraser_kind: wayscriber::draw::EraserKind::Circle,
-        eraser_mode: wayscriber::input::EraserMode::Brush,
+        eraser_kind: EraserKind::Circle,
+        eraser_mode: EraserMode::Brush,
         blur_style: Default::default(),
         recent_colors: Vec::new(),
         pen_smoothing: None,
@@ -226,27 +234,27 @@ fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
         fill_enabled: Some(false),
         tool_override: None,
         current_font_size: 24.0,
-        font_descriptor: Some(wayscriber::draw::FontDescriptor::default()),
+        font_descriptor: Some(FontDescriptor::default()),
         text_background_enabled: false,
         arrow_length: 20.0,
         arrow_angle: 30.0,
         arrow_head_at_end: Some(false),
         arrow_style: None,
         arrow_label_enabled: Some(false),
-        polygon_sides: wayscriber::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+        polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
         tool_settings: None,
     }
 }
 
-fn saved_line_snapshot(with_tool_state: bool) -> wayscriber::session::SessionSnapshot {
-    let mut frame = wayscriber::draw::Frame::new();
-    frame.add_shape(wayscriber::draw::Shape::Line {
+fn saved_line_snapshot(with_tool_state: bool) -> SessionSnapshot {
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 10,
         y2: 10,
-        color: wayscriber::draw::Color {
+        color: Color {
             r: 1.0,
             g: 0.0,
             b: 0.0,
@@ -255,12 +263,12 @@ fn saved_line_snapshot(with_tool_state: bool) -> wayscriber::session::SessionSna
         thick: 2.0,
     });
 
-    wayscriber::session::SessionSnapshot {
+    SessionSnapshot {
         active_board_id: "transparent".to_string(),
-        boards: vec![wayscriber::session::BoardSnapshot {
+        boards: vec![BoardSnapshot {
             appearance: None,
             id: "transparent".to_string(),
-            pages: wayscriber::session::BoardPagesSnapshot {
+            pages: BoardPagesSnapshot {
                 pages: vec![frame],
                 active: 0,
             },
@@ -292,19 +300,19 @@ fn wayscriber_version_prints_binary_name() {
             .success()
             .code(0)
             .stdout_starts_with("wayscriber ")
-            .stdout_contains(wayscriber::build_info::version());
+            .stdout_contains(build_info::version());
     }
 }
 
 #[test]
 fn wayscriber_runtime_capabilities_reports_portal_feature() {
-    let expected = wayscriber::runtime_capabilities::render_runtime_capabilities(
-        wayscriber::runtime_capabilities::current_runtime_capabilities(),
+    let expected = runtime_capabilities::render_runtime_capabilities(
+        runtime_capabilities::current_runtime_capabilities(),
     );
     assert!(
         expected.starts_with(&format!(
             "portal={}\n",
-            wayscriber::shortcut_hint::portal_runtime_supported()
+            shortcut_hint::portal_runtime_supported()
         )),
         "the rendered report must lead with the portal capability"
     );
@@ -405,7 +413,7 @@ fn daemon_lock_conflict_exits_seventy_five_without_starting_runtime_services() {
         .truncate(false)
         .open(&lock_path)
         .unwrap();
-    wayscriber::session::try_lock_exclusive(&lock_file).unwrap();
+    session::try_lock_exclusive(&lock_file).unwrap();
 
     let mut command = wayscriber_cmd();
     command
@@ -585,20 +593,18 @@ fn clear_tool_state_named_session_targets_only_requested_file() {
     let selected = temp.path().join("lecture-04.wayscriber-session");
     let sibling = temp.path().join("lecture-05.wayscriber-session");
 
-    let mut selected_options =
-        wayscriber::session::SessionOptions::new(temp.path().to_path_buf(), "display");
+    let mut selected_options = SessionOptions::new(temp.path().to_path_buf(), "display");
     selected_options.set_named_file_target(selected.clone());
     selected_options.persist_transparent = true;
     selected_options.restore_tool_state = true;
 
-    let mut sibling_options =
-        wayscriber::session::SessionOptions::new(temp.path().to_path_buf(), "display");
+    let mut sibling_options = SessionOptions::new(temp.path().to_path_buf(), "display");
     sibling_options.set_named_file_target(sibling);
     sibling_options.persist_transparent = true;
     sibling_options.restore_tool_state = true;
 
-    wayscriber::session::save_snapshot(&saved_line_snapshot(true), &selected_options).unwrap();
-    wayscriber::session::save_snapshot(&saved_line_snapshot(true), &sibling_options).unwrap();
+    session::save_snapshot(&saved_line_snapshot(true), &selected_options).unwrap();
+    session::save_snapshot(&saved_line_snapshot(true), &sibling_options).unwrap();
 
     run_command(
         wayscriber_cmd()
@@ -613,10 +619,10 @@ fn clear_tool_state_named_session_targets_only_requested_file() {
     .stdout_contains("Cleared saved tool state")
     .stdout_contains("Preserved saved boards and history");
 
-    let selected_loaded = wayscriber::session::load_snapshot(&selected_options)
+    let selected_loaded = session::load_snapshot(&selected_options)
         .unwrap()
         .expect("selected session should remain");
-    let sibling_loaded = wayscriber::session::load_snapshot(&sibling_options)
+    let sibling_loaded = session::load_snapshot(&sibling_options)
         .unwrap()
         .expect("sibling session should remain");
 
@@ -651,7 +657,7 @@ fn named_session_clear_rejects_symlink_primary_without_removing_artifacts() {
     let temp = TempDir::new().unwrap();
     let target = temp.path().join("real-session.wayscriber-session");
     let link = temp.path().join("linked-session.wayscriber-session");
-    let mut backup_raw = std::ffi::OsString::from(link.as_os_str());
+    let mut backup_raw = OsString::from(link.as_os_str());
     backup_raw.push(".bak");
     let backup = PathBuf::from(backup_raw);
     fs::write(&target, b"target").unwrap();
@@ -804,43 +810,46 @@ fn session_info_reports_saved_snapshot() {
     write_session_config(&temp, &session_dir);
 
     let display = "test-session";
-    let original_config = std::env::var_os(XDG_CONFIG_HOME_ENV);
+    let original_config = env::var_os(XDG_CONFIG_HOME_ENV);
+    // SAFETY: no lock guards this write. This is the only test in this binary
+    // that changes the environment, and the tests that may run alongside it
+    // read the environment only through std (`Command` spawns), which
+    // serializes those reads with this call.
     unsafe {
-        std::env::set_var(XDG_CONFIG_HOME_ENV, temp.path());
+        env::set_var(XDG_CONFIG_HOME_ENV, temp.path());
     }
-    let original_display = std::env::var_os(WAYLAND_DISPLAY_ENV);
+    let original_display = env::var_os(WAYLAND_DISPLAY_ENV);
+    // SAFETY: as for `XDG_CONFIG_HOME` above.
     unsafe {
-        std::env::set_var(WAYLAND_DISPLAY_ENV, display);
+        env::set_var(WAYLAND_DISPLAY_ENV, display);
     }
 
-    let loaded = wayscriber::config::Config::load().unwrap();
-    let config_dir =
-        wayscriber::config::Config::config_directory_from_source(&loaded.source).unwrap();
-    let mut options = wayscriber::session::options_from_config(
-        &loaded.config.session,
-        &config_dir,
-        Some(display),
-    )
-    .unwrap();
+    let loaded = Config::load().unwrap();
+    let config_dir = Config::config_directory_from_source(&loaded.source).unwrap();
+    let mut options =
+        session::options_from_config(&loaded.config.session, &config_dir, Some(display)).unwrap();
     options.set_output_identity(Some("DP-1"));
 
-    match original_config {
-        Some(value) => unsafe { std::env::set_var(XDG_CONFIG_HOME_ENV, value) },
-        None => unsafe { std::env::remove_var(XDG_CONFIG_HOME_ENV) },
+    // SAFETY: as for the writes above; the restore runs on the same thread.
+    unsafe {
+        match original_config {
+            Some(value) => env::set_var(XDG_CONFIG_HOME_ENV, value),
+            None => env::remove_var(XDG_CONFIG_HOME_ENV),
+        }
+
+        match original_display {
+            Some(value) => env::set_var(WAYLAND_DISPLAY_ENV, value),
+            None => env::remove_var(WAYLAND_DISPLAY_ENV),
+        }
     }
 
-    match original_display {
-        Some(value) => unsafe { std::env::set_var(WAYLAND_DISPLAY_ENV, value) },
-        None => unsafe { std::env::remove_var(WAYLAND_DISPLAY_ENV) },
-    }
-
-    let mut frame = wayscriber::draw::Frame::new();
-    frame.add_shape(wayscriber::draw::Shape::Line {
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 10,
         y2: 10,
-        color: wayscriber::draw::Color {
+        color: Color {
             r: 1.0,
             g: 0.0,
             b: 0.0,
@@ -849,12 +858,12 @@ fn session_info_reports_saved_snapshot() {
         thick: 2.0,
     });
 
-    let snapshot = wayscriber::session::SessionSnapshot {
+    let snapshot = SessionSnapshot {
         active_board_id: "transparent".to_string(),
-        boards: vec![wayscriber::session::BoardSnapshot {
+        boards: vec![BoardSnapshot {
             appearance: None,
             id: "transparent".to_string(),
-            pages: wayscriber::session::BoardPagesSnapshot {
+            pages: BoardPagesSnapshot {
                 pages: vec![frame],
                 active: 0,
             },
@@ -862,7 +871,7 @@ fn session_info_reports_saved_snapshot() {
         tool_state: None,
     };
 
-    wayscriber::session::save_snapshot(&snapshot, &options).unwrap();
+    session::save_snapshot(&snapshot, &options).unwrap();
 
     run_command(
         wayscriber_cmd()

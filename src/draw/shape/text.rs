@@ -1,3 +1,6 @@
+use pangocairo::functions;
+
+use crate::draw;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 
@@ -155,7 +158,7 @@ pub(crate) fn sticky_note_layout(
 }
 
 pub(crate) fn sticky_note_text_layout_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &draw::TextMeasurer,
     ctx: &cairo::Context,
     text: &str,
     size: f64,
@@ -167,7 +170,7 @@ pub(crate) fn sticky_note_text_layout_with_measurer(
     let font_desc_str = font_desc.to_string();
 
     // Create layout for rendering (required for draw operations)
-    let layout = pangocairo::functions::create_layout(ctx);
+    let layout = functions::create_layout(ctx);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);
     if let Some(width) = wrap_width {

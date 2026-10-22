@@ -1,4 +1,5 @@
 use crate::config::BoardGridConfig;
+use crate::domain;
 use crate::domain::{BoardBackground, Color};
 use crate::input::boards::{BoardAppearance, BoardPenOrigin, BoardState};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -44,7 +45,7 @@ impl BoardAppearanceSnapshot {
             return;
         }
         // The reserved overlay identity must stay transparent.
-        let background = if board.spec.id == crate::domain::BOARD_ID_TRANSPARENT {
+        let background = if board.spec.id == domain::BOARD_ID_TRANSPARENT {
             BoardBackground::Transparent
         } else {
             self.background

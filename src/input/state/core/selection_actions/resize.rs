@@ -1,8 +1,7 @@
 //! Selection resize functionality.
 
-use crate::draw::ShapeId;
-use crate::draw::TextMeasurer;
 use crate::draw::frame::ShapeSnapshot;
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::input::InputState;
 use crate::input::state::core::base::SelectionHandle;
 use crate::util::Rect;

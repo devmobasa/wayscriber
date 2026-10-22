@@ -1,10 +1,28 @@
-use super::*;
+use super::super::{
+    RuntimeClearSessionReport, RuntimeClearToolStateReport, RuntimeSaveAsSessionReport,
+    SaveAsPreflightDecision, SessionTransaction, accept_open_preflight, accept_save_as_preflight,
+    cancel_pending_output_transition_for_explicit_target, named_candidate_snapshot,
+};
+use super::{
+    Phase, SessionCommand, SessionCommandReport, SessionCommandTransaction, TransactionStep,
+    empty_snapshot, required_outcome,
+};
+use crate::backend::wayland::session::load_outcome::{
+    apply_load_outcome, replace_output_session_snapshot,
+};
+use crate::backend::wayland::session::persistence::{
+    PersistenceOperation, PersistenceOutcome, SaveStrategy,
+};
+use crate::backend::wayland::session::stored_session;
+use crate::session::LoadSnapshotOutcome;
+use anyhow::{Result, anyhow};
+use std::time::Instant;
 
 impl SessionCommandTransaction {
     pub(super) fn complete_start(
         &mut self,
         context: &mut SessionTransaction<'_>,
-        outcome: Option<PersistenceOutcome>,
+        outcome: Option<&PersistenceOutcome>,
     ) -> Result<TransactionStep> {
         if outcome.is_some() {
             return Err(anyhow!(
@@ -14,8 +32,7 @@ impl SessionCommandTransaction {
         self.current = context.session.options().cloned();
         match &self.command {
             SessionCommand::ClearTools(defaults) if self.current.is_none() => {
-                let defaults = defaults.clone();
-                self.apply_default_tools(context, *defaults);
+                self.apply_default_tools(context, defaults);
                 Ok(TransactionStep::Complete(Box::new(
                     SessionCommandReport::ClearTools(RuntimeClearToolStateReport {
                         session_path: None,
@@ -98,7 +115,7 @@ impl SessionCommandTransaction {
         context: &mut SessionTransaction<'_>,
         outcome: Option<PersistenceOutcome>,
     ) -> Result<TransactionStep> {
-        accept_open_preflight(context.session, required_outcome(outcome)?)?;
+        accept_open_preflight(context.session, &required_outcome(outcome)?)?;
         self.save_current_or_continue(context)
     }
 
@@ -271,7 +288,7 @@ impl SessionCommandTransaction {
         let SessionCommand::SaveAs(path, overwrite) = &self.command else {
             unreachable!()
         };
-        match accept_save_as_preflight(context.session, outcome, *overwrite, path)? {
+        match accept_save_as_preflight(context.session, &outcome, *overwrite, path)? {
             SaveAsPreflightDecision::SameTarget => self.save_current_or_continue(context),
             SaveAsPreflightDecision::SwitchTarget => {
                 let overwrite = *overwrite;
@@ -373,7 +390,7 @@ impl SessionCommandTransaction {
         let SessionCommand::ClearTools(defaults) = &self.command else {
             unreachable!()
         };
-        self.apply_default_tools(context, *defaults.clone());
+        self.apply_default_tools(context, defaults);
         Ok(TransactionStep::Complete(Box::new(
             SessionCommandReport::ClearTools(RuntimeClearToolStateReport {
                 session_path: Some(self.current_path()),

@@ -1,8 +1,16 @@
-use super::*;
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
+use super::ToolbarPositionSnapshot;
+use super::live_state::apply_persisted_top_display_mode;
+use crate::input::InputState;
+use crate::runtime_ui_state::{
+    InteractionSeedTarget, InteractionSeedValue, PreviewRollbackSnapshot,
+};
 
 pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
-    engine: &crate::ui_text::UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    engine: &UiTextEngine,
+    measurer: &TextMeasurer,
     input: &mut InputState,
     positions: &mut ToolbarPositionSnapshot,
     rollback: &PreviewRollbackSnapshot,

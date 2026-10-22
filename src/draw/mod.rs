@@ -31,8 +31,6 @@ pub(crate) use font::{
 pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
-pub(crate) use render::render_sticky_note_preview_with_measurer;
-pub(crate) use render::with_saved_state;
 #[allow(unused_imports)]
 pub use render::{
     BlurRectParams, BoardPaper, EraserReplayContext, IMMUTABLE_RASTER_SOURCE_TOKEN, RenderCaches,
@@ -48,7 +46,9 @@ pub use render::{
     render_text_with_halo_with_measurer, render_text_with_measurer, selection_handle_rects,
     spotlight_regions_for_frame, sticky_note_foreground, text_outline_color,
 };
-pub(crate) use render::{LaserStyle, render_laser_stroke};
+pub(crate) use render::{
+    LaserStyle, render_laser_stroke, render_sticky_note_preview_with_measurer, with_saved_state,
+};
 #[allow(unused_imports)]
 pub use shape::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, MAX_PEN_SMOOTHING,

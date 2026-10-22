@@ -1,18 +1,20 @@
+use crate::help_overlay_interaction::HelpRenderResult;
+use crate::input::state::test_support;
+use crate::ui::UiRenderCaches;
+use crate::ui::theme::Theme;
+
 use super::*;
 use crate::config::HelpOverlayStyle;
-use crate::ui::HelpOverlayBindings;
+use crate::ui::{HelpContentOptions, HelpOverlayBindings};
 
 struct Inputs {
     style: HelpOverlayStyle,
     width: u32,
     height: u32,
-    frozen: bool,
+    content: HelpContentOptions,
     page: usize,
     bindings: HelpOverlayBindings,
     query: String,
-    context_filter: bool,
-    board: bool,
-    capture: bool,
     quick: bool,
     show_unbound: bool,
 }
@@ -23,13 +25,15 @@ impl Default for Inputs {
             style: HelpOverlayStyle::default(),
             width: 800,
             height: 400,
-            frozen: true,
+            content: HelpContentOptions {
+                frozen_enabled: true,
+                context_filter: false,
+                board_enabled: true,
+                capture_enabled: true,
+            },
             page: 0,
             bindings: HelpOverlayBindings::default(),
             query: String::new(),
-            context_filter: false,
-            board: true,
-            capture: true,
             quick: false,
             show_unbound: false,
         }
@@ -40,19 +44,13 @@ fn layout(cache: &mut HelpLayoutCache, inputs: &Inputs, scroll: f64) -> OverlayL
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     cache.get_or_build_overlay_layout(
-        &crate::ui_text::UiTextEngine::default(),
+        &UiTextEngine::default(),
         &ctx,
         &inputs.style,
         inputs.width,
         inputs.height,
         inputs.page,
-        &HelpContentSnapshot::from_bindings(
-            &inputs.bindings,
-            inputs.frozen,
-            inputs.context_filter,
-            inputs.board,
-            inputs.capture,
-        ),
+        &HelpContentSnapshot::from_bindings(&inputs.bindings, inputs.content),
         &inputs.query,
         scroll,
         "Wayscriber Controls",
@@ -85,15 +83,15 @@ fn scrolling_clamps_a_returned_clone_without_rebuilding_or_mutating_the_entry() 
     assert_eq!(cache.entry.as_ref().unwrap().layout.scroll_offset, 0.0);
 }
 
-fn assert_rebuilds_from_baseline(changed: Inputs, label: &str) {
+fn assert_rebuilds_from_baseline(changed: &Inputs, label: &str) {
     let baseline = Inputs::default();
     let mut cache = HelpLayoutCache::default();
     layout(&mut cache, &baseline, 0.0);
-    let changed_layout = layout(&mut cache, &changed, 0.0);
+    let changed_layout = layout(&mut cache, changed, 0.0);
     assert_eq!(cache.builds, 2, "{label} must invalidate independently");
-    layout(&mut cache, &changed, 1.0);
+    layout(&mut cache, changed, 1.0);
     assert_eq!(cache.builds, 2, "{label} replacement must be reusable");
-    let fresh = layout(&mut HelpLayoutCache::default(), &changed, 0.0);
+    let fresh = layout(&mut HelpLayoutCache::default(), changed, 0.0);
     assert_eq!(changed_layout.box_width, fresh.box_width, "{label}");
     assert_eq!(changed_layout.box_height, fresh.box_height, "{label}");
     assert_eq!(changed_layout.scroll_max, fresh.scroll_max, "{label}");
@@ -109,17 +107,17 @@ fn every_layout_key_dimension_invalidates_independently() {
     let changes: &[Change] = &[
         ("width", |v| v.width += 1),
         ("height", |v| v.height += 1),
-        ("frozen", |v| v.frozen = false),
+        ("frozen", |v| v.content.frozen_enabled = false),
         ("page", |v| v.page = 1),
         ("bindings", |v| {
-            let input = crate::input::state::test_support::make_test_input_state();
+            let input = test_support::make_test_input_state();
             v.bindings = HelpOverlayBindings::from_input_state(&input);
         }),
         ("query", |v| v.query = "draw".into()),
         ("raw whitespace query", |v| v.query = " ".into()),
-        ("context filter", |v| v.context_filter = true),
-        ("board", |v| v.board = false),
-        ("capture", |v| v.capture = false),
+        ("context filter", |v| v.content.context_filter = true),
+        ("board", |v| v.content.board_enabled = false),
+        ("capture", |v| v.content.capture_enabled = false),
         ("quick", |v| v.quick = true),
         ("show unbound", |v| v.show_unbound = true),
         ("font size", |v| v.style.font_size += 1.0),
@@ -131,7 +129,7 @@ fn every_layout_key_dimension_invalidates_independently() {
     for (label, change) in changes {
         let mut changed = Inputs::default();
         change(&mut changed);
-        assert_rebuilds_from_baseline(changed, label);
+        assert_rebuilds_from_baseline(&changed, label);
     }
     for channel in 0..4 {
         for color in 0..3 {
@@ -142,7 +140,7 @@ fn every_layout_key_dimension_invalidates_independently() {
                 _ => &mut changed.style.text_color,
             };
             channels[channel] += 0.1;
-            assert_rebuilds_from_baseline(changed, &format!("color {color}, channel {channel}"));
+            assert_rebuilds_from_baseline(&changed, &format!("color {color}, channel {channel}"));
         }
     }
 }
@@ -162,11 +160,11 @@ fn style_quantization_retains_existing_hundredths_policy() {
 }
 
 fn paint(
-    engine: &crate::ui_text::UiTextEngine,
-    caches: &mut crate::ui::UiRenderCaches,
+    engine: &UiTextEngine,
+    caches: &mut UiRenderCaches,
     inputs: &Inputs,
     scroll: f64,
-) -> (Vec<u8>, crate::help_overlay_interaction::HelpRenderResult) {
+) -> (Vec<u8>, HelpRenderResult) {
     let mut surface = cairo::ImageSurface::create(
         cairo::Format::ARgb32,
         inputs.width as i32,
@@ -176,7 +174,7 @@ fn paint(
     let extent;
     {
         let cairo = cairo::Context::new(&surface).unwrap();
-        let theme = crate::ui::theme::Theme::dark();
+        let theme = Theme::dark();
         let mut render = crate::ui::UiRenderCtx {
             cairo: &cairo,
             theme: &theme,
@@ -188,13 +186,10 @@ fn paint(
             &inputs.style,
             inputs.width,
             inputs.height,
-            inputs.frozen,
+            inputs.content,
             inputs.page,
             &inputs.bindings,
             &inputs.query,
-            inputs.context_filter,
-            inputs.board,
-            inputs.capture,
             scroll,
             inputs.quick,
             inputs.show_unbound,
@@ -205,8 +200,8 @@ fn paint(
 }
 
 fn assert_frame_matches(
-    actual: &(Vec<u8>, crate::help_overlay_interaction::HelpRenderResult),
-    expected: &(Vec<u8>, crate::help_overlay_interaction::HelpRenderResult),
+    actual: &(Vec<u8>, HelpRenderResult),
+    expected: &(Vec<u8>, HelpRenderResult),
 ) {
     assert_eq!(
         actual.1, expected.1,
@@ -221,10 +216,10 @@ fn assert_frame_matches(
 
 #[test]
 fn owners_keep_independent_layouts_and_reused_rendering_matches_fresh_pixels() {
-    let engine = crate::ui_text::UiTextEngine::default();
-    let second_engine = crate::ui_text::UiTextEngine::default();
-    let mut caches = crate::ui::UiRenderCaches::default();
-    let mut other_caches = crate::ui::UiRenderCaches::default();
+    let engine = UiTextEngine::default();
+    let second_engine = UiTextEngine::default();
+    let mut caches = UiRenderCaches::default();
+    let mut other_caches = UiRenderCaches::default();
     let inputs = Inputs::default();
     let initial = paint(&engine, &mut caches, &inputs, 0.0);
     assert!(initial.0.iter().any(|&byte| byte != 0));
@@ -269,8 +264,8 @@ fn owners_keep_independent_layouts_and_reused_rendering_matches_fresh_pixels() {
         for scroll in [0.0, 40.0] {
             let actual = paint(&engine, &mut caches, &input, scroll);
             let expected = paint(
-                &crate::ui_text::UiTextEngine::default(),
-                &mut crate::ui::UiRenderCaches::default(),
+                &UiTextEngine::default(),
+                &mut UiRenderCaches::default(),
                 &input,
                 scroll,
             );

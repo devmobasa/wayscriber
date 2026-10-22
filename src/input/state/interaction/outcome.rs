@@ -1,3 +1,5 @@
+use crate::input::InputState;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RoutingOutcome {
     Consumed(ConsumedBy),
@@ -98,7 +100,7 @@ pub(crate) enum ActionRoute {
 }
 
 impl RoutingOutcome {
-    pub(crate) fn owns_pointer_motion(self, state: &crate::input::InputState) -> bool {
+    pub(crate) fn owns_pointer_motion(self, state: &InputState) -> bool {
         match self {
             Self::Started(_) | Self::Continued(_) => state.has_active_pointer_interaction(),
             Self::Consumed(ConsumedBy::RadialMenu | ConsumedBy::RadialMenuToggle) => {
@@ -117,7 +119,7 @@ impl RoutingOutcome {
 
     /// A popup button can own a release without owning motion. Its ownership
     /// ends if that popup closes, so a late Up cannot finish a later stroke.
-    pub(crate) fn owns_pointer_release(self, state: &crate::input::InputState) -> bool {
+    pub(crate) fn owns_pointer_release(self, state: &InputState) -> bool {
         match self {
             Self::Started(_) | Self::Continued(_) => state.has_active_pointer_interaction(),
             Self::Consumed(ConsumedBy::RadialMenu | ConsumedBy::RadialMenuToggle) => {

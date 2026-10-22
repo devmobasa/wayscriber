@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::blur::{BlurRenderCache, render_blur_rect_with_cache};
 use super::image::ImageSurfaceCache;
 use super::{BlurRectParams, EraserReplayContext};
@@ -16,37 +18,33 @@ pub struct RenderCaches {
 }
 
 /// A short drawing pass borrowing its target and persistent resources.
-pub struct RenderCtx<'c, 'r> {
-    pub cairo: &'c cairo::Context,
-    pub caches: &'r mut RenderCaches,
+pub struct RenderCtx<'cairo, 'caches> {
+    pub cairo: &'cairo cairo::Context,
+    pub caches: &'caches mut RenderCaches,
 }
 
-impl<'c, 'r> RenderCtx<'c, 'r> {
-    pub fn new(cairo: &'c cairo::Context, caches: &'r mut RenderCaches) -> Self {
+impl<'cairo, 'caches> RenderCtx<'cairo, 'caches> {
+    pub fn new(cairo: &'cairo cairo::Context, caches: &'caches mut RenderCaches) -> Self {
         Self { cairo, caches }
     }
 
     pub fn render_shape(&mut self, shape: &Shape) {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.render_shape_with_measurer(&measurer, shape);
     }
 
-    pub fn render_shape_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-        shape: &Shape,
-    ) {
+    pub fn render_shape_with_measurer(&mut self, measurer: &TextMeasurer, shape: &Shape) {
         self.render_shape_with_halo_with_measurer(measurer, shape, true);
     }
 
     pub fn render_shape_with_halo(&mut self, shape: &Shape, text_halo_enabled: bool) {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.render_shape_with_halo_with_measurer(&measurer, shape, text_halo_enabled);
     }
 
     pub fn render_shape_with_halo_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         shape: &Shape,
         text_halo_enabled: bool,
     ) {
@@ -54,13 +52,13 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape_over(&mut self, shape: &Shape, known_background_luminance: Option<f64>) {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.render_shape_over_with_measurer(&measurer, shape, known_background_luminance);
     }
 
     pub fn render_shape_over_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         shape: &Shape,
         known_background_luminance: Option<f64>,
     ) {
@@ -78,7 +76,7 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
         known_background_luminance: Option<f64>,
         text_halo_enabled: bool,
     ) {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.render_shape_over_with_halo_with_measurer(
             &measurer,
             shape,
@@ -89,7 +87,7 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
 
     pub fn render_shape_over_with_halo_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         shape: &Shape,
         known_background_luminance: Option<f64>,
         text_halo_enabled: bool,

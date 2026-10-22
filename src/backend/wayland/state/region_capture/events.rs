@@ -1,4 +1,12 @@
-use super::*;
+use crate::input::InputState;
+use crate::ui::RegionResizeHandles;
+
+use super::active_state::{ActiveScreenRegion, RegionInteractionPhase};
+use super::cut_review::RegionReviewEdits;
+use super::geometry::RegionSelectionGeometry;
+use super::measure::{RegionOwnerLoss, RegionSelectionFinalize};
+use crate::input::SelectionHandle;
+use crate::input::state::{RegionInputSource, RegionPurposeTag};
 
 /// The grip under `logical`, placed from the rectangle Review is showing. The
 /// renderer places its chips from the same geometry, so what is painted and
@@ -10,15 +18,13 @@ pub(super) fn review_resize_handle_at(
     let selection = region
         .review_geometry()
         .map(RegionSelectionGeometry::display_selection)?;
-    crate::ui::RegionResizeHandles::place(selection).hit(logical)
+    RegionResizeHandles::place(selection).hit(logical)
 }
 
-fn sync_projection(
-    backend: &Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
-) {
+fn sync_projection(backend: Option<&ActiveScreenRegion>, input_state: &mut InputState) {
     input_state.sync_region_projection(
         backend
+            .copied()
             .map(ActiveScreenRegion::ui_state)
             .unwrap_or_default(),
     );
@@ -26,7 +32,7 @@ fn sync_projection(
 
 pub(super) fn begin_region_selection_event(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> bool {
@@ -44,12 +50,12 @@ pub(super) fn begin_region_selection_event(
             && region.begin_review_resize(handle, logical)
         {
             region.set_phase(RegionInteractionPhase::Review { owner: Some(owner) });
-            sync_projection(backend, input_state);
+            sync_projection(backend.as_ref(), input_state);
             return true;
         }
         if region.begin_review_move(logical) {
             region.set_phase(RegionInteractionPhase::Review { owner: Some(owner) });
-            sync_projection(backend, input_state);
+            sync_projection(backend.as_ref(), input_state);
             return true;
         }
         region.reset_review_for_selection();
@@ -59,13 +65,13 @@ pub(super) fn begin_region_selection_event(
         return false;
     }
     region.set_phase(RegionInteractionPhase::Selecting { owner });
-    sync_projection(backend, input_state);
+    sync_projection(backend.as_ref(), input_state);
     true
 }
 
 pub(super) fn update_region_selection_event(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     owner: RegionInputSource,
     logical: (f64, f64),
 ) {
@@ -106,7 +112,7 @@ pub(super) fn update_region_selection_event(
         region.update_endpoint(logical)
     };
     if changed {
-        sync_projection(backend, input_state);
+        sync_projection(backend.as_ref(), input_state);
     }
 }
 
@@ -125,7 +131,7 @@ fn finish_review_drag(region: &mut ActiveScreenRegion, owner: RegionInputSource)
 
 pub(super) fn sync_region_square_modifier_event(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     shift: bool,
 ) -> bool {
     let Some(region) = backend.as_mut() else {
@@ -134,7 +140,7 @@ pub(super) fn sync_region_square_modifier_event(
     if !region.set_square_modifier(shift) {
         return false;
     }
-    sync_projection(backend, input_state);
+    sync_projection(backend.as_ref(), input_state);
     true
 }
 
@@ -144,7 +150,7 @@ pub(super) fn initial_square_modifier(purpose: RegionPurposeTag, shift: bool) ->
 
 pub(super) fn rearm_region_selection_event(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
 ) {
     if let Some(ActiveScreenRegion::Ready {
         anchor,
@@ -174,12 +180,12 @@ pub(super) fn rearm_region_selection_event(
         *edge = None;
         *phase = RegionInteractionPhase::Armed;
     }
-    sync_projection(backend, input_state);
+    sync_projection(backend.as_ref(), input_state);
 }
 
 pub(super) fn region_owner_lost_event(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     source: RegionInputSource,
 ) -> RegionOwnerLoss {
     let Some(region) = backend.as_mut() else {
@@ -198,8 +204,11 @@ pub(super) fn region_owner_lost_event(
     }
     if matches!(region.phase(), Some(RegionInteractionPhase::Review { .. })) {
         let finished = finish_review_drag(region, source);
-        debug_assert!(finished);
-        sync_projection(backend, input_state);
+        debug_assert!(
+            finished,
+            "a review owner always holds a resize or move drag that can finish"
+        );
+        sync_projection(backend.as_ref(), input_state);
         return RegionOwnerLoss::Rearmed;
     }
     rearm_region_selection_event(backend, input_state);
@@ -213,7 +222,7 @@ enum SelectionFinalization {
 
 fn finalize_region_selection(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> SelectionFinalization {
@@ -227,7 +236,7 @@ fn finalize_region_selection(
         region.update_endpoint(logical);
         if region.measure_selection().is_some() {
             region.set_phase(RegionInteractionPhase::Measured);
-            sync_projection(backend, input_state);
+            sync_projection(backend.as_ref(), input_state);
             return SelectionFinalization::Complete(RegionSelectionFinalize::Measured);
         }
         return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
@@ -236,7 +245,7 @@ fn finalize_region_selection(
         let changed = region.update_review_resize(logical) || region.update_review_move(logical);
         let finished = finish_review_drag(region, owner);
         if changed || finished {
-            sync_projection(backend, input_state);
+            sync_projection(backend.as_ref(), input_state);
         }
         return SelectionFinalization::Complete(if finished {
             RegionSelectionFinalize::Reviewed
@@ -252,7 +261,7 @@ fn finalize_region_selection(
         input_state.needs_redraw = true;
     }
     region.update_endpoint(logical);
-    sync_projection(backend, input_state);
+    sync_projection(backend.as_ref(), input_state);
     let Some(rect) = backend.as_ref().and_then(|region| region.selection_rect()) else {
         rearm_region_selection_event(backend, input_state);
         return SelectionFinalization::Complete(RegionSelectionFinalize::Rearmed);
@@ -266,7 +275,7 @@ fn finalize_region_selection(
             return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
         };
         region.set_phase(RegionInteractionPhase::Review { owner: None });
-        sync_projection(backend, input_state);
+        sync_projection(backend.as_ref(), input_state);
         return SelectionFinalization::Review(seed);
     }
     SelectionFinalization::Complete(RegionSelectionFinalize::Selected { purpose, rect })
@@ -274,7 +283,7 @@ fn finalize_region_selection(
 
 pub(in crate::backend::wayland::state) fn finalize_region_selection_with_review_edits(
     backend: &mut Option<ActiveScreenRegion>,
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     review_edits: &mut Option<RegionReviewEdits>,
     owner: RegionInputSource,
     logical: (f64, f64),

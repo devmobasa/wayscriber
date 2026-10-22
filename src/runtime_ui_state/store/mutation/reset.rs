@@ -1,4 +1,11 @@
-use super::*;
+use super::super::RuntimeUiStateStore;
+use super::result::{
+    applied, artifact_for, failed, is_expected_missing, observation_changed_retained,
+};
+use super::{ClaimedSource, MutationPoint, MutationTarget, store_fs};
+use crate::runtime_ui_state::{
+    AcceptedStateRevision, RuntimeStateFailurePathEffect, SourceMutationId, SourceMutationResult,
+};
 
 impl RuntimeUiStateStore {
     pub(super) fn finish_reset_after_claim(
@@ -24,20 +31,20 @@ impl RuntimeUiStateStore {
                         error.message()
                     ),
                     None,
-                    artifact_for(quarantine, claimed),
+                    artifact_for(&quarantine, &claimed),
                     RuntimeStateFailurePathEffect::UnknownAfterMutation,
                 );
             }
         };
         if !is_expected_missing(&active, &target.expected_path) {
-            return observation_changed_retained(id, active.observation, quarantine, claimed);
+            return observation_changed_retained(id, active.observation, &quarantine, &claimed);
         }
         if let Err(error) = target.operation_path.sync_parent() {
             return failed(
                 id,
                 format!("runtime-state reset has an uncertain durability outcome: {error}"),
                 Some(active.observation),
-                artifact_for(quarantine, claimed),
+                artifact_for(&quarantine, &claimed),
                 RuntimeStateFailurePathEffect::UnknownAfterMutation,
             );
         }
@@ -54,7 +61,7 @@ impl RuntimeUiStateStore {
                             error.message()
                         ),
                         None,
-                        artifact_for(quarantine, claimed),
+                        artifact_for(&quarantine, &claimed),
                         RuntimeStateFailurePathEffect::UnknownAfterMutation,
                     );
                 }
@@ -63,11 +70,11 @@ impl RuntimeUiStateStore {
                 return observation_changed_retained(
                     id,
                     final_active.observation,
-                    quarantine,
-                    claimed,
+                    &quarantine,
+                    &claimed,
                 );
             }
-            let artifacts = artifact_for(quarantine, claimed);
+            let artifacts = artifact_for(&quarantine, &claimed);
             if artifacts.is_empty() {
                 return failed(
                     id,
@@ -87,7 +94,7 @@ impl RuntimeUiStateStore {
 
         let cleanup_artifact = match store_fs::remove_file(&quarantine) {
             Ok(()) => Vec::new(),
-            Err(_) => artifact_for(quarantine, claimed),
+            Err(_) => artifact_for(&quarantine, &claimed),
         };
         if let Err(error) = target.operation_path.sync_parent() {
             return failed(

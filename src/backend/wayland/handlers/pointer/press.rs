@@ -2,17 +2,21 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 use wayland_client::QueueHandle;
 
-use crate::backend::wayland::state::{ContactOwner, RegionReviewPress, drag_log};
-use crate::backend::wayland::toolbar_intent::intent_to_event;
+use crate::backend::wayland::state::{ContactOwner, RegionReviewPress};
+use crate::config::keybindings::linux;
+use crate::config::{ChordModifiers, PointerButton, PointerTrigger, ShortcutTrigger, keybindings};
 use crate::i18n::{tr, trf};
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
-use crate::ui::toolbar::ToolbarEvent;
+#[cfg(test)]
+use crate::ui::RegionAction;
 
-use super::*;
+use super::super::route::{InputSurface, RoutedInput};
+use crate::backend::wayland::state::WaylandState;
+use crate::input::state::RegionInputSource;
 
 #[cfg(test)]
-fn review_action_suppresses_next_release(action: crate::ui::RegionAction) -> bool {
+fn review_action_suppresses_next_release(action: RegionAction) -> bool {
     action.is_terminal()
 }
 
@@ -317,7 +321,7 @@ impl WaylandState {
     }
 
     fn try_dispatch_pointer_shortcut(&mut self, button: u32) -> bool {
-        let Some(pointer) = crate::config::keybindings::linux::pointer_button(button) else {
+        let Some(pointer) = linux::pointer_button(button) else {
             return false;
         };
         if self.dispatch_pointer_shortcut(pointer) {
@@ -331,34 +335,29 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn try_dispatch_gdk_pointer_shortcut(
         &mut self,
         button: u32,
-        ctrl: bool,
-        shift: bool,
-        alt: bool,
-        logo: bool,
+        modifiers: ChordModifiers,
     ) -> bool {
-        let Some(pointer) = crate::config::keybindings::gdk::pointer_button(button) else {
+        let Some(pointer) = keybindings::gdk::pointer_button(button) else {
             return false;
         };
-        self.dispatch_pointer_trigger(crate::config::PointerTrigger {
+        self.dispatch_pointer_trigger(PointerTrigger {
             button: pointer,
-            ctrl,
-            shift,
-            alt,
-            logo,
+            ctrl: modifiers.ctrl,
+            shift: modifiers.shift,
+            alt: modifiers.alt,
+            logo: modifiers.logo,
         })
     }
 
-    fn dispatch_pointer_shortcut(&mut self, pointer: crate::config::PointerButton) -> bool {
+    fn dispatch_pointer_shortcut(&mut self, pointer: PointerButton) -> bool {
         match self.input_state.pointer_trigger(pointer) {
-            crate::config::ShortcutTrigger::Pointer(trigger) => {
-                self.dispatch_pointer_trigger(trigger)
-            }
+            ShortcutTrigger::Pointer(trigger) => self.dispatch_pointer_trigger(trigger),
             _ => false,
         }
     }
 
-    fn dispatch_pointer_trigger(&mut self, trigger: crate::config::PointerTrigger) -> bool {
-        let shortcut = crate::config::ShortcutTrigger::Pointer(trigger);
+    fn dispatch_pointer_trigger(&mut self, trigger: PointerTrigger) -> bool {
+        let shortcut = ShortcutTrigger::Pointer(trigger);
         let Some(action) = self.input_state.find_trigger_action(&shortcut) else {
             return false;
         };
@@ -377,7 +376,7 @@ fn input_hud_button_label(button: u32) -> String {
         BTN_LEFT => tr("Click").to_string(),
         BTN_RIGHT => tr("Right Click").to_string(),
         BTN_MIDDLE => tr("Middle Click").to_string(),
-        other => crate::config::keybindings::linux::pointer_button(other)
+        other => linux::pointer_button(other)
             .map(|button| button.name())
             .unwrap_or_else(|| trf("Button {}", &[&other])),
     }

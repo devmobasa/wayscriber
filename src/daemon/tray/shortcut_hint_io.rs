@@ -1,5 +1,7 @@
 #[cfg(feature = "tray")]
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
+use crate::process_broker;
+use crate::process_broker::HelperKind;
 #[cfg(feature = "tray")]
 use crate::shortcut_hint::{
     GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, PORTAL_SHORTCUT_ENV, ShortcutRuntimeBackend,
@@ -55,9 +57,9 @@ fn read_gnome_shortcut_outputs() -> Option<(String, String)> {
 #[cfg(feature = "tray")]
 fn read_gsettings_value(schema: &str, key: &str) -> Option<String> {
     let arguments = gsettings_get_arguments(schema, key);
-    let output = match crate::process_broker::current().and_then(|broker| {
+    let output = match process_broker::current().and_then(|broker| {
         broker.run(
-            crate::process_broker::HelperKind::Gsettings,
+            HelperKind::Gsettings,
             OsStr::new("gsettings"),
             arguments,
             Vec::new(),

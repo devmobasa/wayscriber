@@ -650,7 +650,8 @@ pub(crate) fn calculate_arrow_outline_styled(
 
             let mut left = Vec::with_capacity(samples.len() + 5);
             let mut right = Vec::with_capacity(samples.len());
-            for sample in samples.iter().take_while(|s| s.arc <= join_arc) {
+            let shaft_samples = samples.iter().take_while(|s| s.arc <= join_arc);
+            for sample in shaft_samples {
                 let progress = (sample.arc / join_arc).clamp(0.0, 1.0);
                 let half_width = tail_half + (shoulder_half - tail_half) * progress;
                 let normal = left_normal(sample.tangent);

@@ -1,13 +1,15 @@
 use anyhow::Result;
 
-use super::super::*;
+use crate::input::state::{Toast, ToastPriority};
+
+use super::super::WaylandState;
 use crate::backend::wayland::backend::event_loop::session_save::{
     handle_autosave_failure, handle_persistence_transport_failure, report_autosave_success,
 };
+use crate::backend::wayland::session::driver::{self, SessionCommandRuntime};
 use crate::backend::wayland::session::{
     PersistenceController, SaveCompletion, SessionCommand, SessionCommandReport,
     SessionCommandTransaction, SessionTransaction,
-    driver::{self, SessionCommandRuntime},
 };
 use crate::i18n::tr;
 use crate::session::ToolStateSnapshot;
@@ -39,7 +41,7 @@ impl SessionCommandRuntime for WaylandState {
     }
 
     fn session_command_queued(&mut self) {
-        self.input_state.push_toast(crate::input::state::ToastPriority::Action, "session.command", crate::input::state::Toast::info(tr("Session command queued for the visible session. If the session changes, retry it on the intended session.")));
+        self.input_state.push_toast(ToastPriority::Action, "session.command", Toast::info(tr("Session command queued for the visible session. If the session changes, retry it on the intended session.")));
     }
 
     fn session_target_committed(&mut self) {
@@ -59,7 +61,7 @@ impl SessionCommandRuntime for WaylandState {
         failures: Vec<(SessionCommand, anyhow::Error)>,
         closing: bool,
     ) {
-        WaylandState::fail_queued_session_commands(self, failures, closing);
+        WaylandState::fail_queued_session_commands(self, &failures, closing);
     }
 
     fn session_transport_failed(&mut self, error: &anyhow::Error) {
@@ -67,7 +69,7 @@ impl SessionCommandRuntime for WaylandState {
     }
 
     fn autosave_succeeded(&mut self, save: SaveCompletion, execution_time: Duration) {
-        report_autosave_success(self, save, execution_time);
+        report_autosave_success(self, &save, execution_time);
     }
 
     fn autosave_failed(&mut self, error: &anyhow::Error) {

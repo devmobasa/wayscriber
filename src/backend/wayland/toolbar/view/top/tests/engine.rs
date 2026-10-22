@@ -13,9 +13,9 @@ fn retained_planner_preserves_wrapped_notices_surface_size_and_input_regions() {
         "/tmp/設定/Καλημέρα/long-directory-name/another-long-directory-name/runtime-ui.toml",
         "/tmp/ui.toml",
     ] {
-        snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
             path: path.into(),
-            mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
+            mode: RuntimeUiPersistenceMode::Supported,
             detail: None,
             recovery_artifacts: Vec::new(),
         });
@@ -60,7 +60,7 @@ fn retained_planner_preserves_wrapped_notices_surface_size_and_input_regions() {
             engine.layout(
                 &ctx,
                 crate::ui_text::UiTextStyle {
-                    family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+                    family: toolbar::FONT_FAMILY_DEFAULT,
                     slant: cairo::FontSlant::Normal,
                     weight: cairo::FontWeight::Normal,
                     size: super::super::menus::MENU_META_FONT,
@@ -84,8 +84,7 @@ fn retained_planner_matches_fresh_under_width_pressure_and_scroll_bounds() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopControls);
     snapshot.top_available_height = Some(360.0);
     for width in [1200.0, 420.0, 1200.0] {
         snapshot.top_viewport_max = Some(width);

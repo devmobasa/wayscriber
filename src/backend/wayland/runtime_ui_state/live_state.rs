@@ -1,4 +1,17 @@
-use super::*;
+use crate::config::{StatusBarItem, ToolbarSectionFlag};
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
+use super::ToolbarPositionSnapshot;
+use crate::config::{
+    ToolbarItemOrderGroup, TopDisplayMode, resettable_individual_toolbar_item_ids,
+};
+use crate::input::InputState;
+use crate::runtime_ui_state::{
+    ControllerId, InteractionSeedTarget, InteractionSeedValue, MutationShapeError,
+    PersistedTopDisplayMode, RuntimeUiLiveState, RuntimeUiMutationValues, RuntimeUiPreviewSession,
+    SeedGuard,
+};
 
 /// Presenter mode can hold the tool preview hidden while it runs, so what
 /// persists is the value presenter will restore -- the user's own.
@@ -29,7 +42,7 @@ fn persisted_top_display_mode(
 pub(super) fn top_display_mode_values(
     mode: TopDisplayMode,
     input: &InputState,
-) -> std::result::Result<RuntimeUiMutationValues, MutationShapeError> {
+) -> Result<RuntimeUiMutationValues, MutationShapeError> {
     let presenter_restore = input.presenter_restored_top_display_mode();
     RuntimeUiMutationValues::one(
         InteractionSeedTarget::TopDisplayMode,
@@ -43,8 +56,8 @@ pub(super) fn top_display_mode_values(
 /// belongs to what presenter will restore, not to the live strip; anywhere
 /// else it is the live strip's mode.
 pub(super) fn apply_persisted_top_display_mode(
-    engine: &crate::ui_text::UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    engine: &UiTextEngine,
+    measurer: &TextMeasurer,
     input: &mut InputState,
     mode: PersistedTopDisplayMode,
 ) {
@@ -58,8 +71,8 @@ pub(super) fn apply_persisted_top_display_mode(
 }
 
 pub(super) fn apply_live_toolbar_state(
-    engine: &crate::ui_text::UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    engine: &UiTextEngine,
+    measurer: &TextMeasurer,
     input: &mut InputState,
     live: &RuntimeUiLiveState,
     include: impl Fn(&InteractionSeedTarget) -> bool,
@@ -70,16 +83,16 @@ pub(super) fn apply_live_toolbar_state(
     apply_live_toolbar_structure(engine, measurer, input, live, &include);
 }
 
-fn live_bool(live: &RuntimeUiLiveState, target: InteractionSeedTarget) -> Option<bool> {
-    match live.get(&target) {
+fn live_bool(live: &RuntimeUiLiveState, target: &InteractionSeedTarget) -> Option<bool> {
+    match live.get(target) {
         Some(InteractionSeedValue::Bool(value)) => Some(*value),
         _ => None,
     }
 }
 
 fn apply_live_display_flags(
-    engine: &crate::ui_text::UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    engine: &UiTextEngine,
+    measurer: &TextMeasurer,
     input: &mut InputState,
     live: &RuntimeUiLiveState,
     include: &impl Fn(&InteractionSeedTarget) -> bool,
@@ -94,22 +107,22 @@ fn apply_live_display_flags(
         apply_persisted_top_display_mode(engine, measurer, input, *mode);
     }
     if include(&InteractionSeedTarget::StatusBar)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBar)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::StatusBar)
     {
         input.ui_visibility.show_status_bar = value;
     }
     if include(&InteractionSeedTarget::StatusBoardBadge)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBoardBadge)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::StatusBoardBadge)
     {
         input.ui_visibility.show_status_board_badge = value;
     }
     if include(&InteractionSeedTarget::StatusPageBadge)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::StatusPageBadge)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::StatusPageBadge)
     {
         input.ui_visibility.show_status_page_badge = value;
     }
     if include(&InteractionSeedTarget::FloatingBadgeAlways)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::FloatingBadgeAlways)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::FloatingBadgeAlways)
     {
         input.ui_visibility.show_floating_badge_always = value;
     }
@@ -121,42 +134,42 @@ fn apply_live_toolbar_preferences(
     include: &impl Fn(&InteractionSeedTarget) -> bool,
 ) {
     if include(&InteractionSeedTarget::ToolbarIcons)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarIcons)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarIcons)
     {
         input.set_toolbar_use_icons(value);
     }
     if include(&InteractionSeedTarget::ToolbarMoreColors)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarMoreColors)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarMoreColors)
     {
         input.ui_visibility.show_more_colors = value;
     }
     if include(&InteractionSeedTarget::ToolbarContextAwareUi)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarContextAwareUi)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarContextAwareUi)
     {
         input.ui_visibility.context_aware_ui = value;
     }
     if include(&InteractionSeedTarget::ToolbarPresetToasts)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarPresetToasts)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarPresetToasts)
     {
         input.ui_visibility.show_preset_toasts = value;
     }
     if include(&InteractionSeedTarget::ToolbarIdleFade)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarIdleFade)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarIdleFade)
     {
         input.ui_visibility.idle_fade = value;
     }
     if include(&InteractionSeedTarget::ToolbarToolPreview)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarToolPreview)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarToolPreview)
     {
         input.ui_visibility.show_tool_preview = value;
     }
     if include(&InteractionSeedTarget::ToolbarDelaySliders)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarDelaySliders)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ToolbarDelaySliders)
     {
         input.ui_visibility.show_delay_sliders = value;
     }
     if include(&InteractionSeedTarget::HistoryCustomSection)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::HistoryCustomSection)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::HistoryCustomSection)
     {
         input.history_limits.set_custom_section_enabled(value);
     }
@@ -168,35 +181,35 @@ fn apply_live_overlay_flags(
     include: &impl Fn(&InteractionSeedTarget) -> bool,
 ) {
     if include(&InteractionSeedTarget::InputHud)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::InputHud)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::InputHud)
     {
         input.set_input_hud_enabled(value);
     }
     if include(&InteractionSeedTarget::FloatingBadge)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::FloatingBadge)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::FloatingBadge)
     {
         input.ui_visibility.show_floating_badge = value;
     }
     if include(&InteractionSeedTarget::ZoomChip)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ZoomChip)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ZoomChip)
     {
         input.ui_visibility.show_zoom_chip = value;
     }
     if include(&InteractionSeedTarget::ClickHighlight)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ClickHighlight)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ClickHighlight)
     {
         input.set_click_highlight_enabled(value);
     }
     if include(&InteractionSeedTarget::ClickHighlightToolRing)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::ClickHighlightToolRing)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::ClickHighlightToolRing)
     {
         input.set_highlight_tool_ring_enabled(value);
     }
 }
 
 fn apply_live_toolbar_structure(
-    engine: &crate::ui_text::UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    engine: &UiTextEngine,
+    measurer: &TextMeasurer,
     input: &mut InputState,
     live: &RuntimeUiLiveState,
     include: &impl Fn(&InteractionSeedTarget) -> bool,
@@ -207,7 +220,7 @@ fn apply_live_toolbar_structure(
     {
         input.apply_toolbar_layout_mode_runtime(*mode);
     }
-    for flag in crate::config::ToolbarSectionFlag::ALL {
+    for flag in ToolbarSectionFlag::ALL {
         let target = InteractionSeedTarget::SectionVisibility(flag);
         if include(&target)
             && let Some(InteractionSeedValue::Visibility(setting)) = live.get(&target)
@@ -216,24 +229,24 @@ fn apply_live_toolbar_structure(
         }
     }
     if include(&InteractionSeedTarget::StatusBarInteractive)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBarInteractive)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::StatusBarInteractive)
     {
         input.ui_visibility.status_bar_interactive = value;
     }
-    for item in crate::config::StatusBarItem::ALL {
+    for item in StatusBarItem::ALL {
         if include(&InteractionSeedTarget::StatusBarItem(item))
-            && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBarItem(item))
+            && let Some(value) = live_bool(live, &InteractionSeedTarget::StatusBarItem(item))
         {
             input.set_status_bar_item_visible_with_resources(engine, measurer, item, value);
         }
     }
     if include(&InteractionSeedTarget::TopPinned)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::TopPinned)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::TopPinned)
     {
         input.set_toolbar_top_pinned(value);
     }
     if include(&InteractionSeedTarget::TopMinimized)
-        && let Some(value) = live_bool(live, InteractionSeedTarget::TopMinimized)
+        && let Some(value) = live_bool(live, &InteractionSeedTarget::TopMinimized)
     {
         input.apply_toolbar_set_top_minimized(value);
     }

@@ -228,8 +228,8 @@ impl ConfiguratorApp {
         vec![Effect::ClearSessionEntry { id }]
     }
 
-    pub(super) fn handle_session_catalog_clear_canceled(&mut self, id: String) -> Vec<Effect> {
-        if self.pending_session_clear_id() != Some(id.as_str()) {
+    pub(super) fn handle_session_catalog_clear_canceled(&mut self, id: &str) -> Vec<Effect> {
+        if self.pending_session_clear_id() != Some(id) {
             return Vec::new();
         }
 

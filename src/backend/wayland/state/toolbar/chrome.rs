@@ -1,20 +1,16 @@
 use std::time::{Duration, Instant};
 
-use crate::{
-    backend::wayland::{
-        toolbar::{
-            ToolbarCursorHint,
-            hit::{
-                HitRegion, drag_intent_for_hit, find_hit, focus_hover_point, focused_event,
-                intent_for_hit, next_focus_index, quick_color_slot_for_hit, resolve_focus_index,
-                resolve_hit_index,
-            },
-            render::TOOLTIP_DELAY,
-        },
-        toolbar_intent::ToolbarIntent,
-    },
-    ui::toolbar::{ToolbarEvent, snapshot::fade::TopStripFade},
+use crate::backend::wayland::toolbar::ToolbarCursorHint;
+use crate::backend::wayland::toolbar::hit::{
+    HitRegion, drag_intent_for_hit, find_hit, focus_hover_point, focused_event, intent_for_hit,
+    next_focus_index, quick_color_slot_for_hit, resolve_focus_index, resolve_hit_index,
 };
+use crate::backend::wayland::toolbar::render::TOOLTIP_DELAY;
+use crate::backend::wayland::toolbar_intent::ToolbarIntent;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::StylePillSlider;
+use crate::ui::toolbar::snapshot::fade;
+use crate::ui::toolbar::snapshot::fade::TopStripFade;
 
 use super::fade::StripRevealKey;
 
@@ -200,7 +196,7 @@ pub(in crate::backend::wayland) struct ToolbarChrome {
     focus_active: bool,
     inline: InlineTopStrip,
     meter_wheel: super::meter_wheel::MeterWheel,
-    slider_wheel: super::meter_wheel::MeterWheel<crate::ui::toolbar::model::StylePillSlider>,
+    slider_wheel: super::meter_wheel::MeterWheel<StylePillSlider>,
 }
 
 impl ToolbarChrome {
@@ -237,13 +233,13 @@ impl ToolbarChrome {
     /// Partial wheel travel over a style-pill slider or its numeral.
     pub(in crate::backend::wayland) fn slider_wheel(
         &self,
-    ) -> &super::meter_wheel::MeterWheel<crate::ui::toolbar::model::StylePillSlider> {
+    ) -> &super::meter_wheel::MeterWheel<StylePillSlider> {
         &self.slider_wheel
     }
 
     pub(in crate::backend::wayland) fn slider_wheel_mut(
         &mut self,
-    ) -> &mut super::meter_wheel::MeterWheel<crate::ui::toolbar::model::StylePillSlider> {
+    ) -> &mut super::meter_wheel::MeterWheel<StylePillSlider> {
         &mut self.slider_wheel
     }
 
@@ -363,8 +359,7 @@ impl ToolbarChrome {
     /// Whether an inline-strip position takes toolbar input. The idle-hidden
     /// strip takes none, so a click on its invisible area draws instead.
     pub(in crate::backend::wayland) fn inline_contains(&self, position: (f64, f64)) -> bool {
-        !crate::ui::toolbar::snapshot::fade::top_strip_hidden(self.top_strip_fade.value())
-            && self.inline.contains(position)
+        !fade::top_strip_hidden(self.top_strip_fade.value()) && self.inline.contains(position)
     }
 
     pub(in crate::backend::wayland) fn inline_primary_hit_at(

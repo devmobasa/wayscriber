@@ -1,5 +1,10 @@
 //! Pointer, wheel, and keyboard use of the properties panel's controls.
 
+use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
+use crate::domain::color;
+use crate::input::state::{InputEffect, InputEffectDrain, PresetAction};
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::domain::color::{PALETTE_GREEN, PALETTE_RED};
 use crate::draw::{ArrowStyle, ShapeId, TextMeasurer};
@@ -270,7 +275,7 @@ fn a_fill_swatch_fills_with_its_own_color_and_no_fill_keeps_it_for_later() {
         state.properties_panel().unwrap().entries[fill].value,
         "None"
     );
-    let blue = swatch_index(&state, crate::domain::color::PALETTE_BLUE);
+    let blue = swatch_index(&state, color::PALETTE_BLUE);
 
     click(
         &mut state,
@@ -279,10 +284,7 @@ fn a_fill_swatch_fills_with_its_own_color_and_no_fill_keeps_it_for_later() {
             index: blue,
         },
     );
-    assert_eq!(
-        fill_of(&state, id),
-        (true, Some(crate::domain::color::PALETTE_BLUE))
-    );
+    assert_eq!(fill_of(&state, id), (true, Some(color::PALETTE_BLUE)));
     assert_eq!(
         rect_of(&state, id).0,
         PALETTE_RED,
@@ -295,7 +297,7 @@ fn a_fill_swatch_fills_with_its_own_color_and_no_fill_keeps_it_for_later() {
     click(&mut state, PropertiesPanelHit::NoFill(fill));
     assert_eq!(
         fill_of(&state, id),
-        (false, Some(crate::domain::color::PALETTE_BLUE)),
+        (false, Some(color::PALETTE_BLUE)),
         "no fill keeps the color for when the fill comes back"
     );
     assert_eq!(
@@ -305,10 +307,7 @@ fn a_fill_swatch_fills_with_its_own_color_and_no_fill_keeps_it_for_later() {
 
     state.set_properties_panel_focus(Some(fill));
     assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Return));
-    assert_eq!(
-        fill_of(&state, id),
-        (true, Some(crate::domain::color::PALETTE_BLUE))
-    );
+    assert_eq!(fill_of(&state, id), (true, Some(color::PALETTE_BLUE)));
 }
 
 #[test]
@@ -790,12 +789,12 @@ fn ok_evens_out_shapes_that_differ_only_in_opacity() {
     assert_eq!(rect_of(&state, faint).0, PALETTE_RED);
 }
 
-fn opacity_variant_palette() -> crate::config::QuickColorPalette {
-    let entry = |label: &str, color: Color| crate::config::QuickColorPaletteEntry {
+fn opacity_variant_palette() -> QuickColorPalette {
+    let entry = |label: &str, color: Color| QuickColorPaletteEntry {
         label: label.to_string(),
         color,
     };
-    crate::config::QuickColorPalette::from_entries(vec![
+    QuickColorPalette::from_entries(vec![
         entry("Red", PALETTE_RED),
         entry(
             "Faint red",
@@ -1006,7 +1005,7 @@ fn the_opacity_row_steps_by_five_percent_and_a_marker_stays_translucent() {
 #[test]
 fn dragging_the_thickness_slider_follows_the_pointer_and_undoes_in_one_step() {
     let measurer = TextMeasurer::default();
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &engine,
@@ -1162,9 +1161,9 @@ fn a_selection_saves_its_style_into_a_preset_slot_and_another_takes_it_on() {
     assert_eq!(saved.size, 8.0);
     assert_eq!(saved.fill_enabled, Some(true));
     assert!(matches!(
-        state.drain_input_effects(crate::input::state::InputEffectDrain::Runtime)
-            .into_iter().filter(|effect| matches!(effect, crate::input::state::InputEffect::Preset(_))).collect::<Vec<_>>().as_slice(),
-        [crate::input::state::InputEffect::Preset(crate::input::state::PresetAction::Save { slot, .. })] if *slot == empty_slot
+        state.drain_input_effects(InputEffectDrain::Runtime)
+            .into_iter().filter(|effect| matches!(effect, InputEffect::Preset(_))).collect::<Vec<_>>().as_slice(),
+        [InputEffect::Preset(PresetAction::Save { slot, .. })] if *slot == empty_slot
     ));
 
     let tool_before = state.active_tool();
@@ -1264,7 +1263,7 @@ fn a_shape_no_tool_draws_cannot_be_saved_as_a_preset() {
 #[test]
 fn a_key_pressed_mid_drag_lands_after_the_drag_in_history() {
     let measurer = TextMeasurer::default();
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &engine,
@@ -1311,7 +1310,7 @@ fn a_key_pressed_mid_drag_lands_after_the_drag_in_history() {
 #[test]
 fn undo_mid_drag_first_lands_the_drag() {
     let measurer = TextMeasurer::default();
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &engine,
@@ -1373,7 +1372,7 @@ fn a_preset_saved_from_a_separately_filled_shape_brings_its_fill_along() {
     );
     click(&mut state, slot);
 
-    let target = add_styled_rect(&mut state, crate::domain::color::PALETTE_BLUE, 5.0, true);
+    let target = add_styled_rect(&mut state, color::PALETTE_BLUE, 5.0, true);
     open(&mut state, vec![target]);
     click(&mut state, slot);
 

@@ -12,7 +12,11 @@
 //! inside the Pen feel panel (the default); [`StrokeSetting`] is the one place
 //! both read their range, level names, and events from.
 
-use super::*;
+use crate::config::ToolbarStrokeControls;
+
+use super::StylePillControl;
+use crate::i18n::{tr, trf};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 /// Logical width reserved for the zero-level dot before the bars.
 pub(crate) const METER_ZERO_SLOT_W: f64 = 22.0;
@@ -205,7 +209,7 @@ impl StrokeSetting {
     /// that setting. The inline steppers send the same events but never took
     /// the wheel, so the stepper style keeps them that way.
     pub(crate) fn for_wheel(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> Option<Self> {
-        if snapshot.stroke_controls == crate::config::ToolbarStrokeControls::Stepper {
+        if snapshot.stroke_controls == ToolbarStrokeControls::Stepper {
             return None;
         }
         match event {
@@ -266,11 +270,13 @@ impl StylePillControl {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::config::ToolbarStrokeControls;
 
     fn snapshot(smoothing: u8, sensitivity: u8) -> ToolbarSnapshot {
-        let mut state = crate::input::state::test_support::make_test_input_state();
+        let mut state = test_support::make_test_input_state();
         state.set_pen_smoothing(smoothing);
         state.set_shape_recognition_sensitivity(sensitivity);
         ToolbarSnapshot::from_input(&state)

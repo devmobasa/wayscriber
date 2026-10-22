@@ -1,5 +1,7 @@
 //! Compact capture-outcome toasts with Open folder and Copy path actions.
 
+use crate::paths;
+
 use super::super::base::{InputState, TextClipboardRequest, Toast, ToastCommand, ToastPriority};
 use crate::domain::Action;
 use crate::i18n::{tr, trf};
@@ -24,7 +26,7 @@ impl InputState {
         let message = capture_feedback_message(
             saved_path,
             copied_to_clipboard,
-            crate::paths::home_dir().as_deref(),
+            paths::home_dir().as_deref(),
         );
         let (priority, toast) = if saved_path.is_some() {
             let open_folder = match self.action_binding_primary_label(Action::OpenCaptureFolder) {
@@ -89,6 +91,10 @@ fn capture_display_name(path: &Path, home: Option<&Path>) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use crate::config::Shortcut;
+
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
     use std::path::PathBuf;
@@ -136,9 +142,9 @@ mod tests {
     #[test]
     fn saved_capture_offers_open_folder_with_its_shortcut_and_copy_path() {
         let mut state = make_test_input_state();
-        state.set_action_bindings(std::collections::HashMap::from([(
+        state.set_action_bindings(HashMap::from([(
             Action::OpenCaptureFolder,
-            vec![crate::config::Shortcut::parse("Ctrl+Alt+O").unwrap()],
+            vec![Shortcut::parse("Ctrl+Alt+O").unwrap()],
         )]));
 
         state.set_capture_feedback(Some(Path::new(SAVED)), true);
@@ -191,10 +197,7 @@ mod tests {
     #[test]
     fn unbound_open_folder_keeps_a_plain_button_label() {
         let mut state = make_test_input_state();
-        state.set_action_bindings(std::collections::HashMap::from([(
-            Action::OpenCaptureFolder,
-            Vec::new(),
-        )]));
+        state.set_action_bindings(HashMap::from([(Action::OpenCaptureFolder, Vec::new())]));
 
         state.set_capture_feedback(Some(Path::new(SAVED)), false);
 

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
 use std::str::FromStr;
 use std::sync::LazyLock;
+use std::{fmt, mem};
 
 use serde::{Deserialize, Serialize};
 
@@ -115,6 +115,7 @@ impl Default for ToolbarItemsConfig {
 }
 
 impl ToolbarItemsConfig {
+    #[must_use]
     pub fn resolved(&self) -> ResolvedToolbarItems {
         let mut hidden = BTreeSet::new();
         let mut unknown_hidden = Vec::new();
@@ -149,8 +150,8 @@ impl ToolbarItemsConfig {
     }
 
     pub fn set_hidden(&mut self, id: ToolbarItemId, hidden: bool) {
-        self.hidden = drain_without(std::mem::take(&mut self.hidden), id);
-        self.shown = drain_without(std::mem::take(&mut self.shown), id);
+        self.hidden = drain_without(mem::take(&mut self.hidden), id);
+        self.shown = drain_without(mem::take(&mut self.shown), id);
         if hidden {
             self.hidden.push(id.as_str().to_string());
         } else if super::visibility::section_flag_for_item(id).is_some()
@@ -179,8 +180,8 @@ impl ToolbarItemsConfig {
         }
         let before_hidden = self.hidden.clone();
         let before_shown = self.shown.clone();
-        self.hidden = drain_without(std::mem::take(&mut self.hidden), id);
-        self.shown = drain_without(std::mem::take(&mut self.shown), id);
+        self.hidden = drain_without(mem::take(&mut self.hidden), id);
+        self.shown = drain_without(mem::take(&mut self.shown), id);
         match setting {
             ToolbarItemVisibilitySetting::Default => {}
             ToolbarItemVisibilitySetting::Hidden => {
@@ -279,6 +280,7 @@ pub struct ResolvedToolbarItems {
 }
 
 impl ResolvedToolbarItems {
+    #[must_use]
     pub fn is_hidden(&self, id: ToolbarItemId) -> bool {
         if self.hidden.contains(&id) {
             return true;
@@ -353,6 +355,7 @@ impl ToolbarItemId {
         Self(value)
     }
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         self.0
     }
@@ -444,6 +447,7 @@ pub enum ToolbarGroupId {
 }
 
 impl ToolbarGroupId {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::StepUndo => "step-undo",

@@ -1,6 +1,12 @@
 //! Clipboard integration for copying screenshots.
 
-use super::{dependencies::CaptureClipboard, types::CaptureError};
+use std::fmt::Display;
+
+use crate::process_broker;
+use crate::process_broker::HelperKind;
+
+use super::dependencies::CaptureClipboard;
+use super::types::CaptureError;
 use crate::process_broker::max_publish_bytes;
 use std::ffi::OsStr;
 use std::time::Duration;
@@ -117,10 +123,10 @@ where
 
 /// Copy to the clipboard through the brokered `wl-copy` helper.
 fn copy_via_command(image_data: &[u8]) -> Result<(), String> {
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.publish(
-                crate::process_broker::HelperKind::WlCopy,
+                HelperKind::WlCopy,
                 OsStr::new("wl-copy"),
                 [OsStr::new("--type"), OsStr::new("image/png")],
                 image_data.to_vec(),
@@ -145,10 +151,10 @@ fn copy_via_command(image_data: &[u8]) -> Result<(), String> {
 
 /// Read the published image back through brokered `wl-paste`.
 fn read_back_via_command(output_cap: usize) -> Result<Vec<u8>, String> {
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.run(
-                crate::process_broker::HelperKind::WlPaste,
+                HelperKind::WlPaste,
                 OsStr::new("wl-paste"),
                 clipboard_image_read_args(),
                 Vec::new(),
@@ -179,7 +185,7 @@ fn clipboard_image_read_args() -> [&'static OsStr; 3] {
     ]
 }
 
-fn persistence_error(error: impl std::fmt::Display) -> CaptureError {
+fn persistence_error(error: impl Display) -> CaptureError {
     CaptureError::ClipboardError(format!("Could not persist clipboard: {error}"))
 }
 

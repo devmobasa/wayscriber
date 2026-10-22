@@ -7,11 +7,18 @@
 
 mod state;
 
+use std::time::Instant;
+
 use state::StatusHudRebuildInputs;
 pub use state::StatusHudState;
 
 use crate::config::{Action, StatusBarItem, StatusBarStyle, StatusPosition};
-use crate::ui::{StatusHudLayout, StatusHudSegmentKind};
+use crate::draw::TextMeasurer;
+use crate::input::DrawingState;
+use crate::input::state::InputTextResources;
+use crate::ui;
+use crate::ui::{StatusHudLayout, StatusHudSegmentKind, StatusHudTooltip};
+use crate::ui_text::UiTextEngine;
 
 use super::base::InputState;
 use super::board_picker::BoardPickerFocus;
@@ -58,8 +65,8 @@ impl InputState {
 
     pub(crate) fn set_status_bar_item_visible_with_resources(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
         item: StatusBarItem,
         visible: bool,
     ) -> bool {
@@ -94,8 +101,8 @@ impl InputState {
     /// the render effect pass, which re-measures with that frame's inputs.
     pub(crate) fn refresh_status_hud_layout_with_resources(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
     ) {
         let Some(inputs) = self.status_hud.rebuild_inputs() else {
             self.status_hud.layout = None;
@@ -128,8 +135,8 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        let engine = crate::ui_text::UiTextEngine::default();
-        let measurer = crate::draw::TextMeasurer::default();
+        let engine = UiTextEngine::default();
+        let measurer = TextMeasurer::default();
         self.update_status_hud_layout_for_pointer_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -145,7 +152,7 @@ impl InputState {
 
     pub(crate) fn update_status_hud_layout_for_pointer_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         position: StatusPosition,
         style: &StatusBarStyle,
         screen_width: u32,
@@ -153,7 +160,7 @@ impl InputState {
         chrome_cursor_focused: bool,
     ) {
         let layout = if self.ui_visibility.show_status_bar {
-            crate::ui::compute_status_hud_layout_with_resources(
+            ui::compute_status_hud_layout_with_resources(
                 resources.ui_engine,
                 resources.measurer,
                 self,
@@ -212,15 +219,15 @@ impl InputState {
     /// once per frame after the HUD layout, so damage and paint agree.
     pub(crate) fn update_status_tooltip_with_engine(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        now: std::time::Instant,
+        engine: &UiTextEngine,
+        now: Instant,
     ) -> Option<(f64, f64, f64, f64)> {
         let tooltip = self
             .status_hud
             .tooltip_segment(now)
             .zip(self.status_hud.layout.as_ref())
             .and_then(|(kind, layout)| layout.tooltip_for(engine, kind));
-        let bounds = tooltip.as_ref().map(crate::ui::StatusHudTooltip::bounds);
+        let bounds = tooltip.as_ref().map(StatusHudTooltip::bounds);
 
         self.status_hud.set_tooltip(tooltip);
         bounds
@@ -228,7 +235,7 @@ impl InputState {
 
     /// Whether a hovered segment's tooltip just became due, so the next frame
     /// must paint it.
-    pub(crate) fn status_tooltip_due(&self, now: std::time::Instant) -> bool {
+    pub(crate) fn status_tooltip_due(&self, now: Instant) -> bool {
         self.status_hud.tooltip().is_none() && self.status_hud.tooltip_segment(now).is_some()
     }
 
@@ -239,16 +246,15 @@ impl InputState {
     /// is requested on transitions only; the damage pass re-damages the
     /// pill footprint every rendered frame, so no region marking is needed.
     pub(crate) fn update_status_hud_hover_from_pointer(&mut self, x: i32, y: i32) {
-        let new_hover = if matches!(self.state, crate::input::DrawingState::Idle)
-            && self.status_hud_contains(x, y)
-        {
-            self.status_hud
-                .layout
-                .as_ref()
-                .and_then(|layout| layout.segment_at(x as f64, y as f64))
-        } else {
-            None
-        };
+        let new_hover =
+            if matches!(self.state, DrawingState::Idle) && self.status_hud_contains(x, y) {
+                self.status_hud
+                    .layout
+                    .as_ref()
+                    .and_then(|layout| layout.segment_at(x as f64, y as f64))
+            } else {
+                None
+            };
         if self.status_hud.update_hover(new_hover) {
             self.needs_redraw = true;
         }
@@ -325,7 +331,7 @@ impl InputState {
     /// `(hit, action)` mirroring toast release resolver.
     pub(crate) fn check_status_hud_click_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
     ) -> (bool, Option<Action>) {

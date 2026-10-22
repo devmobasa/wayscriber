@@ -1,12 +1,15 @@
+use crate::draw;
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::config::{Action, KeybindingsConfig};
 use crate::draw::{
     ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, Shape,
 };
-use crate::input::BOARD_ID_BLACKBOARD;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
+use crate::input::{BOARD_ID_BLACKBOARD, EraserMode, PerToolDrawingSettings, Tool};
 use std::path::PathBuf;
 
 #[test]
@@ -103,11 +106,7 @@ fn every_persisted_drawing_style_survives_snapshot_serialization_and_restore() {
     let decoded: ToolStateSnapshot =
         serde_json::from_slice(&encoded).expect("deserialize tool snapshot fixture");
     let mut restored = dummy_input_state();
-    apply_tool_state_snapshot(
-        &mut restored,
-        &crate::draw::TextMeasurer::default(),
-        decoded,
-    );
+    apply_tool_state_snapshot(&mut restored, &TextMeasurer::default(), &decoded);
 
     let recaptured = ToolStateSnapshot::from_input_state(&restored);
     assert_eq!(
@@ -132,11 +131,7 @@ fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_pen_smoothing(1);
-    apply_tool_state_snapshot(
-        &mut restored,
-        &crate::draw::TextMeasurer::default(),
-        decoded,
-    );
+    apply_tool_state_snapshot(&mut restored, &TextMeasurer::default(), &decoded);
 
     assert_eq!(restored.style.pen_smoothing, 5);
 }
@@ -153,11 +148,7 @@ fn shape_recognition_sensitivity_survives_snapshot_serialization_and_restore() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_shape_recognition_sensitivity(0);
-    apply_tool_state_snapshot(
-        &mut restored,
-        &crate::draw::TextMeasurer::default(),
-        decoded,
-    );
+    apply_tool_state_snapshot(&mut restored, &TextMeasurer::default(), &decoded);
 
     assert_eq!(restored.style.shape_recognition_sensitivity, 4);
 }
@@ -178,11 +169,7 @@ fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_pen_smoothing(4);
-    apply_tool_state_snapshot(
-        &mut restored,
-        &crate::draw::TextMeasurer::default(),
-        decoded,
-    );
+    apply_tool_state_snapshot(&mut restored, &TextMeasurer::default(), &decoded);
 
     assert_eq!(
         restored.style.pen_smoothing, 4,
@@ -192,8 +179,8 @@ fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
 
 #[test]
 fn snapshot_uses_pre_light_mode_tool_state() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -313,8 +300,8 @@ fn restoring_a_session_never_carries_a_rebound_shortcut() {
 /// just the live one.
 #[test]
 fn restoring_a_session_leaves_focus_modes_pending_status_bar_value_alone() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -469,7 +456,7 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             },
             current_thickness: 4.0,
             eraser_size: 12.0,
-            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_kind: EraserKind::Circle,
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
@@ -487,7 +474,7 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             arrow_head_at_end: Some(false),
             arrow_style: None,
             arrow_label_enabled: Some(false),
-            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+            polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             tool_settings: None,
         }),
@@ -526,7 +513,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             current_color: desired_color,
             current_thickness: 3.0,
             eraser_size: 12.0,
-            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_kind: EraserKind::Circle,
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
@@ -544,7 +531,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             arrow_head_at_end: Some(false),
             arrow_style: None,
             arrow_label_enabled: Some(false),
-            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+            polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             tool_settings: Some(tool_settings),
         }),
@@ -578,7 +565,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             current_color: color,
             current_thickness: 3.0,
             eraser_size: 12.0,
-            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_kind: EraserKind::Circle,
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
@@ -596,7 +583,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             arrow_head_at_end: Some(false),
             arrow_style: None,
             arrow_label_enabled: Some(false),
-            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+            polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             tool_settings: None,
         }),

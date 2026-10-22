@@ -1,3 +1,8 @@
+use crate::config::{KeybindingsConfig, RadialMenuMouseBinding};
+use crate::draw::{TextMeasurer, color};
+use crate::ui::toolbar::model;
+use crate::ui_text::UiTextEngine;
+
 use super::helpers::create_test_input_state_with_keybindings;
 use super::*;
 use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
@@ -244,7 +249,7 @@ fn shapes_sub_ring_matches_shape_tools_catalog() {
 
     // Membership and order both come from the toolbar's shape_tools()
     // catalog, the shapes source of truth.
-    let catalog = crate::ui::toolbar::model::shape_tools();
+    let catalog = model::shape_tools();
     let mut previous_position = None;
     for action in children {
         let tool = Tool::from_select_action(*action).expect("shape child must be a tool action");
@@ -405,7 +410,7 @@ fn opening_radial_menu_closes_help_overlay() {
 #[test]
 fn right_click_toggles_radial_when_configured() {
     let mut state = create_test_input_state();
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
 
     state.on_mouse_press(MouseButton::Right, 200, 150);
     assert!(state.is_radial_menu_open());
@@ -418,8 +423,8 @@ fn right_click_toggles_radial_when_configured() {
 
 #[test]
 fn toggle_radial_menu_action_opens_and_closes_menu() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -445,9 +450,9 @@ fn toggle_radial_menu_action_opens_and_closes_menu() {
 
 #[test]
 fn toggle_radial_menu_with_modifier_keybinding_closes_when_open() {
-    let mut keybindings = crate::config::KeybindingsConfig::default();
+    let mut keybindings = KeybindingsConfig::default();
     keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
-    let mut state = create_test_input_state_with_keybindings(keybindings);
+    let mut state = create_test_input_state_with_keybindings(&keybindings);
     state.update_pointer_position(320, 240);
 
     state.on_key_press(Key::Ctrl);
@@ -542,7 +547,7 @@ fn color_ring_selection_uses_configured_quick_palette() {
     state.set_quick_colors(QuickColorPalette::from_entries(vec![
         QuickColorPaletteEntry {
             label: "First".to_string(),
-            color: crate::draw::color::RED,
+            color: color::RED,
         },
         QuickColorPaletteEntry {
             label: "Configured".to_string(),
@@ -597,7 +602,7 @@ fn hover_of(state: &InputState) -> Option<RadialSegmentId> {
 }
 
 fn open_via_right_press(state: &mut InputState) -> RadialMenuLayout {
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
     state.on_mouse_press(MouseButton::Right, 400, 300);
     assert!(state.is_radial_menu_open());
     state.update_radial_menu_layout(800, 600);
@@ -668,13 +673,13 @@ fn tick_radial_menu_paint_requests_redraw_only_at_deadline() {
 #[test]
 fn blind_flick_release_commits_wedge_by_direction() {
     let mut state = create_test_input_state();
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &ui_engine,
     };
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
     state.on_mouse_press_with_canvas_and_resources(
         resources,
         MouseButton::Right,
@@ -822,7 +827,7 @@ fn toggle_release_without_leaving_deadzone_keeps_menu_open() {
 /// Open the menu with a right press near the left screen edge, where the
 /// layout clamps the rendered center far away from the press point.
 fn open_via_right_press_at_edge(state: &mut InputState, x: i32, y: i32) -> RadialMenuLayout {
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
     state.on_mouse_press(MouseButton::Right, x, y);
     assert!(state.is_radial_menu_open());
     state.update_radial_menu_layout(800, 600);
@@ -965,7 +970,7 @@ fn size_ring_hit_test_covers_arc_but_not_gap() {
 #[test]
 fn size_ring_drag_adjusts_thickness_live_and_keeps_menu_open() {
     let mut state = create_test_input_state();
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
     state.on_mouse_press(MouseButton::Right, 400, 300);
     state.update_radial_menu_layout(800, 600);
     let layout = state.radial_menu.layout.expect("layout");
@@ -1014,10 +1019,7 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     };
     // Steps of 0.125 are exact binary fractions, so equality is exact.
     for i in 0..8 {
-        state.apply_color_from_ui_with_measurer(
-            &crate::draw::TextMeasurer::default(),
-            color(i as f64 * 0.125),
-        );
+        state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), color(i as f64 * 0.125));
     }
     assert_eq!(state.style.recent_colors.len(), 6, "recents are capped");
     assert_eq!(
@@ -1027,7 +1029,7 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     );
 
     // Re-applying an existing color moves it to the front without growing.
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), color(0.5));
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), color(0.5));
     assert_eq!(state.style.recent_colors.len(), 6);
     assert_eq!(state.style.recent_colors[0], color(0.5));
     assert_eq!(
@@ -1051,14 +1053,14 @@ fn radial_ring_appends_recents_after_quick_palette_without_duplicates() {
         b: 0.33,
         a: 1.0,
     };
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), unique);
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), unique);
     // A recent identical to a quick swatch is filtered from the ring.
     let quick0 = state
         .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), quick0);
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), quick0);
 
     let swatches = state.radial_ring_swatches();
     assert_eq!(swatches.len(), quick_len + 1);
@@ -1076,14 +1078,14 @@ fn recent_color_segment_applies_through_the_color_path() {
         b: 0.33,
         a: 1.0,
     };
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), unique);
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), unique);
     // Move the current color away so applying the recent is observable.
     let quick0 = state
         .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), quick0);
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), quick0);
     let quick_len = state.style.quick_colors.radial_rendered_len();
 
     let layout = open_with_layout(&mut state);
@@ -1129,9 +1131,7 @@ fn escape_exit_resumes_after_dismissal_guard_and_ctrl_q_is_immediate() {
             state.modifiers.ctrl = true;
             state.on_key_press(Key::Char('q'));
         } else {
-            state.note_escape_dismissal(
-                std::time::Instant::now() - std::time::Duration::from_millis(401),
-            );
+            state.note_escape_dismissal(Instant::now() - Duration::from_millis(401));
             state.on_key_press(Key::Escape);
         }
 

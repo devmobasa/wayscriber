@@ -148,6 +148,11 @@ fn log_session_options(session_options: Option<&session::SessionOptions>) {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+
+    use crate::backend::wayland::session::HomeSession;
+    use crate::test_env;
+
     use super::*;
 
     #[test]
@@ -176,8 +181,8 @@ mod tests {
 
     #[test]
     fn a_daemon_home_follows_the_daemon_resume_policy_not_the_runs_own() {
-        let off = std::ffi::OsStr::new("off");
-        crate::test_env::with_env_var(RESUME_SESSION_ENV, Some(off), || {
+        let off = OsStr::new("off");
+        test_env::with_env_var(RESUME_SESSION_ENV, Some(off), || {
             let previous = crate::runtime_session_override();
             // What a run whose --session-file is not home sets for itself.
             crate::set_runtime_session_override(Some(true));
@@ -186,7 +191,7 @@ mod tests {
                     &Config::default(),
                     Path::new("/tmp/config"),
                     &SessionLaunch {
-                        home: crate::backend::wayland::session::HomeSession::Default,
+                        home: HomeSession::Default,
                         preferred: None,
                         from_daemon,
                     },

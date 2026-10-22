@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Debug, Formatter};
+
 /// A point in source-image pixel-edge coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ImagePoint {
@@ -325,8 +328,8 @@ impl ScreenImage {
     }
 }
 
-impl std::fmt::Debug for PackedArgb32 {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for PackedArgb32 {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("PackedArgb32")
             .field("width", &self.width)
@@ -671,12 +674,12 @@ mod tests {
 
     #[test]
     fn packed_argb32_accepts_only_exact_tightly_packed_storage() {
-        let pixels = PackedArgb32::new(2, 3, 8, vec![0xA5; 24]).expect("valid packed pixels");
+        let pixels = PackedArgb32::new(2, 3, 8, vec![0xa5; 24]).expect("valid packed pixels");
         assert_eq!(
             (pixels.width(), pixels.height(), pixels.stride()),
             (2, 3, 8)
         );
-        assert_eq!(pixels.data(), &[0xA5; 24]);
+        assert_eq!(pixels.data(), &[0xa5; 24]);
         assert_eq!(PackedArgb32::new(2, 3, 12, vec![0; 36]), None);
         assert_eq!(PackedArgb32::new(2, 3, 8, vec![0; 23]), None);
         assert_eq!(PackedArgb32::new(u32::MAX, 1, -4, Vec::new()), None);
@@ -684,7 +687,7 @@ mod tests {
 
     #[test]
     fn packed_argb32_debug_redacts_captured_bytes() {
-        let pixels = PackedArgb32::new(3, 4, 12, vec![0xFF; 48]).unwrap();
+        let pixels = PackedArgb32::new(3, 4, 12, vec![0xff; 48]).unwrap();
         let rendered = format!("{pixels:?}");
         assert!(rendered.contains("width: 3"));
         assert!(rendered.contains("bytes: 48"));

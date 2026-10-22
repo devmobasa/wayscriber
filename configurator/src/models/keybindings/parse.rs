@@ -1,9 +1,12 @@
 #[cfg(test)]
-thread_local! { static PARSE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+thread_local! { static PARSE_CALLS: Cell<usize> = const { Cell::new(0) }; }
 #[cfg(test)]
 pub(crate) fn take_parse_calls() -> usize {
     PARSE_CALLS.with(|calls| calls.replace(0))
 }
+
+#[cfg(test)]
+use std::cell::Cell;
 
 use wayscriber::config::Shortcut;
 

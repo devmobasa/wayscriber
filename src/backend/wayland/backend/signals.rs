@@ -1,11 +1,12 @@
 use std::io;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(unix)]
 use libc::{SIGINT, SIGTERM, SIGUSR1, SIGUSR2};
+
+use crate::unix_signals;
+use crate::unix_signals::{SignalListener, SignalListenerHealth};
 
 use super::runtime_wake::RuntimeWakeHandle;
 
@@ -13,7 +14,7 @@ pub(super) struct OverlaySignalState {
     exit_requested: Arc<AtomicBool>,
     tray_action_requested: Arc<AtomicBool>,
     #[cfg(unix)]
-    listener: crate::unix_signals::SignalListener,
+    listener: SignalListener,
 }
 
 impl OverlaySignalState {
@@ -29,9 +30,7 @@ impl OverlaySignalState {
         #[cfg(unix)]
         {
             match self.listener.health() {
-                crate::unix_signals::SignalListenerHealth::Failed(failure) => {
-                    Some(failure.to_string())
-                }
+                SignalListenerHealth::Failed(failure) => Some(failure.to_string()),
                 _ => None,
             }
         }
@@ -73,7 +72,7 @@ pub(super) fn setup_signal_handlers(
         let signal_exit_requested = Arc::clone(&exit_requested);
         let signal_tray_action_requested = Arc::clone(&tray_action_requested);
         let listener_wake = runtime_wake;
-        let listener = crate::unix_signals::spawn_listener(
+        let listener = unix_signals::spawn_listener(
             &[SIGTERM, SIGINT, SIGUSR1, SIGUSR2],
             move |signal| match signal {
                 SIGUSR1 => {
@@ -136,11 +135,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn tray_signal_publishes_state_then_wakes_overlay_owner() {
-        let _guard = crate::unix_signals::test_signal_lock();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let _guard = unix_signals::test_signal_lock();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut signals = setup_signal_handlers(wake.handle()).unwrap();
 
-        crate::unix_signals::deliver_signal_for_test(SIGUSR2);
+        unix_signals::deliver_signal_for_test(SIGUSR2);
         wait_for_wake(&wake);
 
         assert!(signals.take_tray_action_requested());
@@ -151,8 +150,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn listener_failure_is_published_before_overlay_owner_wake() {
-        let _guard = crate::unix_signals::test_signal_lock();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let _guard = unix_signals::test_signal_lock();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut signals = setup_signal_handlers(wake.handle()).unwrap();
 
         signals.listener.inject_read_error(libc::EIO);

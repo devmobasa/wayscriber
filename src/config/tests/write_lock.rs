@@ -11,6 +11,11 @@
 //! These exercise the advisory lock that makes the check and the rename one
 //! step. Removing `acquire_config_write_lock` from `merge_and_write` fails both.
 
+use std::ffi::OsStr;
+
+use crate::input::Tool;
+use crate::{session, test_temp};
+
 use super::super::io::{persist_preset_slot_at, persist_quick_color_at};
 use super::super::{ColorSpec, ToolPresetConfig};
 use crate::domain::Color;
@@ -37,7 +42,7 @@ const WINNER_KEY: &str = "show_status_bar = false";
 fn preset(name: &str) -> ToolPresetConfig {
     ToolPresetConfig {
         name: Some(name.to_string()),
-        tool: crate::input::Tool::Pen,
+        tool: Tool::Pen,
         color: ColorSpec::from(Color {
             r: 0.13,
             g: 0.27,
@@ -82,7 +87,7 @@ fn fixture(directory: &Path) -> PathBuf {
 fn config_write_lock_path(config_path: &Path) -> PathBuf {
     let name = config_path
         .file_name()
-        .and_then(std::ffi::OsStr::to_str)
+        .and_then(OsStr::to_str)
         .expect("the fixture path this test built has a file name");
     config_path.with_file_name(format!("{name}.lock"))
 }
@@ -97,7 +102,7 @@ fn hold_config_write_lock(config_path: &Path) -> File {
         .truncate(false)
         .open(&path)
         .expect("the lock file beside a fixture this test created");
-    crate::session::try_lock_exclusive(&file)
+    session::try_lock_exclusive(&file)
         .expect("nothing else can hold the lock on a directory this test just made");
     file
 }
@@ -122,7 +127,7 @@ fn backups_in(directory: &Path) -> Vec<String> {
 /// under the lock — replaces the file and takes the preset with it.
 #[test]
 fn an_edit_that_waits_for_the_lock_reapplies_onto_the_writer_that_won() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = fixture(temp.path());
 
     let held = hold_config_write_lock(&path);
@@ -166,7 +171,7 @@ fn an_edit_that_waits_for_the_lock_reapplies_onto_the_writer_that_won() {
 /// the two windows actually overlap.
 #[test]
 fn two_racing_edits_both_land_and_a_backup_still_holds_the_original() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
 
     for attempt in 0..24 {
         let directory = temp.path().join(format!("attempt-{attempt}"));

@@ -6,7 +6,7 @@ mod tests;
 use wayscriber::config::Shortcut;
 use wayscriber::i18n::tr;
 
-use crate::app::search::keybinding_row_visible;
+use crate::app::search::{AppSearchSummary, keybinding_row_visible};
 use crate::app::state::{ConfirmationPrompt, PendingConfirmation};
 use crate::models::keybindings::{
     AppendOutcome, KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind,
@@ -16,7 +16,7 @@ use crate::models::keybindings::{
     other_claimants, parse_keybindings, remove_binding, reset_field, reset_fields,
     text_conflicts_for,
 };
-use crate::models::{KeybindingField, keybinding_tab};
+use crate::models::{KeybindingField, PendingShortcutConflict, keybinding_tab};
 
 use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
@@ -127,12 +127,12 @@ impl ConfiguratorApp {
     pub(super) fn handle_shortcut_removed(
         &mut self,
         field: KeybindingField,
-        binding: Shortcut,
+        binding: &Shortcut,
     ) -> Vec<Effect> {
         if self.shortcuts.conflict().is_some() {
             return Vec::new();
         }
-        match remove_binding(&mut self.draft.keybindings, field, &binding) {
+        match remove_binding(&mut self.draft.keybindings, field, binding) {
             Ok(()) => {
                 self.status = StatusMessage::idle();
                 self.refresh_dirty_flag();
@@ -197,7 +197,7 @@ impl ConfiguratorApp {
                 }
                 self.shortcuts.set_editor(None);
                 self.shortcuts
-                    .set_conflict(Some(crate::models::PendingShortcutConflict::Text {
+                    .set_conflict(Some(PendingShortcutConflict::Text {
                         target: editor.field,
                         new_value: editor.text,
                         conflicts,
@@ -223,12 +223,12 @@ impl ConfiguratorApp {
             return Vec::new();
         };
         let result = match pending {
-            crate::models::PendingShortcutConflict::Recorded {
+            PendingShortcutConflict::Recorded {
                 target,
                 binding,
                 claimants,
             } => apply_recorded_replace(&mut self.draft.keybindings, target, &binding, &claimants),
-            crate::models::PendingShortcutConflict::Text {
+            PendingShortcutConflict::Text {
                 target,
                 new_value,
                 conflicts,
@@ -274,7 +274,7 @@ impl ConfiguratorApp {
 
     pub(crate) fn prepare_shortcut_manager_refresh(
         &self,
-        search: &crate::app::search::AppSearchSummary,
+        search: &AppSearchSummary,
     ) -> (ShortcutManagerSummary, Vec<KeybindingField>) {
         let summary = self.shortcut_manager_summary();
         let fields = self.visible_keybinding_fields_with(&summary, search);
@@ -284,7 +284,7 @@ impl ConfiguratorApp {
     fn visible_keybinding_fields_with(
         &self,
         summary: &ShortcutManagerSummary,
-        search: &crate::app::search::AppSearchSummary,
+        search: &AppSearchSummary,
     ) -> Vec<KeybindingField> {
         let scope = (!self.keybindings_show_all).then_some(self.active_keybindings_tab);
         summary.visible_fields(self.shortcut_filter, self.shortcut_sort, scope, |field| {
@@ -416,13 +416,12 @@ impl ConfiguratorApp {
         match next_review_conflict(&self.draft.keybindings) {
             Some((field, binding, claimants)) => {
                 self.select_keybinding_field(field);
-                self.shortcuts.set_conflict(Some(
-                    crate::models::PendingShortcutConflict::Recorded {
+                self.shortcuts
+                    .set_conflict(Some(PendingShortcutConflict::Recorded {
                         target: field,
                         binding,
                         claimants,
-                    },
-                ));
+                    }));
                 self.status = StatusMessage::info(tr("Review the next conflicting shortcut."));
             }
             None => {
@@ -440,7 +439,7 @@ impl ConfiguratorApp {
         let claimants = other_claimants(&self.draft.keybindings, field, &binding);
         if !claimants.is_empty() {
             self.shortcuts
-                .set_conflict(Some(crate::models::PendingShortcutConflict::Recorded {
+                .set_conflict(Some(PendingShortcutConflict::Recorded {
                     target: field,
                     binding,
                     claimants,

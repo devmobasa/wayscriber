@@ -1,3 +1,5 @@
+use crate::draw;
+
 use super::super::base::InputState;
 use super::summary::{
     PropertySummary, resolve_selected_shapes, shape_arrow_angle, shape_arrow_head,
@@ -250,7 +252,7 @@ impl InputState {
                 tr("Magnification"),
                 SelectionPropertyKind::SpotlightMagnification,
                 &spotlight_summary,
-                crate::draw::format_spotlight_magnification,
+                draw::format_spotlight_magnification,
                 SelectionPropertyValue::Number,
             ));
         }
@@ -264,10 +266,11 @@ mod tests {
     use super::*;
 
     use crate::domain::color::{PALETTE_GREEN, PALETTE_RED};
-    use crate::draw::{ArrowStyle, Color};
+    use crate::draw::{ArrowStyle, Color, Frame};
+    use crate::input::state::test_support::TestInputStateBuilder;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::TestInputStateBuilder::default()
+        TestInputStateBuilder::default()
             .text_background_enabled(true)
             .build()
     }
@@ -299,13 +302,13 @@ mod tests {
 
         for selected in [vec![ids[2], ids[1_000], ids[2_047]], ids] {
             state.set_selection(selected);
-            crate::draw::Frame::reset_linear_id_lookup_count();
+            Frame::reset_linear_id_lookup_count();
             let entries = state.selection_pill_entries();
 
             assert_eq!(entry(&entries, "Thickness").value, "3.0px");
             assert_eq!(entry(&entries, "Opacity").value, "100%");
             assert!(!entry(&entries, "Color").disabled);
-            assert_eq!(crate::draw::Frame::linear_id_lookup_count(), 0);
+            assert_eq!(Frame::linear_id_lookup_count(), 0);
         }
     }
 
@@ -466,7 +469,7 @@ mod tests {
     fn property_entries_name_colors_from_the_quick_color_palette() {
         let mut state = make_state();
         let palette_green = add_line(&mut state, PALETTE_GREEN);
-        let pure_green = add_line(&mut state, crate::draw::GREEN);
+        let pure_green = add_line(&mut state, draw::GREEN);
 
         let entries = state.build_selection_property_entries(&[palette_green]);
         assert_eq!(entry(&entries, "Color").value, "Green");

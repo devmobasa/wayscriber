@@ -1,9 +1,14 @@
-use crate::input::events::MouseButton;
+use std::mem;
 
-use super::super::{
-    DrawingState, InputState,
-    interaction::{CanvasPoint, PointerPoints, PointerRelease, ScreenPoint, route_pointer_release},
+use crate::draw::TextMeasurer;
+use crate::input::events::MouseButton;
+use crate::input::state::InputTextResources;
+use crate::ui_text::UiTextEngine;
+
+use super::super::interaction::{
+    CanvasPoint, PointerPoints, PointerRelease, ScreenPoint, route_pointer_release,
 };
+use super::super::{DrawingState, InputState};
 
 mod drawing;
 mod panels;
@@ -45,8 +50,8 @@ impl InputState {
         canvas_x: impl Into<f64>,
         canvas_y: impl Into<f64>,
     ) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.on_mouse_release_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -62,7 +67,7 @@ impl InputState {
 
     pub(crate) fn on_mouse_release_with_canvas_and_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
@@ -88,7 +93,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_context_menu_release_at_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         x: i32,
         y: i32,
     ) -> bool {
@@ -97,7 +102,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_board_picker_release_at_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         x: i32,
         y: i32,
     ) -> bool {
@@ -106,7 +111,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_properties_panel_release_at_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
     ) -> bool {
@@ -115,7 +120,7 @@ impl InputState {
 
     pub(in crate::input::state) fn finish_pointer_interaction_at_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         canvas_x: i32,
         canvas_y: i32,
     ) {
@@ -132,7 +137,7 @@ impl InputState {
     /// gesture first. The later release then finds nothing left to finish.
     pub(in crate::input::state) fn settle_snapshot_gesture_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
     ) -> bool {
         if !matches!(
             self.state,
@@ -152,11 +157,11 @@ impl InputState {
 
     fn end_pointer_interaction_with(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         (canvas_x, canvas_y): (i32, i32),
         end: GestureEnd,
     ) {
-        let state = std::mem::replace(&mut self.state, DrawingState::Idle);
+        let state = mem::replace(&mut self.state, DrawingState::Idle);
         match state {
             DrawingState::MovingSelection {
                 grab,

@@ -1,8 +1,10 @@
 use std::os::fd::AsFd;
 use std::path::PathBuf;
+use std::process;
 
 use anyhow::{Context, Result, anyhow, bail};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use super::digest::sha256_hex;
 use super::{BootIdentity, NamespaceIdentity, ProtocolId, ProtocolToken};
@@ -52,7 +54,7 @@ impl From<NamespaceIdentity> for NamespaceIdentityV2 {
 impl DaemonRuntimeRecordV2 {
     pub(crate) fn current(token: ProtocolToken) -> Result<Self> {
         Ok(Self {
-            pid: std::process::id(),
+            pid: process::id(),
             runtime_record_version: DAEMON_COMMAND_PROTOCOL_VERSION,
             typed_control_protocol_version: DAEMON_COMMAND_PROTOCOL_VERSION,
             boot_id: BootIdentity::read()?.as_str().to_owned(),

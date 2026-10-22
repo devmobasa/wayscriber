@@ -1,5 +1,4 @@
-use crate::draw::TextMeasurer;
-use crate::draw::{Shape, ShapeId};
+use crate::draw::{Shape, ShapeId, TextMeasurer};
 use crate::input::InputState;
 
 const TEXT_WRAP_MIN_WIDTH: i32 = 40;

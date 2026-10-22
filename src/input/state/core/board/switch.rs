@@ -1,3 +1,8 @@
+use std::collections::BTreeSet;
+
+use crate::draw::Color;
+use crate::input::{BoardManager, Tool};
+
 use super::super::base::InputState;
 use crate::draw::TextMeasurer;
 use crate::i18n::{tr, trf};
@@ -5,11 +10,11 @@ use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
 impl InputState {
-    pub(crate) fn board_previous_color(&self) -> Option<crate::draw::Color> {
+    pub(crate) fn board_previous_color(&self) -> Option<Color> {
         self.board_transitions.previous_color()
     }
 
-    pub(crate) fn set_board_previous_color(&mut self, color: Option<crate::draw::Color>) {
+    pub(crate) fn set_board_previous_color(&mut self, color: Option<Color>) {
         self.board_transitions.set_previous_color(color);
     }
 
@@ -26,8 +31,8 @@ impl InputState {
     pub(crate) fn restore_board_pen_after_snapshot(
         &mut self,
         previous_auto: bool,
-        previous_pen: crate::draw::Color,
-        previous_color: Option<crate::draw::Color>,
+        previous_pen: Color,
+        previous_color: Option<Color>,
     ) {
         let spec = &self.boards.active_board().spec;
         let target_auto = spec.auto_adjust_pen && !spec.background.is_transparent();
@@ -281,8 +286,8 @@ impl InputState {
     pub(super) fn switch_board_with(
         &mut self,
         measurer: &TextMeasurer,
-        can_switch: impl FnOnce(&crate::input::BoardManager) -> bool,
-        switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,
+        can_switch: impl FnOnce(&BoardManager) -> bool,
+        switch: impl FnOnce(&mut BoardManager) -> bool,
         current_id: &str,
     ) -> bool {
         if !can_switch(&self.boards) {
@@ -295,7 +300,7 @@ impl InputState {
             .board_states()
             .iter()
             .map(|board| board.spec.id.clone())
-            .collect::<std::collections::BTreeSet<_>>();
+            .collect::<BTreeSet<_>>();
         let generation_before = self.boards.board_identity_generation();
         self.cancel_active_interaction_with(measurer);
         let switched = switch(&mut self.boards);
@@ -305,7 +310,10 @@ impl InputState {
         }
 
         let target_spec = self.boards.active_board().spec.clone();
-        debug_assert_ne!(target_spec.id, current_id);
+        debug_assert_ne!(
+            target_spec.id, current_id,
+            "a successful board switch leaves the current board"
+        );
         if target_spec.id == current_id {
             return false;
         }
@@ -320,13 +328,13 @@ impl InputState {
             self.queue_board_identity_available(id);
         }
         self.clear_pending_deletes_after_board_generation_change(generation_before);
-        self.finish_board_transition_from(current_spec, current_id, true);
+        self.finish_board_transition_from(&current_spec, current_id, true);
         true
     }
 
     pub(super) fn finish_board_transition_from(
         &mut self,
-        current_spec: BoardSpec,
+        current_spec: &BoardSpec,
         current_id: &str,
         log_switch: bool,
     ) {
@@ -340,7 +348,7 @@ impl InputState {
         match (current_auto, target_auto) {
             (false, true) => {
                 self.board_transitions
-                    .remember_previous_color(self.color_for_tool(crate::input::Tool::Pen));
+                    .remember_previous_color(self.color_for_tool(Tool::Pen));
                 if let Some(default_color) = target_spec.effective_pen_color() {
                     self.set_pen_color_from_board(default_color);
                 }

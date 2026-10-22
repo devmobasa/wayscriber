@@ -260,15 +260,19 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::desktop_open::DesktopOpenRequest;
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::config::Action;
     use crate::draw::{BLACK, WHITE};
     use crate::input::state::KeybindingEditOperation;
-    use crate::input::state::core::base::{InputEffect, InputEffectDrain};
-    use crate::input::state::core::base::{KeybindingEditRequest, PresetAction, QuickColorEdit};
+    use crate::input::state::core::base::{
+        InputEffect, InputEffectDrain, KeybindingEditRequest, PresetAction, QuickColorEdit,
+    };
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     #[test]
@@ -342,7 +346,7 @@ mod tests {
     #[test]
     fn pending_desktop_open_is_taken_without_requesting_early_exit() {
         let mut state = make_state();
-        let request = crate::desktop_open::DesktopOpenRequest::CaptureFolder("/tmp/capture".into());
+        let request = DesktopOpenRequest::CaptureFolder("/tmp/capture".into());
         state.set_pending_backend_action(PendingBackendAction::DesktopOpen(request.clone()));
 
         assert!(!state.should_exit);

@@ -20,12 +20,12 @@ use super::{BuiltPage, PageBuilder};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let edit_modes = PressureThicknessEditModeOption::list();
-    let edit_mode_labels = edit_modes
+    let edit_mode_labels: Vec<String> = edit_modes
         .iter()
         .map(|mode| mode.label().to_string())
         .collect();
     let entry_modes = PressureThicknessEntryModeOption::list();
-    let entry_mode_labels = entry_modes
+    let entry_mode_labels: Vec<String> = entry_modes
         .iter()
         .map(|mode| mode.label().to_string())
         .collect();
@@ -82,7 +82,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Pressure thickness edit mode"),
             "",
             edit_modes,
-            edit_mode_labels,
+            &edit_mode_labels,
             |app| app.draft.tablet_pressure_thickness_edit_mode,
             Message::TabletPressureEditModeChanged,
         )
@@ -90,7 +90,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Pressure thickness entry mode"),
             "",
             entry_modes,
-            entry_mode_labels,
+            &entry_mode_labels,
             |app| app.draft.tablet_pressure_thickness_entry_mode,
             Message::TabletPressureEntryModeChanged,
         );

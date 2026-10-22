@@ -8,6 +8,8 @@
 //! handlers, drained each input cycle, fulfill it against the compositor
 //! clipboard (reusing the generic clipboard worker pipeline).
 
+use std::time::Instant;
+
 use super::{TextCopyOutcome, TextPasteOutcome, WaylandState};
 use crate::backend::wayland::RuntimeOperationPoll;
 use crate::i18n::tr;
@@ -21,7 +23,7 @@ impl WaylandState {
             return;
         }
         self.focus
-            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
         if let Err(err) = self.clipboard.queue_text_copy(request) {
             log::warn!("Failed to start text clipboard copy: {err}");
             self.input_state.push_toast(
@@ -99,7 +101,7 @@ impl WaylandState {
             return;
         }
         self.focus
-            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
         if let Err(err) = self.clipboard.queue_text_paste(target) {
             log::warn!("Failed to start text clipboard paste: {err}");
             self.push_text_paste_failure();

@@ -1,3 +1,7 @@
+use std::process::Command;
+
+use crate::test_env;
+
 use super::*;
 use std::ffi::OsStr;
 
@@ -65,11 +69,11 @@ fn the_startup_token_is_trimmed_and_falls_back_to_the_startup_id() {
 /// features or the system's GTK.
 #[test]
 fn a_launch_token_survives_its_removal_from_the_live_environment() {
-    if std::env::var_os(CHILD_ENV).is_some() {
+    if env::var_os(CHILD_ENV).is_some() {
         let removed = STARTUP_NOTIFICATION_VARIABLES.map(|name| (name, None::<&OsStr>));
-        crate::test_env::with_env_vars(&removed, || {
+        test_env::with_env_vars(&removed, || {
             for name in STARTUP_NOTIFICATION_VARIABLES {
-                assert_eq!(std::env::var_os(name), None, "{name} is still live");
+                assert_eq!(env::var_os(name), None, "{name} is still live");
             }
             assert_eq!(startup_activation_token().as_deref(), Some(LAUNCH_TOKEN));
             assert_eq!(
@@ -86,7 +90,7 @@ fn a_launch_token_survives_its_removal_from_the_live_environment() {
     )
     .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
     .expect("test path contains the crate prefix");
-    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+    let output = Command::new(env::current_exe().expect("test binary"))
         .args([test_name, "--exact", "--test-threads=1"])
         .env(CHILD_ENV, "1")
         .env(XDG_ACTIVATION_TOKEN_ENV, LAUNCH_TOKEN)
@@ -107,7 +111,7 @@ fn a_launch_token_survives_its_removal_from_the_live_environment() {
 fn without_a_launch_environment_the_live_one_is_read() {
     const NAME: &str = "WAYSCRIBER_TEST_LAUNCH_ENVIRONMENT_FALLBACK";
 
-    crate::test_env::with_env_var(NAME, Some(OsStr::new("live")), || {
+    test_env::with_env_var(NAME, Some(OsStr::new("live")), || {
         assert_eq!(
             var_os_in(Path::new("/nonexistent/environ"), NAME).as_deref(),
             Some(OsStr::new("live"))

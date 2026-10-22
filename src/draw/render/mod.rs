@@ -2,8 +2,7 @@
 
 mod backdrop_probe;
 pub(crate) use backdrop_probe::color_luminance;
-pub use backdrop_probe::painted_luminance as painted_background_luminance;
-pub use backdrop_probe::perceived_luminance;
+pub use backdrop_probe::{painted_luminance as painted_background_luminance, perceived_luminance};
 mod background;
 mod blur;
 mod board_grid;

@@ -1,4 +1,5 @@
-use std::process::{Command, Output};
+use std::env;
+use std::process::{Command, ExitStatus, Output};
 
 pub(super) const CHILD_ENV: &str = "WAYSCRIBER_GTK_CAPTURE_RENDER_CHILD";
 const COMPLETION_PREFIX: &str = "WAYSCRIBER_CAPTURE_RENDER_COMPLETED ";
@@ -22,7 +23,7 @@ fn completion_marker(renderer: &str, case: &str, outcome: &Outcome) -> String {
 }
 
 fn child(name: &str, renderer: &str, case: &str) -> Command {
-    let mut command = Command::new(std::env::current_exe().expect("test binary"));
+    let mut command = Command::new(env::current_exe().expect("test binary"));
     command
         .args([name, "--exact", "--test-threads=1", "--nocapture"])
         .env(CHILD_ENV, case)
@@ -125,7 +126,7 @@ fn completion_requires_matching_case_renderer_outcome_and_exit_status() {
     use std::os::unix::process::ExitStatusExt;
 
     let mut output = Output {
-        status: std::process::ExitStatus::from_raw(0),
+        status: ExitStatus::from_raw(0),
         stdout: Vec::new(),
         stderr: Vec::new(),
     };
@@ -136,10 +137,10 @@ fn completion_requires_matching_case_renderer_outcome_and_exit_status() {
     output.stdout = output.stderr.clone();
     assert!(validate(&output, "cairo", "window").is_err());
     output.stdout.clear();
-    output.status = std::process::ExitStatus::from_raw(1 << 8);
+    output.status = ExitStatus::from_raw(1 << 8);
     assert!(validate(&output, "cairo", "window").is_err());
 
-    output.status = std::process::ExitStatus::from_raw(77 << 8);
+    output.status = ExitStatus::from_raw(77 << 8);
     output.stderr =
         completion_marker("vulkan", "renderer-probe", &Outcome::VulkanUnavailable).into_bytes();
     assert_eq!(

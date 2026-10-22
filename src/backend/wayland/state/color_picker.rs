@@ -1,12 +1,14 @@
 //! Clipboard helpers for color hex values.
 
+use std::panic;
+use std::time::Instant;
+
 use super::{HexCopyOutcome, WaylandState};
 use crate::backend::wayland::RuntimeOperationPoll;
 use crate::clipboard_text::{ClipboardTextError, read_clipboard_text_via_command};
 use crate::draw::Color;
 use crate::i18n::{tr, trf};
-use crate::input::state::{HexPasteTarget, Toast, ToastPriority};
-use crate::input::state::{color_to_hex, parse_hex_color};
+use crate::input::state::{HexPasteTarget, Toast, ToastPriority, color_to_hex, parse_hex_color};
 use std::time::Duration;
 
 impl WaylandState {
@@ -15,7 +17,7 @@ impl WaylandState {
         let hex = color_to_hex(color);
         log::info!("Hex copy requested: {}", hex);
         self.focus
-            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
 
         if let Err(err) = self.clipboard.queue_hex_copy(hex) {
             log::warn!("Failed to start hex clipboard copy: {err}");
@@ -89,6 +91,10 @@ impl WaylandState {
     }
 
     /// Pastes a hex color from the clipboard.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "defense in depth: a panic while reading the clipboard is reported as a failed paste instead of ending the overlay"
+    )]
     pub(in crate::backend::wayland) fn handle_paste_hex_color(&mut self, target: HexPasteTarget) {
         if !self.input_state.hex_paste_target_is_current(target) {
             log::debug!("Discarding stale color-picker hex paste request");
@@ -96,8 +102,8 @@ impl WaylandState {
         }
         log::info!("Hex paste requested");
         self.focus
-            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
-        let clipboard = match std::panic::catch_unwind(read_clipboard_text_via_command) {
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
+        let clipboard = match panic::catch_unwind(read_clipboard_text_via_command) {
             Ok(Ok(text)) => text,
             Ok(Err(ClipboardTextError::Empty)) => {
                 self.input_state.push_toast(

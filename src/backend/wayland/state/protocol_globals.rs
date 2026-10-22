@@ -1,15 +1,13 @@
-use smithay_client_toolkit::{
-    activation::ActivationState,
-    compositor::CompositorState,
-    output::OutputState,
-    registry::RegistryState,
-    seat::{
-        SeatState, pointer_constraints::PointerConstraintsState,
-        relative_pointer::RelativePointerState,
-    },
-    shell::{wlr_layer::LayerShell, xdg::XdgShell},
-    shm::Shm,
-};
+use smithay_client_toolkit::activation::ActivationState;
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::output::OutputState;
+use smithay_client_toolkit::registry::RegistryState;
+use smithay_client_toolkit::seat::SeatState;
+use smithay_client_toolkit::seat::pointer_constraints::PointerConstraintsState;
+use smithay_client_toolkit::seat::relative_pointer::RelativePointerState;
+use smithay_client_toolkit::shell::wlr_layer::LayerShell;
+use smithay_client_toolkit::shell::xdg::XdgShell;
+use smithay_client_toolkit::shm::Shm;
 
 pub(in crate::backend::wayland) struct ProtocolGlobalsSeed {
     pub registry: RegistryState,

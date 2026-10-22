@@ -7,6 +7,7 @@ pub const MAX_SPOTLIGHT_MAGNIFICATION: f64 = 4.0;
 pub const SPOTLIGHT_MAGNIFICATION_STEP: f64 = 0.25;
 
 /// Serde default for Spotlight shapes written before magnification existed.
+#[must_use]
 pub const fn default_spotlight_magnification() -> f64 {
     DEFAULT_SPOTLIGHT_MAGNIFICATION
 }
@@ -19,6 +20,7 @@ where
     Ok(normalize_spotlight_magnification(value))
 }
 
+#[must_use]
 pub fn normalize_spotlight_magnification(value: f64) -> f64 {
     if value.is_finite() {
         value.clamp(MIN_SPOTLIGHT_MAGNIFICATION, MAX_SPOTLIGHT_MAGNIFICATION)
@@ -27,10 +29,12 @@ pub fn normalize_spotlight_magnification(value: f64) -> f64 {
     }
 }
 
+#[must_use]
 pub fn spotlight_magnification_is_active(value: f64) -> bool {
     normalize_spotlight_magnification(value) > MIN_SPOTLIGHT_MAGNIFICATION + f64::EPSILON
 }
 
+#[must_use]
 pub fn format_spotlight_magnification(value: f64) -> String {
     let value = normalize_spotlight_magnification(value);
     let mut number = format!("{value:.2}");

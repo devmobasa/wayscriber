@@ -3,8 +3,17 @@
 //! for slot; serves the docked selection properties and the pen smoothing
 //! and Shape Pen detection steppers of `stroke_controls = "stepper"`.
 
+use gtk4::accessible::Property;
+
 use super::style_pill::pill_button;
-use super::*;
+use super::{
+    STYLE_CAPTION_W, STYLE_ROW_H, STYLE_SEL_VALUE_W, STYLE_STEP_W, TopBar, set_semantic_widget_id,
+};
+use crate::toolbar_gtk::widgets::send_event;
+use crate::ui::toolbar::{ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 impl TopBar {
     /// Appends one stepper to `pill`, followed by `gap_px` of margin, and
@@ -29,7 +38,7 @@ impl TopBar {
         // A row of "−  3  +" says nothing about what it steps: the caption
         // names it on screen, the label for assistive tech.
         let accessible_label = control.label(snapshot);
-        row.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        row.update_property(&[Property::Label(&accessible_label)]);
         row.set_valign(gtk4::Align::Center);
         if let Some(caption) = control.caption() {
             let caption_label = gtk4::Label::new(Some(caption));
@@ -61,9 +70,9 @@ impl TopBar {
         let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
         set_semantic_widget_id(&minus, steps[0].id);
         minus.set_tooltip_text(Some(&steps[0].tooltip));
-        minus.update_property(&[gtk4::accessible::Property::Label(&steps[0].tooltip)]);
+        minus.update_property(&[Property::Label(&steps[0].tooltip)]);
         row.append(&minus);
-        handles.push(minus.clone());
+        handles.push(minus);
         let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
         value.add_css_class("stepper-value");
         set_semantic_widget_id(&value, &format!("{}.value", control.id()));
@@ -72,9 +81,9 @@ impl TopBar {
         let plus = pill_button(steps[1].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
         set_semantic_widget_id(&plus, steps[1].id);
         plus.set_tooltip_text(Some(&steps[1].tooltip));
-        plus.update_property(&[gtk4::accessible::Property::Label(&steps[1].tooltip)]);
+        plus.update_property(&[Property::Label(&steps[1].tooltip)]);
         row.append(&plus);
-        handles.push(plus.clone());
+        handles.push(plus);
 
         // The halves carry the level they land on, which moves with the
         // level, so their clicks read the live step rather than the one

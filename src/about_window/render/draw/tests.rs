@@ -1,3 +1,5 @@
+use crate::update_check::Freshness;
+
 use super::*;
 use crate::about_window::layout;
 use crate::update_check::{AvailableUpdate, DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL};
@@ -93,13 +95,13 @@ fn every_update_state_paints_cleanly() {
 
     let states = [
         UpdateState::Unavailable,
-        UpdateState::Unknown(crate::update_check::Freshness::default()),
+        UpdateState::Unknown(Freshness::default()),
         UpdateState::Checking,
-        UpdateState::UpToDate(crate::update_check::Freshness {
+        UpdateState::UpToDate(Freshness {
             checked_seconds_ago: Some(3_600),
             last_attempt_failed: false,
         }),
-        UpdateState::UpToDate(crate::update_check::Freshness {
+        UpdateState::UpToDate(Freshness {
             checked_seconds_ago: Some(3_600),
             last_attempt_failed: true,
         }),
@@ -110,7 +112,7 @@ fn every_update_state_paints_cleanly() {
                 update_url: DEFAULT_UPDATE_URL.to_string(),
                 notes_url: DEFAULT_NOTES_URL.to_string(),
             }),
-            freshness: crate::update_check::Freshness {
+            freshness: Freshness {
                 checked_seconds_ago: Some(0),
                 last_attempt_failed: false,
             },
@@ -135,7 +137,7 @@ fn hover_focus_and_notice_paint_cleanly() {
     let content = AboutContent::build();
     let plan = layout::plan(&content);
     let ctx = context(&plan);
-    let update = UpdateState::Unknown(crate::update_check::Freshness::default());
+    let update = UpdateState::Unknown(Freshness::default());
 
     let mut frame = frame_for(&plan, &content, &update);
     frame.hover = Some(Element::Link(0));

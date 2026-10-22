@@ -1,12 +1,17 @@
 use std::sync::OnceLock;
 
-use super::*;
+use super::super::ids;
+use super::{
+    ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId, ToolbarItemSurface,
+};
 
 use crate::domain::Language;
+use crate::i18n;
 
 /// The toolbar items, labeled in the active UI language.
+#[must_use]
 pub fn toolbar_item_definitions() -> &'static [ToolbarItemDefinition] {
-    toolbar_item_definitions_in(crate::i18n::language())
+    toolbar_item_definitions_in(i18n::language())
 }
 
 /// One table per supported language, built on first use and kept for the
@@ -28,7 +33,7 @@ pub(crate) fn toolbar_item_definitions_in(language: Language) -> &'static [Toolb
 /// two languages even when the active language changes while it is built.
 fn build_toolbar_item_definitions(language: Language) -> Vec<ToolbarItemDefinition> {
     // Named `tr` so each label keeps the spelling the catalog guard reads.
-    let tr = |source: &'static str| crate::i18n::lookup(language, source);
+    let tr = |source: &'static str| i18n::lookup(language, source);
 
     vec![
         item(

@@ -126,7 +126,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Status bar position"),
             "",
             positions,
-            position_labels,
+            &position_labels,
             |app| app.draft.ui_status_position,
             Message::StatusPositionChanged,
         );

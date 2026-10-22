@@ -1,3 +1,5 @@
+use std::mem;
+
 use super::super::Frame;
 
 /// Collection of pages for a single board mode.
@@ -25,6 +27,7 @@ impl Default for BoardPages {
 }
 
 impl BoardPages {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pages: vec![Frame::new()],
@@ -33,6 +36,7 @@ impl BoardPages {
         }
     }
 
+    #[must_use]
     pub fn from_pages(mut pages: Vec<Frame>, active: usize) -> Self {
         if pages.is_empty() {
             pages.push(Frame::new());
@@ -45,14 +49,17 @@ impl BoardPages {
         }
     }
 
+    #[must_use]
     pub fn page_count(&self) -> usize {
         self.pages.len()
     }
 
+    #[must_use]
     pub fn active_index(&self) -> usize {
         self.active
     }
 
+    #[must_use]
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -61,6 +68,7 @@ impl BoardPages {
         self.generation = self.generation.wrapping_add(1);
     }
 
+    #[must_use]
     pub fn active_frame(&self) -> &Frame {
         &self.pages[self.active]
     }
@@ -187,7 +195,7 @@ impl BoardPages {
             return None;
         }
         if len == 1 {
-            let page = std::mem::take(&mut self.pages[0]);
+            let page = mem::take(&mut self.pages[0]);
             self.active = 0;
             self.bump_generation();
             return Some(page);
@@ -257,10 +265,12 @@ impl BoardPages {
         }
     }
 
+    #[must_use]
     pub fn pages(&self) -> &[Frame] {
         &self.pages
     }
 
+    #[must_use]
     pub fn page_name(&self, index: usize) -> Option<&str> {
         self.pages.get(index).and_then(|page| page.page_name())
     }

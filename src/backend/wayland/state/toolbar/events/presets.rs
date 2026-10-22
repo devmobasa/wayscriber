@@ -1,8 +1,10 @@
-use super::*;
 use crate::backend::wayland::config_edits::{ConfigEdit, ConfigEditWorker};
+use crate::backend::wayland::state::WaylandState;
 use crate::config::{Config, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite};
+use crate::domain::Action;
 use crate::i18n::{tr, trf};
 use crate::input::state::{PresetAction, Toast, ToastPriority};
+use anyhow::Result;
 
 /// Apply an accepted preset save/clear to the effective config.
 ///
@@ -123,8 +125,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     "presets",
-                    Toast::warning(message)
-                        .action(tr("Edit"), crate::domain::Action::OpenConfiguratorPresets),
+                    Toast::warning(message).action(tr("Edit"), Action::OpenConfiguratorPresets),
                 );
             }
         }
@@ -133,11 +134,16 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
+    use crate::config::ConfigDocument;
+    use crate::input::Tool;
+    use crate::{config, test_temp};
+
     use super::*;
     use crate::config::io::persist_preset_slot_at;
-    use crate::config::persist_preset_slot;
     use crate::config::test_helpers::with_temp_config_home;
-    use crate::config::{ColorSpec, ToolPresetConfig};
+    use crate::config::{ColorSpec, ToolPresetConfig, persist_preset_slot};
     use crate::draw::Color;
     use std::fs;
 
@@ -147,7 +153,7 @@ mod tests {
     fn preset(name: &str) -> Box<ToolPresetConfig> {
         Box::new(ToolPresetConfig {
             name: Some(name.to_string()),
-            tool: crate::input::Tool::Pen,
+            tool: Tool::Pen,
             color: ColorSpec::from(Color {
                 r: 0.13,
                 g: 0.27,
@@ -183,10 +189,7 @@ mod tests {
         apply_preset_action(&mut config, &action);
 
         assert_eq!(
-            config
-                .presets
-                .get_slot(2)
-                .and_then(|slot| slot.name.clone()),
+            config.presets.slot(2).and_then(|slot| slot.name.clone()),
             Some("Run preset".to_string())
         );
         // The wording waits for the write; this is what the completion says
@@ -208,7 +211,7 @@ mod tests {
         let action = PresetAction::Clear { slot: 1 };
         apply_preset_action(&mut config, &action);
 
-        assert!(config.presets.get_slot(1).is_none());
+        assert!(config.presets.slot(1).is_none());
         assert_eq!(preset_saved_message(&action), "Cleared preset 1.");
     }
 
@@ -253,7 +256,7 @@ undo = [\"Ctrl+Alt+Shift+Q\"]
 redo = [\"Ctrl+Alt+Shift+Q\"]
 ";
 
-    fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
+    fn write_fixture(dir: &Path) -> PathBuf {
         let path = dir.join("config.toml");
         fs::write(&path, AUTHORED_FILE).expect("the fixture should be written");
         path
@@ -263,7 +266,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
     /// comments, the contested pair, the unknown key — exactly as authored.
     #[test]
     fn saving_a_preset_changes_exactly_its_own_slot() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         persist_preset_slot_at(&path, 1, Some(&preset("Run preset")))
@@ -288,7 +291,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
     /// Clearing removes the slot's own block and leaves the rest byte-identical.
     #[test]
     fn clearing_a_preset_changes_exactly_its_own_slot() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         persist_preset_slot_at(&path, 1, None).expect("the write should succeed");
@@ -304,13 +307,13 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
     /// says so instead of claiming a save.
     #[test]
     fn a_preset_edit_the_file_already_holds_writes_nothing() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
-        let stored = crate::config::ConfigDocument::load_from_path(&path)
+        let stored = ConfigDocument::load_from_path(&path)
             .expect("load")
             .config()
             .presets
-            .get_slot(1)
+            .slot(1)
             .cloned()
             .expect("the fixture authors slot 1");
 
@@ -337,7 +340,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
 
     #[test]
     fn a_preset_write_leaves_a_timestamped_backup() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         let outcome = persist_preset_slot_at(&path, 2, Some(&preset("Run preset")))
@@ -354,7 +357,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
     fn a_read_only_config_fails_the_preset_write_and_leaves_the_file_alone() {
         use std::os::unix::fs::PermissionsExt;
 
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
         fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).expect("chmod file");
         fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o555)).expect("chmod dir");
@@ -364,6 +367,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
         fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o755)).expect("restore dir");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("restore file");
 
+        // SAFETY: geteuid has no preconditions and cannot fail.
         if unsafe { libc::geteuid() } == 0 {
             return;
         }
@@ -386,7 +390,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
     /// dropped by `set_slot`.
     #[test]
     fn an_out_of_range_preset_slot_is_refused() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         assert!(persist_preset_slot_at(&path, 0, Some(&preset("Nope"))).is_err());
@@ -399,7 +403,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
     #[test]
     fn a_fresh_load_returns_the_written_preset() {
         with_temp_config_home(|config_root| {
-            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+            let config_dir = config_root.join(config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).expect("test config directory");
             fs::write(config_dir.join("config.toml"), AUTHORED_PRESET)
                 .expect("test config should be written");
@@ -408,10 +412,7 @@ redo = [\"Ctrl+Alt+Shift+Q\"]
 
             let restarted = Config::load().expect("test config should reload").config;
             assert_eq!(
-                restarted
-                    .presets
-                    .get_slot(1)
-                    .and_then(|slot| slot.name.clone()),
+                restarted.presets.slot(1).and_then(|slot| slot.name.clone()),
                 Some("Run preset".to_string())
             );
         });

@@ -1,3 +1,7 @@
+use crate::draw::ShapeId;
+use crate::input::tool::ToolPressBehavior;
+use crate::util::Rect;
+
 use super::*;
 
 fn select_state() -> InputState {
@@ -7,7 +11,7 @@ fn select_state() -> InputState {
     state
 }
 
-fn add_filled_rect(state: &mut InputState, x: i32, y: i32) -> crate::draw::ShapeId {
+fn add_filled_rect(state: &mut InputState, x: i32, y: i32) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Rect {
         x,
         y,
@@ -31,7 +35,7 @@ fn drag(state: &mut InputState, from: (i32, i32), to: (i32, i32)) {
     state.on_mouse_release(MouseButton::Left, to.0, to.1);
 }
 
-fn bounds_of(state: &InputState, id: crate::draw::ShapeId) -> crate::util::Rect {
+fn bounds_of(state: &InputState, id: ShapeId) -> Rect {
     state
         .boards
         .active_frame()
@@ -120,7 +124,7 @@ fn alt_double_click_opens_properties_without_drawing() {
     let rect = add_filled_rect(&mut state, 100, 100);
     assert!(!matches!(
         state.active_tool().press_behavior(),
-        crate::input::tool::ToolPressBehavior::Selection
+        ToolPressBehavior::Selection
     ));
     state.modifiers.alt = true;
 

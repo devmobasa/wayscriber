@@ -1,3 +1,10 @@
+use std::fs::File;
+use std::path::PathBuf;
+use std::{env, fs};
+
+use crate::input::state::test_support;
+use crate::ui::theme::Theme;
+
 use super::*;
 
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
@@ -13,7 +20,7 @@ fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
 #[test]
 fn retained_palette_engine_matches_public_paint_and_geometry_across_targets() {
     let engine = UiTextEngine::default();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.toggle_command_palette();
     for query in ["", "capture", "No match 測試 🖌️"] {
         input.command_palette.set_query(query);
@@ -52,7 +59,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
                 .unwrap();
         let actual = pixels(density, |ctx| {
             draw_command_palette_action_tooltip(
-                &crate::ui::theme::Theme::dark(),
+                &Theme::dark(),
                 &engine,
                 ctx,
                 text,
@@ -64,7 +71,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
         });
         let expected = pixels(density, |ctx| {
             draw_command_palette_action_tooltip(
-                &crate::ui::theme::Theme::dark(),
+                &Theme::dark(),
                 &UiTextEngine::default(),
                 ctx,
                 text,
@@ -129,7 +136,7 @@ fn prepared_palette_paints_without_application_state() {
     let engine = UiTextEngine::default();
     let closed = pixels(1, |ctx| {
         paint_command_palette(
-            &crate::ui::theme::Theme::dark(),
+            &Theme::dark(),
             &engine,
             ctx,
             &CommandPaletteView::Closed,
@@ -150,14 +157,7 @@ fn prepared_palette_paints_without_application_state() {
         tooltip: None,
     });
     let painted = pixels(1, |ctx| {
-        paint_command_palette(
-            &crate::ui::theme::Theme::dark(),
-            &engine,
-            ctx,
-            &view,
-            800,
-            600,
-        )
+        paint_command_palette(&Theme::dark(), &engine, ctx, &view, 800, 600)
     });
     assert!(painted.iter().any(|byte| *byte != 0));
     // The dimmer and the panel have different opacity, so this checks the
@@ -169,27 +169,24 @@ fn prepared_palette_paints_without_application_state() {
 #[test]
 fn palette_theme_refresh_covers_list_capture_and_tooltip() {
     let engine = UiTextEngine::default();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.toggle_command_palette();
     for query in ["", "capture", "No match 測試 🖌️"] {
         input.command_palette.set_query(query);
         let view = CommandPaletteView::prepare(&input, 800, 480);
-        let paint = |theme: &crate::ui::theme::Theme| {
+        let paint = |theme: &Theme| {
             pixels(1, |ctx| {
                 paint_command_palette(theme, &engine, ctx, &view, 800, 480);
             })
         };
-        let dark = paint(&crate::ui::theme::Theme::dark());
-        let light = paint(&crate::ui::theme::Theme::light());
+        let dark = paint(&Theme::dark());
+        let light = paint(&Theme::light());
         assert_ne!(dark, light, "query {query}");
-        assert_eq!(dark, paint(&crate::ui::theme::Theme::dark()));
-        if let Some(dir) = std::env::var_os("WAYSCRIBER_PALETTE_REFERENCES") {
-            let dir = std::path::PathBuf::from(dir);
-            std::fs::create_dir_all(&dir).unwrap();
-            for (name, theme) in [
-                ("dark", crate::ui::theme::Theme::dark()),
-                ("light", crate::ui::theme::Theme::light()),
-            ] {
+        assert_eq!(dark, paint(&Theme::dark()));
+        if let Some(dir) = env::var_os("WAYSCRIBER_PALETTE_REFERENCES") {
+            let dir = PathBuf::from(dir);
+            fs::create_dir_all(&dir).unwrap();
+            for (name, theme) in [("dark", Theme::dark()), ("light", Theme::light())] {
                 let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 480).unwrap();
                 let ctx = cairo::Context::new(&surface).unwrap();
                 paint_command_palette(&theme, &engine, &ctx, &view, 800, 480);
@@ -204,13 +201,13 @@ fn palette_theme_refresh_covers_list_capture_and_tooltip() {
                     }
                 );
                 surface
-                    .write_to_png(&mut std::fs::File::create(dir.join(name)).unwrap())
+                    .write_to_png(&mut File::create(dir.join(name)).unwrap())
                     .unwrap();
             }
         }
     }
     for capture in [false, true] {
-        let paint = |theme: &crate::ui::theme::Theme| {
+        let paint = |theme: &Theme| {
             pixels(1, |ctx| {
                 if capture {
                     render_keybinding_capture(
@@ -218,7 +215,7 @@ fn palette_theme_refresh_covers_list_capture_and_tooltip() {
                         &engine,
                         ctx,
                         &["Ctrl+C".into()],
-                        crate::config::Action::CopySelection,
+                        Action::CopySelection,
                         800,
                         600,
                     );
@@ -236,10 +233,10 @@ fn palette_theme_refresh_covers_list_capture_and_tooltip() {
                 }
             })
         };
-        let dark = paint(&crate::ui::theme::Theme::dark());
-        let light = paint(&crate::ui::theme::Theme::light());
+        let dark = paint(&Theme::dark());
+        let light = paint(&Theme::light());
         assert_ne!(dark, light);
-        assert_eq!(dark, paint(&crate::ui::theme::Theme::dark()));
+        assert_eq!(dark, paint(&Theme::dark()));
     }
 }
 
@@ -278,7 +275,7 @@ fn strip_is_blank(pixels: &[u8], (left, top, right, bottom): (i32, i32, i32, i32
 #[test]
 fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
     let engine = UiTextEngine::default();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.toggle_command_palette();
     input.update_pointer_position(0, 0);
     let rows = input.command_palette_rows();
@@ -316,7 +313,7 @@ fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
 #[test]
 fn palette_rows_highlight_literal_label_matches_but_not_fuzzy_matches() {
     let engine = UiTextEngine::default();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.toggle_command_palette();
     input.command_palette.set_query("tool");
     let mut view = CommandPaletteView::prepare(&input, 800, 600);
@@ -326,7 +323,7 @@ fn palette_rows_highlight_literal_label_matches_but_not_fuzzy_matches() {
     let (x, y, width, height) = list.geometry;
     let rows_top =
         y + COMMAND_PALETTE_PADDING + COMMAND_PALETTE_INPUT_HEIGHT + COMMAND_PALETTE_LIST_GAP;
-    let mut theme = crate::ui::theme::Theme::dark();
+    let mut theme = Theme::dark();
     theme.accent = (1.0, 0.0, 1.0, 1.0);
 
     let count_highlight = |query_view: &CommandPaletteView| {

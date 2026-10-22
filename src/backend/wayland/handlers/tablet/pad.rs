@@ -1,9 +1,9 @@
 use log::{debug, info, warn};
 use std::sync::Arc;
+use wayland_client::backend::ObjectData;
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
-use wayland_protocols::wp::tablet::zv2::client::{
-    zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2, zwp_tablet_pad_v2::ZwpTabletPadV2,
-};
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::ZwpTabletPadV2;
 
 use super::IgnoredObjectData;
 use crate::backend::wayland::state::WaylandState;
@@ -72,10 +72,7 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
         }
     }
 
-    fn event_created_child(
-        opcode: u16,
-        qhandle: &QueueHandle<Self>,
-    ) -> Arc<dyn wayland_client::backend::ObjectData> {
+    fn event_created_child(opcode: u16, qhandle: &QueueHandle<Self>) -> Arc<dyn ObjectData> {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::EVT_GROUP_OPCODE;
         match opcode {
             EVT_GROUP_OPCODE => qhandle.make_data::<ZwpTabletPadGroupV2, _>(()),

@@ -1,8 +1,30 @@
-use super::*;
+use super::super::translate::{
+    EVDEV_KEYCODE_OFFSET, button_label, key_label, modifiers_from_xkb, pen_label, scroll_label,
+};
+use super::{SystemInputEvent, SystemInputFailure};
+use crate::backend::wayland::RuntimeWakeHandle;
+#[cfg(test)]
+use crate::backend::wayland::handlers::keyboard::KEY_REPEAT_INITIAL_DELAY;
+#[cfg(test)]
+use crate::backend::wayland::handlers::keyboard::KEY_REPEAT_INTERVAL;
+use input::event::device::DeviceEvent;
+use input::event::keyboard::{KeyState, KeyboardEventTrait};
+use input::event::pointer::{Axis, ButtonState, PointerScrollEvent};
+use input::event::tablet_tool::{TabletToolEvent, TipState};
+use input::event::{Event, EventTrait, KeyboardEvent, PointerEvent};
+use input::{DeviceCapability, Libinput, LibinputInterface};
+use std::fs::{File, OpenOptions};
+use std::io;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
+use std::sync::mpsc::Sender;
+use std::time::{Duration, Instant};
+use xkbcommon::xkb;
 
 mod repeat;
 
-use repeat::*;
+use repeat::{KeyboardKeys, RepeatPress, RepeatState};
 
 /// Non-blocking, close-on-exec pipe used only to interrupt the reader's poll.
 pub(super) fn stop_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
@@ -42,11 +64,15 @@ impl LibinputInterface for DirectInputDevices {
 
 /// Reader thread body. Every exit path is a typed event or a clean return; a
 /// panic must never cross the libinput FFI boundary.
-pub(super) fn run(stop_read: OwnedFd, sender: Sender<SystemInputEvent>, wake: RuntimeWakeHandle) {
+pub(super) fn run(
+    stop_read: &OwnedFd,
+    sender: &Sender<SystemInputEvent>,
+    wake: &RuntimeWakeHandle,
+) {
     let seat = super::super::probe::current_seat();
     let mut libinput = Libinput::new_with_udev(DirectInputDevices);
     if libinput.udev_assign_seat(&seat).is_err() {
-        report_failure(&sender, &wake, SystemInputFailure::SeatUnavailable { seat });
+        report_failure(sender, wake, SystemInputFailure::SeatUnavailable { seat });
         return;
     }
     // `udev_assign_seat` succeeds for a seat with no devices, and libinput
@@ -71,14 +97,14 @@ pub(super) fn run(stop_read: OwnedFd, sender: Sender<SystemInputEvent>, wake: Ru
                     SystemInputFailure::Unavailable { seat }
                 }
             };
-            report_failure(&sender, &wake, failure);
+            report_failure(sender, wake, failure);
             return;
         }
         Ok(_) => {}
         Err(err) => {
             report_failure(
-                &sender,
-                &wake,
+                sender,
+                wake,
                 SystemInputFailure::ReadFailed(format!("libinput dispatch failed: {err}")),
             );
             return;
@@ -92,7 +118,7 @@ pub(super) fn run(stop_read: OwnedFd, sender: Sender<SystemInputEvent>, wake: Ru
     let Some(keymap) =
         xkb::Keymap::new_from_names(&context, "", "", "", "", None, xkb::KEYMAP_COMPILE_NO_FLAGS)
     else {
-        report_failure(&sender, &wake, SystemInputFailure::KeymapUnavailable);
+        report_failure(sender, wake, SystemInputFailure::KeymapUnavailable);
         return;
     };
     let mut xkb_state = xkb::State::new(&keymap);
@@ -110,7 +136,7 @@ pub(super) fn run(stop_read: OwnedFd, sender: Sender<SystemInputEvent>, wake: Ru
     }
 
     loop {
-        match wait_for_input(&libinput, &stop_read, repeat.timeout(Instant::now())) {
+        match wait_for_input(&libinput, stop_read, repeat.timeout(Instant::now())) {
             Ok(PollOutcome::Stop) => return,
             Ok(PollOutcome::Ready) => {}
             Ok(PollOutcome::Timeout) => {
@@ -128,8 +154,8 @@ pub(super) fn run(stop_read: OwnedFd, sender: Sender<SystemInputEvent>, wake: Ru
             }
             Err(err) => {
                 report_failure(
-                    &sender,
-                    &wake,
+                    sender,
+                    wake,
                     SystemInputFailure::ReadFailed(format!("input poll failed: {err}")),
                 );
                 return;
@@ -138,8 +164,8 @@ pub(super) fn run(stop_read: OwnedFd, sender: Sender<SystemInputEvent>, wake: Ru
 
         if let Err(err) = libinput.dispatch() {
             report_failure(
-                &sender,
-                &wake,
+                sender,
+                wake,
                 SystemInputFailure::ReadFailed(format!("libinput dispatch failed: {err}")),
             );
             return;
@@ -305,7 +331,7 @@ fn translate_event(
             } else {
                 RepeatPress::NonRepeating
             };
-            repeat.on_press(raw_keycode, &device, press, Instant::now());
+            repeat.on_press(raw_keycode, &device, &press, Instant::now());
             let (label, bare_modifier) = label_pair?;
             Some(SystemInputEvent::Key {
                 label,

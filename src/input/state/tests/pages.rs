@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 use crate::draw::{BoardPages, EmbeddedImage, Frame, ShapeId};
 use crate::input::{
@@ -62,7 +64,7 @@ fn set_board_name_trims_the_live_board_name() {
     let mut state = create_test_input_state();
     let index = board_index(&state, BOARD_ID_BLACKBOARD);
 
-    assert!(state.set_board_name(index, "  Focus Board  ".to_string()));
+    assert!(state.set_board_name(index, "  Focus Board  "));
 
     assert_eq!(state.boards.board_states()[index].spec.name, "Focus Board");
 }
@@ -73,7 +75,7 @@ fn set_board_name_rejects_empty_input_with_warning_toast() {
     let index = board_index(&state, BOARD_ID_BLACKBOARD);
     let original = state.boards.board_states()[index].spec.name.clone();
 
-    assert!(!state.set_board_name(index, "   \t ".to_string()));
+    assert!(!state.set_board_name(index, "   \t "));
 
     assert_eq!(state.boards.board_states()[index].spec.name, original);
     assert_eq!(
@@ -116,7 +118,7 @@ fn set_board_background_color_updates_active_auto_adjust_pen_color() {
 
 #[test]
 fn reorder_page_in_board_moves_named_pages_and_active_index() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let index = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -133,7 +135,7 @@ fn reorder_page_in_board_moves_named_pages_and_active_index() {
 
 #[test]
 fn move_page_between_boards_copy_preserves_source_and_adds_page_to_target() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
@@ -181,7 +183,7 @@ fn reset_active_canvas_position_clears_view_offset_on_solid_board() {
 
 #[test]
 fn move_page_between_boards_move_removes_source_page_and_activates_target_copy() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
@@ -220,7 +222,7 @@ fn move_page_between_boards_move_removes_source_page_and_activates_target_copy()
 
 #[test]
 fn switch_to_page_cancels_text_edit_before_leaving_source_page() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -239,7 +241,7 @@ fn switch_to_page_cancels_text_edit_before_leaving_source_page() {
 
 #[test]
 fn page_duplicate_cancels_text_edit_before_cloning_source_page() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -423,7 +425,7 @@ fn page_duplicate_blocks_uncompressed_text_when_real_save_exceeds_limit() {
 
 #[test]
 fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
@@ -457,7 +459,7 @@ fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit(
 
 #[test]
 fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_TRANSPARENT);
@@ -497,7 +499,7 @@ fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
 
 #[test]
 fn cross_board_page_copy_cancels_active_source_text_edit_before_cloning() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);

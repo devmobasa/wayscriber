@@ -29,6 +29,7 @@ impl Language {
     pub const ALL: [Self; 3] = [Self::Auto, Self::English, Self::SimplifiedChinese];
 
     /// The spelling used in configuration and logs.
+    #[must_use]
     pub fn code(self) -> &'static str {
         match self {
             Self::Auto => "auto",
@@ -39,6 +40,7 @@ impl Language {
 
     /// The translation catalog this language reads, or `None` when the source
     /// strings already are that language (English).
+    #[must_use]
     pub fn catalog_code(self) -> Option<&'static str> {
         match self {
             Self::Auto | Self::English => None,
@@ -47,6 +49,7 @@ impl Language {
     }
 
     /// Whether this setting defers to the desktop locale.
+    #[must_use]
     pub fn is_auto(self) -> bool {
         matches!(self, Self::Auto)
     }
@@ -54,6 +57,7 @@ impl Language {
     /// The language's name in itself, never translated, so a user can find
     /// their own language in a list drawn in one they cannot read. `None` for
     /// `Auto`, which is not a language.
+    #[must_use]
     pub fn native_name(self) -> Option<&'static str> {
         match self {
             Self::Auto => None,
@@ -65,6 +69,7 @@ impl Language {
     /// The language's word for "language", never translated, so the setting
     /// that switches languages can be recognized from any of them. `None` for
     /// `Auto`, which is not a language.
+    #[must_use]
     pub fn word_for_language(self) -> Option<&'static str> {
         match self {
             Self::Auto => None,
@@ -74,6 +79,7 @@ impl Language {
     }
 
     /// The language's English name, for command-line output and logs.
+    #[must_use]
     pub fn english_name(self) -> &'static str {
         match self {
             Self::Auto => "Automatic",

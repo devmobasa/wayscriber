@@ -1,7 +1,6 @@
-use super::{
-    CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError,
-    image::decode_clipboard_image, system::read_pipe_with_timeout,
-};
+use super::image::decode_clipboard_image;
+use super::system::read_pipe_with_timeout;
+use super::{CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError};
 use crate::file_uri;
 use crate::screen_pixels::EmbeddedImageLimits;
 #[cfg(unix)]
@@ -17,10 +16,10 @@ const OCTET_STREAM_MIME: &str = "application/octet-stream";
 
 pub(super) fn decode_clipboard_uri_list(
     mime_type: &str,
-    bytes: Vec<u8>,
+    bytes: &[u8],
     offered: Vec<String>,
 ) -> ClipboardPasteResult {
-    let uris = match parse_clipboard_file_uris(mime_type, &bytes) {
+    let uris = match parse_clipboard_file_uris(mime_type, bytes) {
         Ok(uris) if uris.is_empty() => return ClipboardPasteResult::NoSupportedMime { offered },
         Ok(uris) => uris,
         Err(err) => return ClipboardPasteResult::DecodeFailed(err),
@@ -76,8 +75,8 @@ pub(super) fn is_uri_list_mime(mime_type: &str) -> bool {
 }
 
 fn parse_clipboard_file_uris(mime_type: &str, bytes: &[u8]) -> Result<Vec<String>, String> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|err| format!("clipboard URI list is not UTF-8: {err}"))?;
+    let text =
+        str::from_utf8(bytes).map_err(|err| format!("clipboard URI list is not UTF-8: {err}"))?;
     let is_gnome = is_gnome_copied_files_mime(mime_type);
     let mut uris = Vec::new();
 
@@ -206,6 +205,9 @@ fn is_gnome_copied_files_mime(mime_type: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::os::unix;
+
     use super::*;
     use crate::backend::wayland::clipboard::image::choose_supported_mime;
     use crate::test_temp::TempDir;
@@ -244,7 +246,7 @@ mod tests {
         let uri = file_uri_for_path(&image_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.as_bytes(), offered);
 
         match result {
             ClipboardPasteResult::Image(image) => {
@@ -269,17 +271,14 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let fifo_path = temp.path().join("not-an-image");
         let c_path = CString::new(fifo_path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: `c_path` is a NUL-terminated string that outlives the call,
+        // and mkfifo only reads it.
         let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
-        assert_eq!(
-            result,
-            0,
-            "mkfifo failed: {}",
-            std::io::Error::last_os_error()
-        );
+        assert_eq!(result, 0, "mkfifo failed: {}", io::Error::last_os_error());
         let uri = file_uri_for_path(&fifo_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.as_bytes(), offered);
 
         match result {
             ClipboardPasteResult::DecodeFailed(err) => {
@@ -296,11 +295,11 @@ mod tests {
         let image_path = temp.path().join("cat.png");
         fs::write(&image_path, tiny_png()).unwrap();
         let link_path = temp.path().join("link.png");
-        std::os::unix::fs::symlink(&image_path, &link_path).unwrap();
+        unix::fs::symlink(&image_path, &link_path).unwrap();
         let uri = file_uri_for_path(&link_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.as_bytes(), offered);
 
         match result {
             ClipboardPasteResult::DecodeFailed(err) => {
@@ -321,7 +320,7 @@ mod tests {
         let uri = file_uri_for_path(&image_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.as_bytes(), offered);
 
         match result {
             ClipboardPasteResult::DecodeFailed(err) => {

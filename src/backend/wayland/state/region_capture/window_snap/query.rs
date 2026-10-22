@@ -1,9 +1,9 @@
 use crate::backend::wayland::runtime_operation::RuntimeOperationSubmitError;
-use crate::backend::wayland::{
-    RuntimeOperationController, RuntimeOperationPoll, state::WaylandState,
-};
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::{RuntimeOperationController, RuntimeOperationPoll};
 use crate::capture::window_geometry::{
-    WindowQueryContext, WindowQueryResult, detect_backend, query_window_targets,
+    WindowGeometryError, WindowQueryContext, WindowQueryResult, detect_backend,
+    query_window_targets,
 };
 use crate::input::state::RegionPurposeTag;
 use crate::util::Rect;
@@ -32,15 +32,11 @@ enum WindowQuerySubmit {
 fn submit_queued_window_query_with(
     controller: &mut RuntimeOperationController<
         WindowSnapQuery,
-        Result<WindowQueryResult, crate::capture::window_geometry::WindowGeometryError>,
+        Result<WindowQueryResult, WindowGeometryError>,
     >,
     session: &mut Option<WindowSnapSession>,
-    operation: impl FnOnce(
-        WindowQueryContext,
-    ) -> Result<
-        WindowQueryResult,
-        crate::capture::window_geometry::WindowGeometryError,
-    > + Send
+    operation: impl FnOnce(WindowQueryContext) -> Result<WindowQueryResult, WindowGeometryError>
+    + Send
     + 'static,
 ) -> WindowQuerySubmit {
     let Some(query) = session.as_ref().and_then(WindowSnapSession::queued_query) else {
@@ -74,15 +70,11 @@ fn submit_queued_window_query_with(
 fn poll_window_query_with(
     controller: &mut RuntimeOperationController<
         WindowSnapQuery,
-        Result<WindowQueryResult, crate::capture::window_geometry::WindowGeometryError>,
+        Result<WindowQueryResult, WindowGeometryError>,
     >,
     session: &mut Option<WindowSnapSession>,
-    retry: impl FnOnce(
-        WindowQueryContext,
-    ) -> Result<
-        WindowQueryResult,
-        crate::capture::window_geometry::WindowGeometryError,
-    > + Send
+    retry: impl FnOnce(WindowQueryContext) -> Result<WindowQueryResult, WindowGeometryError>
+    + Send
     + 'static,
 ) -> bool {
     let (consumed_terminal, changed) = match controller.poll() {
@@ -204,11 +196,11 @@ fn clear_matching_window_session(
 
 #[cfg(test)]
 mod tests {
+    use std::thread;
+
     use super::*;
-    use crate::backend::wayland::{
-        RuntimeOperationIdSource, RuntimeWakeSource,
-        state::screen_image::{ScreenImageKind, ScreenSourceToken},
-    };
+    use crate::backend::wayland::state::screen_image::{ScreenImageKind, ScreenSourceToken};
+    use crate::backend::wayland::{RuntimeOperationIdSource, RuntimeWakeSource};
     use crate::capture::window_geometry::{WindowGeometryBackend, WindowTarget};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
@@ -238,9 +230,7 @@ mod tests {
         }
     }
 
-    fn result(
-        id: &str,
-    ) -> Result<WindowQueryResult, crate::capture::window_geometry::WindowGeometryError> {
+    fn result(id: &str) -> Result<WindowQueryResult, WindowGeometryError> {
         Ok(WindowQueryResult {
             backend: WindowGeometryBackend::Hyprland,
             targets: vec![WindowTarget {
@@ -279,7 +269,7 @@ mod tests {
 
     #[test]
     fn real_capacity_one_terminal_routes_the_reopened_picker_into_retry() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut controller =
             RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let old = WindowSnapCorrelation::new(1, source());
@@ -319,7 +309,7 @@ mod tests {
         while !session.as_ref().is_some_and(WindowSnapSession::is_ready) {
             poll_window_query_with(&mut controller, &mut session, |_| result("fresh"));
             assert!(Instant::now() < deadline, "reopened query did not retry");
-            std::thread::yield_now();
+            thread::yield_now();
         }
         let session = session.unwrap();
         assert_eq!(session.correlation(), fresh);

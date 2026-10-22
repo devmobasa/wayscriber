@@ -1,6 +1,22 @@
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+use std::{error, fmt, time};
 
-use super::*;
+use super::diagnostics::{SessionSaveReason, log_session_save_result, log_snapshot_capture};
+use super::notifications::notify_session_save_report;
+use super::{
+    final_save_barrier_policy, observe_input_dirty, persistence_barrier, run_persistence_operation,
+    runtime_session, should_skip_disabled_final_save, should_skip_protected_session_save,
+    should_skip_unloaded_contentless_save, snapshot_or_empty,
+};
+use crate::backend::wayland::session::{
+    ContentlessSaveCheck, PersistenceOperation, PersistenceOutcome, SaveStrategy,
+};
+use crate::backend::wayland::state::WaylandState;
+use crate::session;
+use std::time::{Duration, Instant};
 
 pub(super) fn persist_final_session_and_shutdown(
     state: &mut WaylandState,
@@ -51,7 +67,7 @@ fn persist_final_session_direct(state: &mut WaylandState) -> Result<(), anyhow::
     {
         Ok(true) => {}
         Ok(false) => return Ok(()),
-        Err(refusal) => return save_refused_drawings(state, &options, refusal, SideWrite::Direct),
+        Err(refusal) => return save_refused_drawings(state, &options, &refusal, SideWrite::Direct),
     }
     if should_skip_disabled_final_save(&options) {
         return Ok(());
@@ -65,13 +81,13 @@ fn persist_final_session_direct(state: &mut WaylandState) -> Result<(), anyhow::
     let has_board_data = snapshot
         .as_ref()
         .is_some_and(session::SessionSnapshot::has_board_data);
-    if runtime_session::should_skip_unloaded_contentless_save(
-        state.session.has_loaded_board_data(),
-        state.session.is_dirty(),
-        state.input_state.is_session_dirty(),
+    if runtime_session::should_skip_unloaded_contentless_save(ContentlessSaveCheck {
+        loaded_board_data: state.session.has_loaded_board_data(),
+        session_dirty: state.session.is_dirty(),
+        input_dirty: state.input_state.is_session_dirty(),
         has_board_data,
-        runtime_session::has_session_artifact(&options),
-    ) {
+        session_artifact_exists: runtime_session::has_session_artifact(&options),
+    }) {
         return Ok(());
     }
     let snapshot = snapshot_or_empty(state, &options, snapshot)?;
@@ -129,7 +145,7 @@ fn persist_final_session(state: &mut WaylandState) -> Result<(), anyhow::Error> 
     {
         Ok(true) => {}
         Ok(false) => return Ok(()),
-        Err(refusal) => return save_refused_drawings(state, &options, refusal, SideWrite::Worker),
+        Err(refusal) => return save_refused_drawings(state, &options, &refusal, SideWrite::Worker),
     }
     if should_skip_disabled_final_save(&options) {
         return Ok(());
@@ -200,8 +216,8 @@ pub(super) struct RefusedDrawingsSaved {
     pub(super) recovery: Option<PathBuf>,
 }
 
-impl std::fmt::Display for RefusedDrawingsSaved {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for RefusedDrawingsSaved {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
             "drawings that could not be written to {} were saved to {}",
@@ -215,7 +231,7 @@ impl std::fmt::Display for RefusedDrawingsSaved {
     }
 }
 
-impl std::error::Error for RefusedDrawingsSaved {}
+impl error::Error for RefusedDrawingsSaved {}
 
 #[derive(Clone, Copy)]
 enum SideWrite {
@@ -229,7 +245,7 @@ enum SideWrite {
 fn save_refused_drawings(
     state: &mut WaylandState,
     options: &session::SessionOptions,
-    refusal: anyhow::Error,
+    refusal: &anyhow::Error,
     write: SideWrite,
 ) -> Result<(), anyhow::Error> {
     let side = refused_drawings_options(options);
@@ -341,19 +357,19 @@ fn save_side_session_as(
 /// `<name>.unsaved-<milliseconds>.wayscriber-session` beside the session file.
 fn refused_drawings_options(options: &session::SessionOptions) -> session::SessionOptions {
     let path = options.session_file_path();
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let millis = SystemTime::now()
+        .duration_since(time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_millis())
         .unwrap_or_default();
     let mut name = path
         .file_stem()
-        .map(std::ffi::OsStr::to_os_string)
+        .map(OsStr::to_os_string)
         .unwrap_or_else(|| "session".into());
     name.push(format!(".unsaved-{millis}.wayscriber-session"));
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| std::path::Path::new("."));
+        .unwrap_or_else(|| Path::new("."));
 
     let mut side = options.clone();
     side.set_named_file_target(parent.join(name));

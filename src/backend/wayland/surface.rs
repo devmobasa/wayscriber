@@ -6,17 +6,13 @@
 
 use anyhow::{Context, Result};
 use log::info;
-use smithay_client_toolkit::{
-    shell::{WaylandSurface, wlr_layer::LayerSurface, xdg::window::Window},
-    shm::{
-        Shm,
-        slot::{Buffer, Slot, SlotPool},
-    },
-};
-use wayland_client::{
-    Proxy,
-    protocol::{wl_output, wl_shm, wl_surface},
-};
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
+use smithay_client_toolkit::shell::xdg::window::Window;
+use smithay_client_toolkit::shm::Shm;
+use smithay_client_toolkit::shm::slot::{Buffer, Slot, SlotPool};
+use wayland_client::Proxy;
+use wayland_client::protocol::{wl_output, wl_shm, wl_surface};
 
 mod output_membership;
 use output_membership::OutputMembership;
@@ -426,17 +422,21 @@ impl SurfaceState {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::net::UnixStream;
+
+    use smithay_client_toolkit::error::GlobalError;
+    use smithay_client_toolkit::globals::ProvidesBoundGlobal;
+    use wayland_client::protocol::wl_registry::WlRegistry;
+
     use super::*;
 
     struct BufferGlobals(wl_shm::WlShm);
 
-    wayland_client::delegate_noop!(BufferGlobals: ignore wayland_client::protocol::wl_registry::WlRegistry);
+    wayland_client::delegate_noop!(BufferGlobals: ignore WlRegistry);
     wayland_client::delegate_noop!(BufferGlobals: ignore wl_shm::WlShm);
 
-    impl smithay_client_toolkit::globals::ProvidesBoundGlobal<wl_shm::WlShm, 1> for BufferGlobals {
-        fn bound_global(
-            &self,
-        ) -> Result<wl_shm::WlShm, smithay_client_toolkit::error::GlobalError> {
+    impl ProvidesBoundGlobal<wl_shm::WlShm, 1> for BufferGlobals {
+        fn bound_global(&self) -> Result<wl_shm::WlShm, GlobalError> {
             Ok(self.0.clone())
         }
     }
@@ -445,7 +445,7 @@ mod tests {
     fn capture_buffer_availability_tracks_real_slot_activation_release_and_pool_reset() {
         // Only local client objects are needed: SCTK owns the slot/active-buffer
         // bookkeeping. Keep a private socket peer alive; never use the desktop.
-        let (client, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        let (client, _peer) = UnixStream::pair().unwrap();
         let connection = wayland_client::Connection::from_socket(client).unwrap();
         let queue = connection.new_event_queue::<BufferGlobals>();
         let qh = queue.handle();

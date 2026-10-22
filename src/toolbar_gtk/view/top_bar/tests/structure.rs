@@ -1,18 +1,19 @@
 //! Structure, content-key, and width-plan tests.
 
+use crate::config::ToolbarStrokeControls;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     Action, CanvasMenuContentKey, SessionMenuContentKey, SettingsMenuContentKey, StructureKey,
     Tool, ToolbarLayoutMode, ToolbarSnapshot, TopStripPlan, model, plan_top_strip,
     top_default_width, top_toolbar_size,
 };
 use super::expectations::style_pill_tool_snapshot;
-use crate::config::Shortcut;
-use crate::config::ToolbarSectionFlag;
-use crate::config::toolbar_item_ids as ids;
+use crate::config::{Shortcut, ToolbarSectionFlag, toolbar_item_ids as ids};
 use crate::input::state::test_support::make_test_input_state;
-use crate::ui::toolbar::RuntimeUiPersistenceMode;
-use crate::ui::toolbar::RuntimeUiPersistenceSnapshot;
-use crate::ui::toolbar::ToolbarBindingHints;
+use crate::ui::toolbar::{
+    RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarBindingHints,
+};
 use std::collections::HashMap;
 
 #[test]
@@ -22,7 +23,7 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let initial_plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &initial);
+    let initial_plan = plan_top_strip(&UiTextEngine::default(), &initial);
     let initial_key = StructureKey::of(&initial, &initial_plan);
 
     state.set_action_bindings(HashMap::from([(
@@ -33,7 +34,7 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let changed_plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &changed);
+    let changed_plan = plan_top_strip(&UiTextEngine::default(), &changed);
     let changed_key = StructureKey::of(&changed, &changed_plan);
 
     assert!(initial_key != changed_key);
@@ -204,10 +205,7 @@ fn top_structure_ignores_popover_only_section_visibility_changes() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let base_key = StructureKey::of(
-        &base,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &base),
-    );
+    let base_key = StructureKey::of(&base, &plan_top_strip(&UiTextEngine::default(), &base));
 
     for flag in [
         ToolbarSectionFlag::Actions,
@@ -243,7 +241,7 @@ fn top_structure_ignores_popover_only_section_visibility_changes() {
         changed.resolved_toolbar_items.shown.remove(&flag.item_id());
         let changed_key = StructureKey::of(
             &changed,
-            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &changed),
+            &plan_top_strip(&UiTextEngine::default(), &changed),
         );
         assert!(
             base_key == changed_key,
@@ -270,13 +268,11 @@ fn top_structure_still_tracks_top_item_visibility() {
         .remove(&ids::TOP_TOOL_PEN);
 
     assert!(
-        StructureKey::of(
-            &base,
-            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &base)
-        ) != StructureKey::of(
-            &changed,
-            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &changed)
-        ),
+        StructureKey::of(&base, &plan_top_strip(&UiTextEngine::default(), &base))
+            != StructureKey::of(
+                &changed,
+                &plan_top_strip(&UiTextEngine::default(), &changed)
+            ),
         "top-item visibility must still rebuild the top bar"
     );
 }
@@ -375,12 +371,12 @@ fn simple_layout_requests_its_smaller_natural_width() {
         ToolbarBindingHints::from_input_state(&state),
     );
 
-    let regular_width = top_default_width(&crate::ui_text::UiTextEngine::default(), &regular);
-    let simple_width = top_default_width(&crate::ui_text::UiTextEngine::default(), &simple);
+    let regular_width = top_default_width(&UiTextEngine::default(), &regular);
+    let simple_width = top_default_width(&UiTextEngine::default(), &simple);
     assert!(simple_width < regular_width);
     assert_eq!(
         simple_width,
-        top_toolbar_size(&crate::ui_text::UiTextEngine::default(), &simple).0 as i32
+        top_toolbar_size(&UiTextEngine::default(), &simple).0 as i32
     );
 }
 
@@ -393,14 +389,14 @@ fn degraded_layout_requests_the_selected_plan_width() {
     );
     snapshot.top_viewport_max = Some(700.0);
 
-    let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let plan = plan_top_strip(&UiTextEngine::default(), &snapshot);
     let degraded = plan.compact
         || plan.drop_presets
         || !plan.dropped_tools.is_empty()
         || !plan.dropped_utilities.is_empty()
         || plan.swatch_count < 8;
     assert!(degraded, "the 700px budget must degrade the plan: {plan:?}");
-    assert!(top_default_width(&crate::ui_text::UiTextEngine::default(), &snapshot) <= 700);
+    assert!(top_default_width(&UiTextEngine::default(), &snapshot) <= 700);
 }
 
 /// Colors left the strip for the pill (M7-C1); the presets island is the new
@@ -444,14 +440,8 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
     let pen = style_pill_tool_snapshot(&regular, Tool::Pen);
     let eraser = style_pill_tool_snapshot(&regular, Tool::Eraser);
 
-    let pen_key = StructureKey::of(
-        &pen,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &pen),
-    );
-    let eraser_key = StructureKey::of(
-        &eraser,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &eraser),
-    );
+    let pen_key = StructureKey::of(&pen, &plan_top_strip(&UiTextEngine::default(), &pen));
+    let eraser_key = StructureKey::of(&eraser, &plan_top_strip(&UiTextEngine::default(), &eraser));
     assert!(
         pen_key != eraser_key,
         "a pill morph change must rebuild the GTK bar structure"
@@ -463,7 +453,7 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
     thicker.thickness += 3.0;
     let thicker_key = StructureKey::of(
         &thicker,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &thicker),
+        &plan_top_strip(&UiTextEngine::default(), &thicker),
     );
     assert!(pen_key == thicker_key, "value churn must not rebuild");
 
@@ -472,7 +462,7 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
     let key_of = |snapshot: &ToolbarSnapshot| {
         StructureKey::of(
             snapshot,
-            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), snapshot),
+            &plan_top_strip(&UiTextEngine::default(), snapshot),
         )
     };
     let styled = |style| {
@@ -480,7 +470,7 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
         snapshot.stroke_controls = style;
         key_of(&snapshot)
     };
-    let [panel, meter, stepper] = crate::config::ToolbarStrokeControls::ALL.map(styled);
+    let [panel, meter, stepper] = ToolbarStrokeControls::ALL.map(styled);
     assert!(panel != meter && meter != stepper && panel != stepper);
     let mut open = pen.clone();
     open.pen_feel_open = true;

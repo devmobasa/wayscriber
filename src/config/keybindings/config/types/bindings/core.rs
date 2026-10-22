@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_clear_canvas, default_enter_sticky_note_mode, default_enter_text_mode, default_exit,
+    default_redo, default_undo,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

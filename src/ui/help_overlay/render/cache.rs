@@ -1,3 +1,6 @@
+use crate::config::HelpOverlayStyle;
+use crate::ui_text::UiTextEngine;
+
 use super::super::content::HelpContentSnapshot;
 use super::state::{OverlayLayout, build_overlay_layout};
 
@@ -16,7 +19,7 @@ struct StyleKey {
 }
 
 impl StyleKey {
-    fn from_style(style: &crate::config::HelpOverlayStyle) -> Self {
+    fn from_style(style: &HelpOverlayStyle) -> Self {
         fn to_hundredths(v: f64) -> i32 {
             (v * 100.0).round() as i32
         }
@@ -77,9 +80,9 @@ impl HelpLayoutCache {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn get_or_build_overlay_layout(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
+        engine: &UiTextEngine,
         ctx: &cairo::Context,
-        style: &crate::config::HelpOverlayStyle,
+        style: &HelpOverlayStyle,
         screen_width: u32,
         screen_height: u32,
         page_index: usize,

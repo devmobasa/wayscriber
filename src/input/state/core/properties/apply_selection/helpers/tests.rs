@@ -1,19 +1,17 @@
+use crate::draw::ShapeId;
+use crate::input::state::test_support;
+
 use super::*;
 use crate::draw::Color;
 
 fn make_state() -> InputState {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.update_screen_dimensions(200, 120);
     let _ = state.take_dirty_regions();
     state
 }
 
-fn add_rect(
-    state: &mut InputState,
-    color: Color,
-    fill: bool,
-    locked: bool,
-) -> crate::draw::ShapeId {
+fn add_rect(state: &mut InputState, color: Color, fill: bool, locked: bool) -> ShapeId {
     let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 20,
@@ -237,7 +235,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
     let mut state = make_state();
 
     assert!(!state.report_selection_apply_result(
-        SelectionApplyResult {
+        &SelectionApplyResult {
             changed: 0,
             locked: 0,
             applicable: 0,
@@ -250,7 +248,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
     );
 
     assert!(!state.report_selection_apply_result(
-        SelectionApplyResult {
+        &SelectionApplyResult {
             changed: 0,
             locked: 2,
             applicable: 2,
@@ -263,7 +261,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
     );
 
     assert!(!state.report_selection_apply_result(
-        SelectionApplyResult {
+        &SelectionApplyResult {
             changed: 0,
             locked: 1,
             applicable: 2,
@@ -276,7 +274,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
     );
 
     assert!(state.report_selection_apply_result(
-        SelectionApplyResult {
+        &SelectionApplyResult {
             changed: 1,
             locked: 2,
             applicable: 3,

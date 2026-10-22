@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::daemon::control::DaemonToggleRequest;
 use crate::domain::Language;
+use crate::env_vars;
 use crate::env_vars::{
     DESKTOP_STARTUP_ID_ENV, NO_DETACH_ENV, OVERLAY_HOME_SESSION_ENV, OVERLAY_LANGUAGE_ENV,
     OVERLAY_PREFERRED_SESSION_ENV, OVERLAY_SESSION_REPORTS_ENV, XDG_ACTIVATION_TOKEN_ENV,
@@ -108,7 +109,7 @@ pub(super) fn build_overlay_launch(
     let mut environment = vec![(OsString::from(NO_DETACH_ENV), Some("1".into()))];
     if let Some(generation) = generation {
         environment.push((
-            crate::env_vars::OVERLAY_CHILD_GENERATION_ENV.into(),
+            env_vars::OVERLAY_CHILD_GENERATION_ENV.into(),
             Some(generation.into()),
         ));
     }
@@ -196,7 +197,7 @@ mod tests {
                     let mut expected = vec![(NO_DETACH_ENV.into(), Some("1".into()))];
                     if let Some(generation) = generation {
                         expected.push((
-                            crate::env_vars::OVERLAY_CHILD_GENERATION_ENV.into(),
+                            env_vars::OVERLAY_CHILD_GENERATION_ENV.into(),
                             Some(generation.into()),
                         ));
                     }
@@ -270,7 +271,7 @@ mod tests {
                 .environment
                 .into_iter()
                 .filter(|(key, _)| {
-                    key == OVERLAY_LANGUAGE_ENV || key == crate::env_vars::LANGUAGE_OVERRIDE_ENV
+                    key == OVERLAY_LANGUAGE_ENV || key == env_vars::LANGUAGE_OVERRIDE_ENV
                 })
                 .collect::<Vec<_>>()
         };

@@ -1,5 +1,8 @@
+use std::process;
+
 use crate::daemon::protocol_v2::DaemonControlProtocolMode;
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::{durable_io, paths};
 use anyhow::{Context, Result};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -72,18 +75,18 @@ fn queued_action_path(dir: &Path) -> PathBuf {
     dir.join(format!(
         "{:032x}-{:08x}-{:08x}.action",
         action_queue_stamp(),
-        std::process::id(),
+        process::id(),
         sequence
     ))
 }
 
 pub(crate) fn queue_action(action: TrayAction) -> Result<PathBuf> {
-    let dir = crate::paths::tray_action_dir();
+    let dir = paths::tray_action_dir();
     fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create runtime directory {}", dir.display()))?;
 
     let path = queued_action_path(&dir);
-    crate::durable_io::write_text_atomic(
+    durable_io::write_text_atomic(
         &path,
         action.as_str(),
         AtomicWriteOptions {
@@ -126,7 +129,7 @@ pub(crate) fn take_pending_legacy_actions(mode: DaemonControlProtocolMode) -> Ve
 }
 
 pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
-    let dir = crate::paths::tray_action_dir();
+    let dir = paths::tray_action_dir();
     let mut paths = match fs::read_dir(&dir) {
         Ok(entries) => entries
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -168,7 +171,7 @@ pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
         }
     }
 
-    let legacy_path = crate::paths::tray_action_file();
+    let legacy_path = paths::tray_action_file();
     match fs::read_to_string(&legacy_path) {
         Ok(content) => {
             if let Err(err) = fs::remove_file(&legacy_path) {
@@ -195,6 +198,8 @@ pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{test_env, test_temp};
+
     use super::{TrayAction, queue_action, take_pending_actions, take_pending_legacy_actions};
     use crate::daemon::protocol_v2::DaemonControlProtocolMode;
     use crate::env_vars::XDG_RUNTIME_DIR_ENV;
@@ -202,8 +207,8 @@ mod tests {
 
     #[test]
     fn a_v2_overlay_leaves_the_legacy_action_queue_unread() {
-        let tmp = crate::test_temp::tempdir().unwrap();
-        crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(tmp.path().as_os_str()), || {
+        let tmp = test_temp::tempdir().unwrap();
+        test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(tmp.path().as_os_str()), || {
             queue_action(TrayAction::CaptureFull).unwrap();
 
             assert!(take_pending_legacy_actions(DaemonControlProtocolMode::PublishedV2).is_empty());
@@ -238,9 +243,10 @@ mod tests {
 
     #[test]
     fn queued_tray_actions_round_trip_in_order() {
-        let _guard = crate::test_env::lock();
-        let tmp = crate::test_temp::tempdir().unwrap();
+        let _guard = test_env::lock();
+        let tmp = test_temp::tempdir().unwrap();
         let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_guard`.
         unsafe {
             env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
@@ -255,10 +261,12 @@ mod tests {
         assert!(take_pending_actions().is_empty());
 
         if let Some(prev) = prev {
+            // SAFETY: this test still holds the environment mutex in `_guard`.
             unsafe {
                 env::set_var(XDG_RUNTIME_DIR_ENV, prev);
             }
         } else {
+            // SAFETY: this test still holds the environment mutex in `_guard`.
             unsafe {
                 env::remove_var(XDG_RUNTIME_DIR_ENV);
             }

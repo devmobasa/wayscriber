@@ -1,9 +1,11 @@
+use crate::test_temp;
+
 use super::*;
 
 #[test]
 fn committed_top_drag_writes_runtime_state_and_leaves_config_untouched() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -20,7 +22,7 @@ fn committed_top_drag_writes_runtime_state_and_leaves_config_untouched() {
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
 
     assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        stored_position(&runtime, &InteractionSeedTarget::TopPosition),
         Some((42.5, -7.25))
     );
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
@@ -38,7 +40,7 @@ fn committed_top_drag_writes_runtime_state_and_leaves_config_untouched() {
 
 #[test]
 fn a_drag_back_to_the_authored_position_deletes_its_override() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut runtime = test_runtime(&config, &runtime_path);
@@ -49,14 +51,14 @@ fn a_drag_back_to_the_authored_position_deletes_its_override() {
     positions.top = (10.0, 11.0);
     runtime.finish_position_drag(true, positions);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
-    assert!(stored_position(&runtime, InteractionSeedTarget::TopPosition).is_some());
+    assert!(stored_position(&runtime, &InteractionSeedTarget::TopPosition).is_some());
 
     assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
     positions.top = seeded.top;
     runtime.finish_position_drag(true, positions);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        stored_position(&runtime, &InteractionSeedTarget::TopPosition),
         None,
         "an override equal to its seed is deleted, not stored"
     );
@@ -65,7 +67,7 @@ fn a_drag_back_to_the_authored_position_deletes_its_override() {
 
 #[test]
 fn an_authored_position_edit_drops_the_stale_drag_override() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config_a = Config::default();
     let mut input = input_from_config(&config_a);
@@ -77,7 +79,7 @@ fn an_authored_position_edit_drops_the_stale_drag_override() {
     runtime.finish_position_drag(true, positions);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        stored_position(&runtime, &InteractionSeedTarget::TopPosition),
         Some((55.0, 66.0))
     );
 
@@ -85,8 +87,8 @@ fn an_authored_position_edit_drops_the_stale_drag_override() {
     config_b.ui.toolbar.top_offset = 200.0;
     config_b.ui.toolbar.top_offset_y = 201.0;
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -94,7 +96,7 @@ fn an_authored_position_edit_drops_the_stale_drag_override() {
     assert!(refresh.applied);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        stored_position(&runtime, &InteractionSeedTarget::TopPosition),
         None,
         "an explicit config edit wins over an older drag"
     );
@@ -105,7 +107,7 @@ fn an_authored_position_edit_drops_the_stale_drag_override() {
 #[test]
 fn a_drag_without_a_runtime_store_is_process_only_and_never_touches_config() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     fs::write(&config_path, AUTHORED).unwrap();
     let config = Config::default();
@@ -133,7 +135,7 @@ fn display_mode_cycle_is_runtime_owned_and_hidden_persists_as_full() {
     use crate::config::TopDisplayMode;
 
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -175,7 +177,7 @@ fn display_mode_cycle_is_runtime_owned_and_hidden_persists_as_full() {
 fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
     use crate::config::TopDisplayMode;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -192,8 +194,8 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
     );
     let restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(
@@ -203,15 +205,15 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
 }
 #[test]
 fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
     };
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -262,7 +264,7 @@ fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() 
 fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
     use crate::config::TopDisplayMode;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config_a = Config::default();
     let mut input = input_from_config(&config_a);
@@ -279,8 +281,8 @@ fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
     let mut config_b = config_a;
     config_b.ui.toolbar.top_display_mode = TopDisplayMode::Micro;
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,

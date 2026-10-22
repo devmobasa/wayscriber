@@ -1,5 +1,10 @@
+use smithay_client_toolkit::compositor::Region;
+
+use crate::backend::wayland::toolbar::view::top;
+use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui_text::UiTextEngine;
-use smithay_client_toolkit::{compositor::CompositorState, shell::WaylandSurface};
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::shell::WaylandSurface;
 use wayland_client::protocol::wl_output;
 
 use super::structs::ToolbarSurface;
@@ -113,11 +118,7 @@ impl ToolbarSurface {
 
     /// Restrict the top surface's input region to the bar band plus any
     /// open popover panels, in surface coordinates; full-surface otherwise.
-    pub fn sync_top_input_region(
-        &mut self,
-        engine: &UiTextEngine,
-        snapshot: &crate::ui::toolbar::ToolbarSnapshot,
-    ) {
+    pub fn sync_top_input_region(&mut self, engine: &UiTextEngine, snapshot: &ToolbarSnapshot) {
         if self.width == 0 || self.height == 0 {
             return;
         }
@@ -126,7 +127,7 @@ impl ToolbarSurface {
         } else {
             1.0
         };
-        let rects = crate::backend::wayland::toolbar::view::top::top_input_rects(
+        let rects = top::top_input_rects(
             engine,
             snapshot,
             self.width as f64 / ui_scale,
@@ -163,7 +164,7 @@ impl ToolbarSurface {
         match self.input_rects.as_deref() {
             None => surface.set_input_region(None),
             Some(rects) => {
-                let Ok(region) = smithay_client_toolkit::compositor::Region::new(compositor) else {
+                let Ok(region) = Region::new(compositor) else {
                     return;
                 };
                 for &(x, y, w, h) in rects {

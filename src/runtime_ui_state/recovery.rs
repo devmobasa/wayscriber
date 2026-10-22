@@ -1,7 +1,16 @@
 use std::collections::BTreeSet;
 use std::sync::mpsc::{Receiver, Sender};
 
-use super::*;
+use super::{
+    AcceptedStateRevision, ControllerBarrierId, ControllerId, HeldReplacementStage,
+    InteractionSeedRegistry, InteractionSeedTarget, PersistenceIncidentId, RecoveryAttemptId,
+    RecoveryCommandId, RecoveryHandleId, RecoveryLeaseNonce, RuntimeStateFailurePathEffect,
+    RuntimeStateInspectionError, RuntimeStateIoError, RuntimeStateObservedEnvelope,
+    RuntimeStateObservedPathEffect, RuntimeStatePostClaimPathEffect, RuntimeStateRecoveryArtifact,
+    RuntimeStateSourceObservation, RuntimeStateSourceRevision, RuntimeUiFileStatus,
+    RuntimeUiLiveState, RuntimeUiModel, RuntimeUiWireState, SourceMutationId,
+    SourceMutationRequest, SourceMutationResult, StagedSeedReload, WirePassthrough,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PersistenceAuthoritySnapshot {
@@ -502,9 +511,3 @@ mod authority;
 mod lifecycle;
 mod preserve;
 mod protocol;
-
-use protocol::{
-    allocate_counter, completion_protocol_error, evidence, merge_artifacts,
-    observation_matches_file_status, reinspection_writer_observation,
-    source_mutation_observation_for_protocol_error,
-};

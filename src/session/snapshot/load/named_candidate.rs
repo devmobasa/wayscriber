@@ -1,4 +1,21 @@
-use super::*;
+use super::super::compression::ExpandedSessionTooLarge;
+use super::super::types::SessionSnapshot;
+use super::markers::{
+    backup_is_newer_than_primary, clear_marker_metadata, clear_marker_suppresses_artifact,
+    recoverable_backup_marker_metadata, recoverable_recovery_marker_metadata,
+    should_prefer_recovery,
+};
+use super::payload::load_snapshot_opened_with_expanded_limit;
+use super::{LoadSnapshotOutcome, LoadedSnapshot, NewerVersionAction};
+use crate::session::options::SessionOptions;
+use crate::session::primary::{
+    is_non_regular_session_artifact, open_session_artifact_for_read, session_artifact_metadata,
+    session_artifact_metadata_if_exists,
+};
+use anyhow::{Context, Result, anyhow};
+use log::{info, warn};
+use std::fs;
+use std::path::Path;
 
 pub(super) fn log_named_candidate_outcome(session_path: &Path, outcome: &LoadSnapshotOutcome) {
     let (source, snapshot) = match outcome {

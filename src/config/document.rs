@@ -3,6 +3,8 @@
 mod lock;
 mod merge;
 
+use std::error;
+
 pub use lock::ConfigWriteLockTimeout;
 
 use super::io::{
@@ -17,10 +19,9 @@ use crate::durable_io::{
 use anyhow::{Context, Result, bail};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
-use std::fmt;
-use std::fs;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
+use std::{fmt, fs};
 use toml_edit::DocumentMut;
 
 use lock::{CONFIG_WRITE_LOCK_TIMEOUT, acquire_config_write_lock};
@@ -48,7 +49,7 @@ impl fmt::Display for ConfigSourceChanged {
     }
 }
 
-impl std::error::Error for ConfigSourceChanged {}
+impl error::Error for ConfigSourceChanged {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigDiagnosticKind {
@@ -77,10 +78,12 @@ pub struct ConfigDiagnostic {
 }
 
 impl ConfigDiagnostic {
+    #[must_use]
     pub fn kind(&self) -> ConfigDiagnosticKind {
         self.kind
     }
 
+    #[must_use]
     pub fn path(&self) -> &str {
         &self.path
     }
@@ -475,7 +478,7 @@ enum RepairScope {
 
 impl ConfigDocument {
     pub fn load() -> Result<Self> {
-        Self::load_from_path(Config::get_config_path()?)
+        Self::load_from_path(Config::config_path()?)
     }
 
     pub fn load_from_path(path: impl Into<PathBuf>) -> Result<Self> {
@@ -495,7 +498,7 @@ impl ConfigDocument {
     /// The returned warning describes what could not be used. Saving either
     /// fallback remains revision-guarded and creates a backup first.
     pub fn load_for_editing() -> Result<(Self, Option<String>)> {
-        Self::load_for_editing_from_path(Config::get_config_path()?)
+        Self::load_for_editing_from_path(Config::config_path()?)
     }
 
     pub fn load_for_editing_from_path(path: impl Into<PathBuf>) -> Result<(Self, Option<String>)> {
@@ -509,7 +512,7 @@ impl ConfigDocument {
             Err(error) if revision.bytes().is_some() => {
                 let document = revision
                     .bytes()
-                    .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                    .and_then(|bytes| str::from_utf8(bytes).ok())
                     .and_then(|input| input.parse::<DocumentMut>().ok())
                     .unwrap_or_default();
                 Ok((
@@ -546,7 +549,7 @@ impl ConfigDocument {
     fn read(source_path: PathBuf, revision: SourceRevision) -> Result<Self> {
         match revision.bytes() {
             Some(bytes) => {
-                let input = std::str::from_utf8(bytes).with_context(|| {
+                let input = str::from_utf8(bytes).with_context(|| {
                     format!("Config at {} is not valid UTF-8", source_path.display())
                 })?;
                 let document = input.parse::<DocumentMut>().with_context(|| {
@@ -597,6 +600,7 @@ impl ConfigDocument {
         })
     }
 
+    #[must_use]
     pub fn config(&self) -> &Config {
         &self.config
     }
@@ -604,20 +608,24 @@ impl ConfigDocument {
     /// The parsed configuration before validation, exactly as the source spells
     /// it out. [`Self::config`] is the same values after the running session's
     /// clamps and shortcut resolution.
+    #[must_use]
     pub fn authored_config(&self) -> &Config {
         &self.authored_config
     }
 
     /// Which `[keybindings]` keys the source spells out. A migration preview
     /// needs this to tell a shortcut the user wrote from one serde filled in.
+    #[must_use]
     pub fn keybinding_authorship(&self) -> &KeybindingAuthorship {
         &self.authored_config.keybinding_authorship
     }
 
+    #[must_use]
     pub fn source(&self) -> &ConfigSource {
         &self.source
     }
 
+    #[must_use]
     pub fn source_path(&self) -> &Path {
         &self.source_path
     }
@@ -632,10 +640,12 @@ impl ConfigDocument {
     /// `config.toml` a link into one profile among several, the path is the
     /// same for every file it can name, and retargeting it makes the next load
     /// a different configuration entirely.
+    #[must_use]
     pub fn destination(&self) -> &Path {
         self.revision.destination()
     }
 
+    #[must_use]
     pub fn diagnostics(&self) -> &[ConfigDiagnostic] {
         &self.diagnostics
     }
@@ -643,6 +653,7 @@ impl ConfigDocument {
     /// Entries of the file that did not map and hold their defaults in
     /// [`Self::config`]. A save replaces exactly these with the draft's
     /// values; everything else in the file stays as authored.
+    #[must_use]
     pub fn section_errors(&self) -> &[ConfigSectionError] {
         match &self.repair {
             RepairScope::Unreadable(errors) => errors,
@@ -914,14 +925,17 @@ pub struct ConfigDocumentSaveOutcome {
 }
 
 impl ConfigDocumentSaveOutcome {
+    #[must_use]
     pub fn document(&self) -> &ConfigDocument {
         &self.document
     }
 
+    #[must_use]
     pub fn backup_path(&self) -> Option<&Path> {
         self.backup_path.as_deref()
     }
 
+    #[must_use]
     pub fn into_parts(self) -> (ConfigDocument, Option<PathBuf>) {
         (self.document, self.backup_path)
     }

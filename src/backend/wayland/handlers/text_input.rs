@@ -18,12 +18,13 @@
 //! keyboard driving fcitx5/ibus-style input.
 
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
-use wayland_protocols::wp::text_input::zv3::client::{
-    zwp_text_input_manager_v3::ZwpTextInputManagerV3,
-    zwp_text_input_v3::{self, ChangeCause, ContentHint, ContentPurpose, ZwpTextInputV3},
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
+    self, ChangeCause, ContentHint, ContentPurpose, ZwpTextInputV3,
 };
 
 use crate::backend::wayland::state::WaylandState;
+use crate::draw::TextMeasurer;
 
 impl Dispatch<ZwpTextInputManagerV3, ()> for WaylandState {
     fn event(
@@ -198,7 +199,7 @@ impl WaylandState {
         &self,
         ti: &ZwpTextInputV3,
         external_change: bool,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
     ) -> bool {
         if external_change {
             ti.set_text_change_cause(ChangeCause::Other);

@@ -1,8 +1,10 @@
+use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::domain::Language;
 use crate::tray_action::TrayAction;
+use crate::{build_info, i18n, runtime_capabilities};
 
 #[derive(Debug, Default)]
 pub struct Cli {
@@ -95,7 +97,7 @@ pub(crate) enum CliOutcome {
 
 impl Cli {
     pub(crate) fn parse() -> Result<CliOutcome, String> {
-        Self::try_parse_from(std::env::args_os())
+        Self::try_parse_from(env::args_os())
     }
 
     pub(crate) fn try_parse_from<I, T>(args: I) -> Result<CliOutcome, String>
@@ -164,7 +166,7 @@ impl Cli {
                     cli.language = Some(parse_language(&value_after(&args, index, "--language")?)?);
                 }
                 "--list-languages" => cli.list_languages = true,
-                crate::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
+                runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
                     cli.runtime_capabilities = true;
                 }
                 _ if arg.starts_with("--daemon-action=") => {
@@ -518,7 +520,7 @@ impl Cli {
 
 /// Parses a `--language` value: any spelling `[ui] language` accepts.
 fn parse_language(value: &str) -> Result<Language, String> {
-    crate::i18n::language_from_code(value).ok_or_else(|| {
+    i18n::language_from_code(value).ok_or_else(|| {
         format!("unknown language '{value}'; run 'wayscriber --list-languages' to see the choices")
     })
 }
@@ -653,7 +655,7 @@ pub(crate) fn print_help() {
 }
 
 pub(crate) fn print_version() {
-    println!("wayscriber {}", crate::build_info::version());
+    println!("wayscriber {}", build_info::version());
 }
 
 #[cfg(test)]

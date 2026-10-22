@@ -45,6 +45,7 @@ pub struct ConfigValidationReport {
 
 impl ConfigValidationReport {
     /// Whether validation changed nothing the user needs to know about.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.invalid_keybindings.is_empty()
             && self.keybinding_conflicts.is_empty()

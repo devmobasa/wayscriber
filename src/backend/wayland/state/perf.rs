@@ -1,15 +1,11 @@
-use std::{
-    collections::{BTreeMap, VecDeque},
-    fmt,
-    time::{Duration, Instant},
-};
+use std::collections::{BTreeMap, VecDeque};
+use std::time::{Duration, Instant};
+use std::{env, fmt};
 
 use log::info;
 
-use crate::{
-    env_vars::PERF_LOG_ENV,
-    input::{DrawingState, Tool},
-};
+use crate::env_vars::PERF_LOG_ENV;
+use crate::input::{DrawingState, Tool};
 
 use super::{FullDamageReason, WaylandState};
 
@@ -24,19 +20,14 @@ pub(in crate::backend::wayland) use damage_diagnostics::{
     PerfDamageDiagnostics, PerfFrameDamageContext, damage_covers_logical_surface,
 };
 use damage_diagnostics::{
-    damage_area_pct, damage_covers_surface, effective_full_damage_reason,
-    format_effective_full_damage_reason, format_pct_hundredths, full_damage_source,
-    largest_region_area_pct_hundredths,
+    damage_area_pct, damage_covers_surface, largest_region_area_pct_hundredths,
 };
 #[cfg(test)]
 use render_breakdown::PerfRenderStageDurations;
 pub(in crate::backend::wayland) use render_breakdown::{
     PerfRenderBreakdown, PerfRenderProfileKind,
 };
-use render_breakdown::{
-    PerfRenderBreakdownAccumulator, PerfRenderBreakdownSummary, log_render_stage_frame,
-    log_render_stage_summary,
-};
+use render_breakdown::{PerfRenderBreakdownAccumulator, PerfRenderBreakdownSummary};
 
 const MAX_PENDING_INPUT_SAMPLES: usize = 4096;
 const MAX_RECENT_LATENCIES: usize = 2048;
@@ -323,7 +314,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn commit_perf_frame(
         &mut self,
-        damage: PerfFrameDamageContext<'_>,
+        damage: &PerfFrameDamageContext<'_>,
         commit_at: Instant,
     ) {
         if !self.perf.enabled() {
@@ -415,7 +406,7 @@ fn log_frame_pacing_summary(summary: &PerfFramePacingSummary, final_summary: boo
 }
 
 fn perf_log_enabled_from_env() -> bool {
-    std::env::var(PERF_LOG_ENV)
+    env::var(PERF_LOG_ENV)
         .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "on" | "ON"))
         .unwrap_or(false)
 }

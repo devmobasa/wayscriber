@@ -1,5 +1,10 @@
 //! File saving functionality for screenshots.
 
+use std::io::ErrorKind;
+use std::{io, iter};
+
+use crate::{durable_io, paths};
+
 use super::types::CaptureError;
 use crate::durable_io::{
     AtomicWriteOptions, DurableIoError, OverwriteMode, PermissionPolicy, SymlinkPolicy,
@@ -41,6 +46,7 @@ impl Default for FileSaveConfig {
 ///
 /// # Returns
 /// Generated filename with extension
+#[must_use]
 pub fn generate_filename(template: &str, format: &str) -> String {
     let now = now_local();
     let filename = format_with_template(now, template);
@@ -55,16 +61,16 @@ fn sanitize_save_extension(format: &str) -> Option<String> {
 fn save_file_name(template: &str, format: &str) -> Result<String, CaptureError> {
     let stem = format_with_template(now_local(), template);
     let extension = sanitize_save_extension(format).ok_or_else(|| {
-        CaptureError::SaveError(std::io::Error::other("unsupported screenshot file format"))
+        CaptureError::SaveError(io::Error::other("unsupported screenshot file format"))
     })?;
-    if !crate::paths::is_single_path_component(&stem) {
-        return Err(CaptureError::SaveError(std::io::Error::other(
+    if !paths::is_single_path_component(&stem) {
+        return Err(CaptureError::SaveError(io::Error::other(
             "filename template must expand to a single file name",
         )));
     }
     let filename = format!("{stem}.{extension}");
-    if !crate::paths::is_single_path_component(&filename) {
-        return Err(CaptureError::SaveError(std::io::Error::other(
+    if !paths::is_single_path_component(&filename) {
+        return Err(CaptureError::SaveError(io::Error::other(
             "filename template must expand to a single file name",
         )));
     }
@@ -91,7 +97,7 @@ fn save_to_free_path(
         .file_stem()
         .and_then(|stem| stem.to_str())
         .ok_or_else(|| {
-            CaptureError::SaveError(std::io::Error::other(
+            CaptureError::SaveError(io::Error::other(
                 "filename template must expand to a single file name",
             ))
         })?;
@@ -99,15 +105,15 @@ fn save_to_free_path(
         .extension()
         .and_then(|ext| ext.to_str())
         .ok_or_else(|| {
-            CaptureError::SaveError(std::io::Error::other("unsupported screenshot file format"))
+            CaptureError::SaveError(io::Error::other("unsupported screenshot file format"))
         })?;
     if directory.join(&filename).parent() != Some(directory) {
-        return Err(CaptureError::SaveError(std::io::Error::other(
+        return Err(CaptureError::SaveError(io::Error::other(
             "filename template must expand to a single file name",
         )));
     }
 
-    let candidates = std::iter::once(filename.clone())
+    let candidates = iter::once(filename.clone())
         .chain((1..=UNIQUE_NAME_ATTEMPTS).map(|suffix| format!("{base}-{suffix}.{extension}")));
     for candidate in candidates {
         let path = directory.join(candidate);
@@ -123,12 +129,12 @@ fn save_to_free_path(
                     path.display()
                 );
             }
-            Err(err) => return Err(CaptureError::SaveError(std::io::Error::other(err))),
+            Err(err) => return Err(CaptureError::SaveError(io::Error::other(err))),
         }
     }
 
-    Err(CaptureError::SaveError(std::io::Error::new(
-        std::io::ErrorKind::AlreadyExists,
+    Err(CaptureError::SaveError(io::Error::new(
+        ErrorKind::AlreadyExists,
         format!(
             "{filename} and its {UNIQUE_NAME_ATTEMPTS} numbered alternatives already exist in {}",
             directory.display()
@@ -138,8 +144,8 @@ fn save_to_free_path(
 
 /// The error for a save that has no directory to write into.
 pub(crate) fn no_save_directory_error() -> CaptureError {
-    CaptureError::SaveError(std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
+    CaptureError::SaveError(io::Error::new(
+        ErrorKind::InvalidInput,
         "no save directory configured",
     ))
 }
@@ -197,7 +203,7 @@ pub fn save_screenshot(
                 path.display(),
                 image_data.len()
             );
-            crate::durable_io::write_atomic(
+            durable_io::write_atomic(
                 path,
                 image_data,
                 AtomicWriteOptions {
@@ -221,12 +227,15 @@ pub fn save_screenshot(
 }
 
 /// Expand tilde (~) in path strings.
+#[must_use]
 pub fn expand_tilde(path: &str) -> PathBuf {
     expand_tilde_global(path)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
 
     #[test]
@@ -261,7 +270,7 @@ mod tests {
 
     #[test]
     fn ensure_directory_exists_creates_missing_path() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let target = temp.path().join("nested").join("shots");
 
         let resolved = ensure_directory_exists(&target).expect("ensure_directory_exists");
@@ -285,7 +294,7 @@ mod tests {
 
     #[test]
     fn save_to_free_path_stays_inside_the_save_directory() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let directory = temp.path();
         let path = save_to_free_path(directory, "shot", "png", |_| Ok(())).expect("safe name");
         assert_eq!(path.parent(), Some(directory));
@@ -298,7 +307,7 @@ mod tests {
 
     #[test]
     fn save_to_free_path_moves_on_when_a_name_is_taken_during_the_write() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let directory = temp.path();
         let mut attempts = Vec::new();
 
@@ -337,14 +346,14 @@ mod tests {
         let error = save_to(Path::new(""), b"image").expect_err("no directory");
 
         assert!(
-            matches!(&error, CaptureError::SaveError(io) if io.kind() == std::io::ErrorKind::InvalidInput),
+            matches!(&error, CaptureError::SaveError(io) if io.kind() == ErrorKind::InvalidInput),
             "unexpected error: {error}"
         );
     }
 
     #[test]
     fn save_screenshot_takes_the_next_free_suffix() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let directory = temp.path().canonicalize().unwrap();
         fs::write(directory.join("shot.png"), b"first").unwrap();
 
@@ -357,7 +366,7 @@ mod tests {
 
     #[test]
     fn save_screenshot_fails_instead_of_overwriting_when_every_name_is_taken() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let directory = temp.path().canonicalize().unwrap();
         fs::write(directory.join("shot.png"), b"kept").unwrap();
         for suffix in 1..=UNIQUE_NAME_ATTEMPTS {
@@ -367,7 +376,7 @@ mod tests {
         let error = save_to(&directory, b"new").expect_err("no free name");
 
         assert!(
-            matches!(&error, CaptureError::SaveError(io) if io.kind() == std::io::ErrorKind::AlreadyExists),
+            matches!(&error, CaptureError::SaveError(io) if io.kind() == ErrorKind::AlreadyExists),
             "unexpected error: {error}"
         );
         assert_eq!(fs::read(directory.join("shot.png")).unwrap(), b"kept");

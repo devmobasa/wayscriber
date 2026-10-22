@@ -1,6 +1,9 @@
 //! Capture admission and the layout identity retained through fallback.
 mod retry;
 
+use std::fmt::{Debug, Display, Formatter};
+use std::{error, fmt};
+
 pub(super) use retry::{CaptureLayoutRetry, LayoutRetryError};
 
 use super::frozen_geometry::OutputGeometry;
@@ -33,7 +36,7 @@ impl CaptureLayoutScope {
     }
 }
 
-pub(super) trait CaptureBackend: Copy + std::fmt::Debug {
+pub(super) trait CaptureBackend: Copy + Debug {
     fn layout_scope(self) -> CaptureLayoutScope;
     fn suppression_reason(self) -> OverlaySuppression;
 
@@ -46,8 +49,8 @@ pub(super) trait CaptureBackend: Copy + std::fmt::Debug {
 /// `key=value` diagnostics free of `Some(..)` wrappers.
 pub(super) struct LogField<T>(pub(super) Option<T>);
 
-impl<T: std::fmt::Display> std::fmt::Display for LogField<T> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: Display> Display for LogField<T> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match &self.0 {
             Some(value) => value.fmt(formatter),
             None => formatter.write_str("none"),
@@ -124,13 +127,13 @@ impl CapturePreflightError {
     }
 }
 
-impl std::fmt::Display for CapturePreflightError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for CapturePreflightError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.message(tr("Screen capture")))
     }
 }
 
-impl std::error::Error for CapturePreflightError {}
+impl error::Error for CapturePreflightError {}
 
 impl From<LayoutRetryError> for CapturePreflightError {
     fn from(error: LayoutRetryError) -> Self {
@@ -291,6 +294,8 @@ impl<B: Copy> CapturePreflight<B> {
 
 #[cfg(test)]
 mod tests {
+    use wayland_client::protocol::wl_output::Transform;
+
     use super::*;
     use std::time::{Duration, Instant};
 
@@ -402,7 +407,7 @@ mod tests {
             Some((2, 1)),
             (2, 1),
             1,
-            wayland_client::protocol::wl_output::Transform::Normal,
+            Transform::Normal,
             Some((2, 1)),
         )
         .unwrap()

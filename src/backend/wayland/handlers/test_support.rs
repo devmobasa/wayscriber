@@ -1,29 +1,43 @@
 //! Private protocol peer for exercising real handlers without a desktop connection.
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
+use std::thread;
+use std::time::Duration;
 
-use smithay_client_toolkit::{
-    compositor::CompositorState,
-    output::OutputState,
-    registry::RegistryState,
-    seat::{
-        SeatState, pointer_constraints::PointerConstraintsState,
-        relative_pointer::RelativePointerState,
-    },
-    shell::xdg::{XdgShell, XdgSurface, window::WindowDecorations},
-    shm::Shm,
-};
-use wayland_client::{
-    Connection, EventQueue, Proxy, globals::registry_queue_init, protocol::wl_output,
-};
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::output::OutputState;
+use smithay_client_toolkit::registry::RegistryState;
+use smithay_client_toolkit::seat::SeatState;
+use smithay_client_toolkit::seat::pointer_constraints::PointerConstraintsState;
+use smithay_client_toolkit::seat::relative_pointer::RelativePointerState;
+use smithay_client_toolkit::shell::xdg::window::WindowDecorations;
+use smithay_client_toolkit::shell::xdg::{XdgShell, XdgSurface};
+use smithay_client_toolkit::shm::Shm;
+use tokio::runtime::{Builder, Runtime};
+use wayland_client::globals::registry_queue_init;
+use wayland_client::protocol::wl_output;
+use wayland_client::{Connection, EventQueue, Proxy};
 use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
-use crate::backend::wayland::{
-    backend::runtime_wake::RuntimeWakeSource,
-    session::{HomeSession, PersistenceController, SessionHome, SessionLaunch, session_target},
-    state::{ProtocolGlobals, ProtocolGlobalsSeed, WaylandState, WaylandStateInit},
+use crate::backend::ExitAfterCaptureMode;
+use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
+use crate::backend::wayland::frozen::ExtImageCopyManagers;
+use crate::backend::wayland::session::{
+    HomeSession, PersistenceController, SessionHome, SessionLaunch, session_target,
 };
+use crate::backend::wayland::state::{
+    ProtocolGlobals, ProtocolGlobalsSeed, WaylandState, WaylandStateInit,
+};
+use crate::capture::CaptureManager;
+use crate::config::Config;
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
+use crate::onboarding::OnboardingStore;
+use crate::palette_recents::{PaletteRecentsStore, PaletteRecentsWriter};
+use crate::test_temp;
+use crate::test_temp::TempDir;
+use crate::ui_text::UiTextEngine;
 
 pub(in crate::backend::wayland) struct HandlerFixture {
     pub state: WaylandState,
@@ -32,8 +46,8 @@ pub(in crate::backend::wayland) struct HandlerFixture {
     peer: UnixStream,
     direct_capture_manager: Option<u32>,
     _wake: RuntimeWakeSource,
-    _runtime: tokio::runtime::Runtime,
-    _data: crate::test_temp::TempDir,
+    _runtime: Runtime,
+    _data: TempDir,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -45,30 +59,22 @@ pub(in crate::backend::wayland) enum CaptureFixtureBackend {
 }
 
 impl HandlerFixture {
-    pub fn new(config: crate::config::Config) -> Self {
+    pub fn new(config: Config) -> Self {
         Self::new_inner(config, 0, CaptureFixtureBackend::Unavailable)
     }
 
-    pub fn with_outputs(config: crate::config::Config, output_count: u32) -> Self {
+    pub fn with_outputs(config: Config, output_count: u32) -> Self {
         Self::new_inner(config, output_count, CaptureFixtureBackend::Unavailable)
     }
 
-    pub fn with_capture_output(
-        config: crate::config::Config,
-        backend: CaptureFixtureBackend,
-    ) -> Self {
+    pub fn with_capture_output(config: Config, backend: CaptureFixtureBackend) -> Self {
         Self::new_inner(config, 1, backend)
     }
 
-    fn new_inner(
-        config: crate::config::Config,
-        output_count: u32,
-        backend: CaptureFixtureBackend,
-    ) -> Self {
+    fn new_inner(config: Config, output_count: u32, backend: CaptureFixtureBackend) -> Self {
         let (client, mut peer) = UnixStream::pair().unwrap();
-        peer.set_read_timeout(Some(std::time::Duration::from_secs(5)))
-            .unwrap();
-        let bootstrap = std::thread::spawn(move || {
+        peer.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let bootstrap = thread::spawn(move || {
             loop {
                 let request = read_request(&mut peer);
                 assert_eq!(request.object, 1);
@@ -125,19 +131,14 @@ impl HandlerFixture {
             output: OutputState::new(&globals, &qh),
             seat: SeatState::new(&globals, &qh),
         });
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         // Private store files keep tests away from the developer's own data
         // folder without changing the environment other tests read.
-        let data = crate::test_temp::tempdir().unwrap();
-        let onboarding =
-            crate::onboarding::OnboardingStore::load_from_path(data.path().join("onboarding.toml"));
-        let palette_recents = crate::palette_recents::PaletteRecentsStore::load_from_path(
-            data.path().join("palette_recents.toml"),
-        );
+        let data = test_temp::tempdir().unwrap();
+        let onboarding = OnboardingStore::load_from_path(data.path().join("onboarding.toml"));
+        let palette_recents =
+            PaletteRecentsStore::load_from_path(data.path().join("palette_recents.toml"));
 
         let screencopy_manager: Option<ZwlrScreencopyManagerV1> = (backend
             == CaptureFixtureBackend::WlrScreencopy)
@@ -156,21 +157,21 @@ impl HandlerFixture {
         let ext_image_copy_managers = ext_capture_manager.map(|capture| {
             let source = globals.bind(&qh, 1..=1, ()).unwrap();
 
-            crate::backend::wayland::frozen::ExtImageCopyManagers::new(capture, source)
+            ExtImageCopyManagers::new(capture, source)
         });
 
         // Placement follows the configured preference, as at startup without env overrides.
         let xdg_fullscreen = config.ui.xdg_fullscreen;
         let mut state = WaylandState::new(WaylandStateInit {
-            ui_text: crate::ui_text::UiTextEngine::default(),
-            text_measurer: crate::draw::TextMeasurer::default(),
+            ui_text: UiTextEngine::default(),
+            text_measurer: TextMeasurer::default(),
             globals: protocol,
-            input_state: crate::input::InputState::from_config(&config),
+            input_state: InputState::from_config(&config),
             config,
             startup_activation_token: None,
             onboarding,
-            palette_recents: crate::palette_recents::PaletteRecentsWriter::new(palette_recents),
-            capture_manager: crate::capture::CaptureManager::new(runtime.handle()),
+            palette_recents: PaletteRecentsWriter::new(palette_recents),
+            capture_manager: CaptureManager::new(runtime.handle()),
             session_options: None,
             session_home: SessionHome::new(
                 SessionLaunch {
@@ -187,7 +188,7 @@ impl HandlerFixture {
             runtime_ui_unavailable: None,
             runtime_wake: wake.handle(),
             tokio_handle: runtime.handle().clone(),
-            exit_after_capture_mode: crate::backend::ExitAfterCaptureMode::Never,
+            exit_after_capture_mode: ExitAfterCaptureMode::Never,
             frozen_enabled: backend != CaptureFixtureBackend::Unavailable,
             preferred_output_identity: None,
             xdg_fullscreen,

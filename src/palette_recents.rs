@@ -7,6 +7,7 @@
 //! treated as an empty history, never an error.
 
 use crate::domain::Action;
+use crate::durable_io;
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::paths::data_dir;
 use log::warn;
@@ -51,6 +52,7 @@ pub struct PaletteRecentsStore {
 }
 
 impl PaletteRecentsStore {
+    #[must_use]
     pub fn load() -> Self {
         let Some(path) = palette_recents_path() else {
             return Self {
@@ -84,6 +86,7 @@ impl PaletteRecentsStore {
         }
     }
 
+    #[must_use]
     pub fn recents(&self) -> &[Action] {
         &self.recents
     }
@@ -149,7 +152,7 @@ impl PaletteRecentsStore {
                 return false;
             }
         };
-        if let Err(err) = crate::durable_io::write_text_atomic(
+        if let Err(err) = durable_io::write_text_atomic(
             &path,
             &contents,
             AtomicWriteOptions {
@@ -204,12 +207,14 @@ fn palette_recents_path() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
     use std::fs;
 
     #[test]
     fn missing_file_yields_empty_recents() {
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp
             .path()
             .join(PALETTE_RECENTS_DIR)
@@ -220,7 +225,7 @@ mod tests {
 
     #[test]
     fn recents_round_trip_preserves_order_dedupes_and_caps() {
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp
             .path()
             .join(PALETTE_RECENTS_DIR)
@@ -262,7 +267,7 @@ mod tests {
 
     #[test]
     fn corrupt_file_degrades_to_empty_without_error() {
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp
             .path()
             .join(PALETTE_RECENTS_DIR)
@@ -285,7 +290,7 @@ mod tests {
 
     #[test]
     fn identical_update_after_no_change_is_a_successful_noop() {
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp
             .path()
             .join(PALETTE_RECENTS_DIR)
@@ -304,14 +309,14 @@ mod tests {
         // masked when the in-memory value already matches. A later identical
         // update has to re-attempt the write (and fail again) instead of
         // early-returning success and silently dropping the pending state.
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         // Put a regular file where the store's parent directory must go, so
         // `create_dir_all` on the parent fails deterministically.
         let blocker = tmp.path().join(PALETTE_RECENTS_DIR);
         fs::write(&blocker, "not a directory").expect("write blocker file");
         let path = blocker.join(PALETTE_RECENTS_FILE);
 
-        let mut store = PaletteRecentsStore::load_from_path(path.clone());
+        let mut store = PaletteRecentsStore::load_from_path(path);
 
         // First write fails (parent is a file, not a directory).
         assert!(
@@ -330,7 +335,7 @@ mod tests {
 
     #[test]
     fn unknown_action_ids_are_skipped_not_fatal() {
-        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let tmp = test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp
             .path()
             .join(PALETTE_RECENTS_DIR)

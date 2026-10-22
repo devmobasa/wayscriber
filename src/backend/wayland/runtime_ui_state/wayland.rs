@@ -1,9 +1,18 @@
+use crate::config::TopDisplayMode;
+use crate::input::boards::PendingBoardRuntimeUiAction;
+
 use super::super::state::{MoveDragKind, WaylandState};
-#[cfg(not(test))]
+use super::live_state::top_display_mode_values;
+use super::rollback::apply_toolbar_runtime_rollback;
 use super::seed_refresh::{
     RuntimeUiSeedRefresh, SeedRefreshContext, refresh_runtime_ui_config_seeds,
 };
-use super::*;
+use super::{ToolbarPositionSnapshot, ToolbarRuntimeFinish, ToolbarRuntimeState};
+use crate::config::ToolbarItemOrderGroup;
+use crate::runtime_ui_state::{
+    InteractionSeedTarget, InteractionSeedValue, RuntimeUiMutationValues,
+};
+use crate::ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget;
 impl RuntimeUiSeedRefresh for WaylandState {
     fn seed_refresh_context(&mut self) -> SeedRefreshContext<'_> {
         SeedRefreshContext {
@@ -140,7 +149,7 @@ impl WaylandState {
     /// travels with the pending action and supplies the preview's rollback.
     pub(in crate::backend::wayland) fn persist_toolbar_display_mode(
         &mut self,
-        previous: crate::config::TopDisplayMode,
+        previous: TopDisplayMode,
     ) {
         let target = ToolbarRuntimeUiPersistenceTarget::TopDisplayMode;
         let rollback = match top_display_mode_values(previous, &self.input_state) {
@@ -156,7 +165,7 @@ impl WaylandState {
         let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
-        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, &rollback) else {
             return;
         };
         let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
@@ -187,7 +196,7 @@ impl WaylandState {
         let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
-        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, &rollback) else {
             return;
         };
         let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
@@ -214,7 +223,7 @@ impl WaylandState {
         let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
-        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, &rollback) else {
             return;
         };
         let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
@@ -248,7 +257,7 @@ impl WaylandState {
         let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
-        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, &rollback) else {
             return;
         };
         let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
@@ -354,7 +363,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn apply_board_runtime_ui_action(
         &mut self,
-        action: crate::input::boards::PendingBoardRuntimeUiAction,
+        action: PendingBoardRuntimeUiAction,
     ) {
         use crate::input::boards::PendingBoardRuntimeUiAction;
 

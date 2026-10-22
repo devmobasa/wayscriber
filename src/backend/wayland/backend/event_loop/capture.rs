@@ -1,6 +1,7 @@
 use crate::backend::wayland::acquisition::{
     AcquisitionRecord, AcquisitionStage, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
 };
+use crate::draw::EmbeddedImage;
 use crate::input::state::{Toast, ToastPriority};
 use log::{info, warn};
 use std::time::{Duration, Instant};
@@ -386,7 +387,7 @@ fn resolve_board_capture_outcome(
     match (outcome, pending_board) {
         (CaptureOutcome::RenderedImageReady(image), Some(pending)) => {
             state.capture.finish_capture_lifecycle();
-            let embedded = crate::draw::EmbeddedImage {
+            let embedded = EmbeddedImage {
                 mime_type: image.format.mime_type,
                 width: image.width,
                 height: image.height,
@@ -574,18 +575,10 @@ fn handle_capture_results(state: &mut WaylandState) {
                 // Send normal notification.
                 let notification_body = if message_parts.is_empty() {
                     match result.operation {
-                        crate::capture::ImageOperationKind::Screenshot => {
-                            tr("Screenshot captured").to_string()
-                        }
-                        crate::capture::ImageOperationKind::CanvasExport => {
-                            tr("Canvas exported").to_string()
-                        }
-                        crate::capture::ImageOperationKind::BoardPdfExport => {
-                            tr("Board exported").to_string()
-                        }
-                        crate::capture::ImageOperationKind::AllBoardsPdfExport => {
-                            tr("Boards exported").to_string()
-                        }
+                        ImageOperationKind::Screenshot => tr("Screenshot captured").to_string(),
+                        ImageOperationKind::CanvasExport => tr("Canvas exported").to_string(),
+                        ImageOperationKind::BoardPdfExport => tr("Board exported").to_string(),
+                        ImageOperationKind::AllBoardsPdfExport => tr("Boards exported").to_string(),
                     }
                 } else {
                     message_parts.join(" - ")
@@ -615,12 +608,11 @@ fn handle_capture_results(state: &mut WaylandState) {
             message,
         } => {
             state.capture.clear_pending_pdf_export();
-            let friendly_error =
-                if matches!(operation, crate::capture::ImageOperationKind::Screenshot) {
-                    friendly_capture_error(kind)
-                } else {
-                    message.clone()
-                };
+            let friendly_error = if matches!(operation, ImageOperationKind::Screenshot) {
+                friendly_capture_error(kind)
+            } else {
+                message.clone()
+            };
 
             warn!("{} failed: {}", operation.saved_log_label(), message);
 
@@ -720,6 +712,10 @@ fn handle_capture_manager_failure(
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::state::RenderOutcome;
+    use crate::config::Config;
+    use crate::ui::toolbar::ToolbarEvent;
+
     use super::*;
     use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
     use crate::backend::wayland::handlers::test_support::{CaptureFixtureBackend, HandlerFixture};
@@ -742,20 +738,19 @@ mod tests {
             (ToolbarEvent::ZoomIn, CaptureFixtureBackend::WlrScreencopy),
         ] {
             for enter_before_frame in [false, true] {
-                toolbar_output_discovery(event.clone(), enter_before_frame, backend);
+                toolbar_output_discovery(&event, enter_before_frame, backend);
             }
         }
     }
 
     fn toolbar_output_discovery(
-        event: crate::ui::toolbar::ToolbarEvent,
+        event: &ToolbarEvent,
         enter_before_frame: bool,
         backend: CaptureFixtureBackend,
     ) {
         use smithay_client_toolkit::compositor::CompositorHandler;
 
-        let mut fixture =
-            HandlerFixture::with_capture_output(crate::config::Config::default(), backend);
+        let mut fixture = HandlerFixture::with_capture_output(Config::default(), backend);
         let output = fixture.complete_output_metadata("DP-3");
         let qh = fixture.queue.handle();
         let surface = fixture.state.surface.wl_surface().unwrap().clone();
@@ -772,7 +767,7 @@ mod tests {
             .state
             .suppression
             .keyboard_passthrough_requested(false);
-        let freezing = matches!(event, crate::ui::toolbar::ToolbarEvent::ToggleFreeze);
+        let freezing = matches!(event, ToolbarEvent::ToggleFreeze);
         assert_eq!(
             reason,
             if freezing {
@@ -843,20 +838,17 @@ mod tests {
     }
 
     fn complete_hidden_frame(
-        fixture: &mut crate::backend::wayland::handlers::test_support::HandlerFixture,
+        fixture: &mut HandlerFixture,
         qh: &wayland_client::QueueHandle<WaylandState>,
     ) {
         assert!(matches!(
             fixture.state.render(qh).unwrap(),
-            crate::backend::wayland::state::RenderOutcome::Committed { .. }
+            RenderOutcome::Committed { .. }
         ));
         fixture.complete_main_frame();
     }
 
-    fn record(
-        owner: ScreenAcquisitionOwner,
-        stage: AcquisitionStage,
-    ) -> crate::backend::wayland::acquisition::AcquisitionRecord {
+    fn record(owner: ScreenAcquisitionOwner, stage: AcquisitionStage) -> AcquisitionRecord {
         let mut registry = ScreenAcquisitionRegistry::default();
         let id = registry.request(owner).expect("test acquisition");
         if stage == AcquisitionStage::Started {

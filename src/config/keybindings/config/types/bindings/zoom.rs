@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_refresh_zoom_capture, default_reset_zoom, default_toggle_frozen_mode,
+    default_toggle_zoom_lock, default_zoom_in, default_zoom_out,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

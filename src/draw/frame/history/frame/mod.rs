@@ -21,6 +21,7 @@ impl Frame {
     /// push, undo, redo, and history clear, and trimming the oldest entries
     /// leaves it alone. Feedback that advertises a particular undo (the
     /// Shape Pen chip) compares it to know the undo still means that.
+    #[must_use]
     pub fn history_revision(&self) -> u64 {
         self.history_revision
     }
@@ -74,12 +75,14 @@ impl Frame {
 
     #[allow(dead_code)]
     /// Returns a reference to the undo stack (for testing).
+    #[must_use]
     pub fn undo_stack_len(&self) -> usize {
         self.undo_stack.len()
     }
 
     #[allow(dead_code)]
     /// Returns a reference to the redo stack length (for testing).
+    #[must_use]
     pub fn redo_stack_len(&self) -> usize {
         self.redo_stack.len()
     }

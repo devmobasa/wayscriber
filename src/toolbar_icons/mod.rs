@@ -29,12 +29,14 @@ pub(crate) use opacity_preview::{draw_opacity_swatch, draw_opacity_track};
 pub(crate) use slider_ticks::draw_slider_ticks;
 pub(crate) use smoothing_preview::draw_smoothing_preview;
 
+use crate::config::action_meta::ActionIcon;
+use crate::ui::toolbar::model::TopToolbarIcon;
+
 pub(crate) type ToolbarIconPainter = fn(&cairo::Context, f64, f64, f64);
 
 /// Resolve action metadata to the shared Cairo glyph used by UI surfaces.
-pub fn action_icon_painter(
-    icon: crate::config::action_meta::ActionIcon,
-) -> fn(&cairo::Context, f64, f64, f64) {
+#[must_use]
+pub fn action_icon_painter(icon: ActionIcon) -> fn(&cairo::Context, f64, f64, f64) {
     use crate::config::action_meta::ActionIcon;
 
     match icon {
@@ -127,9 +129,7 @@ pub(crate) fn draw_micro_chip(
     glyph(ctx, cx - icon_size / 2.0, cy - icon_size / 2.0, icon_size);
 }
 
-pub(crate) fn top_toolbar_icon_painter(
-    icon: crate::ui::toolbar::model::TopToolbarIcon,
-) -> ToolbarIconPainter {
+pub(crate) fn top_toolbar_icon_painter(icon: TopToolbarIcon) -> ToolbarIconPainter {
     use crate::ui::toolbar::model::{SemanticToolIcon as T, TopToolbarIcon as I};
 
     match icon {
@@ -180,6 +180,11 @@ pub(crate) fn top_toolbar_icon_painter(
 
 #[cfg(test)]
 mod painter_tests {
+    use std::ptr;
+
+    use crate::config;
+    use crate::config::Action;
+
     use super::*;
     use cairo::{Context, Format, ImageSurface};
 
@@ -267,19 +272,16 @@ mod painter_tests {
         use crate::toolbar_icons::top_toolbar_icon_painter;
         use crate::ui::toolbar::model::{TopToolbarIcon, semantic_icon_for_tool};
 
-        for meta in crate::config::action_meta_iter().filter(|meta| meta.icon.is_some()) {
+        let actions_with_icons = config::action_meta_iter().filter(|meta| meta.icon.is_some());
+        for meta in actions_with_icons {
             let action = meta.action;
-            let icon = crate::config::action_meta(action)
+            let icon = config::action_meta(action)
                 .and_then(|meta| meta.icon)
                 .map(action_icon_painter)
                 .unwrap_or_else(|| panic!("missing icon for {:?}", action));
             let expected = match action {
-                crate::config::Action::EnterTextMode => {
-                    top_toolbar_icon_painter(TopToolbarIcon::Text)
-                }
-                crate::config::Action::EnterStickyNoteMode => {
-                    top_toolbar_icon_painter(TopToolbarIcon::StickyNote)
-                }
+                Action::EnterTextMode => top_toolbar_icon_painter(TopToolbarIcon::Text),
+                Action::EnterStickyNoteMode => top_toolbar_icon_painter(TopToolbarIcon::StickyNote),
                 _ => {
                     let tool = Tool::from_select_action(action)
                         .unwrap_or_else(|| panic!("{:?} should select a tool", action));
@@ -287,7 +289,7 @@ mod painter_tests {
                 }
             };
             assert!(
-                std::ptr::fn_addr_eq(icon, expected),
+                ptr::fn_addr_eq(icon, expected),
                 "icon painter for {:?} drifted from the shared semantic painter",
                 action
             );

@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::input::Tool;
+
 use super::types::{BoardPagesSnapshot, SessionSnapshot, ToolStateSnapshot};
 use crate::draw::BoardPages;
 use crate::input::{BOARD_ID_TRANSPARENT, InputState};
@@ -7,20 +10,20 @@ use std::collections::HashSet;
 
 /// Apply a session snapshot to the live [`InputState`].
 pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options: &SessionOptions) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     apply_snapshot_inner(input, &measurer, snapshot, options, None);
 }
 
 fn apply_snapshot_inner(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     snapshot: SessionSnapshot,
     options: &SessionOptions,
     replacement_board_ids: Option<&HashSet<String>>,
 ) {
     let previous_spec = &input.boards.active_board().spec;
     let previous_auto = previous_spec.auto_adjust_pen && !previous_spec.background.is_transparent();
-    let previous_pen = input.color_for_tool(crate::input::Tool::Pen);
+    let previous_pen = input.color_for_tool(Tool::Pen);
     let previous_color = input.board_previous_color();
     if replacement_board_ids.is_some() {
         input.boards.reset_appearances();
@@ -69,7 +72,7 @@ fn apply_snapshot_inner(
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
-            apply_tool_state_snapshot(input, measurer, tool_state);
+            apply_tool_state_snapshot(input, measurer, &tool_state);
         } else {
             log::info!("No tool state found in session; skipping tool restore");
         }
@@ -88,8 +91,8 @@ fn apply_snapshot_inner(
 /// last one run.
 pub(crate) fn apply_tool_state_snapshot(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
-    tool_state: ToolStateSnapshot,
+    measurer: &TextMeasurer,
+    tool_state: &ToolStateSnapshot,
 ) {
     let marker_opacity = tool_state
         .marker_opacity
@@ -113,7 +116,7 @@ pub(crate) fn apply_tool_state_snapshot(
         tool_state.arrow_label_enabled
     );
     let active_tool = input.active_tool();
-    input.style.restore_snapshot(&tool_state, active_tool);
+    input.style.restore_snapshot(tool_state, active_tool);
     // The snapshot replaces every value a highlighted preset slot described,
     // and the per-field setters this used to go through invalidated the
     // canvas as they went; keep both effects now that the owner restores in
@@ -136,7 +139,7 @@ pub(crate) fn apply_tool_state_snapshot(
 #[allow(dead_code)]
 pub(crate) fn apply_snapshot_replacing_boards(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     snapshot: SessionSnapshot,
     options: &SessionOptions,
 ) -> Result<()> {
@@ -171,7 +174,7 @@ pub(crate) fn apply_snapshot_replacing_boards(
     Ok(())
 }
 
-fn clear_board_pages(input: &mut InputState, measurer: &crate::draw::TextMeasurer) {
+fn clear_board_pages(input: &mut InputState, measurer: &TextMeasurer) {
     input.cancel_active_interaction_with(measurer);
     // Every page is about to be replaced. A wheel adjustment still in flight
     // belongs to a frame that will not exist afterwards, so record it now

@@ -1,7 +1,8 @@
 use relm4::{ComponentSender, gtk};
 
+use gtk::accessible::Property;
 use gtk::glib::object::IsA;
-use gtk::prelude::*;
+use gtk::prelude::{AccessibleExt, *};
 
 use crate::messages::Message;
 use crate::models::KeybindingField;
@@ -20,8 +21,8 @@ pub(super) fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
     button
 }
 
-pub(super) fn set_accessible_label(widget: &impl gtk::prelude::AccessibleExt, label: &str) {
-    widget.update_property(&[gtk::accessible::Property::Label(label)]);
+pub(super) fn set_accessible_label(widget: &impl AccessibleExt, label: &str) {
+    widget.update_property(&[Property::Label(label)]);
 }
 
 /// Writes the widget's own visibility flag, never `is_visible`: a widget

@@ -1,10 +1,11 @@
-use std::fmt;
-use std::io;
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+#[cfg(test)]
+use std::sync::atomic::AtomicI32;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::{fmt, io};
 
 use super::{
     SIGNAL_WRITE_FD, begin_listener_teardown, clear_registered_signals, create_pipe,
@@ -54,9 +55,9 @@ struct ListenerShared {
     on_signal: Box<dyn Fn(libc::c_int) + Send + Sync + 'static>,
     owner_wake: Arc<dyn Fn() + Send + Sync + 'static>,
     #[cfg(test)]
-    injected_read_error: std::sync::atomic::AtomicI32,
+    injected_read_error: AtomicI32,
     #[cfg(test)]
-    thread_tid: std::sync::atomic::AtomicI32,
+    thread_tid: AtomicI32,
 }
 
 pub(crate) struct SignalListener {
@@ -118,9 +119,9 @@ where
         on_signal: Box::new(on_signal),
         owner_wake: Arc::new(owner_wake),
         #[cfg(test)]
-        injected_read_error: std::sync::atomic::AtomicI32::new(0),
+        injected_read_error: AtomicI32::new(0),
         #[cfg(test)]
-        thread_tid: std::sync::atomic::AtomicI32::new(0),
+        thread_tid: AtomicI32::new(0),
     });
     let thread_shared = Arc::clone(&shared);
     let listener_read_fd = read_fd.as_raw_fd();
@@ -165,7 +166,7 @@ impl SignalListener {
         self.shared
             .health
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expect("signal listener health is never locked across a panic")
             .clone()
     }
 
@@ -185,7 +186,7 @@ impl SignalListener {
                 .shared
                 .health
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                .expect("signal listener health is never locked across a panic");
             if matches!(*health, SignalListenerHealth::Running) {
                 *health = SignalListenerHealth::Stopping;
             }
@@ -204,7 +205,8 @@ impl SignalListener {
             .shared
             .health
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = SignalListenerHealth::Stopped;
+            .expect("signal listener health is never locked across a panic") =
+            SignalListenerHealth::Stopped;
         self.teardown_complete = true;
 
         match join_result {
@@ -250,6 +252,10 @@ impl Drop for SignalListener {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a panicking listener must surface as a reported listener failure instead of silently ending signal handling"
+)]
 fn listener_thread(read_fd: RawFd, shared: &ListenerShared) {
     #[cfg(test)]
     {
@@ -270,6 +276,10 @@ fn listener_thread(read_fd: RawFd, shared: &ListenerShared) {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a panicking signal callback must surface as a reported listener failure instead of silently ending signal handling"
+)]
 fn read_signal_loop(read_fd: RawFd, shared: &ListenerShared) -> Result<(), SignalListenerFailure> {
     let mut buffer = [0_u8; MAX_SIGNAL_PIPE_BYTES_PER_PASS];
     loop {
@@ -282,7 +292,7 @@ fn read_signal_loop(read_fd: RawFd, shared: &ListenerShared) -> Result<(), Signa
             let injected = shared.injected_read_error.swap(0, Ordering::AcqRel);
             if injected != 0 {
                 let err = io::Error::from_raw_os_error(injected);
-                return Err(read_failure(err));
+                return Err(read_failure(&err));
             }
         }
 
@@ -303,7 +313,7 @@ fn read_signal_loop(read_fd: RawFd, shared: &ListenerShared) -> Result<(), Signa
             if err.kind() == io::ErrorKind::Interrupted {
                 continue;
             }
-            return Err(read_failure(err));
+            return Err(read_failure(&err));
         }
         if should_stop(shared) {
             return Ok(());
@@ -319,7 +329,7 @@ fn read_signal_loop(read_fd: RawFd, shared: &ListenerShared) -> Result<(), Signa
     }
 }
 
-fn read_failure(err: io::Error) -> SignalListenerFailure {
+fn read_failure(err: &io::Error) -> SignalListenerFailure {
     SignalListenerFailure::ReadFailed {
         kind: err.kind(),
         raw_os_error: err.raw_os_error(),
@@ -334,7 +344,7 @@ fn should_stop(shared: &ListenerShared) -> bool {
         *shared
             .health
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            .expect("signal listener health is never locked across a panic"),
         SignalListenerHealth::Running
     )
 }
@@ -344,7 +354,7 @@ fn publish_failure(shared: &ListenerShared, failure: SignalListenerFailure) {
         let mut health = shared
             .health
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("signal listener health is never locked across a panic");
         if matches!(*health, SignalListenerHealth::Running) {
             *health = SignalListenerHealth::Failed(failure);
             true
@@ -357,6 +367,10 @@ fn publish_failure(shared: &ListenerShared, failure: SignalListenerFailure) {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a panicking owner wake must not end the listener thread that delivers later signals"
+)]
 fn wake_owner(shared: &ListenerShared) {
     let wake = Arc::clone(&shared.owner_wake);
     let _ = catch_unwind(AssertUnwindSafe(move || wake()));

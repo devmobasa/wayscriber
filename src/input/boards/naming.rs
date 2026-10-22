@@ -1,6 +1,7 @@
 use super::{BOARD_ID_TRANSPARENT, BoardBackground, BoardManager, BoardSpec, BoardState};
 
 impl BoardManager {
+    #[must_use]
     pub fn can_switch_to_id(&self, id: &str) -> bool {
         self.switch_to_id_target_index(id)
             .is_some_and(|index| index != self.active_index)
@@ -22,6 +23,7 @@ impl BoardManager {
         self.switch_to_slot(desired_slot)
     }
 
+    #[must_use]
     pub fn can_switch_to_slot(&self, slot: usize) -> bool {
         self.switch_to_slot_target_index(slot)
             .is_some_and(|index| index != self.active_index)
@@ -193,7 +195,7 @@ fn name_from_id(id: &str) -> String {
     let normalized = id.replace('-', " ");
     let mut chars = normalized.chars();
     match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
         None => "Board".to_string(),
     }
 }

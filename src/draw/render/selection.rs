@@ -1,3 +1,6 @@
+use crate::draw;
+use crate::draw::TextMeasurer;
+
 use super::highlight::render_click_highlight;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::spotlight::{SpotlightRegion, render_spotlight_outline};
@@ -30,12 +33,12 @@ const SELECTION_GLOW: Color = Color {
 
 /// Renders a selection halo overlay for a drawn shape.
 pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     render_selection_halo_with_measurer(&measurer, ctx, drawn);
 }
 
 pub fn render_selection_halo_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     drawn: &DrawnShape,
 ) {
@@ -112,7 +115,7 @@ pub fn render_selection_halo_with_measurer(
                     cy: f64::from(*cy),
                     rx: f64::from(*rx),
                     ry: f64::from(*ry),
-                    magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
+                    magnification: draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
                 },
                 glow,
                 outline_width,
@@ -312,6 +315,7 @@ pub fn render_selection_handles(ctx: &cairo::Context, bounds: &Rect) {
 /// Computes selection handle rectangles for hit testing.
 /// Returns handles in order: TL, TR, BL, BR, Top, Bottom, Left, Right
 #[allow(dead_code)]
+#[must_use]
 pub fn selection_handle_rects(bounds: &Rect) -> [Rect; 8] {
     let x = bounds.x;
     let y = bounds.y;

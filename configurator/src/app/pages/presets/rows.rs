@@ -14,8 +14,8 @@ use super::super::{PageBuilder, set_selected_blocked, set_text_blocked};
 /// Mirrors the [`PageBuilder`] row helpers, but adds rows to the slot's
 /// expander and reads the slot out of the model, so a slot the draft does
 /// not hold simply leaves its rows alone.
-pub(super) struct SlotBuilder<'a> {
-    pub(super) page: &'a mut PageBuilder,
+pub(super) struct SlotBuilder<'page> {
+    pub(super) page: &'page mut PageBuilder,
     pub(super) expander: adw::ExpanderRow,
     pub(super) slot: usize,
 }
@@ -69,7 +69,7 @@ impl SlotBuilder<'_> {
         &mut self,
         title: &str,
         values: Vec<O>,
-        labels: Vec<String>,
+        labels: &[String],
         get: impl Fn(&ConfiguratorApp) -> Option<O> + 'static,
         to_message: impl Fn(usize, O) -> Message + 'static,
     ) -> adw::ComboRow
@@ -117,7 +117,7 @@ impl SlotBuilder<'_> {
     ) -> adw::ComboRow {
         let values = OverrideOption::list();
         let labels = labels_of(&values, OverrideOption::label);
-        self.combo_row(title, values, labels, get, move |slot, value| {
+        self.combo_row(title, values, &labels, get, move |slot, value| {
             Message::PresetToggleOptionChanged(slot, field, value)
         })
     }

@@ -1,3 +1,5 @@
+use wayscriber::config;
+
 use super::super::draft::ConfigDraft;
 use super::super::parse::{
     parse_field, parse_field_in_range, parse_u64_field, parse_u64_in_range, parse_usize_field,
@@ -65,7 +67,7 @@ impl ConfigDraft {
         config.ui.toolbar.stroke_controls = self.ui_toolbar_stroke_controls.to_config();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.items = self.ui_toolbar_items.clone();
-        let visibility = wayscriber::config::resolve_section_visibility(
+        let visibility = config::resolve_section_visibility(
             config.ui.toolbar.layout_mode,
             &config.ui.toolbar.mode_overrides,
             &config.ui.toolbar.items.resolved(),

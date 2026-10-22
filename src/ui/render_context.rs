@@ -21,8 +21,8 @@ impl UiRenderCaches {
 }
 
 /// A short UI paint pass borrowing an explicit theme and its owner's resources.
-pub(crate) struct UiRenderCtx<'c, 't, 'r> {
-    pub cairo: &'c cairo::Context,
-    pub theme: &'t Theme,
-    pub caches: &'r mut UiRenderCaches,
+pub(crate) struct UiRenderCtx<'cairo, 'theme, 'caches> {
+    pub cairo: &'cairo cairo::Context,
+    pub theme: &'theme Theme,
+    pub caches: &'caches mut UiRenderCaches,
 }

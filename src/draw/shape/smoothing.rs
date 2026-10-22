@@ -24,6 +24,8 @@
 //! started and stopped. A filter that moved them would pull an underline off the
 //! word it began under.
 
+use std::mem;
+
 /// Highest smoothing level. Past roughly this many passes a stroke stops
 /// following its own corners and reads as a different line from the one drawn.
 pub const MAX_PEN_SMOOTHING: u8 = 6;
@@ -52,11 +54,13 @@ const MIN_SMOOTHABLE_POINTS: usize = 3;
 const CENTER_WEIGHT: f64 = 0.5;
 
 /// Clamp a configured or stepped level into range.
+#[must_use]
 pub fn clamp_pen_smoothing(level: u8) -> u8 {
     level.min(MAX_PEN_SMOOTHING)
 }
 
 /// Smooth an `(x, y)` path. Level 0 returns the path unchanged.
+#[must_use]
 pub fn smooth_path(points: &[(f64, f64)], level: u8) -> Vec<(f64, f64)> {
     let Some(smoothed) = smooth_points(points, level, |&(x, y)| (x, y)) else {
         return points.to_vec();
@@ -87,6 +91,7 @@ pub(crate) fn smooth_committed_path(points: &[(f64, f64)], level: u8) -> Vec<(f6
 /// tablet rather than from the hand's aim, and averaging them would erase real
 /// detail while fixing nothing. Each smoothed position keeps the thickness that
 /// was sampled with it.
+#[must_use]
 pub fn smooth_pressure_path(points: &[(f64, f64, f32)], level: u8) -> Vec<(f64, f64, f32)> {
     let Some(smoothed) = smooth_points(points, level, |&(x, y, _)| (x, y)) else {
         return points.to_vec();
@@ -135,7 +140,7 @@ fn smooth_points<T>(
                     + following.1 * neighbor_weight,
             );
         }
-        std::mem::swap(&mut current, &mut next);
+        mem::swap(&mut current, &mut next);
     }
     Some(current)
 }

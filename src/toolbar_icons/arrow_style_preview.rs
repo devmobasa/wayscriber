@@ -7,6 +7,7 @@
 
 use crate::draw::ArrowStyle;
 use crate::ui::theme::{Rgba, set_color};
+use crate::util;
 
 /// Sample space, authored large so the outline's whole-unit endpoints stay
 /// far below a preview pixel once scaled down.
@@ -57,7 +58,7 @@ fn sample_outline(style: ArrowStyle) -> Option<Vec<(f64, f64)>> {
     } else {
         (SAMPLE_H / 2.0) as i32
     };
-    crate::util::calculate_arrow_outline_styled(
+    util::calculate_arrow_outline_styled(
         SAMPLE_W as i32 - SAMPLE_INSET,
         baseline,
         SAMPLE_INSET,
@@ -66,7 +67,7 @@ fn sample_outline(style: ArrowStyle) -> Option<Vec<(f64, f64)>> {
         SAMPLE_HEAD_LENGTH,
         SAMPLE_HEAD_ANGLE,
         style,
-        style.effective_bend(crate::util::DEFAULT_ARROW_BEND),
+        style.effective_bend(util::DEFAULT_ARROW_BEND),
     )
 }
 

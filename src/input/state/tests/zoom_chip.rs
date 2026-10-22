@@ -5,6 +5,10 @@
 //! ignored, and visibility/interactivity are gated on the effective
 //! `zoom_chip_enabled()` state.
 
+use crate::config::ZoomChipDisplay;
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::config::StatusBarStyle;
 use crate::ui::{ZoomChipButtonKind, ZoomChipPress};
@@ -61,8 +65,8 @@ fn zoom_chip_layout_cleared_when_actions_hidden() {
 
 #[test]
 fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -75,7 +79,7 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     // The palette/keybinding toggle hides the chip for this run without
     // touching the `show_zoom_actions` toolbar preference or queueing any
     // durable work.
-    input.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
     assert!(!input.zoom_chip_enabled());
     assert!(
         input.ui_visibility.show_zoom_actions,
@@ -87,7 +91,7 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     assert!(!input.zoom_chip_contains(1270, 710));
 
     // Toggling again restores it.
-    input.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
     assert!(input.zoom_chip_enabled());
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_some());
@@ -95,8 +99,8 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
 
 #[test]
 fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -112,7 +116,7 @@ fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
     assert!(input.needs_redraw, "hover transition requests a redraw");
 
     // Runtime-hiding the chip clears hover on the next layout pass.
-    input.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
     update_chip_layout(&mut input, 1280, 720);
     assert_eq!(input.zoom_chip.hover, None);
 }
@@ -178,7 +182,7 @@ fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     // must not reapply that stale hit while focus is elsewhere.
     input.clear_chrome_hover();
     input.update_zoom_chip_layout_for_pointer_with_engine(
-        &crate::ui_text::UiTextEngine::default(),
+        &UiTextEngine::default(),
         &StatusBarStyle::default(),
         1280,
         720,
@@ -194,7 +198,7 @@ fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
 #[test]
 fn while_zoomed_display_mode_shows_the_chip_only_during_zoom() {
     let mut input = create_test_input_state();
-    input.zoom_chip.display = crate::config::ZoomChipDisplay::WhileZoomed;
+    input.zoom_chip.display = ZoomChipDisplay::WhileZoomed;
 
     // At 100% the corner stays clean: no layout, no hit.
     update_chip_layout(&mut input, 1280, 720);
@@ -278,8 +282,8 @@ fn zoom_chip_click_lock_returns_toggle_lock_when_zoomed() {
 
 #[test]
 fn zoom_chip_activation_records_usage_and_coach_slow_path() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -444,9 +448,9 @@ fn tablet_path_press_release_dispatches_zoom_action() {
     assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
     assert_eq!(
         input.take_pending_zoom_request(),
-        Some(crate::input::ZoomRequest {
+        Some(ZoomRequest {
             action: ZoomAction::In,
-            anchor: crate::input::ZoomAnchor::ScreenCenter,
+            anchor: ZoomAnchor::ScreenCenter,
         }),
         "the chip sits in a corner, so its zoom centres the screen"
     );
@@ -481,7 +485,7 @@ fn zoom_chip_ignored_while_eclipsing_overlay_open() {
     // An overlay rendering above the chip suppresses its presses (also covers
     // an overlay opened between press and release: check_zoom_chip_click
     // shares the same guard).
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(!input.zoom_chip_contains(x, y));
     assert!(!input.check_zoom_chip_click(ZoomChipButtonKind::In, x, y).0);
     input.close_board_picker();

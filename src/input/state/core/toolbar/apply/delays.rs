@@ -32,10 +32,12 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     #[test]

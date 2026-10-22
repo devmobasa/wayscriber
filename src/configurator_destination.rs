@@ -43,16 +43,19 @@ const QUICK_COLORS_SEARCH: &str = "Quick Colors";
 const ONBOARDING_HINTS_SEARCH: &str = "Show automatic guidance and tips";
 
 /// The Drawing screen, focused on the quick-color palette.
+#[must_use]
 pub fn quick_colors_destination() -> ConfiguratorDestination {
     ConfiguratorDestination::with_search(ConfiguratorScreen::Drawing, QUICK_COLORS_SEARCH)
 }
 
 /// The General UI section, filtered to the automatic-guidance preference.
+#[must_use]
 pub fn onboarding_hints_destination() -> ConfiguratorDestination {
     ConfiguratorDestination::with_search(ConfiguratorScreen::UiToolbar, ONBOARDING_HINTS_SEARCH)
 }
 
 /// General UI, filtered to the interface language setting.
+#[must_use]
 pub fn language_destination() -> ConfiguratorDestination {
     ConfiguratorDestination::with_search(ConfiguratorScreen::UiToolbar, "language")
 }
@@ -89,6 +92,7 @@ pub enum KeybindingsSection {
 /// storage layout and is spelled out here instead.
 /// `every_action_section_matches_the_field_tab_that_holds_it` (in the
 /// configurator crate, which can see both sides) keeps the conversion aligned.
+#[must_use]
 pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSection> {
     let section = match action {
         Action::Exit | Action::OpenConfigurator | Action::OpenAbout => KeybindingsSection::General,
@@ -274,6 +278,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
 /// opened out: the configurator searches that key verbatim alongside its row
 /// label, so this is the one spelling guaranteed to select exactly the row the
 /// user asked about while still reading as words in the search box.
+#[must_use]
 pub fn keybindings_destination_for_action(action: Action) -> Option<ConfiguratorDestination> {
     let section = keybindings_section_for_action(action)?;
     let key = KeybindingsConfig::config_key_for_action(action)?;
@@ -347,6 +352,7 @@ impl ConfiguratorScreen {
     ];
 
     /// The token that names this screen on the command line.
+    #[must_use]
     pub const fn as_arg(self) -> &'static str {
         match self {
             Self::UiToolbar => "ui/toolbar",
@@ -382,6 +388,7 @@ impl ConfiguratorScreen {
     }
 
     /// The screen a token names, if this build has it.
+    #[must_use]
     pub fn parse(token: &str) -> Option<Self> {
         match token {
             "ui/toolbar" => Some(Self::UiToolbar),
@@ -434,6 +441,7 @@ pub struct ConfiguratorDestination {
 
 impl ConfiguratorDestination {
     /// A destination that only names a screen.
+    #[must_use]
     pub const fn new(screen: ConfiguratorScreen) -> Self {
         Self {
             screen,
@@ -454,10 +462,12 @@ impl ConfiguratorDestination {
         }
     }
 
+    #[must_use]
     pub const fn screen(&self) -> ConfiguratorScreen {
         self.screen
     }
 
+    #[must_use]
     pub fn search(&self) -> Option<&str> {
         self.search.as_deref()
     }
@@ -468,6 +478,7 @@ impl ConfiguratorDestination {
     /// token. Nothing needs escaping: the token goes from the broker straight
     /// into `exec`, never through a shell or a file, so a term may contain
     /// spaces, `?`, and `=` and still come back unchanged.
+    #[must_use]
     pub fn as_arg(&self) -> String {
         let screen = self.screen.as_arg();
         match &self.search {
@@ -481,6 +492,7 @@ impl ConfiguratorDestination {
     /// A screen this build does not have, or a query it does not understand,
     /// yields `None` rather than a partial landing: the configurator says so
     /// and opens its usual first screen instead.
+    #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let (screen_token, term) = match text.split_once(QUERY_SEPARATOR) {
             None => (text, None),

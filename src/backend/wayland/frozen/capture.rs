@@ -1,25 +1,19 @@
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use smithay_client_toolkit::shm::{
-    Shm,
-    slot::{Buffer, SlotPool},
-};
-use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::wl_shm};
-use wayland_protocols::ext::{
-    image_capture_source::v1::client::{
-        ext_image_capture_source_v1::ExtImageCaptureSourceV1,
-        ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
-    },
-    image_copy_capture::v1::client::{
-        ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
-        ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
-        ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
-    },
-};
+use smithay_client_toolkit::shm::Shm;
+use smithay_client_toolkit::shm::slot::{Buffer, SlotPool};
+use wayland_client::{Dispatch, QueueHandle, WEnum};
+use wayland_client::protocol::wl_shm;
+use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
+use wayland_protocols::ext::image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1;
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1;
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1;
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
     Event as FrameEvent, Flags, ZwlrScreencopyFrameV1,
 };
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+use tokio::runtime::Handle;
 
 use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
 use crate::backend::wayland::capture::CaptureLayoutContext;
@@ -108,7 +102,7 @@ impl FrozenState {
         backend: FrozenCaptureBackend,
         shm: &Shm,
         qh: &QueueHandle<State>,
-        tokio_handle: &tokio::runtime::Handle,
+        tokio_handle: &Handle,
     ) -> Result<()>
     where
         State: Dispatch<ZwlrScreencopyFrameV1, ()>
@@ -128,7 +122,7 @@ impl FrozenState {
         failed_backend: FrozenCaptureBackend,
         shm: &Shm,
         qh: &QueueHandle<State>,
-        tokio_handle: &tokio::runtime::Handle,
+        tokio_handle: &Handle,
     ) -> Result<()>
     where
         State: Dispatch<ZwlrScreencopyFrameV1, ()>
@@ -151,7 +145,7 @@ impl FrozenState {
         first_backend: FrozenCaptureBackend,
         shm: &Shm,
         qh: &QueueHandle<State>,
-        tokio_handle: &tokio::runtime::Handle,
+        tokio_handle: &Handle,
     ) -> Result<()>
     where
         State: Dispatch<ZwlrScreencopyFrameV1, ()>
@@ -189,7 +183,7 @@ impl FrozenState {
         backend: FrozenCaptureBackend,
         shm: &Shm,
         qh: &QueueHandle<State>,
-        tokio_handle: &tokio::runtime::Handle,
+        tokio_handle: &Handle,
     ) -> Result<()>
     where
         State: Dispatch<ZwlrScreencopyFrameV1, ()>
@@ -259,7 +253,7 @@ impl FrozenState {
     }
 
     /// Handle screencopy frame events.
-    pub fn handle_frame_event(&mut self, event: FrameEvent, input_state: &mut InputState) -> bool {
+    pub fn handle_frame_event(&mut self, event: &FrameEvent, input_state: &mut InputState) -> bool {
         if !matches!(
             self.direct_capture.as_ref(),
             Some(DirectCaptureAttempt::WlrScreencopy { .. })
@@ -268,7 +262,7 @@ impl FrozenState {
             return false;
         }
 
-        match event {
+        match *event {
             FrameEvent::Buffer {
                 format,
                 width,

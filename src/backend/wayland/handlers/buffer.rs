@@ -1,6 +1,7 @@
 // Listens for wl_buffer release events so SlotPool buffers can re-enter circulation.
 use log::debug;
-use wayland_client::{Connection, Dispatch, QueueHandle, protocol::wl_buffer};
+use wayland_client::protocol::wl_buffer;
+use wayland_client::{Connection, Dispatch, QueueHandle};
 
 use super::super::state::WaylandState;
 

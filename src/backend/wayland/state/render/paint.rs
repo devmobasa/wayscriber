@@ -1,7 +1,14 @@
-use super::plan::FramePlan;
+use std::slice;
+use std::time::{Duration, Instant};
+
+use super::super::WaylandState;
+use super::super::perf::PerfRenderBreakdown;
+use super::plan::{FrameGeometry, FramePlan};
 use super::profile::{PixelBuffer, ProfileMode};
-use super::*;
+use super::{canvas, record_render_stage};
 use crate::backend::wayland::surface::AcquiredBuffer;
+use anyhow::{Context, Result};
+use log::debug;
 
 impl WaylandState {
     pub(super) fn paint_frame(
@@ -25,7 +32,7 @@ impl WaylandState {
         // The acquired SHM slot supplies width * height * 4 bytes in ARgb32.
         // It stays owned by this render attempt until submission. All Cairo
         // handles are dropped before attach_to marks the slot in flight.
-        let draw_start = std::time::Instant::now();
+        let draw_start = Instant::now();
         let (cairo_surface, ctx) = record_stage!(breakdown, cairo_surface, {
             // SAFETY: the unsubmitted slot owns the backing memory throughout
             // painting; geometry and stride match its acquisition parameters.
@@ -91,10 +98,10 @@ impl WaylandState {
                 // SAFETY: the acquired slot remains exclusive to this paint pass.
                 // Cairo is flushed and the temporary slice ends before UI painting.
                 let data = unsafe {
-                    std::slice::from_raw_parts_mut(canvas_ptr as *mut u8, plan.geometry.byte_len)
+                    slice::from_raw_parts_mut(canvas_ptr as *mut u8, plan.geometry.byte_len)
                 };
                 let rewritten = plan.profile.before_ui(
-                    PixelBuffer {
+                    &mut PixelBuffer {
                         data,
                         width: phys_width as i32,
                         height: phys_height as i32,
@@ -128,10 +135,10 @@ impl WaylandState {
                 // SAFETY: Cairo is flushed and dropped, and the slot has not been
                 // attached. This is the only access to its pixel bytes.
                 let data = unsafe {
-                    std::slice::from_raw_parts_mut(canvas_ptr as *mut u8, plan.geometry.byte_len)
+                    slice::from_raw_parts_mut(canvas_ptr as *mut u8, plan.geometry.byte_len)
                 };
                 plan.profile.after_ui(
-                    PixelBuffer {
+                    &mut PixelBuffer {
                         data,
                         width: phys_width as i32,
                         height: phys_height as i32,
@@ -157,7 +164,7 @@ impl WaylandState {
                 width, height, phys_width, phys_height, scale, draw_duration
             );
         }
-        if draw_duration > std::time::Duration::from_millis(2) {
+        if draw_duration > Duration::from_millis(2) {
             debug!("Cairo draw took {:?}", draw_duration);
         }
 

@@ -4,15 +4,18 @@ mod translate;
 
 use log::{debug, trace, warn};
 use smithay_client_toolkit::seat::keyboard::{
-    KeyEvent, KeyboardHandler, Modifiers, RawModifiers, RepeatInfo,
+    KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers, RepeatInfo,
 };
 use std::time::{Duration, Instant};
-use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_keyboard, wl_surface},
-};
+use wayland_client::protocol::{wl_keyboard, wl_surface};
+use wayland_client::{Connection, QueueHandle};
 
-use crate::{config::Action, input::Key, notification};
+use crate::backend::wayland::state::WindowSnapDirection;
+use crate::config::{Action, ChordModifiers};
+use crate::input::Key;
+use crate::input::state::RegionPurposeTag;
+use crate::notification;
+use crate::ui::RegionAction;
 
 use super::super::state::{KeyRepeatTiming, KeyboardId, WaylandState};
 pub(in crate::backend::wayland) use press::{ForwardedKey, KeyPressSource};
@@ -27,19 +30,25 @@ pub(in crate::backend::wayland) enum XdgFocusLeaveAction {
     Exit,
 }
 
+/// What the overlay knows when keyboard focus leaves its surface.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::backend::wayland) struct XdgFocusLeaveContext {
+    pub(in crate::backend::wayland) is_xdg_window: bool,
+    pub(in crate::backend::wayland) desktop_open_in_progress: bool,
+    pub(in crate::backend::wayland) focus_exit_suppressed: bool,
+    pub(in crate::backend::wayland) focus_loss_exits_overlay: bool,
+}
+
 pub(in crate::backend::wayland) fn xdg_focus_leave_action(
-    is_xdg_window: bool,
-    desktop_open_in_progress: bool,
-    focus_exit_suppressed: bool,
-    focus_loss_exits_overlay: bool,
+    context: XdgFocusLeaveContext,
 ) -> XdgFocusLeaveAction {
-    if !is_xdg_window {
+    if !context.is_xdg_window {
         XdgFocusLeaveAction::Ignore
-    } else if desktop_open_in_progress {
+    } else if context.desktop_open_in_progress {
         XdgFocusLeaveAction::AwaitDesktopOpen
-    } else if focus_exit_suppressed {
+    } else if context.focus_exit_suppressed {
         XdgFocusLeaveAction::RestoreClipboardFocus
-    } else if focus_loss_exits_overlay {
+    } else if context.focus_loss_exits_overlay {
         XdgFocusLeaveAction::Exit
     } else {
         XdgFocusLeaveAction::StayOpen
@@ -55,7 +64,7 @@ impl KeyboardHandler for WaylandState {
         surface: &wl_surface::WlSurface,
         serial: u32,
         _raw: &[u32],
-        _keysyms: &[smithay_client_toolkit::seat::keyboard::Keysym],
+        _keysyms: &[Keysym],
     ) {
         debug!("Keyboard focus entered");
         self.focus.keyboard_entered();
@@ -94,12 +103,12 @@ impl KeyboardHandler for WaylandState {
         debug!("Keyboard focus left");
         self.teardown_keyboard_focus();
 
-        match xdg_focus_leave_action(
-            self.surface.is_xdg_window(),
-            self.desktop_open_in_progress(),
-            self.focus.exit_suppressed(Instant::now()),
-            self.xdg_focus_loss_exits_overlay(),
-        ) {
+        match xdg_focus_leave_action(XdgFocusLeaveContext {
+            is_xdg_window: self.surface.is_xdg_window(),
+            desktop_open_in_progress: self.desktop_open_in_progress(),
+            focus_exit_suppressed: self.focus.exit_suppressed(Instant::now()),
+            focus_loss_exits_overlay: self.xdg_focus_loss_exits_overlay(),
+        }) {
             XdgFocusLeaveAction::Ignore => {}
             XdgFocusLeaveAction::AwaitDesktopOpen => {
                 // The opener deliberately transfers focus. Overlay exit waits
@@ -196,12 +205,12 @@ impl KeyboardHandler for WaylandState {
         );
         // Trust compositor-reported modifier state to reconcile any missed key release
         // events and avoid "stuck" modifiers.
-        self.input_state.sync_modifiers(
-            modifiers.shift,
-            modifiers.ctrl,
-            modifiers.alt,
-            modifiers.logo,
-        );
+        self.input_state.sync_modifiers(ChordModifiers {
+            ctrl: modifiers.ctrl,
+            shift: modifiers.shift,
+            alt: modifiers.alt,
+            logo: modifiers.logo,
+        });
         self.sync_region_square_modifier(modifiers.shift);
     }
 
@@ -339,8 +348,7 @@ impl WaylandState {
                 return true;
             }
             if action == Action::CopyTextFromScreen
-                && self.input_state.region_state().purpose()
-                    == Some(crate::input::state::RegionPurposeTag::Ocr)
+                && self.input_state.region_state().purpose() == Some(RegionPurposeTag::Ocr)
             {
                 self.cancel_ocr();
                 return true;
@@ -510,7 +518,7 @@ fn screen_modal_swallows_key_release(
 /// to submit.
 fn region_select_all_pressed(
     region_active: bool,
-    purpose: Option<crate::input::state::RegionPurposeTag>,
+    purpose: Option<RegionPurposeTag>,
     ctrl: bool,
     key: Key,
 ) -> bool {
@@ -522,10 +530,7 @@ fn region_select_all_pressed(
         && matches!(key, Key::Char('a' | 'A'))
 }
 
-fn region_window_snap_direction(
-    key: Key,
-    logo: bool,
-) -> Option<crate::backend::wayland::state::WindowSnapDirection> {
+fn region_window_snap_direction(key: Key, logo: bool) -> Option<WindowSnapDirection> {
     use crate::backend::wayland::state::WindowSnapDirection;
 
     if !logo {
@@ -543,7 +548,7 @@ fn region_window_snap_direction(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RegionReviewKeyAction {
     Nudge(i64, i64),
-    Submit(crate::ui::RegionAction),
+    Submit(RegionAction),
 }
 
 fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionReviewKeyAction> {
@@ -553,42 +558,36 @@ fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionR
         Key::Right => Some(RegionReviewKeyAction::Nudge(step, 0)),
         Key::Up => Some(RegionReviewKeyAction::Nudge(0, -step)),
         Key::Down => Some(RegionReviewKeyAction::Nudge(0, step)),
-        Key::Char('c' | 'C') if ctrl => {
-            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Copy))
-        }
-        Key::Char('s' | 'S') if ctrl => {
-            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Save))
-        }
-        Key::Return => Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Both)),
-        Key::Char('b' | 'B') if !ctrl => Some(RegionReviewKeyAction::Submit(
-            crate::ui::RegionAction::Board,
-        )),
+        Key::Char('c' | 'C') if ctrl => Some(RegionReviewKeyAction::Submit(RegionAction::Copy)),
+        Key::Char('s' | 'S') if ctrl => Some(RegionReviewKeyAction::Submit(RegionAction::Save)),
+        Key::Return => Some(RegionReviewKeyAction::Submit(RegionAction::Both)),
+        Key::Char('b' | 'B') if !ctrl => Some(RegionReviewKeyAction::Submit(RegionAction::Board)),
         Key::Char('d' | 'D') if !ctrl => Some(RegionReviewKeyAction::Submit(
-            crate::ui::RegionAction::ToggleIncludeDrawings,
+            RegionAction::ToggleIncludeDrawings,
         )),
-        Key::Char('x' | 'X') if !ctrl => Some(RegionReviewKeyAction::Submit(
-            crate::ui::RegionAction::CutBand,
-        )),
-        Key::Char('z' | 'Z') if ctrl && shift => Some(RegionReviewKeyAction::Submit(
-            crate::ui::RegionAction::RedoCut,
-        )),
-        Key::Char('z' | 'Z') if ctrl => Some(RegionReviewKeyAction::Submit(
-            crate::ui::RegionAction::UndoCut,
-        )),
-        Key::Char('y' | 'Y') if ctrl && !shift => Some(RegionReviewKeyAction::Submit(
-            crate::ui::RegionAction::RedoCut,
-        )),
+        Key::Char('x' | 'X') if !ctrl => Some(RegionReviewKeyAction::Submit(RegionAction::CutBand)),
+        Key::Char('z' | 'Z') if ctrl && shift => {
+            Some(RegionReviewKeyAction::Submit(RegionAction::RedoCut))
+        }
+        Key::Char('z' | 'Z') if ctrl => Some(RegionReviewKeyAction::Submit(RegionAction::UndoCut)),
+        Key::Char('y' | 'Y') if ctrl && !shift => {
+            Some(RegionReviewKeyAction::Submit(RegionAction::RedoCut))
+        }
         _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
+    use crate::input::state::{RegionPurposeTag, ScreenCaptureSource, test_support};
+
     use super::*;
 
     fn repeat(rate: u32, delay: u32) -> RepeatInfo {
         RepeatInfo::Repeat {
-            rate: std::num::NonZeroU32::new(rate).expect("non-zero rate"),
+            rate: NonZeroU32::new(rate).expect("non-zero rate"),
             delay,
         }
     }
@@ -646,13 +645,12 @@ mod tests {
         assert!(screen_modal_swallows_key_release(false, true));
         assert!(!screen_modal_swallows_key_release(false, false));
 
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        input.sync_modifiers(true, false, false, false);
-        input.set_region_pending_capture(
-            crate::input::state::RegionPurposeTag::Ocr,
-            1,
-            crate::input::state::ScreenCaptureSource::Frozen,
-        );
+        let mut input = test_support::make_test_input_state();
+        input.sync_modifiers(ChordModifiers {
+            shift: true,
+            ..ChordModifiers::default()
+        });
+        input.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
         if !screen_modal_swallows_key_release(input.region_is_engaged(), false) {
             input.on_key_release(Key::Shift);
         }
@@ -660,7 +658,7 @@ mod tests {
             input.modifiers.shift,
             "key release must not outrun modifier sync"
         );
-        input.sync_modifiers(false, false, false, false);
+        input.sync_modifiers(ChordModifiers::default());
         assert!(
             !input.modifiers.shift,
             "compositor modifier sync is authoritative"
@@ -740,54 +738,44 @@ mod tests {
         );
         assert_eq!(
             region_review_key_action(Key::Char('c'), true, false),
-            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Copy))
+            Some(RegionReviewKeyAction::Submit(RegionAction::Copy))
         );
         assert_eq!(
             region_review_key_action(Key::Char('s'), true, false),
-            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Save))
+            Some(RegionReviewKeyAction::Submit(RegionAction::Save))
         );
         assert_eq!(
             region_review_key_action(Key::Return, false, false),
-            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Both))
+            Some(RegionReviewKeyAction::Submit(RegionAction::Both))
         );
         assert_eq!(
             region_review_key_action(Key::Char('b'), false, false),
-            Some(RegionReviewKeyAction::Submit(
-                crate::ui::RegionAction::Board
-            ))
+            Some(RegionReviewKeyAction::Submit(RegionAction::Board))
         );
         assert_eq!(region_review_key_action(Key::Char('b'), true, false), None);
         assert_eq!(
             region_review_key_action(Key::Char('d'), false, false),
             Some(RegionReviewKeyAction::Submit(
-                crate::ui::RegionAction::ToggleIncludeDrawings
+                RegionAction::ToggleIncludeDrawings
             ))
         );
         assert_eq!(region_review_key_action(Key::Char('d'), true, false), None);
         assert_eq!(
             region_review_key_action(Key::Char('x'), false, false),
-            Some(RegionReviewKeyAction::Submit(
-                crate::ui::RegionAction::CutBand
-            ))
+            Some(RegionReviewKeyAction::Submit(RegionAction::CutBand))
         );
         assert_eq!(region_review_key_action(Key::Char('x'), true, false), None);
         assert_eq!(
             region_review_key_action(Key::Char('z'), true, false),
-            Some(RegionReviewKeyAction::Submit(
-                crate::ui::RegionAction::UndoCut
-            ))
+            Some(RegionReviewKeyAction::Submit(RegionAction::UndoCut))
         );
         assert_eq!(
             region_review_key_action(Key::Char('z'), true, true),
-            Some(RegionReviewKeyAction::Submit(
-                crate::ui::RegionAction::RedoCut
-            ))
+            Some(RegionReviewKeyAction::Submit(RegionAction::RedoCut))
         );
         assert_eq!(
             region_review_key_action(Key::Char('y'), true, false),
-            Some(RegionReviewKeyAction::Submit(
-                crate::ui::RegionAction::RedoCut
-            ))
+            Some(RegionReviewKeyAction::Submit(RegionAction::RedoCut))
         );
     }
 
@@ -827,12 +815,12 @@ mod tests {
         for focus_exit_suppressed in [false, true] {
             for focus_loss_exits_overlay in [false, true] {
                 assert_eq!(
-                    xdg_focus_leave_action(
-                        true,
-                        true,
+                    xdg_focus_leave_action(XdgFocusLeaveContext {
+                        is_xdg_window: true,
+                        desktop_open_in_progress: true,
                         focus_exit_suppressed,
                         focus_loss_exits_overlay,
-                    ),
+                    }),
                     XdgFocusLeaveAction::AwaitDesktopOpen,
                 );
             }
@@ -841,20 +829,38 @@ mod tests {
 
     #[test]
     fn focus_leave_routing_preserves_non_desktop_open_policies() {
+        let idle_xdg = XdgFocusLeaveContext {
+            is_xdg_window: true,
+            desktop_open_in_progress: false,
+            focus_exit_suppressed: false,
+            focus_loss_exits_overlay: false,
+        };
         assert_eq!(
-            xdg_focus_leave_action(false, true, true, true),
+            xdg_focus_leave_action(XdgFocusLeaveContext {
+                is_xdg_window: false,
+                desktop_open_in_progress: true,
+                focus_exit_suppressed: true,
+                focus_loss_exits_overlay: true,
+            }),
             XdgFocusLeaveAction::Ignore,
         );
         assert_eq!(
-            xdg_focus_leave_action(true, false, true, true),
+            xdg_focus_leave_action(XdgFocusLeaveContext {
+                focus_exit_suppressed: true,
+                focus_loss_exits_overlay: true,
+                ..idle_xdg
+            }),
             XdgFocusLeaveAction::RestoreClipboardFocus,
         );
         assert_eq!(
-            xdg_focus_leave_action(true, false, false, false),
+            xdg_focus_leave_action(idle_xdg),
             XdgFocusLeaveAction::StayOpen,
         );
         assert_eq!(
-            xdg_focus_leave_action(true, false, false, true),
+            xdg_focus_leave_action(XdgFocusLeaveContext {
+                focus_loss_exits_overlay: true,
+                ..idle_xdg
+            }),
             XdgFocusLeaveAction::Exit,
         );
     }

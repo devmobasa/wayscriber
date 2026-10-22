@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
+use crate::draw::Shape;
+use crate::draw::color::BLACK;
 use crate::draw::frame::{DrawnShape, Frame, ShapeSnapshot, UndoAction};
-use crate::draw::{Shape, color::BLACK};
 
 #[test]
 fn prune_history_for_removed_ids_prunes_shapes_and_actions() {
@@ -20,7 +21,7 @@ fn prune_history_for_removed_ids_prunes_shapes_and_actions() {
     let shape2 = DrawnShape::with_metadata(2, base_shape.clone(), 0, false);
 
     let create_both = UndoAction::Create {
-        shapes: vec![(0, shape1), (1, shape2.clone())],
+        shapes: vec![(0, shape1), (1, shape2)],
     };
 
     let modify_second = UndoAction::Modify {

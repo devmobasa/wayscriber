@@ -1,4 +1,9 @@
-use super::*;
+use super::super::SystemInputEvent;
+use crate::backend::wayland::handlers::keyboard::{KEY_REPEAT_INITIAL_DELAY, KEY_REPEAT_INTERVAL};
+use crate::backend::wayland::input_monitor::translate::EVDEV_KEYCODE_OFFSET;
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
+use xkbcommon::xkb;
 
 pub(super) struct RepeatState {
     held: Option<HeldKey>,
@@ -88,12 +93,12 @@ impl KeyboardKeys {
 
 /// What a press means for the repeat timer: the keymap's repeat flag, plus
 /// the chip label when the HUD has one.
-pub(super) enum RepeatPress<'a> {
+pub(super) enum RepeatPress<'label> {
     /// The keymap marks this key as non-repeating (modifiers, and anything
     /// else the layout excludes from typematic).
     NonRepeating,
     /// The keymap repeats this key; `None` when the HUD has no label for it.
-    Repeating(Option<&'a str>),
+    Repeating(Option<&'label str>),
 }
 
 impl RepeatState {
@@ -115,10 +120,10 @@ impl RepeatState {
         &mut self,
         keycode: u32,
         device: &str,
-        press: RepeatPress<'_>,
+        press: &RepeatPress<'_>,
         now: Instant,
     ) {
-        match press {
+        match *press {
             RepeatPress::NonRepeating => {}
             RepeatPress::Repeating(label) => {
                 self.held = label.map(|label| HeldKey {

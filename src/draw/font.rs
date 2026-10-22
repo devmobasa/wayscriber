@@ -1,5 +1,7 @@
 //! Font descriptor for text rendering.
 
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
 
 /// Font configuration for text rendering.
@@ -22,6 +24,7 @@ pub struct FontDescriptor {
 
 impl FontDescriptor {
     /// Creates a new font descriptor with the specified parameters.
+    #[must_use]
     pub fn new(family: String, weight: String, style: String) -> Self {
         Self {
             family,
@@ -36,6 +39,7 @@ impl FontDescriptor {
     /// its state from this and `to_pango_string` renders from the same field.
     /// A numeric weight is not bold — the toggle writes the word, and a config
     /// that asks for `700` is asking for something the toggle cannot express.
+    #[must_use]
     pub fn is_bold(&self) -> bool {
         self.weight.trim().eq_ignore_ascii_case("bold")
     }
@@ -47,6 +51,7 @@ impl FontDescriptor {
     /// so a family such as "Roboto Condensed" or "Archivo Black" would come
     /// back as "Roboto" condensed or "Archivo" black and render in whatever
     /// fontconfig substitutes. The size keeps its fraction.
+    #[must_use]
     pub fn to_pango_description(&self, size: f64) -> pango::FontDescription {
         let mut description = family_description(&self.family, size);
         if let Some(weight) = pango_weight(&self.weight) {
@@ -66,6 +71,7 @@ impl FontDescriptor {
     /// `pango::FontDescription::from_string` reads back exactly what
     /// [`Self::to_pango_description`] built: a family ending in a style word
     /// is closed with a comma, as in "Roboto Condensed, Bold 17.5".
+    #[must_use]
     pub fn to_pango_string(&self, size: f64) -> String {
         self.to_pango_description(size).to_string()
     }
@@ -75,6 +81,7 @@ impl FontDescriptor {
 ///
 /// The family is set as a name, never parsed, for the reason given on
 /// [`FontDescriptor::to_pango_description`].
+#[must_use]
 pub fn family_description(family: &str, size: f64) -> pango::FontDescription {
     let mut description = pango::FontDescription::new();
     description.set_family(family.trim());
@@ -279,7 +286,7 @@ struct FontCatalog {
     monospace: Vec<String>,
 }
 
-static FONT_CATALOG: std::sync::OnceLock<FontCatalog> = std::sync::OnceLock::new();
+static FONT_CATALOG: OnceLock<FontCatalog> = OnceLock::new();
 
 /// The installed families, enumerated once and kept for the life of the process.
 ///
@@ -362,6 +369,7 @@ fn build_font_catalog(mut listed: Vec<(String, bool)>) -> FontCatalog {
 /// Font families installed on this system, sorted, with duplicates removed.
 ///
 /// See [`font_catalog`] for when the enumeration happens and why it is cached.
+#[must_use]
 pub fn system_font_families() -> &'static [String] {
     &font_catalog().all
 }
@@ -371,6 +379,7 @@ pub fn system_font_families() -> &'static [String] {
 /// The group people reach for when annotating code, and a small enough slice of
 /// a typical system — 10 of 269 on the machine this was measured on — to be
 /// worth offering as its own filter. Free once the full list has been built.
+#[must_use]
 pub fn monospace_font_families() -> &'static [String] {
     &font_catalog().monospace
 }
@@ -380,6 +389,7 @@ pub fn monospace_font_families() -> &'static [String] {
 /// Pango resolves an unknown family to whatever fontconfig substitutes, with no
 /// error and no warning, so a typo in a configured family silently renders in
 /// something else. This is how a caller can say so.
+#[must_use]
 pub fn family_is_installed(family: &str) -> bool {
     let wanted = family.trim();
     if wanted.is_empty() {
@@ -397,6 +407,7 @@ pub fn family_is_installed(family: &str) -> bool {
 /// names exactly ends up treating them as two, and a step from one to the other
 /// changes only the spelling. Not `eq_ignore_ascii_case`: family names are not
 /// all Latin.
+#[must_use]
 pub fn families_match(left: &str, right: &str) -> bool {
     normalized_family_name(left) == normalized_family_name(right)
 }
@@ -407,6 +418,8 @@ fn normalized_family_name(family: &str) -> String {
 
 #[cfg(test)]
 mod system_font_tests {
+    use std::ptr;
+
     use super::*;
 
     #[test]
@@ -431,7 +444,7 @@ mod system_font_tests {
         let second = system_font_families();
 
         assert!(
-            std::ptr::eq(first, second),
+            ptr::eq(first, second),
             "the second call must not re-enumerate"
         );
     }
@@ -444,8 +457,8 @@ mod system_font_tests {
         let all = system_font_families();
         let monospace = monospace_font_families();
 
-        assert!(std::ptr::eq(all, system_font_families()));
-        assert!(std::ptr::eq(monospace, monospace_font_families()));
+        assert!(ptr::eq(all, system_font_families()));
+        assert!(ptr::eq(monospace, monospace_font_families()));
         // Same catalog: the monospace list is in the full list's own order.
         let mut positions = monospace
             .iter()

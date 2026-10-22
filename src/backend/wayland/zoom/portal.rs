@@ -1,24 +1,24 @@
 use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
+use tokio::runtime::Handle;
 
 use crate::backend::wayland::frozen::ScreenImageProvenance;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, portal_output_matches,
 };
+use crate::backend::wayland::portal_raster;
 use crate::backend::wayland::portal_task::{PortalPoll, PortalTask};
 use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureError;
 use crate::input::InputState;
+use crate::notification;
 
 use super::state::{ZoomSourceOutcome, ZoomState};
 
 impl ZoomState {
-    pub(super) fn capture_via_portal(
-        &mut self,
-        tokio_handle: &tokio::runtime::Handle,
-    ) -> Result<()> {
+    pub(super) fn capture_via_portal(&mut self, tokio_handle: &Handle) -> Result<()> {
         if self.portal.is_running() {
             warn!("Zoom portal capture already running; ignoring new request");
             return Ok(());
@@ -43,7 +43,7 @@ impl ZoomState {
             geo.transform,
         )
         .expect("verified output geometry has a positive scale");
-        crate::notification::send_notification_async(
+        notification::send_notification_async(
             tokio_handle,
             "Zoom capture".to_string(),
             "Requesting screen capture...".to_string(),
@@ -57,9 +57,7 @@ impl ZoomState {
                     let (data, width, height) = decode_image_to_argb(&bytes).map_err(|error| {
                         CaptureError::ImageError(format!("Decode failed: {error}"))
                     })?;
-                    let image = crate::backend::wayland::portal_raster::crop_portal_raster(
-                        data, width, height, &geo,
-                    );
+                    let image = portal_raster::crop_portal_raster(&data, width, height, &geo);
 
                     Ok((Some(target_output_id), layout_generation, provenance, image))
                 }
@@ -209,6 +207,15 @@ impl ZoomState {
 
 #[cfg(test)]
 mod tests {
+    use std::future;
+
+    use tokio::task;
+    use wayland_client::protocol::wl_output::Transform;
+
+    use crate::backend::wayland::RuntimeWakeSource;
+    use crate::backend::wayland::capture_preflight::CaptureLayoutRetry;
+    use crate::capture::DesktopBackdropGeometry;
+
     use super::*;
     use crate::backend::wayland::frozen::FrozenImage;
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
@@ -225,13 +232,7 @@ mod tests {
     }
 
     fn provenance(output_id: u32, layout_generation: u64) -> ScreenImageProvenance {
-        ScreenImageProvenance::new(
-            output_id,
-            layout_generation,
-            1,
-            wayland_client::protocol::wl_output::Transform::Normal,
-        )
-        .unwrap()
+        ScreenImageProvenance::new(output_id, layout_generation, 1, Transform::Normal).unwrap()
     }
 
     fn stale_report() -> Option<super::super::state::ZoomTerminalReport> {
@@ -241,16 +242,14 @@ mod tests {
         })
     }
 
-    fn crop_geometry(
-        origin: (u32, u32),
-    ) -> crate::backend::wayland::frozen_geometry::OutputGeometry {
-        crate::backend::wayland::frozen_geometry::OutputGeometry {
+    fn crop_geometry(origin: (u32, u32)) -> OutputGeometry {
+        OutputGeometry {
             logical_x: 0,
             logical_y: 0,
             logical_width: 2,
             logical_height: 1,
             scale: 1,
-            transform: wayland_client::protocol::wl_output::Transform::Normal,
+            transform: Transform::Normal,
             overlay_buffer_size: (2, 1),
             pixel_size: Some((2, 1)),
             screenshot_origin: Some(origin),
@@ -262,11 +261,11 @@ mod tests {
 
     #[tokio::test]
     async fn portal_start_requires_verifiable_geometry_and_output_identity() -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
 
         let error = zoom
-            .capture_via_portal(&tokio::runtime::Handle::current())
+            .capture_via_portal(&Handle::current())
             .expect_err("missing geometry must fail closed");
         assert!(error.to_string().contains("geometry is unavailable"));
         assert!(!zoom.portal.is_running());
@@ -274,7 +273,7 @@ mod tests {
 
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
         let error = zoom
-            .capture_via_portal(&tokio::runtime::Handle::current())
+            .capture_via_portal(&Handle::current())
             .expect_err("missing output identity must fail closed");
         assert!(error.to_string().contains("identity is unavailable"));
         assert!(!zoom.portal.is_running());
@@ -289,11 +288,11 @@ mod tests {
             Some((3, 2)),
             (3, 2),
             2,
-            wayland_client::protocol::wl_output::Transform::Normal,
+            Transform::Normal,
             Some((5, 3)),
         )
         .expect("fractional geometry")
-        .with_desktop_backdrop_geometry(Some(crate::capture::DesktopBackdropGeometry {
+        .with_desktop_backdrop_geometry(Some(DesktopBackdropGeometry {
             logical_x: 0,
             logical_y: 0,
             logical_width: 3,
@@ -306,13 +305,8 @@ mod tests {
             screenshot_height: Some(3),
         }));
 
-        let image = crate::backend::wayland::portal_raster::crop_portal_raster(
-            vec![7; 5 * 3 * 4],
-            5,
-            3,
-            &geometry,
-        )
-        .expect("fractional output screenshot");
+        let image = portal_raster::crop_portal_raster(&[7; 5 * 3 * 4], 5, 3, &geometry)
+            .expect("fractional output screenshot");
 
         assert_eq!((image.width, image.height), (5, 3));
         assert_eq!(image.stride, 20);
@@ -359,19 +353,14 @@ mod tests {
                 Some((active.logical_width as i32, active.logical_height as i32)),
                 (active.logical_width, active.logical_height),
                 if index == 0 { 1 } else { 2 },
-                wayland_client::protocol::wl_output::Transform::Normal,
+                Transform::Normal,
                 Some((8, 4)),
             )
             .unwrap()
             .with_desktop_backdrop_geometry(DesktopBackdropGeometry::from_outputs(active, &outputs))
             .with_portal_outputs(Some(outputs.to_vec()));
-            let image = crate::backend::wayland::portal_raster::crop_portal_raster(
-                pixels.clone(),
-                24,
-                8,
-                &geometry,
-            )
-            .expect("KDE mixed-scale crop");
+            let image = portal_raster::crop_portal_raster(&pixels, 24, 8, &geometry)
+                .expect("KDE mixed-scale crop");
             assert_eq!((image.width, image.height), (8, 4));
             assert_eq!(
                 image.data,
@@ -383,8 +372,8 @@ mod tests {
 
     #[test]
     fn portal_crop_rejects_a_different_screenshot_layout() {
-        let geometry = crop_geometry((0, 0)).with_desktop_backdrop_geometry(Some(
-            crate::capture::DesktopBackdropGeometry {
+        let geometry =
+            crop_geometry((0, 0)).with_desktop_backdrop_geometry(Some(DesktopBackdropGeometry {
                 logical_x: 0,
                 logical_y: 0,
                 logical_width: 2,
@@ -395,18 +384,9 @@ mod tests {
                 crop_y: Some(0),
                 screenshot_width: Some(2),
                 screenshot_height: Some(1),
-            },
-        ));
+            }));
 
-        assert!(
-            crate::backend::wayland::portal_raster::crop_portal_raster(
-                vec![0; 3 * 4],
-                3,
-                1,
-                &geometry
-            )
-            .is_err()
-        );
+        assert!(portal_raster::crop_portal_raster(&[0; 3 * 4], 3, 1, &geometry).is_err());
     }
 
     async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) {
@@ -423,21 +403,21 @@ mod tests {
             if !zoom.portal.is_running() {
                 return;
             }
-            tokio::task::yield_now().await;
+            task::yield_now().await;
         }
         panic!("zoom portal task did not finish");
     }
 
     #[tokio::test]
     async fn success_activates_zoom_with_the_matching_image() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
         zoom.set_active_output(None, Some(1));
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, provenance(1, 0), Ok(image(3)))) },
         ));
@@ -464,17 +444,17 @@ mod tests {
     #[tokio::test]
     async fn domain_error_and_task_panic_restore_the_zoom_lifecycle() {
         for panic_task in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             let id = zoom.begin_identified_capture();
             zoom.request_activation();
             zoom.portal.start(if panic_task {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
+                PortalTask::spawn(&Handle::current(), wake.handle(), async {
                     panic!("expected zoom portal panic")
                 })
             } else {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
+                PortalTask::spawn(&Handle::current(), wake.handle(), async {
                     Err(CaptureError::PermissionDenied)
                 })
             });
@@ -499,12 +479,12 @@ mod tests {
 
     #[tokio::test]
     async fn portal_dismissal_emits_a_correlated_cancelled_terminal() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async { Err(CaptureError::Cancelled("dismissed".to_string())) },
         ));
@@ -526,17 +506,17 @@ mod tests {
     async fn disconnect_and_deadline_expiry_restore_without_a_producer_result() {
         let now = Instant::now();
         for timed_out in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             let id = zoom.begin_identified_capture();
             zoom.request_activation();
             zoom.portal.start(if timed_out {
                 PortalTask::spawn_at_for_test(
-                    &tokio::runtime::Handle::current(),
+                    &Handle::current(),
                     wake.handle(),
                     now.checked_sub(PORTAL_CAPTURE_TIMEOUT).unwrap(),
-                    std::future::pending(),
+                    future::pending(),
                 )
             } else {
                 PortalTask::disconnected_for_test(now)
@@ -562,7 +542,7 @@ mod tests {
 
     #[tokio::test]
     async fn stale_output_preserves_the_current_zoom_image_and_activation() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
@@ -571,7 +551,7 @@ mod tests {
         zoom.set_active_output(None, Some(2));
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, provenance(1, 0), Ok(image(9)))) },
         ));
@@ -596,11 +576,11 @@ mod tests {
 
     #[tokio::test]
     async fn exhausted_layout_retry_preserves_the_current_zoom_image_and_activation() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
-        zoom.layout_retry = crate::backend::wayland::capture_preflight::CaptureLayoutRetry::Spent;
+        zoom.layout_retry = CaptureLayoutRetry::Spent;
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
@@ -608,7 +588,7 @@ mod tests {
         let layout_generation = zoom.layout_generations.active_output;
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async move {
                 Ok((
@@ -641,7 +621,7 @@ mod tests {
 
     #[tokio::test]
     async fn matching_layout_still_applies_after_an_identical_geometry_refresh() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
@@ -651,7 +631,7 @@ mod tests {
         let layout_generation = zoom.layout_generations.active_output;
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async move {
                 Ok((
@@ -684,11 +664,11 @@ mod tests {
 
     #[tokio::test]
     async fn exhausted_topology_retry_discards_a_single_output_portal_image() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let id = zoom.begin_identified_capture();
-        zoom.layout_retry = crate::backend::wayland::capture_preflight::CaptureLayoutRetry::Spent;
+        zoom.layout_retry = CaptureLayoutRetry::Spent;
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0)).with_known_output_count(Some(1))));
@@ -696,7 +676,7 @@ mod tests {
         let layout_generation = zoom.layout_generations.active_output;
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async move {
                 Ok((
@@ -728,18 +708,17 @@ mod tests {
 
     #[tokio::test]
     async fn supersession_is_ignored_and_explicit_abort_owns_task_cancellation() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let id = zoom.begin_identified_capture();
         zoom.request_activation();
         zoom.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
-            std::future::pending(),
+            future::pending(),
         ));
 
-        zoom.capture_via_portal(&tokio::runtime::Handle::current())
-            .unwrap();
+        zoom.capture_via_portal(&Handle::current()).unwrap();
         assert!(zoom.portal.is_running());
         assert!(zoom.abort_capture());
         assert!(!zoom.portal.is_running());

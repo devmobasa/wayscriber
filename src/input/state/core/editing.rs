@@ -1,11 +1,13 @@
 //! Canvas mutation transactions. InputState applies UI and persistence effects.
+use std::collections::HashSet;
+
 use crate::draw::frame::{Frame, ShapeSnapshot, UndoAction};
 use crate::draw::{Shape, ShapeId, TextMeasurer};
 use crate::util::Rect;
 use std::borrow::Cow;
 
-pub(in crate::input::state) struct CanvasEdit<'a> {
-    snapshots: Cow<'a, [(ShapeId, ShapeSnapshot)]>,
+pub(in crate::input::state) struct CanvasEdit<'snapshots> {
+    snapshots: Cow<'snapshots, [(ShapeId, ShapeSnapshot)]>,
 }
 
 #[derive(Default)]
@@ -15,7 +17,7 @@ pub(in crate::input::state) struct EditEffects {
     committed: bool,
 }
 
-impl<'a> CanvasEdit<'a> {
+impl<'snapshots> CanvasEdit<'snapshots> {
     pub(in crate::input::state) fn capture(frame: &Frame, ids: &[ShapeId]) -> Self {
         Self {
             snapshots: Cow::Owned(
@@ -48,7 +50,7 @@ impl<'a> CanvasEdit<'a> {
     /// Live resize borrows the gesture's original snapshots; motion events
     /// must not clone whole freehand paths just to read their starting geometry.
     pub(in crate::input::state) fn borrow_snapshots(
-        snapshots: &'a [(ShapeId, ShapeSnapshot)],
+        snapshots: &'snapshots [(ShapeId, ShapeSnapshot)],
     ) -> Self {
         Self {
             snapshots: Cow::Borrowed(snapshots),
@@ -159,7 +161,7 @@ impl<'a> CanvasEdit<'a> {
 
     pub(in crate::input::state) fn delete(
         frame: &mut Frame,
-        ids: &std::collections::HashSet<ShapeId>,
+        ids: &HashSet<ShapeId>,
         measurer: &TextMeasurer,
         limit: usize,
     ) -> EditEffects {

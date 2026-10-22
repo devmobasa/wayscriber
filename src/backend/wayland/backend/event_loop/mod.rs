@@ -1,3 +1,6 @@
+use std::io;
+
+use crate::daemon::protocol_v2;
 use crate::notification;
 use log::{info, warn};
 use std::time::{Duration, Instant};
@@ -47,9 +50,8 @@ pub(super) fn run_event_loop(
     let mut signals = match install_then_scan(
         || {
             let signals = setup_signal_handlers(runtime_wake.handle())?;
-            if let Err(error) = crate::daemon::protocol_v2::publish_signal_ready_from_environment()
-            {
-                return Err(std::io::Error::other(format!(
+            if let Err(error) = protocol_v2::publish_signal_ready_from_environment() {
+                return Err(io::Error::other(format!(
                     "failed to publish overlay signal readiness: {error:#}"
                 )));
             }
@@ -370,9 +372,9 @@ fn handle_xdg_focus_loss(state: &mut WaylandState, qh: &wayland_client::QueueHan
 }
 
 fn install_then_scan<T>(
-    install: impl FnOnce() -> std::io::Result<T>,
+    install: impl FnOnce() -> io::Result<T>,
     scan: impl FnOnce(),
-) -> std::io::Result<T> {
+) -> io::Result<T> {
     let installed = install()?;
     scan();
     Ok(installed)
@@ -393,7 +395,7 @@ fn terminal_signal_failure(
 fn finalize_event_loop(
     loop_error: &mut Option<anyhow::Error>,
     persist_final_session: impl FnOnce(),
-    stop_signal_listener: impl FnOnce() -> std::io::Result<()>,
+    stop_signal_listener: impl FnOnce() -> io::Result<()>,
 ) {
     persist_final_session();
     if let Err(err) = stop_signal_listener() {
@@ -407,13 +409,21 @@ fn finalize_event_loop(
     }
 }
 
-fn should_defer_xdg_unfocused_exit(
+/// What the overlay knows when an exit request reaches the event loop.
+#[derive(Debug, Clone, Copy)]
+struct XdgExitContext {
     is_xdg_window: bool,
+    /// Losing focus keeps the xdg overlay open instead of exiting.
     stay_mode: bool,
     has_keyboard_focus: bool,
-    explicit_xdg_close_requested: bool,
-) -> bool {
-    is_xdg_window && stay_mode && !has_keyboard_focus && !explicit_xdg_close_requested
+    explicit_close_requested: bool,
+}
+
+fn should_defer_xdg_unfocused_exit(context: XdgExitContext) -> bool {
+    context.is_xdg_window
+        && context.stay_mode
+        && !context.has_keyboard_focus
+        && !context.explicit_close_requested
 }
 
 fn break_on_requested_exit(state: &mut WaylandState) -> bool {
@@ -422,12 +432,12 @@ fn break_on_requested_exit(state: &mut WaylandState) -> bool {
     }
     let explicit_xdg_close_requested = state.focus.take_xdg_explicit_close_requested()
         || state.input_state.take_explicit_exit_requested();
-    if should_defer_xdg_unfocused_exit(
-        state.surface.is_xdg_window(),
-        !state.xdg_focus_loss_exits_overlay(),
-        state.focus.keyboard_focused(),
-        explicit_xdg_close_requested,
-    ) {
+    if should_defer_xdg_unfocused_exit(XdgExitContext {
+        is_xdg_window: state.surface.is_xdg_window(),
+        stay_mode: !state.xdg_focus_loss_exits_overlay(),
+        has_keyboard_focus: state.focus.keyboard_focused(),
+        explicit_close_requested: explicit_xdg_close_requested,
+    }) {
         warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
         state.input_state.should_exit = false;
         false
@@ -443,7 +453,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        finalize_event_loop, install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
+        XdgExitContext, finalize_event_loop, install_then_scan, min_timeout,
+        should_defer_xdg_unfocused_exit,
     };
 
     #[test]
@@ -464,14 +475,32 @@ mod tests {
 
     #[test]
     fn defers_exit_only_for_unfocused_xdg_stay_without_explicit_close() {
-        assert!(should_defer_xdg_unfocused_exit(true, true, false, false));
-        assert!(!should_defer_xdg_unfocused_exit(true, true, true, false));
-        assert!(!should_defer_xdg_unfocused_exit(true, false, false, false));
-        assert!(!should_defer_xdg_unfocused_exit(false, true, false, false));
+        let unfocused_stay_mode = XdgExitContext {
+            is_xdg_window: true,
+            stay_mode: true,
+            has_keyboard_focus: false,
+            explicit_close_requested: false,
+        };
+        assert!(should_defer_xdg_unfocused_exit(unfocused_stay_mode));
+        assert!(!should_defer_xdg_unfocused_exit(XdgExitContext {
+            has_keyboard_focus: true,
+            ..unfocused_stay_mode
+        }));
+        assert!(!should_defer_xdg_unfocused_exit(XdgExitContext {
+            stay_mode: false,
+            ..unfocused_stay_mode
+        }));
+        assert!(!should_defer_xdg_unfocused_exit(XdgExitContext {
+            is_xdg_window: false,
+            ..unfocused_stay_mode
+        }));
         // Desktop-open handoff marks the close explicit so stay-mode does not
         // cancel exit and reactivate over the opened application. Exit-after-
         // capture uses the same explicit-close bit for the same reason.
-        assert!(!should_defer_xdg_unfocused_exit(true, true, false, true));
+        assert!(!should_defer_xdg_unfocused_exit(XdgExitContext {
+            explicit_close_requested: true,
+            ..unfocused_stay_mode
+        }));
     }
 
     #[test]

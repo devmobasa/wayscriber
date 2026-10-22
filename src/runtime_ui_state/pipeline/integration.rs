@@ -1,4 +1,13 @@
-use super::*;
+use super::super::{
+    AcceptedStateRevision, FlushRequestId, RuntimeStateFailurePathEffect, RuntimeStateIoError,
+    RuntimeStateObservedPathEffect, RuntimeStatePostClaimPathEffect, RuntimeStateSourceRevision,
+    RuntimeUiWireState,
+};
+use super::{
+    DurabilityOutcome, FlushOutcome, HeldReplacementStage, IntegratedSourceMutation,
+    PersistencePipeline, PipelineProtocolError, SourceMutationKind, SourceMutationResult,
+};
+use std::collections::BTreeSet;
 
 impl PersistencePipeline {
     pub(crate) fn integrate(
@@ -152,7 +161,7 @@ impl PersistencePipeline {
     pub(crate) fn settle_failed(
         &mut self,
         revisions: impl IntoIterator<Item = AcceptedStateRevision>,
-        error: RuntimeStateIoError,
+        error: &RuntimeStateIoError,
     ) {
         for revision in revisions {
             self.settle_receipt(revision, DurabilityOutcome::Failed(error.clone()));
@@ -163,7 +172,7 @@ impl PersistencePipeline {
     pub(crate) fn settle_persisted(
         &mut self,
         revisions: impl IntoIterator<Item = AcceptedStateRevision>,
-        source: RuntimeStateSourceRevision,
+        source: &RuntimeStateSourceRevision,
     ) {
         for revision in revisions {
             self.settle_receipt(
@@ -189,7 +198,7 @@ impl PersistencePipeline {
     pub(crate) fn settle_held_failed(
         &mut self,
         stages: &[HeldReplacementStage],
-        error: RuntimeStateIoError,
+        error: &RuntimeStateIoError,
     ) {
         self.settle_failed(
             stages

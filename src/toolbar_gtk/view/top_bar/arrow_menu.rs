@@ -7,10 +7,22 @@
 //! click-away), keys relayed to the overlay, and `closed` echoing a user
 //! dismissal. Choosing a style closes the menu from the backend.
 
+use gtk4::accessible::Property;
+
 use crate::draw::ArrowStyle;
 use crate::i18n::trf;
+use crate::toolbar_icons;
+use crate::ui::theme::toolbar;
 
-use super::*;
+use super::super::CaptureSurfaceContent;
+use super::{STYLE_ROW_H, TopBar, set_semantic_widget_id};
+use crate::toolbar_gtk::widgets::{
+    install_click_modifier_capture, install_key_relay, send_event, set_active_class, sized_button,
+};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// Space between a preview and the name after it, as in the builtin menu.
 const PREVIEW_GAP: f64 = 8.0;
@@ -54,7 +66,7 @@ impl TopBar {
         let handle = chip.clone();
         let refresh = move |snapshot: &ToolbarSnapshot| {
             handle.set_tooltip_text(control.tooltip(snapshot).as_deref());
-            handle.update_property(&[gtk4::accessible::Property::Label(&trf(
+            handle.update_property(&[Property::Label(&trf(
                 "{}: {}",
                 &[&control.label(snapshot), &snapshot.arrow_style.label()],
             ))]);
@@ -132,7 +144,7 @@ impl TopBar {
         );
         set_semantic_widget_id(&row, &id);
         row.set_tooltip_text(Some(&entry.tooltip()));
-        row.update_property(&[gtk4::accessible::Property::Label(&trf(
+        row.update_property(&[Property::Label(&trf(
             "{} arrow: {}",
             &[&entry.label, &entry.hint],
         ))]);
@@ -183,11 +195,11 @@ impl ArrowStylePreviewArea {
         let style = Rc::new(Cell::new(style));
         let draw_style = style.clone();
         area.set_draw_func(move |_, ctx, width, height| {
-            crate::toolbar_icons::draw_arrow_style_preview(
+            toolbar_icons::draw_arrow_style_preview(
                 ctx,
                 (0.0, 0.0, f64::from(width), f64::from(height)),
                 draw_style.get(),
-                crate::ui::theme::toolbar::COLOR_TEXT_PRIMARY,
+                toolbar::COLOR_TEXT_PRIMARY,
             );
         });
         Self { area, style }

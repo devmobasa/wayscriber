@@ -6,10 +6,10 @@
 
 use wayscriber::i18n::{tr, trf};
 
+use gtk4::gdk::Key;
 #[cfg(feature = "tablet-input")]
 use wayscriber::config::StylusTrigger;
-use wayscriber::config::keybindings::MAX_SEQUENCE_STEPS;
-use wayscriber::config::keybindings::{MAX_POINTER_EXTRA, gdk};
+use wayscriber::config::keybindings::{MAX_POINTER_EXTRA, MAX_SEQUENCE_STEPS, gdk};
 use wayscriber::config::{KeyBinding, PointerTrigger, Shortcut, ShortcutTrigger};
 
 use super::field::KeybindingField;
@@ -476,7 +476,7 @@ fn keyval_to_unicode(keyval: u32) -> Option<char> {
     // SAFETY: `Key` is a GDK keyval newtype. `from_glib` does not validate,
     // and `to_unicode` is defined for any u32 keyval (it returns None when
     // GDK has no mapping).
-    let key = unsafe { gtk4::gdk::Key::from_glib(keyval) };
+    let key = unsafe { Key::from_glib(keyval) };
     key.to_unicode()
 }
 
@@ -588,16 +588,38 @@ pub mod keyval {
 
 #[cfg(test)]
 mod tests {
+    use wayscriber::config::ChordModifiers;
+    use wayscriber::i18n;
+
+    use crate::test_env;
+
     use super::*;
 
-    fn mods(ctrl: bool, shift: bool, alt: bool, super_held: bool) -> KeyboardModifiers {
-        KeyboardModifiers {
-            ctrl,
-            shift,
-            alt,
-            super_held,
-        }
-    }
+    const NONE: KeyboardModifiers = KeyboardModifiers {
+        ctrl: false,
+        shift: false,
+        alt: false,
+        super_held: false,
+    };
+    const CTRL: KeyboardModifiers = KeyboardModifiers { ctrl: true, ..NONE };
+    const SHIFT: KeyboardModifiers = KeyboardModifiers {
+        shift: true,
+        ..NONE
+    };
+    #[cfg(feature = "tablet-input")]
+    const ALT: KeyboardModifiers = KeyboardModifiers { alt: true, ..NONE };
+    const SUPER: KeyboardModifiers = KeyboardModifiers {
+        super_held: true,
+        ..NONE
+    };
+    const CTRL_SHIFT: KeyboardModifiers = KeyboardModifiers {
+        ctrl: true,
+        ..SHIFT
+    };
+    const SHIFT_SUPER: KeyboardModifiers = KeyboardModifiers {
+        super_held: true,
+        ..SHIFT
+    };
 
     fn chord(keyval: u32, modifiers: KeyboardModifiers) -> KeyBinding {
         match normalize_key_event(keyval, modifiers) {
@@ -614,24 +636,28 @@ mod tests {
 
     #[test]
     fn ctrl_shift_x_uses_canonical_modifier_order() {
-        let binding = chord(u32::from(b'x'), mods(true, true, false, false));
+        let binding = chord(u32::from(b'x'), CTRL_SHIFT);
         assert_eq!(binding.to_string(), "Ctrl+Shift+X");
-        let from_uppercase = chord(u32::from(b'X'), mods(true, true, false, false));
+        let from_uppercase = chord(u32::from(b'X'), CTRL_SHIFT);
         assert_eq!(from_uppercase.to_string(), "Ctrl+Shift+X");
         assert_eq!(binding, from_uppercase);
     }
 
     #[test]
     fn shifted_punctuation_records_the_unshifted_key() {
-        let binding = chord(u32::from(b'!'), mods(false, true, false, false));
+        let binding = chord(u32::from(b'!'), SHIFT);
         assert_eq!(binding.to_string(), "Shift+1");
-        assert!(binding.matches("1", false, true, false, false));
-        assert!(!binding.matches("!", false, true, false, false));
+        let shift_held = ChordModifiers {
+            shift: true,
+            ..ChordModifiers::default()
+        };
+        assert!(binding.matches("1", shift_held));
+        assert!(!binding.matches("!", shift_held));
     }
 
     #[test]
     fn ctrl_shift_plus_round_trips_the_plus_key() {
-        let binding = chord(keyval::PLUS, mods(true, true, false, false));
+        let binding = chord(keyval::PLUS, CTRL_SHIFT);
         assert_eq!(binding.key, "+");
         assert_eq!(binding.to_string(), "Ctrl+Shift++");
         let parsed = KeyBinding::parse("Ctrl+Shift++").expect("plus key parses");
@@ -652,7 +678,7 @@ mod tests {
             keyval::META_L,
             keyval::HYPER_L,
         ] {
-            match normalize_key_event(keyval, mods(true, false, false, false)) {
+            match normalize_key_event(keyval, CTRL) {
                 RecordedKeyboard::Pending { modifiers } => {
                     assert_eq!(pending_preview(modifiers), "Ctrl+…");
                 }
@@ -690,20 +716,17 @@ mod tests {
 
     #[test]
     fn super_chords_record_as_canonical_super() {
-        let binding = chord(u32::from(b'x'), mods(false, false, false, true));
+        let binding = chord(u32::from(b'x'), SUPER);
         assert_eq!(binding.to_string(), "Super+X");
         assert!(binding.logo);
         assert_eq!(binding, KeyBinding::parse("Meta+X").expect("Meta alias"));
 
-        assert_eq!(
-            chord(keyval::F5, mods(false, true, false, true)).to_string(),
-            "Shift+Super+F5"
-        );
+        assert_eq!(chord(keyval::F5, SHIFT_SUPER).to_string(), "Shift+Super+F5");
     }
 
     #[test]
     fn bare_super_stays_pending() {
-        match normalize_key_event(keyval::SUPER_L, mods(false, false, false, true)) {
+        match normalize_key_event(keyval::SUPER_L, SUPER) {
             RecordedKeyboard::Pending { modifiers } => {
                 assert_eq!(pending_preview(modifiers), "Super+…");
             }
@@ -741,7 +764,7 @@ mod tests {
 
     #[test]
     fn named_keys_keep_keyboard_names_in_every_language() {
-        crate::test_env::in_language_child(
+        test_env::in_language_child(
             concat!(
                 module_path!(),
                 "::named_keys_keep_keyboard_names_in_every_language"
@@ -750,7 +773,7 @@ mod tests {
                 use wayscriber::domain::Language;
 
                 for language in [Language::English, Language::SimplifiedChinese] {
-                    wayscriber::i18n::set_language(language);
+                    i18n::set_language(language);
                     for (keyval, name) in [
                         (keyval::END, "End"),
                         (keyval::KP_END, "End"),
@@ -758,9 +781,13 @@ mod tests {
                         (keyval::DELETE, "Delete"),
                         (keyval::KP_DELETE, "Delete"),
                     ] {
-                        let binding = chord(keyval, mods(true, false, false, false));
+                        let binding = chord(keyval, CTRL);
                         assert_eq!(binding.to_string(), format!("Ctrl+{name}"), "{language:?}");
-                        assert!(binding.matches(name, true, false, false, false));
+                        let ctrl_held = ChordModifiers {
+                            ctrl: true,
+                            ..ChordModifiers::default()
+                        };
+                        assert!(binding.matches(name, ctrl_held));
                     }
                 }
             },
@@ -783,11 +810,7 @@ mod tests {
             RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "MouseBack"),
             other => panic!("expected MouseBack, got {other:?}"),
         }
-        match normalize_button_event(
-            9,
-            RecorderDeviceKind::Mouse,
-            mods(true, false, false, false),
-        ) {
+        match normalize_button_event(9, RecorderDeviceKind::Mouse, CTRL) {
             RecordedDevice::Trigger(trigger) => {
                 assert_eq!(trigger.to_string(), "Ctrl+MouseForward");
             }
@@ -834,7 +857,7 @@ mod tests {
             RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "StylusPrimary"),
             other => panic!("expected StylusPrimary, got {other:?}"),
         }
-        match normalize_button_event(3, RecorderDeviceKind::Pen, mods(false, false, true, false)) {
+        match normalize_button_event(3, RecorderDeviceKind::Pen, ALT) {
             RecordedDevice::Trigger(trigger) => {
                 assert_eq!(trigger.to_string(), "Alt+StylusSecondary");
             }
@@ -862,13 +885,13 @@ mod tests {
         assert!(!recorder.can_remove_last());
         assert_eq!(recorder.prompt(), "Press the first chord.");
 
-        let first = chord(u32::from(b'k'), mods(true, false, false, false));
+        let first = chord(u32::from(b'k'), CTRL);
         assert!(recorder.push_keyboard_step(first).is_none());
         assert!(recorder.can_remove_last());
         assert!(!recorder.can_finish());
         assert_eq!(recorder.prompt(), "Ctrl+K then …");
 
-        let second = chord(u32::from(b'c'), mods(true, false, false, false));
+        let second = chord(u32::from(b'c'), CTRL);
         assert!(recorder.push_keyboard_step(second).is_none());
         assert!(recorder.can_finish());
         assert_eq!(
@@ -878,7 +901,7 @@ mod tests {
             Some("Ctrl+K > Ctrl+C".to_string())
         );
 
-        let third = chord(u32::from(b'v'), mods(true, false, false, false));
+        let third = chord(u32::from(b'v'), CTRL);
         let finished = recorder
             .push_keyboard_step(third)
             .expect("third step auto-finishes");
@@ -889,7 +912,7 @@ mod tests {
     #[test]
     fn sequence_recorder_can_remove_the_last_step() {
         let mut recorder = ShortcutRecorderState::new_sequence(KeybindingField::Undo);
-        let first = chord(u32::from(b'k'), mods(true, false, false, false));
+        let first = chord(u32::from(b'k'), CTRL);
         recorder.push_keyboard_step(first);
         recorder.remove_last_step();
         assert!(!recorder.can_remove_last());
@@ -898,7 +921,7 @@ mod tests {
 
     #[test]
     fn the_prompt_follows_the_ui_language_while_the_recorder_is_open() {
-        crate::test_env::in_language_child(
+        test_env::in_language_child(
             concat!(
                 module_path!(),
                 "::the_prompt_follows_the_ui_language_while_the_recorder_is_open"
@@ -906,14 +929,13 @@ mod tests {
             || {
                 use wayscriber::domain::Language;
                 let mut sequence = ShortcutRecorderState::new_sequence(KeybindingField::Undo);
-                sequence
-                    .push_keyboard_step(chord(u32::from(b'k'), mods(true, false, false, false)));
+                sequence.push_keyboard_step(chord(u32::from(b'k'), CTRL));
                 let mut rejected = ShortcutRecorderState::new(KeybindingField::Undo);
                 rejected.reject(RecorderRejection::DrawingButton);
                 let waiting = ShortcutRecorderState::new(KeybindingField::Undo);
                 assert_eq!(sequence.prompt(), "Ctrl+K then …");
 
-                wayscriber::i18n::set_language(Language::SimplifiedChinese);
+                i18n::set_language(Language::SimplifiedChinese);
 
                 // The recording itself is untouched; only its words change.
                 assert_eq!(sequence.prompt(), "Ctrl+K 然后 …");

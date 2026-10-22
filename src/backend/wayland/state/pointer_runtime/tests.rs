@@ -1,8 +1,10 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::test_support;
+use crate::ui_text::UiTextEngine;
+
 use super::{PendingChromePress, PointerRuntime, TouchState, TouchTarget};
-use crate::{
-    input::state::{RegionInputSource, ToastPress},
-    ui::{OnboardingCardPress, ZoomChipPress},
-};
+use crate::input::state::{RegionInputSource, ToastPress};
+use crate::ui::{OnboardingCardPress, ZoomChipPress};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
 
 #[test]
@@ -151,16 +153,17 @@ fn assert_interleaved_release_keeps_stroke(
     consumed_source: RegionInputSource,
     drawing_source: RegionInputSource,
 ) {
-    use crate::input::{MouseButton, state::DrawingState};
+    use crate::input::MouseButton;
+    use crate::input::state::DrawingState;
 
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &ui_engine,
     };
     let mut runtime = PointerRuntime::new();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
 
     // The modal press was consumed, but that device remains held while the
     // other device starts drawing. Both canvas press handlers reset chrome.

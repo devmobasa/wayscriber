@@ -1,9 +1,7 @@
 // Handles xdg-activation events so GNOME will focus the fallback xdg overlay window.
 use log::debug;
-use smithay_client_toolkit::{
-    activation::{ActivationHandler, RequestData},
-    globals::GlobalData,
-};
+use smithay_client_toolkit::activation::{ActivationHandler, RequestData};
+use smithay_client_toolkit::globals::GlobalData;
 use wayland_client::{Connection, Dispatch, QueueHandle};
 use wayland_protocols::xdg::activation::v1::client::{xdg_activation_token_v1, xdg_activation_v1};
 

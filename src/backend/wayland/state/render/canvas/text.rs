@@ -1,8 +1,16 @@
 mod ime;
 
-use super::super::super::*;
+use crate::draw;
+use crate::draw::Color;
+use crate::input::TextInputMode;
+use crate::util::Rect;
+
+use std::f64::consts;
+
 use super::CanvasRenderCtx;
+use crate::backend::wayland::state::WaylandState;
 use crate::draw::Shape;
+use crate::input::DrawingState;
 use ime::{paint_preedit_selection, paint_preedit_underline};
 use std::ops::Range;
 
@@ -44,8 +52,8 @@ impl WaylandState {
                 self.input_state.style.current_color,
             );
             match self.input_state.text_editing.mode() {
-                crate::input::TextInputMode::Plain => {
-                    crate::draw::render_text_with_halo_with_measurer(
+                TextInputMode::Plain => {
+                    draw::render_text_with_halo_with_measurer(
                         self.render.text_measurer(),
                         ctx,
                         *x,
@@ -59,8 +67,8 @@ impl WaylandState {
                         canvas.canvas.text_halo_enabled,
                     );
                 }
-                crate::input::TextInputMode::StickyNote => {
-                    crate::draw::render_sticky_note_preview_with_measurer(
+                TextInputMode::StickyNote => {
+                    draw::render_sticky_note_preview_with_measurer(
                         self.render.text_measurer(),
                         ctx,
                         *x,
@@ -104,7 +112,7 @@ impl WaylandState {
         y: i32,
         preview_text: &str,
         caret: Option<usize>,
-        color: crate::draw::Color,
+        color: Color,
     ) {
         let Some(caret) = caret else {
             return;
@@ -144,7 +152,7 @@ impl WaylandState {
         y: i32,
         preview_text: &str,
         range: Option<&Range<usize>>,
-        color: crate::draw::Color,
+        color: Color,
     ) {
         let Some(range) = range else {
             return;
@@ -221,7 +229,7 @@ impl WaylandState {
                 background_enabled,
                 wrap_width,
             } if !text.is_empty() => {
-                crate::draw::render_text_with_halo_with_measurer(
+                draw::render_text_with_halo_with_measurer(
                     self.render.text_measurer(),
                     ctx,
                     *x,
@@ -244,7 +252,7 @@ impl WaylandState {
                 font_descriptor,
                 wrap_width,
             } if !text.is_empty() => {
-                crate::draw::render_sticky_note_with_measurer(
+                draw::render_sticky_note_with_measurer(
                     self.render.text_measurer(),
                     ctx,
                     *x,
@@ -270,7 +278,7 @@ impl WaylandState {
     }
 
     /// Renders a subtle dashed border around the ghost text area.
-    fn render_ghost_border(&self, ctx: &cairo::Context, bounds: crate::util::Rect) {
+    fn render_ghost_border(&self, ctx: &cairo::Context, bounds: Rect) {
         let _ = ctx.save();
 
         let padding = 4.0;
@@ -314,13 +322,7 @@ impl WaylandState {
         gradient.add_color_stop_rgba(1.0, 0.2, 0.55, 0.65, 0.0);
 
         ctx.set_source(&gradient).ok();
-        ctx.arc(
-            x as f64,
-            y as f64,
-            glow_radius,
-            0.0,
-            std::f64::consts::PI * 2.0,
-        );
+        ctx.arc(x as f64, y as f64, glow_radius, 0.0, consts::PI * 2.0);
         let _ = ctx.fill();
 
         let _ = ctx.restore();
@@ -332,29 +334,24 @@ fn render_caret_stroke(
     caret_x: f64,
     top: f64,
     bottom: f64,
-    color: crate::draw::Color,
+    color: Color,
     size: f64,
     text_halo_enabled: bool,
 ) {
     ctx.save().ok();
     // Widths come from the draw layer so the damage tracker sizes the caret's
     // repaint rectangle from the exact same numbers.
-    let line_width = crate::draw::caret_line_width(size);
+    let line_width = draw::caret_line_width(size);
     if text_halo_enabled {
         // The caret stands where the glyphs will, so it asks the same question
         // they do: what is behind this point on the canvas?
-        let background_luminance = crate::draw::painted_background_luminance(
+        let background_luminance = draw::painted_background_luminance(
             ctx,
-            (
-                caret_x,
-                top,
-                crate::draw::caret_outline_width(size),
-                bottom - top,
-            ),
+            (caret_x, top, draw::caret_outline_width(size), bottom - top),
         );
-        let outline = crate::draw::text_outline_color(color, background_luminance);
+        let outline = draw::text_outline_color(color, background_luminance);
         ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
-        ctx.set_line_width(crate::draw::caret_outline_width(size));
+        ctx.set_line_width(draw::caret_outline_width(size));
         ctx.move_to(caret_x, top);
         ctx.line_to(caret_x, bottom);
         let _ = ctx.stroke();
@@ -367,20 +364,17 @@ fn render_caret_stroke(
     ctx.restore().ok();
 }
 
-fn text_preview_decoration_color(
-    mode: crate::input::TextInputMode,
-    current_color: crate::draw::Color,
-) -> crate::draw::Color {
+fn text_preview_decoration_color(mode: TextInputMode, current_color: Color) -> Color {
     match mode {
-        crate::input::TextInputMode::Plain => current_color,
-        crate::input::TextInputMode::StickyNote => {
-            crate::draw::sticky_note_foreground(current_color)
-        }
+        TextInputMode::Plain => current_color,
+        TextInputMode::StickyNote => draw::sticky_note_foreground(current_color),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::draw;
+
     use super::{render_caret_stroke, text_preview_decoration_color};
     use crate::draw::Color;
     use crate::input::TextInputMode;
@@ -396,7 +390,7 @@ mod tests {
 
         assert_eq!(
             text_preview_decoration_color(TextInputMode::StickyNote, background),
-            crate::draw::sticky_note_foreground(background)
+            draw::sticky_note_foreground(background)
         );
         assert_eq!(
             text_preview_decoration_color(TextInputMode::Plain, background),

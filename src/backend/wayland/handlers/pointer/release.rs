@@ -4,11 +4,13 @@ use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, Poi
 use wayland_client::Connection;
 
 use crate::backend::wayland::state::drag_log;
-use crate::input::state::HelpOverlayPressSource;
+use crate::input::state::{HelpOverlayPressSource, ZoomAnchor};
 use crate::input::{HelpOverlayReleaseOutcome, MouseButton};
 use crate::ui::ZoomChipPress;
 
-use super::*;
+use super::super::route::{InputSurface, RoutedInput};
+use crate::backend::wayland::state::{WaylandState, debug_toolbar_drag_logging_enabled};
+use crate::input::state::RegionInputSource;
 
 impl WaylandState {
     pub(super) fn handle_pointer_release(
@@ -43,7 +45,7 @@ impl WaylandState {
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self
             .pointer
-            .take_suppressed_release(crate::input::state::RegionInputSource::Pointer)
+            .take_suppressed_release(RegionInputSource::Pointer)
         {
             self.pointer.clear_chrome_press();
             return;
@@ -254,10 +256,7 @@ impl WaylandState {
                 .input_state
                 .check_zoom_chip_click(kind, screen_x, screen_y);
             if let Some(action) = action {
-                self.dispatch_input_action_anchored(
-                    action,
-                    crate::input::state::ZoomAnchor::ScreenCenter,
-                );
+                self.dispatch_input_action_anchored(action, ZoomAnchor::ScreenCenter);
             }
         }
         pressed.is_pending()

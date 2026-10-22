@@ -1,5 +1,6 @@
+use crate::draw::Shape;
+use crate::draw::color::BLACK;
 use crate::draw::frame::{DrawnShape, Frame, UndoAction};
-use crate::draw::{Shape, color::BLACK};
 
 #[test]
 fn validate_history_drops_actions_exceeding_compound_depth() {

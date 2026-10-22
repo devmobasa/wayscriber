@@ -7,8 +7,9 @@ use std::net::Shutdown;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
+use std::{mem, thread};
 
 use anyhow::{Context, Result};
 
@@ -46,9 +47,9 @@ impl Proxy {
         let commands = UnixListener::bind(&control_path)?;
 
         let accept_shared = Arc::clone(&shared);
-        let accept = std::thread::spawn(move || accept_shared.accept_clients(clients));
+        let accept = thread::spawn(move || accept_shared.accept_clients(&clients));
         let control_shared = Arc::clone(&shared);
-        let control = std::thread::spawn(move || control_shared.answer_commands(commands));
+        let control = thread::spawn(move || control_shared.answer_commands(&commands));
 
         Ok(Self {
             shared,
@@ -75,7 +76,7 @@ impl Drop for Proxy {
         // No listener runs now, so the connection list is final; close any
         // accepted while the listeners were stopping.
         self.shared.shutdown_connections();
-        let forwarders = std::mem::take(&mut *lock(&self.shared.forwarders));
+        let forwarders = mem::take(&mut *lock(&self.shared.forwarders));
         for forwarder in forwarders {
             let _ = forwarder.join();
         }
@@ -89,7 +90,7 @@ impl Shared {
         }
     }
 
-    fn accept_clients(&self, listener: UnixListener) {
+    fn accept_clients(&self, listener: &UnixListener) {
         for client in listener.incoming() {
             if self.stopping.load(Ordering::SeqCst) {
                 return;
@@ -103,14 +104,14 @@ impl Shared {
 
             for direction in [Direction::Request, Direction::Event] {
                 let connection = Arc::clone(&connection);
-                let forwarder = std::thread::spawn(move || connection.forward(direction));
+                let forwarder = thread::spawn(move || connection.forward(direction));
                 lock(&self.forwarders).push(forwarder);
             }
         }
     }
 
     /// Answers one line command per control connection with one JSON line.
-    fn answer_commands(&self, listener: UnixListener) {
+    fn answer_commands(&self, listener: &UnixListener) {
         for client in listener.incoming() {
             if self.stopping.load(Ordering::SeqCst) {
                 return;
@@ -239,7 +240,7 @@ impl Connection {
             if state.inspect(&self.schema, &packet, direction)? {
                 state.held.push(packet);
             } else {
-                wire::send(destination, packet)?;
+                wire::send(destination, &packet)?;
             }
         }
 
@@ -282,9 +283,9 @@ impl Connection {
     /// Delivers the withheld events in their original order.
     fn release(&self, state: &mut State) -> Result<()> {
         state.selected = None;
-        for packet in std::mem::take(&mut state.held) {
+        for packet in mem::take(&mut state.held) {
             state.inspect(&self.schema, &packet, Direction::Event)?;
-            wire::send(&self.client, packet)?;
+            wire::send(&self.client, &packet)?;
         }
 
         Ok(())
@@ -414,8 +415,10 @@ fn is_disconnect(error: &anyhow::Error) -> bool {
     })
 }
 
-/// Relay threads report failures through `State::error`, so a poisoned lock
-/// carries no extra information and cleanup must still proceed.
+/// Relay threads report failures through `State::error` instead of panicking,
+/// so their locks are never poisoned.
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    mutex
+        .lock()
+        .expect("relay threads never hold relay state across a panic")
 }

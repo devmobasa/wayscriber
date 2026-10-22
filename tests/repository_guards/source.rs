@@ -6,9 +6,9 @@
 //! of small sources can also be checked as its own tree.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex};
+use std::{fs, iter};
 
 /// Rust sources keyed by repository-relative path.
 #[derive(Clone)]
@@ -27,11 +27,22 @@ impl Tree {
             .iter()
             .map(|directory| (*directory).to_owned())
             .collect();
-        let mut checkouts = CHECKOUTS.lock().unwrap_or_else(PoisonError::into_inner);
+        let cached = CHECKOUTS
+            .lock()
+            .expect("the checkout cache is never locked across a panic")
+            .get(&key)
+            .cloned();
+        if let Some(tree) = cached {
+            return tree;
+        }
 
-        checkouts
+        // Reading can panic on an unreadable file, so it runs outside the lock.
+        let tree = Self::read_checkout(directories);
+        CHECKOUTS
+            .lock()
+            .expect("the checkout cache is never locked across a panic")
             .entry(key)
-            .or_insert_with(|| Self::read_checkout(directories))
+            .or_insert(tree)
             .clone()
     }
 
@@ -39,10 +50,10 @@ impl Tree {
         let root = repository_root();
         let mut files = BTreeMap::new();
 
-        for path in directories
+        let listed_paths = directories
             .iter()
-            .flat_map(|directory| files_under(directory))
-        {
+            .flat_map(|directory| files_under(directory));
+        for path in listed_paths {
             if path.extension().is_some_and(|extension| extension == "rs") {
                 let source = fs::read_to_string(root.join(&path))
                     .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
@@ -388,17 +399,17 @@ pub fn within(spans: &[(usize, usize)], offset: usize) -> bool {
 }
 
 /// A cursor over masked source for recognising item headers.
-pub struct Cursor<'a> {
-    pub text: &'a str,
+pub struct Cursor<'text> {
+    pub text: &'text str,
     pub at: usize,
 }
 
-impl<'a> Cursor<'a> {
-    pub fn new(text: &'a str, at: usize) -> Self {
+impl<'text> Cursor<'text> {
+    pub fn new(text: &'text str, at: usize) -> Self {
         Self { text, at }
     }
 
-    fn rest(&self) -> &'a str {
+    fn rest(&self) -> &'text str {
         &self.text[self.at..]
     }
 
@@ -448,7 +459,7 @@ impl<'a> Cursor<'a> {
     }
 
     /// A run of word characters, like `\w+`.
-    pub fn word(&mut self) -> Option<&'a str> {
+    pub fn word(&mut self) -> Option<&'text str> {
         let rest = self.rest();
         let length = rest
             .char_indices()
@@ -462,7 +473,7 @@ impl<'a> Cursor<'a> {
 
     /// `pub`, optionally restricted, then whitespace, like
     /// `pub(?:\s*\([^)]*\))?\s+`. Returns the visibility text.
-    pub fn visibility(&mut self) -> Option<&'a str> {
+    pub fn visibility(&mut self) -> Option<&'text str> {
         let start = self.at;
         if !self.keyword("pub") {
             return None;
@@ -515,7 +526,7 @@ impl<'a> Cursor<'a> {
 
 /// Offsets of every line start: 0 and each offset after a newline.
 pub fn line_starts(text: &str) -> impl Iterator<Item = usize> + '_ {
-    std::iter::once(0).chain(text.match_indices('\n').map(|(index, _)| index + 1))
+    iter::once(0).chain(text.match_indices('\n').map(|(index, _)| index + 1))
 }
 
 /// The attribute that compiles an item only for tests.

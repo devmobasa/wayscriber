@@ -1,3 +1,6 @@
+use std::slice::{Iter, IterMut};
+use std::vec;
+
 use super::DrawnShape;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -63,7 +66,7 @@ impl DerefMut for FrameShapes {
 
 impl<'a> IntoIterator for &'a FrameShapes {
     type Item = &'a DrawnShape;
-    type IntoIter = std::slice::Iter<'a, DrawnShape>;
+    type IntoIter = Iter<'a, DrawnShape>;
     fn into_iter(self) -> Self::IntoIter {
         self.values.iter()
     }
@@ -71,7 +74,7 @@ impl<'a> IntoIterator for &'a FrameShapes {
 
 impl<'a> IntoIterator for &'a mut FrameShapes {
     type Item = &'a mut DrawnShape;
-    type IntoIter = std::slice::IterMut<'a, DrawnShape>;
+    type IntoIter = IterMut<'a, DrawnShape>;
     fn into_iter(self) -> Self::IntoIter {
         self.deref_mut().iter_mut()
     }
@@ -79,7 +82,7 @@ impl<'a> IntoIterator for &'a mut FrameShapes {
 
 impl IntoIterator for FrameShapes {
     type Item = DrawnShape;
-    type IntoIter = std::vec::IntoIter<DrawnShape>;
+    type IntoIter = vec::IntoIter<DrawnShape>;
     fn into_iter(self) -> Self::IntoIter {
         self.values.into_iter()
     }

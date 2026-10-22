@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::create_test_input_state;
 use crate::config::{
     Action, ColorSpec, PresenterToolBehavior, PresenterToolbarMode, ToolPresetConfig,
@@ -8,8 +11,8 @@ use crate::ui::toolbar::ToolbarEvent;
 
 #[test]
 fn presenter_mode_forces_click_highlight() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -30,8 +33,8 @@ fn presenter_mode_forces_click_highlight() {
 
 #[test]
 fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -66,8 +69,8 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
 
 #[test]
 fn presenter_mode_blocks_preset_status_bar_toggle() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -106,8 +109,8 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
 
 #[test]
 fn presenter_mode_blocks_tool_preview_toggle() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -124,8 +127,8 @@ fn presenter_mode_blocks_tool_preview_toggle() {
 
 #[test]
 fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -143,8 +146,8 @@ fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
 
 #[test]
 fn presenter_locked_mode_blocks_non_left_drag_bindings() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -167,8 +170,8 @@ fn presenter_locked_mode_blocks_non_left_drag_bindings() {
 
 #[test]
 fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -193,8 +196,8 @@ fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
 
 #[test]
 fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -229,8 +232,8 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
 
 #[test]
 fn presenter_hidden_mapping_keeps_todays_behavior() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -248,8 +251,8 @@ fn presenter_hidden_mapping_keeps_todays_behavior() {
 
 #[test]
 fn presenter_mode_emits_entry_and_exit_toasts() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -264,7 +267,7 @@ fn presenter_mode_emits_entry_and_exit_toasts() {
             .action
             .as_ref()
             .and_then(|action| action.dispatch_action()),
-        Some(crate::config::Action::TogglePresenterMode)
+        Some(Action::TogglePresenterMode)
     );
 
     state.toggle_presenter_mode_with_resources(route_resources);

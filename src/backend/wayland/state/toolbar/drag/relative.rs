@@ -1,4 +1,6 @@
-use super::*;
+use super::state::MoveDragKind;
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::helpers::drag_log;
 
 impl WaylandState {
     /// Apply a relative delta to toolbar offsets (used with locked pointer + relative motion).

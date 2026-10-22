@@ -1,9 +1,9 @@
 use smithay_client_toolkit::seat::relative_pointer::{RelativeMotionEvent, RelativePointerHandler};
-use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
+use wayland_client::protocol::wl_pointer;
+use wayland_client::{Connection, QueueHandle};
 use wayland_protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1;
 
-use super::super::state::WaylandState;
-use super::super::state::drag_log;
+use super::super::state::{WaylandState, drag_log};
 
 impl RelativePointerHandler for WaylandState {
     fn relative_pointer_motion(

@@ -1,6 +1,11 @@
-use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
+use std::time::Instant;
+
+use crate::config::{
+    StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting,
+    ToolbarLayoutMode, ToolbarSectionFlag, TopDisplayMode,
+};
 use crate::input::InputState;
-use crate::input::state::TopMenuState;
+use crate::input::state::{InputTextResources, TopMenuState};
 use crate::ui::toolbar::ToolbarItemCustomizeGroup;
 
 impl InputState {
@@ -62,7 +67,7 @@ impl InputState {
     /// Whether a toolbar click at `now` is the tail of the double-click that
     /// just restored the strip from its minimized tab or micro chip. The
     /// restored controls sit under the pointer, so such a click is dropped.
-    pub(crate) fn toolbar_restore_guard_blocks(&self, now: std::time::Instant) -> bool {
+    pub(crate) fn toolbar_restore_guard_blocks(&self, now: Instant) -> bool {
         self.toolbar.restore_guard_blocks(now)
     }
 
@@ -79,8 +84,8 @@ impl InputState {
     /// Set the top strip's display form (micro chip click → `Full`).
     pub(super) fn apply_toolbar_set_top_display_mode_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-        mode: crate::config::TopDisplayMode,
+        resources: InputTextResources<'_>,
+        mode: TopDisplayMode,
     ) -> bool {
         // Same presenter gate as Action::CycleToolbarDisplay: while presenter
         // mode owns toolbar visibility (e.g. the micro chip mapping), a chip
@@ -123,35 +128,35 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_actions_section(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::Actions, show)
+        self.apply_section_flag(ToolbarSectionFlag::Actions, show)
     }
 
     pub(super) fn apply_toolbar_toggle_actions_advanced(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::ActionsAdvanced, show)
+        self.apply_section_flag(ToolbarSectionFlag::ActionsAdvanced, show)
     }
 
     pub(super) fn apply_toolbar_toggle_zoom_actions(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::ZoomActions, show)
+        self.apply_section_flag(ToolbarSectionFlag::ZoomActions, show)
     }
 
     pub(super) fn apply_toolbar_toggle_pages_section(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::Pages, show)
+        self.apply_section_flag(ToolbarSectionFlag::Pages, show)
     }
 
     pub(super) fn apply_toolbar_toggle_boards_section(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::Boards, show)
+        self.apply_section_flag(ToolbarSectionFlag::Boards, show)
     }
 
     pub(super) fn apply_toolbar_toggle_presets(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::Presets, show)
+        self.apply_section_flag(ToolbarSectionFlag::Presets, show)
     }
 
     pub(super) fn apply_toolbar_toggle_step_section(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::StepSection, show)
+        self.apply_section_flag(ToolbarSectionFlag::StepSection, show)
     }
 
     pub(super) fn apply_toolbar_toggle_text_controls(&mut self, show: bool) -> bool {
-        self.apply_section_flag(crate::config::ToolbarSectionFlag::TextControls, show)
+        self.apply_section_flag(ToolbarSectionFlag::TextControls, show)
     }
 
     /// Applies a section's visibility restored from runtime-UI state.
@@ -161,8 +166,8 @@ impl InputState {
     /// than pinning it to whatever that mode happened to show.
     pub(crate) fn apply_section_visibility_runtime(
         &mut self,
-        flag: crate::config::ToolbarSectionFlag,
-        setting: crate::config::ToolbarItemVisibilitySetting,
+        flag: ToolbarSectionFlag,
+        setting: ToolbarItemVisibilitySetting,
     ) {
         self.set_toolbar_item_visibility_setting(flag.item_id(), setting);
         self.refresh_section_visibility();
@@ -171,7 +176,7 @@ impl InputState {
     /// Section toggles record an explicit override in the item store (the
     /// single source of truth) and re-derive the mirror booleans, so the
     /// choice survives layout-mode switches.
-    fn apply_section_flag(&mut self, flag: crate::config::ToolbarSectionFlag, show: bool) -> bool {
+    fn apply_section_flag(&mut self, flag: ToolbarSectionFlag, show: bool) -> bool {
         if !self.toolbar.set_section_visibility(flag, show) {
             return false;
         }
@@ -222,7 +227,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_toggle_status_bar_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         show: bool,
     ) -> bool {
         if self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar {
@@ -253,8 +258,8 @@ impl InputState {
 
     pub(super) fn apply_toolbar_set_status_bar_item_visible_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-        item: crate::config::StatusBarItem,
+        resources: InputTextResources<'_>,
+        item: StatusBarItem,
         visible: bool,
     ) -> bool {
         self.set_status_bar_item_visible_with_resources(
@@ -267,26 +272,26 @@ impl InputState {
 
     pub(super) fn apply_toolbar_toggle_status_board_badge_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         show: bool,
     ) -> bool {
         self.set_status_bar_item_visible_with_resources(
             resources.ui_engine,
             resources.measurer,
-            crate::config::StatusBarItem::Board,
+            StatusBarItem::Board,
             show,
         )
     }
 
     pub(super) fn apply_toolbar_toggle_status_page_badge_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         show: bool,
     ) -> bool {
         self.set_status_bar_item_visible_with_resources(
             resources.ui_engine,
             resources.measurer,
-            crate::config::StatusBarItem::Page,
+            StatusBarItem::Page,
             show,
         )
     }
@@ -497,8 +502,13 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
-    use crate::input::state::{TopMenuState, test_support::make_test_input_state};
+    use std::time::{Duration, Instant};
+
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag, TopDisplayMode};
+    use crate::draw::TextMeasurer;
+    use crate::input::state::TopMenuState;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::{InputState, Tool};
     use crate::ui::toolbar::ToolbarEvent;
 
     #[test]
@@ -637,30 +647,26 @@ mod tests {
         let mut state = make_test_input_state();
         assert!(state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true)));
         assert!(
-            !state.toolbar_restore_guard_blocks(std::time::Instant::now()),
+            !state.toolbar_restore_guard_blocks(Instant::now()),
             "minimizing arms nothing"
         );
 
         assert!(state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false)));
 
-        let now = std::time::Instant::now();
+        let now = Instant::now();
         assert!(state.toolbar_restore_guard_blocks(now));
-        assert!(!state.toolbar_restore_guard_blocks(now + std::time::Duration::from_secs(1)));
+        assert!(!state.toolbar_restore_guard_blocks(now + Duration::from_secs(1)));
     }
 
     #[test]
     fn restoring_from_the_micro_chip_guards_the_next_click() {
         let mut state = make_test_input_state();
-        state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(
-            crate::config::TopDisplayMode::Micro,
-        ));
-        assert!(!state.toolbar_restore_guard_blocks(std::time::Instant::now()));
+        state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Micro));
+        assert!(!state.toolbar_restore_guard_blocks(Instant::now()));
 
-        assert!(state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(
-            crate::config::TopDisplayMode::Full
-        )));
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)));
 
-        assert!(state.toolbar_restore_guard_blocks(std::time::Instant::now()));
+        assert!(state.toolbar_restore_guard_blocks(Instant::now()));
     }
 
     /// The toolbar's Exit is an explicit request, so xdg stay-mode focus loss
@@ -697,7 +703,7 @@ mod tests {
         let mut state = make_test_input_state();
         state.apply_toolbar_event(ToolbarEvent::ToggleLayoutMenu(true));
 
-        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Marker));
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Marker));
 
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
@@ -712,7 +718,7 @@ mod tests {
         assert_minimize_and_close_handle_canvas(&mut state);
     }
 
-    fn assert_canvas_open_closes_top_menus(state: &mut crate::input::InputState) {
+    fn assert_canvas_open_closes_top_menus(state: &mut InputState) {
         // Opening Canvas closes the overflow, the shapes picker, and resets
         // the shared internal scroll.
         state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
@@ -723,7 +729,7 @@ mod tests {
         assert_eq!(state.toolbar_top_popover_scroll(), 0.0);
     }
 
-    fn assert_canvas_is_exclusive_with_session_and_settings(state: &mut crate::input::InputState) {
+    fn assert_canvas_is_exclusive_with_session_and_settings(state: &mut InputState) {
         // Opening Session or Settings closes Canvas, and Canvas closes them.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true)));
         assert_eq!(state.toolbar_top_menu(), TopMenuState::SessionPopover);
@@ -735,7 +741,7 @@ mod tests {
         assert_eq!(state.toolbar_top_menu(), TopMenuState::CanvasPopover);
     }
 
-    fn assert_overflow_and_shapes_close_canvas(state: &mut crate::input::InputState) {
+    fn assert_overflow_and_shapes_close_canvas(state: &mut InputState) {
         // Re-opening the overflow (or the shapes picker) closes Canvas.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true)));
         assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
@@ -744,7 +750,7 @@ mod tests {
         assert_eq!(state.toolbar_top_menu(), TopMenuState::ShapePicker);
     }
 
-    fn assert_minimize_and_close_handle_canvas(state: &mut crate::input::InputState) {
+    fn assert_minimize_and_close_handle_canvas(state: &mut InputState) {
         // Minimizing the strip closes an open Canvas popover.
         state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true));
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
@@ -867,7 +873,7 @@ mod tests {
             state.toolbar_top_popover_scroll(),
         );
 
-        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Line));
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Line));
 
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
@@ -901,7 +907,7 @@ mod tests {
         use crate::config::{StatusBarItem, StatusBarStyle, StatusPosition, TopDisplayMode};
         use crate::ui_text::UiTextEngine;
         let engine = UiTextEngine::default();
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let resources = crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &engine,

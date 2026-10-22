@@ -2,6 +2,8 @@
 //!
 //! Command-line output stays English, like the rest of the CLI.
 
+use std::env;
+
 use crate::cli::Cli;
 use crate::config::Config;
 use crate::domain::Language;
@@ -11,7 +13,7 @@ use crate::i18n::{self, LanguageSource};
 /// The language this run was given: its own `--language`, or, for an overlay
 /// a daemon started, that daemon's.
 pub(super) fn given_language(cli: &Cli) -> Option<Language> {
-    given_language_with(cli, std::env::var(OVERLAY_LANGUAGE_ENV).ok().as_deref())
+    given_language_with(cli, env::var(OVERLAY_LANGUAGE_ENV).ok().as_deref())
 }
 
 fn given_language_with(cli: &Cli, from_daemon: Option<&str>) -> Option<Language> {
@@ -28,6 +30,7 @@ pub(super) fn print_languages() {
         .map_err(|err| format!("{err:#}"));
     let requested = i18n::requested_language(configured.clone().unwrap_or_default());
     let in_effect = i18n::resolve(requested.0);
+    let configured = configured.as_ref().copied().map_err(String::as_str);
 
     print!("{}", render(configured, requested, in_effect));
 }
@@ -36,7 +39,7 @@ pub(super) fn print_languages() {
 /// config could not be read), the setting that decides, and what it resolves
 /// to.
 fn render(
-    configured: Result<Language, String>,
+    configured: Result<Language, &str>,
     (requested, source): (Language, LanguageSource),
     in_effect: Language,
 ) -> String {
@@ -50,7 +53,7 @@ fn render(
     }
 
     out.push('\n');
-    match &configured {
+    match configured {
         Ok(language) => out.push_str(&format!(
             "Configured:  {} ([ui] language)\n",
             language.code()
@@ -94,11 +97,15 @@ fn describe(language: Language) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::iter;
+
+    use crate::cli::CliOutcome;
+
     use super::*;
 
     fn parse(arguments: &[&str]) -> Cli {
-        match Cli::try_parse_from(std::iter::once("wayscriber").chain(arguments.iter().copied())) {
-            Ok(crate::cli::CliOutcome::Run(cli)) => cli,
+        match Cli::try_parse_from(iter::once("wayscriber").chain(arguments.iter().copied())) {
+            Ok(CliOutcome::Run(cli)) => cli,
             other => panic!("{arguments:?} did not parse to a run: {other:?}"),
         }
     }
@@ -156,7 +163,7 @@ mod tests {
             Language::SimplifiedChinese,
         );
         let from_environment = render(
-            Err("TOML parse error at line 1, column 4\n  |\n1 | [ui\n".to_string()),
+            Err("TOML parse error at line 1, column 4\n  |\n1 | [ui\n"),
             (Language::English, LanguageSource::Environment),
             Language::English,
         );

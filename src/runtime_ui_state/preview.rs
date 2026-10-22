@@ -1,6 +1,12 @@
 use std::collections::BTreeSet;
+use std::mem;
 
-use super::*;
+use super::{
+    AcceptedStateRevision, BeginMutationError, CommitResult, ControllerBarrierId, ControllerId,
+    InteractionSeedTarget, MutationShapeError, PreviewRollbackSnapshot, RuntimeUiFileStatus,
+    RuntimeUiLiveState, RuntimeUiMutationPermit, RuntimeUiMutationScope, RuntimeUiMutationValues,
+    RuntimeUiStateController, SeedGuard, SeedRegistryError,
+};
 
 #[derive(Debug)]
 pub(crate) struct RuntimeUiLiveOnlyGuard {
@@ -133,7 +139,7 @@ impl RuntimeUiStateController {
             }
             RuntimeUiFileStatus::Invalid => Err(BeginPreviewError::InvalidAuthority),
             RuntimeUiFileStatus::Missing | RuntimeUiFileStatus::Supported => self
-                .begin_mutation(scope.clone())
+                .begin_mutation(&scope)
                 .map(|permit| {
                     RuntimeUiPreviewSession::Persistent(RuntimePersistentPreviewSession {
                         permit,
@@ -166,7 +172,7 @@ impl RuntimeUiStateController {
         self.drain_lifecycle_controls();
         if let Some(barrier) = &self.active_barrier {
             let barrier = barrier.id;
-            self.record_abandoned_preview(barrier, session, intent);
+            self.record_abandoned_preview(barrier, session, &intent);
             return PreviewFinishResult::AbandonedDuringBarrier { barrier };
         }
         self.finish_runtime_preview(session, intent)
@@ -180,7 +186,7 @@ impl RuntimeUiStateController {
     ) -> Vec<AbandonedPreviewResolution> {
         let mut retained = Vec::new();
         let mut resolved = Vec::new();
-        for abandoned in std::mem::take(&mut self.abandoned_previews) {
+        for abandoned in mem::take(&mut self.abandoned_previews) {
             if abandoned.barrier != barrier {
                 retained.push(abandoned);
                 continue;
@@ -228,7 +234,7 @@ impl RuntimeUiStateController {
                     scope,
                     rollback,
                 } = session;
-                match self.commit(permit, values) {
+                match self.commit(permit, &values) {
                     CommitResult::Accepted { through } => {
                         PreviewFinishResult::AcceptedRuntime { through }
                     }
@@ -300,7 +306,7 @@ impl RuntimeUiStateController {
         &mut self,
         barrier: ControllerBarrierId,
         session: RuntimeUiPreviewSession,
-        intent: RuntimePreviewFinishIntent,
+        intent: &RuntimePreviewFinishIntent,
     ) {
         let finish = match intent {
             RuntimePreviewFinishIntent::Commit(_) => AbandonedPreviewFinish::CommitRequested,

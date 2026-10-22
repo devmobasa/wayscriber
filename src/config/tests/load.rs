@@ -1,3 +1,10 @@
+use std::env;
+
+use crate::config::{PresenterToolbarMode, io};
+use crate::domain::Color;
+use crate::input::{DragBindableTool, DragTool};
+use crate::{env_vars, util};
+
 use super::super::*;
 use super::save_through_document;
 use crate::config::test_helpers::with_temp_config_home;
@@ -174,12 +181,12 @@ fn presenter_toolbar_mode_defaults_to_hidden_and_round_trips() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(
         default_config.presenter_mode.toolbar_mode,
-        crate::config::PresenterToolbarMode::Hidden
+        PresenterToolbarMode::Hidden
     );
 
     for (value, expected) in [
-        ("hidden", crate::config::PresenterToolbarMode::Hidden),
-        ("micro", crate::config::PresenterToolbarMode::Micro),
+        ("hidden", PresenterToolbarMode::Hidden),
+        ("micro", PresenterToolbarMode::Micro),
     ] {
         let config: Config =
             toml::from_str(&format!("[presenter_mode]\ntoolbar_mode = '{value}'\n"))
@@ -813,7 +820,7 @@ fn drawing_quick_colors_parse_ordered_entries_with_hex_and_rgb() {
     let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
     assert!(color_approx_eq(
         &palette.color_for_index(0).unwrap(),
-        &crate::domain::Color {
+        &Color {
             r: 1.0,
             g: 179.0 / 255.0,
             b: 186.0 / 255.0,
@@ -822,7 +829,7 @@ fn drawing_quick_colors_parse_ordered_entries_with_hex_and_rgb() {
     ));
     assert!(color_approx_eq(
         &palette.color_for_index(1).unwrap(),
-        &crate::domain::Color {
+        &Color {
             r: 1.0 / 255.0,
             g: 2.0 / 255.0,
             b: 3.0 / 255.0,
@@ -873,7 +880,7 @@ fn quick_colors_set_color_at_keeps_labels_and_materializes_defaults() {
     let mut config: Config =
         toml::from_str("[[drawing.quick_colors]]\nlabel = 'Only'\ncolor = 'blue'\n")
             .expect("short quick color list should parse");
-    let crimson = crate::domain::Color {
+    let crimson = Color {
         r: 220.0 / 255.0,
         g: 20.0 / 255.0,
         b: 60.0 / 255.0,
@@ -917,7 +924,7 @@ fn quick_colors_set_color_at_keeps_labels_and_materializes_defaults() {
 fn quick_colors_set_color_at_starts_from_defaults_when_unconfigured() {
     let mut config = Config::default();
     assert!(config.drawing.quick_colors.is_implicit_default());
-    let teal = crate::domain::Color {
+    let teal = Color {
         r: 0.0,
         g: 128.0 / 255.0,
         b: 128.0 / 255.0,
@@ -969,7 +976,7 @@ fn shipped_quick_color_defaults_cover_only_the_built_in_palette() {
 fn palette_set_color_for_index_recolors_in_place() {
     let mut palette = QuickColorPalette::default();
     let label = palette.entry(1).map(|entry| entry.label.clone());
-    let color = crate::domain::Color {
+    let color = Color {
         r: 0.25,
         g: 0.5,
         b: 0.75,
@@ -993,7 +1000,7 @@ fn palette_set_color_for_index_recolors_in_place() {
 #[test]
 fn palette_cache_key_changes_when_only_a_slot_alpha_changes() {
     let mut palette = QuickColorPalette::default();
-    let opaque = crate::domain::Color {
+    let opaque = Color {
         r: 0.25,
         g: 0.5,
         b: 0.75,
@@ -1002,7 +1009,7 @@ fn palette_cache_key_changes_when_only_a_slot_alpha_changes() {
     assert!(palette.set_color_for_index(1, opaque));
     let before = palette.cache_key();
 
-    assert!(palette.set_color_for_index(1, crate::domain::Color { a: 0.4, ..opaque }));
+    assert!(palette.set_color_for_index(1, Color { a: 0.4, ..opaque }));
 
     assert_ne!(palette.cache_key(), before);
 }
@@ -1036,7 +1043,7 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     );
     assert!(color_approx_eq(
         &palette.color_for_index(8).unwrap(),
-        &crate::domain::Color {
+        &Color {
             r: 0.0,
             g: 1.0,
             b: 1.0,
@@ -1045,7 +1052,7 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     ));
     assert!(color_approx_eq(
         &palette.color_for_index(9).unwrap(),
-        &crate::domain::Color {
+        &Color {
             r: 153.0 / 255.0,
             g: 102.0 / 255.0,
             b: 204.0 / 255.0,
@@ -1054,7 +1061,7 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     ));
     assert!(color_approx_eq(
         &palette.color_for_index(10).unwrap(),
-        &crate::domain::Color {
+        &Color {
             r: 102.0 / 255.0,
             g: 102.0 / 255.0,
             b: 102.0 / 255.0,
@@ -1166,7 +1173,7 @@ fn drawing_quick_color_rendered_entries_are_capped_without_dropping_config() {
     let entries = (0..QUICK_COLOR_RENDER_LIMIT + 3)
         .map(|index| QuickColorPaletteEntry {
             label: format!("Color {index}"),
-            color: crate::domain::Color {
+            color: Color {
                 r: 0.0,
                 g: 0.0,
                 b: 0.0,
@@ -1245,11 +1252,11 @@ fn pdf_transparent_background_defaults_to_none() {
 
 /// Resolves one of the tuned built-in palette hex values exactly like
 /// `ColorSpec::to_color`, so assertions can compare with `==`.
-fn tuned_default(hex: &str) -> crate::domain::Color {
-    crate::util::parse_config_hex_color(hex).expect("tuned default hex is valid")
+fn tuned_default(hex: &str) -> Color {
+    util::parse_config_hex_color(hex).expect("tuned default hex is valid")
 }
 
-fn color_approx_eq(a: &crate::domain::Color, b: &crate::domain::Color) -> bool {
+fn color_approx_eq(a: &Color, b: &Color) -> bool {
     (a.r - b.r).abs() < 0.001
         && (a.g - b.g).abs() < 0.001
         && (a.b - b.b).abs() < 0.001
@@ -1291,9 +1298,9 @@ fn load_parses_mouse_button_drag_tool_bindings() {
 
         let loaded = Config::load().expect("load succeeds");
         let drag_tools = loaded.config.drawing.drag_tools.expect("drag tools config");
-        assert_eq!(drag_tools.left.drag_tool, crate::input::DragTool::Line);
-        assert_eq!(drag_tools.left.shift_drag_tool, crate::input::DragTool::Pen);
-        assert_eq!(drag_tools.right.drag_tool, crate::input::DragTool::Pen);
+        assert_eq!(drag_tools.left.drag_tool, DragTool::Line);
+        assert_eq!(drag_tools.left.shift_drag_tool, DragTool::Pen);
+        assert_eq!(drag_tools.right.drag_tool, DragTool::Pen);
         assert_eq!(
             drag_tools.right.drag_color,
             Some(ColorSpec::Name("blue".to_string()))
@@ -1307,23 +1314,11 @@ fn legacy_drag_fields_accept_drag_bindable_polygon_tools() {
         toml::from_str("[drawing]\ndrag_tool = 'regular-polygon'\nshift_drag_tool = 'triangle'\n")
             .expect("drag-bindable polygon tools should parse");
 
-    assert_eq!(
-        config.drawing.drag_tool,
-        crate::input::DragBindableTool::RegularPolygon
-    );
-    assert_eq!(
-        config.drawing.shift_drag_tool,
-        crate::input::DragBindableTool::Triangle
-    );
+    assert_eq!(config.drawing.drag_tool, DragBindableTool::RegularPolygon);
+    assert_eq!(config.drawing.shift_drag_tool, DragBindableTool::Triangle);
     let drag_tools = config.drawing.effective_drag_tools();
-    assert_eq!(
-        drag_tools.left.drag_tool,
-        crate::input::DragTool::RegularPolygon
-    );
-    assert_eq!(
-        drag_tools.left.shift_drag_tool,
-        crate::input::DragTool::Triangle
-    );
+    assert_eq!(drag_tools.left.drag_tool, DragTool::RegularPolygon);
+    assert_eq!(drag_tools.left.shift_drag_tool, DragTool::Triangle);
 }
 
 #[test]
@@ -1351,12 +1346,9 @@ fn effective_drag_tools_preserve_legacy_left_when_only_right_is_configured() {
 
         let loaded = Config::load().expect("load succeeds");
         let drag_tools = loaded.config.drawing.effective_drag_tools();
-        assert_eq!(drag_tools.left.drag_tool, crate::input::DragTool::Arrow);
-        assert_eq!(
-            drag_tools.left.shift_drag_tool,
-            crate::input::DragTool::Eraser
-        );
-        assert_eq!(drag_tools.right.drag_tool, crate::input::DragTool::Pen);
+        assert_eq!(drag_tools.left.drag_tool, DragTool::Arrow);
+        assert_eq!(drag_tools.left.shift_drag_tool, DragTool::Eraser);
+        assert_eq!(drag_tools.right.drag_tool, DragTool::Pen);
     });
 }
 
@@ -1373,28 +1365,19 @@ fn effective_drag_tools_preserve_explicit_builtin_left_mapping() {
 
         let loaded = Config::load().expect("load succeeds");
         let drag_tools = loaded.config.drawing.effective_drag_tools();
-        assert_eq!(drag_tools.left.drag_tool, crate::input::DragTool::Pen);
-        assert_eq!(
-            drag_tools.left.shift_drag_tool,
-            crate::input::DragTool::Line
-        );
-        assert_eq!(drag_tools.left.ctrl_drag_tool, crate::input::DragTool::Rect);
-        assert_eq!(
-            drag_tools.left.ctrl_shift_drag_tool,
-            crate::input::DragTool::Arrow
-        );
-        assert_eq!(
-            drag_tools.left.tab_drag_tool,
-            crate::input::DragTool::Ellipse
-        );
+        assert_eq!(drag_tools.left.drag_tool, DragTool::Pen);
+        assert_eq!(drag_tools.left.shift_drag_tool, DragTool::Line);
+        assert_eq!(drag_tools.left.ctrl_drag_tool, DragTool::Rect);
+        assert_eq!(drag_tools.left.ctrl_shift_drag_tool, DragTool::Arrow);
+        assert_eq!(drag_tools.left.tab_drag_tool, DragTool::Ellipse);
     });
 }
 
 #[test]
 fn ui_defaults_follow_desktop_for_xdg_focus_loss() {
-    let desktop_like_gnome = crate::env_vars::DESKTOP_ENV_KEYS
+    let desktop_like_gnome = env_vars::DESKTOP_ENV_KEYS
         .iter()
-        .filter_map(|key| std::env::var(key).ok())
+        .filter_map(|key| env::var(key).ok())
         .any(|value| {
             let value = value.to_lowercase();
             value.contains("ubuntu") || value.contains("gnome")
@@ -1502,7 +1485,7 @@ fn load_rejects_oversized_config_file() {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&primary_dir).unwrap();
         let config_path = primary_dir.join("config.toml");
-        let oversized = vec![b'x'; (crate::config::io::MAX_CONFIG_FILE_BYTES as usize) + 1];
+        let oversized = vec![b'x'; (io::MAX_CONFIG_FILE_BYTES as usize) + 1];
         fs::write(&config_path, oversized).unwrap();
 
         let err = Config::load().expect_err("oversized config must not load");

@@ -6,6 +6,8 @@
 //! keycap language and tinted from `status_bar_style`, so the HUD reads as the
 //! same chrome family as the status bar and zoom chip.
 
+use std::time::Instant;
+
 use crate::config::{InputHudPosition, StatusBarStyle};
 use crate::input::state::{InputHudEntryKind, InputState};
 
@@ -68,7 +70,7 @@ fn compute_input_hud_layout(
         return None;
     }
     let font_size = input_state.input_hud_font_size();
-    let now = std::time::Instant::now();
+    let now = Instant::now();
 
     // Newest chip first: the row is right-aligned in spirit (new chips arrive
     // on the right and push older ones left), so overflow drops the oldest.

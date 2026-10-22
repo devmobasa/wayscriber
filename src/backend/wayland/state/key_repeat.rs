@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use wayland_client::{Proxy, protocol::wl_keyboard};
+use wayland_client::Proxy;
+use wayland_client::protocol::wl_keyboard;
 
 use crate::backend::wayland::handlers::keyboard::{KEY_REPEAT_INITIAL_DELAY, KEY_REPEAT_INTERVAL};
 use crate::input::Key;

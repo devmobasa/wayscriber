@@ -2,9 +2,13 @@ mod native_popovers;
 mod quiescence;
 
 use std::cell::{Cell, RefCell};
+use std::future::Future;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use glib::WeakRef;
+use gtk4::cairo::Region;
+use gtk4::glib;
 use gtk4::prelude::*;
 
 use super::{CaptureProofTarget, CaptureSurfaceContent, widget_native_is_mapped};
@@ -38,8 +42,8 @@ pub(super) struct TooltipCapture {
 struct TooltipCaptureInner {
     content: CaptureSurfaceContent,
     label: gtk4::Label,
-    installed_sources: RefCell<Vec<gtk4::glib::WeakRef<gtk4::Widget>>>,
-    active_source: RefCell<Option<gtk4::glib::WeakRef<gtk4::Widget>>>,
+    installed_sources: RefCell<Vec<WeakRef<gtk4::Widget>>>,
+    active_source: RefCell<Option<WeakRef<gtk4::Widget>>>,
     native_popovers: NativePopoverCapture,
     suppressed: Cell<bool>,
     popup_input_enabled: Cell<bool>,
@@ -101,7 +105,7 @@ impl TooltipCapture {
             installed.retain(|source| source.upgrade().is_some());
             installed
                 .iter()
-                .filter_map(gtk4::glib::WeakRef::upgrade)
+                .filter_map(WeakRef::upgrade)
                 .any(|candidate| candidate == *source)
         };
         if already_installed {
@@ -153,7 +157,7 @@ impl TooltipCapture {
             .active_source
             .borrow()
             .as_ref()
-            .and_then(gtk4::glib::WeakRef::upgrade)
+            .and_then(WeakRef::upgrade)
             .is_some_and(|active| active == *source)
     }
 
@@ -225,7 +229,7 @@ impl TooltipCapture {
     ) -> Result<(), String>
     where
         F: FnMut(Vec<CaptureProofTarget>, Instant) -> Fut,
-        Fut: std::future::Future<Output = Result<(), String>>,
+        Fut: Future<Output = Result<(), String>>,
     {
         quiescence::wait_for_popover_quiescence(
             generation,
@@ -287,7 +291,7 @@ fn set_native_widget_input_enabled(widget: &gtk4::Widget, enabled: bool) {
         if enabled {
             surface.set_input_region(None);
         } else {
-            let empty = gtk4::cairo::Region::create();
+            let empty = Region::create();
             surface.set_input_region(Some(&empty));
         }
     }
@@ -350,7 +354,7 @@ pub(super) async fn wait_for_presented_transparency_until(
                 "GTK capture suppression generation {generation} timed out waiting for normally visible toolbar surfaces to map ({states})"
             ));
         }
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 
     // Popup surfaces inherit their parent's frame clock. Queueing every proof
@@ -416,7 +420,7 @@ async fn wait_for_surface_presentation(
                 "GTK capture suppression generation {generation} timed out waiting for a dedicated transparent render from {name}"
             ));
         }
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 
     let Some(frame_counter) = target.content.proof_frame() else {
@@ -456,7 +460,7 @@ async fn wait_for_surface_presentation(
                 proof_started.elapsed().as_millis()
             ));
         }
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 }
 
@@ -491,6 +495,12 @@ mod tests {
     mod process;
     mod wayland_proxy;
 
+    use std::env;
+
+    use glib::{MainContext, Object};
+    use gtk4::gio::MenuModel;
+    use gtk4::prelude::WidgetExt;
+
     use super::*;
 
     #[test]
@@ -518,7 +528,7 @@ mod tests {
         const CHILD_ENV: &str = "WAYSCRIBER_GTK_POPUP_CAPTURE_CHILD";
         const TEST_NAME: &str = "toolbar_gtk::view::capture_suppression::tests::capture_aware_gtk_popups_use_transparent_proof_surfaces";
 
-        if std::env::var_os(CHILD_ENV).is_none() {
+        if env::var_os(CHILD_ENV).is_none() {
             let status = process::run_isolated_gtk_test(CHILD_ENV, TEST_NAME);
             assert!(status.success(), "isolated GTK popup capture test failed");
             return;
@@ -558,7 +568,7 @@ mod tests {
         context_popover: gtk4::Popover,
         context_menu: gtk4::PopoverMenu,
         original_context_child: gtk4::Widget,
-        original_context_model: gtk4::gio::MenuModel,
+        original_context_model: MenuModel,
     }
 
     fn gtk_popup_fixture() -> GtkPopupFixture {
@@ -567,7 +577,7 @@ mod tests {
         window.set_child(Some(&root));
         // GtkText creates its private popup against the nearest native. Realize
         // that native for the test without presenting or focusing a window.
-        gtk4::prelude::WidgetExt::realize(&window);
+        WidgetExt::realize(&window);
         let button = gtk4::Button::new();
         button.set_tooltip_text(Some("Zoom"));
         root.append(&button);
@@ -607,7 +617,7 @@ mod tests {
         capture.install_tree(fixture.root.upcast_ref());
         assert_eq!(capture.installed_source_count(), 1);
 
-        let tooltip = gtk4::glib::Object::builder::<gtk4::Tooltip>().build();
+        let tooltip = Object::builder::<gtk4::Tooltip>().build();
         assert!(
             fixture
                 .button
@@ -622,7 +632,7 @@ mod tests {
         // and map the real GtkText-owned surface for this structural test. The
         // parent window remains hidden throughout.
         capture.enroll_native_popover(&fixture.context_popover, true);
-        gtk4::prelude::WidgetExt::map(&fixture.context_popover);
+        WidgetExt::map(&fixture.context_popover);
         assert_eq!(
             fixture.context_popover.child().as_ref(),
             Some(&fixture.original_context_child),
@@ -647,9 +657,9 @@ mod tests {
     }
 
     fn assert_context_popover_remap(capture: &TooltipCapture, fixture: &GtkPopupFixture) {
-        gtk4::prelude::WidgetExt::unmap(&fixture.context_popover);
+        WidgetExt::unmap(&fixture.context_popover);
         assert!(capture.capture_popover_targets().is_empty());
-        gtk4::prelude::WidgetExt::map(&fixture.context_popover);
+        WidgetExt::map(&fixture.context_popover);
         assert_eq!(capture.pending_capture_popover_targets().len(), 1);
         assert_eq!(
             fixture.context_popover.child().as_ref(),
@@ -743,7 +753,7 @@ mod tests {
             &capture.inner.content,
             move || withdrawn_callback.set(true),
         );
-        let error = gtk4::glib::MainContext::default()
+        let error = MainContext::default()
             .block_on(wait_for_presented_transparency_until(
                 90,
                 vec![closed_target],
@@ -764,7 +774,7 @@ mod tests {
         let asynchronous_root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         let asynchronous_window = gtk4::Window::new();
         asynchronous_window.set_child(Some(&asynchronous_root));
-        gtk4::prelude::WidgetExt::realize(&asynchronous_window);
+        WidgetExt::realize(&asynchronous_window);
         let asynchronous_entry = gtk4::Entry::new();
         let second_asynchronous_entry = gtk4::Entry::new();
         asynchronous_root.append(&asynchronous_entry);
@@ -783,7 +793,7 @@ mod tests {
 
         let created_popovers = Rc::new(RefCell::new(Vec::<(gtk4::Popover, gtk4::Widget)>::new()));
         let created_popovers_callback = Rc::clone(&created_popovers);
-        gtk4::glib::timeout_add_local_once(Duration::from_millis(10), move || {
+        glib::timeout_add_local_once(Duration::from_millis(10), move || {
             created_popovers_callback
                 .borrow_mut()
                 .push(open_hidden_test_text_popover(&asynchronous_text));
@@ -792,8 +802,8 @@ mod tests {
         let proof_calls = Rc::new(Cell::new(0usize));
         let proof_calls_callback = Rc::clone(&proof_calls);
         let second_created_popovers = Rc::clone(&created_popovers);
-        let roots = [asynchronous_root.clone().upcast::<gtk4::Widget>()];
-        gtk4::glib::MainContext::default()
+        let roots = [asynchronous_root.upcast::<gtk4::Widget>()];
+        MainContext::default()
             .block_on(asynchronous_capture.wait_for_popover_quiescence(
                 91,
                 &roots,
@@ -802,7 +812,7 @@ mod tests {
                     if proof_calls.get() == 0 {
                         let text = second_asynchronous_text.clone();
                         let popovers = Rc::clone(&second_created_popovers);
-                        gtk4::glib::timeout_add_local_once(Duration::from_millis(10), move || {
+                        glib::timeout_add_local_once(Duration::from_millis(10), move || {
                             popovers
                                 .borrow_mut()
                                 .push(open_hidden_test_text_popover(&text));
@@ -814,7 +824,7 @@ mod tests {
                         // Real presentation proof yields the GTK main context.
                         // Mirror that so the second popup is created during
                         // the first proof round, after its discovery scan.
-                        gtk4::glib::timeout_future(Duration::from_millis(20)).await;
+                        glib::timeout_future(Duration::from_millis(20)).await;
                         proof_calls.set(proof_calls.get() + 1);
                         Ok(())
                     }
@@ -852,7 +862,7 @@ mod tests {
         // Keep the toplevel hidden so this test never foregrounds a window,
         // but mark the native popup mapped to exercise the production
         // visibility predicate and discovery path.
-        gtk4::prelude::WidgetExt::map(&popover);
+        WidgetExt::map(&popover);
         (popover, original_child)
     }
 }

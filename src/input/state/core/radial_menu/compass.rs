@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 
 use crate::domain::Action;
 use crate::input::tool::Tool;
+use crate::ui::toolbar::model;
 
 /// Number of segments in the primary compass ring.
 pub const TOOL_SEGMENT_COUNT: usize = 8;
@@ -45,6 +46,7 @@ impl CompassDir {
     ];
 
     /// Primary-ring segment index of this direction.
+    #[must_use]
     pub fn index(self) -> u8 {
         self as u8
     }
@@ -63,6 +65,7 @@ pub enum RadialParent {
 impl RadialParent {
     /// Wedge label. Parents are not actions, so their labels live here
     /// rather than in the `ActionMeta` registry.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             RadialParent::Shapes => "Shapes",
@@ -72,6 +75,7 @@ impl RadialParent {
 
     /// Sub-ring children in slice order (child 0 sits at the parent wedge's
     /// leading edge).
+    #[must_use]
     pub fn children(self) -> &'static [Action] {
         match self {
             RadialParent::Shapes => shapes_children(),
@@ -91,7 +95,7 @@ const NOTES_CHILDREN: [Action; 2] = [Action::SelectStepMarkerTool, Action::Enter
 fn shapes_children() -> &'static [Action] {
     static CHILDREN: OnceLock<Vec<Action>> = OnceLock::new();
     CHILDREN.get_or_init(|| {
-        crate::ui::toolbar::model::shape_tools()
+        model::shape_tools()
             .iter()
             .filter(|tool| {
                 matches!(
@@ -162,11 +166,13 @@ pub const COMPASS_SLICES: [RadialSlice; TOOL_SEGMENT_COUNT] = [
 ];
 
 /// Slice at a primary-ring segment index.
+#[must_use]
 pub fn compass_slice(idx: u8) -> Option<&'static RadialSlice> {
     COMPASS_SLICES.get(idx as usize)
 }
 
 /// Parent at a segment index, if that slice expands a sub-ring.
+#[must_use]
 pub fn slice_parent(idx: u8) -> Option<RadialParent> {
     match compass_slice(idx)?.kind {
         RadialSliceKind::Parent(parent) => Some(parent),
@@ -182,6 +188,7 @@ pub fn sub_ring_children(parent_idx: u8) -> &'static [Action] {
 }
 
 /// Number of sub-ring children for a segment index, or 0 if none.
+#[must_use]
 pub fn sub_ring_child_count(parent_idx: u8) -> usize {
     sub_ring_children(parent_idx).len()
 }

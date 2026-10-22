@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::interaction;
+
 use super::InputState;
 use crate::domain::Action;
 use crate::input::Key;
@@ -24,18 +27,22 @@ pub enum EyedropperUiState {
 }
 
 impl EyedropperUiState {
+    #[must_use]
     pub fn is_active(self) -> bool {
         matches!(self, Self::Active { .. })
     }
 
+    #[must_use]
     pub fn is_pending(self) -> bool {
         matches!(self, Self::PendingCapture { .. })
     }
 
+    #[must_use]
     pub fn is_engaged(self) -> bool {
         self.is_active() || self.is_pending()
     }
 
+    #[must_use]
     pub fn hover(self) -> Option<(f64, f64)> {
         match self {
             Self::Active { hover, .. } => hover,
@@ -43,6 +50,7 @@ impl EyedropperUiState {
         }
     }
 
+    #[must_use]
     pub fn pending_source(self) -> Option<EyedropperCaptureSource> {
         match self {
             Self::PendingCapture { source, .. } => Some(source),
@@ -83,7 +91,7 @@ impl InputState {
     }
 
     pub(crate) fn action_for_key(&self, key: Key) -> Option<Action> {
-        crate::input::state::interaction::action_for_key_binding(self, key)
+        interaction::action_for_key_binding(self, key)
             .ok()
             .flatten()
     }
@@ -99,7 +107,7 @@ impl InputState {
 
     pub(crate) fn activate_eyedropper_with(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         owned_frozen_generation: Option<u64>,
     ) {
         // A capture can take long enough for another interaction to begin while
@@ -146,7 +154,7 @@ mod tests {
     fn cancel_returns_the_exact_owned_frozen_generation() {
         let mut state = make_test_input_state();
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(17));
+        state.activate_eyedropper_with(&TextMeasurer::default(), Some(17));
 
         assert_eq!(state.cancel_eyedropper(), Some(17));
         assert_eq!(state.eyedropper_state(), EyedropperUiState::Inactive);
@@ -168,7 +176,7 @@ mod tests {
         state.on_mouse_press(MouseButton::Left, 10, 20);
         assert!(matches!(state.state, DrawingState::Drawing { .. }));
 
-        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
+        state.activate_eyedropper_with(&TextMeasurer::default(), Some(1));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.pointer_drag_active());
@@ -185,7 +193,7 @@ mod tests {
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(state.modal_blocks_canvas_key_repeat());
 
-        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
+        state.activate_eyedropper_with(&TextMeasurer::default(), Some(1));
         assert!(state.modal_blocks_canvas_key_repeat());
 
         state.cancel_eyedropper();

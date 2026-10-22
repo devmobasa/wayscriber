@@ -1,4 +1,9 @@
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
+
+use crate::config::{Config, toolbar_item_ids};
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
 
 use super::*;
 use crate::config::{LaserConfig, PresenterToolBehavior};
@@ -27,8 +32,8 @@ fn draw(state: &mut InputState, path: &[(i32, i32)]) {
 }
 
 fn run_action(state: &mut InputState, action: Action) {
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     state.handle_action_with_resources(
         crate::input::state::InputTextResources {
             measurer: &measurer,
@@ -75,7 +80,7 @@ fn a_laser_stroke_never_reaches_the_frame_history_or_session() {
 fn session_snapshots_and_exports_see_no_laser_ink() {
     let mut state = laser_state();
     draw(&mut state, &STROKE);
-    let mut options = SessionOptions::new(std::path::PathBuf::from("/tmp"), "laser");
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "laser");
     options.persist_transparent = true;
 
     let snapshot = snapshot_from_input(&state, &options).expect("tool state is persisted");
@@ -189,7 +194,7 @@ fn clearing_the_canvas_also_clears_laser_ink() {
 
 #[test]
 fn from_config_applies_the_laser_section() {
-    let mut config = crate::config::Config::default();
+    let mut config = Config::default();
     config.laser.width = 12.0;
     config.laser.color = [0.0, 0.5, 1.0, 1.0];
 
@@ -204,8 +209,8 @@ fn locked_presenter_mode_still_allows_the_laser() {
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().tool_behavior =
         PresenterToolBehavior::ForceHighlightLocked;
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     state.toggle_presenter_mode_with_resources(crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &ui_engine,
@@ -247,7 +252,7 @@ fn regular_and_advanced_strips_show_the_laser_with_the_pens_and_simple_does_not(
     );
     assert_eq!(
         model::toolbar_item_id_for_tool(Tool::Laser),
-        crate::config::toolbar_item_ids::TOP_TOOL_LASER
+        toolbar_item_ids::TOP_TOOL_LASER
     );
 }
 

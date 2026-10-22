@@ -1,3 +1,5 @@
+use crate::input::state::core::modal::ModalSurface;
+
 use super::super::base::InputState;
 use super::metrics::MAX_SWATCHES;
 use super::panel_layout::selection_panel_anchor;
@@ -90,7 +92,7 @@ impl InputState {
             return false;
         }
 
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::PropertiesPanel);
+        self.close_modals_for_open(ModalSurface::PropertiesPanel);
 
         let Some(contents) = self.properties_panel_contents(measurer) else {
             return false;
@@ -288,11 +290,13 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::draw::{Shape, ShapeId};
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     fn add_rect(state: &mut InputState, x: i32, y: i32, w: i32, h: i32) -> ShapeId {

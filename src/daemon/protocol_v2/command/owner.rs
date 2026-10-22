@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, ErrorKind};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -179,7 +179,7 @@ impl CommandOwner {
         };
         if use_claimed {
             let (_order, identity, path) = claimed.expect("selected claimed command exists");
-            return self.claim_ref_less_control(identity, path);
+            return self.claim_ref_less_control(&identity, path);
         }
         let Some((_order, (identity, reference_path, reference))) = reference else {
             return Ok(None);
@@ -347,7 +347,7 @@ impl CommandOwner {
 
     fn recover_abandoned_unqueued(
         &self,
-        path: &std::path::Path,
+        path: &Path,
         observed: &super::super::wire::CommandControl,
     ) -> Result<()> {
         let caller_lease = open_lock(&path.join("caller.lease"), false)?;
@@ -389,7 +389,7 @@ impl CommandOwner {
 
     fn claim_ref_less_control(
         &self,
-        identity: String,
+        identity: &str,
         path: PathBuf,
     ) -> Result<Option<ClaimedCommand>> {
         if !matches!(

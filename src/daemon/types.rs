@@ -1,16 +1,16 @@
 use crate::tray_action::TrayAction;
-#[cfg(feature = "tray")]
-use log::warn;
 use std::collections::VecDeque;
 use std::ffi::OsString;
-use std::io;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::fmt::{Display, Formatter};
+#[cfg(feature = "tray")]
+use std::sync::MutexGuard;
 #[cfg(feature = "tray")]
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 #[cfg(feature = "tray")]
 use std::time::Instant;
+use std::{error, fmt, io, mem};
 
 use crate::backend::wayland::RuntimeWakeHandle;
 #[cfg(all(test, feature = "portal"))]
@@ -60,7 +60,7 @@ impl DaemonControlEvent {
 
     #[cfg(all(test, feature = "portal"))]
     pub(super) fn for_test(flag: Arc<AtomicBool>) -> (Self, RuntimeWakeSource) {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().expect("create the test runtime wake source");
         (Self::new(flag, wake.handle()), wake)
     }
 }
@@ -109,13 +109,13 @@ impl VisibilityIntents {
         let mut state = self
             .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("daemon intents are never locked across a panic");
         if !self.ready.swap(false, Ordering::Acquire) {
             return None;
         }
         Some(VisibilityIntent {
             activation_token: state.activation_token.take(),
-            signal_requested: std::mem::take(&mut state.signal_requested),
+            signal_requested: mem::take(&mut state.signal_requested),
         })
     }
 }
@@ -131,7 +131,7 @@ impl VisibilityPublisher {
             .intents
             .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("daemon intents are never locked across a panic");
         if activation_token.is_some() {
             state.activation_token = activation_token;
         }
@@ -248,11 +248,10 @@ impl TrayStatusShared {
         self.revision.load(Ordering::Acquire)
     }
 
-    fn lock_status(&self) -> std::sync::MutexGuard<'_, TrayStatus> {
-        self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("tray status mutex poisoned; recovering");
-            poisoned.into_inner()
-        })
+    fn lock_status(&self) -> MutexGuard<'_, TrayStatus> {
+        self.inner
+            .lock()
+            .expect("tray status is never locked across a panic")
     }
 
     fn bump_revision(&self) {
@@ -263,13 +262,13 @@ impl TrayStatusShared {
 #[derive(Debug)]
 pub struct AlreadyRunningError;
 
-impl std::fmt::Display for AlreadyRunningError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for AlreadyRunningError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "wayscriber daemon is already running")
     }
 }
 
-impl std::error::Error for AlreadyRunningError {}
+impl error::Error for AlreadyRunningError {}
 
 /// Daemon state manager
 pub type BackendRunner = dyn Fn(Option<String>) -> anyhow::Result<()> + Send + Sync;
@@ -305,6 +304,13 @@ pub(super) enum OverlayActionPublishError {
 }
 
 impl OverlayActionIntents {
+    #[cfg_attr(
+        not(any(feature = "tray", test)),
+        expect(
+            clippy::needless_pass_by_value,
+            reason = "the publisher keeps the wake handle only in tray and test builds"
+        )
+    )]
     pub(super) fn publisher(self: &Arc<Self>, wake: RuntimeWakeHandle) -> OverlayActionPublisher {
         #[cfg(not(any(feature = "tray", test)))]
         let _ = wake;
@@ -324,7 +330,7 @@ impl OverlayActionIntents {
         let mut state = self
             .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("daemon intents are never locked across a panic");
         if !self.ready.swap(false, Ordering::Acquire) {
             return Vec::new();
         }
@@ -338,7 +344,7 @@ impl OverlayActionIntents {
         let mut state = self
             .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("daemon intents are never locked across a panic");
         assert!(
             completed <= state.in_flight,
             "completed action count exceeds in-flight ownership"
@@ -355,7 +361,7 @@ impl OverlayActionIntents {
         let state = self
             .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("daemon intents are never locked across a panic");
         (state.queue.len(), state.in_flight)
     }
 }
@@ -367,7 +373,7 @@ impl OverlayActionPublisher {
             .intents
             .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("daemon intents are never locked across a panic");
         if state.queue.len() + state.in_flight >= MAX_OVERLAY_ACTION_INTENTS {
             return Err(OverlayActionPublishError::QueueFull);
         }
@@ -380,6 +386,8 @@ impl OverlayActionPublisher {
 
 #[cfg(test)]
 mod control_tests {
+    use std::thread;
+
     use super::*;
     use std::sync::Barrier;
     use std::sync::atomic::AtomicUsize;
@@ -423,7 +431,7 @@ mod control_tests {
         let claimant_intents = Arc::clone(&intents);
         let claimant_claim = Arc::clone(&claim_barrier);
         let claimant_release = Arc::clone(&release_barrier);
-        let claimant = std::thread::spawn(move || {
+        let claimant = thread::spawn(move || {
             claimant_intents.claim_batch_with_hook(|| {
                 claimant_claim.wait();
                 claimant_release.wait();
@@ -431,8 +439,8 @@ mod control_tests {
         });
 
         claim_barrier.wait();
-        let late_publisher = publisher.clone();
-        let late = std::thread::spawn(move || {
+        let late_publisher = publisher;
+        let late = thread::spawn(move || {
             late_publisher.publish(TrayAction::ToggleHelp).unwrap();
         });
         release_barrier.wait();

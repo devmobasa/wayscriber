@@ -1,8 +1,11 @@
+use std::iter;
+
+use crate::domain::BoardGrid;
 use crate::draw::render::{render_freehand_pressure_preview_borrowed, render_polygon_preview};
 use crate::draw::shape::bounding_box_for_points;
 use crate::draw::{
-    Color, RenderCaches, RenderCtx, Shape, render_freehand_borrowed, render_laser_stroke,
-    render_marker_stroke_borrowed,
+    Color, RenderCaches, RenderCtx, Shape, TextMeasurer, render_freehand_borrowed,
+    render_laser_stroke, render_marker_stroke_borrowed,
 };
 use crate::input::Tool;
 use crate::input::tool::{
@@ -66,7 +69,7 @@ impl InputState {
     }
 
     /// The board paper Shape Pen snaps to: none when snapping is turned off.
-    pub(crate) fn shape_pen_grid(&self) -> crate::domain::BoardGrid {
+    pub(crate) fn shape_pen_grid(&self) -> BoardGrid {
         let grid = self.boards.active_board().spec.grid;
         if self.style.shape_recognition_grid_snap {
             grid
@@ -101,7 +104,7 @@ impl InputState {
                 fill_enabled: self.style.fill_enabled,
                 regular_sides: self.style.polygon_sides,
             };
-            return tool.provisional_polygon_stroke(snapshot);
+            return tool.provisional_polygon_stroke(&snapshot);
         }
 
         let snapshot = ProvisionalToolSnapshot {
@@ -137,7 +140,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_tool_stroke(
         &self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         stroke: ProvisionalToolStroke<'_>,
         text_halo_enabled: bool,
@@ -219,7 +222,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_tool_stroke_for_damage(
         &self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         stroke: ProvisionalToolStroke<'_>,
         damage_regions: &[Rect],
@@ -335,7 +338,7 @@ impl InputState {
         current_y: i32,
     ) -> bool {
         let mut caches = RenderCaches::default();
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.render_provisional_shape_with_halo(
             &measurer,
             &mut RenderCtx::new(ctx, &mut caches),
@@ -347,7 +350,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_shape_with_halo(
         &self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         current_x: i32,
         current_y: i32,
@@ -409,7 +412,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_shape_for_damage(
         &self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         current_x: i32,
         current_y: i32,
@@ -479,7 +482,7 @@ fn path_damage_ranges<T: Copy + Into<f64>>(
 }
 
 fn single_range(range: Range<usize>) -> Vec<Range<usize>> {
-    std::iter::once(range).collect()
+    iter::once(range).collect()
 }
 
 fn push_merged_range(ranges: &mut Vec<Range<usize>>, next: Range<usize>) {
@@ -516,13 +519,19 @@ fn pressure_preview_needs_full_mask_render(color: Color, ranges: &[Range<usize>]
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
+    use crate::draw;
+    use crate::draw::{ArrowLabel, ArrowStyle, EmbeddedImage, FontDescriptor, StepMarkerLabel};
+    use crate::input::state::test_support::TestInputStateBuilder;
+
     use super::*;
 
     #[test]
     fn persistent_preview_dispatch_matches_shape_rendering() {
-        let measurer = crate::draw::TextMeasurer::default();
-        let input = crate::input::state::test_support::TestInputStateBuilder::default().build();
-        let mut png = std::io::Cursor::new(Vec::new());
+        let measurer = TextMeasurer::default();
+        let input = TestInputStateBuilder::default().build();
+        let mut png = Cursor::new(Vec::new());
         let source = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
         let context = cairo::Context::new(&source).unwrap();
         context.set_source_rgb(240.0 / 255.0, 50.0 / 255.0, 20.0 / 255.0);
@@ -534,7 +543,7 @@ mod tests {
                 y: 2,
                 w: 20,
                 h: 20,
-                data: crate::draw::EmbeddedImage {
+                data: EmbeddedImage {
                     mime_type: "image/png".into(),
                     width: 2,
                     height: 2,
@@ -545,9 +554,9 @@ mod tests {
                 x: 2,
                 y: 42,
                 text: "Preview".into(),
-                color: crate::draw::RED,
+                color: draw::RED,
                 size: 14.0,
-                font_descriptor: crate::draw::FontDescriptor::default(),
+                font_descriptor: FontDescriptor::default(),
                 background_enabled: false,
                 wrap_width: None,
             },
@@ -556,14 +565,14 @@ mod tests {
                 y1: 80,
                 x2: 210,
                 y2: 80,
-                color: crate::draw::RED,
+                color: draw::RED,
                 thick: 3.0,
                 arrow_length: 12.0,
                 arrow_angle: 30.0,
                 head_at_end: true,
-                style: crate::draw::ArrowStyle::Standard,
+                style: ArrowStyle::Standard,
                 bend: 0.0,
-                label: Some(crate::draw::ArrowLabel {
+                label: Some(ArrowLabel {
                     value: 72,
                     size: 18.0,
                     font_descriptor: Default::default(),
@@ -572,8 +581,8 @@ mod tests {
             Shape::StepMarker {
                 x: 55,
                 y: 105,
-                color: crate::draw::RED,
-                label: crate::draw::StepMarkerLabel {
+                color: draw::RED,
+                label: StepMarkerLabel {
                     value: 108,
                     size: 18.0,
                     font_descriptor: Default::default(),

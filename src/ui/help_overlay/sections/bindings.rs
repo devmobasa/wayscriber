@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::config;
 use crate::config::{
     Action, QuickColorPalette, QuickColorSlot, RadialMenuMouseBinding, action_meta_iter,
 };
@@ -29,7 +30,8 @@ impl Default for HelpOverlayBindings {
 impl HelpOverlayBindings {
     pub fn from_input_state(state: &InputState) -> Self {
         let mut labels = HashMap::new();
-        for meta in action_meta_iter().filter(|meta| meta.in_help) {
+        let help_actions = action_meta_iter().filter(|meta| meta.in_help);
+        for meta in help_actions {
             let bindings = state.action_binding_labels(meta.action);
             if !bindings.is_empty() {
                 labels.insert(meta.action, bindings);
@@ -37,7 +39,8 @@ impl HelpOverlayBindings {
         }
 
         let mut cache_parts = Vec::new();
-        for meta in action_meta_iter().filter(|meta| meta.in_help) {
+        let help_actions = action_meta_iter().filter(|meta| meta.in_help);
+        for meta in help_actions {
             if let Some(values) = labels.get(&meta.action) {
                 cache_parts.push(format!("{:?}={}", meta.action, values.join("/")));
             }
@@ -152,7 +155,7 @@ pub(super) fn action_row(
 ) -> super::super::types::Row {
     super::super::types::row(
         binding_or_fallback(bindings, action, fallback),
-        crate::config::action_label(action),
+        config::action_label(action),
     )
     .with_action(action)
 }
@@ -219,6 +222,8 @@ fn split_numeric_suffix(label: &str) -> Option<(String, u32)> {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::color;
+
     use super::*;
     use crate::config::{Action, QuickColorPaletteEntry};
     use crate::draw::Color;
@@ -298,7 +303,7 @@ mod tests {
         state.set_quick_colors(QuickColorPalette::from_entries(vec![
             QuickColorPaletteEntry {
                 label: "Red".to_string(),
-                color: crate::draw::color::RED,
+                color: color::RED,
             },
             QuickColorPaletteEntry {
                 label: "Custom green".to_string(),

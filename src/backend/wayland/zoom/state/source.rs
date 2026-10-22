@@ -1,5 +1,11 @@
 //! Identified Zoom requests, waiters, terminal reports and cancellation cleanup.
-use super::*;
+use crate::i18n;
+
+use super::ZoomState;
+use crate::backend::wayland::capture_preflight::{
+    CaptureLayoutRetry, CapturePreflight, CapturePreflightError,
+};
+use crate::input::InputState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(in crate::backend::wayland) struct ZoomCaptureId(u64);
@@ -135,10 +141,14 @@ impl ZoomState {
         let report = report.or_else(|| {
             matches!(outcome, ZoomSourceOutcome::StaleLayout).then(|| ZoomTerminalReport {
                 source: "zoom",
-                message: CapturePreflightError::StaleLayout.message(crate::i18n::tr("Zoom")),
+                message: CapturePreflightError::StaleLayout.message(i18n::tr("Zoom")),
             })
         });
-        debug_assert!(self.source_terminal.is_none());
+        debug_assert!(
+            self.source_terminal.is_none(),
+            "a zoom source finished while an earlier terminal is unclaimed: {:?}",
+            self.source_terminal
+        );
         if self.source_terminal.is_none() {
             self.source_terminal = Some(ZoomSourceTerminal {
                 id,
@@ -151,9 +161,9 @@ impl ZoomState {
     pub(in crate::backend::wayland) fn finish_preflight_failure(
         &mut self,
         input_state: &mut InputState,
-        error: CapturePreflightError,
+        error: &CapturePreflightError,
     ) {
-        let message = error.message(crate::i18n::tr("Zoom"));
+        let message = error.message(i18n::tr("Zoom"));
         let report = ZoomTerminalReport {
             source: "zoom",
             message: message.clone(),

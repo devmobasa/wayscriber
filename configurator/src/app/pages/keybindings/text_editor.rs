@@ -2,6 +2,7 @@ use wayscriber::i18n::tr;
 
 use relm4::{ComponentSender, gtk};
 
+use gtk::glib::SignalHandlerId;
 use gtk::glib::object::IsA;
 use gtk::prelude::*;
 
@@ -15,7 +16,7 @@ use super::widgets::{field_canceled, set_accessible_label, set_label, unparent_o
 pub(super) struct TextEditorPopover {
     pub popover: gtk::Popover,
     entry: gtk::Entry,
-    entry_handler: gtk::glib::SignalHandlerId,
+    entry_handler: SignalHandlerId,
     error: gtk::Label,
 }
 

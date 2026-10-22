@@ -1,5 +1,7 @@
+use crate::draw::{Frame, RenderCaches, RenderCtx, TextMeasurer};
 use crate::input::InputState;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
+use crate::ui::theme::popup;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
@@ -27,8 +29,8 @@ pub fn render_board_picker(
     screen_height: u32,
 ) {
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
-    let mut caches = crate::draw::RenderCaches::default();
+    let measurer = TextMeasurer::default();
+    let mut caches = RenderCaches::default();
     render_board_picker_with_halo(
         &engine,
         &measurer,
@@ -44,9 +46,9 @@ pub fn render_board_picker(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_board_picker_with_halo(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     cache: &mut ThumbnailCache,
-    render: &mut crate::draw::RenderCtx<'_, '_>,
+    render: &mut RenderCtx<'_, '_>,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -57,13 +59,13 @@ pub(crate) fn render_board_picker_with_halo(
         return;
     }
 
-    cache.retain_revisions(input_state.boards.board_states().iter().flat_map(|board| {
-        board
-            .pages
-            .pages()
+    cache.retain_revisions(
+        input_state
+            .boards
+            .board_states()
             .iter()
-            .map(crate::draw::Frame::content_revision)
-    }));
+            .flat_map(|board| board.pages.pages().iter().map(Frame::content_revision)),
+    );
     let layout = match input_state.board_picker_layout() {
         Some(layout) => layout,
         None => return,
@@ -90,9 +92,9 @@ pub(crate) fn render_board_picker_with_halo(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, crate::ui::theme::popup::bg_board_picker());
+    constants::set_color(ctx, popup::bg_board_picker());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
+    constants::set_color(ctx, popup::border_board_picker());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

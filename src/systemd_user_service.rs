@@ -1,3 +1,4 @@
+use std::iter;
 use std::path::{Path, PathBuf};
 
 use crate::env_vars::{PATH_ENV, WAYLAND_DISPLAY_ENV, XDG_RUNTIME_DIR_ENV};
@@ -5,14 +6,17 @@ use crate::paths::config_dir;
 
 pub const USER_SERVICE_NAME: &str = "wayscriber.service";
 
+#[must_use]
 pub fn user_service_unit_path() -> Option<PathBuf> {
     config_dir().map(|root| user_service_unit_path_from_config_root(&root))
 }
 
+#[must_use]
 pub fn portal_shortcut_dropin_path() -> Option<PathBuf> {
     config_dir().map(|root| portal_shortcut_dropin_path_from_config_root(&root))
 }
 
+#[must_use]
 pub fn user_service_unit_path_from_config_root(config_root: &Path) -> PathBuf {
     config_root
         .join("systemd")
@@ -20,6 +24,7 @@ pub fn user_service_unit_path_from_config_root(config_root: &Path) -> PathBuf {
         .join(USER_SERVICE_NAME)
 }
 
+#[must_use]
 pub fn portal_shortcut_dropin_path_from_config_root(config_root: &Path) -> PathBuf {
     config_root
         .join("systemd")
@@ -33,6 +38,7 @@ pub fn portal_shortcut_dropin_path_from_config_root(config_root: &Path) -> PathB
 /// systemd expands `%` specifiers in the command word, but `$VAR` substitution
 /// applies only to the arguments after it, so a `$` in the path stays as it is:
 /// doubling it would name an executable that does not exist.
+#[must_use]
 pub fn quote_systemd_exec(path: &Path) -> String {
     let mut quoted = String::from("\"");
     for character in path.to_string_lossy().chars() {
@@ -44,6 +50,7 @@ pub fn quote_systemd_exec(path: &Path) -> String {
 
 /// Escapes `value` for a double-quoted `Environment=` assignment, where `$`
 /// has no special meaning and stays as it is.
+#[must_use]
 pub fn escape_systemd_env_value(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for character in value.chars() {
@@ -80,6 +87,7 @@ const BASE_SERVICE_PATH: [&str; 3] = ["/usr/local/bin", "/usr/bin", "/bin"];
 /// `/usr/bin` install, pinned by `packaged_service_unit_matches_the_renderer`.
 /// The two used to be maintained by hand and had already drifted apart on the
 /// PATH they set.
+#[must_use]
 pub fn render_user_service_unit(binary_path: &Path) -> String {
     let quoted_exec = quote_systemd_exec(binary_path);
     let binary_dir = binary_path
@@ -92,7 +100,7 @@ pub fn render_user_service_unit(binary_path: &Path) -> String {
     let service_path = if BASE_SERVICE_PATH.contains(&binary_dir.as_str()) {
         BASE_SERVICE_PATH.join(":")
     } else {
-        std::iter::once(binary_dir.as_str())
+        iter::once(binary_dir.as_str())
             .chain(BASE_SERVICE_PATH)
             .collect::<Vec<_>>()
             .join(":")

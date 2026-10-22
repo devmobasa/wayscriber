@@ -1,4 +1,30 @@
-use super::*;
+use std::slice;
+use std::sync::mpsc;
+
+use super::super::{
+    AbandonedPreviewResolutionReason, ActiveControllerBarrier, ControllerBarrierId,
+    ControllerBarrierOperation, ControllerBarrierPhase, DurabilityOutcome, HeldReplacementStage,
+    PersistenceIncidentId, RecoveryAttemptId, RecoveryAttemptStep, RecoveryCommandId,
+    RecoveryHandleId, RecoveryLeaseNonce, RuntimeStateFailurePathEffect, RuntimeStateIoError,
+    RuntimeStateObservedPathEffect, RuntimeStateRecoveryArtifact, RuntimeStateSourceObservation,
+    RuntimeUiStateController,
+};
+use super::protocol::{
+    allocate_counter, completion_protocol_error, merge_artifacts, observation_matches_file_status,
+    reinspection_writer_observation,
+};
+use super::{
+    ActiveRecoveryAttempt, ActiveRecoveryCommand, BeginPersistenceRecoveryResult,
+    CancelPersistenceRecoveryResult, CheckoutPersistenceRecoveryHandleResult, LifecycleControl,
+    PersistenceAuthoritySnapshot, PersistenceIncident, PersistenceRecoveryAction,
+    PersistenceRecoveryHandle, PersistenceRecoveryRequest, RecoveryAttemptClient,
+    RecoveryAttemptKind, RecoveryBeginRejection, RecoveryCancellation,
+    RecoveryCancellationRejection, RecoveryCleanupState, RecoveryCommandExpectation,
+    RecoveryCompletionProtocolError, RecoveryCompletionReceiver, RecoveryHandleAvailability,
+    RecoveryHandleState, RecoveryIoCommand, RecoveryIoCompletion, RecoveryIoOperation,
+    RecoveryIoResult, SubmitPersistenceRecoveryResult,
+};
+use std::collections::BTreeSet;
 
 impl RuntimeUiStateController {
     const RECOVERY_COMMAND_TOMBSTONE_LIMIT: usize = 1024;
@@ -141,7 +167,7 @@ impl RuntimeUiStateController {
                 RecoveryAttemptKind::ConfirmPreserveInvalidReset { confirmation }
             }
         };
-        let (completion_tx, completion_rx) = std::sync::mpsc::channel();
+        let (completion_tx, completion_rx) = mpsc::channel();
         let active = ActiveRecoveryAttempt {
             id: attempt_id,
             incident: incident_id,
@@ -236,24 +262,24 @@ impl RuntimeUiStateController {
         if active.incident != completion.incident || active.barrier != completion.barrier {
             return self.block_protocol_failure(
                 RecoveryCompletionProtocolError::WrongIncidentOrBarrier,
-                completion,
+                &completion,
             );
         }
         if active.id != completion.attempt {
             return self.block_protocol_failure(
                 RecoveryCompletionProtocolError::UnknownAttempt,
-                completion,
+                &completion,
             );
         }
         if active.current_command.id != completion.command_id {
             return self.block_protocol_failure(
                 RecoveryCompletionProtocolError::UnknownCommand,
-                completion,
+                &completion,
             );
         }
         let expectation = active.current_command.expected.clone();
         if let Some(reason) = completion_protocol_error(&completion.result, &expectation) {
-            return self.block_protocol_failure(reason, completion);
+            return self.block_protocol_failure(reason, &completion);
         }
         let incident = active.incident;
         let attempt = active.id;
@@ -269,7 +295,7 @@ impl RuntimeUiStateController {
         match completion.result {
             RecoveryIoResult::Inspected(result) => self.integrate_recovery_inspection(result),
             RecoveryIoResult::SourceMutation(result) if protocol_failure_pending => {
-                self.integrate_protocol_failure_source_completion(result)
+                self.integrate_protocol_failure_source_completion(&result)
             }
             RecoveryIoResult::SourceMutation(result) => {
                 self.integrate_recovery_source_mutation(result)
@@ -328,11 +354,11 @@ impl RuntimeUiStateController {
 
     pub(in crate::runtime_ui_state) fn enter_persistence_incident(
         &mut self,
-        error: RuntimeStateIoError,
+        error: &RuntimeStateIoError,
         active: Option<RuntimeStateSourceObservation>,
         recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
         path_effect: RuntimeStateFailurePathEffect,
-        failed_replacement: Option<HeldReplacementStage>,
+        failed_replacement: Option<&HeldReplacementStage>,
     ) -> PersistenceIncidentId {
         let barrier = match self.active_barrier.as_ref() {
             Some(barrier) => barrier.id,
@@ -367,10 +393,10 @@ impl RuntimeUiStateController {
         } else {
             self.pipeline.hold_all_pending_replacements()
         };
-        let failed_desired_through = failed_replacement.as_ref().map(|stage| stage.through);
-        if let Some(failed_replacement) = &failed_replacement {
+        let failed_desired_through = failed_replacement.map(|stage| stage.through);
+        if let Some(failed_replacement) = failed_replacement {
             self.pipeline
-                .settle_held_failed(std::slice::from_ref(failed_replacement), error.clone());
+                .settle_held_failed(slice::from_ref(failed_replacement), error);
         }
         let retry_desired_through = held_replacements
             .iter()
@@ -450,9 +476,9 @@ impl RuntimeUiStateController {
 
     pub(in crate::runtime_ui_state) fn apply_lifecycle_control(
         &mut self,
-        control: LifecycleControl,
+        control: &LifecycleControl,
     ) {
-        match control {
+        match *control {
             LifecycleControl::ReturnRecoveryHandle {
                 controller,
                 incident,

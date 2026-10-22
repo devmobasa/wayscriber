@@ -1,7 +1,6 @@
 use super::super::super::base::{ClipboardPasteRequest, InputState};
-use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
-use crate::draw::{EmbeddedImage, Shape};
+use crate::draw::{EmbeddedImage, Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 

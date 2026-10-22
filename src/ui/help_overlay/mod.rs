@@ -13,7 +13,7 @@ pub use render::{
     HelpHitMap, HelpOverlayRegion, HelpRenderResult, render_help_overlay,
     render_help_overlay_result,
 };
-pub use sections::HelpOverlayBindings;
+pub use sections::{HelpContentOptions, HelpOverlayBindings};
 
 pub(crate) use content::HelpContentCache;
 pub(in crate::ui) use render::HelpLayoutCache;

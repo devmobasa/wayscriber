@@ -1,8 +1,11 @@
+use crate::draw::{ArrowStyle, TextMeasurer};
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 
 #[test]
 fn translate_selection_with_undo_moves_shape() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
@@ -46,7 +49,7 @@ fn translate_selection_with_undo_moves_shape() {
 
 #[test]
 fn resizing_selection_marks_previous_live_bounds_dirty() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -106,7 +109,7 @@ fn resizing_selection_marks_previous_live_bounds_dirty() {
 
 #[test]
 fn resizing_selection_back_to_start_restores_original_geometry() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -171,8 +174,8 @@ fn resizing_selection_back_to_start_restores_original_geometry() {
 
 #[test]
 fn move_selection_to_horizontal_edges_uses_screen_bounds() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -213,8 +216,8 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
 
 #[test]
 fn move_selection_to_horizontal_edges_ignores_last_axis() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -256,8 +259,8 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
 
 #[test]
 fn move_selection_to_vertical_edges_explicit_actions() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -298,8 +301,8 @@ fn move_selection_to_vertical_edges_explicit_actions() {
 
 #[test]
 fn nudge_selection_large_uses_large_step() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -330,8 +333,8 @@ fn nudge_selection_large_uses_large_step() {
 
 #[test]
 fn nudge_selection_clamps_left_and_top_edges() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -362,8 +365,8 @@ fn nudge_selection_clamps_left_and_top_edges() {
 
 #[test]
 fn nudge_selection_clamps_right_and_bottom_edges() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -397,7 +400,7 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
 #[test]
 fn restore_selection_snapshots_reverts_translation() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
@@ -416,7 +419,7 @@ fn restore_selection_snapshots_reverts_translation() {
     assert_eq!(snapshots.len(), 1);
 
     assert!(state.apply_translation_to_selection_with(&test_text_measurer, 20, 30));
-    state.restore_selection_from_snapshots_with(&crate::draw::TextMeasurer::default(), snapshots);
+    state.restore_selection_from_snapshots_with(&TextMeasurer::default(), snapshots);
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -430,7 +433,7 @@ fn restore_selection_snapshots_reverts_translation() {
 
 #[test]
 fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     // `Shape::scaled` rebuilds `Shape::Arrow` field by field, so a field left out
     // there silently resets on every resize. `style` has to survive untouched;
@@ -447,7 +450,7 @@ fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
         arrow_length: 20.0,
         arrow_angle: 30.0,
         head_at_end: true,
-        style: crate::draw::ArrowStyle::Curved,
+        style: ArrowStyle::Curved,
         bend: 0.4,
         label: None,
     });
@@ -476,11 +479,7 @@ fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
             x2,
             ..
         } => {
-            assert_eq!(
-                *style,
-                crate::draw::ArrowStyle::Curved,
-                "resize reset the style"
-            );
+            assert_eq!(*style, ArrowStyle::Curved, "resize reset the style");
             assert!(*bend > 0.0, "resize reset the bend");
             assert!(x2 - x1 > 100, "test setup should have widened the arrow");
         }
@@ -490,7 +489,7 @@ fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
 
 #[test]
 fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     // A horizontal curved arrow's height is almost entirely its arc. Dragging
     // the bottom handle does not lengthen the chord, so a bend copied through
@@ -508,7 +507,7 @@ fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
         arrow_length: 20.0,
         arrow_angle: 30.0,
         head_at_end: true,
-        style: crate::draw::ArrowStyle::Curved,
+        style: ArrowStyle::Curved,
         bend: 0.3,
         label: None,
     });

@@ -450,15 +450,15 @@ fn trait_methods(body: &str) -> BTreeSet<String> {
         .collect()
 }
 
-struct Source<'a> {
-    path: &'a str,
-    text: &'a str,
+struct Source<'source> {
+    path: &'source str,
+    text: &'source str,
     masked: String,
     test_spans: Spans,
 }
 
-impl<'a> Source<'a> {
-    fn read(tree: &'a Tree, path: &'a str) -> (Self, Vec<String>) {
+impl<'source> Source<'source> {
+    fn read(tree: &'source Tree, path: &'source str) -> (Self, Vec<String>) {
         let text = tree
             .read(Path::new(path))
             .unwrap_or_else(|| panic!("{path} is missing"));
@@ -485,13 +485,13 @@ impl<'a> Source<'a> {
     }
 }
 
-struct Audit<'a> {
-    tree: &'a Tree,
+struct Audit<'tree> {
+    tree: &'tree Tree,
     failures: Vec<String>,
     test_sources: TestSources,
 }
 
-impl<'a> Audit<'a> {
+impl<'tree> Audit<'tree> {
     fn fail(&mut self, failure: String) {
         self.failures.push(failure);
     }
@@ -1042,8 +1042,8 @@ fn checkout() -> Tree {
     Tree::checkout(&["src", "configurator/src"])
 }
 
-fn assert_fails(tree: Tree, expected: &str) {
-    let failures = audit(&tree);
+fn assert_fails(tree: &Tree, expected: &str) {
+    let failures = audit(tree);
 
     assert!(
         failures.iter().any(|failure| failure.contains(expected)),
@@ -1061,7 +1061,7 @@ fn only_the_reviewed_writers_can_write_config_toml() {
 #[test]
 fn a_primitive_outside_the_reviewed_writers_fails() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             "src/daemon/core.rs",
             "\nfn leak(document: &ConfigDocument) { document.save_with_backup(config()); }\n",
         ),
@@ -1082,7 +1082,7 @@ fn only_a_cfg_test_module_makes_a_tests_directory_test_code() {
     };
 
     assert_fails(
-        tree("mod tests;\n"),
+        &tree("mod tests;\n"),
         "src/probe/tests/leak.rs:1: config write capability `create_config_backup`",
     );
     let failures = audit(&tree("#[cfg(test)]\nmod tests;\n"));
@@ -1092,7 +1092,7 @@ fn only_a_cfg_test_module_makes_a_tests_directory_test_code() {
 #[test]
 fn editor_calls_are_pinned_to_their_reviewed_callers() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             "src/backend/wayland/state.rs",
             "\nfn sneak() { crate::config::persist_quick_color(0, color()); }\n",
         ),
@@ -1100,7 +1100,7 @@ fn editor_calls_are_pinned_to_their_reviewed_callers() {
          `persist_quick_color`",
     );
     assert_fails(
-        checkout()
+        &checkout()
             .replacing(EDIT_WORKER, "\n    persist_quick_color,\n", "\n")
             .replacing(
                 EDIT_WORKER,
@@ -1114,14 +1114,14 @@ fn editor_calls_are_pinned_to_their_reviewed_callers() {
 #[test]
 fn path_taking_twins_stay_out_of_production() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             "src/daemon/core.rs",
             "\nfn f() { persist_preset_slot_at(path, 0, None); }\n",
         ),
         "src/daemon/core.rs: production code names `persist_preset_slot_at`",
     );
     assert_fails(
-        checkout().replacing(
+        &checkout().replacing(
             IO_SOURCE,
             "#[cfg(test)]\npub(crate) fn persist_quick_color_at(",
             "pub(crate) fn persist_quick_color_at(",
@@ -1133,7 +1133,7 @@ fn path_taking_twins_stay_out_of_production() {
 #[test]
 fn editors_are_not_wrapped_elsewhere_in_the_config_module() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             "src/config/types/mod.rs",
             "\npub fn wrapped() { super::io::persist_keybinding_edit(action(), &[]); }\n",
         ),
@@ -1145,7 +1145,7 @@ fn editors_are_not_wrapped_elsewhere_in_the_config_module() {
 fn casting_a_writer_to_a_value_fails() {
     // The edit worker may name the editor, but not hand it on as a value.
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             EDIT_WORKER,
             "\nfn leak() -> fn() { persist_quick_color as fn() }\n",
         ),
@@ -1156,14 +1156,14 @@ fn casting_a_writer_to_a_value_fails() {
 #[test]
 fn renaming_a_writer_on_import_or_reexport_fails() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             EDIT_WORKER,
             "\nuse crate::config::persist_preset_slot as save;\n",
         ),
         "imports the config writer `persist_preset_slot` as `save`",
     );
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             CONFIG_MODULE,
             "\npub use io::persist_keybinding_edit as concealed_edit;\n",
         ),
@@ -1174,7 +1174,7 @@ fn renaming_a_writer_on_import_or_reexport_fails() {
 #[test]
 fn a_new_document_entry_that_reaches_the_write_fails() {
     assert_fails(
-        checkout().replacing(
+        &checkout().replacing(
             DOCUMENT_SOURCE,
             "    fn merge_and_write(",
             "    pub fn persist_any_config(&self, config: &Config) {\n        \
@@ -1188,7 +1188,7 @@ fn a_new_document_entry_that_reaches_the_write_fails() {
 #[test]
 fn a_new_io_entry_that_reaches_a_primitive_fails() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             IO_SOURCE,
             "\nfn helper(path: &Path) -> Result<()> { prepare_config_parent(path) }\n\
              pub fn persist_everything(path: &Path) -> Result<()> { helper(path) }\n",
@@ -1200,7 +1200,7 @@ fn a_new_io_entry_that_reaches_a_primitive_fails() {
 #[test]
 fn a_write_reachable_through_a_trait_fails() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             DOCUMENT_SOURCE,
             "\nimpl Persist for ConfigDocument {\n    fn persist(&self, config: &Config) {\n        \
              self.merge_and_write(&self.config, config, &mut || {});\n    }\n}\n",
@@ -1208,7 +1208,7 @@ fn a_write_reachable_through_a_trait_fails() {
         "`fn persist` can write config.toml from inside a trait",
     );
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             IO_SOURCE,
             "\npub trait Concealed {\n    fn persist_quick_color(&self);\n}\n",
         ),
@@ -1219,7 +1219,7 @@ fn a_write_reachable_through_a_trait_fails() {
 #[test]
 fn a_writer_stored_as_a_value_fails_on_both_halves() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             DOCUMENT_SOURCE,
             "\npub const PERSIST_ANY_CONFIG: fn(&ConfigDocument, Config) -> \
              Result<ConfigDocumentSaveOutcome> = ConfigDocument::save_with_backup;\n",
@@ -1227,7 +1227,7 @@ fn a_writer_stored_as_a_value_fails_on_both_halves() {
         "`const PERSIST_ANY_CONFIG` names `save_with_backup`",
     );
     assert_fails(
-        checkout()
+        &checkout()
             .appending(IO_SOURCE, "\npub static WRITE_CONFIG: () = ();\n")
             .appending(CONFIG_MODULE, "\npub use io::WRITE_CONFIG;\n"),
         "re-exports `WRITE_CONFIG`, a `static` declared in src/config/io.rs",
@@ -1237,14 +1237,14 @@ fn a_writer_stored_as_a_value_fails_on_both_halves() {
 #[test]
 fn the_config_module_stays_a_reexport_list() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             CONFIG_MODULE,
             "\npub fn concealed_edit() { io::persist_keybinding_edit(action(), &[]); }\n",
         ),
         "names the config writer `persist_keybinding_edit` inside `fn concealed_edit`",
     );
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             CONFIG_MODULE,
             "\npub fn indirect() { concealed(); }\n\
              fn concealed() { io::persist_quick_color(0, color()); }\n",
@@ -1256,11 +1256,11 @@ fn the_config_module_stays_a_reexport_list() {
 #[test]
 fn primitives_never_leave_the_config_module() {
     assert_fails(
-        checkout().appending(CONFIG_MODULE, "\npub use io::create_config_backup;\n"),
+        &checkout().appending(CONFIG_MODULE, "\npub use io::create_config_backup;\n"),
         "re-exports the write primitive `create_config_backup`",
     );
     assert_fails(
-        checkout().replacing(
+        &checkout().replacing(
             IO_SOURCE,
             "pub(super) fn prepare_config_parent(",
             "pub(crate) fn prepare_config_parent(",
@@ -1272,7 +1272,7 @@ fn primitives_never_leave_the_config_module() {
 #[test]
 fn editors_build_on_the_loaded_config() {
     assert_fails(
-        checkout().appending(
+        &checkout().appending(
             IO_SOURCE,
             "\nfn base(document: &ConfigDocument) -> &Config { document.authored_config() }\n",
         ),
@@ -1283,7 +1283,7 @@ fn editors_build_on_the_loaded_config() {
 #[test]
 fn the_walk_must_reach_every_former_writer() {
     assert_fails(
-        checkout().without("src/daemon/tray/runtime.rs"),
+        &checkout().without("src/daemon/tray/runtime.rs"),
         "the walk missed expected sources, so it proves nothing: src/daemon/tray/runtime.rs",
     );
 }

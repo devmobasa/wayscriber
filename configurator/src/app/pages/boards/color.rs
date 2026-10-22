@@ -1,5 +1,8 @@
+use std::array;
+
 use relm4::{ComponentSender, gtk};
 
+use gtk::gdk::RGBA;
 use gtk::glib::SignalHandlerId;
 use gtk::prelude::*;
 
@@ -44,7 +47,7 @@ impl ColorRow {
         }
 
         let rgb = parse_triplet_values(&values.color.components);
-        let rgba = gtk::gdk::RGBA::new(rgb[0] as f32, rgb[1] as f32, rgb[2] as f32, 1.0);
+        let rgba = RGBA::new(rgb[0] as f32, rgb[1] as f32, rgb[2] as f32, 1.0);
         set_swatch_blocked(&self.swatch, &self.swatch_handler, &rgba);
     }
 }
@@ -88,7 +91,7 @@ pub(super) fn build_color_row(
     };
     controls.append(&swatch);
 
-    let components = std::array::from_fn(|component| {
+    let components = array::from_fn(|component| {
         let entry = gtk::Entry::builder()
             .placeholder_text(COMPONENT_PLACEHOLDERS.get(component).copied().unwrap_or(""))
             .width_chars(6)

@@ -9,11 +9,13 @@ mod config;
 mod defaults;
 mod shortcut;
 
+use std::sync::OnceLock;
+
 pub use crate::domain::Action;
 pub use authorship::KeybindingAuthorship;
 pub use binding::{
-    KeyBinding, NAMED_KEYS, canonical_key_names, is_deliverable_key_name, key_display_name,
-    suggest_key_name,
+    ChordModifiers, KeyBinding, NAMED_KEYS, canonical_key_names, is_deliverable_key_name,
+    key_display_name, suggest_key_name,
 };
 pub use config::{ConfigurableAction, KeybindingConflict, KeybindingsConfig};
 pub use shortcut::{
@@ -27,7 +29,7 @@ pub use shortcut::{
 /// hundreds of strings — and callers of the "is this action rebindable" check
 /// include the command palette's per-frame tooltip path.
 pub fn default_keybindings() -> &'static KeybindingsConfig {
-    static DEFAULTS: std::sync::OnceLock<KeybindingsConfig> = std::sync::OnceLock::new();
+    static DEFAULTS: OnceLock<KeybindingsConfig> = OnceLock::new();
     DEFAULTS.get_or_init(KeybindingsConfig::default)
 }
 

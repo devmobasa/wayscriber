@@ -1,12 +1,13 @@
 use wayscriber::i18n::{tr, trf};
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
 use adw::prelude::*;
+use gtk::pango::EllipsizeMode;
 use wayscriber::config::Shortcut;
 
 use crate::messages::Message;
@@ -82,7 +83,7 @@ pub(super) fn binding_row(
 
     let compact_summary = gtk::Label::builder()
         .css_classes(["dim-label"])
-        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .ellipsize(EllipsizeMode::End)
         .max_width_chars(24)
         .xalign(1.0)
         .build();
@@ -162,16 +163,11 @@ pub(super) fn binding_row(
 
     let recorder = RecorderPopover::build(&row, field, sender);
     let text_editor = TextEditorPopover::build(&row, field, sender);
-    let seen_chips = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-    let seen_badges = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-    let compact_mode = std::rc::Rc::new(std::cell::Cell::new(false));
-    let last_focus_serial = std::rc::Rc::new(std::cell::Cell::new(0));
+    let seen_chips = Rc::new(RefCell::new(Vec::<String>::new()));
+    let seen_badges = Rc::new(RefCell::new(Vec::<String>::new()));
+    let compact_mode = Rc::new(Cell::new(false));
+    let last_focus_serial = Rc::new(Cell::new(0));
     {
-        let compact = compact.clone();
-        let inline_host = inline_host.clone();
-        let compact_mode = compact_mode.clone();
-        let editor_popover = editor_popover.clone();
-        let editor = editor.clone();
         watch_compact(&row, move |is_compact| {
             compact_mode.set(is_compact);
             set_visible(&compact, is_compact);

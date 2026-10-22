@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::super::{DrawingState, InputState, TextInputMode};
 use crate::domain::Action;
 use crate::i18n::tr;
@@ -7,7 +9,7 @@ use log::info;
 impl InputState {
     pub(in crate::input::state) fn handle_core_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         match action {
@@ -79,7 +81,7 @@ impl InputState {
     /// with the same numbers.
     fn start_text_draft_at_view_centre_with(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         mode: TextInputMode,
     ) {
         if !matches!(self.state, DrawingState::Idle) {

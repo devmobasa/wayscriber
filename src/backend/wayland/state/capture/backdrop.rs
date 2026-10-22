@@ -1,8 +1,12 @@
-use super::super::*;
+use smithay_client_toolkit::output::OutputInfo;
+
+use super::super::WaylandState;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::capture::{DesktopBackdropGeometry, DesktopBackdropOutputGeometry};
+use wayland_client::protocol::wl_output;
 
 pub(super) fn desktop_backdrop_output_geometry_from_info(
-    info: &smithay_client_toolkit::output::OutputInfo,
+    info: &OutputInfo,
 ) -> Option<DesktopBackdropOutputGeometry> {
     let (logical_x, logical_y) = info.logical_position?;
     let (logical_width, logical_height) = info.logical_size?;
@@ -25,7 +29,7 @@ pub(super) fn desktop_backdrop_output_geometry_from_info(
     })
 }
 
-fn current_mode_size(info: &smithay_client_toolkit::output::OutputInfo) -> Option<(u32, u32)> {
+fn current_mode_size(info: &OutputInfo) -> Option<(u32, u32)> {
     info.modes
         .iter()
         .find(|mode| mode.current)

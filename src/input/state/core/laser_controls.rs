@@ -1,5 +1,8 @@
 use std::time::{Duration, Instant};
 
+use crate::draw::Color;
+use crate::ui::anim;
+
 use super::base::{DrawingState, InputState};
 use crate::config::LaserConfig;
 use crate::draw::LaserStyle;
@@ -29,7 +32,7 @@ impl InputState {
     }
 
     /// Color the status bar shows for `tool`, following the laser's own color.
-    pub(crate) fn status_color_for_tool(&self, tool: Tool) -> crate::draw::Color {
+    pub(crate) fn status_color_for_tool(&self, tool: Tool) -> Color {
         if tool == Tool::Laser {
             self.laser_style().color
         } else {
@@ -53,7 +56,7 @@ impl InputState {
 
     /// Advances the laser fade; returns whether it needs continuous frames.
     pub fn advance_laser_ink(&mut self, now: Instant) -> bool {
-        self.advance_laser_ink_for(now, crate::ui::anim::motion_enabled())
+        self.advance_laser_ink_for(now, anim::motion_enabled())
     }
 
     /// Split from the accessor so both motion settings can be exercised
@@ -67,7 +70,7 @@ impl InputState {
     /// When the laser ink next changes on its own, for a loop that is not
     /// already ticking for animation.
     pub(crate) fn laser_ink_wake_after(&self, now: Instant) -> Option<Duration> {
-        self.laser_ink_wake_after_for(now, crate::ui::anim::motion_enabled())
+        self.laser_ink_wake_after_for(now, anim::motion_enabled())
     }
 
     pub(crate) fn laser_ink_wake_after_for(&self, now: Instant, motion: bool) -> Option<Duration> {

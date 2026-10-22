@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_copy_selection, default_delete_selection, default_duplicate_selection,
+    default_move_selection_to_back, default_move_selection_to_bottom,
+    default_move_selection_to_end, default_move_selection_to_front,
+    default_move_selection_to_start, default_move_selection_to_top, default_nudge_selection_down,
+    default_nudge_selection_down_large, default_nudge_selection_left,
+    default_nudge_selection_right, default_nudge_selection_up, default_nudge_selection_up_large,
+    default_paste_selection, default_select_all,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

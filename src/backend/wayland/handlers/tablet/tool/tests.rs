@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 
 /// The modal term stops exactly where the tip and motion guards stop: once
@@ -19,11 +21,7 @@ fn stylus_pressure_stops_at_the_selector_not_at_the_request() {
         !fresh_contact(&state),
         "a stroke drawn while the capture is pending is still a real stroke"
     );
-    state.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
-        RegionPurposeTag::Ocr,
-        1,
-    );
+    state.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, 1);
     assert!(fresh_contact(&state));
     state.start_region_selection(RegionInputSource::Stylus, (10.0, 10.0));
     assert!(fresh_contact(&state));
@@ -32,7 +30,7 @@ fn stylus_pressure_stops_at_the_selector_not_at_the_request() {
 
     state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
     assert!(!fresh_contact(&state));
-    state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
+    state.activate_eyedropper_with(&TextMeasurer::default(), Some(1));
     assert!(fresh_contact(&state));
     state.cancel_eyedropper();
     assert!(!fresh_contact(&state));

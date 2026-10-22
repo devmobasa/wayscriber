@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 
 #[test]
@@ -60,14 +62,14 @@ fn default_session_target_paths_handle_nonstandard_names() {
 
 #[test]
 fn artifact_summary_reports_non_lock_artifacts_and_size() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("lecture.wayscriber-session");
-    let artifacts = wayscriber::session::named_session_artifact_paths(&path);
-    std::fs::write(&artifacts.primary, b"primary").unwrap();
-    std::fs::write(&artifacts.backup, b"backup").unwrap();
-    std::fs::write(&artifacts.recovery, b"recovery").unwrap();
-    std::fs::write(&artifacts.clear_marker, b"cleared").unwrap();
-    std::fs::write(&artifacts.lock, b"lock").unwrap();
+    let artifacts = session::named_session_artifact_paths(&path);
+    fs::write(&artifacts.primary, b"primary").unwrap();
+    fs::write(&artifacts.backup, b"backup").unwrap();
+    fs::write(&artifacts.recovery, b"recovery").unwrap();
+    fs::write(&artifacts.clear_marker, b"cleared").unwrap();
+    fs::write(&artifacts.lock, b"lock").unwrap();
 
     let summary = SessionArtifactSummary::from_primary_path(&path).unwrap();
 
@@ -94,13 +96,13 @@ fn format_byte_count_uses_compact_units() {
 
 #[test]
 fn artifact_summary_counts_diagnostic_copies_without_counting_similar_foreign_files() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let primary = temp.path().join("board.wayscriber-session");
-    std::fs::write(&primary, b"primary").unwrap();
+    fs::write(&primary, b"primary").unwrap();
     for suffix in [".corrupt-1", ".bak.corrupt-2", ".recovery.corrupt-3"] {
-        std::fs::write(format!("{}{suffix}", primary.display()), b"diagnostic").unwrap();
+        fs::write(format!("{}{suffix}", primary.display()), b"diagnostic").unwrap();
     }
-    std::fs::write(
+    fs::write(
         format!("{}.corrupt-01", primary.display()),
         b"foreign similar name",
     )
@@ -116,7 +118,7 @@ fn artifact_summary_counts_diagnostic_copies_without_counting_similar_foreign_fi
     assert_eq!(summary.status_label(), "primary, unreadable copy · 37 B");
 
     // A primary moved aside still leaves something to show.
-    std::fs::remove_file(&primary).unwrap();
+    fs::remove_file(&primary).unwrap();
     let summary = SessionArtifactSummary::from_primary_path(&primary).unwrap();
     assert_eq!(summary.status_label(), "unreadable copy · 30 B");
 }

@@ -2,6 +2,9 @@ use std::ffi::CString;
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{PermissionsExt, symlink};
+use std::time::{Duration, Instant};
+
+use crate::test_temp;
 
 use super::mutation::MutationPoint;
 use super::*;
@@ -40,7 +43,7 @@ fn request(
 
 fn commit_top_pinned(controller: &mut RuntimeUiStateController) -> SourceMutationRequest {
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
@@ -50,7 +53,7 @@ fn commit_top_pinned(controller: &mut RuntimeUiStateController) -> SourceMutatio
     )
     .unwrap();
     assert!(matches!(
-        controller.commit(permit, values),
+        controller.commit(permit, &values),
         CommitResult::Accepted { .. }
     ));
     controller.take_source_mutation().expect("source mutation")
@@ -58,7 +61,7 @@ fn commit_top_pinned(controller: &mut RuntimeUiStateController) -> SourceMutatio
 
 #[test]
 fn supported_write_connects_controller_to_restart_inspection() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let mut controller = store
@@ -89,7 +92,7 @@ fn supported_write_connects_controller_to_restart_inspection() {
 
 #[test]
 fn external_change_before_missing_write_wins_without_overwrite() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let mut controller = store
@@ -110,7 +113,7 @@ fn external_change_before_missing_write_wins_without_overwrite() {
 
 #[test]
 fn replacing_same_bytes_with_a_new_inode_is_a_conflict() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let bytes = encode_runtime_ui_file(&RuntimeUiWireState::default()).unwrap();
     fs::write(&path, &bytes).unwrap();
@@ -134,7 +137,7 @@ fn replacing_same_bytes_with_a_new_inode_is_a_conflict() {
 
 #[test]
 fn active_file_appearing_after_claim_is_not_overwritten() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let original = encode_runtime_ui_file(&RuntimeUiWireState::default()).unwrap();
     fs::write(&path, &original).unwrap();
@@ -174,7 +177,7 @@ fn active_file_appearing_after_claim_is_not_overwritten() {
 
 #[test]
 fn unsupported_reset_preserves_exact_bytes_as_an_artifact() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let unsupported = b"version = 9\nfuture = [1, 2, 3]\n";
     fs::write(&path, unsupported).unwrap();
@@ -212,7 +215,7 @@ fn unsupported_reset_preserves_exact_bytes_as_an_artifact() {
 
 #[test]
 fn invalid_reset_preserves_exact_bytes_as_an_artifact() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let invalid = b"this is not valid TOML\n";
     fs::write(&path, invalid).unwrap();
@@ -237,7 +240,7 @@ fn invalid_reset_preserves_exact_bytes_as_an_artifact() {
 
 #[test]
 fn target_symlink_is_rejected_and_neither_path_is_modified() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("external.toml");
     let path = temp.path().join("runtime-ui.toml");
     let external = b"version = 17\n";
@@ -252,19 +255,19 @@ fn target_symlink_is_rejected_and_neither_path_is_modified() {
 
 #[test]
 fn fifo_is_rejected_without_blocking_for_a_writer() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let c_path = CString::new(path.as_os_str().as_bytes()).unwrap();
     // SAFETY: the CString is NUL-terminated and remains live for the call.
     assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     assert!(RuntimeUiStateStore::new(path).inspect().is_err());
-    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    assert!(started.elapsed() < Duration::from_secs(1));
 }
 
 #[test]
 fn uncertain_post_install_result_blocks_the_controller() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let mut controller = store
@@ -295,7 +298,7 @@ fn uncertain_post_install_result_blocks_the_controller() {
 
 #[test]
 fn oversized_file_is_rejected_before_parsing() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(&path, vec![b'x'; (MAX_RUNTIME_UI_FILE_BYTES + 1) as usize]).unwrap();
     assert!(RuntimeUiStateStore::new(path).inspect().is_err());
@@ -303,7 +306,7 @@ fn oversized_file_is_rejected_before_parsing() {
 
 #[test]
 fn preparation_failure_reports_an_untouched_failure() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("missing-parent/runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
@@ -326,7 +329,7 @@ fn preparation_failure_reports_an_untouched_failure() {
 
 #[test]
 fn missing_source_install_error_with_unchanged_source_is_an_untouched_failure() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let mut controller = store
@@ -378,7 +381,7 @@ fn missing_source_install_error_with_unchanged_source_is_an_untouched_failure() 
 
 #[test]
 fn malformed_startup_enters_the_recovery_barrier() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(&path, b"not valid TOML").unwrap();
     let mut bootstrap = RuntimeUiStateStore::new(path)
@@ -403,7 +406,7 @@ fn malformed_startup_enters_the_recovery_barrier() {
 
 #[test]
 fn unrelated_controller_write_preserves_supported_unknown_fields() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(
         &path,
@@ -430,7 +433,7 @@ future_boards = true
         .into_controller_bootstrap(seeds())
         .controller;
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopMinimized,
         ))
         .unwrap();
@@ -440,7 +443,7 @@ future_boards = true
     )
     .unwrap();
     assert!(matches!(
-        controller.commit(permit, values),
+        controller.commit(permit, &values),
         CommitResult::Accepted { .. }
     ));
     let result = store.execute_source_mutation(controller.take_source_mutation().unwrap());
@@ -460,7 +463,7 @@ future_boards = true
 
 #[test]
 fn ordinary_commands_cannot_overwrite_unsupported_or_invalid_files() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     for (name, bytes) in [
         (
             "unsupported.toml",
@@ -485,7 +488,7 @@ fn ordinary_commands_cannot_overwrite_unsupported_or_invalid_files() {
 
 #[test]
 fn symlink_retarget_after_inspection_is_rejected_without_touching_target() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let target = temp.path().join("external.toml");
     let supported = encode_runtime_ui_file(&RuntimeUiWireState::default()).unwrap();
@@ -509,7 +512,7 @@ fn symlink_retarget_after_inspection_is_rejected_without_touching_target() {
 
 #[test]
 fn supported_reset_removes_only_the_exact_confirmed_source() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(
         &path,
@@ -538,7 +541,7 @@ fn supported_reset_removes_only_the_exact_confirmed_source() {
 
 #[test]
 fn reset_conflict_after_claim_preserves_both_files() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let original = encode_runtime_ui_file(&RuntimeUiWireState::default()).unwrap();
     let external = b"version = 44\nexternal = true\n";
@@ -568,7 +571,7 @@ fn reset_conflict_after_claim_preserves_both_files() {
 
 #[test]
 fn stale_board_ids_are_pruned_by_startup_cleanup() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(
         &path,
@@ -596,7 +599,7 @@ value = true
 
 #[test]
 fn changed_claim_is_restored_without_overwriting_another_path() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let original = encode_runtime_ui_file(&RuntimeUiWireState::default()).unwrap();
     let changed = b"version = 61\nchanged_after_claim = true\n";
@@ -643,7 +646,7 @@ fn changed_claim_is_restored_without_overwriting_another_path() {
 
 #[test]
 fn disappeared_claim_is_not_reported_as_a_recovery_artifact() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let original = encode_runtime_ui_file(&RuntimeUiWireState::default()).unwrap();
     fs::write(&path, original).unwrap();
@@ -684,7 +687,7 @@ fn disappeared_claim_is_not_reported_as_a_recovery_artifact() {
 
 #[test]
 fn confirmed_unsupported_reset_runs_end_to_end_through_the_controller() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let unsupported = b"version = 73\nfuture = 'preserve me'\n";
     fs::write(&path, unsupported).unwrap();
@@ -739,7 +742,7 @@ fn confirmed_unsupported_reset_runs_end_to_end_through_the_controller() {
 
 #[test]
 fn missing_source_rejects_parent_symlink_retarget_before_write() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first_parent = temp.path().join("first");
     let second_parent = temp.path().join("second");
     let selected_parent = temp.path().join("selected");
@@ -768,7 +771,7 @@ fn missing_source_rejects_parent_symlink_retarget_before_write() {
 
 #[test]
 fn missing_source_rejects_replacement_of_the_resolved_parent_directory() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let parent = temp.path().join("state");
     let displaced_parent = temp.path().join("displaced-state");
     fs::create_dir(&parent).unwrap();
@@ -794,7 +797,7 @@ fn missing_source_rejects_replacement_of_the_resolved_parent_directory() {
 
 #[test]
 fn parent_symlink_retarget_after_claim_retains_the_original_artifact() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first_parent = temp.path().join("first");
     let second_parent = temp.path().join("second");
     let selected_parent = temp.path().join("selected");
@@ -833,7 +836,7 @@ fn parent_symlink_retarget_after_claim_retains_the_original_artifact() {
 
 #[test]
 fn resolved_parent_replacement_after_claim_retains_the_original_artifact() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let parent = temp.path().join("state");
     let displaced_parent = temp.path().join("displaced-state");
     fs::create_dir(&parent).unwrap();
@@ -878,7 +881,7 @@ fn resolved_parent_replacement_after_claim_retains_the_original_artifact() {
 
 #[test]
 fn removed_override_does_not_resurrect_its_entry_passthrough() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(
         &path,
@@ -899,7 +902,7 @@ future_entry = "must not return"
         .controller;
 
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
@@ -909,7 +912,7 @@ future_entry = "must not return"
     )
     .unwrap();
     assert!(matches!(
-        controller.commit(permit, configured),
+        controller.commit(permit, &configured),
         CommitResult::Accepted { .. }
     ));
     let removed = store.execute_source_mutation(controller.take_source_mutation().unwrap());
@@ -931,7 +934,7 @@ future_entry = "must not return"
 
 #[test]
 fn seed_reconciliation_does_not_resurrect_pruned_entry_passthrough() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     fs::write(
         &path,
@@ -965,7 +968,7 @@ future_entry = "must not return"
         .unwrap();
 
     assert!(matches!(
-        controller.update_seeds(changed_seeds),
+        controller.update_seeds(&changed_seeds),
         UpdateSeedsResult::Applied {
             cleanup_through: Some(_),
             ..
@@ -977,7 +980,7 @@ future_entry = "must not return"
         SubmitSourceMutationResult::Integrated { .. }
     ));
     assert!(matches!(
-        controller.update_seeds(seeds()),
+        controller.update_seeds(&seeds()),
         UpdateSeedsResult::Applied { .. }
     ));
 

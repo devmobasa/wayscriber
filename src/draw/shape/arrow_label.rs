@@ -1,4 +1,5 @@
 use crate::draw::{ArrowStyle, FontDescriptor};
+use crate::util;
 use crate::util::Rect;
 
 use super::text::{text_bounds_from_metrics, text_layout_metrics};
@@ -84,7 +85,7 @@ pub(crate) fn arrow_label_layout_with(
     let offset =
         (label_size * LABEL_OFFSET_SCALE).max(LABEL_OFFSET_MIN) + thick * LABEL_THICKNESS_SCALE;
 
-    let bend = crate::util::clamp_arrow_bend(bend);
+    let bend = util::clamp_arrow_bend(bend);
     // Left normal of the tail-to-tip direction, matching the convention the
     // arc's control point is offset along.
     let (left_x, left_y) = (uy, -ux);

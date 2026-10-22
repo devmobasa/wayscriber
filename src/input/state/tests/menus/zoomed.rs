@@ -1,6 +1,9 @@
 //! The context menu over a zoomed view: right-click and the keyboard
 //! shortcut open it, and the canvas menu leads with the zoom controls.
 
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::input::ZoomAction;
 
@@ -22,8 +25,8 @@ fn labels(state: &InputState) -> Vec<String> {
 /// fails here.
 #[test]
 fn the_keyboard_shortcut_opens_the_menu_while_zoomed() {
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     let mut state = zoomed_state(false);
 
     state.handle_action_with_resources(

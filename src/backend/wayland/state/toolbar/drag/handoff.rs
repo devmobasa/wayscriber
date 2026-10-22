@@ -1,4 +1,7 @@
-use super::*;
+use crate::toolbar_gtk::GtkToolbarKind;
+
+use super::super::{Duration, Instant, WaylandState, drag_log};
+use super::state::HandoffEnd;
 use crate::backend::wayland::state::helpers::toolbar_drag_handoff_delay;
 
 impl WaylandState {
@@ -48,7 +51,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn begin_gtk_toolbar_drag_preview(
         &mut self,
-        kind: crate::toolbar_gtk::GtkToolbarKind,
+        kind: GtkToolbarKind,
     ) {
         let frozen_top_base_x = self.inline_top_base_x();
         drag_log(|| {

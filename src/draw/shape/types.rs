@@ -67,6 +67,7 @@ impl BlurStyle {
     pub const ALL: [Self; 4] = [Self::Gaussian, Self::Pixelate, Self::Secure, Self::BlackOut];
 
     /// Short human-readable name for toolbars, menus, and toasts.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Gaussian => tr("Blur"),
@@ -77,6 +78,7 @@ impl BlurStyle {
     }
 
     /// Next style in [`Self::ALL`] order, wrapping at the end.
+    #[must_use]
     pub fn next(self) -> Self {
         match self {
             Self::Gaussian => Self::Pixelate,
@@ -87,6 +89,7 @@ impl BlurStyle {
     }
 
     /// Whether the style needs the captured backdrop to render.
+    #[must_use]
     pub fn needs_backdrop(self) -> bool {
         !matches!(self, Self::BlackOut)
     }
@@ -120,6 +123,7 @@ impl ArrowStyle {
 
     /// Stable name for identifiers, the same in every UI language; it matches
     /// the serde spelling.
+    #[must_use]
     pub fn id(self) -> &'static str {
         match self {
             Self::Standard => "standard",
@@ -131,6 +135,7 @@ impl ArrowStyle {
 
     /// Short human-readable name for toolbars, menus, and toasts. Translated;
     /// use [`Self::id`] wherever a name must stay stable.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Standard => tr("Standard"),
@@ -141,6 +146,7 @@ impl ArrowStyle {
     }
 
     /// Next style in [`Self::ALL`] order, wrapping at the end.
+    #[must_use]
     pub fn next(self) -> Self {
         match self {
             Self::Standard => Self::Pointy,
@@ -154,6 +160,7 @@ impl ArrowStyle {
     ///
     /// The properties panel steps entries in both directions, so a four-way
     /// cycle needs a way back that is not three presses forward.
+    #[must_use]
     pub fn previous(self) -> Self {
         match self {
             Self::Standard => Self::Double,
@@ -165,6 +172,7 @@ impl ArrowStyle {
 
     /// Whether this style bends its shaft, and so needs the `bend` field and
     /// the curve sampler rather than the straight-line fast paths.
+    #[must_use]
     pub fn is_curved(self) -> bool {
         matches!(self, Self::Curved)
     }
@@ -175,6 +183,7 @@ impl ArrowStyle {
     /// lose the arc the user shaped, which means readers have to ask the style
     /// whether that stored value is on screen before they position anything
     /// against it.
+    #[must_use]
     pub fn effective_bend(self, bend: f64) -> f64 {
         if self.is_curved() { bend } else { 0.0 }
     }
@@ -471,6 +480,7 @@ impl Shape {
     /// The returned rectangle is suitable for dirty region tracking and damage hints.
     /// Returns `None` when the shape has no drawable area or its full bounds cannot be
     /// represented safely by [`Rect`].
+    #[must_use]
     pub fn bounding_box(&self) -> Option<Rect> {
         let measurer = TextMeasurer::default();
         self.bounding_box_with(&measurer)
@@ -587,6 +597,7 @@ impl Shape {
     }
 
     /// Returns a human-readable label for the shape variant.
+    #[must_use]
     pub fn kind_name(&self) -> &'static str {
         match self {
             Shape::Freehand { .. } | Shape::FreehandPressure { .. } => tr("Freehand"),
@@ -620,13 +631,17 @@ fn normalized_rect(x: i32, y: i32, w: i32, h: i32) -> Option<Rect> {
 }
 
 mod base64_bytes {
-    use super::*;
+    use serde::de;
+
+    use crate::base64;
+
+    use super::{Arc, Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(bytes: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        crate::base64::encode_standard(bytes).serialize(serializer)
+        base64::encode_standard(bytes).serialize(serializer)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<[u8]>, D::Error>
@@ -634,8 +649,8 @@ mod base64_bytes {
         D: Deserializer<'de>,
     {
         let encoded = String::deserialize(deserializer)?;
-        crate::base64::decode_standard(&encoded)
+        base64::decode_standard(&encoded)
             .map(Arc::from)
-            .map_err(serde::de::Error::custom)
+            .map_err(de::Error::custom)
     }
 }

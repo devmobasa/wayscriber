@@ -79,7 +79,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         tr("Canvas export profile"),
         "",
         export_options,
-        export_labels,
+        &export_labels,
         |app| app.draft.render_profiles.export,
         Message::RenderProfileExportChanged,
     );
@@ -279,15 +279,15 @@ fn section_layouts(app: &ConfiguratorApp, summary: &AppSearchSummary) -> Vec<Sec
 }
 
 /// One profile row's values: everything the layout deliberately left out.
-struct ProfileValues<'a> {
-    id: &'a str,
-    name: &'a str,
+struct ProfileValues<'draft> {
+    id: &'draft str,
+    name: &'draft str,
     /// One entry per mapping row, in mapping order.
-    mappings: Vec<MappingValues<'a>>,
+    mappings: Vec<MappingValues<'draft>>,
 }
 
 /// One mapping row's two editing hex fields.
-struct MappingValues<'a> {
-    from: &'a str,
-    to: &'a str,
+struct MappingValues<'draft> {
+    from: &'draft str,
+    to: &'draft str,
 }

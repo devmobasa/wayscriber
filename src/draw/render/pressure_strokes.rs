@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use crate::draw::Color;
 
 const PRESSURE_STROKE_MAX_SAMPLE_SPACING: f64 = 4.0;
@@ -162,13 +164,7 @@ fn fill_pressure_segment(ctx: &cairo::Context, segment: &PressureStrokeSegment) 
 
 fn fill_pressure_sample(ctx: &cairo::Context, sample: &PressureStrokeSample) {
     ctx.new_path();
-    ctx.arc(
-        sample.x,
-        sample.y,
-        sample.radius,
-        0.0,
-        std::f64::consts::PI * 2.0,
-    );
+    ctx.arc(sample.x, sample.y, sample.radius, 0.0, consts::PI * 2.0);
     ctx.fill().ok();
 }
 

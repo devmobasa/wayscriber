@@ -1,10 +1,23 @@
-use super::*;
+use crate::session;
+use crate::session::{artifacts, lock, primary};
+
+use super::super::types::SessionSnapshot;
+use super::{NewerVersionAction, RestoredArtifact, is_named_primary_path, payload};
 use crate::durable_io::{
     AtomicWriteOptions, DestinationExpectation, DurableIoError, FileIdentity, OverwriteMode,
     PermissionPolicy, SymlinkPolicy, sync_parent_dir, write_atomic,
     write_atomic_reporting_identity,
 };
-use std::io::ErrorKind;
+use crate::session::lock::{open_runtime_lock_file, unlock};
+use crate::session::options::SessionOptions;
+use crate::session::primary::{
+    open_session_artifact_for_read, session_artifact_metadata, session_artifact_metadata_if_exists,
+};
+use anyhow::{Context, Result, anyhow};
+use log::{debug, info, warn};
+use std::fs;
+use std::io::{ErrorKind, Read};
+use std::path::{Path, PathBuf};
 
 /// Keeps unreadable bytes away from rotation backups. Called under the session lock.
 pub(super) fn quarantine_corrupt_artifact(
@@ -12,18 +25,17 @@ pub(super) fn quarantine_corrupt_artifact(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<PathBuf> {
-    let copies = crate::session::artifacts::corrupt_copies_of(artifact)?;
+    let copies = artifacts::corrupt_copies_of(artifact)?;
     let named_bytes = if is_named_primary_path(artifact, options) {
         read_artifact_bounded(artifact, max_expanded_size.max(options.max_file_size_bytes)).ok()
     } else {
         None
     };
     if let Some(bytes) = &named_bytes {
-        for copy in copies.iter().filter(|copy| copy.regular_file) {
+        let regular_copies = copies.iter().filter(|copy| copy.regular_file);
+        for copy in regular_copies {
             if preserved_already_holds(&copy.path, bytes) {
-                if let Err(error) =
-                    crate::session::primary::make_session_artifact_private(&copy.path)
-                {
+                if let Err(error) = primary::make_session_artifact_private(&copy.path) {
                     warn!(
                         "Diagnostic bytes are preserved at {}, but permissions could not be restricted: {error}",
                         copy.path.display()
@@ -40,7 +52,7 @@ pub(super) fn quarantine_corrupt_artifact(
         let seq = last_seq
             .checked_add(attempt)
             .ok_or_else(|| anyhow!("corrupt copy sequence exhausted"))?;
-        let target = crate::session::artifacts::corrupt_copy_path(artifact, seq);
+        let target = artifacts::corrupt_copy_path(artifact, seq);
         if let Some(bytes) = &named_bytes {
             match write_atomic(
                 &target,
@@ -63,9 +75,9 @@ pub(super) fn quarantine_corrupt_artifact(
                 Err(err) => warn!("Could not copy unreadable session; moving it aside: {err}"),
             }
         }
-        match crate::session::artifacts::rename_artifact_no_replace(artifact, &target) {
+        match artifacts::rename_artifact_no_replace(artifact, &target) {
             Ok(()) => {
-                if let Err(err) = crate::session::primary::make_session_artifact_private(&target) {
+                if let Err(err) = primary::make_session_artifact_private(&target) {
                     warn!(
                         "Could not restrict corrupt copy {}: {err}",
                         target.display()
@@ -86,15 +98,15 @@ pub(super) fn quarantine_corrupt_artifact(
 }
 
 fn prune_corrupt_copies(artifact: &Path, keep: &Path) {
-    let Ok(copies) = crate::session::artifacts::corrupt_copies_of(artifact) else {
+    let Ok(copies) = artifacts::corrupt_copies_of(artifact) else {
         return;
     };
     let mut count = copies.iter().filter(|copy| copy.regular_file).count();
-    for copy in copies
+    let removable_copies = copies
         .into_iter()
-        .filter(|copy| copy.regular_file && copy.path != keep)
-    {
-        if count <= crate::session::artifacts::MAX_CORRUPT_COPIES_PER_ARTIFACT {
+        .filter(|copy| copy.regular_file && copy.path != keep);
+    for copy in removable_copies {
+        if count <= artifacts::MAX_CORRUPT_COPIES_PER_ARTIFACT {
             break;
         }
         match fs::remove_file(&copy.path) {
@@ -119,7 +131,7 @@ pub(super) fn restore_named_primary_after_corruption(
 ) -> Result<Option<Box<SessionSnapshot>>> {
     use std::io::{Seek, SeekFrom};
     let lock = open_runtime_lock_file(&options.lock_file_path(), true)?;
-    crate::session::lock::lock_exclusive(&lock)?;
+    lock::lock_exclusive(&lock)?;
     let result = (|| {
         let primary = options.session_file_path();
         let copy_len = session_artifact_metadata(copy, true)?.len();
@@ -238,7 +250,7 @@ pub(super) fn preserve_newer_version_session(
     let digest = content_digest(bytes);
     let base = format!(
         ".v{version}{}{digest:016x}",
-        crate::session::artifacts::PRESERVED_SESSION_MARKER
+        artifacts::PRESERVED_SESSION_MARKER
     );
     let mut last_error = None;
 
@@ -248,10 +260,10 @@ pub(super) fn preserve_newer_version_session(
         } else {
             format!("{base}-{attempt}")
         };
-        let preserved_path = crate::session::append_path_suffix(session_path, &suffix);
+        let preserved_path = session::append_path_suffix(session_path, &suffix);
 
         if preserved_already_holds(&preserved_path, bytes) {
-            crate::session::primary::make_session_artifact_private(&preserved_path)?;
+            primary::make_session_artifact_private(&preserved_path)?;
             debug!(
                 "Newer-version session {} is already preserved at {}",
                 session_path.display(),
@@ -295,28 +307,25 @@ pub(super) fn preserve_newer_version_session(
 
     for attempt in 0..MAX_PRESERVE_ATTEMPTS {
         let suffix = if attempt == 0 {
-            format!(
-                "{base}{}",
-                crate::session::artifacts::PRESERVED_SESSION_MOVED_SUFFIX
-            )
+            format!("{base}{}", artifacts::PRESERVED_SESSION_MOVED_SUFFIX)
         } else {
             format!(
                 "{base}{}-{attempt}",
-                crate::session::artifacts::PRESERVED_SESSION_MOVED_SUFFIX
+                artifacts::PRESERVED_SESSION_MOVED_SUFFIX
             )
         };
-        let fallback_path = crate::session::append_path_suffix(session_path, &suffix);
+        let fallback_path = session::append_path_suffix(session_path, &suffix);
 
         // A previous fallback may already have established the required copy.
         // Trust it only after the same exact-byte verification as copy paths.
         if preserved_already_holds(&fallback_path, bytes) {
-            crate::session::primary::make_session_artifact_private(&fallback_path)?;
+            primary::make_session_artifact_private(&fallback_path)?;
             return Ok(fallback_path);
         }
 
-        match crate::session::artifacts::rename_artifact_no_replace(session_path, &fallback_path) {
+        match artifacts::rename_artifact_no_replace(session_path, &fallback_path) {
             Ok(()) => {
-                crate::session::primary::make_session_artifact_private(&fallback_path)?;
+                primary::make_session_artifact_private(&fallback_path)?;
                 sync_parent_dir(&fallback_path).with_context(|| {
                     format!(
                         "moved newer-version session to {}, but failed to sync its directory",
@@ -386,11 +395,14 @@ fn read_artifact_bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
+    use crate::session::snapshot::load::with_shared_session_lock;
 
     #[test]
     fn restored_backup_cleanup_does_not_remove_a_changed_named_primary() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let mut options = SessionOptions::new(temp.path().to_path_buf(), "named");
         options.persist_transparent = true;
         options.set_named_file_target(temp.path().join("board.wayscriber-session"));
@@ -428,8 +440,7 @@ mod tests {
         let mut scratch = SessionOptions::new(dir.to_path_buf(), "scratch");
         scratch.persist_transparent = true;
         scratch.set_named_file_target(dir.join("scratch.wayscriber-session"));
-        crate::session::save_snapshot(&super::super::super::tests::sample_snapshot(), &scratch)
-            .unwrap();
+        session::save_snapshot(&super::super::super::tests::sample_snapshot(), &scratch).unwrap();
         fs::read(scratch.session_file_path()).unwrap()
     }
 
@@ -448,7 +459,7 @@ mod tests {
 
     #[test]
     fn restored_ink_too_large_for_a_session_file_is_not_written_into_the_primary() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let (mut options, corrupt_copy, corrupt_bytes) = quarantined_named_session(temp.path());
         let backup = saved_session_bytes(temp.path());
         fs::write(options.backup_file_path(), &backup).unwrap();
@@ -473,7 +484,7 @@ mod tests {
 
     #[test]
     fn restore_creates_a_primary_that_was_moved_aside() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let (options, corrupt_copy, _) = quarantined_named_session(temp.path());
         fs::remove_file(options.session_file_path()).unwrap();
         let backup = saved_session_bytes(temp.path());

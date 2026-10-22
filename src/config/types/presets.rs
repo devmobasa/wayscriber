@@ -1,4 +1,5 @@
-use crate::config::{MouseDragToolsConfig, enums::ColorSpec};
+use crate::config::MouseDragToolsConfig;
+use crate::config::enums::ColorSpec;
 use crate::domain::{Color, EraserMode, Tool};
 use crate::draw::EraserKind;
 use serde::{Deserialize, Serialize};
@@ -84,6 +85,7 @@ pub struct ToolPresetConfig {
 }
 
 impl ToolPresetConfig {
+    #[must_use]
     pub fn preview_color_spec(&self) -> ColorSpec {
         self.tool_settings
             .as_ref()
@@ -91,10 +93,12 @@ impl ToolPresetConfig {
             .unwrap_or_else(|| self.color.clone())
     }
 
+    #[must_use]
     pub fn preview_color(&self) -> Color {
         self.preview_color_spec().to_color()
     }
 
+    #[must_use]
     pub fn preview_size(&self) -> f64 {
         self.tool_settings
             .as_ref()
@@ -156,7 +160,8 @@ pub struct PresetSlotsConfig {
 }
 
 impl PresetSlotsConfig {
-    pub fn get_slot(&self, slot: usize) -> Option<&ToolPresetConfig> {
+    #[must_use]
+    pub fn slot(&self, slot: usize) -> Option<&ToolPresetConfig> {
         match slot {
             1 => self.slot_1.as_ref(),
             2 => self.slot_2.as_ref(),

@@ -1,3 +1,5 @@
+use crate::config::TopDisplayMode;
+
 use super::*;
 
 fn selection_entry(
@@ -230,7 +232,7 @@ fn allocation_free_queries_match_the_materialized_spec() {
     let mut minimized = snapshot();
     minimized.top_minimized = true;
     let mut micro = snapshot();
-    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+    micro.top_display_mode = TopDisplayMode::Micro;
     let mut text = snapshot();
     text.text_active = true;
 

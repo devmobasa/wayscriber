@@ -223,7 +223,7 @@ impl InputState {
         }
     }
 
-    pub(crate) fn focus_context_menu_command(&mut self, command: MenuCommand) -> bool {
+    pub(crate) fn focus_context_menu_command(&mut self, command: &MenuCommand) -> bool {
         if !self.is_context_menu_open() {
             return false;
         }
@@ -232,7 +232,7 @@ impl InputState {
             if entry.disabled {
                 continue;
             }
-            if entry.command.as_ref() == Some(&command) {
+            if entry.command.as_ref() == Some(command) {
                 self.set_context_menu_focus(Some(index));
                 return true;
             }

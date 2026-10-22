@@ -1,3 +1,9 @@
+use std::collections::BTreeSet;
+
+use crate::input::Key;
+use crate::input::state::test_support;
+use crate::ui;
+
 use super::super::metrics::{ACTIONS_HEIGHT, FOOTER_HEIGHT, PADDING_BOTTOM};
 use super::super::types::{
     PanelRect, PropertiesPanelHit, PropertiesRowControl, PropertiesRowGeometry,
@@ -62,7 +68,7 @@ fn paint(state: &InputState) -> Vec<u8> {
             .unwrap();
     {
         let ctx = cairo::Context::new(&surface).unwrap();
-        crate::ui::render_properties_panel_with_engine(
+        ui::render_properties_panel_with_engine(
             &UiTextEngine::default(),
             &ctx,
             state,
@@ -146,7 +152,7 @@ fn control_hits(row: &PropertiesRowGeometry) -> Vec<(PanelRect, PropertiesPanelH
 
 #[test]
 fn rows_stack_from_the_divider_to_the_footer() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let id = arrow(&mut state);
     open_panel(vec![id], &mut state);
     let layout = *state.properties_panel_layout().expect("layout");
@@ -174,7 +180,7 @@ fn rows_stack_from_the_divider_to_the_footer() {
 
 #[test]
 fn every_control_is_hit_where_it_is_drawn_and_stays_in_its_row() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let arrow = arrow(&mut state);
     let note = text(&mut state, "Label");
     let rect = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -218,7 +224,7 @@ fn every_control_is_hit_where_it_is_drawn_and_stays_in_its_row() {
 
 #[test]
 fn a_small_screen_keeps_the_whole_panel_on_screen() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let id = arrow(&mut state);
     state.set_selection(vec![id]);
     assert!(state.show_properties_panel_with(&TextMeasurer::default()));
@@ -233,7 +239,7 @@ fn a_small_screen_keeps_the_whole_panel_on_screen() {
 
 #[test]
 fn hovering_a_swatch_shows_its_name_in_a_tooltip_on_screen() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let id = arrow(&mut state);
     open_panel(vec![id], &mut state);
     let (swatch, expected) = rows(&state)
@@ -266,7 +272,7 @@ fn hovering_a_swatch_shows_its_name_in_a_tooltip_on_screen() {
 
 #[test]
 fn deferred_refresh_updates_the_header_before_layout_and_paint() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let id = text(&mut state, "你好 initial");
     open_panel(vec![id], &mut state);
     let before = state.properties_panel().unwrap().subtitle.clone();
@@ -331,7 +337,7 @@ fn assert_all_reachable(state: &InputState, height: f64) {
 
 #[test]
 fn a_slightly_short_screen_drops_the_keyboard_hints_first() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let id = arrow(&mut state);
     open_panel(vec![id], &mut state);
     let full = state.properties_panel_layout().expect("layout").height;
@@ -347,7 +353,7 @@ fn a_slightly_short_screen_drops_the_keyboard_hints_first() {
 
 #[test]
 fn a_selection_taller_than_the_screen_flows_into_columns() {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let rect = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 300,
         y: 200,
@@ -379,8 +385,7 @@ fn a_selection_taller_than_the_screen_flows_into_columns() {
 
     let layout = *state.properties_panel_layout().expect("layout");
     let rows = rows(&state);
-    let columns: std::collections::BTreeSet<u64> =
-        rows.iter().map(|row| row.content_x.to_bits()).collect();
+    let columns: BTreeSet<u64> = rows.iter().map(|row| row.content_x.to_bits()).collect();
     assert!(columns.len() > 1, "the rows spread over columns");
     assert!(layout.width > single.width);
     assert!(layout.origin_x + layout.width <= f64::from(wide) - 12.0 + 1e-9);
@@ -443,7 +448,7 @@ fn assert_visible_rows_reachable(state: &InputState, screen: (f64, f64)) -> Vec<
 fn when_columns_would_leave_the_screen_the_rows_scroll_instead() {
     let measurer = TextMeasurer::default();
     let screen = (480, 360);
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let ids = four_kinds(&mut state);
     open_panel(ids, &mut state);
 
@@ -494,7 +499,7 @@ fn when_columns_would_leave_the_screen_the_rows_scroll_instead() {
 #[test]
 fn keyboard_focus_scrolls_its_row_into_view() {
     let screen = (480, 360);
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let ids = four_kinds(&mut state);
     open_panel(ids, &mut state);
     lay_out(&mut state, screen);
@@ -520,7 +525,7 @@ fn keyboard_focus_scrolls_its_row_into_view() {
 fn scrolling_after_a_click_moves_hover_off_the_control_that_scrolled_away() {
     let measurer = TextMeasurer::default();
     let screen = (480, 360);
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let ids = four_kinds(&mut state);
     open_panel(ids, &mut state);
     lay_out(&mut state, screen);
@@ -565,7 +570,7 @@ fn scrolling_after_a_click_moves_hover_off_the_control_that_scrolled_away() {
 fn keyboard_scrolling_drops_the_hover_of_a_swatch_it_scrolls_away() {
     let measurer = TextMeasurer::default();
     let screen = (480, 360);
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let ids = four_kinds(&mut state);
     open_panel(ids, &mut state);
     lay_out(&mut state, screen);
@@ -590,9 +595,7 @@ fn keyboard_scrolling_drops_the_hover_of_a_swatch_it_scrolls_away() {
         .expect("arrow length row");
     state.set_properties_panel_focus(Some(0));
     while state.properties_panel().unwrap().keyboard_focus != Some(length) {
-        assert!(
-            state.handle_properties_panel_key_with_measurer(&measurer, crate::input::Key::Down)
-        );
+        assert!(state.handle_properties_panel_key_with_measurer(&measurer, Key::Down));
         lay_out(&mut state, screen);
     }
 

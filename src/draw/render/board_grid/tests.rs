@@ -1,3 +1,5 @@
+use crate::draw;
+
 use super::*;
 use crate::draw::{EraserBrush, EraserKind, EraserReplayContext};
 
@@ -64,13 +66,13 @@ fn board_grid_paint_preserves_incoming_path_and_cairo_state() {
     let grid = BoardGrid::new(BoardGridKind::Isometric, 40);
     paint_geometry(
         &ctx,
-        crate::draw::WHITE,
+        draw::WHITE,
         grid,
         1.0,
         Rectangle::new(0.0, 0.0, 80.0, 80.0),
     )
     .unwrap();
-    BoardPaper::for_context(crate::draw::WHITE, grid, &ctx)
+    BoardPaper::for_context(draw::WHITE, grid, &ctx)
         .unwrap()
         .paint(&ctx)
         .unwrap();
@@ -89,8 +91,8 @@ fn board_grid_eraser_replays_paper_instead_of_removing_lines_or_dots() {
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
             let ctx = Context::new(&surface).unwrap();
             ctx.translate(9.0, 7.0);
-            let paper = BoardPaper::for_context(crate::draw::WHITE, BoardGrid::new(kind, 20), &ctx)
-                .unwrap();
+            let paper =
+                BoardPaper::for_context(draw::WHITE, BoardGrid::new(kind, 20), &ctx).unwrap();
             paper.paint(&ctx).unwrap();
             let original = {
                 let mut copy =
@@ -108,7 +110,7 @@ fn board_grid_eraser_replays_paper_instead_of_removing_lines_or_dots() {
                 pattern: Some(paper.pattern()),
                 surface: None,
                 backdrop_cache_key: None,
-                bg_color: Some(crate::draw::WHITE),
+                bg_color: Some(draw::WHITE),
                 logical_to_image_scale_x: 1.0,
                 logical_to_image_scale_y: 1.0,
                 logical_image_origin_x: 0.0,

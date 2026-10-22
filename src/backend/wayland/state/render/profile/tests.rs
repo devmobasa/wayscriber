@@ -79,7 +79,7 @@ fn profile_passes_preserve_canvas_and_ui_separation_with_partial_damage() {
         let mut baseline = Vec::new();
         let rewritten = profile.needs_before_ui(true)
             && profile.before_ui(
-                pixels(&mut surface.data().unwrap(), &damage),
+                &mut pixels(&mut surface.data().unwrap(), &damage),
                 &mut baseline,
                 true,
             );
@@ -93,7 +93,7 @@ fn profile_passes_preserve_canvas_and_ui_separation_with_partial_damage() {
             ctx.fill().unwrap();
         }
         profile.after_ui(
-            pixels(&mut surface.data().unwrap(), &damage),
+            &mut pixels(&mut surface.data().unwrap(), &damage),
             &baseline,
             true,
         );
@@ -109,13 +109,13 @@ fn suppressed_ui_does_not_copy_or_remap_a_stale_baseline() {
     let mut baseline = vec![0; 16];
     assert!(!profile.needs_before_ui(false));
     assert!(!profile.before_ui(
-        pixels(&mut surface.data().unwrap(), &damage),
+        &mut pixels(&mut surface.data().unwrap(), &damage),
         &mut baseline,
         false,
     ));
     assert_eq!(baseline, vec![0; 16]);
     profile.after_ui(
-        pixels(&mut surface.data().unwrap(), &damage),
+        &mut pixels(&mut surface.data().unwrap(), &damage),
         &baseline,
         false,
     );
@@ -131,12 +131,12 @@ fn absent_profile_does_not_remap_even_when_both_targets_are_enabled() {
     assert_eq!(profile.mode(), ProfileMode::Off);
     assert!(!profile.needs_before_ui(true));
     assert!(!profile.before_ui(
-        pixels(&mut surface.data().unwrap(), &damage),
+        &mut pixels(&mut surface.data().unwrap(), &damage),
         &mut baseline,
         true,
     ));
     profile.after_ui(
-        pixels(&mut surface.data().unwrap(), &damage),
+        &mut pixels(&mut surface.data().unwrap(), &damage),
         &baseline,
         true,
     );

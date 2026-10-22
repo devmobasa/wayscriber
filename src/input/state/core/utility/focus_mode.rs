@@ -12,12 +12,13 @@
 //! [`InputState::break_focus_mode`], so exiting later can never stomp an
 //! explicit user choice.
 
+use crate::input::DrawingState;
+
 use super::super::base::InputState;
 use super::super::modes::FocusModeRestore;
 use crate::domain::Action;
 use crate::i18n::{tr, trf};
-use crate::input::state::InputTextResources;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{InputTextResources, Toast, ToastPriority};
 
 const FOCUS_MODE_TOAST_KEY: &str = "focus.mode";
 
@@ -46,7 +47,7 @@ impl InputState {
                 || (self.boards.pan_enabled()
                     && self.boards.show_pan_badge()
                     && !self.board_is_transparent())
-                || (matches!(self.state, crate::input::DrawingState::TextInput { .. })
+                || (matches!(self.state, DrawingState::TextInput { .. })
                     && self.text_editing.edit_target().is_some()))
     }
 

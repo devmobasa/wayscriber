@@ -52,6 +52,7 @@ pub struct ToolbarModeOverrides {
 }
 
 impl ToolbarModeOverrides {
+    #[must_use]
     pub fn for_mode(&self, mode: ToolbarLayoutMode) -> &ToolbarModeOverride {
         match mode {
             ToolbarLayoutMode::Simple => &self.simple,

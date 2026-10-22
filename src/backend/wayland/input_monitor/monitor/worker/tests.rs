@@ -4,12 +4,12 @@ const KEYBOARD: &str = "event0";
 
 /// A keymap-repeating press, labeled as the HUD would label it.
 fn press(repeat: &mut RepeatState, keycode: u32, label: Option<&str>, now: Instant) {
-    repeat.on_press(keycode, KEYBOARD, RepeatPress::Repeating(label), now);
+    repeat.on_press(keycode, KEYBOARD, &RepeatPress::Repeating(label), now);
 }
 
 /// A press the keymap marks as non-repeating (modifiers and friends).
 fn press_non_repeating(repeat: &mut RepeatState, keycode: u32, now: Instant) {
-    repeat.on_press(keycode, KEYBOARD, RepeatPress::NonRepeating, now);
+    repeat.on_press(keycode, KEYBOARD, &RepeatPress::NonRepeating, now);
 }
 
 #[test]

@@ -1,6 +1,13 @@
+use super::super::WaylandState;
+use super::super::helpers::{damage_summary, debug_damage_logging_enabled};
+use super::super::perf::{PerfFrameDamageContext, PerfRenderBreakdown};
 use super::plan::FramePlan;
-use super::*;
+use super::record_render_stage;
 use crate::backend::wayland::surface::AcquiredBuffer;
+use anyhow::{Context, Result};
+use log::debug;
+use std::time::Instant;
+use wayland_client::QueueHandle;
 
 impl WaylandState {
     pub(super) fn submit_frame(
@@ -66,7 +73,7 @@ impl WaylandState {
             }
 
             self.commit_perf_frame(
-                PerfFrameDamageContext {
+                &PerfFrameDamageContext {
                     damage_screen: &plan.damage.screen,
                     logical_width: width,
                     logical_height: height,

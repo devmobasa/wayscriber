@@ -1,3 +1,5 @@
+use crate::draw::BoardPages;
+
 use super::types::{BoardPagesSnapshot, BoardSnapshot, SessionSnapshot, ToolStateSnapshot};
 use crate::input::InputState;
 use crate::session::options::SessionOptions;
@@ -19,7 +21,7 @@ pub fn snapshot_from_input(
 
     let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit());
 
-    let capture_pages = |pages: &crate::draw::BoardPages| -> BoardPagesSnapshot {
+    let capture_pages = |pages: &BoardPages| -> BoardPagesSnapshot {
         let cloned_pages = pages
             .pages()
             .iter()

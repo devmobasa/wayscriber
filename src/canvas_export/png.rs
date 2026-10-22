@@ -1,5 +1,5 @@
 use crate::capture::{CaptureError, ImageFormatMetadata, RenderedImage};
-use crate::draw::{Frame, RenderCaches, RenderCtx};
+use crate::draw::{Frame, RenderCaches, RenderCtx, TextMeasurer};
 use crate::render_profiles::RenderColorProfile;
 use crate::util::Rect;
 
@@ -78,7 +78,7 @@ pub(crate) fn render_canvas_surface(
     snapshot: &CanvasExportSnapshot,
 ) -> Result<cairo::ImageSurface, CaptureError> {
     let mut caches = RenderCaches::default();
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let viewport = snapshot.viewport;
     let scale = viewport.scale.max(1);
     let physical_width = viewport.logical_width.saturating_mul(scale as u32);

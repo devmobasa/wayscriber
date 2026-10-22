@@ -1,6 +1,9 @@
+use crate::ui_text::UiTextEngine;
+
 use super::super::*;
 use crate::draw::TextMeasurer;
 use crate::draw::shape::{bounding_box_for_sticky_note_preview_with, bounding_box_for_text_with};
+use crate::input::BOARD_ID_WHITEBOARD;
 use crate::util::Rect;
 
 const OUTPUT: (u32, u32) = (800, 600);
@@ -13,7 +16,7 @@ fn output_state() -> InputState {
 
 fn enter_mode(state: &mut InputState, action: Action) {
     let measurer = TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let ui_engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &ui_engine,
@@ -189,7 +192,7 @@ type MovedView = fn(&mut InputState);
 fn keyboard_text_entry_starts_at_the_centre_of_a_panned_or_zoomed_view() {
     let views: [(&str, MovedView); 2] = [
         ("panned", |state| {
-            state.switch_board(crate::input::BOARD_ID_WHITEBOARD);
+            state.switch_board(BOARD_ID_WHITEBOARD);
             assert!(state.boards.active_frame_mut().set_view_offset(1500, 900));
         }),
         ("zoomed", |state| {

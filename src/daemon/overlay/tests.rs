@@ -1,3 +1,12 @@
+use std::ffi::OsString;
+use std::os::unix;
+use std::{env, thread};
+
+use crate::daemon::protocol_v2;
+use crate::daemon::protocol_v2::ProtocolToken;
+use crate::domain::Language;
+use crate::{env_vars, i18n, paths, process_broker, test_env, test_temp};
+
 use super::*;
 use std::ffi::OsStr;
 use std::fs;
@@ -57,23 +66,20 @@ pub(in crate::daemon) fn assert_token_only_pending_launch(daemon: &Daemon, token
 /// Runs `body` with a broker whose overlay launches of this test binary act
 /// as [`fake_overlay`] children. Receipts land in the runtime root passed to `body`.
 fn with_fixture(ignore_term: bool, body: impl FnOnce(&mut Daemon, OverlaySpawnCandidate, &Path)) {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let behavior = if ignore_term {
         fake_overlay::IGNORES_TERM
     } else {
         fake_overlay::STOPS_ON_TERM
     };
 
-    crate::test_env::with_env_vars(
+    test_env::with_env_vars(
         &[
-            (
-                crate::env_vars::XDG_RUNTIME_DIR_ENV,
-                Some(temp.path().as_os_str()),
-            ),
+            (env_vars::XDG_RUNTIME_DIR_ENV, Some(temp.path().as_os_str())),
             (fake_overlay::FAKE_OVERLAY_ENV, Some(OsStr::new(behavior))),
         ],
         || {
-            let _broker = crate::process_broker::start_for_runtime().unwrap();
+            let _broker = process_broker::start_for_runtime().unwrap();
             let mut daemon = Daemon::new(
                 Some("transparent".into()),
                 false,
@@ -81,11 +87,9 @@ fn with_fixture(ignore_term: bool, body: impl FnOnce(&mut Daemon, OverlaySpawnCa
                 Some(PathBuf::from("/tmp/home.wayscriber-session")),
             );
 
-            daemon.instance_token = crate::daemon::protocol_v2::ProtocolToken::generate()
-                .unwrap()
-                .to_string();
+            daemon.instance_token = ProtocolToken::generate().unwrap().to_string();
             let candidate = OverlaySpawnCandidate {
-                program: std::env::current_exe().unwrap().into_os_string(),
+                program: env::current_exe().unwrap().into_os_string(),
                 source: "test binary",
             };
 
@@ -109,7 +113,7 @@ fn receipt(root: &Path) -> serde_json::Value {
             Instant::now() < deadline,
             "owned overlay did not publish its launch receipt"
         );
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
@@ -118,7 +122,7 @@ fn assert_retired(daemon: &Daemon, generation: &str) {
     assert!(!daemon.overlay.active_flag().load(Ordering::Acquire));
     assert!(daemon.overlay.active_named_session_file().is_none());
     assert!(daemon.overlay.poll_fd().is_none());
-    let proofs = crate::daemon::protocol_v2::command_root().join("children");
+    let proofs = protocol_v2::command_root().join("children");
     for suffix in ["active", "enabled", "ready", "signals"] {
         assert!(!proofs.join(format!("{generation}.{suffix}")).exists());
     }
@@ -126,7 +130,7 @@ fn assert_retired(daemon: &Daemon, generation: &str) {
 }
 
 fn session_report(generation: &str) -> PathBuf {
-    crate::paths::daemon_command_dir()
+    paths::daemon_command_dir()
         .join("overlay-targets")
         .join(format!("{generation}.target"))
 }
@@ -159,7 +163,7 @@ fn wait_until_retired(daemon: &mut Daemon) {
     while daemon.overlay.state() == OverlayState::Visible {
         daemon.update_overlay_process_state().unwrap();
         assert!(Instant::now() < deadline, "exited child was not retired");
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
@@ -169,13 +173,13 @@ const REMEMBERED: &str = "/tmp/remembered.wayscriber-session";
 #[test]
 fn a_daemon_started_with_a_language_gives_it_to_its_overlays() {
     // The command-line language is set once per process, so this runs alone.
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::a_daemon_started_with_a_language_gives_it_to_its_overlays"
         ),
         || {
-            crate::i18n::set_command_line_language(crate::domain::Language::SimplifiedChinese);
+            i18n::set_command_line_language(Language::SimplifiedChinese);
             with_fixture(false, |daemon, _, root| {
                 let receipt = show(daemon, root);
                 assert_eq!(receipt["language"], "zh-CN");
@@ -379,7 +383,7 @@ fn real_child_hide_restart_and_natural_retirement_clear_target_and_visibility() 
         while daemon.overlay.state() == OverlayState::Visible {
             daemon.update_overlay_process_state().unwrap();
             assert!(Instant::now() < deadline, "exited child was not retired");
-            std::thread::sleep(Duration::from_millis(5));
+            thread::sleep(Duration::from_millis(5));
         }
         assert_retired(daemon, second["generation"].as_str().unwrap());
     });
@@ -390,7 +394,7 @@ fn real_spawn_failure_drops_options_and_token_before_retry() {
     with_fixture(false, |daemon, candidate, root| {
         // A real child that starts and exits before publishing readiness.
         let failed_program = root.join(fake_overlay::EXITS_BEFORE_READY);
-        std::os::unix::fs::symlink(&candidate.program, &failed_program).unwrap();
+        unix::fs::symlink(&candidate.program, &failed_program).unwrap();
         daemon.queue_overlay_launch(
             Some(DaemonToggleRequest {
                 mode: Some("whiteboard".into()),
@@ -418,7 +422,7 @@ fn real_spawn_failure_drops_options_and_token_before_retry() {
             format!("{failure:#}"),
             format!(
                 "Unable to launch overlay process (tried current_exe/argv0/{})",
-                crate::env_vars::PATH_ENV
+                env_vars::PATH_ENV
             )
         );
         let attempts = failure
@@ -450,7 +454,7 @@ fn real_spawn_failure_drops_options_and_token_before_retry() {
         let deadline = Instant::now() + Duration::from_secs(3);
         while daemon.overlay_start_backoff().is_some() {
             assert!(Instant::now() < deadline);
-            std::thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
         }
 
         let request = daemon.take_pending_launch();
@@ -482,7 +486,7 @@ fn real_spawn_failure_drops_options_and_token_before_retry() {
 #[test]
 fn preparation_error_keeps_only_the_token_and_does_not_replay_options() {
     with_fixture(false, |daemon, candidate, _| {
-        let commands = crate::daemon::protocol_v2::command_root();
+        let commands = protocol_v2::command_root();
         fs::create_dir_all(&commands).unwrap();
         fs::write(commands.join("children"), b"not a proof directory").unwrap();
         daemon.queue_overlay_launch(
@@ -508,10 +512,10 @@ fn preparation_error_keeps_only_the_token_and_does_not_replay_options() {
                 "--session-file",
                 "/tmp/home.wayscriber-session"
             ]
-            .map(std::ffi::OsString::from)
+            .map(OsString::from)
         );
         assert!(actual.environment.contains(&(
-            crate::env_vars::XDG_ACTIVATION_TOKEN_ENV.into(),
+            env_vars::XDG_ACTIVATION_TOKEN_ENV.into(),
             Some("retained-token".into())
         )));
         assert!(

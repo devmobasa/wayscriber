@@ -1,15 +1,16 @@
 use crate::backend::wayland::acquisition::{ScreenAcquisitionOutcome, ScreenAcquisitionOwner};
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::zoom::ZoomWaiterOwner;
+use crate::config::Action;
 use crate::draw::Color;
-use crate::input::state::EyedropperCaptureSource;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{EyedropperCaptureSource, Toast, ToastPriority};
+use crate::ui;
 
 use super::WaylandState;
 use super::acquisition::report_screen_source_activation_rejected_to;
 use super::screen_image::{
-    DisplayedScreenImage, ScreenSourceEntry, current_screen_source_token, displayed_screen_image,
-    image_point_for_screen_point, screen_source_entry, screen_source_token,
+    DisplayedScreenImage, ScreenSourceConditions, ScreenSourceEntry, current_screen_source_token,
+    displayed_screen_image, image_point_for_screen_point, screen_source_entry, screen_source_token,
 };
 use crate::i18n::tr;
 
@@ -71,13 +72,13 @@ impl WaylandState {
         // during the wait would commit that stroke's peak pressure to the tool.
         self.retire_stylus_contact();
 
-        let decision = screen_source_entry(
-            self.background_image_source().is_some(),
-            self.input_state.board_is_transparent(),
-            self.zoom.is_engaged(),
-            self.zoom.active,
-            self.frozen.enabled(),
-        );
+        let decision = screen_source_entry(ScreenSourceConditions {
+            has_source: self.background_image_source().is_some(),
+            board_is_transparent: self.input_state.board_is_transparent(),
+            zoom_engaged: self.zoom.is_engaged(),
+            zoom_active: self.zoom.active,
+            frozen_enabled: self.frozen.enabled(),
+        });
         match decision {
             ScreenSourceEntry::Activate => {
                 if !self.activate_eyedropper_sampler(None) {
@@ -114,20 +115,14 @@ impl WaylandState {
                     Toast::info(tr(
                         "Screen eyedropper isn't available while zoomed on a solid board.",
                     ))
-                    .action(
-                        tr("Switch to transparent"),
-                        crate::config::Action::ReturnToTransparent,
-                    ),
+                    .action(tr("Switch to transparent"), Action::ReturnToTransparent),
                 );
             }
             ScreenSourceEntry::RefuseSolidBoard => {
                 let toast = Toast::info(tr(
                     "Screen eyedropper requires a transparent board or an active screen freeze.",
                 ))
-                .action(
-                    tr("Switch to transparent"),
-                    crate::config::Action::ReturnToTransparent,
-                );
+                .action(tr("Switch to transparent"), Action::ReturnToTransparent);
                 self.input_state
                     .push_toast(ToastPriority::Action, "eyedropper", toast);
             }
@@ -257,11 +252,11 @@ impl WaylandState {
             return;
         };
         let (image_x, image_y) = self.eyedropper_image_coords(&source, pointer_x, pointer_y);
-        let layout = crate::ui::compute_eyedropper_loupe_layout(
+        let layout = ui::compute_eyedropper_loupe_layout(
             (pointer_x, pointer_y),
             (screen_width, screen_height),
         );
-        crate::ui::render_eyedropper_loupe(ctx, layout, (image_x, image_y), |x, y| {
+        ui::render_eyedropper_loupe(ctx, layout, (image_x, image_y), |x, y| {
             sample_at(source.image, x, y)
         });
     }
@@ -334,7 +329,13 @@ mod tests {
     #[test]
     fn entry_waits_for_pending_zoom_instead_of_starting_frozen_capture() {
         assert_eq!(
-            screen_source_entry(false, true, true, false, true),
+            screen_source_entry(ScreenSourceConditions {
+                has_source: false,
+                board_is_transparent: true,
+                zoom_engaged: true,
+                zoom_active: false,
+                frozen_enabled: true,
+            }),
             ScreenSourceEntry::WaitForZoom
         );
     }
@@ -342,11 +343,23 @@ mod tests {
     #[test]
     fn entry_distinguishes_solid_board_zoom_refusal() {
         assert_eq!(
-            screen_source_entry(false, false, true, true, true),
+            screen_source_entry(ScreenSourceConditions {
+                has_source: false,
+                board_is_transparent: false,
+                zoom_engaged: true,
+                zoom_active: true,
+                frozen_enabled: true,
+            }),
             ScreenSourceEntry::RefuseWhileZoomedOnSolidBoard
         );
         assert_eq!(
-            screen_source_entry(false, false, false, false, true),
+            screen_source_entry(ScreenSourceConditions {
+                has_source: false,
+                board_is_transparent: false,
+                zoom_engaged: false,
+                zoom_active: false,
+                frozen_enabled: true,
+            }),
             ScreenSourceEntry::RefuseSolidBoard
         );
     }
@@ -354,7 +367,13 @@ mod tests {
     #[test]
     fn entry_uses_existing_source_before_board_policy() {
         assert_eq!(
-            screen_source_entry(true, false, false, false, true),
+            screen_source_entry(ScreenSourceConditions {
+                has_source: true,
+                board_is_transparent: false,
+                zoom_engaged: false,
+                zoom_active: false,
+                frozen_enabled: true,
+            }),
             ScreenSourceEntry::Activate
         );
     }
@@ -362,11 +381,23 @@ mod tests {
     #[test]
     fn entry_reports_missing_zoom_image_separately_from_missing_capture_support() {
         assert_eq!(
-            screen_source_entry(false, true, true, true, true),
+            screen_source_entry(ScreenSourceConditions {
+                has_source: false,
+                board_is_transparent: true,
+                zoom_engaged: true,
+                zoom_active: true,
+                frozen_enabled: true,
+            }),
             ScreenSourceEntry::ZoomImageUnavailable
         );
         assert_eq!(
-            screen_source_entry(false, true, false, false, false),
+            screen_source_entry(ScreenSourceConditions {
+                has_source: false,
+                board_is_transparent: true,
+                zoom_engaged: false,
+                zoom_active: false,
+                frozen_enabled: false,
+            }),
             ScreenSourceEntry::CaptureUnavailable
         );
     }

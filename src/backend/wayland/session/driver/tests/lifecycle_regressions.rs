@@ -1,12 +1,17 @@
+use crate::config::{Action, ToolbarItemOrderGroup, toolbar_item_ids};
+use crate::input::{DrawingState, MouseButton};
+use crate::toolbar_gtk::GtkToolbarKind;
+
 use super::*;
-use crate::backend::wayland::{runtime_ui_state::ToolbarPositionSnapshot, state::MoveDragKind};
+use crate::backend::wayland::runtime_ui_state::ToolbarPositionSnapshot;
+use crate::backend::wayland::state::MoveDragKind;
 
 #[test]
 fn pending_destructive_commands_preserve_live_slider_edits_and_undo() {
     use crate::input::state::{PropertiesPanelHit, SelectionPropertyKind};
 
     for open in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "candidate");
         stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
@@ -69,10 +74,7 @@ fn pending_destructive_commands_preserve_live_slider_edits_and_undo() {
             .active_frame()
             .shape(id)
             .expect("pending command must retain the edited shape");
-        assert!(matches!(
-            retained.shape,
-            crate::draw::Shape::Line { thick: 50.0, .. }
-        ));
+        assert!(matches!(retained.shape, Shape::Line { thick: 50.0, .. }));
         assert_eq!(
             runtime.session.options().unwrap().session_file_path(),
             options.session_file_path()
@@ -96,9 +98,9 @@ fn pending_destructive_commands_preserve_live_slider_edits_and_undo() {
         runtime.input.handle_action_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
-                ui_engine: &crate::ui_text::UiTextEngine::default(),
+                ui_engine: &UiTextEngine::default(),
             },
-            crate::config::Action::Undo,
+            Action::Undo,
         );
         assert_eq!(
             runtime.input.boards.active_frame().shape(id).unwrap().shape,
@@ -146,7 +148,7 @@ fn rejected_disk_clears_are_autosaved_after_an_uncommitted_gesture_is_canceled()
 
 fn assert_rejected_disk_clear_recovers_after_canceled_gesture(command: SessionCommand) {
     let clears_boards = matches!(command, SessionCommand::Clear);
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = named_options(temp.path(), "current");
     options.autosave_enabled = true;
     options.autosave_idle = Duration::from_millis(10);
@@ -173,18 +175,15 @@ fn assert_rejected_disk_clear_recovers_after_canceled_gesture(command: SessionCo
     runtime.input.on_mouse_press_with_canvas_and_resources(
         crate::input::state::InputTextResources {
             measurer: &measurer,
-            ui_engine: &crate::ui_text::UiTextEngine::default(),
+            ui_engine: &UiTextEngine::default(),
         },
-        crate::input::MouseButton::Left,
+        MouseButton::Left,
         500,
         400,
         500,
         400,
     );
-    assert!(matches!(
-        runtime.input.state,
-        crate::input::DrawingState::Drawing { .. }
-    ));
+    assert!(matches!(runtime.input.state, DrawingState::Drawing { .. }));
     assert!(
         !runtime.input.is_session_dirty(),
         "unfinished stroke has not committed"
@@ -265,7 +264,7 @@ fn autosave_ownership_errors_do_not_publish_failures_or_delay_retry() {
         Receipt::WrongEpoch,
         Receipt::WriteFailure,
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let mut options = named_options(temp.path(), "current");
         options.autosave_enabled = true;
         options.autosave_idle = Duration::from_millis(1);
@@ -324,7 +323,7 @@ fn autosave_ownership_errors_do_not_publish_failures_or_delay_retry() {
 
 #[test]
 fn shutdown_caller_retires_a_command_queued_behind_an_owned_failed_autosave() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let target = named_options(temp.path(), "target");
     stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
@@ -388,7 +387,7 @@ fn session_seed_refresh_aborts_changed_drags_and_publishes_live_chrome_positions
     }
 
     for drag in [Drag::Item, Drag::Builtin, Drag::Gtk] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = named_options(temp.path(), "current");
 
         let mut input = test_input_state();
@@ -401,8 +400,8 @@ fn session_seed_refresh_aborts_changed_drags_and_publishes_live_chrome_positions
 
         runtime.enable_ui_runtime(&temp.path().join("runtime-ui.toml"));
 
-        let group = crate::config::ToolbarItemOrderGroup::TopTools;
-        let pen = crate::config::toolbar_item_ids::TOP_TOOL_PEN;
+        let group = ToolbarItemOrderGroup::TopTools;
+        let pen = toolbar_item_ids::TOP_TOOL_PEN;
 
         match drag {
             Drag::Item => {
@@ -435,9 +434,7 @@ fn session_seed_refresh_aborts_changed_drags_and_publishes_live_chrome_positions
                         .drag
                         .begin_move(MoveDragKind::Top, (0.0, 0.0), false, (0.0, 0.0));
                 } else {
-                    runtime
-                        .drag
-                        .begin_gtk_preview(crate::toolbar_gtk::GtkToolbarKind::Top, 0.0);
+                    runtime.drag.begin_gtk_preview(GtkToolbarKind::Top, 0.0);
                 }
                 runtime.chrome.set_top_offset((80.0, 100.0));
             }

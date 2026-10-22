@@ -1,3 +1,10 @@
+use std::path::PathBuf;
+
+use crate::backend::wayland::session::HomeSession;
+use crate::config::Config;
+use crate::input::state::test_support;
+use crate::session::SaveAsOverwrite;
+
 use super::{DialogFramePhase, dialog_frame_accepted, populate_session_snapshot};
 use crate::backend::wayland::session::{SessionHome, SessionLaunch};
 use crate::backend::wayland::state::RenderOutcome;
@@ -8,15 +15,15 @@ use crate::session::SessionTarget;
 fn queued_commands_that_did_not_run_are_all_named_in_one_toast() {
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
     use crate::backend::wayland::session::SessionCommand;
-    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    let mut fixture = HandlerFixture::new(Config::default());
     let reason = || anyhow::anyhow!("the visible session changed");
 
     fixture.state.fail_queued_session_commands(
-        vec![
+        &[
             (
                 SessionCommand::SaveAs(
                     "/sessions/copy.wayscriber-session".into(),
-                    crate::session::SaveAsOverwrite::Deny,
+                    SaveAsOverwrite::Deny,
                 ),
                 reason(),
             ),
@@ -35,12 +42,12 @@ fn queued_commands_that_did_not_run_are_all_named_in_one_toast() {
 
 #[test]
 fn the_session_menu_learns_home_and_whether_it_is_active() {
-    let input = crate::input::state::test_support::make_test_input_state();
+    let input = test_support::make_test_input_state();
     let mut snapshot = ToolbarSnapshot::from_input_with_bindings(&input, Default::default());
-    let home = std::path::PathBuf::from("/sessions/home.wayscriber-session");
+    let home = PathBuf::from("/sessions/home.wayscriber-session");
     let away = SessionHome::new(
         SessionLaunch {
-            home: crate::backend::wayland::session::HomeSession::Named(home),
+            home: HomeSession::Named(home),
             preferred: None,
             from_daemon: true,
         },

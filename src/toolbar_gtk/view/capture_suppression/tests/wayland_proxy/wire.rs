@@ -1,17 +1,17 @@
 //! Wayland stream framing. Descriptors stay with the message during whose
 //! bytes they arrived and are passed on, then closed, when it is sent.
 
-use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::net::UnixStream;
+use std::{io, mem, ptr};
 
 use anyhow::{Result, ensure};
 
 const HEADER_LEN: usize = 8;
 /// Ancillary space reserved for each read, in descriptors.
 const RECEIVE_DESCRIPTORS: usize = 256;
-// SAFETY: CMSG_SPACE only performs arithmetic on its argument.
 const RECEIVE_CONTROL_LEN: usize =
+    // SAFETY: CMSG_SPACE only performs arithmetic on its argument.
     unsafe { libc::CMSG_SPACE((RECEIVE_DESCRIPTORS * size_of::<RawFd>()) as u32) } as usize;
 
 pub(super) struct Packet {
@@ -78,7 +78,7 @@ fn receive_chunk(
         iov_len: buffer.len(),
     };
     // SAFETY: zero is a valid initial state for msghdr.
-    let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
+    let mut message: libc::msghdr = unsafe { mem::zeroed() };
     message.msg_iov = &mut iovec;
     message.msg_iovlen = 1;
     message.msg_control = control.as_mut_ptr().cast();
@@ -144,7 +144,7 @@ fn take_descriptors(message: &libc::msghdr, descriptors: &mut Vec<OwnedFd>) -> R
 }
 
 /// Writes the whole message with its descriptors attached to the first chunk.
-pub(super) fn send(socket: &UnixStream, packet: Packet) -> Result<()> {
+pub(super) fn send(socket: &UnixStream, packet: &Packet) -> Result<()> {
     let mut sent = send_chunk(socket, &packet.data, &packet.descriptors)?;
     while sent < packet.data.len() {
         sent += send_chunk(socket, &packet.data[sent..], &[])?;
@@ -163,7 +163,7 @@ fn send_chunk(socket: &UnixStream, bytes: &[u8], descriptors: &[OwnedFd]) -> Res
         iov_len: bytes.len(),
     };
     // SAFETY: zero is a valid initial state for msghdr.
-    let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
+    let mut message: libc::msghdr = unsafe { mem::zeroed() };
     message.msg_iov = &mut iovec;
     message.msg_iovlen = 1;
 
@@ -176,7 +176,7 @@ fn send_chunk(socket: &UnixStream, bytes: &[u8], descriptors: &[OwnedFd]) -> Res
             (*header).cmsg_level = libc::SOL_SOCKET;
             (*header).cmsg_type = libc::SCM_RIGHTS;
             (*header).cmsg_len = libc::CMSG_LEN(size_of_val(raw.as_slice()) as u32) as usize;
-            std::ptr::copy_nonoverlapping(
+            ptr::copy_nonoverlapping(
                 raw.as_ptr(),
                 libc::CMSG_DATA(header).cast::<RawFd>(),
                 raw.len(),

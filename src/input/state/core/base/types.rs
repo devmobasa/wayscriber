@@ -20,8 +20,9 @@ use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
+use std::sync::Arc;
 use std::time::Instant;
-use std::{ops::Range, sync::Arc};
 
 /// The press that started a selection move.
 ///
@@ -42,6 +43,7 @@ pub struct SelectionGrab {
 }
 
 impl SelectionGrab {
+    #[must_use]
     pub fn new(shape_id: ShapeId, x: i32, y: i32) -> Self {
         Self {
             shape_id,
@@ -54,7 +56,7 @@ impl SelectionGrab {
     /// Records the pointer at `(x, y)` and returns whether the gesture is now
     /// a drag.
     pub(crate) fn track(&mut self, x: i32, y: i32) -> bool {
-        let threshold = crate::input::state::mouse::SELECTION_DRAG_THRESHOLD;
+        let threshold = mouse::SELECTION_DRAG_THRESHOLD;
         self.dragged |= (x - self.x).abs() >= threshold || (y - self.y).abs() >= threshold;
         self.dragged
     }
@@ -176,7 +178,7 @@ pub enum DrawingState {
         /// Which handle is being dragged
         handle: SelectionHandle,
         /// Original bounding box of selection
-        original_bounds: crate::util::Rect,
+        original_bounds: Rect,
         /// Starting mouse position
         start_x: i32,
         start_y: i32,
@@ -189,6 +191,7 @@ impl DrawingState {
     /// Build a [`DrawingState::TextInput`] with the caret at the end of
     /// `buffer` and no selection — the common entry point for both new text and
     /// resuming an edit of existing text.
+    #[must_use]
     pub fn text_input(x: i32, y: i32, buffer: String) -> Self {
         let caret = buffer.len();
         DrawingState::TextInput {
@@ -259,7 +262,11 @@ pub(crate) struct TextPasteEdit {
     pub(crate) inserted_len: usize,
 }
 
+use crate::config::TopDisplayMode;
+use crate::configurator_destination::ConfiguratorDestination;
+use crate::desktop_open::DesktopOpenRequest;
 pub use crate::domain::{PressureThicknessEditMode, PressureThicknessEntryMode};
+use crate::input::state::mouse;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionAxis {
@@ -315,6 +322,7 @@ pub enum PresetAction {
 
 impl PresetAction {
     /// The preset slot this action writes.
+    #[must_use]
     pub fn slot(&self) -> usize {
         match self {
             Self::Save { slot, .. } | Self::Clear { slot } => *slot,
@@ -483,14 +491,17 @@ pub enum ShellMode {
 }
 
 impl CompositorCapabilities {
+    #[must_use]
     pub fn direct_capture_available(&self) -> bool {
         self.screencopy || self.image_copy_capture
     }
 
+    #[must_use]
     pub fn all_available(&self) -> bool {
         self.layer_shell && self.direct_capture_available() && self.pointer_constraints
     }
 
+    #[must_use]
     pub fn limitations_summary(&self) -> Option<String> {
         let mut issues = Vec::new();
         if !self.layer_shell {
@@ -515,7 +526,7 @@ impl CompositorCapabilities {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HelperLaunchRequest {
     About,
-    Configurator(Option<crate::configurator_destination::ConfiguratorDestination>),
+    Configurator(Option<ConfiguratorDestination>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -524,7 +535,7 @@ pub enum PendingBackendAction {
     MeasureMode,
     CanvasExport(Action),
     BoardPdfExport(Action),
-    DesktopOpen(crate::desktop_open::DesktopOpenRequest),
+    DesktopOpen(DesktopOpenRequest),
     HelperLaunch(HelperLaunchRequest),
     ClearSavedToolState,
     /// Replay Tour: run the first-run cards again from the first step.
@@ -544,7 +555,7 @@ pub enum PendingToolbarPersistence {
     /// the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
     DisplayMode {
-        previous: crate::config::TopDisplayMode,
+        previous: TopDisplayMode,
     },
     /// The pin flag driven by the keyboard visibility toggle (F9). The
     /// toggle already applied, so the payload carries the pre-change pin for

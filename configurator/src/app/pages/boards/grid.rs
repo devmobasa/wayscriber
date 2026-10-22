@@ -1,9 +1,7 @@
 use wayscriber::i18n::tr;
 
-use super::{
-    SectionLayout,
-    rows::{TextRow, build_text_row},
-};
+use super::SectionLayout;
+use super::rows::{TextRow, build_text_row};
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
 use crate::models::{BoardBackgroundOption, BoardItemTextField};

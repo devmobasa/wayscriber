@@ -1,8 +1,14 @@
+use std::fmt::{Debug, Formatter};
+use std::{env, fmt};
+
 use crate::backend::wayland::runtime_operation::{
     RuntimeOperationController, RuntimeOperationIdSource, RuntimeOperationPoll,
 };
 
+use crate::backend::wayland::RuntimeWakeHandle;
 use crate::i18n::tr;
+use crate::process_broker::{BrokerErrorKind, HelperKind};
+use crate::{paths, process_broker};
 
 use anyhow::{Result, anyhow};
 use std::ffi::{OsStr, OsString};
@@ -33,8 +39,8 @@ pub(in crate::backend::wayland::state) struct SessionFileDialogController {
     operation: RuntimeOperationController<SessionFileDialogMode, Result<Option<PathBuf>, String>>,
 }
 
-impl std::fmt::Debug for SessionFileDialogController {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for SessionFileDialogController {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SessionFileDialogController")
             .field("active", &self.operation.is_active())
@@ -43,9 +49,7 @@ impl std::fmt::Debug for SessionFileDialogController {
 }
 
 impl SessionFileDialogController {
-    pub(in crate::backend::wayland::state) fn new(
-        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
-    ) -> Self {
+    pub(in crate::backend::wayland::state) fn new(runtime_wake: RuntimeWakeHandle) -> Self {
         Self {
             operation: RuntimeOperationController::new(
                 RuntimeOperationIdSource::new(),
@@ -184,11 +188,7 @@ fn run_zenity_session_file_dialog(
         "--file-filter".into(),
         "All files | *".into(),
     ]);
-    run_session_file_dialog_command(
-        crate::process_broker::HelperKind::SessionZenity,
-        "zenity",
-        arguments,
-    )
+    run_session_file_dialog_command(HelperKind::SessionZenity, "zenity", &arguments)
 }
 
 fn run_kdialog_session_file_dialog(
@@ -213,23 +213,19 @@ fn run_kdialog_session_file_dialog(
         }
     }
     arguments.push("Wayscriber sessions (*.wayscriber-session *.session);;All files (*)".into());
-    run_session_file_dialog_command(
-        crate::process_broker::HelperKind::SessionKdialog,
-        "kdialog",
-        arguments,
-    )
+    run_session_file_dialog_command(HelperKind::SessionKdialog, "kdialog", &arguments)
 }
 
 fn run_session_file_dialog_command(
-    kind: crate::process_broker::HelperKind,
+    kind: HelperKind,
     program: &'static str,
-    arguments: Vec<OsString>,
+    arguments: &[OsString],
 ) -> Result<Option<SessionFileDialogResult>> {
-    let output = match crate::process_broker::current().and_then(|broker| {
+    let output = match process_broker::current().and_then(|broker| {
         broker.run(
             kind,
             OsStr::new(program),
-            &arguments,
+            arguments,
             Vec::new(),
             Duration::from_secs(120),
             64 * 1024,
@@ -237,8 +233,7 @@ fn run_session_file_dialog_command(
     }) {
         Ok(output) => output,
         Err(err)
-            if crate::process_broker::error_kind(&err)
-                == Some(crate::process_broker::BrokerErrorKind::MissingExecutable) =>
+            if process_broker::error_kind(&err) == Some(BrokerErrorKind::MissingExecutable) =>
         {
             return Ok(None);
         }
@@ -270,7 +265,7 @@ fn run_session_file_dialog_command(
 }
 
 fn default_session_dir() -> PathBuf {
-    crate::paths::home_dir().unwrap_or_else(std::env::temp_dir)
+    paths::home_dir().unwrap_or_else(env::temp_dir)
 }
 
 pub(in crate::backend::wayland::state::toolbar::events) fn default_save_as_path(
@@ -280,8 +275,8 @@ pub(in crate::backend::wayland::state::toolbar::events) fn default_save_as_path(
 }
 
 fn default_save_as_dir() -> PathBuf {
-    let Some(home) = crate::paths::home_dir() else {
-        return std::env::temp_dir();
+    let Some(home) = paths::home_dir() else {
+        return env::temp_dir();
     };
     let documents = home.join("Documents");
     if documents.is_dir() { documents } else { home }
@@ -322,6 +317,8 @@ pub(in crate::backend::wayland::state::toolbar::events) fn ensure_save_as_extens
 
 #[cfg(test)]
 mod controller_tests {
+    use std::sync::mpsc;
+
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
 
@@ -333,7 +330,7 @@ mod controller_tests {
             Err("chooser error".into()),
         ];
         for expected in outcomes {
-            let wake = RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut controller = SessionFileDialogController::new(wake.handle());
             let result = expected.clone();
             controller
@@ -351,7 +348,7 @@ mod controller_tests {
 
     #[test]
     fn panicking_dialog_wakes_idle_runtime_with_one_terminal_failure() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut controller = SessionFileDialogController::new(wake.handle());
         controller
             .submit(SessionFileDialogMode::Open, || panic!("chooser panicked"))
@@ -367,9 +364,9 @@ mod controller_tests {
 
     #[test]
     fn active_dialog_rejects_overlap_before_spawning_worker() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut controller = SessionFileDialogController::new(wake.handle());
-        let (release, wait) = std::sync::mpsc::channel();
+        let (release, wait) = mpsc::channel();
         controller
             .submit(SessionFileDialogMode::Open, move || {
                 wait.recv().unwrap();

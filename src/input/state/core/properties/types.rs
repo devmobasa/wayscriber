@@ -1,3 +1,5 @@
+use crate::domain;
+
 use super::metrics::SLIDER_THUMB_RADIUS;
 use crate::draw::{ArrowStyle, Color};
 use crate::util::Rect;
@@ -56,11 +58,12 @@ fn slider_travel(track: PanelRect) -> f64 {
 
 impl SelectionPropertyKind {
     /// The slider range of a property set on a slider.
+    #[must_use]
     pub fn level_range(self) -> Option<LevelRange> {
         match self {
             Self::Thickness => Some(LevelRange {
-                min: crate::domain::MIN_STROKE_THICKNESS,
-                max: crate::domain::MAX_STROKE_THICKNESS,
+                min: domain::MIN_STROKE_THICKNESS,
+                max: domain::MAX_STROKE_THICKNESS,
                 step: 1.0,
             }),
             Self::Opacity => Some(LevelRange {
@@ -75,6 +78,7 @@ impl SelectionPropertyKind {
     /// The kind's value with nothing known about it, for fixtures that only
     /// care about an entry's text.
     #[cfg(test)]
+    #[must_use]
     pub fn unknown_value(self) -> SelectionPropertyValue {
         match self {
             Self::Color => SelectionPropertyValue::Color(None),

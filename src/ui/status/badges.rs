@@ -1,3 +1,5 @@
+use crate::util;
+
 use super::super::primitives::{
     BADGE_PADDING, BADGE_STACK_GAP, BadgeAlign, draw_badge_with_engine,
 };
@@ -97,6 +99,10 @@ pub(crate) fn render_frozen_badge_with_engine(
 ///
 /// Returns the vertical space consumed (badge height plus stacking gap) so
 /// callers can position the next stacked badge below it.
+#[expect(
+    clippy::must_use_candidate,
+    reason = "painting is the purpose; the last stacked badge may ignore its height"
+)]
 pub fn render_zoom_badge(
     ctx: &cairo::Context,
     screen_width: u32,
@@ -141,6 +147,10 @@ pub(crate) fn render_zoom_badge_with_engine(
 ///
 /// Returns the vertical space consumed (badge height plus stacking gap) so
 /// callers can position the next stacked badge below it.
+#[expect(
+    clippy::must_use_candidate,
+    reason = "painting is the purpose; the last stacked badge may ignore its height"
+)]
 pub fn render_pan_badge(
     ctx: &cairo::Context,
     screen_width: u32,
@@ -256,7 +266,7 @@ pub(crate) fn render_page_badge_with_engine(
     page_index: usize,
     page_count: usize,
 ) {
-    let truncated_name = crate::util::truncate_with_ellipsis(board_name, 20);
+    let truncated_name = util::truncate_with_ellipsis(board_name, 20);
     let board_label = if !truncated_name.trim().is_empty() {
         if board_count > 1 {
             Some(trf(

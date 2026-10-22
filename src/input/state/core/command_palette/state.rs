@@ -1,3 +1,9 @@
+use crate::i18n;
+use crate::input::Key;
+
+use std::mem;
+use std::time::{Duration, Instant};
+
 use super::CommandPaletteResults;
 use crate::config::Action;
 use crate::input::state::core::key_repeat::OverlayKeyRepeat;
@@ -92,7 +98,7 @@ impl CommandPaletteState {
         let cached = self.results.borrow();
         let cached = cached.as_ref()?;
         (cached.query == self.query
-            && cached.language == crate::i18n::language()
+            && cached.language == i18n::language()
             && cached.keymap_revision == revision
             && cached.recents == self.recent)
             .then(|| cached.results.clone())
@@ -100,7 +106,7 @@ impl CommandPaletteState {
     pub(super) fn cache_results(&self, revision: u64, results: Vec<&'static super::CommandEntry>) {
         *self.results.borrow_mut() = Some(CommandPaletteResults {
             query: self.query.clone(),
-            language: crate::i18n::language(),
+            language: i18n::language(),
             recents: self.recent.clone(),
             keymap_revision: revision,
             results,
@@ -135,7 +141,7 @@ impl CommandPaletteState {
     }
 
     pub(super) fn take_recents_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.recents_dirty)
+        mem::take(&mut self.recents_dirty)
     }
 
     pub(super) fn clear_recents_dirty(&mut self) {
@@ -195,7 +201,7 @@ impl CommandPaletteState {
 
     pub(super) fn navigate(
         &mut self,
-        key: crate::input::Key,
+        key: Key,
         rows: &[super::CommandPaletteListRow],
         capacity: usize,
     ) -> bool {
@@ -293,17 +299,16 @@ impl CommandPaletteState {
         }
         true
     }
-    pub(super) fn start_repeat(&mut self, key: crate::input::Key, now: std::time::Instant) {
-        self.repeat
-            .start(key, now, std::time::Duration::from_millis(280));
+    pub(super) fn start_repeat(&mut self, key: Key, now: Instant) {
+        self.repeat.start(key, now, Duration::from_millis(280));
     }
     pub(crate) fn clear_repeat(&mut self) {
         self.repeat.clear();
     }
-    pub(crate) fn release_repeat(&mut self, key: crate::input::Key) {
+    pub(crate) fn release_repeat(&mut self, key: Key) {
         self.repeat.release(key);
     }
-    pub(super) fn repeat_timeout(&self, now: std::time::Instant) -> Option<std::time::Duration> {
+    pub(super) fn repeat_timeout(&self, now: Instant) -> Option<Duration> {
         if self.open {
             self.repeat.timeout(now)
         } else {
@@ -312,7 +317,7 @@ impl CommandPaletteState {
     }
     pub(super) fn tick_repeat(
         &mut self,
-        now: std::time::Instant,
+        now: Instant,
         capacity: usize,
         revision: u64,
         labels: impl Fn(Action) -> Vec<String>,
@@ -326,8 +331,7 @@ impl CommandPaletteState {
         };
         let rows = self.prepare(revision, labels, capacity);
         let changed = self.navigate(key, &rows, capacity);
-        self.repeat
-            .schedule_fixed(now, std::time::Duration::from_millis(55));
+        self.repeat.schedule_fixed(now, Duration::from_millis(55));
         changed
     }
 }

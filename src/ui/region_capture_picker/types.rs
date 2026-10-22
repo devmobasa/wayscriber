@@ -8,10 +8,10 @@ use crate::ui::region_action_bar::{
 use crate::ui::region_resize_handles::RegionResizeHandles;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct RegionCaptureWindowVisual<'a> {
+pub(crate) struct RegionCaptureWindowVisual<'picker> {
     pub available: bool,
     pub active: bool,
-    pub targets: &'a [RegionSelection],
+    pub targets: &'picker [RegionSelection],
     /// The pointer-hovered or keyboard-focused window candidate.
     pub highlighted_target: Option<usize>,
 }
@@ -38,11 +38,11 @@ impl RegionCaptureWindowVisual<'_> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct RegionCapturePickerVisual<'a> {
+pub(crate) struct RegionCapturePickerVisual<'picker> {
     pub selection: Option<RegionSelection>,
     pub pointer: (f64, f64),
     /// Authoritative pixel coordinates or size supplied by the picker owner.
-    pub measurement: Option<&'a str>,
+    pub measurement: Option<&'picker str>,
     pub show_scrim: bool,
     pub show_legend: bool,
     /// The selection is committed and awaiting a destination choice. Review
@@ -57,13 +57,13 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     pub action_bar: Option<RegionActionBar>,
     pub hovered_action: Option<RegionAction>,
     pub include_drawings: bool,
-    pub cut: RegionCaptureCutVisual<'a>,
-    pub window: RegionCaptureWindowVisual<'a>,
+    pub cut: RegionCaptureCutVisual<'picker>,
+    pub window: RegionCaptureWindowVisual<'picker>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct RegionCutPreviewVisual<'a> {
-    pub pixels: &'a PackedArgb32,
+pub(crate) struct RegionCutPreviewVisual<'picker> {
+    pub pixels: &'picker PackedArgb32,
     pub display: RegionSelection,
 }
 
@@ -74,8 +74,8 @@ pub(crate) struct RegionCutDragVisual {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub(crate) struct RegionCaptureCutVisual<'a> {
-    pub preview: Option<RegionCutPreviewVisual<'a>>,
+pub(crate) struct RegionCaptureCutVisual<'picker> {
+    pub preview: Option<RegionCutPreviewVisual<'picker>>,
     pub drag: Option<RegionCutDragVisual>,
     pub availability: RegionActionAvailability,
     pub cut_armed: bool,

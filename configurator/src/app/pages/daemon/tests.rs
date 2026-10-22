@@ -1,3 +1,8 @@
+use wayscriber::domain::Language;
+use wayscriber::i18n;
+
+use crate::test_env;
+
 use super::*;
 use crate::models::{
     DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability, ShortcutApplyCapability,
@@ -122,14 +127,14 @@ fn overall_status_follows_service_state() {
 
 #[test]
 fn feedback_tone_follows_the_outcome_in_every_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::feedback_tone_follows_the_outcome_in_every_language"
         ),
         || {
             use crate::app::daemon_workflow::{ActionFeedback, DaemonFeedback, StatusFeedback};
-            wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
             let failed = DaemonFeedback::Action(ActionFeedback::Failed("权限不足".into()));
             let loaded = DaemonFeedback::Status(StatusFeedback::Loaded);
 

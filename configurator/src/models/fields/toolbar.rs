@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::config::{
@@ -53,8 +56,8 @@ impl ToolbarRebindModifierOption {
     }
 }
 
-impl std::fmt::Display for ToolbarRebindModifierOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ToolbarRebindModifierOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -100,8 +103,8 @@ impl ToolbarLayoutModeOption {
     }
 }
 
-impl std::fmt::Display for ToolbarLayoutModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ToolbarLayoutModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -139,8 +142,8 @@ impl ZoomChipDisplayOption {
     }
 }
 
-impl std::fmt::Display for ZoomChipDisplayOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ZoomChipDisplayOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -187,8 +190,8 @@ impl ToolbarStrokeControlsOption {
     }
 }
 
-impl std::fmt::Display for ToolbarStrokeControlsOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ToolbarStrokeControlsOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -230,8 +233,8 @@ impl OverrideOption {
     }
 }
 
-impl std::fmt::Display for OverrideOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for OverrideOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

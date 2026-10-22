@@ -112,11 +112,14 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
-    use crate::draw::{Color, Shape, frame::ShapeSnapshot};
+    use crate::draw::frame::ShapeSnapshot;
+    use crate::draw::{Color, Shape};
 
     fn make_state() -> InputState {
-        let mut state = crate::input::state::test_support::make_test_input_state();
+        let mut state = test_support::make_test_input_state();
         state.update_screen_dimensions(200, 120);
         let _ = state.take_dirty_regions();
         state
@@ -167,7 +170,7 @@ mod tests {
 
     #[test]
     fn apply_action_side_effects_closes_properties_panel_after_modify() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let mut state = make_state();
         let shape_id = state.boards.active_frame_mut().add_shape(rect(10, 20));
         state.set_selection(vec![shape_id]);

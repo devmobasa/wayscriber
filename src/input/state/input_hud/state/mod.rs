@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
-use std::time::Instant;
+use std::collections::vec_deque::Iter;
+use std::mem;
+use std::time::{Duration, Instant};
 
 use crate::config::{InputHudMode, InputHudPosition};
 use crate::draw::DirtyTracker;
@@ -43,14 +45,17 @@ pub struct InputHudEntry {
 }
 
 impl InputHudEntry {
+    #[must_use]
     pub fn label(&self) -> &str {
         &self.label
     }
 
+    #[must_use]
     pub fn kind(&self) -> InputHudEntryKind {
         self.kind
     }
 
+    #[must_use]
     pub fn count(&self) -> u32 {
         self.count
     }
@@ -77,6 +82,7 @@ pub struct InputHudState {
 }
 
 impl InputHudState {
+    #[must_use]
     pub fn new(settings: InputHudSettings) -> Self {
         let enabled = settings.enabled;
         Self {
@@ -97,22 +103,27 @@ impl InputHudState {
         self.entries.clear();
     }
 
+    #[must_use]
     pub fn enabled(&self) -> bool {
         self.enabled
     }
 
+    #[must_use]
     pub fn configured_mode(&self) -> InputHudMode {
         self.settings.mode
     }
 
+    #[must_use]
     pub fn position(&self) -> InputHudPosition {
         self.settings.position
     }
 
+    #[must_use]
     pub fn font_size(&self) -> f64 {
         self.settings.font_size
     }
 
+    #[must_use]
     pub fn active_source(&self) -> InputHudActiveSource {
         self.source
     }
@@ -127,16 +138,19 @@ impl InputHudState {
         true
     }
 
+    #[must_use]
     pub fn has_entries(&self) -> bool {
         !self.entries.is_empty()
     }
 
-    pub fn entries(&self) -> std::collections::vec_deque::Iter<'_, InputHudEntry> {
+    #[must_use]
+    pub fn entries(&self) -> Iter<'_, InputHudEntry> {
         self.entries.iter()
     }
 
     /// Fade factor for one chip: fully opaque for `display`, then a linear
     /// ramp to zero over `fade`.
+    #[must_use]
     pub fn alpha(&self, entry: &InputHudEntry, now: Instant) -> f64 {
         let elapsed = now.saturating_duration_since(entry.refreshed_at);
         if elapsed <= self.settings.display {
@@ -165,6 +179,7 @@ impl InputHudState {
     }
 
     /// Whether a source announcement is waiting, without consuming it.
+    #[must_use]
     pub fn has_source_announce(&self) -> bool {
         self.announce_source_pending
     }
@@ -174,7 +189,7 @@ impl InputHudState {
     /// has reconciled the reader thread, so the announcement can never claim
     /// a source the HUD does not actually have.
     pub fn take_source_announce(&mut self) -> bool {
-        std::mem::take(&mut self.announce_source_pending)
+        mem::take(&mut self.announce_source_pending)
     }
 
     /// Force the HUD to a given enabled state (presenter mode entry/exit).
@@ -281,7 +296,7 @@ impl InputHudState {
         let fade = self.settings.fade;
         self.entries.retain(|entry| {
             let elapsed = now.saturating_duration_since(entry.refreshed_at);
-            elapsed <= display || (fade > std::time::Duration::ZERO && elapsed < display + fade)
+            elapsed <= display || (fade > Duration::ZERO && elapsed < display + fade)
         });
         !self.entries.is_empty()
     }

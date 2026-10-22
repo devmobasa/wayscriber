@@ -1,4 +1,5 @@
-use super::{Config, float::finite_or_default};
+use super::Config;
+use super::float::finite_or_default;
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides};
 

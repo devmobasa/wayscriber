@@ -1,13 +1,21 @@
+use std::io::ErrorKind;
+use std::{io, process};
+
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::daemon::protocol_v2;
+use crate::daemon::protocol_v2::{
+    ClassifiedRuntimeRecord, ClientCommand, DaemonRequestV2, TerminalCommandResult,
+};
 #[cfg(test)]
 use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 #[cfg(test)]
 use crate::paths::daemon_command_dir;
 use crate::tray_action::TrayAction;
+use crate::{paths, session};
 
 mod queue;
 mod response;
@@ -147,7 +155,7 @@ impl DaemonToggleRequest {
             ));
         }
         let normalized = normalize_daemon_session_file(path)?;
-        crate::session::validate_named_session_file_for_foreground(&normalized)?;
+        session::validate_named_session_file_for_foreground(&normalized)?;
         self.session_file = Some(normalized);
         Ok(())
     }
@@ -157,7 +165,7 @@ fn normalize_daemon_session_file(path: &Path) -> Result<PathBuf> {
     let raw = path
         .to_str()
         .ok_or_else(|| anyhow!("--session-file path must be valid UTF-8"))?;
-    Ok(crate::session::normalize_named_session_file_arg(raw))
+    Ok(session::normalize_named_session_file_arg(raw))
 }
 
 fn current_unix_millis() -> Result<u64> {
@@ -175,33 +183,32 @@ pub(crate) fn generate_daemon_instance_token() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("{:x}-{:x}", std::process::id(), now)
+    format!("{:x}-{:x}", process::id(), now)
 }
 
 pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Result<()> {
     ensure_daemon_running()?;
 
-    let record =
-        match crate::daemon::protocol_v2::read_runtime_record(&crate::paths::daemon_pid_file()) {
-            Ok(record) => record,
-            // The daemon takes its lock before it publishes the record, so a lock
-            // held with no record means one is still starting up.
-            Err(error) if is_not_found(&error) => {
-                return Err(anyhow!(
-                    "wayscriber daemon is starting and not ready yet; try again"
-                ));
-            }
-            Err(error) => return Err(error),
-        };
+    let record = match protocol_v2::read_runtime_record(&paths::daemon_pid_file()) {
+        Ok(record) => record,
+        // The daemon takes its lock before it publishes the record, so a lock
+        // held with no record means one is still starting up.
+        Err(error) if is_not_found(&error) => {
+            return Err(anyhow!(
+                "wayscriber daemon is starting and not ready yet; try again"
+            ));
+        }
+        Err(error) => return Err(error),
+    };
     match record {
-        crate::daemon::protocol_v2::ClassifiedRuntimeRecord::V2(runtime) => {
-            let command = crate::daemon::protocol_v2::ClientCommand::publish(
-                &crate::daemon::protocol_v2::DaemonRequestV2::from(request),
+        ClassifiedRuntimeRecord::V2(runtime) => {
+            let command = ClientCommand::publish(
+                &DaemonRequestV2::from(request),
                 &runtime.v2_instance_token,
             )?;
             return finish_v2_command(command.wait()?);
         }
-        crate::daemon::protocol_v2::ClassifiedRuntimeRecord::LegacyV1 { .. } => {}
+        ClassifiedRuntimeRecord::LegacyV1 { .. } => {}
     }
 
     let runtime = read_daemon_runtime_info()?;
@@ -231,26 +238,22 @@ pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Resul
 fn is_not_found(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         cause
-            .downcast_ref::<std::io::Error>()
-            .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            .downcast_ref::<io::Error>()
+            .is_some_and(|error| error.kind() == ErrorKind::NotFound)
     })
 }
 
-fn finish_v2_command(result: crate::daemon::protocol_v2::TerminalCommandResult) -> Result<()> {
+fn finish_v2_command(result: TerminalCommandResult) -> Result<()> {
     match result {
-        crate::daemon::protocol_v2::TerminalCommandResult::Succeeded => Ok(()),
-        crate::daemon::protocol_v2::TerminalCommandResult::Canceled => {
+        TerminalCommandResult::Succeeded => Ok(()),
+        TerminalCommandResult::Canceled => {
             Err(anyhow!("daemon command was canceled before any effect"))
         }
-        crate::daemon::protocol_v2::TerminalCommandResult::FailedNoEffect(reason) => {
-            Err(anyhow!(reason))
-        }
-        crate::daemon::protocol_v2::TerminalCommandResult::AdmittedIndeterminate(reason) => {
-            Err(anyhow!(
-                "daemon command was admitted but its outcome is indeterminate; do not retry: {reason}"
-            ))
-        }
-        crate::daemon::protocol_v2::TerminalCommandResult::CommittedIndeterminate(reason) => {
+        TerminalCommandResult::FailedNoEffect(reason) => Err(anyhow!(reason)),
+        TerminalCommandResult::AdmittedIndeterminate(reason) => Err(anyhow!(
+            "daemon command was admitted but its outcome is indeterminate; do not retry: {reason}"
+        )),
+        TerminalCommandResult::CommittedIndeterminate(reason) => {
             Err(anyhow!("daemon command outcome is indeterminate: {reason}"))
         }
     }

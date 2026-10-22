@@ -1,5 +1,8 @@
 //! A popover and its capture resources have one lifecycle.
-use super::*;
+use super::super::{CaptureSurfaceContent, Updater};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub(super) struct PopoverResources {

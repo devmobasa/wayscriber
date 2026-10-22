@@ -12,6 +12,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use crate::config::LaserConfig;
+use crate::draw;
 use crate::draw::{Color, DirtyTracker, LaserStyle};
 use crate::util::Rect;
 
@@ -211,7 +212,7 @@ impl LaserInk {
     /// Paints every finished stroke at the opacity the last advance chose.
     pub(crate) fn render(&self, ctx: &cairo::Context) {
         for stroke in &self.strokes {
-            crate::draw::render_laser_stroke(
+            draw::render_laser_stroke(
                 ctx,
                 &stroke.points,
                 self.settings.style,

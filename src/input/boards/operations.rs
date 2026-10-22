@@ -23,6 +23,7 @@ pub struct BoardDeleteConfirmation {
 }
 
 impl BoardDeleteConfirmation {
+    #[must_use]
     pub fn matches_identity(&self, board_id: &str, generation: BoardIdentityGeneration) -> bool {
         self.board_id == board_id && self.board_identity_generation == generation
     }
@@ -50,7 +51,7 @@ pub enum BoardDeleteOutcome {
     Rejected(BoardDeleteRejection),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoardDeleteRejection {
     MissingBoard,
     StaleConfirmation,
@@ -90,6 +91,7 @@ pub struct PageDeleteConfirmation {
 }
 
 impl PageDeleteConfirmation {
+    #[must_use]
     pub fn matches_identity(
         &self,
         board_id: &str,
@@ -132,7 +134,7 @@ pub enum PageDeleteOutcome {
     Rejected(PageOperationRejection),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageOperationRejection {
     MissingBoard,
     MissingPage,
@@ -204,14 +206,14 @@ impl BoardManager {
     pub fn delete_board(&mut self, request: BoardDeleteRequest) -> BoardDeleteOutcome {
         match request {
             BoardDeleteRequest::Request(target) => self.request_board_delete(target),
-            BoardDeleteRequest::Confirm(confirmation) => self.confirm_board_delete(confirmation),
+            BoardDeleteRequest::Confirm(confirmation) => self.confirm_board_delete(&confirmation),
         }
     }
 
     pub fn delete_page(&mut self, request: PageDeleteRequest) -> PageDeleteOutcome {
         match request {
-            PageDeleteRequest::Request(target) => self.request_page_delete(target),
-            PageDeleteRequest::Confirm(confirmation) => self.confirm_page_delete(confirmation),
+            PageDeleteRequest::Request(target) => self.request_page_delete(&target),
+            PageDeleteRequest::Confirm(confirmation) => self.confirm_page_delete(&confirmation),
         }
     }
 
@@ -299,7 +301,7 @@ impl BoardManager {
 
     fn confirm_board_delete(
         &mut self,
-        confirmation: BoardDeleteConfirmation,
+        confirmation: &BoardDeleteConfirmation,
     ) -> BoardDeleteOutcome {
         if confirmation.board_identity_generation != self.identity_generation {
             return BoardDeleteOutcome::Rejected(BoardDeleteRejection::StaleConfirmation);
@@ -346,7 +348,7 @@ impl BoardManager {
         }
     }
 
-    fn request_page_delete(&mut self, target: PageDeleteTarget) -> PageDeleteOutcome {
+    fn request_page_delete(&mut self, target: &PageDeleteTarget) -> PageDeleteOutcome {
         let Some(board_index) = self.board_index_for_page_delete_target(&target.board) else {
             return PageDeleteOutcome::Rejected(PageOperationRejection::MissingBoard);
         };
@@ -384,7 +386,7 @@ impl BoardManager {
         }
     }
 
-    fn confirm_page_delete(&mut self, confirmation: PageDeleteConfirmation) -> PageDeleteOutcome {
+    fn confirm_page_delete(&mut self, confirmation: &PageDeleteConfirmation) -> PageDeleteOutcome {
         if confirmation.board_identity_generation != self.identity_generation {
             return PageDeleteOutcome::Rejected(PageOperationRejection::StaleConfirmation);
         }

@@ -1,4 +1,6 @@
-use crate::draw::{ArrowStyle, Color};
+use std::f64::consts;
+
+use crate::draw::{ArrowStyle, Color, shape};
 use crate::util;
 
 /// Render a straight line
@@ -79,7 +81,7 @@ pub(super) fn render_ellipse(
     ctx.translate(cx as f64, cy as f64);
     ctx.scale(rx as f64, ry as f64);
     ctx.new_sub_path();
-    ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * std::f64::consts::PI);
+    ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * consts::PI);
     fill_path(ctx, fill);
     ctx.restore().ok();
 
@@ -95,7 +97,7 @@ pub(super) fn render_polygon(
     color: Color,
     thick: f64,
 ) {
-    if !crate::draw::shape::has_minimum_distinct_points(points) {
+    if !shape::has_minimum_distinct_points(points) {
         return;
     }
 
@@ -138,7 +140,7 @@ pub(crate) fn render_polygon_preview(
     for &(x, y) in &points[1..] {
         ctx.line_to(x as f64, y as f64);
     }
-    if crate::draw::shape::has_minimum_distinct_points(points) {
+    if shape::has_minimum_distinct_points(points) {
         ctx.close_path();
         if fill {
             let _ = ctx.fill_preserve();
@@ -226,6 +228,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::draw;
+    use crate::draw::Shape;
+
     use super::*;
     use cairo::{Context, ImageSurface};
 
@@ -563,9 +568,9 @@ mod tests {
         let (mut surface, ctx) = surface_with_context(60, 60);
         let red = Color::new(1.0, 0.0, 0.0, 1.0);
         let blue = Color::new(0.0, 0.0, 1.0, 1.0);
-        crate::draw::render_shape(
+        draw::render_shape(
             &ctx,
-            &crate::draw::Shape::Rect {
+            &Shape::Rect {
                 x: 10,
                 y: 10,
                 w: 40,

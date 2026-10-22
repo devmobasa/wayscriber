@@ -1,9 +1,11 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use pangocairo::functions;
+
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct UiTextStyle<'a> {
-    pub family: &'a str,
+pub(crate) struct UiTextStyle<'font> {
+    pub family: &'font str,
     pub slant: cairo::FontSlant,
     pub weight: cairo::FontWeight,
     pub size: f64,
@@ -66,7 +68,7 @@ impl UiTextLayout {
 
     pub(crate) fn show_at_baseline(&self, ctx: &cairo::Context, x: f64, y: f64) {
         ctx.move_to(x, y - self.baseline);
-        pangocairo::functions::show_layout(ctx, &self.layout);
+        functions::show_layout(ctx, &self.layout);
     }
 }
 
@@ -209,7 +211,7 @@ impl UiTextEngine {
         if let Some(layout) = cached {
             // Re-bind the cached layout to the current Cairo context (font options,
             // resolution, transformation) without re-shaping the text.
-            pangocairo::functions::update_layout(ctx, &layout);
+            functions::update_layout(ctx, &layout);
             let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
             return UiTextLayout {
                 layout,
@@ -219,7 +221,7 @@ impl UiTextEngine {
             };
         }
 
-        let layout = pangocairo::functions::create_layout(ctx);
+        let layout = functions::create_layout(ctx);
         let font_desc = font_description(style);
         layout.set_font_description(Some(&font_desc));
         layout.set_text(text);

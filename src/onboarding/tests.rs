@@ -1,9 +1,12 @@
+use crate::test_temp;
+use crate::test_temp::TempDir;
+
 use super::*;
 use std::fs;
 
 #[test]
 fn onboarding_defaults_when_missing() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path.clone());
     assert!(!store.state().welcome_shown);
@@ -17,7 +20,7 @@ fn onboarding_defaults_when_missing() {
 
 #[test]
 fn onboarding_persists_flags() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path.clone());
     store.state_mut().welcome_shown = true;
@@ -25,7 +28,7 @@ fn onboarding_persists_flags() {
     store.state_mut().used_help_overlay = true;
     store.save().expect("updated state should persist");
 
-    let reloaded = OnboardingStore::load_from_path(path.clone());
+    let reloaded = OnboardingStore::load_from_path(path);
     assert!(reloaded.state().welcome_shown);
     assert!(reloaded.state().toolbar_hint_shown);
     assert!(reloaded.state().used_help_overlay);
@@ -36,7 +39,7 @@ fn onboarding_persists_flags() {
 fn rejected_persistence_disables_automatic_onboarding_for_the_session() {
     use std::os::unix::fs::symlink;
 
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let target = tmp.path().join("real-onboarding.toml");
     fs::write(&target, "version = 5\n").expect("seed should be writable");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
@@ -59,7 +62,7 @@ fn rejected_persistence_disables_automatic_onboarding_for_the_session() {
 
 #[test]
 fn unwritable_state_location_disables_automatic_onboarding_for_the_session() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let blocker = tmp.path().join("not-a-directory");
     fs::write(&blocker, "occupied").expect("blocker file should be created");
     let path = blocker.join(ONBOARDING_FILE);
@@ -78,7 +81,7 @@ fn unwritable_state_location_disables_automatic_onboarding_for_the_session() {
 
 #[test]
 fn startup_notice_acknowledgement_survives_reload_and_is_content_specific() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path.clone());
 
@@ -97,7 +100,7 @@ fn startup_notice_acknowledgement_survives_reload_and_is_content_specific() {
 
 #[test]
 fn deferred_hint_cap_survives_repeated_process_launches() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
 
     for expected_count in 0..DEFERRED_HINT_REPEAT_MAX {
@@ -127,7 +130,7 @@ fn deferred_hint_cap_survives_repeated_process_launches() {
 
 #[test]
 fn using_surface_features_stops_their_tips_from_rearming() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path);
     let state = store.state_mut();
@@ -150,12 +153,12 @@ fn using_surface_features_stops_their_tips_from_rearming() {
 
 #[test]
 fn acknowledging_one_tip_survives_reload_without_suppressing_other_tips() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path.clone());
 
     store
-        .acknowledge_tip(crate::domain::OnboardingTip::StatusBar)
+        .acknowledge_tip(OnboardingTip::StatusBar)
         .expect("tip acknowledgement should persist");
 
     let reloaded = OnboardingStore::load_from_path(path);
@@ -172,7 +175,7 @@ fn acknowledging_one_tip_survives_reload_without_suppressing_other_tips() {
 fn failed_tip_acknowledgement_suppresses_this_session_without_claiming_persistence() {
     use std::os::unix::fs::symlink;
 
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let target = tmp.path().join("real-onboarding.toml");
     fs::write(
         &target,
@@ -185,11 +188,7 @@ fn failed_tip_acknowledgement_suppresses_this_session_without_claiming_persisten
     symlink(&target, &path).expect("test symlink should be created");
     let mut store = OnboardingStore::load_from_path(path.clone());
 
-    assert!(
-        store
-            .acknowledge_tip(crate::domain::OnboardingTip::ZoomChip)
-            .is_err()
-    );
+    assert!(store.acknowledge_tip(OnboardingTip::ZoomChip).is_err());
     assert!(store.state().hint_zoom_chip_shown);
     assert_eq!(store.state().hint_zoom_chip_count, DEFERRED_HINT_REPEAT_MAX);
     assert!(!store.persistence_available());
@@ -204,7 +203,7 @@ fn failed_tip_acknowledgement_suppresses_this_session_without_claiming_persisten
 
 #[test]
 fn disabled_automatic_guidance_does_not_activate_first_run() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path);
 
@@ -218,7 +217,7 @@ fn disabled_automatic_guidance_does_not_activate_first_run() {
 
 #[test]
 fn onboarding_recovers_from_parse_error() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
@@ -249,7 +248,7 @@ fn onboarding_recovers_from_parse_error() {
 
 #[test]
 fn onboarding_version_bump_saves() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
@@ -271,7 +270,7 @@ fn onboarding_version_bump_saves() {
 
 #[test]
 fn retired_radial_flick_step_resumes_at_reference() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
@@ -291,7 +290,7 @@ fn retired_radial_flick_step_resumes_at_reference() {
 
 #[test]
 fn v3_file_migrates_to_current_version_preserving_completion() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
@@ -330,7 +329,7 @@ used_command_palette = true
 
 #[test]
 fn completed_pre_v6_profile_does_not_receive_new_surface_tips() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
@@ -380,7 +379,7 @@ coach_hint_count = 1
 
 #[test]
 fn m9_surface_hint_fields_persist_and_reconcile() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path.clone());
     store.state_mut().hint_status_bar_count = 2;
@@ -410,7 +409,7 @@ fn m9_surface_hint_fields_persist_and_reconcile() {
 
 #[test]
 fn coach_bookkeeping_reconciles_capped_count_to_learned_flag() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
@@ -427,14 +426,8 @@ fn coach_bookkeeping_reconciles_capped_count_to_learned_flag() {
 }
 
 /// Writes `seed` as the onboarding file and loads it through migration.
-fn load_seed(
-    seed: &str,
-) -> (
-    OnboardingStore,
-    std::path::PathBuf,
-    crate::test_temp::TempDir,
-) {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+fn load_seed(seed: &str) -> (OnboardingStore, PathBuf, TempDir) {
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     fs::create_dir_all(path.parent().expect("parent")).expect("create onboarding dir");
     fs::write(&path, seed).expect("write seed");
@@ -443,7 +436,7 @@ fn load_seed(
 
 #[test]
 fn a_fresh_tour_starts_by_drawing_not_by_background_mode() {
-    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let tmp = test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     let mut store = OnboardingStore::load_from_path(path);
 

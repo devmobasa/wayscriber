@@ -1,6 +1,7 @@
 //! Motion and release ownership are independent and bound by the real press route.
 use crate::backend::wayland::state::ContactOwner;
-use crate::input::{InputState, state::interaction::RoutingOutcome};
+use crate::input::InputState;
+use crate::input::state::interaction::RoutingOutcome;
 
 #[derive(Debug)]
 struct HeldContact {
@@ -87,11 +88,13 @@ impl PointerContacts {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
     #[test]
     fn unrelated_releases_and_rebinds_preserve_the_first_held_contact() {
         let mut contacts = PointerContacts::default();
-        let input = crate::input::state::test_support::make_test_input_state();
+        let input = test_support::make_test_input_state();
         let canvas = ContactOwner::Canvas;
         contacts.bind(1, canvas);
         contacts.bind(2, ContactOwner::InlineToolbar);
@@ -116,20 +119,20 @@ mod tests {
 mod dispatch_regressions {
     use crate::backend::wayland::state::pointer_runtime::PointerRuntime;
     use crate::backend::wayland::state::{ContactMotion, ContactOwner};
+    use crate::config::{Config, RadialMenuMouseBinding};
     use crate::draw::TextMeasurer;
-    use crate::input::{
-        MouseButton,
-        state::{InputTextResources, test_support::make_test_input_state},
-    };
+    use crate::input::state::InputTextResources;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::{InputState, MouseButton};
     use crate::ui_text::UiTextEngine;
 
     #[test]
     fn inert_canvas_presses_cannot_inherit_another_devices_canvas_gesture() {
         for mouse_button in [MouseButton::Right, MouseButton::Middle] {
             let mut pointer = PointerRuntime::new();
-            let mut config = crate::config::Config::default();
-            config.ui.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Disabled;
-            let mut input = crate::input::InputState::from_config(&config);
+            let mut config = Config::default();
+            config.ui.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
+            let mut input = InputState::from_config(&config);
             let measurer = TextMeasurer::default();
             let engine = UiTextEngine::default();
             let resources = || InputTextResources {
@@ -225,10 +228,9 @@ mod popup_dispatch_regressions {
     use crate::backend::wayland::state::pointer_runtime::PointerRuntime;
     use crate::backend::wayland::state::{ContactMotion, ContactOwner};
     use crate::draw::TextMeasurer;
-    use crate::input::{
-        MouseButton,
-        state::{InputTextResources, test_support::make_test_input_state},
-    };
+    use crate::input::MouseButton;
+    use crate::input::state::InputTextResources;
+    use crate::input::state::test_support::make_test_input_state;
     use crate::ui_text::UiTextEngine;
 
     #[test]

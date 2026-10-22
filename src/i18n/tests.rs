@@ -1,4 +1,11 @@
 use std::collections::BTreeMap;
+use std::ffi::CString;
+use std::os::unix;
+use std::sync::mpsc;
+use std::time::Duration;
+use std::{fs, thread};
+
+use crate::test_env;
 
 use super::*;
 
@@ -21,7 +28,7 @@ fn english_source_strings_are_the_identity_catalog() {
 fn simplified_chinese_serves_translations() {
     // Catalogs load once per process, with the runner's override directory
     // if any; the child's is empty, so lookup serves the embedded entries.
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(module_path!(), "::simplified_chinese_serves_translations"),
         || {
             let catalog = catalog_pairs();
@@ -181,7 +188,7 @@ fn catalog_placeholders_survive_translation() {
             "{source:?} changes the placeholder count"
         );
 
-        let arguments: Vec<&dyn std::fmt::Display> = vec![&"x"; placeholders];
+        let arguments: Vec<&dyn Display> = vec![&"x"; placeholders];
         let rendered = substitute(&translation, &arguments);
         assert!(
             !rendered.contains("{}"),
@@ -211,7 +218,7 @@ fn catalog_entries_are_translated_and_non_empty() {
 /// The embedded catalog with whatever `contents` an override file holds.
 fn with_override(contents: &[u8]) -> Catalog {
     let directory = tempfile::tempdir().expect("override directory");
-    std::fs::write(directory.path().join("zh-CN.toml"), contents).expect("write override");
+    fs::write(directory.path().join("zh-CN.toml"), contents).expect("write override");
 
     load_catalog("zh-CN", SIMPLIFIED_CHINESE_CATALOG, Some(directory.path()))
 }
@@ -275,14 +282,14 @@ fn an_override_entry_that_changes_its_placeholders_is_dropped() {
 fn an_override_that_is_too_large_is_refused_after_a_bounded_read() {
     let directory = tempfile::tempdir().expect("override directory");
     let path = directory.path().join("zh-CN.toml");
-    std::fs::write(&path, vec![b'#'; MAX_OVERRIDE_BYTES as usize + 1]).expect("write");
+    fs::write(&path, vec![b'#'; MAX_OVERRIDE_BYTES as usize + 1]).expect("write");
 
     assert!(matches!(
         read_override(&path),
         Err(OverrideRejection::TooLarge)
     ));
 
-    std::fs::write(&path, vec![b'#'; MAX_OVERRIDE_BYTES as usize]).expect("write");
+    fs::write(&path, vec![b'#'; MAX_OVERRIDE_BYTES as usize]).expect("write");
     assert!(read_override(&path).is_ok(), "the limit itself is allowed");
 }
 
@@ -290,8 +297,8 @@ fn an_override_that_is_too_large_is_refused_after_a_bounded_read() {
 fn a_symlinked_override_is_refused() {
     let directory = tempfile::tempdir().expect("override directory");
     let target = directory.path().join("real.toml");
-    std::fs::write(&target, "\"Boards\" = \"白板\"\n").expect("write target");
-    std::os::unix::fs::symlink(&target, directory.path().join("zh-CN.toml")).expect("symlink");
+    fs::write(&target, "\"Boards\" = \"白板\"\n").expect("write target");
+    unix::fs::symlink(&target, directory.path().join("zh-CN.toml")).expect("symlink");
 
     assert!(matches!(
         read_override(&directory.path().join("zh-CN.toml")),
@@ -307,12 +314,12 @@ fn a_symlinked_override_is_refused() {
 fn a_fifo_override_is_refused_without_waiting_for_a_writer() {
     let directory = tempfile::tempdir().expect("override directory");
     let path = directory.path().join("zh-CN.toml");
-    let raw_path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).expect("path");
+    let raw_path = CString::new(path.as_os_str().as_encoded_bytes()).expect("path");
     // SAFETY: `raw_path` is a valid NUL-terminated path for the call.
     assert_eq!(unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) }, 0);
 
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
         let _ = sender.send(matches!(
             read_override(&path),
             Err(OverrideRejection::NotARegularFile)
@@ -321,7 +328,7 @@ fn a_fifo_override_is_refused_without_waiting_for_a_writer() {
 
     // No process ever opens the write end, so a blocking open never returns.
     let refused = receiver
-        .recv_timeout(std::time::Duration::from_secs(5))
+        .recv_timeout(Duration::from_secs(5))
         .expect("reading a FIFO override must not block");
     assert!(refused);
 }
@@ -329,13 +336,13 @@ fn a_fifo_override_is_refused_without_waiting_for_a_writer() {
 #[test]
 fn the_first_lookup_merges_the_override_directory() {
     let directory = tempfile::tempdir().expect("override directory");
-    std::fs::write(
+    fs::write(
         directory.path().join("zh-CN.toml"),
         "\"Boards\" = \"白板\"\n",
     )
     .expect("write override");
 
-    crate::test_env::in_language_isolated_child_with_overrides(
+    test_env::in_language_isolated_child_with_overrides(
         concat!(
             module_path!(),
             "::the_first_lookup_merges_the_override_directory"
@@ -352,14 +359,14 @@ fn the_first_lookup_merges_the_override_directory() {
 
 #[test]
 fn the_command_line_language_holds_for_the_whole_process() {
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::the_command_line_language_holds_for_the_whole_process"
         ),
         || {
             // SAFETY: this child process runs only this test.
-            unsafe { std::env::set_var(LANGUAGE_OVERRIDE_ENV, "en") };
+            unsafe { env::set_var(LANGUAGE_OVERRIDE_ENV, "en") };
             set_command_line_language(Language::SimplifiedChinese);
 
             set_language(Language::English);

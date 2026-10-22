@@ -1,3 +1,11 @@
+use std::{env, io};
+
+use gtk4::gdk::FrameClockPhase;
+use gtk4::gio::Menu;
+use gtk4::glib;
+use gtk4::glib::MainContext;
+use gtk4::gsk::GLRenderer;
+
 use super::wayland_proxy::{CONTROL_ENV, ProxyResponse, ProxyStatus, run_in_private_wayland};
 use super::*;
 use std::future::{Future, poll_fn};
@@ -29,7 +37,7 @@ fn popup_capture_waits_for_its_own_render_after_a_shared_clock_paint() {
     popover.set_parent(&anchor);
     window.present();
 
-    gtk4::glib::MainContext::default().block_on(async {
+    MainContext::default().block_on(async {
         wait_for_native_mapping(window.upcast_ref()).await;
         require_gl_renderer(&window);
 
@@ -62,7 +70,7 @@ fn menu_capture_presents_its_empty_proof_and_restores_the_menu() {
 
     gtk4::init().expect("private GTK display");
     let (window, anchor) = popup_parent();
-    let model = gtk4::gio::Menu::new();
+    let model = Menu::new();
     model.append(Some("Copy"), Some("clipboard.copy"));
     let menu = gtk4::PopoverMenu::from_model(Some(&model));
     menu.set_autohide(false);
@@ -73,7 +81,7 @@ fn menu_capture_presents_its_empty_proof_and_restores_the_menu() {
     let capture = TooltipCapture::new();
     window.present();
 
-    gtk4::glib::MainContext::default().block_on(async {
+    MainContext::default().block_on(async {
         wait_for_native_mapping(window.upcast_ref()).await;
         require_gl_renderer(&window);
 
@@ -105,10 +113,10 @@ fn menu_capture_presents_its_empty_proof_and_restores_the_menu() {
 }
 
 fn run_in_private_display(test_name: &str) -> bool {
-    if std::env::var_os(CHILD_ENV).is_some() {
+    if env::var_os(CHILD_ENV).is_some() {
         return true;
     }
-    if std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none() {
+    if env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none() {
         eprintln!("skipping native popup presentation test: run tools/test-gtk-widgets.sh");
         return false;
     }
@@ -117,8 +125,8 @@ fn run_in_private_display(test_name: &str) -> bool {
         .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
         .expect("test name contains the crate prefix");
     let output = run_in_private_wayland(CHILD_ENV, test_name);
-    std::io::stdout().write_all(&output.stdout).unwrap();
-    std::io::stderr().write_all(&output.stderr).unwrap();
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
 
     assert!(
         output.status.success(),
@@ -146,7 +154,7 @@ fn require_gl_renderer(window: &gtk4::Window) {
         window
             .renderer()
             .expect("window renderer")
-            .is::<gtk4::gsk::GLRenderer>()
+            .is::<GLRenderer>()
     );
 }
 
@@ -161,7 +169,7 @@ async fn wait_for_native_mapping(widget: &gtk4::Widget) {
             Instant::now() < deadline,
             "native surface did not map with nonzero bounds"
         );
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 }
 
@@ -173,7 +181,7 @@ async fn wait_for_initial_popup_callback() {
             "initial popup frame did not complete"
         );
 
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 }
 
@@ -199,12 +207,12 @@ async fn assert_popup_proof(window: &gtk4::Window, target: CaptureProofTarget) {
             .await
             .is_pending()
     );
-    clock.request_phase(gtk4::gdk::FrameClockPhase::PAINT);
+    clock.request_phase(FrameClockPhase::PAINT);
 
     let deadline = Instant::now() + Duration::from_millis(250);
     while shared_paint.get().is_none() {
         assert!(Instant::now() < deadline, "shared clock did not paint");
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
     clock.disconnect(handler);
 
@@ -237,12 +245,12 @@ async fn wait_for_held_popup_callback() {
             "popup never submitted the held callback"
         );
 
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
+        glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 }
 
 fn control(command: &str) -> ProxyStatus {
-    let path = std::env::var_os(CONTROL_ENV).expect("private proxy control");
+    let path = env::var_os(CONTROL_ENV).expect("private proxy control");
     let mut socket = UnixStream::connect(path).expect("connect proxy control");
     socket.set_read_timeout(Some(FIXTURE_WAIT)).unwrap();
 

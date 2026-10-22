@@ -8,6 +8,8 @@
 
 use std::time::{Duration, Instant};
 
+use crate::ui::anim;
+
 use super::base::InputState;
 use crate::domain::Action;
 use crate::draw::Shape;
@@ -52,7 +54,7 @@ impl RecognitionChip {
     /// Fully opaque, then fading out over the end of its lifetime. Under
     /// `[ui] reduced_motion` it stays opaque and then disappears.
     pub(crate) fn opacity(&self, now: Instant) -> f64 {
-        crate::ui::anim::end_fade(
+        anim::end_fade(
             self.age(now).as_secs_f64(),
             RECOGNITION_CHIP_LIFETIME.as_secs_f64(),
             RECOGNITION_CHIP_FADE.as_secs_f64(),
@@ -181,6 +183,8 @@ fn recognized_shape_label(shape: &Shape) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+
     use super::*;
     use crate::draw::Color;
 
@@ -205,7 +209,7 @@ mod tests {
 
     #[test]
     fn the_drawing_config_switch_reaches_input_state() {
-        let mut config = crate::config::Config::default();
+        let mut config = Config::default();
         assert!(
             InputState::from_config(&config)
                 .recognition_feedback

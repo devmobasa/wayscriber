@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 use crate::draw::ShapeId;
 
@@ -32,7 +34,7 @@ fn add_text_shape(state: &mut InputState) -> ShapeId {
 }
 
 fn open_panel(state: &mut InputState) {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     assert!(state.show_properties_panel_with(&route_measurer));
 }
 
@@ -120,7 +122,7 @@ fn pressure_entry_mode_pressure_only_requires_all_pressure() {
 
 #[test]
 fn pressure_entry_enabled_when_edit_mode_add_and_unlocked() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::PressureOnly;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Add;
@@ -146,7 +148,7 @@ fn pressure_entry_enabled_when_edit_mode_add_and_unlocked() {
 
 #[test]
 fn pressure_entry_add_mode_decrements_thickness() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::PressureOnly;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Add;
@@ -172,7 +174,7 @@ fn pressure_entry_add_mode_decrements_thickness() {
 
 #[test]
 fn pressure_entry_disabled_when_edit_mode_disabled() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::PressureOnly;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Disabled;
@@ -258,7 +260,7 @@ fn pressure_entry_mode_any_pressure_mixed_lock_states_is_editable() {
 
 #[test]
 fn pressure_entry_mode_any_pressure_add_updates_pressure_only() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::AnyPressure;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Add;
@@ -288,7 +290,7 @@ fn pressure_entry_mode_any_pressure_add_updates_pressure_only() {
 
 #[test]
 fn pressure_entry_mode_any_pressure_scale_updates_pressure_only() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::AnyPressure;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Scale;
@@ -318,7 +320,7 @@ fn pressure_entry_mode_any_pressure_scale_updates_pressure_only() {
 
 #[test]
 fn pressure_entry_scale_mode_applies_step() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::PressureOnly;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Scale;
@@ -345,7 +347,7 @@ fn pressure_entry_scale_mode_applies_step() {
 
 #[test]
 fn pressure_entry_scale_mode_decrements_thickness() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.style.pressure_thickness_entry_mode = PressureThicknessEntryMode::PressureOnly;
     state.style.pressure_thickness_edit_mode = PressureThicknessEditMode::Scale;

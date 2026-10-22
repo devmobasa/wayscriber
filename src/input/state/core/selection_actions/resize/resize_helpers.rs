@@ -1,7 +1,6 @@
 use crate::util::Rect;
 
-use super::super::super::base::InputState;
-use super::super::super::base::SelectionHandle;
+use super::super::super::base::{InputState, SelectionHandle};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ResizeHandleProbe {

@@ -1,5 +1,14 @@
 //! Output switches use the same ordered, nonblocking disk phases as session commands.
-use super::*;
+use super::super::{SessionTransaction, session_persistence_enabled};
+use super::{
+    Phase, SessionCommand, SessionCommandReport, SessionCommandTransaction, TransactionStep,
+    empty_snapshot, required_outcome,
+};
+use crate::backend::wayland::session::persistence::{
+    PersistenceOperation, PersistenceOutcome, SaveStrategy,
+};
+use crate::session::SessionSnapshot;
+use anyhow::{Result, anyhow};
 
 impl SessionCommandTransaction {
     pub(super) fn start_output(

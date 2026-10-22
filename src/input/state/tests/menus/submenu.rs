@@ -1,5 +1,8 @@
 use std::time::{Duration, Instant};
 
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::input::BOARD_ID_WHITEBOARD;
 use crate::input::events::Key;
@@ -12,11 +15,11 @@ fn open_canvas_menu(state: &mut InputState, anchor: (i32, i32)) {
     state.update_context_menu_layout(SCREEN.0, SCREEN.1);
 }
 
-fn row_of(state: &InputState, command: MenuCommand) -> usize {
+fn row_of(state: &InputState, command: &MenuCommand) -> usize {
     state
         .context_menu_entries()
         .iter()
-        .position(|entry| entry.command.as_ref() == Some(&command))
+        .position(|entry| entry.command.as_ref() == Some(command))
         .expect("menu row")
 }
 
@@ -76,11 +79,8 @@ fn settle(state: &mut InputState) {
     state.update_context_menu_layout(SCREEN.0, SCREEN.1);
 }
 
-fn text_resources() -> (crate::draw::TextMeasurer, crate::ui_text::UiTextEngine) {
-    (
-        crate::draw::TextMeasurer::default(),
-        crate::ui_text::UiTextEngine::default(),
-    )
+fn text_resources() -> (TextMeasurer, UiTextEngine) {
+    (TextMeasurer::default(), UiTextEngine::default())
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn heading_into_a_submenu_keeps_it_while_other_rows_switch_or_close_it() {
     open_canvas_menu(&mut state, (100, 100));
     let boards = parent_row_of(&state, ContextMenuKind::Boards);
     let pages = parent_row_of(&state, ContextMenuKind::Pages);
-    let help = row_of(&state, MenuCommand::ToggleHelp);
+    let help = row_of(&state, &MenuCommand::ToggleHelp);
     assert_eq!(pages, boards + 1, "Pages sits right below Boards");
     let (x, boards_y) = menu_row(&state, boards);
     let (_, pages_y) = menu_row(&state, pages);
@@ -205,7 +205,7 @@ fn sweeping_across_a_parent_row_does_not_open_its_submenu() {
     let mut state = create_test_input_state();
     open_canvas_menu(&mut state, (100, 100));
     let boards = parent_row_of(&state, ContextMenuKind::Boards);
-    let help = row_of(&state, MenuCommand::ToggleHelp);
+    let help = row_of(&state, &MenuCommand::ToggleHelp);
     let (x, boards_y) = menu_row(&state, boards);
     let (_, help_y) = menu_row(&state, help);
 
@@ -274,7 +274,7 @@ fn the_menu_swallows_arrow_keys_that_have_nothing_to_do() {
     };
     let mut state = create_test_input_state();
     state.toggle_context_menu_via_keyboard();
-    let help = row_of(&state, MenuCommand::ToggleHelp);
+    let help = row_of(&state, &MenuCommand::ToggleHelp);
     state.set_context_menu_focus(Some(help));
 
     assert!(state.handle_context_menu_key_with_resources(resources, Key::Right));
@@ -433,7 +433,7 @@ fn leaving_the_menu_lifts_a_collapsed_parent_rows_suppression() {
 fn page_overflow_from_the_picker_keeps_the_picker_open() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     state.execute_menu_command(MenuCommand::OpenPagesMenu);
     assert!(state.is_board_picker_open() && state.is_context_menu_open());
 
@@ -450,7 +450,7 @@ fn page_overflow_from_the_picker_keeps_the_picker_open() {
 fn a_menu_command_with_no_parent_row_opens_that_menu_on_its_own() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     state.update_pointer_position_synthetic(300, 200);
 
     // The board picker's page overflow link runs this with no menu open.

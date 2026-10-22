@@ -1,36 +1,26 @@
+use std::collections::hash_map::DefaultHasher;
+
 use crate::config::{QuickColorPalette, RadialMenuMouseBinding};
 use crate::input::InputState;
 use std::hash::{Hash, Hasher};
 
-use super::sections::{HelpOverlayBindings, SectionSets, build_section_sets};
+use super::sections::{HelpContentOptions, HelpOverlayBindings, SectionSets, build_section_sets};
 
 #[derive(Clone, PartialEq)]
 struct HelpContentKey {
     shortcut_revision: u64,
     radial_menu_mouse_binding: RadialMenuMouseBinding,
     quick_colors: QuickColorPalette,
-    frozen_enabled: bool,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
+    options: HelpContentOptions,
 }
 
 impl HelpContentKey {
-    fn from_input(
-        input: &InputState,
-        frozen_enabled: bool,
-        context_filter: bool,
-        board_enabled: bool,
-        capture_enabled: bool,
-    ) -> Self {
+    fn from_input(input: &InputState, options: HelpContentOptions) -> Self {
         Self {
             shortcut_revision: input.keymap_revision(),
             radial_menu_mouse_binding: input.radial_menu.mouse_binding(),
             quick_colors: input.style.quick_colors.clone(),
-            frozen_enabled,
-            context_filter,
-            board_enabled,
-            capture_enabled,
+            options,
         }
     }
 }
@@ -44,27 +34,15 @@ pub(crate) struct HelpContentSnapshot {
 impl HelpContentSnapshot {
     pub(super) fn from_bindings(
         bindings: &HelpOverlayBindings,
-        frozen_enabled: bool,
-        context_filter: bool,
-        board_enabled: bool,
-        capture_enabled: bool,
+        options: HelpContentOptions,
     ) -> Self {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut hasher = DefaultHasher::new();
         bindings.cache_key().hash(&mut hasher);
-        frozen_enabled.hash(&mut hasher);
-        context_filter.hash(&mut hasher);
-        board_enabled.hash(&mut hasher);
-        capture_enabled.hash(&mut hasher);
+        options.hash(&mut hasher);
         Self {
             revision: hasher.finish(),
             bindings: bindings.clone(),
-            sections: build_section_sets(
-                bindings,
-                frozen_enabled,
-                context_filter,
-                board_enabled,
-                capture_enabled,
-            ),
+            sections: build_section_sets(bindings, options),
         }
     }
 }
@@ -88,28 +66,13 @@ impl HelpContentCache {
     pub(crate) fn get_or_build(
         &mut self,
         input: &InputState,
-        frozen_enabled: bool,
-        context_filter: bool,
-        board_enabled: bool,
-        capture_enabled: bool,
+        options: HelpContentOptions,
     ) -> &HelpContentSnapshot {
-        let key = HelpContentKey::from_input(
-            input,
-            frozen_enabled,
-            context_filter,
-            board_enabled,
-            capture_enabled,
-        );
+        let key = HelpContentKey::from_input(input, options);
         let rebuild = self.entry.as_ref().is_none_or(|entry| entry.key != key);
         if rebuild {
             let bindings = HelpOverlayBindings::from_input_state(input);
-            let sections = build_section_sets(
-                &bindings,
-                frozen_enabled,
-                context_filter,
-                board_enabled,
-                capture_enabled,
-            );
+            let sections = build_section_sets(&bindings, options);
             self.next_revision = self.next_revision.wrapping_add(1);
             self.entry = Some(CachedHelpContent {
                 key,
@@ -144,11 +107,14 @@ mod tests {
         let mut cache = HelpContentCache::default();
         let mut input = make_test_input_state();
 
-        let first = cache.get_or_build(&input, true, true, false, true).revision;
-        assert_eq!(
-            cache.get_or_build(&input, true, true, false, true).revision,
-            first
-        );
+        let single_board = HelpContentOptions {
+            frozen_enabled: true,
+            context_filter: true,
+            board_enabled: false,
+            capture_enabled: true,
+        };
+        let first = cache.get_or_build(&input, single_board).revision;
+        assert_eq!(cache.get_or_build(&input, single_board).revision, first);
         assert_eq!(cache.builds, 1);
 
         input.help_overlay.open(false);
@@ -156,7 +122,7 @@ mod tests {
         input.help_overlay.insert_search("zoom");
         input.help_overlay.scroll_by(12.0);
         assert_eq!(
-            cache.get_or_build(&input, true, true, false, true).revision,
+            cache.get_or_build(&input, single_board).revision,
             first,
             "page, search, and scroll are display state, not content inputs"
         );
@@ -166,11 +132,17 @@ mod tests {
             Action::ToggleHelp,
             vec![Shortcut::parse("F10").unwrap()],
         )]));
-        let rebound = cache.get_or_build(&input, true, true, false, true).revision;
+        let rebound = cache.get_or_build(&input, single_board).revision;
         assert_ne!(rebound, first);
         assert_eq!(cache.builds, 2);
 
-        let capability_content = cache.get_or_build(&input, true, true, true, true);
+        let capability_content = cache.get_or_build(
+            &input,
+            HelpContentOptions {
+                board_enabled: true,
+                ..single_board
+            },
+        );
         let capability_change = capability_content.revision;
         assert!(
             capability_content

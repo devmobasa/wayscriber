@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::*;
 
 #[test]
@@ -99,7 +101,7 @@ fn confirmed_invalid_reset_is_observation_bound_and_retains_artifact() {
         RecoveryIoOperation::PreserveInvalidIfUnchanged { mutation_id, .. } => mutation_id,
         operation => panic!("unexpected operation: {operation:?}"),
     };
-    let artifact_path = std::path::PathBuf::from("/tmp/wayscriber-invalid-preserved");
+    let artifact_path = PathBuf::from("/tmp/wayscriber-invalid-preserved");
     let missing = missing_revision();
     assert!(matches!(
         controller.submit_persistence_recovery_io(RecoveryIoCompletion {
@@ -481,7 +483,7 @@ fn preserve_invalid_that_reports_a_present_source_remains_unhealthy() {
 fn preserve_invalid_rejects_duplicate_recovery_artifact_paths() {
     let (mut controller, _, incident, client, preserve, mutation_id) =
         begin_confirmed_invalid_preserve();
-    let duplicate_path = std::path::PathBuf::from("/tmp/duplicate-preserved-invalid");
+    let duplicate_path = PathBuf::from("/tmp/duplicate-preserved-invalid");
     assert!(matches!(
         controller.submit_persistence_recovery_io(RecoveryIoCompletion {
             controller_id: controller.id(),
@@ -522,7 +524,7 @@ fn retry_does_not_overwrite_an_exact_invalid_source() {
     let (mut controller, incident) = RuntimeUiStateController::new_startup_unhealthy(
         test_seeds(false, false),
         invalid.clone(),
-        RuntimeStateIoError::new("malformed startup state"),
+        &RuntimeStateIoError::new("malformed startup state"),
         Vec::new(),
         RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::Untouched),
     );

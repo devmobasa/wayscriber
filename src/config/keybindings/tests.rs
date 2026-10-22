@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+use std::ffi::OsStr;
+
+use crate::input::state;
+use crate::{env_vars, test_env};
+
 use super::*;
 
 #[test]
@@ -79,7 +85,7 @@ fn bindings_differing_only_in_key_case_are_the_same_binding() {
     let upper = KeyBinding::parse("Ctrl+Z").unwrap();
     assert_eq!(lower, upper);
 
-    let mut map = std::collections::HashMap::new();
+    let mut map = HashMap::new();
     map.insert(lower, ());
     assert!(map.contains_key(&upper));
     assert_eq!(
@@ -103,9 +109,17 @@ fn super_aliases_parse_display_equal_and_match_as_super() {
     assert!(canonical.logo);
     assert!(!canonical.ctrl);
     assert_eq!(canonical.to_string(), "Super+X");
-    assert!(canonical.matches("x", false, false, false, true));
-    assert!(!canonical.matches("x", false, false, false, false));
-    assert!(!canonical.matches("x", true, false, false, false));
+    let super_held = ChordModifiers {
+        logo: true,
+        ..ChordModifiers::default()
+    };
+    let ctrl_held = ChordModifiers {
+        ctrl: true,
+        ..ChordModifiers::default()
+    };
+    assert!(canonical.matches("x", super_held));
+    assert!(!canonical.matches("x", ChordModifiers::default()));
+    assert!(!canonical.matches("x", ctrl_held));
 
     for alias in ["Meta+X", "Logo+X", "Win+X", "Windows+X", "meta+x", "WIN+X"] {
         let parsed = KeyBinding::parse(alias).unwrap();
@@ -120,8 +134,8 @@ fn super_aliases_parse_display_equal_and_match_as_super() {
     assert_eq!(shifted.to_string(), "Shift+Super+F5");
     assert_eq!(KeyBinding::parse("Super+Shift+F5").unwrap(), shifted);
 
-    let mut map = std::collections::HashMap::new();
-    map.insert(canonical.clone(), ());
+    let mut map = HashMap::new();
+    map.insert(canonical, ());
     assert!(map.contains_key(&KeyBinding::parse("Meta+X").unwrap()));
     assert!(!map.contains_key(&KeyBinding::parse("Ctrl+X").unwrap()));
     assert!(!map.contains_key(&KeyBinding::parse("X").unwrap()));
@@ -136,11 +150,24 @@ fn test_display_normalizes_modifier_order() {
 #[test]
 fn test_matches() {
     let binding = KeyBinding::parse("Ctrl+Shift+W").unwrap();
-    assert!(binding.matches("W", true, true, false, false));
-    assert!(binding.matches("w", true, true, false, false)); // Case insensitive
-    assert!(!binding.matches("W", false, true, false, false)); // Missing ctrl
-    assert!(!binding.matches("W", true, false, false, false)); // Missing shift
-    assert!(!binding.matches("A", true, true, false, false)); // Wrong key
+    let ctrl_shift = ChordModifiers {
+        ctrl: true,
+        shift: true,
+        ..ChordModifiers::default()
+    };
+    let shift_only = ChordModifiers {
+        shift: true,
+        ..ChordModifiers::default()
+    };
+    let ctrl_only = ChordModifiers {
+        ctrl: true,
+        ..ChordModifiers::default()
+    };
+    assert!(binding.matches("W", ctrl_shift));
+    assert!(binding.matches("w", ctrl_shift)); // Case insensitive
+    assert!(!binding.matches("W", shift_only)); // Missing ctrl
+    assert!(!binding.matches("W", ctrl_only)); // Missing shift
+    assert!(!binding.matches("A", ctrl_shift)); // Wrong key
 }
 
 #[test]
@@ -381,8 +408,12 @@ fn test_parse_trims_surrounding_whitespace() {
 #[test]
 fn test_matches_requires_exact_alt_state() {
     let binding = KeyBinding::parse("Alt+X").unwrap();
-    assert!(binding.matches("x", false, false, true, false));
-    assert!(!binding.matches("x", false, false, false, false));
+    let alt_held = ChordModifiers {
+        alt: true,
+        ..ChordModifiers::default()
+    };
+    assert!(binding.matches("x", alt_held));
+    assert!(!binding.matches("x", ChordModifiers::default()));
 }
 
 #[test]
@@ -880,15 +911,12 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
 /// cannot record because it pins the other one.
 #[test]
 fn gnome_sessions_get_the_unprefixed_page_navigation_defaults() {
-    let (prev, next) = crate::test_env::with_env_var(
-        crate::env_vars::XDG_CURRENT_DESKTOP_ENV,
-        Some(std::ffi::OsStr::new("GNOME")),
+    let (prev, next) = test_env::with_env_var(
+        env_vars::XDG_CURRENT_DESKTOP_ENV,
+        Some(OsStr::new("GNOME")),
         || {
             let defaults = KeybindingsConfig::default();
-            (
-                defaults.board.page_prev.clone(),
-                defaults.board.page_next.clone(),
-            )
+            (defaults.board.page_prev.clone(), defaults.board.page_next)
         },
     );
 
@@ -898,7 +926,7 @@ fn gnome_sessions_get_the_unprefixed_page_navigation_defaults() {
 
 #[test]
 fn default_bindings_match_the_checked_in_snapshot() {
-    let defaults = crate::test_env::with_scrubbed_desktop_env(KeybindingsConfig::default);
+    let defaults = test_env::with_scrubbed_desktop_env(KeybindingsConfig::default);
     let actual = KeybindingsConfig::configurable_actions()
         .iter()
         .map(|action| {
@@ -985,7 +1013,7 @@ fn every_name_the_input_layer_produces_is_deliverable() {
         Key::Char('/'),
     ];
     for key in keys {
-        let name = crate::input::state::key_to_action_label_for_test(key)
+        let name = state::key_to_action_label_for_test(key)
             .unwrap_or_else(|| panic!("{key:?} produces no binding name"));
         assert!(
             is_deliverable_key_name(&name),

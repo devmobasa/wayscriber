@@ -1,3 +1,4 @@
+use wayscriber::configurator_destination::KeybindingsSection;
 use wayscriber::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -193,8 +194,8 @@ pub enum KeybindingsTabId {
     Presets,
 }
 
-impl From<wayscriber::configurator_destination::KeybindingsSection> for KeybindingsTabId {
-    fn from(section: wayscriber::configurator_destination::KeybindingsSection) -> Self {
+impl From<KeybindingsSection> for KeybindingsTabId {
+    fn from(section: KeybindingsSection) -> Self {
         use wayscriber::configurator_destination::KeybindingsSection;
 
         match section {
@@ -258,6 +259,10 @@ impl KeybindingsTabId {
 mod tests {
     use std::collections::BTreeSet;
 
+    use wayscriber::i18n;
+
+    use crate::test_env;
+
     use super::*;
     use wayscriber::domain::Language;
 
@@ -277,7 +282,7 @@ mod tests {
 
     #[test]
     fn stack_names_are_fixed_unique_and_untranslated() {
-        crate::test_env::in_language_child(
+        test_env::in_language_child(
             concat!(
                 module_path!(),
                 "::stack_names_are_fixed_unique_and_untranslated"
@@ -288,7 +293,7 @@ mod tests {
 
     fn stack_names_survive_translation() {
         let english: Vec<&str> = TabId::ALL.iter().map(TabId::stack_name).collect();
-        wayscriber::i18n::set_language(Language::SimplifiedChinese);
+        i18n::set_language(Language::SimplifiedChinese);
         let chinese: Vec<&str> = TabId::ALL.iter().map(TabId::stack_name).collect();
 
         assert_eq!(english, chinese);

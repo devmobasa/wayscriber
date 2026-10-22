@@ -92,13 +92,13 @@ fn section_combo_row<O>(
     list: &gtk::ListBox,
     title: &str,
     values: Vec<O>,
-    labels: Vec<String>,
+    labels: &[String],
     get: impl Fn(&ConfiguratorApp) -> O + 'static,
     to_message: impl Fn(O) -> Message + 'static,
 ) where
     O: Copy + PartialEq + 'static,
 {
-    let row = combo_row_widget(title, &labels);
+    let row = combo_row_widget(title, labels);
     let handler = connect_combo(&row, page.sender(), values.clone(), to_message);
     list.append(&row);
     page.bind(move |app, _summary| {
@@ -191,8 +191,8 @@ fn set_visible_if_changed(widget: &impl IsA<gtk::Widget>, visible: bool) {
     }
 }
 
-fn select_if_changed<O: PartialEq>(row: &adw::ComboRow, values: &[O], current: O) {
-    if let Some(index) = values.iter().position(|value| *value == current) {
+fn select_if_changed<O: PartialEq>(row: &adw::ComboRow, values: &[O], current: &O) {
+    if let Some(index) = values.iter().position(|value| value == current) {
         let index = index as u32;
         if row.selected() != index {
             row.set_selected(index);

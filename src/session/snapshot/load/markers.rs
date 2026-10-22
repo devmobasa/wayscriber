@@ -1,5 +1,12 @@
-use super::*;
+use crate::session;
+use crate::session::options::SessionOptions;
+use crate::session::primary::{
+    is_non_regular_session_artifact, session_artifact_metadata_if_exists,
+};
 use crate::session::snapshot::generation::{ArtifactStamp, LegacyOrder, cleared_by, written_after};
+use log::{info, warn};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub(super) fn backup_is_newer_than_primary(backup: &fs::Metadata, primary: &fs::Metadata) -> bool {
     written_after(
@@ -127,13 +134,13 @@ fn preserved_recovery_path(path: &Path, reason: &str) -> PathBuf {
         } else {
             format!(".{reason}.{index}")
         };
-        let candidate = crate::session::append_path_suffix(path, &suffix);
+        let candidate = session::append_path_suffix(path, &suffix);
         if !candidate.exists() {
             return candidate;
         }
     }
 
-    crate::session::append_path_suffix(path, &format!(".{reason}.100"))
+    session::append_path_suffix(path, &format!(".{reason}.100"))
 }
 
 pub(super) fn should_prefer_recovery(

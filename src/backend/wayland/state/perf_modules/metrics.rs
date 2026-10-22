@@ -1,4 +1,27 @@
-use super::*;
+use super::super::FullDamageReason;
+use super::damage_diagnostics::{
+    effective_full_damage_reason, format_effective_full_damage_reason, format_pct_hundredths,
+    full_damage_source,
+};
+use super::render_breakdown::{
+    PerfRenderBreakdown, PerfRenderBreakdownAccumulator, PerfRenderBreakdownSummary,
+    log_render_stage_frame, log_render_stage_summary,
+};
+use super::{
+    MAX_PENDING_INPUT_SAMPLES, MAX_RECENT_LATENCIES, MAX_RECENT_RENDER_DURATIONS, PerfCommitReport,
+    PerfFinalSummaryReport, PerfFrameContext, PerfFramePacingReport, PerfFramePacingSummary,
+    PerfInputSample, PerfInputSource, PerfMetrics, PerfRenderSkipReason, PerfSlowFrame,
+    PerfSlowRenderFrame, PerfSummary, SLOW_INPUT_TO_COMMIT, SLOW_RENDER_FALLBACK,
+    SUMMARY_FRAME_INTERVAL, SUMMARY_INTERVAL, dominant_full_damage_reason, duration_ms,
+    format_force_full_reason, format_full_damage_reasons, format_optional_ms, format_pct,
+    frame_budget_duration, log_frame_pacing_summary, log_input_summary, percentile_nearest_rank,
+    perf_log_enabled_from_env,
+};
+use crate::env_vars::PERF_LOG_ENV;
+use crate::input::Tool;
+use log::info;
+use std::collections::{BTreeMap, VecDeque};
+use std::time::{Duration, Instant};
 
 impl PerfMetrics {
     pub(in crate::backend::wayland::state) fn from_env() -> Self {

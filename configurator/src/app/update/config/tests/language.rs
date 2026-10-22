@@ -5,8 +5,12 @@
 //! it selects reaches no other test. The override and locale variables are
 //! cleared there, so `auto` resolves to English.
 
+use std::fs;
+
 use wayscriber::domain::Language;
 use wayscriber::i18n;
+
+use crate::test_env;
 
 use super::{app_with_config_file, load_config_file, save_draft, status_contains};
 use crate::app::effects::Effect;
@@ -17,7 +21,7 @@ const CHINESE_FILE: &str = "[ui]\nlanguage = \"zh-CN\"\n";
 
 #[test]
 fn the_first_load_applies_the_saved_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::the_first_load_applies_the_saved_language"
@@ -35,7 +39,7 @@ fn the_first_load_applies_the_saved_language() {
 
 #[test]
 fn selecting_a_language_previews_it_without_writing() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::selecting_a_language_previews_it_without_writing"
@@ -55,7 +59,7 @@ fn selecting_a_language_previews_it_without_writing() {
 
 #[test]
 fn a_successful_reload_applies_the_loaded_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::a_successful_reload_applies_the_loaded_language"
@@ -78,7 +82,7 @@ fn a_successful_reload_applies_the_loaded_language() {
 
 #[test]
 fn a_failed_reload_keeps_the_preview() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(module_path!(), "::a_failed_reload_keeps_the_preview"),
         || {
             let (mut app, _dir, _path) = app_with_config_file(ENGLISH_FILE);
@@ -97,7 +101,7 @@ fn a_failed_reload_keeps_the_preview() {
 
 #[test]
 fn confirmed_defaults_apply_the_default_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::confirmed_defaults_apply_the_default_language"
@@ -122,7 +126,7 @@ fn confirmed_defaults_apply_the_default_language() {
 
 #[test]
 fn a_canceled_defaults_request_keeps_the_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::a_canceled_defaults_request_keeps_the_language"
@@ -140,7 +144,7 @@ fn a_canceled_defaults_request_keeps_the_language() {
 
 #[test]
 fn a_finished_save_applies_the_saved_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::a_finished_save_applies_the_saved_language"
@@ -162,7 +166,7 @@ fn a_finished_save_applies_the_saved_language() {
 
 #[test]
 fn canceling_the_leave_prompt_keeps_the_preview() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::canceling_the_leave_prompt_keeps_the_preview"
@@ -183,7 +187,7 @@ fn canceling_the_leave_prompt_keeps_the_preview() {
 
 #[test]
 fn discarding_to_reload_applies_the_document_that_loads() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::discarding_to_reload_applies_the_document_that_loads"
@@ -196,7 +200,7 @@ fn discarding_to_reload_applies_the_document_that_loads() {
             let effects = app.discard_before_leave();
             assert!(matches!(effects.as_slice(), [Effect::LoadConfig]));
             // Another editor saved in the meantime: what loads is what counts.
-            std::fs::write(&path, CHINESE_FILE).expect("rewrite config");
+            fs::write(&path, CHINESE_FILE).expect("rewrite config");
             load_config_file(&mut app, &path);
 
             assert_eq!(app.draft.ui_language, LanguageOption::SimplifiedChinese);

@@ -1,5 +1,9 @@
+use std::error;
+
 use anyhow::{Context, Result};
-use flate2::{Compression, bufread::GzDecoder, write::GzEncoder};
+use flate2::Compression;
+use flate2::bufread::GzDecoder;
+use flate2::write::GzEncoder;
 use std::fmt;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -22,7 +26,7 @@ impl fmt::Display for ExpandedSessionTooLarge {
     }
 }
 
-impl std::error::Error for ExpandedSessionTooLarge {}
+impl error::Error for ExpandedSessionTooLarge {}
 
 pub(super) fn compress_bytes(data: &[u8]) -> Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());

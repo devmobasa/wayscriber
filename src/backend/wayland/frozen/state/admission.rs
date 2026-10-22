@@ -1,6 +1,8 @@
 //! Backend selection and admission of the retained Freeze request.
-use super::*;
-use crate::backend::wayland::capture_preflight::{CaptureBackend, CaptureLayoutScope};
+use super::{FrozenCaptureBackend, FrozenState};
+use crate::backend::wayland::capture_preflight::{
+    CaptureBackend, CaptureLayoutScope, CapturePreflightError,
+};
 use crate::backend::wayland::state::OverlaySuppression;
 
 impl CaptureBackend for FrozenCaptureBackend {

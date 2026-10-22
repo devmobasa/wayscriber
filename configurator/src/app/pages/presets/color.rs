@@ -14,7 +14,7 @@ pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
     let mode_row = rows.combo_row(
         tr("Color mode"),
         vec![ColorMode::Named, ColorMode::Rgb],
-        vec![tr("Named").to_string(), "RGB".to_string()],
+        &[tr("Named").to_string(), "RGB".to_string()],
         move |app| app.draft.presets.slot(slot).map(|draft| draft.color.mode),
         Message::PresetColorModeChanged,
     );
@@ -52,7 +52,7 @@ pub(super) fn build_color_rows(rows: &mut SlotBuilder<'_>, slot: usize) {
     let named_row = rows.combo_row(
         tr("Named color"),
         named,
-        named_labels,
+        &named_labels,
         move |app| {
             app.draft
                 .presets

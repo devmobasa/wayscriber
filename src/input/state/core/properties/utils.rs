@@ -35,7 +35,7 @@ pub(super) fn color_palette_index(
     palette: &[QuickColorPaletteEntry],
     color: Color,
 ) -> Option<usize> {
-    palette_position(palette.iter().map(|entry| entry.color), color)
+    palette_position(&palette.iter().map(|entry| entry.color), color)
 }
 
 /// Where `color` sits among `colors`: the entry with exactly this color and
@@ -44,7 +44,7 @@ pub(super) fn color_palette_index(
 /// apart; a recolor copies the palette's value, so an exact match is there
 /// to find.
 pub(super) fn palette_position(
-    colors: impl Iterator<Item = Color> + Clone,
+    colors: &(impl Iterator<Item = Color> + Clone),
     color: Color,
 ) -> Option<usize> {
     colors
@@ -155,17 +155,17 @@ mod tests {
         let colors = [PALETTE_RED, translucent_red, PALETTE_GREEN];
 
         assert_eq!(
-            palette_position(colors.into_iter(), translucent_red),
+            palette_position(&colors.into_iter(), translucent_red),
             Some(1)
         );
-        assert_eq!(palette_position(colors.into_iter(), PALETTE_RED), Some(0));
+        assert_eq!(palette_position(&colors.into_iter(), PALETTE_RED), Some(0));
         let nearly_opaque = Color {
             a: 254.0 / 255.0,
             ..PALETTE_RED
         };
         let close = [PALETTE_RED, nearly_opaque];
         assert_eq!(
-            palette_position(close.into_iter(), nearly_opaque),
+            palette_position(&close.into_iter(), nearly_opaque),
             Some(1),
             "near-identical opacities are still different entries"
         );
@@ -174,7 +174,7 @@ mod tests {
             ..PALETTE_RED
         };
         assert_eq!(
-            palette_position(colors.into_iter(), other_opacity),
+            palette_position(&colors.into_iter(), other_opacity),
             Some(0),
             "without an exact match the first entry of the hue stands in"
         );

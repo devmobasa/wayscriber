@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use crate::config::RenderColorMappingConfig;
+
 use super::Config;
 use crate::config::{RenderProfileConfig, RenderProfileExportMode};
 use crate::render_profiles::{format_hex_rgb, normalize_profile_id, parse_hex_rgb};
@@ -143,7 +145,7 @@ fn normalize_profile_mappings(profile: &mut RenderProfileConfig) {
             );
             continue;
         }
-        normalized.push(crate::config::RenderColorMappingConfig {
+        normalized.push(RenderColorMappingConfig {
             from: format_hex_rgb(from),
             to: format_hex_rgb(to),
         });

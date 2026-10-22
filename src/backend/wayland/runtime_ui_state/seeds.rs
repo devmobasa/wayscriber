@@ -1,4 +1,19 @@
-use super::*;
+use crate::config::{ResolvedToolbarItems, StatusBarItem, ToolbarSectionFlag};
+
+use super::live_state::{top_display_mode_values, user_click_highlight_enabled, user_tool_preview};
+use crate::config::{
+    Config, ToolbarItemOrderGroup, ToolbarSectionVisibility, fold_legacy_section_flags,
+    item_visibility_setting, resettable_individual_toolbar_item_ids,
+};
+use crate::input::InputState;
+use crate::runtime_ui_state::{
+    InteractionSeedTarget, InteractionSeedValue, MutationShapeError, PersistedTopDisplayMode,
+    RuntimeUiMutationValues, RuntimeUiStateInspection, ToolbarPositionSeed,
+    ValidatedInteractionSeeds,
+};
+use crate::ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget;
+use anyhow::{Context, Result};
+use std::collections::BTreeMap;
 
 pub(super) fn runtime_seeds_from_config(
     config: &Config,
@@ -75,7 +90,7 @@ pub(super) fn runtime_seeds_from_config(
         InteractionSeedTarget::StatusBarInteractive,
         InteractionSeedValue::Bool(config.ui.status_bar_interactive),
     )?;
-    for item in crate::config::StatusBarItem::ALL {
+    for item in StatusBarItem::ALL {
         insert(
             InteractionSeedTarget::StatusBarItem(item),
             InteractionSeedValue::Bool(config.ui.status_bar_item_visible(item)),
@@ -102,7 +117,7 @@ pub(super) fn runtime_seeds_from_config(
         InteractionSeedTarget::ToolbarLayoutMode,
         InteractionSeedValue::LayoutMode(config.ui.toolbar.layout_mode),
     )?;
-    for flag in crate::config::ToolbarSectionFlag::ALL {
+    for flag in ToolbarSectionFlag::ALL {
         insert(
             InteractionSeedTarget::SectionVisibility(flag),
             InteractionSeedValue::Visibility(item_visibility_setting(
@@ -172,7 +187,7 @@ pub(super) fn retain_stored_board_pin_seeds_for_session_restore(
     }
 }
 
-fn resolved_toolbar_item_seeds(config: &Config) -> crate::config::ResolvedToolbarItems {
+fn resolved_toolbar_item_seeds(config: &Config) -> ResolvedToolbarItems {
     let toolbar = &config.ui.toolbar;
     let mut items = toolbar.items.clone();
     let mut legacy = ToolbarSectionVisibility {
@@ -198,7 +213,7 @@ fn resolved_toolbar_item_seeds(config: &Config) -> crate::config::ResolvedToolba
 pub(super) fn toolbar_values(
     target: ToolbarRuntimeUiPersistenceTarget,
     input: &InputState,
-) -> std::result::Result<RuntimeUiMutationValues, MutationShapeError> {
+) -> Result<RuntimeUiMutationValues, MutationShapeError> {
     use ToolbarRuntimeUiPersistenceTarget as Target;
     match target {
         Target::TopPinned => RuntimeUiMutationValues::one(
@@ -355,7 +370,7 @@ pub(in crate::backend::wayland) fn single_bool_seed_target(
 pub(in crate::backend::wayland) fn click_highlight_values(
     enabled: bool,
     tool_ring: bool,
-) -> std::result::Result<RuntimeUiMutationValues, MutationShapeError> {
+) -> Result<RuntimeUiMutationValues, MutationShapeError> {
     RuntimeUiMutationValues::batch([
         (
             InteractionSeedTarget::ClickHighlight,

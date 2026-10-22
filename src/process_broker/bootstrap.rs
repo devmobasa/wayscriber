@@ -4,11 +4,23 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 #[cfg(not(test))]
+use std::env;
+#[cfg(not(test))]
 use std::ffi::CString;
 #[cfg(not(test))]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(not(test))]
+use std::ptr;
+use std::thread;
+#[cfg(test)]
+use std::thread::Builder;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+
+use crate::daemon::protocol_v2::ProtocolToken;
+#[cfg(not(test))]
+use crate::env_vars;
 
 use super::client::{BrokerInner, ProcessBroker};
 use super::wire::BrokerOperation;
@@ -21,9 +33,9 @@ use super::wire::{
 pub(super) fn start() -> Result<ProcessBroker> {
     let (parent_socket, child_socket) = socket_pair("test broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("test broker shutdown")?;
-    let token = crate::daemon::protocol_v2::ProtocolToken::generate()?.to_string();
+    let token = ProtocolToken::generate()?.to_string();
     let thread_token = token.clone();
-    let thread = std::thread::Builder::new()
+    let thread = Builder::new()
         .name("wayscriber-process-broker-test".into())
         .spawn(move || {
             let _socket = child_socket;
@@ -56,18 +68,18 @@ pub(super) fn start() -> Result<ProcessBroker> {
 pub(super) fn start() -> Result<ProcessBroker> {
     let (parent_socket, child_socket) = socket_pair("broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("broker shutdown")?;
-    let token = crate::daemon::protocol_v2::ProtocolToken::generate()
+    let token = ProtocolToken::generate()
         .context("failed to generate broker authentication token")?
         .to_string();
-    let exe = std::env::current_exe().context("failed to resolve broker executable")?;
+    let exe = env::current_exe().context("failed to resolve broker executable")?;
     let exe = CString::new(exe.as_os_str().as_bytes())?;
-    let argv = [exe.as_ptr(), std::ptr::null()];
-    let mut environment = std::env::vars_os()
+    let argv = [exe.as_ptr(), ptr::null()];
+    let mut environment = env::vars_os()
         .filter(|(name, _)| {
             name != BROKER_FD_ENV
                 && name != BROKER_TOKEN_ENV
                 && name != BROKER_SHUTDOWN_FD_ENV
-                && name != crate::env_vars::DAEMON_WATCHDOG_FD_ENV
+                && name != env_vars::DAEMON_WATCHDOG_FD_ENV
         })
         .map(|(name, value)| {
             let mut bytes = name.as_bytes().to_vec();
@@ -85,7 +97,7 @@ pub(super) fn start() -> Result<ProcessBroker> {
         .iter()
         .map(|value| value.as_ptr())
         .collect::<Vec<_>>();
-    envp.push(std::ptr::null());
+    envp.push(ptr::null());
 
     let child_socket_exec = duplicate_for_exec(&child_socket)?;
     let shutdown_exec = duplicate_for_exec(&shutdown_reader)?;
@@ -100,6 +112,13 @@ pub(super) fn start() -> Result<ProcessBroker> {
     if pid == 0 {
         // Raw-clone child stub: no allocation, formatting, logging,
         // unwinding, Rust destructors, or dynamic loader calls are allowed.
+        // SAFETY: the clone gave this child a private copy of the parent's
+        // memory with only the calling thread, so `exe`, the `environment`
+        // strings, and the null-terminated `argv` and `envp` arrays built
+        // above are still valid here. `child_fd` and `shutdown_fd` are open
+        // descriptors inherited from the parent. Only raw syscalls run, so no
+        // lock held by another parent thread is touched, and the block never
+        // returns: execve replaces the image or exit_group/_exit end the child.
         unsafe {
             if child_fd == BROKER_FD {
                 let _ = libc::syscall(libc::SYS_fcntl, BROKER_FD, libc::F_SETFD, 0);
@@ -179,12 +198,12 @@ fn socket_pair(label: &str) -> Result<(OwnedFd, OwnedFd)> {
 }
 
 /// Whether the broker process exits within `grace`, reaping it if it does.
-pub(super) fn broker_exits_within(child_pid: libc::pid_t, grace: std::time::Duration) -> bool {
+pub(super) fn broker_exits_within(child_pid: libc::pid_t, grace: Duration) -> bool {
     if child_pid <= 0 {
         return true;
     }
 
-    let deadline = std::time::Instant::now() + grace;
+    let deadline = Instant::now() + grace;
     let mut status = 0;
     loop {
         // SAFETY: child_pid names the raw-clone broker child owned by its guard.
@@ -199,10 +218,10 @@ pub(super) fn broker_exits_within(child_pid: libc::pid_t, grace: std::time::Dura
             // Already reaped: nothing is left to wait for.
             return true;
         }
-        if std::time::Instant::now() >= deadline {
+        if Instant::now() >= deadline {
             return false;
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(10));
     }
 }
 

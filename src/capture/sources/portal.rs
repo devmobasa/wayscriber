@@ -1,7 +1,7 @@
-use crate::capture::{
-    portal,
-    types::{CaptureError, CaptureType},
-};
+use tokio::task;
+
+use crate::capture::portal;
+use crate::capture::types::{CaptureError, CaptureType};
 
 use super::reader::read_image_from_uri;
 
@@ -10,7 +10,7 @@ pub async fn capture_via_portal_bytes(capture_type: CaptureType) -> Result<Vec<u
     let uri = portal::capture_via_portal(capture_type).await?;
     log::info!("Portal returned a screenshot URI");
 
-    tokio::task::spawn_blocking(move || read_image_from_uri(&uri))
+    task::spawn_blocking(move || read_image_from_uri(&uri))
         .await
         .map_err(|e| CaptureError::ImageError(format!("Portal reader task failed: {}", e)))?
 }

@@ -1,3 +1,5 @@
+use std::{io, process};
+
 use anyhow::{Context, Result, anyhow};
 use log::info;
 use std::ffi::OsString;
@@ -6,6 +8,8 @@ use std::io::{ErrorKind, Seek, SeekFrom};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use crate::durable_io;
 
 use super::{ArtifactMovePaths, rollback_artifact_moves};
 
@@ -61,7 +65,7 @@ impl SaveAsSidecarQuarantine {
                     directory.display()
                 )
             })?;
-            crate::durable_io::sync_parent_dir(directory).with_context(|| {
+            durable_io::sync_parent_dir(directory).with_context(|| {
                 format!(
                     "failed to sync restored Save Session As sidecars under {}",
                     directory.display()
@@ -75,7 +79,7 @@ impl SaveAsSidecarQuarantine {
         self.remove_after_commit_with(
             |path| fs::remove_file(path),
             |path| fs::remove_dir(path),
-            |path| crate::durable_io::sync_parent_dir(path).map_err(Into::into),
+            |path| durable_io::sync_parent_dir(path).map_err(Into::into),
         )
     }
 
@@ -86,8 +90,8 @@ impl SaveAsSidecarQuarantine {
         sync_parent: SyncParent,
     ) -> Result<()>
     where
-        RemoveFile: FnMut(&Path) -> std::io::Result<()>,
-        RemoveDir: FnOnce(&Path) -> std::io::Result<()>,
+        RemoveFile: FnMut(&Path) -> io::Result<()>,
+        RemoveDir: FnOnce(&Path) -> io::Result<()>,
         SyncParent: FnOnce(&Path) -> Result<()>,
     {
         let Some(directory) = self.directory.as_deref() else {
@@ -188,7 +192,7 @@ impl RetainedSidecar {
                     self.staged.display()
                 )
             })?;
-        std::io::copy(&mut self.file, &mut restored).with_context(|| {
+        io::copy(&mut self.file, &mut restored).with_context(|| {
             format!(
                 "failed to restore retained Save Session As sidecar {}",
                 self.staged.display()
@@ -235,14 +239,14 @@ fn retain_after_cleanup_failure(
             sidecar.restore_if_missing()?;
         }
         if let Some(first) = retained.first() {
-            crate::durable_io::sync_parent_dir(&first.staged).with_context(|| {
+            durable_io::sync_parent_dir(&first.staged).with_context(|| {
                 format!(
                     "failed to sync retained Save Session As sidecars in {}",
                     directory.display()
                 )
             })?;
         }
-        crate::durable_io::sync_parent_dir(directory).with_context(|| {
+        durable_io::sync_parent_dir(directory).with_context(|| {
             format!(
                 "failed to sync retained Save Session As quarantine {}",
                 directory.display()
@@ -274,8 +278,8 @@ pub(crate) fn quarantine_save_as_sidecars(
     quarantine_save_as_sidecars_with(
         sidecars,
         session_path,
-        |directory| crate::durable_io::sync_directory(directory).map_err(Into::into),
-        |directory| crate::durable_io::sync_parent_dir(directory).map_err(Into::into),
+        |directory| durable_io::sync_directory(directory).map_err(Into::into),
+        |directory| durable_io::sync_parent_dir(directory).map_err(Into::into),
     )
 }
 
@@ -407,10 +411,7 @@ where
 fn create_save_as_staging_dir(parent: &Path) -> Result<PathBuf> {
     for _ in 0..1024 {
         let id = NEXT_SAVE_AS_STAGING_ID.fetch_add(1, Ordering::Relaxed);
-        let candidate = parent.join(format!(
-            "{SAVE_AS_STAGING_PREFIX}-{}-{id}",
-            std::process::id()
-        ));
+        let candidate = parent.join(format!("{SAVE_AS_STAGING_PREFIX}-{}-{id}", process::id()));
         let mut builder = fs::DirBuilder::new();
         builder.mode(0o700);
         match builder.create(&candidate) {

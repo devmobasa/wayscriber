@@ -1,6 +1,7 @@
-use wayscriber::config::action_label;
-use wayscriber::config::action_meta_iter;
+use std::collections::HashSet;
+
 use wayscriber::config::keybindings::KeybindingsConfig;
+use wayscriber::config::{ConfigurableAction, action_label, action_meta_iter};
 
 use super::draft::KeybindingsDraft;
 use super::field::{KeybindingField, keybinding_fields, keybinding_tab};
@@ -33,14 +34,11 @@ fn parse_keybinding_list_rejects_unparseable_shortcuts() {
 #[test]
 fn presentation_order_covers_each_generated_keybinding_field_once() {
     let fields = keybinding_fields();
-    let unique: std::collections::HashSet<_> = fields.iter().copied().collect();
+    let unique: HashSet<_> = fields.iter().copied().collect();
 
     assert_eq!(unique.len(), fields.len());
-    assert_eq!(
-        unique.len(),
-        wayscriber::config::ConfigurableAction::all().len()
-    );
-    for field in wayscriber::config::ConfigurableAction::all() {
+    assert_eq!(unique.len(), ConfigurableAction::all().len());
+    for field in ConfigurableAction::all() {
         assert!(
             unique.contains(field),
             "missing presentation row for {field:?}"

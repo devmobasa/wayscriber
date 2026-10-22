@@ -1,6 +1,21 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_cycle_arrow_style, default_cycle_blur_style, default_cycle_font_family,
+    default_decrease_font_size, default_decrease_marker_opacity, default_decrease_pen_smoothing,
+    default_decrease_shape_recognition_sensitivity, default_decrease_thickness,
+    default_increase_font_size, default_increase_marker_opacity, default_increase_pen_smoothing,
+    default_increase_shape_recognition_sensitivity, default_increase_thickness,
+    default_open_font_picker, default_reset_arrow_labels, default_reset_step_markers,
+    default_select_arrow_tool, default_select_blur_tool, default_select_ellipse_tool,
+    default_select_eraser_tool, default_select_freeform_polygon_tool,
+    default_select_highlight_tool, default_select_laser_tool, default_select_line_tool,
+    default_select_live_shape_tool, default_select_marker_tool, default_select_parallelogram_tool,
+    default_select_pen_tool, default_select_rect_tool, default_select_regular_polygon_tool,
+    default_select_rhombus_tool, default_select_selection_tool, default_select_spotlight_tool,
+    default_select_step_marker_tool, default_select_triangle_tool, default_toggle_eraser_mode,
+    default_toggle_highlight_tool,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

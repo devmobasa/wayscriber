@@ -1,3 +1,12 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::capture::{CutAxis, CutBand, ImageRenderJob};
+use crate::config::CaptureConfig;
+use crate::draw::{Frame, Shape};
+use crate::screen_pixels::ScreenImage;
+use crate::{capture, draw};
+
 use super::*;
 use crate::backend::ExitAfterCaptureMode;
 use crate::backend::wayland::state::region_capture::delivery::{
@@ -9,12 +18,12 @@ use crate::backend::wayland::state::region_capture::picker::{
 use crate::backend::wayland::state::region_capture::render::{
     RegionPixelSource, RegionRenderRequest, region_render_job,
 };
+use crate::backend::wayland::state::screen_image::ScreenSourceConditions;
 use crate::canvas_export::{
     CanvasExportRect, CanvasRegionExportSnapshot, CanvasRegionSource, SpotlightPassSnapshot,
 };
-use crate::capture::{
-    CaptureDestination, CaptureType, ImageFormatMetadata, ImageOperationKind, file::FileSaveConfig,
-};
+use crate::capture::file::FileSaveConfig;
+use crate::capture::{CaptureDestination, CaptureType, ImageFormatMetadata, ImageOperationKind};
 use crate::config::{Action, RegionPicker};
 use crate::input::state::RegionPurposeTag;
 use crate::screen_pixels::{ImagePixelRect, PackedArgb32};
@@ -84,12 +93,12 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
     // A deliberately non-uniform 3x2 crop: a first-pixel check would pass on a
     // flat image even if the encoder transposed or truncated it.
     let swatch: [u32; 6] = [
-        0xFF11_2233,
-        0xFF44_5566,
-        0xFF77_8899,
-        0xFFAA_BBCC,
-        0xFFDD_EEFF,
-        0xFF01_0203,
+        0xff11_2233,
+        0xff44_5566,
+        0xff77_8899,
+        0xffaa_bbcc,
+        0xffdd_eeff,
+        0xff01_0203,
     ];
     let bytes: Vec<u8> = swatch
         .iter()
@@ -98,7 +107,7 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
 
     let rendered = region_render_job(RegionRenderRequest {
         source: RegionPixelSource::Raw {
-            image: std::sync::Arc::new(crate::screen_pixels::ScreenImage {
+            image: Arc::new(ScreenImage {
                 data: bytes.clone(),
                 width: 3,
                 height: 2,
@@ -109,7 +118,7 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
         cuts: Vec::new(),
     })()
     .expect("raw render");
-    let direct = crate::capture::png::encode_packed_argb32_png(
+    let direct = capture::png::encode_packed_argb32_png(
         &PackedArgb32::new(3, 2, 12, bytes).expect("a 3x2 crop"),
     )
     .expect("direct encode");
@@ -128,20 +137,20 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
 
     // The composed path renders the same selection with the board's committed
     // shapes over it, so the crop's pixels are no longer what comes back.
-    let mut frame = crate::draw::Frame::new();
-    frame.add_shape(crate::draw::Shape::Rect {
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Rect {
         x: 10,
         y: 20,
         w: 3,
         h: 2,
         fill: true,
         fill_color: None,
-        color: crate::draw::RED,
+        color: draw::RED,
         thick: 1.0,
     });
     let snapshot = CanvasRegionExportSnapshot {
         source: CanvasRegionSource {
-            image: std::sync::Arc::new(crate::screen_pixels::ScreenImage {
+            image: Arc::new(ScreenImage {
                 data: swatch
                     .iter()
                     .flat_map(|pixel| pixel.to_ne_bytes())
@@ -180,21 +189,21 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
 #[test]
 fn the_render_job_cuts_after_flattening_and_keeps_composed_bytes() {
     let swatch: [u32; 6] = [
-        0xFF11_2233,
-        0xFF44_5566,
-        0xFF77_8899,
-        0xFFAA_BBCC,
-        0xFFDD_EEFF,
-        0xFF01_0203,
+        0xff11_2233,
+        0xff44_5566,
+        0xff77_8899,
+        0xffaa_bbcc,
+        0xffdd_eeff,
+        0xff01_0203,
     ];
     let bytes: Vec<u8> = swatch
         .iter()
         .flat_map(|pixel| pixel.to_ne_bytes())
         .collect();
-    let cut = crate::capture::CutBand::new(crate::capture::CutAxis::Columns, 1, 2).unwrap();
+    let cut = CutBand::try_new(CutAxis::Columns, 1, 2).unwrap();
     let request = RegionRenderRequest {
         source: RegionPixelSource::Raw {
-            image: std::sync::Arc::new(crate::screen_pixels::ScreenImage {
+            image: Arc::new(ScreenImage {
                 data: bytes,
                 width: 3,
                 height: 2,
@@ -235,11 +244,23 @@ fn decode_png_pixels(bytes: &[u8]) -> Vec<u32> {
 #[test]
 fn native_entry_auto_freezes_solid_boards_but_refuses_solid_zoom() {
     assert_eq!(
-        region_picker_entry(false, false, false, false, true),
+        region_picker_entry(ScreenSourceConditions {
+            has_source: false,
+            board_is_transparent: false,
+            zoom_engaged: false,
+            zoom_active: false,
+            frozen_enabled: true,
+        }),
         RegionPickerEntry::AutoFreeze
     );
     assert_eq!(
-        region_picker_entry(false, false, true, true, true),
+        region_picker_entry(ScreenSourceConditions {
+            has_source: false,
+            board_is_transparent: false,
+            zoom_engaged: true,
+            zoom_active: true,
+            frozen_enabled: true,
+        }),
         RegionPickerEntry::RefuseSolidZoom
     );
 }
@@ -247,26 +268,50 @@ fn native_entry_auto_freezes_solid_boards_but_refuses_solid_zoom() {
 #[test]
 fn native_entry_uses_existing_waiting_legacy_and_missing_zoom_paths() {
     assert_eq!(
-        region_picker_entry(true, false, true, true, true),
+        region_picker_entry(ScreenSourceConditions {
+            has_source: true,
+            board_is_transparent: false,
+            zoom_engaged: true,
+            zoom_active: true,
+            frozen_enabled: true,
+        }),
         RegionPickerEntry::Activate
     );
     assert_eq!(
-        region_picker_entry(false, true, true, false, true),
+        region_picker_entry(ScreenSourceConditions {
+            has_source: false,
+            board_is_transparent: true,
+            zoom_engaged: true,
+            zoom_active: false,
+            frozen_enabled: true,
+        }),
         RegionPickerEntry::WaitForZoom
     );
     assert_eq!(
-        region_picker_entry(false, true, false, false, false),
+        region_picker_entry(ScreenSourceConditions {
+            has_source: false,
+            board_is_transparent: true,
+            zoom_engaged: false,
+            zoom_active: false,
+            frozen_enabled: false,
+        }),
         RegionPickerEntry::Legacy
     );
     assert_eq!(
-        region_picker_entry(false, true, true, true, true),
+        region_picker_entry(ScreenSourceConditions {
+            has_source: false,
+            board_is_transparent: true,
+            zoom_engaged: true,
+            zoom_active: true,
+            frozen_enabled: true,
+        }),
         RegionPickerEntry::ZoomImageUnavailable
     );
 }
 
 #[test]
 fn picker_options_snapshot_is_independent_of_later_config_changes() {
-    let mut live = crate::config::CaptureConfig::default();
+    let mut live = CaptureConfig::default();
     let options = RegionPickerOptions::new(
         live.region.show_size_readout,
         live.region.show_loupe,
@@ -305,7 +350,7 @@ fn native_delivery_forces_png_naming_metadata_and_bytes() {
         RegionPurposeTag::CaptureDeliver,
         CaptureDestination::FileOnly,
         Some(FileSaveConfig {
-            save_directory: std::path::PathBuf::from("/tmp/captures"),
+            save_directory: PathBuf::from("/tmp/captures"),
             filename_template: "region-{timestamp}".to_string(),
             format: "jpg".to_string(),
         }),
@@ -316,8 +361,7 @@ fn native_delivery_forces_png_naming_metadata_and_bytes() {
     let pixels = PackedArgb32::new(1, 1, 4, 0xff33_2211_u32.to_ne_bytes().to_vec())
         .expect("one native ARGB32 pixel");
 
-    let render: crate::capture::ImageRenderJob =
-        Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels));
+    let render: ImageRenderJob = Box::new(move || capture::png::encode_packed_argb32_png(&pixels));
     let request = region_delivery_request(render, &intent, intent.destination());
 
     assert_eq!(request.destination, CaptureDestination::FileOnly);
@@ -346,7 +390,7 @@ fn legacy_handoff_preserves_the_reserved_selection_request_snapshot() {
         RegionPurposeTag::CaptureDeliver,
         CaptureDestination::FileOnly,
         Some(FileSaveConfig {
-            save_directory: std::path::PathBuf::from("/tmp/original"),
+            save_directory: PathBuf::from("/tmp/original"),
             filename_template: "shot-{timestamp}".to_string(),
             format: "jpg".to_string(),
         }),
@@ -370,10 +414,7 @@ fn legacy_handoff_preserves_the_reserved_selection_request_snapshot() {
     let save = request
         .save_config
         .expect("file selection keeps save config");
-    assert_eq!(
-        save.save_directory,
-        std::path::PathBuf::from("/tmp/original")
-    );
+    assert_eq!(save.save_directory, PathBuf::from("/tmp/original"));
     assert_eq!(save.filename_template, "shot-{timestamp}");
     assert_eq!(
         save.format, "jpg",

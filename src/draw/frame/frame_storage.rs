@@ -60,9 +60,9 @@ where
 }
 
 #[derive(Serialize)]
-struct SerializedDrawnShape<'a> {
+struct SerializedDrawnShape<'shape> {
     id: ShapeId,
-    shape: &'a Shape,
+    shape: &'shape Shape,
     created_at: u64,
     locked: bool,
 }

@@ -1,6 +1,8 @@
 use std::time::Instant;
 
+use crate::draw::TextMeasurer;
 use crate::input::InputState;
+use crate::input::state::InputTextResources;
 use crate::input::state::core::color_picker_popup::ColorPickerPopupAction;
 use crate::input::state::core::{BoardPickerClickState, MenuCommand};
 
@@ -106,7 +108,7 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
 
 pub(super) fn handle_board_picker_release(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     x: i32,
     y: i32,
 ) -> bool {
@@ -225,7 +227,7 @@ pub(super) fn handle_board_picker_release(
 
 pub(super) fn handle_properties_panel_release(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     x: i32,
     y: i32,
 ) -> bool {
@@ -242,7 +244,7 @@ pub(super) fn handle_properties_panel_release(
 
 pub(super) fn handle_context_menu_release(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     x: i32,
     y: i32,
 ) -> bool {

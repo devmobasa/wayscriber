@@ -1,5 +1,14 @@
 //! Built-in toolbar order and semantic contract tests.
 
+use std::ptr;
+
+use crate::backend::wayland;
+use crate::backend::wayland::TopToolbarWidgetKind;
+use crate::config::TopDisplayMode;
+use crate::toolbar_icons;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     Tool, ToolbarLayoutMode, ToolbarSnapshot, TopStripPlan, model, plan_top_strip, top_toolbar_size,
 };
@@ -27,8 +36,8 @@ fn record_lane(record: &SemanticAdapterRecord) -> SemanticLane {
 }
 
 fn assert_builtin_node(
-    node: &crate::backend::wayland::TopToolbarWidgetKind,
-    interaction: Option<&crate::ui::toolbar::ToolbarEvent>,
+    node: &TopToolbarWidgetKind,
+    interaction: Option<&ToolbarEvent>,
     tooltip: Option<&str>,
     shortcut_badge: Option<&str>,
     expected: &SemanticAdapterRecord,
@@ -50,10 +59,7 @@ fn assert_builtin_node(
     assert_builtin_node_kind(node, expected);
 }
 
-fn assert_builtin_node_kind(
-    node: &crate::backend::wayland::TopToolbarWidgetKind,
-    expected: &SemanticControlRecord,
-) {
+fn assert_builtin_node_kind(node: &TopToolbarWidgetKind, expected: &SemanticControlRecord) {
     use crate::backend::wayland::TopToolbarWidgetKind as W;
 
     match node {
@@ -63,9 +69,9 @@ fn assert_builtin_node_kind(
             style,
         } => {
             let icon = expected.icon.expect("semantic icon for icon button");
-            assert!(std::ptr::fn_addr_eq(
+            assert!(ptr::fn_addr_eq(
                 glyph.0,
-                crate::toolbar_icons::top_toolbar_icon_painter(icon)
+                toolbar_icons::top_toolbar_icon_painter(icon)
             ));
             assert_builtin_button_style(style.active, style.disabled, style.destructive, expected);
         }
@@ -86,9 +92,9 @@ fn assert_builtin_node_kind(
                 // has no glyph and shows its 1-based number label.
                 Some(icon) => {
                     let glyph = glyph.as_ref().expect("filled preset slot has a glyph");
-                    assert!(std::ptr::fn_addr_eq(
+                    assert!(ptr::fn_addr_eq(
                         glyph.0,
-                        crate::toolbar_icons::top_toolbar_icon_painter(icon)
+                        toolbar_icons::top_toolbar_icon_painter(icon)
                     ));
                 }
                 None => {
@@ -99,17 +105,17 @@ fn assert_builtin_node_kind(
         }
         W::MicroChip { glyph, .. } => {
             let icon = expected.icon.expect("semantic icon for micro chip");
-            assert!(std::ptr::fn_addr_eq(
+            assert!(ptr::fn_addr_eq(
                 glyph.0,
-                crate::toolbar_icons::top_toolbar_icon_painter(icon)
+                toolbar_icons::top_toolbar_icon_painter(icon)
             ));
             assert_eq!(expected.role, model::TopToolbarControlRole::Restore);
         }
         W::RestoreTab { glyph, label } => {
             let icon = expected.icon.expect("semantic icon for the restore tab");
-            assert!(std::ptr::fn_addr_eq(
+            assert!(ptr::fn_addr_eq(
                 glyph.0,
-                crate::toolbar_icons::top_toolbar_icon_painter(icon)
+                toolbar_icons::top_toolbar_icon_painter(icon)
             ));
             assert_eq!(label.text, expected.label);
             assert_eq!(expected.role, model::TopToolbarControlRole::Restore);
@@ -142,9 +148,9 @@ fn builtin_semantic_records(
     snapshot: &ToolbarSnapshot,
     expected: &[SemanticAdapterRecord],
 ) -> Vec<SemanticAdapterRecord> {
-    let (width, height) = top_toolbar_size(&crate::ui_text::UiTextEngine::default(), snapshot);
-    let tree = crate::backend::wayland::build_top_toolbar_view(
-        &crate::ui_text::UiTextEngine::default(),
+    let (width, height) = top_toolbar_size(&UiTextEngine::default(), snapshot);
+    let tree = wayland::build_top_toolbar_view(
+        &UiTextEngine::default(),
         snapshot,
         width as f64,
         height as f64,
@@ -198,7 +204,7 @@ fn shared_spec_matches_builtin_order_and_full_semantics_without_starting_a_gui()
     let mut minimized = regular.clone();
     minimized.top_minimized = true;
     let mut micro = regular.clone();
-    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+    micro.top_display_mode = TopDisplayMode::Micro;
     let mut narrow = regular.clone();
     narrow.top_viewport_max = Some(520.0);
     narrow.top_overflow_open = true;
@@ -220,7 +226,7 @@ fn shared_spec_matches_builtin_order_and_full_semantics_without_starting_a_gui()
         ("shapes", shapes),
         ("highlighted", highlighted),
     ] {
-        let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &snapshot);
+        let plan = plan_top_strip(&UiTextEngine::default(), &snapshot);
         let spec = super::super::strip::top_toolbar_spec(&snapshot, &plan);
         let expected = expected_semantic_records(&snapshot, &spec, &plan);
         for record in &expected {
@@ -356,7 +362,7 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
     let mut minimized = regular.clone();
     minimized.top_minimized = true;
     let mut micro = regular.clone();
-    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+    micro.top_display_mode = TopDisplayMode::Micro;
 
     for (name, snapshot) in [
         ("regular", regular.clone()),
@@ -387,11 +393,11 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
 }
 
 fn assert_builtin_style_pill_scenario(name: &str, snapshot: &ToolbarSnapshot) {
-    let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), snapshot);
+    let plan = plan_top_strip(&UiTextEngine::default(), snapshot);
     let expected = expected_style_pill_nodes(snapshot, &plan);
-    let (width, height) = top_toolbar_size(&crate::ui_text::UiTextEngine::default(), snapshot);
-    let tree = crate::backend::wayland::build_top_toolbar_view(
-        &crate::ui_text::UiTextEngine::default(),
+    let (width, height) = top_toolbar_size(&UiTextEngine::default(), snapshot);
+    let tree = wayland::build_top_toolbar_view(
+        &UiTextEngine::default(),
         snapshot,
         width as f64,
         height as f64,

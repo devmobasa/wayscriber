@@ -1,3 +1,7 @@
+use std::ptr;
+
+use crate::{i18n, test_env};
+
 use super::*;
 
 #[test]
@@ -348,7 +352,7 @@ fn toolbar_item_definitions_are_unique_parseable_and_labeled() {
 
 #[test]
 fn each_language_keeps_one_table_with_the_same_items() {
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::each_language_keeps_one_table_with_the_same_items"
@@ -367,12 +371,12 @@ fn each_language_keeps_one_table_with_the_same_items() {
                 Language::SimplifiedChinese,
                 Language::English,
             ] {
-                crate::i18n::set_language(language);
+                i18n::set_language(language);
                 let expected = match language {
                     Language::SimplifiedChinese => chinese,
                     _ => english,
                 };
-                assert!(std::ptr::eq(toolbar_item_definitions(), expected));
+                assert!(ptr::eq(toolbar_item_definitions(), expected));
             }
 
             assert_eq!(english.len(), chinese.len());

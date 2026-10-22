@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter;
 
 use super::{
     ControllerId, InteractionSeedRegistry, InteractionSeedTarget, InteractionSeedValue, SeedGuard,
@@ -218,7 +219,7 @@ impl RuntimeUiMutationScope {
         &self,
     ) -> Result<BTreeSet<InteractionSeedTarget>, MutationShapeError> {
         let targets: BTreeSet<InteractionSeedTarget> = match self {
-            Self::Target(target) => std::iter::once(target.clone()).collect(),
+            Self::Target(target) => iter::once(target.clone()).collect(),
             Self::Batch(targets) => targets.iter().cloned().collect(),
         };
         if targets.is_empty() {

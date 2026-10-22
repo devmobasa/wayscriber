@@ -20,15 +20,12 @@
 //! route through the same apply machinery as the overlay properties
 //! popup, which stays available from the context menu.
 
-use std::borrow::Cow;
-
-use crate::config::{
-    Action, QuickColorPalette, ToolbarStrokeControls, action_label, action_short_label,
-    toolbar_item_ids as ids,
-};
-use crate::i18n::{tr, trf};
-use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
-use crate::label_format::{format_binding_label, format_quick_color_tooltip};
+#[cfg(test)]
+use crate::config::QuickColorPalette;
+use crate::config::{ToolbarStrokeControls, toolbar_item_ids as ids};
+#[cfg(test)]
+use crate::input::EraserMode;
+use crate::input::{SelectionPropertyEntry, SelectionPropertyKind};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
 pub(crate) use arrow_menu::{

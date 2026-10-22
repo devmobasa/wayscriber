@@ -1,9 +1,8 @@
-use crate::{
-    backend::ExitAfterCaptureMode,
-    capture::{CaptureDestination, file::FileSaveConfig},
-    config::Action,
-    input::state::RegionPurposeTag,
-};
+use crate::backend::ExitAfterCaptureMode;
+use crate::capture::CaptureDestination;
+use crate::capture::file::FileSaveConfig;
+use crate::config::Action;
+use crate::input::state::RegionPurposeTag;
 
 /// Runtime picker settings captured when a region action is accepted.
 ///

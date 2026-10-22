@@ -203,7 +203,7 @@ pub struct PresetsDraft {
 impl PresetsDraft {
     pub fn from_config(config: &Config) -> Self {
         let slots = (1..=PRESET_SLOTS_MAX)
-            .map(|slot| PresetSlotDraft::from_config(config.presets.get_slot(slot), config))
+            .map(|slot| PresetSlotDraft::from_config(config.presets.slot(slot), config))
             .collect();
         Self {
             slot_count: config.presets.slot_count,

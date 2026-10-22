@@ -4,7 +4,9 @@
 //! worker, wakes the Wayland loop, and requests overlay exit only after the
 //! opener has been handed off successfully.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use crate::desktop_open;
 
 use super::{RuntimeOperationController, WaylandState};
 use crate::backend::wayland::{RuntimeOperationPoll, RuntimeOperationSubmitFailure};
@@ -44,10 +46,10 @@ fn handoff_exit_intent(completion: &DesktopOpenCompletion) -> HandoffExitIntent 
 impl WaylandState {
     pub(in crate::backend::wayland) fn handle_desktop_open(&mut self, request: DesktopOpenRequest) {
         if let Err(failure) =
-            queue_desktop_open(&mut self.desktop_open, request, crate::desktop_open::open)
+            queue_desktop_open(&mut self.desktop_open, request, desktop_open::open)
         {
             let (error, request) = failure.into_parts();
-            self.report_desktop_open_failure(request, error.to_string());
+            self.report_desktop_open_failure(&request, &error.to_string());
         }
     }
 
@@ -70,7 +72,7 @@ impl WaylandState {
                 );
             }
             DesktopOpenCompletion::Failed { request, reason } => {
-                self.report_desktop_open_failure(request, reason);
+                self.report_desktop_open_failure(&request, &reason);
             }
         }
     }
@@ -79,7 +81,7 @@ impl WaylandState {
         self.desktop_open.is_active()
     }
 
-    fn report_desktop_open_failure(&mut self, request: DesktopOpenRequest, reason: String) {
+    fn report_desktop_open_failure(&mut self, request: &DesktopOpenRequest, reason: &str) {
         log::warn!(
             "Failed to open {} at {}: {}",
             request.target_name(),
@@ -89,7 +91,7 @@ impl WaylandState {
         // If an opener partially launched an application before failing, keep
         // this failure visible instead of immediately applying focus-loss exit.
         self.focus
-            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
         self.input_state.push_toast(
             ToastPriority::Critical,
             "launcher",
@@ -150,24 +152,25 @@ fn classify_result(
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
+    use std::thread;
     use std::time::{Duration, Instant};
 
     use super::*;
-    use crate::backend::wayland::{
-        RuntimeOperationIdSource, RuntimeWakeSource,
-        handlers::keyboard::{XdgFocusLeaveAction, xdg_focus_leave_action},
+    use crate::backend::wayland::handlers::keyboard::{
+        XdgFocusLeaveAction, XdgFocusLeaveContext, xdg_focus_leave_action,
     };
+    use crate::backend::wayland::{RuntimeOperationIdSource, RuntimeWakeSource};
 
     #[test]
     fn dispatch_returns_before_helper_completion_and_exit_waits_for_success() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut controller =
             RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let request = DesktopOpenRequest::CaptureFolder("/tmp/capture".into());
         let (release_tx, release_rx) = mpsc::channel();
         let fallback_release = release_tx.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(500));
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(500));
             let _ = fallback_release.send(());
         });
 
@@ -183,7 +186,12 @@ mod tests {
         );
         assert!(controller.is_active());
         assert_eq!(
-            xdg_focus_leave_action(true, controller.is_active(), false, true),
+            xdg_focus_leave_action(XdgFocusLeaveContext {
+                is_xdg_window: true,
+                desktop_open_in_progress: controller.is_active(),
+                focus_exit_suppressed: false,
+                focus_loss_exits_overlay: true,
+            }),
             XdgFocusLeaveAction::AwaitDesktopOpen,
         );
         assert!(matches!(
@@ -204,7 +212,7 @@ mod tests {
                         Instant::now() < deadline,
                         "desktop-open completion was not published"
                     );
-                    std::thread::yield_now();
+                    thread::yield_now();
                 }
                 DesktopOpenCompletion::HandedOff(completed) => {
                     assert_eq!(completed, request);

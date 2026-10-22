@@ -1,8 +1,10 @@
+use crate::test_temp;
+
 use super::*;
 
 #[test]
 fn unrelated_board_pin_write_preserves_supported_unknown_fields() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
@@ -23,8 +25,8 @@ future_entry = [1, 2, 3]
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
     runtime.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
     );
     assert!(board_pinned(&input, "whiteboard"));
@@ -48,7 +50,7 @@ future_entry = [1, 2, 3]
 
 #[test]
 fn global_runtime_reset_clears_board_pin_override_and_live_value() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -70,8 +72,8 @@ fn global_runtime_reset_clears_board_pin_override_and_live_value() {
     assert!(drain.rebuild_live);
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -83,7 +85,7 @@ fn global_runtime_reset_clears_board_pin_override_and_live_value() {
 #[test]
 fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
     const UNSUPPORTED: &[u8] = b"version = 22\nfuture = { keep = true }\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(&runtime_path, UNSUPPORTED).unwrap();
     let config = Config::default();
@@ -113,8 +115,8 @@ fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!restarted_input.toolbar_top_minimized());
@@ -126,11 +128,11 @@ fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
 fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
     const AUTHORED: &[u8] =
         b"# non-default authored toolbar seed\n[ui.toolbar.items]\nhidden = [\"top.tool.pen\"]\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
-    let config: Config = toml::from_str(std::str::from_utf8(AUTHORED).unwrap()).unwrap();
+    let config: Config = toml::from_str(str::from_utf8(AUTHORED).unwrap()).unwrap();
     let mut input = input_from_config(&config);
     assert!(
         input
@@ -169,8 +171,8 @@ fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(
@@ -193,11 +195,11 @@ fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
 #[test]
 fn factory_order_reset_survives_restart_over_nondefault_authored_config() {
     const AUTHORED: &[u8] = b"# preserve authored order exactly\n[ui.toolbar.items.order]\ntop_tools = [\"top.tool.pen\", \"top.tool.select\"]\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
-    let config: Config = toml::from_str(std::str::from_utf8(AUTHORED).unwrap()).unwrap();
+    let config: Config = toml::from_str(str::from_utf8(AUTHORED).unwrap()).unwrap();
     let mut input = input_from_config(&config);
     assert_eq!(
         input
@@ -223,8 +225,8 @@ fn factory_order_reset_survives_restart_over_nondefault_authored_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(

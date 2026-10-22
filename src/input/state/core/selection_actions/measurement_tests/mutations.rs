@@ -1,3 +1,6 @@
+use crate::input::DrawingState;
+use crate::input::state::SelectionGrab;
+
 use super::*;
 use crate::draw::frame::UndoAction;
 use crate::input::state::core::properties::SelectionPropertyKind;
@@ -167,8 +170,8 @@ fn explicit_cancellation_restores_decorated_move_bounds_and_hits() {
             state.hit_test_at_with(&owner, probe.0, probe.1 + 300),
             Some(id)
         );
-        state.state = crate::input::DrawingState::MovingSelection {
-            grab: crate::input::state::SelectionGrab::new(id, probe.0, probe.1 + 300),
+        state.state = DrawingState::MovingSelection {
+            grab: SelectionGrab::new(id, probe.0, probe.1 + 300),
             last_x: probe.0,
             last_y: probe.1 + 300,
             snapshots,
@@ -176,7 +179,7 @@ fn explicit_cancellation_restores_decorated_move_bounds_and_hits() {
         };
         state.take_dirty_regions();
         assert!(state.try_cancel_active_interaction_with(&owner));
-        assert!(matches!(state.state, crate::input::DrawingState::Idle));
+        assert!(matches!(state.state, DrawingState::Idle));
         assert_eq!(bounds(&state, &owner, id), original);
         assert_eq!(bounds(&state, &owner, locked_id), locked);
         assert_eq!(state.hit_test_at_with(&owner, probe.0, probe.1), Some(id));

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use log::info;
-use smithay_client_toolkit::shell::{
-    WaylandSurface, wlr_layer::Anchor, xdg::window::WindowDecorations,
-};
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::Anchor;
+use smithay_client_toolkit::shell::xdg::window::WindowDecorations;
 
 use crate::app_id::runtime_app_id;
 

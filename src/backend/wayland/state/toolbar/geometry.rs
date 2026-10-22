@@ -146,6 +146,11 @@ pub(super) fn point_in_top_strip_reveal_zone(
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::toolbar::layout;
+    use crate::input::state::test_support;
+    use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
+    use crate::ui_text::UiTextEngine;
+
     use super::*;
 
     #[test]
@@ -156,17 +161,11 @@ mod tests {
         assert_eq!(budget, 764.0);
         assert_eq!(base + budget + 12.0, 800.0);
 
-        let state = crate::input::state::test_support::make_test_input_state();
-        let mut snapshot = crate::ui::toolbar::ToolbarSnapshot::from_input_with_bindings(
-            &state,
-            crate::ui::toolbar::ToolbarBindingHints::default(),
-        );
+        let state = test_support::make_test_input_state();
+        let mut snapshot =
+            ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
         snapshot.top_viewport_max = Some(budget);
-        let planned = crate::backend::wayland::toolbar::layout::top_size(
-            &crate::ui_text::UiTextEngine::default(),
-            &snapshot,
-        )
-        .0 as f64;
+        let planned = layout::top_size(&UiTextEngine::default(), &snapshot).0 as f64;
         assert!(planned <= budget, "planned={planned}, budget={budget}");
     }
 

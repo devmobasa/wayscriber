@@ -1,5 +1,7 @@
 //! Built-in style-pill node assertions.
 
+use crate::backend::wayland::TopToolbarWidgetKind;
+
 use super::super::{ToolbarEvent, ToolbarSnapshot, model};
 use super::builtin_contract::StylePillNodeExpectation;
 use super::expectations::slider_opacity_paint;
@@ -8,7 +10,7 @@ use super::expectations::slider_opacity_paint;
 pub(super) fn assert_builtin_style_pill_node(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     interaction_event: Option<&ToolbarEvent>,
     interaction_tooltip: Option<&str>,
     has_interaction: bool,
@@ -65,7 +67,7 @@ pub(super) fn assert_builtin_style_pill_node(
             let zero = setting.zero_segment(snapshot, &control.id());
             assert_eq!(
                 kind,
-                &crate::backend::wayland::TopToolbarWidgetKind::MeterDot {
+                &TopToolbarWidgetKind::MeterDot {
                     active: setting.level(snapshot) == 0,
                     enabled: control.enabled(snapshot),
                 }
@@ -115,7 +117,7 @@ pub(super) fn assert_builtin_style_pill_node(
 fn assert_builtin_style_pill_control(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     interaction_event: Option<&ToolbarEvent>,
     interaction_tooltip: Option<&str>,
     has_interaction: bool,
@@ -153,7 +155,7 @@ fn assert_builtin_style_pill_control(
 fn assert_builtin_style_pill_control_kind(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     interaction_event: Option<&ToolbarEvent>,
     has_interaction: bool,
     id: &str,
@@ -248,7 +250,7 @@ fn assert_builtin_style_pill_control_kind(
 fn assert_builtin_style_pill_readout(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     has_interaction: bool,
     id: &str,
     control: model::StylePillControl,
@@ -297,7 +299,7 @@ fn assert_builtin_style_pill_slider(
 fn assert_builtin_style_pill_step_half(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     interaction_event: Option<&ToolbarEvent>,
     interaction_tooltip: Option<&str>,
     id: &str,
@@ -331,7 +333,7 @@ fn assert_builtin_style_pill_step_half(
 fn assert_builtin_style_pill_step_value(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     has_interaction: bool,
     id: &str,
     control: model::StylePillControl,
@@ -353,7 +355,7 @@ fn assert_builtin_style_pill_step_value(
 fn assert_builtin_style_pill_meter_bar(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     interaction_event: Option<&ToolbarEvent>,
     interaction_tooltip: Option<&str>,
     id: &str,
@@ -389,7 +391,7 @@ fn assert_builtin_style_pill_meter_bar(
 
 fn assert_builtin_style_pill_caption(
     name: &str,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     has_interaction: bool,
     id: &str,
     control: model::StylePillControl,
@@ -414,7 +416,7 @@ fn assert_builtin_style_pill_caption(
 fn assert_builtin_style_pill_segment_half(
     name: &str,
     snapshot: &ToolbarSnapshot,
-    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    kind: &TopToolbarWidgetKind,
     interaction_event: Option<&ToolbarEvent>,
     interaction_tooltip: Option<&str>,
     id: &str,

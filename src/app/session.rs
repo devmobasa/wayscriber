@@ -1,12 +1,17 @@
+use std::env;
+
 use crate::cli::Cli;
+use crate::config::Config;
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
+use crate::session::{ClearToolStateOutcome, SessionOptions, catalog};
+use crate::{session, time_utils};
 
 pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     if rename_session(cli)? {
         return Ok(());
     }
 
-    let loaded = crate::config::Config::load()?;
+    let loaded = Config::load()?;
     // [session] configures which files these commands act on. A load that
     // fell back to defaults for that section would silently retarget a
     // destructive command - a custom storage path becomes `storage = auto` -
@@ -17,20 +22,20 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
              default settings may mistarget - fix the section and retry"
         );
     }
-    let config_dir = crate::config::Config::config_directory_from_source(&loaded.source)?;
-    let display_env = std::env::var(WAYLAND_DISPLAY_ENV).ok();
+    let config_dir = Config::config_directory_from_source(&loaded.source)?;
+    let display_env = env::var(WAYLAND_DISPLAY_ENV).ok();
 
     let options = if let Some(raw_path) = cli.session_file.as_ref() {
         let raw = raw_path
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
-        let path = crate::session::normalize_named_session_file_arg(raw);
+        let path = session::normalize_named_session_file_arg(raw);
         if cli.clear_session || cli.clear_tool_state {
-            crate::session::validate_named_session_file_for_clear(&path)?;
+            session::validate_named_session_file_for_clear(&path)?;
         } else {
-            crate::session::validate_named_session_file_for_info(&path)?;
+            session::validate_named_session_file_for_info(&path)?;
         }
-        let mut options = crate::session::options_from_config_for_named_file(
+        let mut options = session::options_from_config_for_named_file(
             &loaded.config.session,
             path,
             display_env.as_deref(),
@@ -38,11 +43,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         options.force_resume_persistence();
         options
     } else {
-        crate::session::options_from_config(
-            &loaded.config.session,
-            &config_dir,
-            display_env.as_deref(),
-        )?
+        session::options_from_config(&loaded.config.session, &config_dir, display_env.as_deref())?
     };
 
     if cli.clear_session {
@@ -51,16 +52,16 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     }
 
     if cli.clear_tool_state {
-        let outcome = crate::session::clear_tool_state(&options)?;
+        let outcome = session::clear_tool_state(&options)?;
         println!("Session file: {}", options.session_file_path().display());
         match outcome {
-            crate::session::ClearToolStateOutcome::NoSession => {
+            ClearToolStateOutcome::NoSession => {
                 println!("  No session file present");
             }
-            crate::session::ClearToolStateOutcome::NoToolState => {
+            ClearToolStateOutcome::NoToolState => {
                 println!("  No saved tool state present");
             }
-            crate::session::ClearToolStateOutcome::Cleared {
+            ClearToolStateOutcome::Cleared {
                 preserved_board_data,
             } => {
                 println!("  Cleared saved tool state");
@@ -75,7 +76,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     }
 
     if cli.session_info {
-        let inspection = crate::session::inspect_session(&options)?;
+        let inspection = session::inspect_session(&options)?;
         println!("Session persistence status:");
         println!("  Persist transparent: {}", inspection.persist_transparent);
         println!("  Persist whiteboard : {}", inspection.persist_whiteboard);
@@ -104,7 +105,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
             }
             if let Some(ts) = inspection
                 .modified
-                .and_then(|m| crate::time_utils::format_system_time(m, "%Y-%m-%d %H:%M:%S"))
+                .and_then(|m| time_utils::format_system_time(m, "%Y-%m-%d %H:%M:%S"))
             {
                 println!("    Modified : {}", ts);
             }
@@ -163,15 +164,15 @@ fn rename_session(cli: &Cli) -> anyhow::Result<bool> {
     let raw = raw_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
-    let path = crate::session::normalize_named_session_file_arg(raw);
-    let entry = crate::session::catalog::rename_session_display_name_by_path(&path, display_name)?
+    let path = session::normalize_named_session_file_arg(raw);
+    let entry = catalog::rename_session_display_name_by_path(&path, display_name)?
         .ok_or_else(|| anyhow::anyhow!("session is not in the named-session catalog"))?;
     println!("Renamed session to {}.", entry.display_name);
     Ok(true)
 }
 
-fn clear_session(options: &crate::session::SessionOptions) -> anyhow::Result<()> {
-    let outcome = crate::session::clear_session(options)?;
+fn clear_session(options: &SessionOptions) -> anyhow::Result<()> {
+    let outcome = session::clear_session(options)?;
     println!("Session file: {}", options.session_file_path().display());
     if outcome.removed_session {
         println!("  Removed session file");

@@ -12,9 +12,11 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use log::{debug, info, warn};
+use tokio::runtime::Builder;
 
 use crate::config::{Config, UpdatesConfig};
 use crate::i18n::trf;
+use crate::notification;
 use crate::notification::NotificationError;
 use crate::update_check::{self, AvailableUpdate, CachedStatus, CheckOutcome};
 
@@ -64,20 +66,20 @@ pub(super) fn start_update_watch(
     );
 
     Some(thread::spawn(move || {
-        watch(quit, overlay_active, sink, updates);
+        watch(&quit, &overlay_active, &sink, updates);
     }))
 }
 
 fn watch(
-    quit: super::types::DaemonControlEvent,
-    overlay_active: Arc<AtomicBool>,
-    sink: StatusSink,
+    quit: &super::types::DaemonControlEvent,
+    overlay_active: &AtomicBool,
+    sink: &StatusSink,
     updates: UpdatesConfig,
 ) {
     // Seed from the cache first: a daemon restart should not lose a pending
     // notice, and reading the cache costs no network.
     let mut pending = update_from_cache();
-    publish(&sink, pending.as_ref());
+    publish(sink, pending.as_ref());
 
     let mut next_check = Instant::now() + STARTUP_DELAY;
     let mut next_announce = next_check;
@@ -94,7 +96,7 @@ fn watch(
                     CheckOutcome::UpToDate { .. } => None,
                 };
                 announced = false;
-                publish(&sink, pending.as_ref());
+                publish(sink, pending.as_ref());
             }
             next_check = now + POLL_INTERVAL;
         }
@@ -104,7 +106,7 @@ fn watch(
         // rather than at the next daily check.
         if !announced && now >= next_announce {
             announced = match pending.as_ref() {
-                Some(update) => announce(update, updates.notify, &overlay_active),
+                Some(update) => announce(update, updates.notify, overlay_active),
                 None => false,
             };
             next_announce = now + ANNOUNCE_RETRY;
@@ -205,10 +207,7 @@ fn send_notification(update: &AvailableUpdate) -> Result<(), NotificationError> 
     let summary = trf("Wayscriber {} is available", &[&update.version]);
     let body = notification_body(update_check::current_version(), update);
 
-    let runtime = match tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
+    let runtime = match Builder::new_current_thread().enable_all().build() {
         Ok(runtime) => runtime,
         Err(err) => {
             warn!("Failed to create a runtime for the update notification: {err}");
@@ -218,7 +217,7 @@ fn send_notification(update: &AvailableUpdate) -> Result<(), NotificationError> 
         }
     };
 
-    runtime.block_on(crate::notification::send_notification(
+    runtime.block_on(notification::send_notification(
         &summary,
         &body,
         Some(NOTIFICATION_ICON),
@@ -248,6 +247,19 @@ fn publish(sink: &StatusSink, update: Option<&AvailableUpdate>) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "dbus"))]
+    use std::env;
+    use std::fs;
+
+    use crate::config;
+    use crate::config::test_helpers;
+    #[cfg(not(feature = "dbus"))]
+    use crate::env_vars;
+    #[cfg(not(feature = "dbus"))]
+    use crate::test_env;
+    #[cfg(not(feature = "dbus"))]
+    use crate::test_temp;
+
     use super::*;
     use crate::update_check::{DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL};
 
@@ -288,11 +300,12 @@ mod tests {
     #[cfg(not(feature = "dbus"))]
     #[test]
     fn unavailable_notifications_settle_without_claiming_the_release() {
-        let _lock = crate::test_env::lock();
-        let cache_home = crate::test_temp::tempdir().expect("temporary cache home");
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
+        let _lock = test_env::lock();
+        let cache_home = test_temp::tempdir().expect("temporary cache home");
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_lock`.
         unsafe {
-            std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, cache_home.path());
+            env::set_var(env_vars::XDG_CACHE_HOME_ENV, cache_home.path());
         }
 
         let update = update();
@@ -300,25 +313,24 @@ mod tests {
         assert!(announce(&update, true, &AtomicBool::new(false)));
         assert!(update_check::notification_pending(&update));
 
-        match previous {
-            Some(value) => unsafe {
-                std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value);
-            },
-            None => unsafe {
-                std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV);
-            },
+        // SAFETY: this test still holds the environment mutex in `_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
     /// A broken config must not resurrect a check the user switched off.
     #[test]
     fn an_unparseable_config_disables_the_check_rather_than_defaulting_it_on() {
-        crate::config::test_helpers::with_temp_config_home(|config_root| {
-            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
-            std::fs::create_dir_all(&config_dir).unwrap();
+        test_helpers::with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(config::PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&config_dir).unwrap();
 
             // A `check = false` the user wrote, plus an unrelated syntax error.
-            std::fs::write(
+            fs::write(
                 config_dir.join("config.toml"),
                 "[updates]\ncheck = false\n\n[ui\nbroken = ",
             )
@@ -329,10 +341,10 @@ mod tests {
             assert!(!update_check::background_checks_enabled(updates.check));
 
             // The same file without the syntax error is honored as written.
-            std::fs::write(config_dir.join("config.toml"), "[updates]\ncheck = false\n").unwrap();
+            fs::write(config_dir.join("config.toml"), "[updates]\ncheck = false\n").unwrap();
             assert!(!load_updates_config().check);
 
-            std::fs::write(config_dir.join("config.toml"), "[updates]\ncheck = true\n").unwrap();
+            fs::write(config_dir.join("config.toml"), "[updates]\ncheck = true\n").unwrap();
             assert!(load_updates_config().check);
         });
     }

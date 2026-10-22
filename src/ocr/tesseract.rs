@@ -1,14 +1,15 @@
 //! Production adapters: local Tesseract for recognition, `wl-copy` for publication.
 
 use std::ffi::{OsStr, OsString};
-use std::fs;
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::{env, fs};
 
 use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 use crate::process_broker::{HelperKind, STDOUT_CAP_EXCEEDED};
+use crate::{clipboard_text, process_broker};
 
 use super::{
     OcrFailure, OcrLanguages, OcrTextPublisher, RecognizedOutput, RecognizedText, TextRecognizer,
@@ -48,8 +49,8 @@ fn with_temporary_png<T>(
     png: &[u8],
     operation: impl FnOnce(&Path) -> Result<T, OcrFailure>,
 ) -> Result<T, OcrFailure> {
-    let Some(directory) = private_runtime_directory(std::env::var_os(XDG_RUNTIME_DIR_ENV)) else {
-        return with_temporary_png_in(png, &std::env::temp_dir(), operation);
+    let Some(directory) = private_runtime_directory(env::var_os(XDG_RUNTIME_DIR_ENV)) else {
+        return with_temporary_png_in(png, &env::temp_dir(), operation);
     };
 
     remove_stale_temporary_pngs(&directory);
@@ -134,7 +135,7 @@ fn with_temporary_png_in<T>(
 }
 
 fn run_tesseract(input: &Path, languages: &OcrLanguages) -> Result<RecognizedOutput, OcrFailure> {
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.run(
                 HelperKind::Tesseract,
@@ -166,7 +167,7 @@ fn run_tesseract(input: &Path, languages: &OcrLanguages) -> Result<RecognizedOut
     }
 
     // Never log stdout: it is the recognized screen content.
-    let replaced_invalid_utf8 = std::str::from_utf8(&output.stdout).is_err();
+    let replaced_invalid_utf8 = str::from_utf8(&output.stdout).is_err();
     let text = RecognizedText::trimmed(&String::from_utf8_lossy(&output.stdout));
     Ok(RecognizedOutput {
         text,
@@ -223,7 +224,7 @@ fn classify_stderr(stderr: &str, languages: &OcrLanguages) -> OcrFailure {
 /// Checked before invoking so "not installed" is its own actionable message
 /// rather than a generic spawn failure.
 fn program_on_path(program: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|path| program_in_search_path(program, &path))
+    env::var_os("PATH").is_some_and(|path| program_in_search_path(program, &path))
 }
 
 /// The search itself, over an explicit path list. Split out so tests can probe
@@ -232,11 +233,11 @@ fn program_on_path(program: &str) -> bool {
 fn program_in_search_path(program: &str, search_path: &OsStr) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
-    std::env::split_paths(search_path).any(|directory| {
+    env::split_paths(search_path).any(|directory| {
         if directory.as_os_str().is_empty() {
             return false;
         }
-        std::fs::metadata(directory.join(program))
+        fs::metadata(directory.join(program))
             .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
             .unwrap_or(false)
     })
@@ -246,7 +247,7 @@ pub(crate) struct WlCopyPublisher;
 
 impl OcrTextPublisher for WlCopyPublisher {
     fn publish(&self, text: &str) -> Result<(), OcrFailure> {
-        crate::clipboard_text::copy_text_via_command(text).map_err(|err| {
+        clipboard_text::copy_text_via_command(text).map_err(|err| {
             log::warn!("wl-copy failed for recognized text: {err}");
             OcrFailure::ClipboardFailed
         })
@@ -255,6 +256,11 @@ impl OcrTextPublisher for WlCopyPublisher {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::Permissions;
+    use std::thread;
+
+    use crate::{test_env, test_temp};
+
     use super::*;
 
     fn languages() -> OcrLanguages {
@@ -315,9 +321,9 @@ mod tests {
     fn path_probe_accepts_only_executable_files() {
         use std::os::unix::fs::PermissionsExt;
 
-        let directory = crate::test_temp::tempdir().unwrap();
+        let directory = test_temp::tempdir().unwrap();
         let program = directory.path().join("wayscriber-fake-ocr");
-        std::fs::write(&program, b"").unwrap();
+        fs::write(&program, b"").unwrap();
         let search_path = directory.path().as_os_str();
 
         assert!(
@@ -325,7 +331,7 @@ mod tests {
             "a non-executable file is not a usable engine"
         );
 
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&program, Permissions::from_mode(0o755)).unwrap();
         assert!(program_in_search_path("wayscriber-fake-ocr", search_path));
         assert!(!program_in_search_path(
             "wayscriber-absent-ocr",
@@ -337,16 +343,15 @@ mod tests {
     fn path_probe_skips_empty_entries_and_searches_every_directory() {
         use std::os::unix::fs::PermissionsExt;
 
-        let directory = crate::test_temp::tempdir().unwrap();
+        let directory = test_temp::tempdir().unwrap();
         let program = directory.path().join("wayscriber-fake-ocr");
-        std::fs::write(&program, b"").unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(&program, b"").unwrap();
+        fs::set_permissions(&program, Permissions::from_mode(0o755)).unwrap();
 
         // An empty entry means "current directory" to some shells; treating it
         // as one would make the probe depend on the working directory.
         let search_path =
-            std::env::join_paths(["".as_ref(), Path::new("/nonexistent"), directory.path()])
-                .unwrap();
+            env::join_paths(["".as_ref(), Path::new("/nonexistent"), directory.path()]).unwrap();
 
         assert!(program_in_search_path("wayscriber-fake-ocr", &search_path));
     }
@@ -373,7 +378,7 @@ mod tests {
     fn runtime_directory_is_created_private_under_an_absolute_runtime_dir() {
         use std::os::unix::fs::PermissionsExt;
 
-        let runtime = crate::test_temp::tempdir().unwrap();
+        let runtime = test_temp::tempdir().unwrap();
 
         let directory = private_runtime_directory(Some(runtime.path().into())).unwrap();
 
@@ -387,7 +392,7 @@ mod tests {
 
     #[test]
     fn production_input_goes_to_the_runtime_directory_after_removing_stale_inputs() {
-        let runtime = crate::test_temp::tempdir().unwrap();
+        let runtime = test_temp::tempdir().unwrap();
         let directory = runtime.path().join("wayscriber");
         fs::create_dir(&directory).unwrap();
         let stale = directory.join("wayscriber-ocr-stale.png");
@@ -395,7 +400,7 @@ mod tests {
         fs::write(&stale, b"screen crop").unwrap();
         fs::write(&unrelated, b"").unwrap();
 
-        let result = crate::test_env::with_env_var(
+        let result = test_env::with_env_var(
             XDG_RUNTIME_DIR_ENV,
             Some(runtime.path().as_os_str()),
             || {
@@ -414,11 +419,11 @@ mod tests {
 
     #[test]
     fn temporary_input_is_removed_after_success() {
-        let directory = crate::test_temp::tempdir().unwrap();
+        let directory = test_temp::tempdir().unwrap();
 
         let result = with_temporary_png_in(b"png", directory.path(), |path| {
             assert!(path.exists());
-            assert_eq!(std::fs::read(path).unwrap(), b"png");
+            assert_eq!(fs::read(path).unwrap(), b"png");
             Ok("recognized")
         });
 
@@ -428,7 +433,7 @@ mod tests {
 
     #[test]
     fn temporary_input_is_removed_after_operation_failure() {
-        let directory = crate::test_temp::tempdir().unwrap();
+        let directory = test_temp::tempdir().unwrap();
 
         let result = with_temporary_png_in(b"png", directory.path(), |path| {
             assert!(path.exists());
@@ -441,22 +446,26 @@ mod tests {
 
     #[test]
     fn temporary_input_is_removed_while_unwinding_from_a_panic() {
-        let directory = crate::test_temp::tempdir().unwrap();
+        let directory = test_temp::tempdir().unwrap();
 
-        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _: Result<(), OcrFailure> =
-                with_temporary_png_in(b"png", directory.path(), |path| {
-                    assert!(path.exists());
-                    panic!("simulated OCR adapter panic");
-                });
-        }));
+        let panic = thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _: Result<(), OcrFailure> =
+                        with_temporary_png_in(b"png", directory.path(), |path| {
+                            assert!(path.exists());
+                            panic!("simulated OCR adapter panic");
+                        });
+                })
+                .join()
+        });
 
         assert!(panic.is_err());
         assert!(temporary_ocr_files(directory.path()).is_empty());
     }
 
-    fn temporary_ocr_files(directory: &Path) -> Vec<std::path::PathBuf> {
-        let Ok(entries) = std::fs::read_dir(directory) else {
+    fn temporary_ocr_files(directory: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = fs::read_dir(directory) else {
             return Vec::new();
         };
         let mut paths: Vec<_> = entries

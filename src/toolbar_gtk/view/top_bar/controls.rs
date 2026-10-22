@@ -2,7 +2,19 @@
 //!
 //! Owns construction and state-updater wiring for toolbar buttons and chrome.
 
-use super::*;
+use gtk4::accessible::Property;
+
+use super::super::CaptureSurfaceContent;
+use super::{TopBar, control_face_button, effective_scale, set_control_widget_id};
+use crate::toolbar_gtk::icons::IconWidget;
+use crate::toolbar_gtk::widgets::{
+    add_button_shortcut_hint, install_key_relay, send_event, set_active_class, sized_button,
+};
+use crate::toolbar_icons::top_toolbar_icon_painter;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::ui::theme::set_color;
 use crate::ui::theme::toolbar::{
@@ -10,6 +22,7 @@ use crate::ui::theme::toolbar::{
     PRESET_SLOT_ICON_RATIO, PRESET_SLOT_NUMBER_BOX, PRESET_SLOT_SWATCH_INSET,
     PRESET_SLOT_SWATCH_RADIUS, PRESET_SLOT_SWATCH_RATIO,
 };
+use crate::{draw, ui};
 
 use super::super::super::widgets::rounded_rect_path;
 
@@ -54,7 +67,10 @@ impl TopBar {
         use_icons: bool,
         show_badge: bool,
     ) -> gtk4::Button {
-        assert!(matches!(control, model::TopToolbarControl::Tool(_)));
+        assert!(
+            matches!(control, model::TopToolbarControl::Tool(_)),
+            "tool_button builds only tool controls, got {control:?}"
+        );
         self.action_button(
             snapshot,
             control,
@@ -75,7 +91,11 @@ impl TopBar {
         icon_size: f64,
         use_icons: bool,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::ShapePicker);
+        assert_eq!(
+            control,
+            model::TopToolbarControl::ShapePicker,
+            "shapes_picker_button builds only the shape picker"
+        );
         let tooltip = control.tooltip(snapshot);
         let label = control.label(snapshot);
         let button = control_face_button(
@@ -89,7 +109,7 @@ impl TopBar {
         );
         set_control_widget_id(&button, control);
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         let sender = self.feedback.clone();
         let expected = self.shapes.expected_open.clone();
         button.connect_clicked(move |_| {
@@ -153,10 +173,13 @@ impl TopBar {
         use_icons: bool,
         show_badge: bool,
     ) -> gtk4::Button {
-        assert!(matches!(
-            control,
-            model::TopToolbarControl::Undo | model::TopToolbarControl::Redo
-        ));
+        assert!(
+            matches!(
+                control,
+                model::TopToolbarControl::Undo | model::TopToolbarControl::Redo
+            ),
+            "history_button builds only undo or redo, got {control:?}"
+        );
         self.action_button(
             snapshot,
             control,
@@ -189,7 +212,7 @@ impl TopBar {
         );
         set_control_widget_id(&button, control);
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         if show_badge {
             let badge = control.shortcut_badge(snapshot);
             add_button_shortcut_hint(&button, badge.as_deref(), use_icons);
@@ -236,12 +259,15 @@ impl TopBar {
         index: usize,
         button_size: (f64, f64),
     ) -> gtk4::Button {
-        assert!(matches!(control, model::TopToolbarControl::Preset(_)));
+        assert!(
+            matches!(control, model::TopToolbarControl::Preset(_)),
+            "preset_button builds only preset controls, got {control:?}"
+        );
         let button = sized_button(button_size.0, button_size.1);
         set_control_widget_id(&button, control);
         button.add_css_class("preset");
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         set_active_class(&button, control.active(snapshot));
 
@@ -284,11 +310,11 @@ impl TopBar {
                 // checkerboard, so the slot previews what it will apply.
                 let swatch_path =
                     |ctx: &cairo::Context| rounded_rect_path(ctx, sx, sy, sw, sw, radius);
-                crate::ui::checkerboard_behind(ctx, a, swatch_path);
+                ui::checkerboard_behind(ctx, a, swatch_path);
                 ctx.set_source_rgba(r, g, b, a);
                 swatch_path(ctx);
                 let _ = ctx.fill();
-                let luminance = crate::draw::perceived_luminance(r, g, b);
+                let luminance = draw::perceived_luminance(r, g, b);
                 set_color(
                     ctx,
                     if luminance < 0.3 {
@@ -340,12 +366,16 @@ impl TopBar {
         control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::Pin);
+        assert_eq!(
+            control,
+            model::TopToolbarControl::Pin,
+            "pin_button builds only the pin control"
+        );
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         let glyph = if snapshot.top_pinned {
             model::TopToolbarIcon::Pin
         } else {
@@ -374,7 +404,7 @@ impl TopBar {
                 handle.remove_css_class("pinned");
             }
             let accessible_label = control.accessible_label(snapshot);
-            handle.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+            handle.update_property(&[Property::Label(&accessible_label)]);
             handle.set_tooltip_text(Some(&control.tooltip(snapshot)));
         }));
         button
@@ -389,11 +419,15 @@ impl TopBar {
         button_size: (f64, f64),
         icon_size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::Overflow);
+        assert_eq!(
+            control,
+            model::TopToolbarControl::Overflow,
+            "overflow_button builds only the overflow menu"
+        );
         let button = sized_button(button_size.0, button_size.1);
         set_control_widget_id(&button, control);
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
             top_toolbar_icon_painter(model::TopToolbarIcon::Overflow),
@@ -486,10 +520,13 @@ impl TopBar {
         control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert!(matches!(
-            control,
-            model::TopToolbarControl::About | model::TopToolbarControl::Exit
-        ));
+        assert!(
+            matches!(
+                control,
+                model::TopToolbarControl::About | model::TopToolbarControl::Exit
+            ),
+            "about_button builds only about or exit, got {control:?}"
+        );
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
@@ -499,7 +536,7 @@ impl TopBar {
             "exit"
         });
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
             top_toolbar_icon_painter(control.glyph(snapshot)),
@@ -524,13 +561,17 @@ impl TopBar {
         control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::LayoutMode);
+        assert_eq!(
+            control,
+            model::TopToolbarControl::LayoutMode,
+            "layout_mode_button builds only the layout mode control"
+        );
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
         button.add_css_class("layout");
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
             top_toolbar_icon_painter(model::TopToolbarIcon::for_layout_mode(snapshot.layout_mode)),
@@ -574,13 +615,17 @@ impl TopBar {
         control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::Minimize);
+        assert_eq!(
+            control,
+            model::TopToolbarControl::Minimize,
+            "minimize_button builds only the minimize control"
+        );
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
         button.add_css_class("minimize");
         let accessible_label = control.accessible_label(snapshot);
-        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.update_property(&[Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
             top_toolbar_icon_painter(model::TopToolbarIcon::Minimize),

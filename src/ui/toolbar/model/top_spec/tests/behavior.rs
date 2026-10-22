@@ -1,3 +1,6 @@
+use crate::draw::Color;
+use crate::ui::toolbar::PresetSlotSnapshot;
+
 use super::*;
 
 #[test]
@@ -226,7 +229,7 @@ fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
     assert!(!strip_control_ids(&spec).contains(&ids::TOP_CHROME_ABOUT.as_str().to_string()));
     assert!(!spec.overflow().contains(&TopToolbarControl::About));
 
-    let mut hidden = snapshot.clone();
+    let mut hidden = snapshot;
     let mut items = ToolbarItemsConfig::default();
     items.set_hidden(ids::TOP_CHROME_ABOUT, true);
     hidden.resolved_toolbar_items = items.resolved();
@@ -453,7 +456,7 @@ fn presets_island_hosts_the_saved_slots() {
 
     let mut snapshot = snapshot();
     snapshot.presets = vec![None; 5];
-    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+    snapshot.presets[0] = Some(PresetSlotSnapshot {
         name: Some("Red pen".to_string()),
         tool: Tool::Pen,
         color: Color::new(1.0, 0.0, 0.0, 1.0),
@@ -539,12 +542,8 @@ fn presets_island_hosts_the_saved_slots() {
     assert!(!has_preset(&TopToolbarSpec::build(&snapshot, &dropped)));
 }
 
-fn preset(
-    tool: Tool,
-    color: crate::draw::Color,
-    size: f64,
-) -> crate::ui::toolbar::PresetSlotSnapshot {
-    crate::ui::toolbar::PresetSlotSnapshot {
+fn preset(tool: Tool, color: Color, size: f64) -> PresetSlotSnapshot {
+    PresetSlotSnapshot {
         name: None,
         tool,
         color,
@@ -572,13 +571,9 @@ fn preset_slots_say_what_they_hold_and_how_to_fill_them() {
     let red = snapshot.quick_colors.rendered_entries()[0].clone();
     snapshot.presets = vec![None; 5];
     snapshot.presets[0] = Some(preset(Tool::Pen, red.color, 4.0));
-    snapshot.presets[1] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+    snapshot.presets[1] = Some(PresetSlotSnapshot {
         name: Some("Lecture".to_string()),
-        ..preset(
-            Tool::Marker,
-            crate::draw::Color::new(0.2, 0.4, 0.6, 1.0),
-            12.0,
-        )
+        ..preset(Tool::Marker, Color::new(0.2, 0.4, 0.6, 1.0), 12.0)
     });
     snapshot.presets[2] = Some(preset(Tool::Eraser, red.color, 18.0));
 
@@ -679,7 +674,7 @@ fn a_grouped_tool_lights_one_button() {
     }
 
     // Simple layouts move Shape Pen, Line, and Arrow into the picker.
-    let mut simple = full.clone();
+    let mut simple = full;
     simple.layout_mode = ToolbarLayoutMode::Simple;
     for tool in [Tool::LiveShape, Tool::Line, Tool::Arrow] {
         simple.active_tool = tool;

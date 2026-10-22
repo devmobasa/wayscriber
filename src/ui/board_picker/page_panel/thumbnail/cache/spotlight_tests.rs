@@ -1,3 +1,5 @@
+use crate::draw::RenderCaches;
+
 use super::*;
 use crate::draw::{Color, Frame, Shape};
 
@@ -33,7 +35,7 @@ fn pixels(
         }
         let engine = UiTextEngine::default();
         let measurer = TextMeasurer::default();
-        let mut draw = crate::draw::RenderCaches::default();
+        let mut draw = RenderCaches::default();
         let mut render = RenderCtx::new(&ctx, &mut draw);
         let args = PageContentArgs {
             render: &mut render,

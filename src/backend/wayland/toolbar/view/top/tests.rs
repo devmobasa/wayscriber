@@ -1,8 +1,30 @@
+use crate::backend::wayland::toolbar::events::HitKind;
+use crate::backend::wayland::toolbar::hit;
+use crate::config::{
+    QuickColorPalette, ToolbarItemOrderConfig, ToolbarItemsConfig, ToolbarStrokeControls,
+    TopDisplayMode,
+};
+use crate::draw::{Color, SpotlightMagnifierSource};
+use crate::input::{SelectionPropertyEntry, SelectionPropertyKind, Tool};
+use crate::toolbar_icons;
+use crate::ui::toolbar::model::{
+    ToolbarControlKind, ToolbarSessionModel, ToolbarSettingsModel, TopToolbarIcon,
+};
+use crate::ui::toolbar::snapshot::fade;
+use crate::ui::toolbar::{
+    PrecisionEntryTarget, PresetSlotSnapshot, RuntimeUiPersistenceMode,
+    RuntimeUiPersistenceSnapshot, SessionRecentSnapshot, ToolbarItemCustomizeGroup, session_format,
+};
+
+use std::path::{Path, PathBuf};
+use std::ptr;
+
 use super::*;
 use crate::backend::wayland::toolbar::layout::{ToolbarLayoutSpec, top_size};
 use crate::backend::wayland::toolbar::view::{ShortcutBadgePlacement, WidgetKind, WidgetTree};
 use crate::config::{Action, action_label, toolbar_item_ids as ids};
-use crate::input::state::{TopMenuState, test_support::make_test_input_state};
+use crate::input::state::TopMenuState;
+use crate::input::state::test_support::make_test_input_state;
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
 fn snapshot() -> ToolbarSnapshot {
@@ -11,13 +33,8 @@ fn snapshot() -> ToolbarSnapshot {
 }
 
 fn build(snapshot: &ToolbarSnapshot) -> WidgetTree {
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), snapshot);
-    build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        snapshot,
-        w as f64,
-        h as f64,
-    )
+    let (w, h) = top_size(&UiTextEngine::default(), snapshot);
+    build_top_view(&UiTextEngine::default(), snapshot, w as f64, h as f64)
 }
 
 fn node_id_list(tree: &WidgetTree) -> Vec<&str> {
@@ -157,10 +174,10 @@ fn presets_render_as_slot_buttons_in_the_presets_island() {
 
     let mut snapshot = snapshot();
     snapshot.presets = vec![None; 5];
-    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+    snapshot.presets[0] = Some(PresetSlotSnapshot {
         name: Some("Red pen".to_string()),
         tool: Tool::Pen,
-        color: crate::draw::Color::new(1.0, 0.0, 0.0, 1.0),
+        color: Color::new(1.0, 0.0, 0.0, 1.0),
         size: 4.0,
         eraser_kind: None,
         eraser_mode: None,
@@ -241,20 +258,15 @@ fn presets_render_as_slot_buttons_in_the_presets_island() {
     ));
 
     // The presets island joins the surface input region as its own rect.
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    )
-    .expect("input rects");
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
+        .expect("input rects");
     assert!(rects.contains(&island.rect));
 }
 
 #[test]
 fn idle_hidden_strip_keeps_its_size_but_passes_input_through() {
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
     let mut snapshot = snapshot();
     let shown_size = top_size(&engine, &snapshot);
     let (w, h) = (shown_size.0 as f64, shown_size.1 as f64);
@@ -266,7 +278,7 @@ fn idle_hidden_strip_keeps_its_size_but_passes_input_through() {
     assert_eq!(top_input_rects(&engine, &snapshot, w, h), Some(shown_rects));
 
     // Fully hidden: same surface size (no configure churn), empty region.
-    snapshot.top_fade = crate::ui::toolbar::snapshot::fade::TOP_STRIP_HIDDEN_LEVEL;
+    snapshot.top_fade = fade::TOP_STRIP_HIDDEN_LEVEL;
     assert_eq!(top_size(&engine, &snapshot), shown_size);
     assert_eq!(top_input_rects(&engine, &snapshot, w, h), Some(Vec::new()));
 }
@@ -447,7 +459,7 @@ fn shape_picker_shows_fill_while_line_is_active() {
     );
     let mut snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
-    snapshot.active_tool = crate::input::Tool::Line;
+    snapshot.active_tool = Tool::Line;
     snapshot.tool_override = None;
 
     let tree = build(&snapshot);
@@ -458,10 +470,10 @@ fn shape_picker_shows_fill_while_line_is_active() {
         "Fill configures the next shape and must not depend on the active tool"
     );
 
-    snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+    snapshot.resolved_toolbar_items = ToolbarItemsConfig {
         hidden: vec![ids::TOP_UTILITY_FILL.as_str().to_string()],
         shown: Vec::new(),
-        order: crate::config::ToolbarItemOrderConfig::default(),
+        order: ToolbarItemOrderConfig::default(),
     }
     .resolved();
     assert!(
@@ -478,14 +490,9 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     state.test_set_toolbar_menu_state(TopMenuState::Closed, state.toolbar_top_popover_scroll());
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    )
-    .expect("no popover: the islands still restrict input");
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
+        .expect("no popover: the islands still restrict input");
     assert_eq!(
         rects.len(),
         5,
@@ -498,12 +505,7 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     assert!(rects[2].0 + rects[2].2 < rects[3].0);
     // The style pill is the fifth rect, detached below the band.
     assert!(rects[4].1 > rects[0].1 + rects[0].3);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let islands: Vec<_> = tree
         .nodes()
         .iter()
@@ -520,14 +522,9 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     );
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    )
-    .expect("partial input region");
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
+        .expect("partial input region");
     assert_eq!(rects.len(), 6, "five islands + shapes panel: {rects:?}");
     assert_eq!(rects[0].0, 0.0);
     assert_eq!(rects[0].1, 0.0);
@@ -542,12 +539,7 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     assert!(rects[0].0 + rects[0].2 < rects[1].0);
     assert!(rects[1].0 + rects[1].2 < rects[2].0);
     assert!(rects[2].0 + rects[2].2 < rects[3].0);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let panel = tree
         .node_by_id(&"top.shapes.panel".into())
         .expect("panel node");
@@ -568,20 +560,10 @@ fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
     );
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
-    let input_rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    )
-    .expect("partial input region");
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let input_rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
+        .expect("partial input region");
 
     let islands: Vec<_> = tree
         .nodes()
@@ -605,15 +587,10 @@ fn minimized_strip_is_a_single_restore_tab() {
 
     // A comfortable target (the old 64x24 sliver was easy to miss) that
     // carries the restore glyph and its caption.
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!((w, h), (104, 32));
 
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let interactive: Vec<_> = tree
         .nodes()
         .iter()
@@ -641,21 +618,16 @@ fn minimized_strip_is_a_single_restore_tab() {
 #[test]
 fn micro_strip_is_a_single_round_chip() {
     let mut snapshot = snapshot();
-    snapshot.top_display_mode = crate::config::TopDisplayMode::Micro;
+    snapshot.top_display_mode = TopDisplayMode::Micro;
 
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(
         (w, h),
         ToolbarLayoutSpec::TOP_MICRO_SIZE,
         "micro mode is one 44px chip"
     );
 
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let interactive: Vec<_> = tree
         .nodes()
         .iter()
@@ -665,7 +637,7 @@ fn micro_strip_is_a_single_round_chip() {
     assert_eq!(interactive[0].id.as_str(), "top.chrome.micro");
     assert!(matches!(
         interactive[0].interact.as_ref().unwrap().event,
-        ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Full)
+        ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)
     ));
     match &interactive[0].kind {
         WidgetKind::MicroChip {
@@ -673,12 +645,11 @@ fn micro_strip_is_a_single_round_chip() {
             ring_color,
             ring_width,
         } => {
-            let expected_icon = crate::ui::toolbar::model::TopToolbarIcon::Tool(
-                crate::ui::toolbar::model::semantic_icon_for_tool(snapshot.active_tool),
-            );
-            assert!(std::ptr::fn_addr_eq(
+            let expected_icon =
+                TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool));
+            assert!(ptr::fn_addr_eq(
                 glyph.0,
-                crate::toolbar_icons::top_toolbar_icon_painter(expected_icon)
+                toolbar_icons::top_toolbar_icon_painter(expected_icon)
             ));
             assert_eq!(
                 *ring_color,
@@ -690,34 +661,20 @@ fn micro_strip_is_a_single_round_chip() {
                 ),
                 "ring strokes in the current color"
             );
-            assert_eq!(
-                *ring_width,
-                crate::ui::toolbar::model::micro_ring_width(snapshot.thickness)
-            );
+            assert_eq!(*ring_width, model::micro_ring_width(snapshot.thickness));
         }
         other => panic!("micro chip kind, got {other:?}"),
     }
 
     // No popovers, ring rows, or partial input regions in micro mode: the
     // whole 44px surface takes input.
-    assert!(
-        top_input_rects(
-            &crate::ui_text::UiTextEngine::default(),
-            &snapshot,
-            w as f64,
-            h as f64
-        )
-        .is_none()
-    );
-    assert_eq!(
-        top_extra_height(&crate::ui_text::UiTextEngine::default(), &snapshot),
-        0.0
-    );
+    assert!(top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64).is_none());
+    assert_eq!(top_extra_height(&UiTextEngine::default(), &snapshot), 0.0);
 
     // Minimized wins if both states are somehow set.
     snapshot.top_minimized = true;
     assert_eq!(
-        top_size(&crate::ui_text::UiTextEngine::default(), &snapshot),
+        top_size(&UiTextEngine::default(), &snapshot),
         ToolbarLayoutSpec::TOP_MINIMIZED_SIZE
     );
 }
@@ -728,7 +685,7 @@ fn compact_shape_picker_preserves_its_full_semantic_icon_size() {
     let mut plan = TopStripPlan::unconstrained();
     plan.compact = true;
     let tree = super::build::build_top_view_planned(
-        &crate::ui_text::UiTextEngine::default(),
+        &UiTextEngine::default(),
         &snapshot,
         &plan,
         800.0,
@@ -758,7 +715,7 @@ fn overflow_utility_tooltips_remain_bare_action_labels() {
     plan.dropped_utilities = vec![model::TopUtilityButton::Text];
 
     let tree = super::build::build_top_view_planned(
-        &crate::ui_text::UiTextEngine::default(),
+        &UiTextEngine::default(),
         &snapshot,
         &plan,
         800.0,
@@ -778,12 +735,12 @@ fn overflow_utility_tooltips_remain_bare_action_labels() {
 /// Snapshot with one tool active and the settings overrides pinned off, so
 /// each case exercises exactly one pure style-pill morph state (the
 /// overrides themselves are covered by the spec's unit tests).
-fn snapshot_for_tool(tool: crate::input::Tool) -> ToolbarSnapshot {
+fn snapshot_for_tool(tool: Tool) -> ToolbarSnapshot {
     let mut snapshot = snapshot();
     snapshot.active_tool = tool;
     snapshot.tool_override = None;
-    snapshot.thickness_targets_eraser = tool == crate::input::Tool::Eraser;
-    snapshot.thickness_targets_marker = tool == crate::input::Tool::Marker;
+    snapshot.thickness_targets_eraser = tool == Tool::Eraser;
+    snapshot.thickness_targets_marker = tool == Tool::Marker;
     snapshot.show_text_controls = false;
     snapshot.show_marker_opacity_section = false;
     snapshot
@@ -801,7 +758,7 @@ fn style_ids(tree: &WidgetTree) -> Vec<String> {
 fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
     use crate::backend::wayland::toolbar::events::HitKind;
 
-    let snapshot = snapshot_for_tool(crate::input::Tool::Pen);
+    let snapshot = snapshot_for_tool(Tool::Pen);
     let tree = build(&snapshot);
 
     let chip = tree
@@ -835,7 +792,7 @@ fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
         swatch.interact.as_ref().unwrap().event,
         ToolbarEvent::SetQuickColor { color, action, index }
             if color == entry.color
-                && action == crate::config::QuickColorPalette::action_for_index(0)
+                && action == QuickColorPalette::action_for_index(0)
                 && index == 0
     ));
 
@@ -878,17 +835,16 @@ fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
     assert_eq!(
         numeral.interact.as_ref().map(|interact| &interact.event),
         Some(&ToolbarEvent::OpenPrecisionEntry(
-            crate::ui::toolbar::PrecisionEntryTarget::Thickness
+            PrecisionEntryTarget::Thickness
         ))
     );
 }
 
 #[test]
 fn spotlight_style_pill_shows_missing_source_status_inline() {
-    let mut snapshot = snapshot_for_tool(crate::input::Tool::Spotlight);
+    let mut snapshot = snapshot_for_tool(Tool::Spotlight);
     snapshot.spotlight_magnification = 2.25;
-    snapshot.spotlight_magnifier_source =
-        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+    snapshot.spotlight_magnifier_source = Some(SpotlightMagnifierSource::IncompleteTransparent);
 
     let tree = build(&snapshot);
     let status = tree
@@ -899,8 +855,7 @@ fn spotlight_style_pill_shows_missing_source_status_inline() {
         WidgetKind::Label(label) if label.text == "Freeze screen to preview"
     ));
 
-    snapshot.spotlight_magnifier_source =
-        Some(crate::draw::SpotlightMagnifierSource::CompleteSolid);
+    snapshot.spotlight_magnifier_source = Some(SpotlightMagnifierSource::CompleteSolid);
     assert!(
         build(&snapshot)
             .node_by_id(&"top.style.spotlight-magnification.status".into())
@@ -1020,9 +975,7 @@ fn assert_eraser_style_pill() {
         .as_ref()
         .map(|interact| &interact.event)
     {
-        Some(ToolbarEvent::OpenPrecisionEntry(
-            crate::ui::toolbar::PrecisionEntryTarget::Thickness,
-        )) => {}
+        Some(ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::Thickness)) => {}
         other => panic!("numeral opens the precise entry, got {other:?}"),
     }
 }
@@ -1141,22 +1094,12 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
     // Select without a selection: the pill yields entirely — no pill node,
     // no fourth input rect, no extra height for it.
     let select = snapshot_for_tool(Tool::Select);
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &select);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &select,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &select);
+    let tree = build_top_view(&UiTextEngine::default(), &select, w as f64, h as f64);
     assert!(tree.node_by_id(&"top.island.style".into()).is_none());
     assert!(style_ids(&tree).is_empty());
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &select,
-        w as f64,
-        h as f64,
-    )
-    .expect("island input rects");
+    let rects = top_input_rects(&UiTextEngine::default(), &select, w as f64, h as f64)
+        .expect("island input rects");
     assert_eq!(
         rects.len(),
         4,
@@ -1167,30 +1110,25 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
     // its fourth input rect) back, with the same geometry contract.
     let mut selection = snapshot_for_tool(Tool::Select);
     selection.selection_properties = vec![
-        crate::input::SelectionPropertyEntry {
+        SelectionPropertyEntry {
             label: "Color".to_string(),
             value: "Red".to_string(),
-            kind: crate::input::SelectionPropertyKind::Color,
-            state: crate::input::SelectionPropertyKind::Color.unknown_value(),
+            kind: SelectionPropertyKind::Color,
+            state: SelectionPropertyKind::Color.unknown_value(),
             disabled: false,
         },
-        crate::input::SelectionPropertyEntry {
+        SelectionPropertyEntry {
             label: "Thickness".to_string(),
             value: "3.0px".to_string(),
-            kind: crate::input::SelectionPropertyKind::Thickness,
-            state: crate::input::SelectionPropertyKind::Thickness.unknown_value(),
+            kind: SelectionPropertyKind::Thickness,
+            state: SelectionPropertyKind::Thickness.unknown_value(),
             disabled: false,
         },
     ];
     selection.selection_has_text = true;
     selection.selected_text_bold = Some(false);
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &selection);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &selection,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &selection);
+    let tree = build_top_view(&UiTextEngine::default(), &selection, w as f64, h as f64);
     let style = tree
         .node_by_id(&"top.island.style".into())
         .expect("selection pill card");
@@ -1209,13 +1147,8 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
             "top.style.font-bold",
         ]
     );
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &selection,
-        w as f64,
-        h as f64,
-    )
-    .expect("island input rects");
+    let rects = top_input_rects(&UiTextEngine::default(), &selection, w as f64, h as f64)
+        .expect("island input rects");
     assert_eq!(rects.len(), 5, "selection pill rect: {rects:?}");
     let pill_rect = rects[4];
     assert_eq!(
@@ -1233,13 +1166,8 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
         Tool::StepMarker,
     ] {
         let snapshot = snapshot_for_tool(tool);
-        let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-        let tree = build_top_view(
-            &crate::ui_text::UiTextEngine::default(),
-            &snapshot,
-            w as f64,
-            h as f64,
-        );
+        let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+        let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
         let tools = tree
             .node_by_id(&"top.island.tools".into())
             .expect("tools island");
@@ -1280,13 +1208,8 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 
         // The pill joins the surface input region as the fifth rect (after
         // the tools, presets, history, and chrome band islands).
-        let rects = top_input_rects(
-            &crate::ui_text::UiTextEngine::default(),
-            &snapshot,
-            w as f64,
-            h as f64,
-        )
-        .expect("island input rects");
+        let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
+            .expect("island input rects");
         assert_eq!(rects.len(), 5, "{tool:?} rects: {rects:?}");
         assert_eq!(rects[4], style.rect, "{tool:?} pill input rect");
     }
@@ -1294,8 +1217,8 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 
 #[test]
 fn a_press_on_a_meter_bar_activates_that_bar_not_its_neighbour() {
-    let mut snapshot = snapshot_for_tool(crate::input::Tool::Pen);
-    snapshot.stroke_controls = crate::config::ToolbarStrokeControls::Meter;
+    let mut snapshot = snapshot_for_tool(Tool::Pen);
+    snapshot.stroke_controls = ToolbarStrokeControls::Meter;
     snapshot.pen_smoothing = 3;
     let tree = build(&snapshot);
     let hits = tree.to_hit_regions();
@@ -1309,25 +1232,23 @@ fn a_press_on_a_meter_bar_activates_that_bar_not_its_neighbour() {
         first.rect.0 + first.rect.2 / 2.0,
         first.rect.1 + first.rect.3 / 2.0,
     );
-    let pressed = crate::backend::wayland::toolbar::hit::find_hit(&hits, x, y, |hit| {
-        crate::backend::wayland::toolbar::hit::intent_for_hit(hit, x, y)
-    })
-    .map(|(intent, _)| intent.into_event());
+    let pressed = hit::find_hit(&hits, x, y, |hit| hit::intent_for_hit(hit, x, y))
+        .map(|(intent, _)| intent.into_event());
 
     assert_eq!(pressed, Some(ToolbarEvent::SetPenSmoothing(1)));
 }
 
 #[test]
 fn shape_pen_meters_carry_captions_and_level_bars_inside_the_planned_width() {
-    let engine = crate::ui_text::UiTextEngine::default();
-    let mut snapshot = snapshot_for_tool(crate::input::Tool::LiveShape);
-    snapshot.stroke_controls = crate::config::ToolbarStrokeControls::Meter;
+    let engine = UiTextEngine::default();
+    let mut snapshot = snapshot_for_tool(Tool::LiveShape);
+    snapshot.stroke_controls = ToolbarStrokeControls::Meter;
     let tree = build(&snapshot);
     let caption_style = crate::ui_text::UiTextStyle {
-        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        family: toolbar::FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP,
+        size: toolbar::FONT_SIZE_TOOLTIP,
     };
 
     for (meter_id, text, level, bars) in [
@@ -1411,15 +1332,15 @@ fn shape_pen_meters_carry_captions_and_level_bars_inside_the_planned_width() {
 
 #[test]
 fn shape_pen_steppers_carry_visible_captions_inside_the_planned_width() {
-    let engine = crate::ui_text::UiTextEngine::default();
-    let mut snapshot = snapshot_for_tool(crate::input::Tool::LiveShape);
-    snapshot.stroke_controls = crate::config::ToolbarStrokeControls::Stepper;
+    let engine = UiTextEngine::default();
+    let mut snapshot = snapshot_for_tool(Tool::LiveShape);
+    snapshot.stroke_controls = ToolbarStrokeControls::Stepper;
     let tree = build(&snapshot);
     let caption_style = crate::ui_text::UiTextStyle {
-        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        family: toolbar::FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP,
+        size: toolbar::FONT_SIZE_TOOLTIP,
     };
 
     for (stepper, text) in [
@@ -1507,7 +1428,7 @@ fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
 
 #[test]
 fn overflow_popover_anchors_directly_below_its_button_like_gtk() {
-    let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+    let mut snapshot = snapshot_for_tool(Tool::Marker);
     // Classic mode pins every control, so the pill reaches under the panel.
     snapshot.context_aware_ui = false;
     snapshot.show_text_controls = true;
@@ -1552,9 +1473,9 @@ fn runtime_sized_menu_popovers_do_not_reenter_strip_planning() {
             _ => unreachable!(),
         }
 
-        let (width, height) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+        let (width, height) = top_size(&UiTextEngine::default(), &snapshot);
         let tree = build_top_view(
-            &crate::ui_text::UiTextEngine::default(),
+            &UiTextEngine::default(),
             &snapshot,
             width as f64,
             height as f64,
@@ -1574,7 +1495,7 @@ fn menu_popovers_anchor_directly_below_overflow_button_like_gtk() {
         ("session", (false, true, false)),
         ("settings", (false, false, true)),
     ] {
-        let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+        let mut snapshot = snapshot_for_tool(Tool::Marker);
         // Classic mode pins every control, so the pill reaches under the panel.
         snapshot.context_aware_ui = false;
         snapshot.show_text_controls = true;
@@ -1824,7 +1745,7 @@ fn canvas_popover_step_section_carries_toggles_steppers_and_delay_sliders() {
     ));
 
     // The step rows and global sliders vanish when their toggles are off.
-    let mut collapsed = snapshot.clone();
+    let mut collapsed = snapshot;
     collapsed.custom_section_enabled = false;
     collapsed.show_delay_sliders = false;
     let collapsed_tree = build(&collapsed);
@@ -1873,7 +1794,7 @@ fn canvas_popover_scrolls_when_all_sections_exceed_the_viewport() {
     snapshot.show_delay_sliders = true;
     snapshot.delay_actions_enabled = true;
 
-    let bounds = top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
+    let bounds = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
         .expect("canvas scroll bounds");
     assert!(
         bounds.0 > bounds.1,
@@ -1888,17 +1809,12 @@ fn canvas_popover_scrolls_when_all_sections_exceed_the_viewport() {
     );
 
     // The Canvas popover joins the input region as an extra rect.
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     let panel = tree
         .node_by_id(&"top.menu.canvas.panel".into())
         .expect("canvas panel");
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    )
-    .expect("input rects");
+    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
+        .expect("input rects");
     assert!(
         rects
             .iter()
@@ -1918,19 +1834,14 @@ fn session_popover_re_hosts_the_session_pane_content() {
     snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
     snapshot.active_session_path = Some(PathBuf::from("/tmp/lecture.wayscriber-session"));
     snapshot.recent_sessions = (0..2)
-        .map(|index| crate::ui::toolbar::SessionRecentSnapshot {
+        .map(|index| SessionRecentSnapshot {
             display_name: format!("recent-{index}.wayscriber-session"),
             path: PathBuf::from(format!("/tmp/recent-{index}.wayscriber-session")),
         })
         .collect();
 
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let panel = tree
         .node_by_id(&"top.menu.session.panel".into())
         .expect("session popover panel");
@@ -1957,8 +1868,7 @@ fn session_popover_re_hosts_the_session_pane_content() {
 fn assert_session_popover_model(tree: &WidgetTree, snapshot: &ToolbarSnapshot) {
     // Content parity with the Session pane: the same model drives both, so
     // every model control appears exactly once with the same event.
-    let model = crate::ui::toolbar::model::ToolbarSessionModel::for_popover(snapshot)
-        .expect("session model");
+    let model = ToolbarSessionModel::for_popover(snapshot).expect("session model");
     assert_eq!(model.buttons.len(), 5);
     for button in &model.buttons {
         let node = tree
@@ -1996,10 +1906,7 @@ fn assert_session_popover_model(tree: &WidgetTree, snapshot: &ToolbarSnapshot) {
         .expect("home row");
     match &node.kind {
         WidgetKind::TextButton { label, style } => {
-            assert_eq!(
-                label.text,
-                crate::ui::toolbar::session_format::truncate_middle(&home.label, 30)
-            );
+            assert_eq!(label.text, session_format::truncate_middle(&home.label, 30));
             assert_eq!(style.disabled, !home.enabled);
         }
         other => panic!("home row kind, got {other:?}"),
@@ -2044,13 +1951,8 @@ fn assert_session_popover_input_rect(
         .node_by_id(&"top.menu.session.panel".into())
         .expect("session popover panel");
     // The popover joins the input region as an extra rect below the band.
-    let rects = top_input_rects(
-        &crate::ui_text::UiTextEngine::default(),
-        snapshot,
-        w as f64,
-        h as f64,
-    )
-    .expect("input rects");
+    let rects = top_input_rects(&UiTextEngine::default(), snapshot, w as f64, h as f64)
+        .expect("input rects");
     assert!(
         rects
             .iter()
@@ -2069,7 +1971,7 @@ fn assert_session_overwrite_confirmation(snapshot: &ToolbarSnapshot) {
     assert!(matches!(
         &replace.interact.as_ref().unwrap().event,
         ToolbarEvent::SaveSessionAsConfirm(path)
-            if path.as_path() == std::path::Path::new("/tmp/existing.wayscriber-session")
+            if path.as_path() == Path::new("/tmp/existing.wayscriber-session")
     ));
     let cancel = tree
         .node_by_id(&"top.menu.session.confirm-cancel".into())
@@ -2092,12 +1994,11 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
         .expect("settings popover panel");
     assert!(matches!(panel.kind, WidgetKind::Popover { .. }));
 
-    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
-        .expect("settings model");
+    let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings model");
 
     // Layout-mode segments render as three exclusive tabs.
-    let control = crate::ui::toolbar::model::layout_mode_control(snapshot.layout_mode);
-    let crate::ui::toolbar::model::ToolbarControlKind::Segmented(segmented) = &control.kind else {
+    let control = model::layout_mode_control(snapshot.layout_mode);
+    let ToolbarControlKind::Segmented(segmented) = &control.kind else {
         panic!("layout mode control is segmented");
     };
     for (index, segment) in segmented.segments().iter().enumerate() {
@@ -2150,11 +2051,10 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
 fn settings_popover_tucks_the_runtime_path_behind_details() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
-    let runtime_path =
-        std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
-    snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+    let runtime_path = PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
+    snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
         path: runtime_path.clone(),
-        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
+        mode: RuntimeUiPersistenceMode::Supported,
         detail: None,
         recovery_artifacts: Vec::new(),
     });
@@ -2187,8 +2087,7 @@ fn settings_popover_tucks_the_runtime_path_behind_details() {
             .map(|interaction| &interaction.event),
         Some(&ToolbarEvent::SetSettingsDetailsOpen(true))
     );
-    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
-        .expect("settings model");
+    let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings model");
     assert!(
         model
             .buttons()
@@ -2218,11 +2117,10 @@ fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.settings_details_open = true;
-    let runtime_path =
-        std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
-    snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+    let runtime_path = PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
+    snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
         path: runtime_path.clone(),
-        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
+        mode: RuntimeUiPersistenceMode::Supported,
         detail: None,
         recovery_artifacts: Vec::new(),
     });
@@ -2258,11 +2156,10 @@ fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group = Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopTools);
 
     let tree = build(&snapshot);
-    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
-        .expect("settings model");
+    let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings model");
     let overrides = model.item_overrides();
     assert!(!overrides.is_empty());
 
@@ -2284,7 +2181,7 @@ fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
             .expect("row drag region");
         assert!(matches!(
             drag.interact.as_ref().unwrap().kind,
-            crate::backend::wayland::toolbar::events::HitKind::DragToolbarItem { id, .. }
+            HitKind::DragToolbarItem { id, .. }
                 if id == item.id
         ));
         let up = tree
@@ -2327,24 +2224,17 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopControls);
     // An explicitly short output exercises internal scrolling independently
     // of how much content fits under the normal-screen fallback cap.
     snapshot.top_available_height = Some(360.0);
 
-    let (natural, viewport) =
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
-            .expect("settings scroll bounds");
+    let (natural, viewport) = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
+        .expect("settings scroll bounds");
     assert!(natural > viewport, "short output must cap tall content");
 
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let panel = tree
         .node_by_id(&"top.menu.settings.panel".into())
         .expect("settings popover panel");
@@ -2358,9 +2248,7 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
         .node_by_id(&"top.menu.settings.scrollbar".into())
         .expect("internal scrollbar");
     let interaction = scrollbar.interact.as_ref().expect("scroll drag");
-    let crate::backend::wayland::toolbar::events::HitKind::DragScrollTopPopover { max_scroll } =
-        interaction.kind
-    else {
+    let HitKind::DragScrollTopPopover { max_scroll } = interaction.kind else {
         panic!("scrollbar kind, got {:?}", interaction.kind);
     };
     assert!(max_scroll > 0.0);
@@ -2388,12 +2276,7 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
     let unscrolled_first = tree.node_by_id(&"top.menu.settings.button.0".into());
     assert!(unscrolled_first.is_some(), "top row visible before scroll");
     snapshot.top_popover_scroll = max_scroll + 500.0; // clamps to max
-    let scrolled = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let scrolled = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let scrolled_panel = scrolled
         .node_by_id(&"top.menu.settings.panel".into())
         .expect("panel");
@@ -2422,34 +2305,26 @@ fn tall_content_fills_a_tall_screen_without_scrolling() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopControls);
 
     // Without a known output height, the fixed fallback cap still scrolls.
-    let (natural, capped) =
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
-            .expect("bounds while the settings popover is open");
+    let (natural, capped) = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
+        .expect("bounds while the settings popover is open");
     assert_eq!(capped, super::menus::MENU_MAX_CONTENT_H);
     assert!(natural > capped, "content overflows the fallback cap");
 
     // A tall screen: the popover grows to the full natural height, no scroll.
     snapshot.top_available_height = Some(natural + 600.0);
-    let (natural2, viewport) =
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
-            .expect("bounds with a known tall output");
+    let (natural2, viewport) = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
+        .expect("bounds with a known tall output");
     assert_eq!(natural2, natural, "content is unchanged");
     assert!(
         (viewport - natural).abs() < 1e-9,
         "viewport should equal natural height on a tall screen: {viewport} vs {natural}"
     );
 
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     assert!(
         tree.node_by_id(&"top.menu.settings.scrollbar".into())
             .is_none(),
@@ -2473,26 +2348,19 @@ fn tall_content_scrolls_on_a_short_screen() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopControls);
     // A short output forces the screen-aware cap below the natural height.
     snapshot.top_available_height = Some(360.0);
 
-    let (natural, viewport) =
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
-            .expect("bounds with a known short output");
+    let (natural, viewport) = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
+        .expect("bounds with a known short output");
     assert!(
         viewport < natural,
         "content must still scroll when the screen is too short"
     );
 
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let scrollbar = tree
         .node_by_id(&"top.menu.settings.scrollbar".into())
         .expect("internal scrollbar on a short screen");
@@ -2519,14 +2387,10 @@ fn popover_height_budget_is_relative_to_the_toolbar_surface_origin() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopControls);
     snapshot.top_available_height = Some(360.0);
 
-    assert_eq!(
-        top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).1,
-        360
-    );
+    assert_eq!(top_size(&UiTextEngine::default(), &snapshot).1, 360);
 }
 
 /// The wheel path scrolls the open popover against the same bounds the
@@ -2535,18 +2399,16 @@ fn popover_height_budget_is_relative_to_the_toolbar_surface_origin() {
 fn top_popover_scroll_bounds_serve_the_wheel_path() {
     let mut snapshot = snapshot();
     assert!(
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot).is_none(),
+        top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot).is_none(),
         "no bounds while no menu popover is open"
     );
 
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopControls);
     snapshot.top_available_height = Some(360.0);
-    let (natural, viewport) =
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
-            .expect("bounds while the settings popover is open");
+    let (natural, viewport) = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
+        .expect("bounds while the settings popover is open");
     assert!(
         natural > viewport,
         "the Top-controls list overflows a short-screen viewport"
@@ -2558,7 +2420,7 @@ fn top_popover_scroll_bounds_serve_the_wheel_path() {
     let scrollbar = tree
         .node_by_id(&"top.menu.settings.scrollbar".into())
         .expect("internal scrollbar");
-    let crate::backend::wayland::toolbar::events::HitKind::DragScrollTopPopover { max_scroll } =
+    let HitKind::DragScrollTopPopover { max_scroll } =
         scrollbar.interact.as_ref().expect("scroll drag").kind
     else {
         panic!("scrollbar kind");
@@ -2571,23 +2433,22 @@ fn top_popover_scroll_bounds_serve_the_wheel_path() {
     snapshot.customize_items_open = false;
     snapshot.customize_items_group = None;
     snapshot.session_popover_open = true;
-    let (natural, viewport) =
-        top_popover_scroll_bounds(&crate::ui_text::UiTextEngine::default(), &snapshot)
-            .expect("bounds while the session popover is open");
+    let (natural, viewport) = top_popover_scroll_bounds(&UiTextEngine::default(), &snapshot)
+        .expect("bounds while the session popover is open");
     assert_eq!(natural, viewport, "short content never scrolls");
 }
 
 #[test]
 fn hidden_items_produce_no_nodes() {
     let mut snapshot = snapshot();
-    snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+    snapshot.resolved_toolbar_items = ToolbarItemsConfig {
         hidden: vec![
             ids::TOP_TOOL_PEN.as_str().to_string(),
             ids::TOP_GROUP_QUICK_COLORS.as_str().to_string(),
             ids::TOP_UTILITY_UNDO.as_str().to_string(),
         ],
         shown: Vec::new(),
-        order: crate::config::ToolbarItemOrderConfig::default(),
+        order: ToolbarItemOrderConfig::default(),
     }
     .resolved();
 

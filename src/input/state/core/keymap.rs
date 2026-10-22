@@ -5,7 +5,7 @@ use crate::config::{
 };
 use crate::draw::Color;
 use crate::input::state::core::utility::{PendingSequence, SequenceMatch, SequenceTrie};
-use crate::input::{DragToolBindings, Modifiers, MouseButton};
+use crate::input::{DragBinding, DragToolBindings, Modifiers, MouseButton};
 use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -164,7 +164,7 @@ impl Keymap {
         &self,
         button: MouseButton,
         modifiers: Modifiers,
-    ) -> crate::input::DragBinding {
+    ) -> DragBinding {
         self.drag_tool_bindings
             .binding_for_button_modifier(button, modifiers.active_drag_modifier())
     }

@@ -1,22 +1,14 @@
-use std::f64::consts::PI;
-
-use super::super::primitives::{
-    BADGE_STACK_GAP, BadgeAlign, draw_badge_with_engine, draw_pill, draw_rounded_rect,
-    measure_badge_with_engine,
-};
-use super::super::theme::{self, overlay};
-use super::badges::{
-    EDITING_BADGE_FONT_SIZE, EDITING_BADGE_HINT_FONT_SIZE, EDITING_BADGE_TINT,
-    FROZEN_BADGE_FONT_SIZE, FROZEN_BADGE_TINT, PAN_BADGE_FONT_SIZE, PAN_BADGE_TINT,
-    ZOOM_BADGE_FONT_SIZE, ZOOM_BADGE_TINT, editing_badge_hint, editing_badge_label,
-    frozen_badge_label, pan_badge_label, zoom_badge_label,
-};
+use super::super::theme::overlay;
+#[cfg(test)]
+use super::badges::FROZEN_BADGE_TINT;
+#[cfg(test)]
 use crate::config::{Action, StatusPosition, action_display_label};
 use crate::i18n::tr;
-use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
-use crate::label_format::{format_binding_labels, join_binding_labels};
-use crate::ui::toolbar::bindings::action_for_tool;
-use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle};
+use crate::input::InputState;
+#[cfg(test)]
+use crate::input::{DrawingState, Tool};
+use crate::ui::tooltip;
+use crate::ui_text::UiTextEngine;
 
 mod content;
 mod helpers;
@@ -187,12 +179,12 @@ impl StatusHudLayout {
     /// in the lower half of the screen, below it otherwise, kept on screen.
     pub(crate) fn tooltip_for(
         &self,
-        engine: &crate::ui_text::UiTextEngine,
+        engine: &UiTextEngine,
         kind: StatusHudSegmentKind,
     ) -> Option<StatusHudTooltip> {
         let segment = self.segments.iter().find(|segment| segment.kind == kind)?;
         let text = kind.tooltip();
-        let (width, height) = crate::ui::tooltip::tooltip_size(engine, text)?;
+        let (width, height) = tooltip::tooltip_size(engine, text)?;
         let screen_width = f64::from(self.screen_width);
         let screen_height = f64::from(self.screen_height);
 
@@ -228,7 +220,7 @@ impl StatusHudTooltip {
     /// The painted footprint, shadow included, for damage.
     pub(crate) fn bounds(&self) -> (f64, f64, f64, f64) {
         let (x, y, w, h) = self.rect;
-        let outset = crate::ui::tooltip::TOOLTIP_PAINT_OUTSET;
+        let outset = tooltip::TOOLTIP_PAINT_OUTSET;
 
         (x, y, w + outset, h + outset)
     }

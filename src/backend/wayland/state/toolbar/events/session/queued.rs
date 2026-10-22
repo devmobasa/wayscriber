@@ -1,5 +1,10 @@
-use super::*;
+use crate::notification;
+
+use super::AnyhowError;
+use crate::backend::wayland::session::SessionCommand;
+use crate::backend::wayland::state::WaylandState;
 use crate::i18n::{tr, trf};
+use crate::ui::toolbar::session_format::session_display_name;
 
 impl WaylandState {
     /// One toast names every queued command that will not run, since each
@@ -7,7 +12,7 @@ impl WaylandState {
     /// desktop notification names the commands that were requested but lost.
     pub(in crate::backend::wayland) fn fail_queued_session_commands(
         &mut self,
-        failures: Vec<(SessionCommand, AnyhowError)>,
+        failures: &[(SessionCommand, AnyhowError)],
         closing: bool,
     ) {
         if closing {
@@ -24,7 +29,7 @@ impl WaylandState {
                     "Wayscriber closed before it could run: {}. Run them again after restarting.",
                     &[&lost.join("; ")],
                 );
-                crate::notification::send_notification_async(
+                notification::send_notification_async(
                     &self.tokio_handle,
                     tr("Session Commands Not Run").to_string(),
                     body,
@@ -33,7 +38,7 @@ impl WaylandState {
             }
         }
 
-        match failures.as_slice() {
+        match failures {
             [] => {}
             [(command, error)] => self.fail_session_command(command, error),
             _ => {

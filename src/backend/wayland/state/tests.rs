@@ -1,5 +1,4 @@
-use super::helpers;
-use super::*;
+use super::{helpers, *};
 use crate::util::Rect;
 
 // NOTE: The renderer uses per-buffer damage tracking via BufferDamageTracker.

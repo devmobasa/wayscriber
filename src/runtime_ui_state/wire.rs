@@ -1,4 +1,5 @@
 use toml::Value;
+use toml::map::Map;
 
 use super::{RuntimeStateObservedEnvelope, RuntimeUiFileStatus, RuntimeUiWireState};
 
@@ -36,7 +37,7 @@ pub(crate) fn decode_runtime_ui_file(bytes: &[u8]) -> DecodedRuntimeUiFile {
         envelope: RuntimeStateObservedEnvelope::PresentWithoutReadableVersion,
         supported_wire: None,
     };
-    let Ok(text) = std::str::from_utf8(bytes) else {
+    let Ok(text) = str::from_utf8(bytes) else {
         return invalid();
     };
     let Ok(Value::Table(mut root)) = toml::from_str::<Value>(text) else {
@@ -80,7 +81,7 @@ pub(crate) fn encode_runtime_ui_file(
 }
 
 fn preserve_value(value: &Value) -> Result<String, RuntimeUiWireError> {
-    let mut wrapper = toml::map::Map::new();
+    let mut wrapper = Map::new();
     wrapper.insert("preserved".to_string(), value.clone());
     toml::to_string(&Value::Table(wrapper))
         .map_err(|error| RuntimeUiWireError::new(format!("could not preserve TOML value: {error}")))

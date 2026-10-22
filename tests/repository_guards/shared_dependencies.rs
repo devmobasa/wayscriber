@@ -41,15 +41,7 @@ const CONFIG_DRAW_VALUES: &[(&str, &str)] = &[
     ),
     (
         "src/config/validate/spotlight.rs",
-        "crate::draw::MIN_SPOTLIGHT_MAGNIFICATION",
-    ),
-    (
-        "src/config/validate/spotlight.rs",
-        "crate::draw::MAX_SPOTLIGHT_MAGNIFICATION",
-    ),
-    (
-        "src/config/validate/spotlight.rs",
-        "crate::draw::normalize_spotlight_magnification",
+        "crate::draw::{MAX_SPOTLIGHT_MAGNIFICATION, MIN_SPOTLIGHT_MAGNIFICATION, normalize_spotlight_magnification,}",
     ),
 ];
 

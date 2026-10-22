@@ -3,12 +3,11 @@ use super::super::parse::{
     parse_field_in_range, parse_u8_in_range, parse_usize_at_least, parse_usize_in_range,
 };
 use crate::models::error::FormError;
-use wayscriber::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
 use wayscriber::config::{
     ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN, Config,
+    MAX_SHAPE_RECOGNITION_SENSITIVITY,
 };
-use wayscriber::domain::{DragBindableTool, DragTool};
-use wayscriber::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use wayscriber::domain::{DragBindableTool, DragTool, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::draw::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 
 impl ConfigDraft {

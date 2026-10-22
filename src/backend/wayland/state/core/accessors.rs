@@ -1,4 +1,7 @@
-use super::super::*;
+use crate::config::XdgFocusLossBehavior;
+
+use super::super::WaylandState;
+use crate::session::SessionOptions;
 use smithay_client_toolkit::shell::WaylandSurface;
 use std::time::Instant;
 
@@ -131,7 +134,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn xdg_focus_loss_exits_overlay(&self) -> bool {
         matches!(
             self.config.ui.xdg_focus_loss_behavior,
-            crate::config::XdgFocusLossBehavior::Exit
+            XdgFocusLossBehavior::Exit
         )
     }
 

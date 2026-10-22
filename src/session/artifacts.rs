@@ -10,6 +10,9 @@ use std::io::{self, ErrorKind};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
+use crate::session;
+use crate::session::catalog;
+
 use super::options::append_path_suffix;
 use super::primary::open_session_artifact_for_read;
 
@@ -91,6 +94,7 @@ pub struct NamedSessionDuplicateOutcome {
 
 impl NamedSessionClearOutcome {
     #[allow(dead_code)]
+    #[must_use]
     pub fn removed_any(self) -> bool {
         self.removed_primary
             || self.removed_backup
@@ -100,6 +104,7 @@ impl NamedSessionClearOutcome {
 }
 
 #[allow(dead_code)]
+#[must_use]
 pub fn named_session_artifact_paths(path: &Path) -> SessionArtifactPaths {
     SessionArtifactPaths {
         primary: path.to_path_buf(),
@@ -208,7 +213,7 @@ fn preserved_newer_version_suffix<'a>(
 
 #[allow(dead_code)]
 pub fn clear_named_session_non_lock_artifacts(path: &Path) -> Result<NamedSessionClearOutcome> {
-    crate::session::validate_named_session_file_for_clear(path)?;
+    session::validate_named_session_file_for_clear(path)?;
 
     let artifacts = named_session_artifact_paths(path);
     let recovery_artifacts = removable_recovery_artifact_paths(&artifacts.recovery)?;
@@ -240,9 +245,9 @@ pub fn duplicate_named_session_primary(
     source: &Path,
     target: &Path,
 ) -> Result<NamedSessionDuplicateOutcome> {
-    crate::session::validate_named_session_file_for_info(source)?;
-    crate::session::validate_named_session_file_for_foreground(target)?;
-    if crate::session::catalog::session_paths_match(source, target) {
+    session::validate_named_session_file_for_info(source)?;
+    session::validate_named_session_file_for_foreground(target)?;
+    if catalog::session_paths_match(source, target) {
         return Err(anyhow!(
             "Duplicate Session target must be different from the source: {}",
             target.display()

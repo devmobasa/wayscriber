@@ -1,5 +1,14 @@
 //! Toolbar feedback and style-pill interaction tests.
 
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+
+use crate::config::QuickColorPalette;
+use crate::input::EraserMode;
+use crate::toolbar_gtk::css;
+use crate::ui::toolbar::PrecisionEntryTarget;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     FeedbackSender, GtkToolbarFeedback, ICON_BUTTON, ICON_SIZE, PIN_BUTTON_SIZE, Tool,
     ToolbarEvent, ToolbarSnapshot, TopBar, model, plan_top_strip,
@@ -12,7 +21,7 @@ use gtk4::prelude::*;
 use std::time::Duration;
 
 pub(super) fn assert_gtk_toggle_events(regular: &ToolbarSnapshot, highlighted: &ToolbarSnapshot) {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
     let shape = top.shapes_picker_button(
         regular,
@@ -116,7 +125,7 @@ fn assert_test_popover_capture_surfaces(top: &TopBar) {
             true,
             false,
         );
-        assert!(popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
+        assert!(popover.has_css_class(css::CAPTURE_TRANSPARENT_CLASS));
         assert!(!popover.can_target());
         assert_eq!(capture_surface.content_opacity(), Some(0.0));
         assert!(capture_surface.proof_visible());
@@ -126,7 +135,7 @@ fn assert_test_popover_capture_surfaces(top: &TopBar) {
             false,
             true,
         );
-        assert!(!popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
+        assert!(!popover.has_css_class(css::CAPTURE_TRANSPARENT_CLASS));
         assert!(popover.can_target());
         assert_eq!(capture_surface.content_opacity(), Some(1.0));
         assert!(!capture_surface.proof_visible());
@@ -134,7 +143,7 @@ fn assert_test_popover_capture_surfaces(top: &TopBar) {
 }
 
 fn assert_gtk_button_events(
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
     cases: [(&gtk4::Button, ToolbarEvent); 4],
 ) {
     for (button, event) in cases {
@@ -152,11 +161,11 @@ fn assert_gtk_button_events(
 fn assert_highlight_ring_event(
     top: &mut TopBar,
     highlighted: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     top.build_strip(
         highlighted,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), highlighted),
+        &plan_top_strip(&UiTextEngine::default(), highlighted),
     );
     let ring = collect_semantic_widgets(top.root.upcast_ref())
         .into_iter()
@@ -181,7 +190,7 @@ fn pill_widget(top: &TopBar, id: &str) -> gtk4::Widget {
 }
 
 pub(super) fn assert_style_pill_interactions(regular: &ToolbarSnapshot) {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
     assert_eraser_pill_interactions(&mut top, regular, &rx);
     assert_pen_pill_interactions(&mut top, regular, &rx);
@@ -192,7 +201,7 @@ pub(super) fn assert_style_pill_interactions(regular: &ToolbarSnapshot) {
 fn assert_inline_stroke_level_clicks(
     top: &mut TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     use crate::config::ToolbarStrokeControls::{Meter, Stepper};
 
@@ -218,7 +227,7 @@ fn assert_inline_stroke_level_clicks(
         snapshot.shape_recognition_sensitivity = 3;
         top.build_strip(
             &snapshot,
-            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &snapshot),
+            &plan_top_strip(&UiTextEngine::default(), &snapshot),
         );
         for control in controls {
             let setting = control.stroke_setting().unwrap();
@@ -251,13 +260,10 @@ fn assert_inline_stroke_level_clicks(
 fn assert_eraser_pill_interactions(
     top: &mut TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let eraser = style_pill_tool_snapshot(regular, Tool::Eraser);
-    top.build_strip(
-        &eraser,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &eraser),
-    );
+    top.build_strip(&eraser, &plan_top_strip(&UiTextEngine::default(), &eraser));
     let segment_row = pill_widget(top, "top.style.eraser-mode");
     let mut halves = Vec::new();
     let mut child = segment_row.first_child();
@@ -270,10 +276,7 @@ fn assert_eraser_pill_interactions(
         );
     }
     assert_eq!(halves.len(), 2);
-    for (half, mode) in halves.iter().zip([
-        crate::input::EraserMode::Brush,
-        crate::input::EraserMode::Stroke,
-    ]) {
+    for (half, mode) in halves.iter().zip([EraserMode::Brush, EraserMode::Stroke]) {
         half.emit_clicked();
         assert_eq!(
             rx.recv_timeout(Duration::from_secs(1))
@@ -292,9 +295,7 @@ fn assert_eraser_pill_interactions(
         rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK numeral event"),
         GtkToolbarFeedback::Event {
-            event: ToolbarEvent::OpenPrecisionEntry(
-                crate::ui::toolbar::PrecisionEntryTarget::Thickness
-            ),
+            event: ToolbarEvent::OpenPrecisionEntry(PrecisionEntryTarget::Thickness),
             rebind_requested: false,
         }
     );
@@ -304,13 +305,10 @@ fn assert_eraser_pill_interactions(
 fn assert_pen_pill_interactions(
     top: &mut TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let pen = style_pill_tool_snapshot(regular, Tool::Pen);
-    top.build_strip(
-        &pen,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &pen),
-    );
+    top.build_strip(&pen, &plan_top_strip(&UiTextEngine::default(), &pen));
     pill_widget(top, "top.style.color-chip")
         .downcast::<gtk4::Button>()
         .expect("chip button")
@@ -333,7 +331,7 @@ fn assert_pen_pill_interactions(
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::SetQuickColor {
                 color: pen.quick_colors.rendered_entries()[1].color,
-                action: crate::config::QuickColorPalette::action_for_index(1),
+                action: QuickColorPalette::action_for_index(1),
                 index: 1,
             },
             rebind_requested: false,
@@ -374,13 +372,10 @@ fn assert_pen_pill_interactions(
 fn assert_shape_pill_interaction(
     top: &mut TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let shape = style_pill_tool_snapshot(regular, Tool::Rect);
-    top.build_strip(
-        &shape,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &shape),
-    );
+    top.build_strip(&shape, &plan_top_strip(&UiTextEngine::default(), &shape));
     pill_widget(top, "top.style.fill")
         .downcast::<gtk4::CheckButton>()
         .expect("fill check button")

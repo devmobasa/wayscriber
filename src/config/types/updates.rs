@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 /// Default gap between background update checks.
@@ -42,9 +44,10 @@ impl Default for UpdatesConfig {
 
 impl UpdatesConfig {
     /// Interval clamped to the supported range.
-    pub fn interval(&self) -> std::time::Duration {
+    #[must_use]
+    pub fn interval(&self) -> Duration {
         let hours = self.interval_hours.max(MIN_UPDATE_CHECK_INTERVAL_HOURS);
-        std::time::Duration::from_secs(u64::from(hours) * 3600)
+        Duration::from_secs(u64::from(hours) * 3600)
     }
 }
 
@@ -66,7 +69,7 @@ mod tests {
 
         assert!(config.check);
         assert!(config.notify);
-        assert_eq!(config.interval(), std::time::Duration::from_secs(86_400));
+        assert_eq!(config.interval(), Duration::from_secs(86_400));
     }
 
     #[test]
@@ -76,7 +79,7 @@ mod tests {
             ..UpdatesConfig::default()
         };
 
-        assert_eq!(config.interval(), std::time::Duration::from_secs(3600));
+        assert_eq!(config.interval(), Duration::from_secs(3600));
     }
 
     #[test]

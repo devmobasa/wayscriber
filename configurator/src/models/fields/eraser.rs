@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::domain::EraserMode;
@@ -36,8 +39,8 @@ impl EraserModeOption {
     }
 }
 
-impl std::fmt::Display for EraserModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for EraserModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -79,8 +82,8 @@ impl PresetEraserKindOption {
     }
 }
 
-impl std::fmt::Display for PresetEraserKindOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PresetEraserKindOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -122,8 +125,8 @@ impl PresetEraserModeOption {
     }
 }
 
-impl std::fmt::Display for PresetEraserModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PresetEraserModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

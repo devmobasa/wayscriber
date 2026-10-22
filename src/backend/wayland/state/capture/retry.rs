@@ -1,7 +1,12 @@
 //! Re-admission on the retained backend after a bounded layout settling period.
-use super::super::core::overlay::OverlaySuppressionState;
-use super::super::*;
+use super::super::WaylandState;
+use super::super::buffer_damage::FullDamageReason;
+use super::super::core::overlay::{OverlaySuppression, OverlaySuppressionState};
 use crate::backend::wayland::capture_preflight::CapturePreflightError;
+use crate::backend::wayland::frozen::FrozenState;
+use crate::backend::wayland::zoom::ZoomState;
+use crate::input::InputState;
+use anyhow::Result;
 use std::time::Instant;
 
 impl WaylandState {
@@ -48,7 +53,7 @@ fn advance_layout_retries(
             Ok(ready) => restarted |= ready,
             Err(error) => {
                 log::warn!("Freeze retry preflight failed: {error}");
-                frozen.finish_preflight_failure(error, input);
+                frozen.finish_preflight_failure(&error, input);
             }
         }
     }
@@ -60,7 +65,7 @@ fn advance_layout_retries(
             Ok(ready) => restarted |= ready,
             Err(error) => {
                 log::warn!("Zoom retry preflight failed: {error}");
-                zoom.finish_preflight_failure(input, error);
+                zoom.finish_preflight_failure(input, &error);
             }
         }
     }
@@ -88,14 +93,20 @@ fn restart_suppressed_retry(
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::RuntimeWakeSource;
+    use crate::config::Config;
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::backend::wayland::acquisition::{
         ScreenAcquisitionId, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
     };
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
+    use crate::backend::wayland::state::OverlaySuppressionKeyboardPolicy;
     use crate::backend::wayland::state::acquisition::AcquisitionRuntime;
     use crate::backend::wayland::zoom::{ZoomCaptureBackend, ZoomCaptureId, ZoomSourceOutcome};
     use std::time::Duration;
+    use wayland_client::protocol::wl_output;
 
     #[derive(Clone, Copy)]
     enum RetainedRequest {
@@ -181,7 +192,7 @@ mod tests {
 
         for reason in [OverlaySuppression::Frozen, OverlaySuppression::Zoom] {
             let mut fixture = HandlerFixture::with_capture_output(
-                crate::config::Config::default(),
+                Config::default(),
                 CaptureFixtureBackend::Portal,
             );
             let output = fixture.complete_output_metadata("DP-3");
@@ -289,10 +300,10 @@ mod tests {
             // Successful admission, lost suppression, switched output, and
             // metadata that never becomes complete exercise the real owners.
             for failure in [None, Some("suppression"), Some("output"), Some("metadata")] {
-                let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+                let wake = RuntimeWakeSource::try_new().unwrap();
                 let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
                 let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
-                let mut input = crate::input::state::test_support::make_test_input_state();
+                let mut input = test_support::make_test_input_state();
                 let geometry = OutputGeometry::update_from(
                     Some((0, 0)),
                     Some((2, 1)),

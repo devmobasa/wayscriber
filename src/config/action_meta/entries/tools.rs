@@ -1,3 +1,5 @@
+use crate::config::action_meta::ActionIcon;
+
 use super::ActionMeta;
 
 pub const ENTRIES: &[ActionMeta] = &[
@@ -10,7 +12,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Text
+        icon: ActionIcon::Text
     ),
     meta!(
         EnterStickyNoteMode,
@@ -21,7 +23,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::StickyNote
+        icon: ActionIcon::StickyNote
     ),
     meta!(
         SelectSelectionTool,
@@ -32,7 +34,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Select
+        icon: ActionIcon::Select
     ),
     meta!(
         SelectPenTool,
@@ -43,7 +45,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Pen
+        icon: ActionIcon::Pen
     ),
     meta!(
         SelectLiveShapeTool,
@@ -64,7 +66,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Line
+        icon: ActionIcon::Line
     ),
     meta!(
         SelectRectTool,
@@ -75,7 +77,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Rect
+        icon: ActionIcon::Rect
     ),
     meta!(
         SelectEllipseTool,
@@ -86,7 +88,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Ellipse
+        icon: ActionIcon::Ellipse
     ),
     meta!(
         SelectTriangleTool,
@@ -127,7 +129,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::FreeformPolygon
+        icon: ActionIcon::FreeformPolygon
     ),
     meta!(
         SelectFreeformPolygonTool,
@@ -148,7 +150,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Arrow
+        icon: ActionIcon::Arrow
     ),
     meta!(
         SelectBlurTool,
@@ -159,7 +161,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Blur
+        icon: ActionIcon::Blur
     ),
     meta!(
         SelectHighlightTool,
@@ -208,7 +210,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Marker
+        icon: ActionIcon::Marker
     ),
     meta!(
         SelectStepMarkerTool,
@@ -219,7 +221,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::StepMarker
+        icon: ActionIcon::StepMarker
     ),
     meta!(
         SelectEraserTool,
@@ -230,7 +232,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true,
         true,
-        icon: crate::config::action_meta::ActionIcon::Eraser
+        icon: ActionIcon::Eraser
     ),
     meta!(
         ToggleEraserMode,

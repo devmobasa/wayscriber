@@ -1,3 +1,8 @@
+use crate::draw::{Color, TextMeasurer};
+use crate::input::MouseButton;
+use crate::session;
+use crate::session::{SessionOptions, SessionSnapshot};
+
 use super::base::{DrawingState, InputState};
 use super::selection::PolygonClickState;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
@@ -9,10 +14,7 @@ use std::path::{Path, PathBuf};
 struct ActiveInteractionRollback {
     boards: BoardManager,
     state: DrawingState,
-    active_drag: (
-        Option<crate::input::MouseButton>,
-        Option<crate::draw::Color>,
-    ),
+    active_drag: (Option<MouseButton>, Option<Color>),
     style: super::DrawingStyle,
     text_editing: super::TextEditing,
     color_picker_popup_state: ColorPickerPopupState,
@@ -166,7 +168,7 @@ impl InputState {
 
     pub(crate) fn with_active_interaction_canceled_for_capture_with<T>(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         capture: impl FnOnce(&Self) -> T,
     ) -> T {
         if !self.has_cancelable_session_capture_interaction() {
@@ -186,11 +188,11 @@ impl InputState {
     /// Snapshot boards for persistence without writing in-progress edits as empty text.
     pub(crate) fn snapshot_for_persistence_with(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
-        options: &crate::session::SessionOptions,
-    ) -> Option<crate::session::SessionSnapshot> {
+        measurer: &TextMeasurer,
+        options: &SessionOptions,
+    ) -> Option<SessionSnapshot> {
         self.with_active_interaction_canceled_for_capture_with(measurer, |input| {
-            crate::session::snapshot_from_input(input, options)
+            session::snapshot_from_input(input, options)
         })
     }
 }
@@ -198,11 +200,14 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use crate::draw::frame::ShapeSnapshot;
-    use crate::draw::{BLACK, Shape};
+    use crate::draw::{BLACK, Shape, TextMeasurer};
     use crate::input::state::core::board_picker::{BoardPickerDrag, BoardPickerPageDrag};
     use crate::input::state::core::text_editing::TextBlockDrag;
     use crate::input::state::test_support::make_test_input_state;
+    use crate::input::state::{PickerDrag, SelectionGrab};
     use crate::input::{BOARD_ID_BLACKBOARD, DrawingState, MouseButton, SelectionHandle, Tool};
+    use crate::session;
+    use crate::session::SessionSnapshot;
     use crate::util::Rect;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
@@ -244,7 +249,7 @@ mod tests {
                 thick: 2.0,
             },
             DrawingState::MovingSelection {
-                grab: crate::input::state::SelectionGrab::new(0, 10, 20),
+                grab: SelectionGrab::new(0, 10, 20),
                 last_x: 10,
                 last_y: 20,
                 snapshots: Vec::new(),
@@ -298,13 +303,13 @@ mod tests {
 
         let mut state = make_test_input_state();
         state.open_color_picker_popup();
-        state.color_picker_popup_set_dragging(Some(crate::input::state::PickerDrag::SatVal));
+        state.color_picker_popup_set_dragging(Some(PickerDrag::SatVal));
         assert!(state.has_active_pointer_interaction());
     }
 
     #[test]
     fn session_capture_rollback_preserves_board_delete_confirmation_identity() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.switch_board(BOARD_ID_BLACKBOARD);
         assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
@@ -315,7 +320,7 @@ mod tests {
         state.begin_pointer_drag(MouseButton::Left, None);
 
         state.with_active_interaction_canceled_for_capture_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             |input| {
                 assert!(!input.has_active_pointer_interaction());
             },
@@ -342,7 +347,7 @@ mod tests {
         state.begin_pointer_drag(MouseButton::Left, None);
 
         state.with_active_interaction_canceled_for_capture_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             |input| {
                 assert!(!input.has_active_pointer_interaction());
             },
@@ -357,7 +362,7 @@ mod tests {
 
     #[test]
     fn persistence_snapshot_keeps_original_text_during_in_place_edit() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_text_measurer = TextMeasurer::default();
 
         use crate::session::SessionOptions;
         use std::path::PathBuf;
@@ -383,11 +388,11 @@ mod tests {
         };
         buffer.push_str(" unsaved edit");
 
-        let live = crate::session::snapshot_from_input(&state, &options).expect("live snapshot");
+        let live = session::snapshot_from_input(&state, &options).expect("live snapshot");
         assert_eq!(first_snapshot_text(&live), "");
 
         let persisted = state
-            .snapshot_for_persistence_with(&crate::draw::TextMeasurer::default(), &options)
+            .snapshot_for_persistence_with(&TextMeasurer::default(), &options)
             .expect("persistence snapshot");
         assert_eq!(first_snapshot_text(&persisted), "Original");
 
@@ -407,7 +412,7 @@ mod tests {
         assert!(text.is_empty());
     }
 
-    fn first_snapshot_text(snapshot: &crate::session::SessionSnapshot) -> &str {
+    fn first_snapshot_text(snapshot: &SessionSnapshot) -> &str {
         for board in &snapshot.boards {
             for page in &board.pages.pages {
                 for drawn in &page.shapes {

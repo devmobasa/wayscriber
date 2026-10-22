@@ -1,5 +1,6 @@
+use crate::canvas_export::CanvasExportRect;
+use crate::screen_pixels::ImagePixelRect;
 use crate::util::Rect;
-use crate::{canvas_export::CanvasExportRect, screen_pixels::ImagePixelRect};
 
 use super::super::screen_image::ScreenSourceToken;
 
@@ -128,6 +129,8 @@ pub(in crate::backend::wayland) fn world_rect_for_composed_region(
 
 #[cfg(test)]
 mod tests {
+    use wayland_client::protocol::wl_output::Transform;
+
     use super::*;
     use crate::backend::wayland::state::screen_image::ScreenImageKind;
 
@@ -141,7 +144,7 @@ mod tests {
             stride: 3200,
             surface: (800, 600),
             output_scale: 1,
-            output_transform: wayland_client::protocol::wl_output::Transform::Normal,
+            output_transform: Transform::Normal,
             zoom_transformed,
             zoom_scale: if zoom_transformed { 2.0 } else { 1.0 },
             zoom_view_offset: if zoom_transformed {
@@ -334,7 +337,7 @@ mod tests {
     #[test]
     fn every_placement_stays_within_a_board_pixel_of_the_exact_crop() {
         let steps = 0..40;
-        for origin_step in steps.clone() {
+        for origin_step in steps {
             for extent_step in 1..40 {
                 let x = -3.0 + f64::from(origin_step) * 0.17;
                 let width = f64::from(extent_step) * 0.13;

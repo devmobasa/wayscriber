@@ -1,6 +1,6 @@
 use crate::config::{
-    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
-    action_label, action_short_label, section_flag_for_item,
+    Action, StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting,
+    ToolbarSectionFlag, action_label, action_short_label, section_flag_for_item,
 };
 use crate::i18n::tr;
 use crate::input::Tool;
@@ -85,7 +85,7 @@ pub(crate) enum ToolbarPersistence {
 pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     TopPinned,
     TopMinimized,
-    NamedSection(crate::config::ToolbarSectionFlag),
+    NamedSection(ToolbarSectionFlag),
     LayoutMode,
     ClickHighlight,
     /// Keyboard-only chrome: no toolbar control routes to these, but they
@@ -98,7 +98,7 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     },
     ItemOrder(ToolbarItemOrderGroup),
     StatusBarInteractive,
-    StatusBarItem(crate::config::StatusBarItem),
+    StatusBarItem(StatusBarItem),
     StatusBar,
     StatusBoardBadge,
     StatusPageBadge,
@@ -889,6 +889,8 @@ mod tests {
 
 #[cfg(test)]
 mod popover_affinity_tests {
+    use crate::draw::ArrowStyle;
+
     use super::*;
 
     /// Every event that starts an item drag must carry the order group its
@@ -1053,7 +1055,7 @@ mod popover_affinity_tests {
             &[P::ArrowStyleMenu]
         );
         for event in [
-            ToolbarEvent::SetArrowStyle(crate::draw::ArrowStyle::Pointy),
+            ToolbarEvent::SetArrowStyle(ArrowStyle::Pointy),
             ToolbarEvent::CycleArrowStyle,
             ToolbarEvent::TogglePenFeelPanel(true),
         ] {
@@ -1067,9 +1069,7 @@ mod popover_affinity_tests {
             ToolbarPersistence::Ephemeral
         );
         assert_eq!(
-            persistence_for_event(&ToolbarEvent::SetArrowStyle(
-                crate::draw::ArrowStyle::Curved
-            )),
+            persistence_for_event(&ToolbarEvent::SetArrowStyle(ArrowStyle::Curved)),
             persistence_for_event(&ToolbarEvent::CycleArrowStyle),
             "picking a style persists like cycling to it"
         );

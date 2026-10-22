@@ -240,6 +240,10 @@ fn action_pending_message(action: DaemonAction) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use wayscriber::i18n;
+
+    use crate::test_env;
+
     use super::*;
     use wayscriber::domain::Language;
 
@@ -298,7 +302,7 @@ mod tests {
 
     #[test]
     fn feedback_renders_in_the_language_active_when_it_is_drawn() {
-        crate::test_env::in_language_child(
+        test_env::in_language_child(
             concat!(
                 module_path!(),
                 "::feedback_renders_in_the_language_active_when_it_is_drawn"
@@ -313,7 +317,7 @@ mod tests {
                 let detecting = DaemonFeedback::Status(StatusFeedback::Detecting);
                 let english = (failed.text(), detecting.text());
 
-                wayscriber::i18n::set_language(Language::SimplifiedChinese);
+                i18n::set_language(Language::SimplifiedChinese);
 
                 assert_eq!(
                     english.0,

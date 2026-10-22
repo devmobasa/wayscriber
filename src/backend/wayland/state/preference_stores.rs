@@ -1,13 +1,11 @@
-use crate::{
-    backend::wayland::{
-        RuntimeWakeHandle,
-        config_edits::ConfigEditWorker,
-        runtime_ui_state::{ToolbarRuntimeState, UnavailablePersistencePreviews},
-    },
-    onboarding::OnboardingStore,
-    palette_recents::PaletteRecentsWriter,
-    ui::toolbar::RuntimeUiPersistenceSnapshot,
+use crate::backend::wayland::RuntimeWakeHandle;
+use crate::backend::wayland::config_edits::ConfigEditWorker;
+use crate::backend::wayland::runtime_ui_state::{
+    ToolbarRuntimeState, UnavailablePersistencePreviews,
 };
+use crate::onboarding::OnboardingStore;
+use crate::palette_recents::PaletteRecentsWriter;
+use crate::ui::toolbar::RuntimeUiPersistenceSnapshot;
 
 /// Runtime state for persisted UI preferences and degraded-mode previews.
 pub(in crate::backend::wayland) struct RuntimeUiSlot {

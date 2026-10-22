@@ -78,6 +78,11 @@ pub(crate) use top_spec::{
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag};
+    use crate::ui::toolbar::ToolbarItemCustomizeGroup;
+
     use super::*;
     use crate::config::{
         ToolbarGroupId, ToolbarItemOrderConfig, ToolbarItemsConfig, ToolbarLayoutMode,
@@ -207,10 +212,10 @@ mod tests {
     #[test]
     fn settings_model_moves_hidden_item_overrides_into_customization_panel() {
         let mut snapshot = snapshot();
-        snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+        snapshot.resolved_toolbar_items = ToolbarItemsConfig {
             hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
             shown: Vec::new(),
-            order: crate::config::ToolbarItemOrderConfig::default(),
+            order: ToolbarItemOrderConfig::default(),
         }
         .resolved();
 
@@ -239,8 +244,7 @@ mod tests {
                 .any(|group| group.label.as_ref() == "Top tools")
         );
 
-        snapshot.customize_items_group =
-            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+        snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopTools);
         let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         assert!(model.groups().is_empty());
         assert!(
@@ -292,7 +296,7 @@ mod tests {
         assert!(has_visibility_reset_button(&snapshot));
 
         let mut section_only = ToolbarItemsConfig::default();
-        section_only.set_hidden(crate::config::ToolbarSectionFlag::Actions.item_id(), false);
+        section_only.set_hidden(ToolbarSectionFlag::Actions.item_id(), false);
         snapshot.resolved_toolbar_items = section_only.resolved();
         assert!(!has_visibility_reset_button(&snapshot));
 
@@ -347,7 +351,7 @@ mod tests {
     #[test]
     fn factory_visibility_reset_button_uses_unambiguous_wording() {
         let mut snapshot = snapshot();
-        let mut items = crate::config::ToolbarItemsConfig::default();
+        let mut items = ToolbarItemsConfig::default();
         items.set_hidden(ids::TOP_TOOL_PEN, true);
         snapshot.resolved_toolbar_items = items.resolved();
 
@@ -369,16 +373,11 @@ mod tests {
     #[test]
     fn factory_order_reset_button_uses_unambiguous_wording() {
         let mut snapshot = snapshot();
-        let mut items = crate::config::ToolbarItemsConfig::default();
-        assert!(items.move_item_to_index(
-            crate::config::ToolbarItemOrderGroup::TopTools,
-            ids::TOP_TOOL_PEN,
-            5,
-        ));
+        let mut items = ToolbarItemsConfig::default();
+        assert!(items.move_item_to_index(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN, 5,));
         snapshot.resolved_toolbar_items = items.resolved();
         snapshot.customize_items_open = true;
-        snapshot.customize_items_group =
-            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+        snapshot.customize_items_group = Some(ToolbarItemCustomizeGroup::TopTools);
 
         let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         let button = model
@@ -399,10 +398,10 @@ mod tests {
         // Paths live behind the "Details" disclosure; expanded, they stay
         // complete.
         snapshot.settings_details_open = true;
-        let runtime_path = std::path::PathBuf::from(
+        let runtime_path = PathBuf::from(
             "/a/very/long/runtime/state/location/whose/complete/path/must/remain/visible/runtime-ui.toml",
         );
-        let artifact_path = std::path::PathBuf::from(
+        let artifact_path = PathBuf::from(
             "/another/very/long/recovery/location/whose/complete/path/must/remain/visible/wayscriber-recovery.toml",
         );
         snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
@@ -462,7 +461,7 @@ mod tests {
         );
 
         snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-            path: std::path::PathBuf::from("/isolated/runtime-ui.toml"),
+            path: PathBuf::from("/isolated/runtime-ui.toml"),
             mode: RuntimeUiPersistenceMode::Unavailable,
             detail: Some(
                 "writer startup failed; runtime-only toolbar and board changes are process-only"
@@ -531,10 +530,10 @@ mod tests {
 
         // Hiding side.boards.picker drops the button (config plumbing), while
         // the rest of the boards row survives.
-        snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+        snapshot.resolved_toolbar_items = ToolbarItemsConfig {
             hidden: vec![ids::SIDE_BOARDS_PICKER.as_str().to_string()],
             shown: Vec::new(),
-            order: crate::config::ToolbarItemOrderConfig::default(),
+            order: ToolbarItemOrderConfig::default(),
         }
         .resolved();
         let hidden =
@@ -601,11 +600,11 @@ mod tests {
 
     #[test]
     fn retained_side_ids_still_control_unified_top_models() {
-        fn hide(snapshot: &mut ToolbarSnapshot, id: crate::config::ToolbarItemId) {
-            snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+        fn hide(snapshot: &mut ToolbarSnapshot, id: ToolbarItemId) {
+            snapshot.resolved_toolbar_items = ToolbarItemsConfig {
                 hidden: vec![id.as_str().to_string()],
                 shown: Vec::new(),
-                order: crate::config::ToolbarItemOrderConfig::default(),
+                order: ToolbarItemOrderConfig::default(),
             }
             .resolved();
         }

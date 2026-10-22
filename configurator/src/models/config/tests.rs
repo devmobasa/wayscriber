@@ -1,3 +1,17 @@
+use crate::models::KeybindingField;
+use crate::{test_env, test_temp};
+
+use wayscriber::config::{
+    BoardGridConfig, BoardGridKindConfig, BoardsConfig, RegionPicker, ToolbarRebindModifier,
+    TrayIconStyle,
+};
+use wayscriber::domain::BoardGridKind;
+use wayscriber::draw::ArrowStyle;
+use wayscriber::input::DragBindableTool;
+use wayscriber::{config, domain, i18n};
+
+use std::fs;
+
 use super::super::color::ColorInput;
 
 #[test]
@@ -95,16 +109,16 @@ fn shape_pen_recognition_feedback_round_trips() {
 #[test]
 fn board_grid_draft_preserves_patterns_and_rejects_invalid_spacing() {
     let mut config = Config::default();
-    let mut boards = wayscriber::config::BoardsConfig::default();
-    boards.items[1].grid = wayscriber::config::BoardGridConfig {
-        kind: wayscriber::config::BoardGridKindConfig::IsometricDots,
+    let mut boards = BoardsConfig::default();
+    boards.items[1].grid = BoardGridConfig {
+        kind: BoardGridKindConfig::IsometricDots,
         spacing: 20,
     };
     config.boards = Some(boards);
     let mut draft = ConfigDraft::from_config(&config);
     assert_eq!(
         draft.boards.items[1].grid_kind,
-        wayscriber::domain::BoardGridKind::IsometricDots
+        BoardGridKind::IsometricDots
     );
     assert_eq!(
         draft.to_config(&config).unwrap().boards.unwrap().items[1].grid,
@@ -222,7 +236,7 @@ use super::super::fields::{
 #[test]
 fn config_draft_round_trips_toolbar_rebind_modifier() {
     let mut config = Config::default();
-    config.ui.toolbar.rebind_modifier = wayscriber::config::ToolbarRebindModifier::CtrlAlt;
+    config.ui.toolbar.rebind_modifier = ToolbarRebindModifier::CtrlAlt;
     let mut draft = ConfigDraft::from_config(&config);
     assert_eq!(
         draft.ui_toolbar_rebind_modifier,
@@ -235,7 +249,7 @@ fn config_draft_round_trips_toolbar_rebind_modifier() {
         .expect("toolbar modifier round trip");
     assert_eq!(
         round_trip.ui.toolbar.rebind_modifier,
-        wayscriber::config::ToolbarRebindModifier::ShiftAlt
+        ToolbarRebindModifier::ShiftAlt
     );
 }
 
@@ -245,13 +259,13 @@ fn config_draft_round_trips_arrow_style() {
     // that sets a style loads as Standard in the UI, and saving anything from
     // any tab writes that Standard back over the user's choice.
     let mut config = Config::default();
-    config.arrow.style = wayscriber::draw::ArrowStyle::Curved;
+    config.arrow.style = ArrowStyle::Curved;
     let mut draft = ConfigDraft::from_config(&config);
     assert_eq!(draft.arrow_style, ArrowStyleOption::Curved);
 
     draft.arrow_style = ArrowStyleOption::Double;
     let round_trip = draft.to_config(&config).expect("arrow style round trip");
-    assert_eq!(round_trip.arrow.style, wayscriber::draw::ArrowStyle::Double);
+    assert_eq!(round_trip.arrow.style, ArrowStyle::Double);
 }
 
 #[test]
@@ -347,10 +361,7 @@ fn config_draft_round_trips_region_capture_settings() {
     let round_trip = draft
         .to_config(&config)
         .expect("region capture settings should round trip");
-    assert_eq!(
-        round_trip.capture.region.picker,
-        wayscriber::config::RegionPicker::Slurp
-    );
+    assert_eq!(round_trip.capture.region.picker, RegionPicker::Slurp);
     assert!(!round_trip.capture.region.show_size_readout);
     assert!(round_trip.capture.region.show_loupe);
     assert!(!round_trip.capture.region.show_legend);
@@ -508,13 +519,13 @@ fn config_draft_rejects_path_escaping_save_names() {
 
 #[test]
 fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
-    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let temp = test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
     let original = format!(
         "config_revision = {}\n# intentionally sparse\n",
-        wayscriber::config::CURRENT_CONFIG_REVISION
+        config::CURRENT_CONFIG_REVISION
     );
-    std::fs::write(&path, &original).expect("write sparse config");
+    fs::write(&path, &original).expect("write sparse config");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
     let draft = ConfigDraft::from_config(document.config());
     let updated = draft
@@ -526,7 +537,7 @@ fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
         .expect("save untouched sparse draft");
 
     assert_eq!(
-        std::fs::read_to_string(path).expect("read sparse config"),
+        fs::read_to_string(path).expect("read sparse config"),
         original
     );
 }
@@ -559,9 +570,9 @@ fn config_draft_round_trips_precise_floats_without_truncation() {
 
 #[test]
 fn sparse_configurator_edit_adds_only_the_edited_field_path() {
-    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let temp = test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
-    std::fs::write(&path, "# intentionally sparse\n").expect("write sparse config");
+    fs::write(&path, "# intentionally sparse\n").expect("write sparse config");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
     let mut draft = ConfigDraft::from_config(document.config());
     draft.performance_max_fps_no_vsync = "144".to_string();
@@ -573,7 +584,7 @@ fn sparse_configurator_edit_adds_only_the_edited_field_path() {
         .save_with_backup(updated)
         .expect("save sparse draft edit");
 
-    let saved = std::fs::read_to_string(path).expect("read sparse config");
+    let saved = fs::read_to_string(path).expect("read sparse config");
     assert!(saved.contains("# intentionally sparse"));
     assert!(saved.contains("[performance]"));
     assert!(saved.contains("max_fps_no_vsync = 144"));
@@ -634,13 +645,13 @@ fn config_draft_round_trips_quick_colors() {
 /// would come back on the next save.
 #[test]
 fn a_config_saved_in_chinese_keeps_its_font_and_color_names() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::a_config_saved_in_chinese_keeps_its_font_and_color_names"
         ),
         || {
-            wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+            i18n::set_language(domain::Language::SimplifiedChinese);
             let mut config = Config::default();
             config.drawing.font_style = "italic".to_string();
             config.drawing.font_weight = "light".to_string();
@@ -687,7 +698,7 @@ fn config_draft_preserves_implicit_quick_color_defaults() {
 
 #[test]
 fn config_draft_preserves_sparse_explicit_quick_colors_without_padding_the_file() {
-    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let temp = test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
     let original = format!(
         r#"config_revision = {}
@@ -695,9 +706,9 @@ fn config_draft_preserves_sparse_explicit_quick_colors_without_padding_the_file(
 label = "Only configured color"
 color = "blue"
 "#,
-        wayscriber::config::CURRENT_CONFIG_REVISION
+        config::CURRENT_CONFIG_REVISION
     );
-    std::fs::write(&path, &original).expect("write sparse quick colors");
+    fs::write(&path, &original).expect("write sparse quick colors");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse quick colors");
     assert_eq!(
         document
@@ -723,7 +734,7 @@ color = "blue"
         .save_with_backup(updated)
         .expect("save sparse quick colors");
     assert_eq!(
-        std::fs::read_to_string(path).expect("read sparse quick colors"),
+        fs::read_to_string(path).expect("read sparse quick colors"),
         original
     );
 }
@@ -1112,7 +1123,7 @@ fn config_draft_round_trips_render_profiles() {
 #[test]
 fn config_draft_round_trips_board_pan_settings() {
     let mut config = Config::default();
-    config.boards = Some(wayscriber::config::BoardsConfig {
+    config.boards = Some(BoardsConfig {
         pan_enabled: false,
         show_pan_badge: false,
         ..Default::default()
@@ -1380,7 +1391,7 @@ fn section_toggle_replaces_overlay_item_override_on_save() {
             .contains(&ToolbarSectionFlag::Presets.item_id())
     );
     assert!(
-        wayscriber::config::resolve_section_visibility(
+        config::resolve_section_visibility(
             saved.ui.toolbar.layout_mode,
             &saved.ui.toolbar.mode_overrides,
             &resolved,
@@ -1580,7 +1591,7 @@ fn config_draft_round_trips_presets_and_history() {
         config.history.custom_redo_steps
     );
     assert_eq!(round_trip.presets.slot_count, config.presets.slot_count);
-    assert_eq!(round_trip.presets.get_slot(1), config.presets.get_slot(1));
+    assert_eq!(round_trip.presets.slot(1), config.presets.slot(1));
 }
 
 #[test]
@@ -1626,7 +1637,7 @@ fn preset_tool_change_loads_selected_tool_profile_values() {
     let round_trip = draft
         .to_config(&config)
         .expect("expected config to round trip");
-    let preset = round_trip.presets.get_slot(1).expect("preset");
+    let preset = round_trip.presets.slot(1).expect("preset");
     let settings = preset.tool_settings.as_ref().expect("tool settings");
 
     assert_eq!(preset.tool, Tool::Marker);
@@ -1683,7 +1694,7 @@ fn preset_visible_edits_update_selected_tool_profile_only() {
     let round_trip = draft
         .to_config(&config)
         .expect("expected config to round trip");
-    let preset = round_trip.presets.get_slot(1).expect("preset");
+    let preset = round_trip.presets.slot(1).expect("preset");
     let settings = preset.tool_settings.as_ref().expect("tool settings");
 
     assert_eq!(preset.tool, Tool::Marker);
@@ -1701,11 +1712,11 @@ fn preset_visible_edits_update_selected_tool_profile_only() {
 #[test]
 fn config_draft_round_trips_drag_tool_mapping() {
     let mut config = Config::default();
-    config.drawing.drag_tool = wayscriber::input::DragBindableTool::Arrow;
-    config.drawing.shift_drag_tool = wayscriber::input::DragBindableTool::Eraser;
-    config.drawing.ctrl_drag_tool = wayscriber::input::DragBindableTool::Pen;
-    config.drawing.ctrl_shift_drag_tool = wayscriber::input::DragBindableTool::Rect;
-    config.drawing.tab_drag_tool = wayscriber::input::DragBindableTool::Ellipse;
+    config.drawing.drag_tool = DragBindableTool::Arrow;
+    config.drawing.shift_drag_tool = DragBindableTool::Eraser;
+    config.drawing.ctrl_drag_tool = DragBindableTool::Pen;
+    config.drawing.ctrl_shift_drag_tool = DragBindableTool::Rect;
+    config.drawing.tab_drag_tool = DragBindableTool::Ellipse;
     let mut drag_tools = config.drawing.effective_drag_tools();
     drag_tools.right.drag_tool = DragTool::Pen;
     drag_tools.right.drag_color = Some(ColorSpec::Name("blue".to_string()));
@@ -1826,10 +1837,10 @@ fn config_draft_round_trips_ui_language() {
 
 #[test]
 fn config_draft_ui_language_defaults_to_auto_when_key_missing() {
-    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let temp = test_temp::tempdir().expect("create temp directory");
 
     let missing = temp.path().join("missing-language.toml");
-    std::fs::write(&missing, "[ui]\ntheme = \"dark\"\n").expect("write config without language");
+    fs::write(&missing, "[ui]\ntheme = \"dark\"\n").expect("write config without language");
     let document = ConfigDocument::load_from_path(&missing).expect("load config without language");
     assert_eq!(document.config().ui.language, Language::Auto);
     assert_eq!(
@@ -1843,10 +1854,10 @@ fn config_draft_ui_language_defaults_to_auto_when_key_missing() {
 /// of reaching the draft as a silently rewritten value.
 #[test]
 fn config_document_salvages_unknown_ui_language_to_auto() {
-    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let temp = test_temp::tempdir().expect("create temp directory");
 
     let unknown = temp.path().join("unknown-language.toml");
-    std::fs::write(&unknown, "[ui]\nlanguage = \"fr\"\n").expect("write unknown language");
+    fs::write(&unknown, "[ui]\nlanguage = \"fr\"\n").expect("write unknown language");
 
     let (document, warning) = ConfigDocument::load_for_editing_from_path(&unknown)
         .expect("expected the editing load to salvage the unknown language");
@@ -1895,39 +1906,31 @@ fn config_draft_keeps_the_documents_revision_until_a_migration_is_applied() {
         .expect("expected config to round trip");
     assert_eq!(untouched.config_revision, 0);
 
-    draft.config_revision = Some(wayscriber::config::CURRENT_CONFIG_REVISION);
+    draft.config_revision = Some(config::CURRENT_CONFIG_REVISION);
     let migrated = draft
         .to_config(&base)
         .expect("expected config to round trip");
-    assert_eq!(
-        migrated.config_revision,
-        wayscriber::config::CURRENT_CONFIG_REVISION
-    );
+    assert_eq!(migrated.config_revision, config::CURRENT_CONFIG_REVISION);
 }
 
 #[test]
 fn config_draft_preserves_tray_icon_style() {
     let mut config = Config::default();
-    config.tray.icon_style = wayscriber::config::TrayIconStyle::Colored;
+    config.tray.icon_style = TrayIconStyle::Colored;
 
     let draft = ConfigDraft::from_config(&config);
     let round_trip = draft
         .to_config(&config)
         .expect("expected config to round trip");
 
-    assert_eq!(
-        round_trip.tray.icon_style,
-        wayscriber::config::TrayIconStyle::Colored
-    );
+    assert_eq!(round_trip.tray.icon_style, TrayIconStyle::Colored);
 }
 
 #[test]
 fn compiled_defaults_are_not_shown_as_authored_keybindings() {
     let draft = ConfigDraft::from_config(&Config::default());
     assert!(
-        !draft
-            .keybindings
-            .is_authored(crate::models::KeybindingField::Undo),
+        !draft.keybindings.is_authored(KeybindingField::Undo),
         "Config::default() is AllExplicit for validation, not for UI source badges"
     );
 }

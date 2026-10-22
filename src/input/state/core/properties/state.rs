@@ -64,6 +64,8 @@ impl PropertiesPanelState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::PropertiesPanelLock;
+
     use super::*;
 
     fn panel() -> ShapePropertiesPanel {
@@ -71,7 +73,7 @@ mod tests {
             title: "Properties".into(),
             subtitle: None,
             details: None,
-            lock: crate::input::state::PropertiesPanelLock::Unlocked,
+            lock: PropertiesPanelLock::Unlocked,
             anchor: (10.0, 20.0),
             anchor_rect: None,
             entries: Vec::new(),

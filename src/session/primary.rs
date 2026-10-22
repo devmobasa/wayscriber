@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use std::error::Error;
-use std::fmt;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::{fmt, io};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PrimaryTargetKind {
@@ -192,7 +192,7 @@ pub(crate) fn make_session_artifact_private(path: &Path) -> Result<()> {
     })
 }
 
-fn raw_metadata(path: &Path, no_follow: bool) -> std::io::Result<Metadata> {
+fn raw_metadata(path: &Path, no_follow: bool) -> io::Result<Metadata> {
     if no_follow {
         fs::symlink_metadata(path)
     } else {
@@ -222,7 +222,7 @@ fn ensure_regular_session_artifact(path: &Path, metadata: Metadata) -> Result<Me
 }
 
 #[cfg(unix)]
-fn open_error_is_symlink(err: &std::io::Error) -> bool {
+fn open_error_is_symlink(err: &io::Error) -> bool {
     err.raw_os_error() == Some(libc::ELOOP)
 }
 

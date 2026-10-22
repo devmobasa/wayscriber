@@ -3,6 +3,7 @@ use crate::draw::{
 };
 use crate::input::InputState;
 use crate::input::state::core::base::SelectionHandle;
+use crate::input::state::test_support;
 use crate::util::Rect;
 
 fn fixtures() -> Vec<(Shape, (i32, i32))> {
@@ -70,7 +71,7 @@ fn fixtures() -> Vec<(Shape, (i32, i32))> {
 }
 
 fn state_with(shape: Shape) -> (InputState, ShapeId, ShapeId) {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.view.set_screen_dimensions(1000, 800);
     state.set_hit_test_threshold(1);
     state.set_hit_test_tolerance(1.0);

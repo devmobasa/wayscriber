@@ -1,8 +1,9 @@
+use std::collections::BTreeSet;
 use std::fs;
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use crate::test_temp;
 
 use super::*;
 use crate::runtime_ui_state::*;
@@ -20,7 +21,7 @@ fn startup_seeds() -> ValidatedInteractionSeeds {
 
 #[test]
 fn every_accepted_command_produces_one_typed_completion() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
@@ -50,7 +51,7 @@ fn every_accepted_command_produces_one_typed_completion() {
 
 #[test]
 fn a_panicking_completion_notifier_does_not_stop_the_writer() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
@@ -105,12 +106,11 @@ fn a_panicking_completion_notifier_does_not_stop_the_writer() {
 
 #[test]
 fn source_commands_are_serialized_against_the_previous_completion_source() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let missing = store.inspect().unwrap().observation.revision;
-    let writer =
-        RuntimeUiStateWriter::spawn_with_completion_notifier(store.clone(), || {}).unwrap();
+    let writer = RuntimeUiStateWriter::spawn_with_completion_notifier(store, || {}).unwrap();
     let first = SourceMutationRequest {
         id: SourceMutationId(1),
         accepted_through: AcceptedStateRevision(1),
@@ -151,7 +151,7 @@ fn source_commands_are_serialized_against_the_previous_completion_source() {
 
 #[test]
 fn writer_reports_filesystem_failures_without_dropping_completion() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("gone/runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
@@ -180,7 +180,7 @@ fn writer_reports_filesystem_failures_without_dropping_completion() {
 
 #[test]
 fn inspection_command_returns_exact_unsupported_bytes() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let bytes = b"version = 22\nfuture = true\n";
     fs::write(&path, bytes).unwrap();
@@ -219,7 +219,7 @@ fn inspection_command_returns_exact_unsupported_bytes() {
 
 #[test]
 fn a_batch_of_accepted_inspections_has_no_missing_or_duplicate_completion() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let writer =
         RuntimeUiStateWriter::spawn_with_completion_notifier(RuntimeUiStateStore::new(path), || {})
@@ -236,7 +236,7 @@ fn a_batch_of_accepted_inspections_has_no_missing_or_duplicate_completion() {
             }))
             .unwrap();
     }
-    let mut completed = std::collections::BTreeSet::new();
+    let mut completed = BTreeSet::new();
     for _ in 0..12 {
         let RuntimeStateWriterCompletion::Recovery(completion) = writer.recv().unwrap() else {
             panic!("expected recovery completion");
@@ -250,7 +250,7 @@ fn a_batch_of_accepted_inspections_has_no_missing_or_duplicate_completion() {
 
 #[test]
 fn malformed_startup_is_preserved_and_reset_through_real_recovery_io() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
     let invalid = b"not valid TOML at all\n";
     fs::write(&path, invalid).unwrap();

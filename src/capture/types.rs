@@ -1,8 +1,13 @@
 //! Data types for screenshot capture functionality.
 
+use std::time::Duration;
+use std::{error, io};
+
+use crate::capture::file::FileSaveConfig;
 use crate::i18n::tr;
+use std::fmt;
 use std::path::PathBuf;
-use std::{fmt, sync::Arc};
+use std::sync::Arc;
 
 /// User-facing operation kind for image delivery and status labels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +19,7 @@ pub enum ImageOperationKind {
 }
 
 impl ImageOperationKind {
+    #[must_use]
     pub fn success_title(self) -> &'static str {
         match self {
             Self::Screenshot => tr("Screenshot Captured"),
@@ -23,6 +29,7 @@ impl ImageOperationKind {
         }
     }
 
+    #[must_use]
     pub fn failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => tr("Screenshot Failed"),
@@ -32,6 +39,7 @@ impl ImageOperationKind {
         }
     }
 
+    #[must_use]
     pub fn save_failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => tr("Screenshot File Not Saved"),
@@ -41,6 +49,7 @@ impl ImageOperationKind {
         }
     }
 
+    #[must_use]
     pub fn clipboard_failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => tr("Screenshot Clipboard Failed"),
@@ -50,6 +59,7 @@ impl ImageOperationKind {
         }
     }
 
+    #[must_use]
     pub fn fallback_toast(self) -> &'static str {
         match self {
             Self::Screenshot => tr("Clipboard failed"),
@@ -59,6 +69,7 @@ impl ImageOperationKind {
         }
     }
 
+    #[must_use]
     pub fn saved_log_label(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot",
@@ -68,6 +79,7 @@ impl ImageOperationKind {
         }
     }
 
+    #[must_use]
     pub fn format_error(self, err: &CaptureError) -> String {
         match self {
             Self::Screenshot => err.to_string(),
@@ -121,6 +133,7 @@ pub struct ImageFormatMetadata {
 }
 
 impl ImageFormatMetadata {
+    #[must_use]
     pub fn png() -> Self {
         Self {
             extension: "png".to_string(),
@@ -141,7 +154,7 @@ pub struct RenderedImage {
 pub struct ImageDeliveryRequest {
     pub image: RenderedImage,
     pub destination: CaptureDestination,
-    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub save_config: Option<FileSaveConfig>,
     pub operation: ImageOperationKind,
     pub fallback_format_override: Option<ImageFormatMetadata>,
 }
@@ -165,7 +178,7 @@ pub type DocumentRenderJob = Box<dyn FnOnce() -> Result<RenderedDocument, Captur
 pub struct RenderedImageDeliveryRequest {
     pub render: ImageRenderJob,
     pub destination: CaptureDestination,
-    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub save_config: Option<FileSaveConfig>,
     pub operation: ImageOperationKind,
     pub fallback_format_override: Option<ImageFormatMetadata>,
 }
@@ -175,7 +188,7 @@ pub struct RenderedImageDeliveryRequest {
 pub struct RenderedDocumentDeliveryRequest {
     pub render: DocumentRenderJob,
     pub destination: CaptureDestination,
-    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub save_config: Option<FileSaveConfig>,
     pub operation: ImageOperationKind,
 }
 
@@ -190,7 +203,7 @@ pub struct RenderedDocument {
 pub struct DocumentDeliveryRequest {
     pub document: RenderedDocument,
     pub destination: CaptureDestination,
-    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub save_config: Option<FileSaveConfig>,
     pub operation: ImageOperationKind,
 }
 
@@ -209,6 +222,7 @@ pub struct DesktopBackdropGeometry {
 }
 
 impl DesktopBackdropGeometry {
+    #[must_use]
     pub fn from_outputs(
         active: DesktopBackdropOutputGeometry,
         outputs: &[DesktopBackdropOutputGeometry],
@@ -235,16 +249,19 @@ impl DesktopBackdropGeometry {
         })
     }
 
+    #[must_use]
     pub fn verified_physical_size(self) -> Option<(u32, u32)> {
         let width = self.physical_width?;
         let height = self.physical_height?;
         (width > 0 && height > 0).then_some((width, height))
     }
 
+    #[must_use]
     pub fn physical_origin(self) -> Option<(u32, u32)> {
         Some((self.crop_x?, self.crop_y?))
     }
 
+    #[must_use]
     pub fn screenshot_size(self) -> Option<(u32, u32)> {
         let width = self.screenshot_width?;
         let height = self.screenshot_height?;
@@ -440,6 +457,7 @@ impl CaptureResult {
     /// the image either, so the caller has to offer another way to keep it.
     ///
     /// A file-only delivery never asked for the clipboard, so it never counts.
+    #[must_use]
     pub fn clipboard_copy_failed(&self) -> bool {
         let clipboard_requested = matches!(
             self.destination,
@@ -507,7 +525,7 @@ pub enum CaptureError {
     #[cfg(feature = "dbus")]
     DBusError(zbus::Error),
 
-    SaveError(std::io::Error),
+    SaveError(io::Error),
 
     ClipboardError(String),
 
@@ -529,7 +547,7 @@ pub enum CaptureError {
 
     /// The screenshot portal did not answer its request in time.
     #[cfg_attr(not(feature = "portal"), allow(dead_code))]
-    PortalTimeout(std::time::Duration),
+    PortalTimeout(Duration),
 
     /// The compositor fast path failed, and so did the portal fallback.
     FallbackFailed {
@@ -540,6 +558,7 @@ pub enum CaptureError {
 
 impl CaptureError {
     /// What kind of failure this is, for choosing the user-facing explanation.
+    #[must_use]
     pub fn failure_kind(&self) -> CaptureFailureKind {
         match self {
             Self::MissingTool { tool, .. } => CaptureFailureKind::MissingTool(tool),
@@ -590,8 +609,8 @@ impl fmt::Display for CaptureError {
     }
 }
 
-impl std::error::Error for CaptureError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl error::Error for CaptureError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             #[cfg(feature = "dbus")]
             Self::DBusError(err) => Some(err),
@@ -608,8 +627,8 @@ impl From<zbus::Error> for CaptureError {
     }
 }
 
-impl From<std::io::Error> for CaptureError {
-    fn from(value: std::io::Error) -> Self {
+impl From<io::Error> for CaptureError {
+    fn from(value: io::Error) -> Self {
         Self::SaveError(value)
     }
 }

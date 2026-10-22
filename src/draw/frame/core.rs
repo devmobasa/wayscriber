@@ -1,3 +1,6 @@
+#[cfg(test)]
+use std::cell::Cell;
+
 use super::frame_storage;
 use super::types::{DrawnShape, ShapeId, UndoAction};
 use crate::draw::shape::Shape;
@@ -5,7 +8,7 @@ use serde::Serialize;
 
 #[cfg(test)]
 std::thread_local! {
-    static LINEAR_ID_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static LINEAR_ID_LOOKUPS: Cell<usize> = const { Cell::new(0) };
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -43,6 +46,7 @@ impl Default for Frame {
 
 impl Frame {
     /// Creates a new empty frame.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             shapes: super::FrameShapes::default(),
@@ -71,6 +75,7 @@ impl Frame {
     }
 
     /// Clone the frame's shapes while dropping history.
+    #[must_use]
     pub fn clone_without_history(&self) -> Self {
         let mut frame = Frame::new();
         frame.shapes = self.shapes.clone();
@@ -82,6 +87,7 @@ impl Frame {
 
     /// Copy exactly the newest undo/redo entries retained by clamp_history_depth,
     /// without first allocating copies of discarded actions or their payloads.
+    #[must_use]
     pub fn clone_with_history_limit(&self, limit: usize) -> Self {
         if limit == usize::MAX {
             return self.clone();
@@ -94,6 +100,7 @@ impl Frame {
         frame
     }
 
+    #[must_use]
     pub fn page_name(&self) -> Option<&str> {
         self.page_name.as_deref()
     }
@@ -112,17 +119,20 @@ impl Frame {
 
     #[allow(dead_code)]
     /// Returns the number of shapes in the frame.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.shapes.len()
     }
 
     #[allow(dead_code)]
     /// Returns true if the frame contains no shapes.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.shapes.is_empty()
     }
 
     /// Returns true if the frame contains data worth persisting.
+    #[must_use]
     pub fn has_persistable_data(&self) -> bool {
         !self.shapes.is_empty()
             || self.page_name.is_some()
@@ -139,10 +149,12 @@ impl Frame {
     }
 
     /// Runtime token for the shape content; view/background are separate cache inputs.
+    #[must_use]
     pub fn content_revision(&self) -> u64 {
         self.shapes.revision()
     }
 
+    #[must_use]
     pub fn view_offset(&self) -> (i32, i32) {
         self.view_offset
     }
@@ -195,6 +207,7 @@ impl Frame {
     }
 
     /// Finds the index of a shape by id.
+    #[must_use]
     pub fn find_index(&self, id: ShapeId) -> Option<usize> {
         #[cfg(test)]
         LINEAR_ID_LOOKUPS.with(|count| count.set(count.get().saturating_add(1)));
@@ -212,10 +225,11 @@ impl Frame {
 
     #[cfg(test)]
     pub(crate) fn linear_id_lookup_count() -> usize {
-        LINEAR_ID_LOOKUPS.with(std::cell::Cell::get)
+        LINEAR_ID_LOOKUPS.with(Cell::get)
     }
 
     /// Returns a reference to a shape by id.
+    #[must_use]
     pub fn shape(&self, id: ShapeId) -> Option<&DrawnShape> {
         self.find_index(id).map(|i| &self.shapes[i])
     }

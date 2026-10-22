@@ -9,6 +9,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
+use crate::test_env::{Lease, LeaseGuard};
+
 static MOTION_ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// Enable/disable non-essential chrome animation process-wide. Wired from the
@@ -23,6 +26,7 @@ pub fn motion_enabled() -> bool {
 }
 
 /// Cubic ease-out easing curve (pure math; not gated).
+#[must_use]
 pub fn ease_out_cubic(t: f64) -> f64 {
     let t = t.clamp(0.0, 1.0);
     1.0 - (1.0 - t).powi(3)
@@ -42,6 +46,7 @@ pub struct Envelope {
 }
 
 impl Envelope {
+    #[must_use]
     pub fn new(value: f64) -> Self {
         Self {
             current: value,
@@ -53,11 +58,13 @@ impl Envelope {
     }
 
     /// Current value without advancing time.
+    #[must_use]
     pub fn value(&self) -> f64 {
         self.current
     }
 
     /// Whether the envelope has reached its target (no transition running).
+    #[must_use]
     pub fn settled(&self) -> bool {
         self.started.is_none()
     }
@@ -110,6 +117,7 @@ impl Envelope {
 
 /// Fully opaque for `hold_ratio` of the lifetime, then a linear fade to zero
 /// at `progress == 1.0`. Used by preset toasts.
+#[must_use]
 pub fn hold_then_fade_out(progress: f64, hold_ratio: f64) -> f64 {
     if !motion_enabled() {
         return if progress >= 1.0 { 0.0 } else { 1.0 };
@@ -125,6 +133,7 @@ pub fn hold_then_fade_out(progress: f64, hold_ratio: f64) -> f64 {
 /// Opaque until the final `fade_secs` of `duration_secs`, then a linear fade
 /// to zero. Used by UI toasts (fixed short end fade keeps long-lived toasts
 /// crisp for nearly their full lifetime).
+#[must_use]
 pub fn end_fade(elapsed_secs: f64, duration_secs: f64, fade_secs: f64) -> f64 {
     let fade_duration = duration_secs.min(fade_secs);
     if fade_duration <= 0.0 {
@@ -148,6 +157,7 @@ pub fn end_fade(elapsed_secs: f64, duration_secs: f64, fade_secs: f64) -> f64 {
 /// Attack/hold/release flash: ramp to `peak` by `attack_end`, hold until
 /// `hold_end`, then release to zero at `progress == 1.0`. Used by the
 /// blocked-action edge flash.
+#[must_use]
 pub fn flash(progress: f64, attack_end: f64, hold_end: f64, peak: f64) -> f64 {
     if !motion_enabled() {
         return if progress >= 1.0 { 0.0 } else { peak };
@@ -165,15 +175,15 @@ pub fn flash(progress: f64, attack_end: f64, hold_end: f64, peak: f64) -> f64 {
 /// flag; motion is restored to enabled when the guard drops.
 #[cfg(test)]
 pub(crate) struct MotionOverrideGuard {
-    _lock: std::sync::MutexGuard<'static, ()>,
+    _lease: LeaseGuard<'static>,
 }
 
 #[cfg(test)]
 pub(crate) fn override_motion_for_test(enabled: bool) -> MotionOverrideGuard {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    static MOTION_LEASE: Lease = Lease::new();
+    let lease = MOTION_LEASE.acquire();
     set_motion_enabled(enabled);
-    MotionOverrideGuard { _lock: lock }
+    MotionOverrideGuard { _lease: lease }
 }
 
 #[cfg(test)]

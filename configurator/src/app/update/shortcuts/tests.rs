@@ -1,3 +1,9 @@
+use std::fs;
+use std::path::PathBuf;
+
+#[cfg(feature = "tablet-input")]
+use wayscriber::config::Action;
+
 use crate::models::{ShortcutManagerFilter, ShortcutManagerSort};
 use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, Shortcut};
 
@@ -5,18 +11,20 @@ use crate::app::effects::Effect;
 use crate::app::state::{ConfiguratorApp, PendingConfirmation, StatusMessage};
 use crate::models::keybindings::keyval;
 use crate::models::{
-    KeybindingField, KeyboardModifiers, RecorderDeviceKind, SearchQuery, keybinding_tab,
+    KeybindingField, KeyboardModifiers, PendingShortcutConflict, RecorderDeviceKind, SearchQuery,
+    keybinding_tab,
 };
+use crate::test_temp;
 use crate::test_temp::TempDir;
 
 fn status_contains(status: &StatusMessage, needle: &str) -> bool {
     status.text().is_some_and(|text| text.contains(needle))
 }
 
-fn load_config(app: &mut ConfiguratorApp, contents: &str) -> (TempDir, std::path::PathBuf) {
-    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+fn load_config(app: &mut ConfiguratorApp, contents: &str) -> (TempDir, PathBuf) {
+    let dir = test_temp::tempdir().expect("temporary test directory");
     let path = dir.path().join("config.toml");
-    std::fs::write(&path, contents).expect("write test config");
+    fs::write(&path, contents).expect("write test config");
     let document = ConfigDocument::load_from_path(&path).expect("load test config document");
     let _ = app.handle_config_loaded(Ok((Box::new(document), None)));
     (dir, path)
@@ -125,7 +133,7 @@ fn recording_reset_and_removal_dirty_without_saving() {
     );
     let effects = app.handle_shortcut_removed(
         KeybindingField::ToggleFloatingBadge,
-        Shortcut::parse("F5").expect("parses"),
+        &Shortcut::parse("F5").expect("parses"),
     );
     assert!(effects.is_empty());
     assert_eq!(
@@ -201,7 +209,7 @@ fn save_after_confirmed_replacement_writes_only_the_intended_fields() {
     let _ = app.handle_shortcut_conflict_replace_confirmed();
     save_draft(&mut app);
 
-    let contents = std::fs::read_to_string(&path).expect("read saved config");
+    let contents = fs::read_to_string(&path).expect("read saved config");
     assert!(contents.contains("# keep me"), "{contents}");
     assert!(contents.contains("unknown_future = true"), "{contents}");
     let revision = format!("config_revision = {CURRENT_CONFIG_REVISION}");
@@ -307,7 +315,7 @@ fn resetting_an_explicit_binding_stays_authored_through_save_reload() {
     assert!(app.draft.keybindings.is_authored(KeybindingField::Undo));
     save_draft(&mut app);
 
-    let contents = std::fs::read_to_string(path).expect("read saved config");
+    let contents = fs::read_to_string(path).expect("read saved config");
     assert_eq!(
         config_setting(&contents, "undo").as_deref(),
         Some("undo = [\"Ctrl+Z\"]")
@@ -374,7 +382,7 @@ fn recording_stylus_primary_prompts_to_move_the_default_legacy_barrel() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     assert_eq!(
         app.draft.keybindings.legacy_tablet.stylus_primary,
-        Some(wayscriber::config::Action::ToggleRadialMenu)
+        Some(Action::ToggleRadialMenu)
     );
     let _ = app.handle_shortcut_recording_started(KeybindingField::Undo);
     let _ = app.handle_shortcut_recorder_button(
@@ -688,7 +696,7 @@ fn conflict_review_queue_arms_the_next_conflict_after_replace() {
     assert!(app.shortcuts.review);
     assert!(app.shortcuts.conflict().is_some());
     let first_target = match app.shortcuts.conflict() {
-        Some(crate::models::PendingShortcutConflict::Recorded { target, .. }) => *target,
+        Some(PendingShortcutConflict::Recorded { target, .. }) => *target,
         other => panic!("expected a recorded conflict, got {other:?}"),
     };
 
@@ -702,7 +710,7 @@ fn conflict_review_queue_arms_the_next_conflict_after_replace() {
         .conflict()
         .expect("the next conflict should be armed");
     match second {
-        crate::models::PendingShortcutConflict::Recorded { target, .. } => {
+        PendingShortcutConflict::Recorded { target, .. } => {
             assert_ne!(*target, first_target);
         }
         other => panic!("expected a recorded conflict, got {other:?}"),
@@ -737,7 +745,7 @@ fn jump_to_conflict_selects_the_other_claimant() {
     let jump = app
         .shortcuts
         .conflict()
-        .and_then(crate::models::PendingShortcutConflict::jump_field)
+        .and_then(PendingShortcutConflict::jump_field)
         .expect("a claimant to jump to");
     let _ = app.handle_shortcut_manager_jump_to(jump);
     assert_eq!(app.selected_keybinding, Some(jump));
@@ -765,7 +773,8 @@ fn prepared_manager_refresh_reuses_analysis_for_filters() {
 #[ignore = "release measurement: cargo test --release shortcut_refresh_cost -- --ignored --nocapture"]
 fn shortcut_refresh_cost() {
     use crate::models::keybindings::take_parse_calls;
-    use std::{hint::black_box, time::Instant};
+    use std::hint::black_box;
+    use std::time::Instant;
     let (mut app, _) = ConfiguratorApp::new_app();
     for query in ["", "tool", "Ctrl"] {
         app.handle_search_changed(query.into());

@@ -1,3 +1,5 @@
+use std::env;
+
 use super::super::WaylandState;
 use crate::config::{Action, Config};
 use crate::draw::frame::UndoAction;
@@ -6,10 +8,9 @@ use crate::env_vars::HOME_ENV;
 use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::boards::BoardState;
-use crate::input::state::ClipboardPasteRequest;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{ClipboardPasteRequest, Toast, ToastPriority};
 use crate::{notification, session};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 const SESSION_PASTE_WARNING_TOAST_MS: u64 = 20_000;
@@ -429,13 +430,14 @@ fn describe_limit(limit: session::SaveLimitExceeded) -> String {
 }
 
 fn config_path_display() -> String {
-    Config::get_config_path()
+    Config::config_path()
+        .as_deref()
         .map(compact_path)
         .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
 }
 
-fn compact_path(path: PathBuf) -> String {
-    let Some(home) = std::env::var_os(HOME_ENV).map(PathBuf::from) else {
+fn compact_path(path: &Path) -> String {
+    let Some(home) = env::var_os(HOME_ENV).map(PathBuf::from) else {
         return path.display().to_string();
     };
     match path.strip_prefix(&home) {

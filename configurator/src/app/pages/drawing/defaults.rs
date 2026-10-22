@@ -1,3 +1,4 @@
+use wayscriber::config;
 use wayscriber::i18n::tr;
 
 use crate::messages::Message;
@@ -37,10 +38,10 @@ pub(super) fn build(page: &mut PageBuilder) {
             tr("Eraser mode"),
             "",
             EraserModeOption::list(),
-            EraserModeOption::list()
+            &EraserModeOption::list()
                 .iter()
                 .map(|option| option.label().to_string())
-                .collect(),
+                .collect::<Vec<_>>(),
             |app| app.draft.drawing_default_eraser_mode,
             Message::EraserModeChanged,
         )
@@ -64,7 +65,7 @@ pub(super) fn build(page: &mut PageBuilder) {
                 validate_usize_range(
                     &app.draft.drawing_shape_recognition_sensitivity,
                     0,
-                    usize::from(wayscriber::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+                    usize::from(config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
                 )
             },
         )

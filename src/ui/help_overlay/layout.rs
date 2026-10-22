@@ -1,3 +1,5 @@
+use crate::ui_text::UiTextEngine;
+
 use super::super::primitives::text_extents_for_with_engine;
 use super::grid::GridStyle;
 use super::keycaps::measure_key_combo;
@@ -15,7 +17,7 @@ pub(crate) struct GridLayout {
 /// Measure each section card. Rows read "label … keys": the label column is
 /// as wide as the widest label, and the key chips start one gap past it.
 pub(crate) fn measure_sections(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     sections: Vec<Section>,
     style: &GridStyle<'_>,

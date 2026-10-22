@@ -3,12 +3,15 @@ use wayscriber::i18n::tr;
 use std::collections::HashMap;
 
 use wayscriber::config::{Config, MigrationPreview, PRESET_SLOTS_MAX};
+use wayscriber::i18n;
 
 use crate::models::{
     ColorPickerId, ConfigDraft, DesktopEnvironment, DragMouseButton, KeybindingField,
     KeybindingsTabId, SearchQuery, SessionCatalogState, ShortcutManagerFilter, ShortcutManagerSort,
     StartupRequest, TabId, ToolbarLayoutModeOption, UiTabId,
 };
+#[cfg(test)]
+use crate::test_env;
 
 use super::effects::Effect;
 
@@ -222,7 +225,7 @@ impl ConfiguratorApp {
     /// about to draw. A transition that fails keeps the language it found.
     /// The shell notices the change and rebuilds its pages in that language.
     pub(crate) fn apply_draft_language(&self) {
-        wayscriber::i18n::set_language(self.draft.ui_language.to_language());
+        i18n::set_language(self.draft.ui_language.to_language());
     }
 
     /// The app as a launch with no destination.
@@ -231,7 +234,7 @@ impl ConfiguratorApp {
     /// when it is the empty one.
     #[cfg(test)]
     pub(crate) fn new_app() -> (Self, Vec<Effect>) {
-        crate::test_env::sanitize_language_environment();
+        test_env::sanitize_language_environment();
         Self::new_app_with_startup(StartupRequest::default())
     }
 

@@ -1,6 +1,8 @@
 use std::env;
 use std::time::Duration;
 
+use crate::{test_env, test_temp};
+
 use super::super::BootClock;
 use super::super::action::ActionJournal;
 use super::super::wire::*;
@@ -13,8 +15,8 @@ use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 use crate::tray_action::TrayAction;
 
 fn with_runtime<T>(run: impl FnOnce() -> T) -> T {
-    let _guard = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
     let previous = env::var_os(XDG_RUNTIME_DIR_ENV);
     // SAFETY: serialized by the test environment mutex.
     unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, temp.path()) };
@@ -717,14 +719,14 @@ fn lock_deadline_is_reported_without_parsing_error_text() {
 
         let deadline = BootClock::now()
             .unwrap()
-            .checked_add(std::time::Duration::from_millis(5))
+            .checked_add(Duration::from_millis(5))
             .unwrap();
         assert!(!try_lock_until(&contender, libc::LOCK_EX, deadline).unwrap());
 
         unlock(&held).unwrap();
         let deadline = BootClock::now()
             .unwrap()
-            .checked_add(std::time::Duration::from_millis(5))
+            .checked_add(Duration::from_millis(5))
             .unwrap();
         assert!(try_lock_until(&contender, libc::LOCK_EX, deadline).unwrap());
         unlock(&contender).unwrap();

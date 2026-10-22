@@ -2,9 +2,11 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
+use std::{io, thread};
 use tokio::sync::watch;
 
 use crate::backend::wayland::RuntimeWakeHandle;
@@ -108,7 +110,7 @@ impl BridgeHealth {
         self.status.load(Ordering::Acquire) == STATUS_FAILED
     }
 
-    fn wake_owner(&self) -> std::io::Result<()> {
+    fn wake_owner(&self) -> io::Result<()> {
         self.runtime_wake.wake()
     }
 }
@@ -150,17 +152,14 @@ impl FeedbackPublisher {
     pub(super) fn publish(&self, feedback: GtkToolbarFeedback) -> Result<(), FeedbackPublishError> {
         let mut overflowed = false;
         {
-            let mut state = match self.mailbox.state.lock() {
-                Ok(state) => state,
-                Err(poisoned) => {
-                    let mut state = poisoned.into_inner();
-                    state.accepting = false;
-                    drop(state);
-                    self.mailbox.health.fail(
-                        "GTK feedback mailbox state was poisoned; restoring built-in toolbars",
-                    );
-                    return Err(FeedbackPublishError::Failed);
-                }
+            // A poisoned mailbox may hold a half-updated queue, so it is
+            // never read again: every later lock fails the same way, which
+            // also closes admission.
+            let Ok(mut state) = self.mailbox.state.lock() else {
+                self.mailbox
+                    .health
+                    .fail("GTK feedback mailbox state was poisoned; restoring built-in toolbars");
+                return Err(FeedbackPublishError::Failed);
             };
             if !state.accepting {
                 return Err(if self.mailbox.health.failed() {
@@ -248,17 +247,14 @@ impl FeedbackPublisher {
 
     fn drain(&self, limit: usize) -> Vec<GtkToolbarFeedback> {
         let (drained, residual) = {
-            let mut state = match self.mailbox.state.lock() {
-                Ok(state) => state,
-                Err(poisoned) => {
-                    let mut state = poisoned.into_inner();
-                    state.accepting = false;
-                    drop(state);
-                    self.mailbox.health.fail(
-                        "GTK feedback mailbox state was poisoned; restoring built-in toolbars",
-                    );
-                    return Vec::new();
-                }
+            // A poisoned mailbox may hold a half-updated queue, so it is
+            // never read again: every later lock fails the same way, which
+            // also closes admission.
+            let Ok(mut state) = self.mailbox.state.lock() else {
+                self.mailbox
+                    .health
+                    .fail("GTK feedback mailbox state was poisoned; restoring built-in toolbars");
+                return Vec::new();
             };
             let take = limit.min(state.queue.len());
             let drained = state.queue.drain(..take).collect::<Vec<_>>();
@@ -290,9 +286,9 @@ impl FeedbackPublisher {
     }
 
     fn close_admission(&self) {
-        match self.mailbox.state.lock() {
-            Ok(mut state) => state.accepting = false,
-            Err(poisoned) => poisoned.into_inner().accepting = false,
+        // A poisoned mailbox already refuses every publish.
+        if let Ok(mut state) = self.mailbox.state.lock() {
+            state.accepting = false;
         }
     }
 
@@ -301,7 +297,7 @@ impl FeedbackPublisher {
         self.mailbox
             .state
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .expect("feedback mailbox state")
             .queue
             .len()
     }
@@ -401,7 +397,7 @@ impl<T: Clone> LatestValueReceiver<T> {
     }
 }
 
-struct ThreadCompletion(std::sync::mpsc::Sender<()>);
+struct ThreadCompletion(Sender<()>);
 
 impl Drop for ThreadCompletion {
     fn drop(&mut self) {
@@ -418,7 +414,7 @@ enum ThreadShutdownOutcome {
 
 fn finish_thread_within(
     thread: &mut Option<JoinHandle<()>>,
-    completion: &std::sync::mpsc::Receiver<()>,
+    completion: &Receiver<()>,
     timeout: Duration,
 ) -> ThreadShutdownOutcome {
     let Some(handle) = thread.as_ref() else {
@@ -428,7 +424,7 @@ fn finish_thread_within(
     let completion_wait = deadline.saturating_duration_since(Instant::now());
     let _ = completion.recv_timeout(completion_wait);
     while !handle.is_finished() && Instant::now() < deadline {
-        std::thread::yield_now();
+        thread::yield_now();
     }
     if !handle.is_finished() {
         // Bounded shutdown: drop the JoinHandle to detach. GTK may keep
@@ -452,7 +448,7 @@ pub struct GtkToolbarBridge {
     feedback: FeedbackPublisher,
     health: BridgeHealth,
     thread: Option<JoinHandle<()>>,
-    completion: std::sync::mpsc::Receiver<()>,
+    completion: Receiver<()>,
 }
 
 impl GtkToolbarBridge {
@@ -460,17 +456,15 @@ impl GtkToolbarBridge {
     /// created; GTK-level failures are published asynchronously and wake the runtime.
     pub fn spawn(runtime_wake: RuntimeWakeHandle) -> Option<Self> {
         let (updates, update_rx) = latest_value_channel();
-        let (completion_tx, completion_rx) = std::sync::mpsc::channel();
+        let (completion_tx, completion_rx) = mpsc::channel();
         let health = BridgeHealth::new(runtime_wake);
         let feedback = FeedbackPublisher::new(health.clone());
         let thread_health = health.clone();
         let thread_feedback = feedback.clone();
-        let spawned = std::thread::Builder::new()
-            .name("gtk-toolbar".into())
-            .spawn(move || {
-                let _completion = ThreadCompletion(completion_tx);
-                super::runtime::run(update_rx, thread_feedback, thread_health);
-            });
+        let spawned = Builder::new().name("gtk-toolbar".into()).spawn(move || {
+            let _completion = ThreadCompletion(completion_tx);
+            super::runtime::run(update_rx, thread_feedback, &thread_health);
+        });
         match spawned {
             Ok(thread) => Some(Self {
                 updates,
@@ -532,6 +526,8 @@ impl Drop for GtkToolbarBridge {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use glib::MainContext;
     use std::os::fd::AsRawFd;
     use std::sync::mpsc;
@@ -569,7 +565,7 @@ mod tests {
     }
 
     fn channel() -> (RuntimeWakeSource, BridgeHealth, FeedbackPublisher) {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let health = BridgeHealth::new(wake.handle());
         let publisher = FeedbackPublisher::new(health.clone());
         (wake, health, publisher)
@@ -591,7 +587,7 @@ mod tests {
         let stat_path = format!("/proc/self/task/{tid}/stat");
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
-            let state = std::fs::read_to_string(&stat_path).ok().and_then(|stat| {
+            let state = fs::read_to_string(&stat_path).ok().and_then(|stat| {
                 stat.rsplit_once(") ")
                     .and_then(|(_, suffix)| suffix.chars().next())
             });
@@ -602,7 +598,7 @@ mod tests {
                 Instant::now() < deadline,
                 "polling thread did not block (last state: {state:?})"
             );
-            std::thread::yield_now();
+            thread::yield_now();
         }
     }
 
@@ -740,7 +736,7 @@ mod tests {
         }
         publisher.publish(event()).unwrap();
         let kept_move = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 1);
-        publisher.publish(kept_move.clone()).unwrap();
+        publisher.publish(kept_move).unwrap();
 
         let latest_top = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999);
         publisher.publish(latest_top.clone()).unwrap();
@@ -819,7 +815,7 @@ mod tests {
     fn feedback_unblocks_a_runtime_already_waiting_in_poll() {
         let (wake, _health, publisher) = channel();
         let (tid_tx, tid_rx) = mpsc::channel();
-        let poller = std::thread::spawn(move || {
+        let poller = thread::spawn(move || {
             // SAFETY: gettid has no preconditions and is used only to observe this test thread.
             let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
             tid_tx.send(tid).unwrap();
@@ -865,7 +861,7 @@ mod tests {
     #[test]
     fn completed_thread_is_joined_without_initializing_gtk() {
         let (completion_tx, completion_rx) = mpsc::channel();
-        let mut thread = Some(std::thread::spawn(move || {
+        let mut thread = Some(thread::spawn(move || {
             let _completion = ThreadCompletion(completion_tx);
         }));
         assert_eq!(
@@ -878,7 +874,7 @@ mod tests {
     #[test]
     fn panicked_thread_is_joined_with_panicked_outcome() {
         let (completion_tx, completion_rx) = mpsc::channel();
-        let mut thread = Some(std::thread::spawn(move || {
+        let mut thread = Some(thread::spawn(move || {
             let _completion = ThreadCompletion(completion_tx);
             panic!("intentional GTK bridge shutdown test panic");
         }));
@@ -893,7 +889,7 @@ mod tests {
     fn stuck_thread_is_detached_at_the_bounded_deadline() {
         let (completion_tx, completion_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
-        let mut thread = Some(std::thread::spawn(move || {
+        let mut thread = Some(thread::spawn(move || {
             let _completion = ThreadCompletion(completion_tx);
             let _ = release_rx.recv();
         }));

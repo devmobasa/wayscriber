@@ -1,11 +1,13 @@
 // Tracks monitor hotplug/updates so `WaylandState` can respond to geometry changes.
 use log::{Level, log, log_enabled, trace};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
-use wayland_client::{Connection, Proxy, QueueHandle, protocol::wl_output};
+use wayland_client::protocol::wl_output;
+use wayland_client::{Connection, Proxy, QueueHandle};
 
 use super::super::capture_preflight::{CAPTURE_LOG_TARGET, LogField};
 use super::super::state::WaylandState;
 
+#[derive(Clone, Copy)]
 pub(super) enum CaptureOutputEvent {
     New,
     Updated,

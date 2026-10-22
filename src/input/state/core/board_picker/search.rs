@@ -155,7 +155,9 @@ mod tests {
     use super::{fuzzy_score, fuzzy_score_relaxed};
     use crate::config::KeybindingsConfig;
 
+    use crate::draw::TextMeasurer;
     use crate::input::InputState;
+    use crate::input::state::test_support;
     use std::time::{Duration, Instant};
 
     fn make_state() -> InputState {
@@ -164,7 +166,7 @@ mod tests {
             .build_action_bindings()
             .expect("default keybindings bindings");
 
-        let mut state = crate::input::state::test_support::make_test_input_state();
+        let mut state = test_support::make_test_input_state();
         state.set_action_bindings(action_bindings);
         state
     }
@@ -183,7 +185,7 @@ mod tests {
     #[test]
     fn board_picker_match_index_accepts_numeric_board_selection() {
         let mut state = make_state();
-        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_with_measurer(&TextMeasurer::default());
 
         assert_eq!(
             state.board_picker_match_index("3"),
@@ -194,7 +196,7 @@ mod tests {
     #[test]
     fn board_picker_match_index_trims_surrounding_whitespace() {
         let mut state = make_state();
-        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_with_measurer(&TextMeasurer::default());
         let blueprint_index = state
             .boards
             .board_states()
@@ -211,7 +213,7 @@ mod tests {
     #[test]
     fn board_picker_match_index_rejects_whitespace_only_queries() {
         let mut state = make_state();
-        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_with_measurer(&TextMeasurer::default());
 
         assert_eq!(state.board_picker_match_index("   \t  "), None);
     }
@@ -219,7 +221,7 @@ mod tests {
     #[test]
     fn board_picker_append_search_returns_focus_to_board_list() {
         let mut state = make_state();
-        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_with_measurer(&TextMeasurer::default());
         state.board_picker_set_focus(BoardPickerFocus::PagePanel);
         assert_eq!(state.board_picker_focus(), BoardPickerFocus::PagePanel);
 
@@ -232,7 +234,7 @@ mod tests {
     #[test]
     fn board_picker_append_search_resets_stale_query_before_appending() {
         let mut state = make_state();
-        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        state.open_board_picker_with_measurer(&TextMeasurer::default());
         state.board_picker.search = "old".to_string();
         state.board_picker.search_last_input =
             Some(Instant::now() - BOARD_PICKER_SEARCH_TIMEOUT - Duration::from_millis(1));

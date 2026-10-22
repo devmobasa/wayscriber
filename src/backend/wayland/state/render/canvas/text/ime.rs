@@ -1,5 +1,9 @@
 use std::ops::Range;
 
+use pangocairo::functions;
+
+use crate::draw::{Color, shape};
+
 /// Paint a Pango-backed highlight for a non-collapsed preedit cursor range.
 pub(super) fn paint_preedit_selection(
     ctx: &cairo::Context,
@@ -10,7 +14,7 @@ pub(super) fn paint_preedit_selection(
     font_desc: &str,
     wrap_width: Option<i32>,
 ) {
-    let layout = pangocairo::functions::create_layout(ctx);
+    let layout = functions::create_layout(ctx);
     let font_desc = pango::FontDescription::from_string(font_desc);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);
@@ -38,7 +42,7 @@ pub(super) fn paint_preedit_selection(
     // The transparent source suppresses a second glyph pass; Pango's explicit
     // background attributes still paint the selected range.
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-    pangocairo::functions::show_layout(ctx, &layout);
+    functions::show_layout(ctx, &layout);
     ctx.restore().ok();
 }
 
@@ -53,7 +57,7 @@ pub(super) fn paint_preedit_underline(
     range: Range<u32>,
     font_desc: &str,
     wrap_width: Option<i32>,
-    color: crate::draw::Color,
+    color: Color,
 ) {
     let Ok(end) = usize::try_from(range.end) else {
         return;
@@ -64,7 +68,7 @@ pub(super) fn paint_preedit_underline(
 
     // Same layout configuration as measurement and rendering, so the underline
     // lands on the glyph run the caret and damage were computed against.
-    let layout = crate::draw::shape::configured_layout(ctx, text, font_desc, wrap_width);
+    let layout = shape::configured_layout(ctx, text, font_desc, wrap_width);
 
     let attrs = pango::AttrList::new();
     let mut underline = pango::AttrInt::new_underline(pango::Underline::Single);
@@ -87,7 +91,7 @@ pub(super) fn paint_preedit_underline(
     ctx.save().ok();
     ctx.move_to(origin.0 as f64, origin.1 as f64 - baseline);
     ctx.set_source_rgba(0.0, 0.0, 0.0, color.a.clamp(0.0, 1.0));
-    pangocairo::functions::show_layout(ctx, &layout);
+    functions::show_layout(ctx, &layout);
     ctx.restore().ok();
 }
 

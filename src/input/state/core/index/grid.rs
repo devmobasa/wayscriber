@@ -186,7 +186,11 @@ impl SpatialGrid {
                     self.cells.entry(key).or_default().push(id);
                     cell_keys.push(key);
                 }
-                debug_assert_eq!(cell_keys.len(), cell_range.count);
+                debug_assert_eq!(
+                    cell_keys.len(),
+                    cell_range.count,
+                    "the cell range yields exactly the count it reserved"
+                );
                 self.shape_cells.insert(id, cell_keys);
             }
             CellCoverage::Bounded(_) | CellCoverage::Global => {

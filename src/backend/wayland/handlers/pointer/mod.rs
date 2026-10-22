@@ -1,13 +1,13 @@
 // Feeds pointer events (motion/buttons/scroll) into the drawing state to keep the canvas reactive.
 use log::debug;
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
-use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
+use wayland_client::protocol::wl_pointer;
+use wayland_client::{Connection, QueueHandle};
 
 use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
-use crate::input::state::RegionInputSource;
 
 use super::super::state::WaylandState;
-use super::route::{InputSurface, RoutedInput};
+use super::route::InputSurface;
 
 mod axis;
 mod cursor;

@@ -6,6 +6,8 @@ use std::rc::Rc;
 
 use relm4::{ComponentSender, gtk};
 
+use gtk::gdk::{ButtonEvent, EventType, InputSource, Key, ModifierType};
+use gtk::glib::Propagation;
 use gtk::glib::object::IsA;
 use gtk::prelude::*;
 
@@ -151,25 +153,24 @@ fn attach_key_controller(popover: &gtk::Popover, sender: &ComponentSender<Config
     let controller = gtk::EventControllerKey::new();
     controller.set_propagation_phase(gtk::PropagationPhase::Capture);
     {
-        let sender = sender.clone();
         let pressed = pressed.clone();
         controller.connect_key_pressed(move |_, key, keycode, modifiers| {
             // GTK repeats key-pressed for auto-repeat. Sequence recording
             // would otherwise append Ctrl+K > Ctrl+K > Ctrl+K from a hold.
             if !pressed.borrow_mut().insert(keycode) {
-                return gtk::glib::Propagation::Stop;
+                return Propagation::Stop;
             }
             let keyval = gdk_keyval(key);
             let recorded = KeyboardModifiers {
-                ctrl: modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK),
-                shift: modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK),
-                alt: modifiers.contains(gtk::gdk::ModifierType::ALT_MASK),
-                super_held: modifiers.contains(gtk::gdk::ModifierType::SUPER_MASK)
-                    || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
-                    || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
+                ctrl: modifiers.contains(ModifierType::CONTROL_MASK),
+                shift: modifiers.contains(ModifierType::SHIFT_MASK),
+                alt: modifiers.contains(ModifierType::ALT_MASK),
+                super_held: modifiers.contains(ModifierType::SUPER_MASK)
+                    || modifiers.contains(ModifierType::META_MASK)
+                    || modifiers.contains(ModifierType::HYPER_MASK),
             };
             sender.input(Message::ShortcutRecorderKey(keyval, recorded));
-            gtk::glib::Propagation::Stop
+            Propagation::Stop
         });
     }
     {
@@ -215,30 +216,30 @@ fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<Con
     let controller = gtk::EventControllerLegacy::new();
     controller.set_propagation_phase(gtk::PropagationPhase::Capture);
     controller.connect_event(move |_, event| {
-        if event.event_type() != gtk::gdk::EventType::ButtonPress {
-            return gtk::glib::Propagation::Proceed;
+        if event.event_type() != EventType::ButtonPress {
+            return Propagation::Proceed;
         }
-        let Some(button_event) = event.downcast_ref::<gtk::gdk::ButtonEvent>() else {
-            return gtk::glib::Propagation::Proceed;
+        let Some(button_event) = event.downcast_ref::<ButtonEvent>() else {
+            return Propagation::Proceed;
         };
         let kind = event
             .device()
             .map(|device| match device.source() {
-                gtk::gdk::InputSource::Mouse
-                | gtk::gdk::InputSource::Touchpad
-                | gtk::gdk::InputSource::Trackpoint => RecorderDeviceKind::Mouse,
-                gtk::gdk::InputSource::Pen => RecorderDeviceKind::Pen,
+                InputSource::Mouse | InputSource::Touchpad | InputSource::Trackpoint => {
+                    RecorderDeviceKind::Mouse
+                }
+                InputSource::Pen => RecorderDeviceKind::Pen,
                 _ => RecorderDeviceKind::Other,
             })
             .unwrap_or(RecorderDeviceKind::Other);
         let modifiers = event.modifier_state();
         let recorded = KeyboardModifiers {
-            ctrl: modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK),
-            shift: modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK),
-            alt: modifiers.contains(gtk::gdk::ModifierType::ALT_MASK),
-            super_held: modifiers.contains(gtk::gdk::ModifierType::SUPER_MASK)
-                || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
-                || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
+            ctrl: modifiers.contains(ModifierType::CONTROL_MASK),
+            shift: modifiers.contains(ModifierType::SHIFT_MASK),
+            alt: modifiers.contains(ModifierType::ALT_MASK),
+            super_held: modifiers.contains(ModifierType::SUPER_MASK)
+                || modifiers.contains(ModifierType::META_MASK)
+                || modifiers.contains(ModifierType::HYPER_MASK),
         };
         // Primary clicks must reach Finish / Remove Last Step / Cancel. Stop
         // only bindable auxiliary mouse or stylus barrel events.
@@ -249,15 +250,15 @@ fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<Con
                     kind,
                     recorded,
                 ));
-                gtk::glib::Propagation::Stop
+                Propagation::Stop
             }
-            RecordedDevice::Unsupported { .. } => gtk::glib::Propagation::Proceed,
+            RecordedDevice::Unsupported { .. } => Propagation::Proceed,
         }
     });
     popover.add_controller(controller);
 }
 
-fn gdk_keyval(key: gtk::gdk::Key) -> u32 {
+fn gdk_keyval(key: Key) -> u32 {
     use gtk::glib::translate::IntoGlib;
     key.into_glib()
 }

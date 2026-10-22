@@ -1,3 +1,16 @@
 # Keep functions within the agreed cognitive-complexity budget. Clippy emits a
 # warning above this value, and CI promotes warnings to errors.
 cognitive-complexity-threshold = 20
+
+# Tests may panic for assertions, so `unwrap_used` applies to production code.
+allow-unwrap-in-tests = true
+
+# Never reach inside a poisoned lock, and do not rely on catching panics.
+disallowed-methods = [
+    { path = "std::panic::catch_unwind", reason = "panics are bugs; recover only as defense in depth with a reviewed `#[expect]`" },
+    { path = "std::sync::PoisonError::get_mut", reason = "a poisoned lock may hold broken invariants" },
+    { path = "std::sync::PoisonError::get_ref", reason = "a poisoned lock may hold broken invariants" },
+    { path = "std::sync::PoisonError::into_inner", reason = "a poisoned lock may hold broken invariants" },
+    { path = "std::sync::Mutex::clear_poison", reason = "a poisoned lock may hold broken invariants" },
+    { path = "std::sync::RwLock::clear_poison", reason = "a poisoned lock may hold broken invariants" },
+]

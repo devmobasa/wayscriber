@@ -546,6 +546,7 @@ fn swatch_grid(x: f64, top: f64, swatches: usize, no_fill: bool) -> PropertiesRo
 impl SelectionPropertyEntry {
     /// What a stepper shows between its buttons. A pressure stroke's width
     /// varies along it, which a stepper readout can only say briefly.
+    #[must_use]
     pub fn stepper_text(&self) -> &str {
         match self.state {
             SelectionPropertyValue::PressureVaries if !self.disabled => tr("Varies"),
@@ -563,7 +564,7 @@ impl ShapePropertiesPanel {
         else {
             return None;
         };
-        palette_position(self.swatches.iter().map(|swatch| swatch.color), color)
+        palette_position(&self.swatches.iter().map(|swatch| swatch.color), color)
     }
 
     /// The text shown while the pointer rests on `hit`, if it has any.

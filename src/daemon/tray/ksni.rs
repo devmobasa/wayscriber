@@ -20,6 +20,7 @@ use crate::i18n::{tr, trf};
 use crate::label_format::format_binding_label;
 #[cfg(feature = "tray")]
 use crate::tray_action::TrayAction;
+use crate::{build_info, configurator_destination};
 #[cfg(feature = "tray")]
 use log::{info, warn};
 #[cfg(feature = "tray")]
@@ -118,7 +119,7 @@ impl ksni::Tray for WayscriberTray {
                 String::new()
             },
             icon_pixmap: vec![],
-            title: trf("Wayscriber {}", &[&crate::build_info::version()]),
+            title: trf("Wayscriber {}", &[&build_info::version()]),
             description,
         }
     }
@@ -136,7 +137,7 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        use ksni::menu::*;
+        use ksni::menu::{MenuItem, StandardItem, SubMenu};
         let use_theme_icons = menu_theme_icons_enabled();
         let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let toggle_label = toggle_overlay_menu_label();
@@ -304,7 +305,7 @@ impl ksni::Tray for WayscriberTray {
                         icon_name: menu_icon_name("preferences-desktop-locale", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
                             this.launch_configurator(Some(
-                                crate::configurator_destination::language_destination(),
+                                &configurator_destination::language_destination(),
                             ));
                         }),
                         ..Default::default()
@@ -323,7 +324,7 @@ impl ksni::Tray for WayscriberTray {
                         label: session_settings_label().to_string(),
                         icon_name: menu_icon_name("document-save", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
-                            this.launch_configurator(Some(ConfiguratorDestination::new(
+                            this.launch_configurator(Some(&ConfiguratorDestination::new(
                                 ConfiguratorScreen::Session,
                             )));
                         }),

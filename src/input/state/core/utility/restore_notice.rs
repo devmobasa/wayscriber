@@ -88,6 +88,11 @@ fn restored_annotations_message(count: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+
+    use crate::draw::TextMeasurer;
+
     use super::*;
     use crate::draw::Shape;
     use crate::input::BOARD_ID_WHITEBOARD;
@@ -161,7 +166,7 @@ mod tests {
     /// would then erase that page instead.
     #[test]
     fn deleting_the_restored_page_retracts_the_notice() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.page_new();
         add_rect(&mut state);
@@ -169,11 +174,11 @@ mod tests {
         add_rect(&mut state);
         assert!(state.announce_restored_annotations());
 
-        let requested_at = std::time::Instant::now();
+        let requested_at = Instant::now();
         state.delete_active_page_at_with_measurer(&measurer, requested_at);
         state.delete_active_page_at_with_measurer(
             &measurer,
-            requested_at + std::time::Duration::from_millis(1),
+            requested_at + Duration::from_millis(1),
         );
 
         assert_eq!(state.boards.page_count(), 1);
@@ -195,8 +200,8 @@ mod tests {
             SessionOptions, apply_snapshot, apply_snapshot_replacing_boards, snapshot_from_input,
         };
 
-        let measurer = crate::draw::TextMeasurer::default();
-        let mut options = SessionOptions::new(std::path::PathBuf::from("/tmp"), "restore-notice");
+        let measurer = TextMeasurer::default();
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "restore-notice");
         options.persist_transparent = true;
         options.restore_tool_state = false;
 

@@ -1,3 +1,11 @@
+use std::fs;
+
+use crate::config;
+use crate::config::test_helpers::ConfigFileSnapshot;
+use crate::config::{Config, test_helpers};
+use crate::draw::TextMeasurer;
+use crate::input::state;
+
 use super::*;
 use crate::draw::{EmbeddedImage, ShapeId};
 use crate::input::state::core::board_picker::BoardPickerState;
@@ -79,7 +87,7 @@ fn switch_board_recent_shows_toast_when_no_other_recent_board_exists() {
 #[test]
 fn switch_board_updates_open_board_picker_selection_and_clears_hover() {
     let mut state = create_test_input_state();
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
 
     if let BoardPickerState::Open { hover_index, .. } = &mut state.board_picker.state {
         *hover_index = Some(0);
@@ -143,7 +151,7 @@ fn failed_switch_board_preserves_active_interaction() {
 
 #[test]
 fn switch_board_cancels_text_edit_on_source_board_before_switching() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
@@ -170,7 +178,7 @@ fn switch_board_cancels_text_edit_on_source_board_before_switching() {
 
 #[test]
 fn switch_board_cancels_selection_move_on_source_board_before_switching() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -187,7 +195,7 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
     let snapshots = state.capture_movable_selection_snapshots();
     assert!(state.apply_translation_to_selection_with(&test_text_measurer, 25, 35));
     state.state = DrawingState::MovingSelection {
-        grab: crate::input::state::SelectionGrab::new(shape_id, 25, 35),
+        grab: state::SelectionGrab::new(shape_id, 25, 35),
         last_x: 25,
         last_y: 35,
         snapshots,
@@ -244,7 +252,7 @@ fn assert_board_transition_dropped_page_local_state(
     assert!(!state.is_context_menu_open());
 
     let shape_count = state.boards.active_frame().shapes.len();
-    assert!(!state.delete_selection_with(&crate::draw::TextMeasurer::default()));
+    assert!(!state.delete_selection_with(&TextMeasurer::default()));
     assert_eq!(state.boards.active_frame().shapes.len(), shape_count);
 
     assert_eq!(
@@ -445,7 +453,7 @@ fn duplicate_board_preflight_handles_existing_copy_board_when_over_image_limit()
 
 #[test]
 fn duplicate_board_cancels_text_edit_before_cloning_board() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
@@ -567,24 +575,22 @@ fn create_board_adds_board_and_emits_toast() {
 /// keeps its bytes, its metadata, and its neighbours through every one of them.
 #[test]
 fn live_board_edits_leave_the_config_file_untouched() {
-    crate::config::test_helpers::with_temp_config_home(|config_root| {
-        let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
-        std::fs::create_dir_all(&config_dir).expect("test config directory");
+    test_helpers::with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(config::PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).expect("test config directory");
         let path = config_dir.join("config.toml");
         // `persist_customizations` is still parsed, and it no longer buys the
         // overlay permission to write anything.
-        std::fs::write(&path, "[boards]\npersist_customizations = true\n")
+        fs::write(&path, "[boards]\npersist_customizations = true\n")
             .expect("test config should be written");
-        let snapshot = crate::config::test_helpers::ConfigFileSnapshot::capture(&path);
+        let snapshot = ConfigFileSnapshot::capture(&path);
 
-        let configured = crate::config::Config::load()
-            .expect("test config should load")
-            .config;
+        let configured = Config::load().expect("test config should load").config;
         let mut state = create_test_input_state();
         state.boards = BoardManager::from_config(configured.resolved_boards());
         let whiteboard = board_index(&state, BOARD_ID_WHITEBOARD);
 
-        assert!(state.set_board_name(whiteboard, "Renamed this run".to_string()));
+        assert!(state.set_board_name(whiteboard, "Renamed this run"));
         assert!(state.set_board_background_color(
             whiteboard,
             Color {
@@ -601,9 +607,7 @@ fn live_board_edits_leave_the_config_file_untouched() {
 
         // Restart semantics: the next process seeds from the authored template,
         // not from the boards this run edited.
-        let restarted = crate::config::Config::load()
-            .expect("test config should reload")
-            .config;
+        let restarted = Config::load().expect("test config should reload").config;
         assert_eq!(
             restarted
                 .resolved_boards()

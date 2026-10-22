@@ -1,10 +1,15 @@
+use std::env;
+use std::path::PathBuf;
+
+use crate::{test_env, test_temp};
+
 use super::super::*;
 use crate::config::{SessionConfig, SessionStorageMode};
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 #[test]
 fn options_from_config_custom_storage() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let custom_dir = temp.path().join("sessions");
 
     let cfg = SessionConfig {
@@ -30,7 +35,8 @@ fn options_from_config_custom_storage() {
 
 #[test]
 fn options_from_config_config_storage_uses_config_dir() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
 
     let cfg = SessionConfig {
         persist_whiteboard: true,
@@ -38,14 +44,16 @@ fn options_from_config_config_storage_uses_config_dir() {
         ..SessionConfig::default()
     };
 
-    let original_display = std::env::var_os(WAYLAND_DISPLAY_ENV);
+    let original_display = env::var_os(WAYLAND_DISPLAY_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
-        std::env::remove_var(WAYLAND_DISPLAY_ENV);
+        env::remove_var(WAYLAND_DISPLAY_ENV);
     }
 
     let mut options = options_from_config(&cfg, temp.path(), None).unwrap();
     if let Some(value) = original_display {
-        unsafe { std::env::set_var(WAYLAND_DISPLAY_ENV, value) }
+        // SAFETY: this test still holds the environment mutex in `_guard`.
+        unsafe { env::set_var(WAYLAND_DISPLAY_ENV, value) }
     }
 
     assert_eq!(options.base_dir, temp.path());
@@ -71,7 +79,7 @@ fn options_from_config_config_storage_uses_config_dir() {
 
 #[test]
 fn session_file_without_per_output_suffix_when_disabled() {
-    let mut options = SessionOptions::new(std::path::PathBuf::from("/tmp"), "display");
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
     options.per_output = false;
     let original = options.session_file_path();
     options.set_output_identity(Some("DP-1"));

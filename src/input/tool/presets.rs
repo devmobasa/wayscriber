@@ -5,6 +5,7 @@ use crate::config::{ColorSpec, PresetToolSettingConfig, PresetToolStatesConfig};
 use crate::domain::Tool;
 
 impl PresetToolSettingConfig {
+    #[must_use]
     pub fn from_runtime(settings: ToolDrawingSettings) -> Self {
         Self {
             color: settings.color.into(),
@@ -12,12 +13,14 @@ impl PresetToolSettingConfig {
         }
     }
 
+    #[must_use]
     pub fn to_runtime(&self) -> ToolDrawingSettings {
         ToolDrawingSettings::new(self.color.to_color(), self.size)
     }
 }
 
 impl PresetToolStatesConfig {
+    #[must_use]
     pub fn from_runtime(settings: &PerToolDrawingSettings, eraser_size: f64) -> Self {
         Self {
             pen: PresetToolSettingConfig::from_runtime(settings.pen),
@@ -32,6 +35,7 @@ impl PresetToolStatesConfig {
         }
     }
 
+    #[must_use]
     pub fn to_runtime(&self) -> PerToolDrawingSettings {
         PerToolDrawingSettings {
             pen: self.pen.to_runtime(),
@@ -45,10 +49,12 @@ impl PresetToolStatesConfig {
         }
     }
 
+    #[must_use]
     pub fn color_spec_for_tool(&self, tool: Tool) -> ColorSpec {
         self.setting_for_slot(tool.settings_slot()).color.clone()
     }
 
+    #[must_use]
     pub fn size_for_tool(&self, tool: Tool) -> f64 {
         let profile = tool.profile();
         match profile.size_source {

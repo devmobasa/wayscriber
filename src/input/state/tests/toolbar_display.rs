@@ -1,3 +1,9 @@
+use crate::config::PresenterToolBehavior;
+use crate::draw::TextMeasurer;
+use crate::input::Tool;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextEngine;
+
 use super::create_test_input_state;
 use crate::config::{
     Action, RadialMenuMouseBinding, StatusBarItem, StatusBarStyle, StatusPosition, TopDisplayMode,
@@ -16,8 +22,8 @@ fn unbind_chrome_visibility_actions(state: &mut InputState) {
 }
 
 fn hide_all_chrome(state: &mut InputState) {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -40,8 +46,8 @@ fn refresh_status_hud_layout(state: &mut InputState) {
 
 #[test]
 fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -90,8 +96,8 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
 
 #[test]
 fn entering_micro_unminimizes_and_closes_top_menus() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -121,8 +127,8 @@ fn entering_micro_unminimizes_and_closes_top_menus() {
 
 #[test]
 fn toggle_toolbar_show_restores_a_cycle_hidden_top_strip() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -148,8 +154,8 @@ fn toggle_toolbar_show_restores_a_cycle_hidden_top_strip() {
 
 #[test]
 fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -188,8 +194,8 @@ fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
 /// the visible state the user was looking at.
 #[test]
 fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -223,8 +229,8 @@ fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
 /// runtime-only, exactly like F2's hidden rung.
 #[test]
 fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -254,8 +260,8 @@ fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
 /// additional persistence and queues nothing.
 #[test]
 fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -277,8 +283,8 @@ fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
 
 #[test]
 fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -302,8 +308,8 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
 /// flags or queue the visibility persistence the explicit toggle uses.
 #[test]
 fn focus_and_presenter_transitions_never_queue_pin_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -341,8 +347,8 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
 /// (correctly) drops.
 #[test]
 fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -375,8 +381,8 @@ fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
 /// persistence queue, and neither may cost the other its delivery.
 #[test]
 fn visibility_persistence_survives_a_capture_request() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -422,8 +428,8 @@ fn visibility_persistence_survives_a_capture_request() {
 /// write would be byte-identical to its own rollback.
 #[test]
 fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -451,8 +457,8 @@ fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
 /// side may drop a queued entry when the same batch also requests an exit.
 #[test]
 fn an_exit_request_does_not_clear_queued_toolbar_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -475,8 +481,8 @@ fn an_exit_request_does_not_clear_queued_toolbar_persistence() {
 
 #[test]
 fn micro_form_survives_a_visibility_toggle() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -495,8 +501,8 @@ fn micro_form_survives_a_visibility_toggle() {
 
 #[test]
 fn hidden_cycle_toast_offers_a_show_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -516,8 +522,8 @@ fn hidden_cycle_toast_offers_a_show_action() {
 
 #[test]
 fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -552,8 +558,8 @@ fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
 
 #[test]
 fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -564,8 +570,8 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     assert!(state.status_hud_layout().is_some());
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_resources(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             item,
             false,
         );
@@ -581,8 +587,8 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     assert!(!state.status_hud_effectively_visible());
 
     assert!(state.set_status_bar_item_visible_with_resources(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         StatusBarItem::About,
         true
     ));
@@ -595,8 +601,8 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
         "policy sees the synchronously refreshed measured cache"
     );
     assert!(state.set_status_bar_item_visible_with_resources(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         StatusBarItem::About,
         false
     ));
@@ -624,8 +630,8 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_resources(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             item,
             false,
         );
@@ -639,8 +645,8 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
     assert!(state.status_hud_layout().is_none());
 
     assert!(state.set_status_bar_item_visible_with_resources(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         StatusBarItem::About,
         true
     ));
@@ -656,8 +662,8 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
 
 #[test]
 fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -666,8 +672,8 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_resources(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             item,
             item == StatusBarItem::ToolbarHint,
         );
@@ -693,8 +699,8 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
 
 #[test]
 fn all_chrome_warning_fires_from_the_cycle_path_and_supersedes_its_toast() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -768,8 +774,8 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
 
 #[test]
 fn all_chrome_warning_suppressed_while_presenting() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -793,8 +799,8 @@ fn all_chrome_warning_suppressed_while_presenting() {
 
 #[test]
 fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -822,8 +828,8 @@ fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
 
 #[test]
 fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -847,8 +853,8 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
 
 #[test]
 fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -908,8 +914,8 @@ fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
 
 #[test]
 fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -929,8 +935,8 @@ fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
 
 #[test]
 fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -974,8 +980,8 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
 /// autosave clobber it.
 #[test]
 fn session_independent_chrome_actions_never_mark_the_session_dirty() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -986,8 +992,7 @@ fn session_independent_chrome_actions_never_mark_the_session_dirty() {
     // would also take the tool override, which *is* session content.
     state.presenter_mode_config_mut_for_test().hide_status_bar = true;
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
-    state.presenter_mode_config_mut_for_test().tool_behavior =
-        crate::config::PresenterToolBehavior::Keep;
+    state.presenter_mode_config_mut_for_test().tool_behavior = PresenterToolBehavior::Keep;
     state
         .presenter_mode_config_mut_for_test()
         .enable_click_highlight = false;
@@ -1027,7 +1032,7 @@ fn session_independent_chrome_actions_never_mark_the_session_dirty() {
     // Control: a change the snapshot does carry still marks the session dirty,
     // so the assertions above are about the toggles and not about a dirty flag
     // that stopped working.
-    assert!(state.set_tool_override(Some(crate::input::Tool::Line)));
+    assert!(state.set_tool_override(Some(Tool::Line)));
     assert!(state.is_session_dirty());
 }
 
@@ -1172,8 +1177,8 @@ fn run_only_toolbar_preference_events_never_mark_the_session_dirty() {
 
 #[test]
 fn micro_chip_event_restores_the_full_strip() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -1181,16 +1186,8 @@ fn micro_chip_event_restores_the_full_strip() {
 
     let mut state = create_test_input_state();
     state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
-    assert!(
-        state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetTopDisplayMode(
-            TopDisplayMode::Full
-        ))
-    );
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)));
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
     // Idempotent: applying the current state reports no change.
-    assert!(
-        !state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetTopDisplayMode(
-            TopDisplayMode::Full
-        ))
-    );
+    assert!(!state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)));
 }

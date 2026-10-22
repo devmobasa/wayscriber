@@ -1,11 +1,10 @@
 use std::borrow::Cow;
 
+#[cfg(test)]
+use crate::config::{Action, action_short_label};
 use crate::config::{
-    Action, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
-    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarLayoutMode,
-    action_label, action_short_label, factory_individual_toolbar_item_visibility_settings,
-    item_visibility_setting, toolbar_item_definitions, toolbar_item_ids as ids,
-    toolbar_item_order_group, toolbar_item_visibility_override_allowed,
+    StatusBarItem, ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode,
+    toolbar_item_definitions, toolbar_item_ids as ids,
 };
 use crate::i18n::{tr, trf};
 
@@ -297,59 +296,59 @@ fn status_bar_content_toggles(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettings
         )
         .wide(),
     ];
-    toggles.extend(crate::config::StatusBarItem::ALL.map(|item| {
+    toggles.extend(StatusBarItem::ALL.map(|item| {
         let (id, label, tooltip) = match item {
-            crate::config::StatusBarItem::ActiveOutput => (
+            StatusBarItem::ActiveOutput => (
                 ToolbarControlId::SettingsStatusActiveOutput,
                 tr("Active output"),
                 tr("Status bar: active monitor/output."),
             ),
-            crate::config::StatusBarItem::SelectionInfo => (
+            StatusBarItem::SelectionInfo => (
                 ToolbarControlId::SettingsStatusSelectionInfo,
                 tr("Selection size"),
                 tr("Status bar: selected item dimensions."),
             ),
-            crate::config::StatusBarItem::Board => (
+            StatusBarItem::Board => (
                 ToolbarControlId::SettingsStatusBoardBadge,
                 tr("Board"),
                 tr("Status bar: board label."),
             ),
-            crate::config::StatusBarItem::Page => (
+            StatusBarItem::Page => (
                 ToolbarControlId::SettingsStatusPageBadge,
                 tr("Page"),
                 tr("Status bar: page counter."),
             ),
-            crate::config::StatusBarItem::Color => (
+            StatusBarItem::Color => (
                 ToolbarControlId::SettingsStatusColor,
                 tr("Current color"),
                 tr("Status bar: active color dot."),
             ),
-            crate::config::StatusBarItem::Tool => (
+            StatusBarItem::Tool => (
                 ToolbarControlId::SettingsStatusTool,
                 tr("Active tool"),
                 tr("Status bar: active tool name."),
             ),
-            crate::config::StatusBarItem::Size => (
+            StatusBarItem::Size => (
                 ToolbarControlId::SettingsStatusSize,
                 tr("Tool size"),
                 tr("Status bar: active tool size."),
             ),
-            crate::config::StatusBarItem::ContextIndicators => (
+            StatusBarItem::ContextIndicators => (
                 ToolbarControlId::SettingsStatusContextIndicators,
                 tr("Context indicators"),
                 tr("Status bar: text and highlight state."),
             ),
-            crate::config::StatusBarItem::ToolbarHint => (
+            StatusBarItem::ToolbarHint => (
                 ToolbarControlId::SettingsStatusToolbarHint,
                 tr("Toolbar hint"),
                 tr("Status bar: recovery hint while toolbars are hidden."),
             ),
-            crate::config::StatusBarItem::Help => (
+            StatusBarItem::Help => (
                 ToolbarControlId::SettingsStatusHelp,
                 tr("Help shortcut"),
                 tr("Status bar: Help shortcut."),
             ),
-            crate::config::StatusBarItem::About => (
+            StatusBarItem::About => (
                 ToolbarControlId::SettingsStatusAbout,
                 tr("About and version"),
                 tr("Status bar: About/version chip."),
@@ -626,6 +625,8 @@ fn push_notice(
 
 #[cfg(test)]
 mod tests {
+    use crate::config::toolbar_item_ids;
+
     use super::*;
     use crate::config::StatusBarItem;
     use crate::input::state::test_support::make_test_input_state;
@@ -666,14 +667,13 @@ mod tests {
     #[test]
     fn status_bar_contents_subpanel_exposes_every_authored_content_toggle() {
         let mut state = make_test_input_state();
-        assert!(state.set_toolbar_item_hidden(
-            crate::config::toolbar_item_ids::SIDE_SETTINGS_STATUS_BOARD_BADGE,
-            true,
-        ));
-        assert!(state.set_toolbar_item_hidden(
-            crate::config::toolbar_item_ids::SIDE_SETTINGS_STATUS_PAGE_BADGE,
-            true,
-        ));
+        assert!(
+            state
+                .set_toolbar_item_hidden(toolbar_item_ids::SIDE_SETTINGS_STATUS_BOARD_BADGE, true,)
+        );
+        assert!(
+            state.set_toolbar_item_hidden(toolbar_item_ids::SIDE_SETTINGS_STATUS_PAGE_BADGE, true,)
+        );
         state.test_set_toolbar_customization(false, None, true);
         let snapshot =
             ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());

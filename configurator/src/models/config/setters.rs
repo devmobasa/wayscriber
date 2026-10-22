@@ -1,3 +1,5 @@
+use wayscriber::config;
+
 use super::super::fields::{
     DragColorOption, DragMouseButton, DragToolField, DragToolOption, FontStyleOption,
     FontWeightOption, OverrideOption, QuadField, TextField, ToggleField, ToolbarLayoutModeOption,
@@ -19,7 +21,7 @@ impl ConfigDraft {
     }
 
     fn refresh_toolbar_section_visibility(&mut self) {
-        let visibility = wayscriber::config::resolve_section_visibility(
+        let visibility = config::resolve_section_visibility(
             self.ui_toolbar_layout_mode.to_mode(),
             &self.ui_toolbar_mode_overrides.to_config(),
             &self.ui_toolbar_items.resolved(),

@@ -1,9 +1,16 @@
+use std::cmp::Ordering;
+use std::time::Duration;
+
 use log::debug;
 use smithay_client_toolkit::seat::pointer::{AxisScroll, PointerEvent};
 use std::time::Instant;
 use wayland_client::protocol::wl_pointer;
 
-use super::*;
+use crate::draw::TextMeasurer;
+use crate::input::DrawingState;
+
+use super::super::route::{InputSurface, RoutedInput};
+use crate::backend::wayland::state::WaylandState;
 use crate::input::Tool;
 use crate::input::state::{InputState, SpotlightWheelClaim, SpotlightWheelOutcome};
 
@@ -11,7 +18,7 @@ use crate::input::state::{InputState, SpotlightWheelClaim, SpotlightWheelOutcome
 ///
 /// Long enough that a pause mid-scroll does not split one adjustment in two,
 /// short enough that a later visit is separately undoable.
-pub(super) const SPOTLIGHT_WHEEL_IDLE: std::time::Duration = std::time::Duration::from_millis(600);
+pub(super) const SPOTLIGHT_WHEEL_IDLE: Duration = Duration::from_millis(600);
 
 fn scroll_direction(vertical: AxisScroll) -> i32 {
     if vertical.value120 != 0 {
@@ -70,7 +77,7 @@ fn finalize_spotlight_wheel_if_axis_stopped(
 /// routing: SCTK may aggregate a final movement and stop in one frame.
 fn try_handle_spotlight_axis(
     input_state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     spotlight_wheel_idle_deadline: &mut Option<Instant>,
     canvas_position: (i32, i32),
     vertical: AxisScroll,
@@ -98,7 +105,11 @@ fn try_handle_spotlight_axis(
             if steps != 0 {
                 let outcome = input_state
                     .nudge_spotlight_magnification_at_with(measurer, canvas_x, canvas_y, steps);
-                debug_assert_ne!(outcome, SpotlightWheelOutcome::NotOverLoupe);
+                debug_assert_ne!(
+                    outcome,
+                    SpotlightWheelOutcome::NotOverLoupe,
+                    "the wheel claim already found an adjustable loupe at this point"
+                );
                 debug!("Spotlight wheel at ({canvas_x}, {canvas_y}): {outcome:?}");
             }
         }
@@ -275,25 +286,25 @@ impl WaylandState {
         }
 
         match scroll_direction.cmp(&0) {
-            std::cmp::Ordering::Greater if self.input_state.modifiers.shift => {
+            Ordering::Greater if self.input_state.modifiers.shift => {
                 self.input_state.adjust_font_size(-2.0);
                 debug!(
                     "Font size decreased: {:.1}px",
                     self.input_state.style.current_font_size
                 );
             }
-            std::cmp::Ordering::Less if self.input_state.modifiers.shift => {
+            Ordering::Less if self.input_state.modifiers.shift => {
                 self.input_state.adjust_font_size(2.0);
                 debug!(
                     "Font size increased: {:.1}px",
                     self.input_state.style.current_font_size
                 );
             }
-            std::cmp::Ordering::Greater | std::cmp::Ordering::Less => {
+            Ordering::Greater | Ordering::Less => {
                 let delta = if scroll_direction > 0 { -1.0 } else { 1.0 };
                 self.adjust_active_tool_thickness(delta, false);
             }
-            std::cmp::Ordering::Equal => {}
+            Ordering::Equal => {}
         }
     }
 
@@ -306,9 +317,7 @@ impl WaylandState {
             return false;
         }
 
-        if scroll_direction != 0
-            && matches!(self.input_state.state, crate::input::DrawingState::Idle)
-        {
+        if scroll_direction != 0 && matches!(self.input_state.state, DrawingState::Idle) {
             self.handle_zoom_scroll(scroll_direction < 0, position.0, position.1);
         }
         true
@@ -427,7 +436,7 @@ fn try_handle_board_picker_page_panel_axis(
 /// the tick.
 fn try_handle_properties_panel_axis(
     input_state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     position: (f64, f64),
     scroll_direction: i32,
 ) -> bool {
@@ -441,10 +450,13 @@ fn try_handle_properties_panel_axis(
 
 #[cfg(test)]
 mod tests {
+    use crate::ui_text::UiTextEngine;
+
     use super::*;
     use crate::config::Action;
     use crate::draw::{Frame, Shape};
-    use crate::input::state::{BoardPickerFocus, test_support::make_test_input_state};
+    use crate::input::state::BoardPickerFocus;
+    use crate::input::state::test_support::make_test_input_state;
     use std::time::Duration;
 
     #[test]
@@ -482,7 +494,7 @@ mod tests {
     #[test]
     fn board_picker_page_panel_axis_consumes_before_thickness_changes() {
         let mut input_state = make_test_input_state();
-        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        input_state.open_board_picker_with_measurer(&TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");
@@ -513,7 +525,7 @@ mod tests {
         // both board-picker wheel routes before the registry swallows the tick.
         let mut input_state = make_test_input_state();
         input_state.switch_board_force("whiteboard");
-        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        input_state.open_board_picker_with_measurer(&TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");
@@ -523,12 +535,10 @@ mod tests {
         let page_panel = (layout.page_viewport_x + 1.0, layout.page_viewport_y + 1.0);
         input_state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-        input_state
-            .board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+        input_state.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
         assert!(
-            input_state.open_color_picker_popup_for_board_paper_with_measurer(
-                &crate::draw::TextMeasurer::default()
-            )
+            input_state
+                .open_color_picker_popup_for_board_paper_with_measurer(&TextMeasurer::default())
         );
         assert!(input_state.is_board_picker_open());
         let frame = input_state.board_appearance_frame().expect("sheet frame");
@@ -573,7 +583,7 @@ mod tests {
     #[test]
     fn an_active_screen_modal_prevents_the_toolbar_scroll_route() {
         let mut input_state = make_test_input_state();
-        input_state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
+        input_state.activate_eyedropper_with(&TextMeasurer::default(), None);
 
         assert_eq!(
             axis_surface_route(&input_state, true, true),
@@ -594,7 +604,7 @@ mod tests {
         // over the board picker, which makes it the one that can have the list
         // scrolled out from under it.
         let mut input_state = make_test_input_state();
-        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+        input_state.open_board_picker_with_measurer(&TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");
@@ -652,8 +662,8 @@ mod tests {
 
     #[test]
     fn a_final_axis_delta_and_stop_complete_one_spotlight_gesture() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &test_ui_engine,
@@ -727,8 +737,8 @@ mod tests {
 
     #[test]
     fn a_coalesced_value120_frame_applies_every_logical_step() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &test_ui_engine,
@@ -788,8 +798,8 @@ mod tests {
 
     #[test]
     fn partial_value120_frames_accumulate_before_applying_a_logical_step() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &test_ui_engine,
@@ -873,8 +883,8 @@ mod tests {
 
     #[test]
     fn a_finger_axis_pause_longer_than_the_wheel_timeout_stays_one_gesture() {
-        let pointer_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &pointer_measurer,
             ui_engine: &test_ui_engine,

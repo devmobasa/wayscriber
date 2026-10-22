@@ -1,5 +1,6 @@
-use super::state::MoveSample;
-use super::*;
+use super::state::{MoveDragKind, MoveSample};
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::helpers::{drag_log, toolbar_drag_preview_enabled};
 
 impl WaylandState {
     pub(in crate::backend::wayland::state::toolbar) fn begin_toolbar_move_drag(

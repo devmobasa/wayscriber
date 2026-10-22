@@ -1,25 +1,27 @@
 #[cfg(feature = "portal")]
 use std::time::Duration;
 
+use tokio::runtime::Runtime;
+#[cfg(feature = "portal")]
+use tokio::time;
+
+#[cfg(feature = "portal")]
+use crate::capture::portal;
+use crate::capture::types::CaptureError;
+
 #[cfg(feature = "portal")]
 const PORTAL_STARTUP_PROBE_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// Whether freeze may fall back to the screenshot portal.
 #[cfg(feature = "portal")]
-pub(crate) fn portal_freeze_fallback(
-    runtime: &tokio::runtime::Runtime,
-    direct_capture_supported: bool,
-) -> bool {
+pub(crate) fn portal_freeze_fallback(runtime: &Runtime, direct_capture_supported: bool) -> bool {
     portal_fallback_available(direct_capture_supported, || {
         screenshot_portal_available(runtime)
     })
 }
 
 #[cfg(not(feature = "portal"))]
-pub(crate) fn portal_freeze_fallback(
-    _runtime: &tokio::runtime::Runtime,
-    _direct_capture_supported: bool,
-) -> bool {
+pub(crate) fn portal_freeze_fallback(_runtime: &Runtime, _direct_capture_supported: bool) -> bool {
     false
 }
 
@@ -33,20 +35,16 @@ fn portal_fallback_available(direct_capture_supported: bool, probe: impl FnOnce(
 }
 
 #[cfg(feature = "portal")]
-fn screenshot_portal_available(runtime: &tokio::runtime::Runtime) -> bool {
+fn screenshot_portal_available(runtime: &Runtime) -> bool {
     runtime.block_on(async {
-        tokio::time::timeout(
-            PORTAL_STARTUP_PROBE_TIMEOUT,
-            crate::capture::portal::is_portal_available(),
-        )
-        .await
-        .unwrap_or(false)
+        time::timeout(PORTAL_STARTUP_PROBE_TIMEOUT, portal::is_portal_available())
+            .await
+            .unwrap_or(false)
     })
 }
 
 #[cfg(feature = "portal")]
-pub(crate) async fn capture_via_portal_fullscreen_bytes()
--> Result<Vec<u8>, crate::capture::types::CaptureError> {
+pub(crate) async fn capture_via_portal_fullscreen_bytes() -> Result<Vec<u8>, CaptureError> {
     use crate::capture::sources::portal::capture_via_portal_bytes;
     use crate::capture::types::CaptureType;
 
@@ -54,9 +52,8 @@ pub(crate) async fn capture_via_portal_fullscreen_bytes()
 }
 
 #[cfg(not(feature = "portal"))]
-pub(crate) async fn capture_via_portal_fullscreen_bytes()
--> Result<Vec<u8>, crate::capture::types::CaptureError> {
-    Err(crate::capture::types::CaptureError::PortalUnavailable)
+pub(crate) async fn capture_via_portal_fullscreen_bytes() -> Result<Vec<u8>, CaptureError> {
+    Err(CaptureError::PortalUnavailable)
 }
 
 pub(crate) const fn portal_output_matches(target: Option<u32>, current: Option<u32>) -> bool {

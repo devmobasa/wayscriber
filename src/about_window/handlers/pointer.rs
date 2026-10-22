@@ -2,7 +2,8 @@ use smithay_client_toolkit::seat::pointer::{
     BTN_LEFT, PointerEvent, PointerEventKind, PointerHandler,
 };
 use smithay_client_toolkit::shell::WaylandSurface;
-use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
+use wayland_client::protocol::wl_pointer;
+use wayland_client::{Connection, QueueHandle};
 
 use super::super::AboutWindowState;
 

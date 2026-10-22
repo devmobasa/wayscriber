@@ -159,12 +159,14 @@ impl ContextMenuEntry {
     }
 
     /// Starts a new group at this row.
+    #[must_use]
     pub fn with_separator(mut self) -> Self {
         self.separator_before = true;
         self
     }
 
     /// Makes this a parent row that opens `kind` as a submenu.
+    #[must_use]
     pub fn with_submenu(mut self, kind: ContextMenuKind) -> Self {
         self.submenu = Some(kind);
         self

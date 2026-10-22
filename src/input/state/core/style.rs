@@ -3,11 +3,14 @@ use crate::config::{
     DrawingConfig, MouseDragToolsConfig, PresetToolStatesConfig, QuickColorPalette,
     SpotlightConfig, ToolPresetConfig,
 };
-use crate::draw::{ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, clamp_regular_sides};
+use crate::draw::{
+    ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, clamp_regular_sides, shape,
+};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
 use crate::session::ToolStateSnapshot;
 use crate::ui::toolbar::model::ToolbarSliderSpec;
+use crate::{config, draw};
 
 use super::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
@@ -79,10 +82,10 @@ impl From<(&DrawingConfig, &ArrowConfig, &SpotlightConfig)> for DrawingStyle {
             eraser_kind: EraserKind::Circle,
             eraser_mode: drawing.default_eraser_mode,
             marker_opacity: drawing.marker_opacity,
-            pen_smoothing: crate::draw::shape::clamp_pen_smoothing(drawing.pen_smoothing),
+            pen_smoothing: shape::clamp_pen_smoothing(drawing.pen_smoothing),
             shape_recognition_sensitivity: drawing
                 .shape_recognition_sensitivity
-                .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+                .min(config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
             shape_recognition_grid_snap: drawing.shape_recognition_grid_snap,
             blur_style: drawing.default_blur_style,
             spotlight_dim_opacity: spotlight.dim_opacity,
@@ -187,16 +190,16 @@ impl DrawingStyle {
     }
 
     pub(crate) fn nudge_pen_smoothing(&mut self, delta: i32) -> bool {
-        let next = crate::draw::shape::clamp_pen_smoothing(
+        let next = shape::clamp_pen_smoothing(
             i32::from(self.pen_smoothing)
                 .saturating_add(delta)
-                .clamp(0, i32::from(crate::draw::shape::MAX_PEN_SMOOTHING)) as u8,
+                .clamp(0, i32::from(shape::MAX_PEN_SMOOTHING)) as u8,
         );
         self.set_pen_smoothing(next)
     }
 
     pub(crate) fn set_pen_smoothing(&mut self, level: u8) -> bool {
-        let level = crate::draw::shape::clamp_pen_smoothing(level);
+        let level = shape::clamp_pen_smoothing(level);
         if level == self.pen_smoothing {
             return false;
         }
@@ -207,15 +210,12 @@ impl DrawingStyle {
     pub(crate) fn nudge_shape_recognition_sensitivity(&mut self, delta: i32) -> bool {
         let next = i32::from(self.shape_recognition_sensitivity)
             .saturating_add(delta)
-            .clamp(
-                0,
-                i32::from(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
-            );
+            .clamp(0, i32::from(config::MAX_SHAPE_RECOGNITION_SENSITIVITY));
         self.set_shape_recognition_sensitivity(next as u8)
     }
 
     pub(crate) fn set_shape_recognition_sensitivity(&mut self, level: u8) -> bool {
-        let level = level.min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY);
+        let level = level.min(config::MAX_SHAPE_RECOGNITION_SENSITIVITY);
         if level == self.shape_recognition_sensitivity {
             return false;
         }
@@ -224,9 +224,8 @@ impl DrawingStyle {
     }
 
     pub(crate) fn set_spotlight_magnification(&mut self, magnification: f64) -> bool {
-        let normalized = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION.normalize_value(
-            crate::draw::normalize_spotlight_magnification(magnification),
-        );
+        let normalized = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION
+            .normalize_value(draw::normalize_spotlight_magnification(magnification));
         if (normalized - self.spotlight_magnification).abs() < f64::EPSILON {
             return false;
         }
@@ -439,8 +438,7 @@ impl DrawingStyle {
             let _ = self.set_marker_opacity(opacity);
         }
         if let Some(magnification) = snapshot.spotlight_magnification {
-            self.spotlight_magnification =
-                crate::draw::normalize_spotlight_magnification(magnification);
+            self.spotlight_magnification = draw::normalize_spotlight_magnification(magnification);
         }
         if let Some(fill_enabled) = snapshot.fill_enabled {
             let _ = self.set_fill_enabled(fill_enabled);
@@ -540,7 +538,7 @@ mod tests {
         assert!(!style.set_marker_opacity(f64::INFINITY));
 
         assert!(style.set_polygon_sides(u8::MAX));
-        assert_eq!(style.polygon_sides, crate::draw::REGULAR_POLYGON_MAX_SIDES);
+        assert_eq!(style.polygon_sides, draw::REGULAR_POLYGON_MAX_SIDES);
         assert!(!style.set_polygon_sides(u8::MAX));
     }
 

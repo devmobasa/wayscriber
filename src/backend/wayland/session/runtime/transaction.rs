@@ -1,5 +1,21 @@
 //! Session commands advance only when their disk phase completes.
-use super::*;
+use std::collections::VecDeque;
+use std::fmt::{Display, Formatter};
+use std::{error, fmt};
+
+use super::super::persistence::{
+    PersistenceOperation, PersistenceOutcome, RequestId, SaveStrategy,
+};
+use super::super::stored_session;
+use super::{
+    RuntimeClearSessionReport, RuntimeClearToolStateReport, RuntimeOpenSessionReport,
+    RuntimeSaveAsSessionReport, SessionTransaction, session_persistence_enabled,
+};
+use crate::input::InputState;
+use crate::session::{SaveAsOverwrite, SessionOptions, SessionSnapshot, ToolStateSnapshot};
+use anyhow::{Result, anyhow};
+use std::path::PathBuf;
+use std::time::Instant;
 
 mod output;
 mod phases;
@@ -7,13 +23,13 @@ mod phases;
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct SessionCommandAborted(&'static str);
 
-impl std::fmt::Display for SessionCommandAborted {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SessionCommandAborted {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.0)
     }
 }
 
-impl std::error::Error for SessionCommandAborted {}
+impl error::Error for SessionCommandAborted {}
 
 #[derive(Debug)]
 pub(in crate::backend::wayland) enum SessionCommand {
@@ -103,8 +119,7 @@ impl SessionCommand {
 
 pub(in crate::backend::wayland) struct SessionCommandTransaction {
     command: SessionCommand,
-    pub(in crate::backend::wayland::session) queued_commands:
-        std::collections::VecDeque<QueuedSessionCommand>,
+    pub(in crate::backend::wayland::session) queued_commands: VecDeque<QueuedSessionCommand>,
     phase: Phase,
     current: Option<SessionOptions>,
     target: Option<SessionOptions>,
@@ -122,7 +137,7 @@ impl SessionCommandTransaction {
     pub fn new(command: SessionCommand, epoch: u64, interaction: (u64, bool)) -> Self {
         Self {
             command,
-            queued_commands: std::collections::VecDeque::new(),
+            queued_commands: VecDeque::new(),
             phase: Phase::Start,
             current: None,
             target: None,
@@ -192,7 +207,7 @@ impl SessionCommandTransaction {
             Phase::OutputCheckSource => self.complete_output_check_source(context, outcome),
             Phase::OutputArtifacts => self.complete_output_artifacts(context, outcome),
             Phase::OutputLoad | Phase::OutputHome => self.complete_output_load(context, outcome),
-            Phase::Start => self.complete_start(context, outcome),
+            Phase::Start => self.complete_start(context, outcome.as_ref()),
             Phase::OpenPreflight => self.complete_open_preflight(context, outcome),
             Phase::SaveCurrent => self.complete_save_current(context, outcome),
             Phase::Load => self.complete_load(context, outcome),
@@ -209,7 +224,11 @@ impl SessionCommandTransaction {
 
     // Catalog bookkeeping is best effort after a successful open.
     pub fn catalog_failure_report(&self, error: anyhow::Error) -> SessionCommandReport {
-        debug_assert!(self.has_committed_open());
+        debug_assert!(
+            self.has_committed_open(),
+            "catalog failures are reported only after the open committed, got phase {:?}",
+            self.phase
+        );
         let mut report = self.open_report();
         report.catalog_error = Some(error);
 
@@ -336,7 +355,7 @@ impl SessionCommandTransaction {
     fn apply_default_tools(
         &self,
         context: &mut SessionTransaction<'_>,
-        defaults: ToolStateSnapshot,
+        defaults: &ToolStateSnapshot,
     ) {
         stored_session::apply_tool_state_snapshot(context.input_state, context.measurer, defaults);
         context.input_state.mark_session_dirty();

@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
+
 use super::super::active::active_interaction_kind;
 use super::super::outcome::{
     ActiveInteractionKind, CancelTarget, ConsumedBy, InteractionSideEffect, KeyboardSideEffect,
@@ -12,7 +15,7 @@ use crate::input::state::{DrawingState, InputState};
 
 pub(crate) fn handle_command_palette_key(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
 ) -> Option<RoutingOutcome> {
     (state.command_palette_is_engaged()
@@ -57,7 +60,7 @@ pub(crate) fn handle_radial_menu_key(state: &mut InputState, key: Key) -> Option
 
 pub(crate) fn handle_precision_entry_key(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
 ) -> Option<RoutingOutcome> {
     (state.is_precision_entry_open()
@@ -74,7 +77,7 @@ pub(crate) fn handle_color_picker_key(state: &mut InputState, key: Key) -> Optio
 /// produced rather than only the key itself.
 pub(crate) fn handle_font_picker_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
     text: Option<&str>,
 ) -> Option<RoutingOutcome> {
@@ -84,7 +87,7 @@ pub(crate) fn handle_font_picker_key(
 
 pub(crate) fn handle_context_menu_key(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
 ) -> Option<RoutingOutcome> {
     (state.is_context_menu_open() && state.handle_context_menu_key_with_resources(resources, key))
@@ -93,7 +96,7 @@ pub(crate) fn handle_context_menu_key(
 
 pub(crate) fn handle_board_picker_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     (state.is_board_picker_open() && state.handle_board_picker_key_with_measurer(measurer, key))
@@ -111,7 +114,7 @@ pub(crate) fn handle_global_modifier_key(
 
 pub(crate) fn handle_properties_panel_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if !state.is_properties_panel_open() {
@@ -159,7 +162,7 @@ pub(crate) fn handle_pending_delete_cancel_key(
 
 pub(crate) fn handle_idle_selection_cancel_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Escape)
@@ -175,7 +178,7 @@ pub(crate) fn handle_idle_selection_cancel_key(
 
 pub(crate) fn handle_text_input_key(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(&state.state, DrawingState::TextInput { .. }) {
@@ -188,7 +191,7 @@ pub(crate) fn handle_text_input_key(
 
 pub(crate) fn handle_building_polygon_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if !matches!(state.state, DrawingState::BuildingPolygon { .. }) {
@@ -220,7 +223,7 @@ pub(crate) fn handle_building_polygon_key(
 
 pub(crate) fn handle_drawing_escape_cancel_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Escape)
@@ -259,7 +262,7 @@ pub(crate) fn action_for_key_binding(
 
 pub(crate) fn handle_return_edit_selected_text_key(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Return)

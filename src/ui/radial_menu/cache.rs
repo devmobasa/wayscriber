@@ -12,6 +12,8 @@
 use crate::ui_text::UiTextEngine;
 use cairo::{Context, Format, ImageSurface};
 
+use crate::draw::Color;
+use crate::input::DrawingState;
 use crate::input::state::{
     InputState, RADIAL_COMPASS_SLICES, RadialMenuLayout, RadialRingSwatch, RadialSliceKind,
     sub_ring_children,
@@ -174,10 +176,7 @@ pub(super) fn base_cache_key(
 ) -> BaseKey {
     let active_tool = input_state.active_tool();
     let active_color = input_state.color_for_tool(active_tool);
-    let text_input = matches!(
-        input_state.state,
-        crate::input::DrawingState::TextInput { .. }
-    );
+    let text_input = matches!(input_state.state, DrawingState::TextInput { .. });
 
     let bindings = RADIAL_COMPASS_SLICES
         .iter()
@@ -254,7 +253,7 @@ fn physical_size(extent: f64, scale: f64) -> i32 {
     ((extent * 2.0) * scale).ceil() as i32
 }
 
-fn color_key(color: &crate::draw::Color) -> String {
+fn color_key(color: &Color) -> String {
     format!(
         "{:.4},{:.4},{:.4},{:.4}",
         color.r, color.g, color.b, color.a
@@ -263,6 +262,11 @@ fn color_key(color: &crate::draw::Color) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::f64::consts;
+
+    use crate::config::{KeybindingsConfig, QuickColorPalette, QuickColorPaletteEntry};
+    use crate::draw::TextMeasurer;
+
     use super::*;
     use crate::draw::Color;
     use crate::input::Tool;
@@ -295,7 +299,7 @@ mod tests {
 
         // Recents arc
         state.apply_color_from_ui_with_measurer(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             Color {
                 r: 0.123,
                 g: 0.456,
@@ -327,8 +331,8 @@ mod tests {
     fn base_cache_key_changes_with_quick_palette() {
         let mut state = make_test_input_state();
         let base = key_for(&state);
-        state.set_quick_colors(crate::config::QuickColorPalette::from_entries(vec![
-            crate::config::QuickColorPaletteEntry {
+        state.set_quick_colors(QuickColorPalette::from_entries(vec![
+            QuickColorPaletteEntry {
                 label: "Only".to_string(),
                 color: Color {
                     r: 0.2,
@@ -347,9 +351,9 @@ mod tests {
     #[test]
     fn a_transparent_ring_swatch_paints_the_checkerboard() {
         let mut state = make_test_input_state();
-        state.set_quick_colors(crate::config::QuickColorPalette::from_entries(
+        state.set_quick_colors(QuickColorPalette::from_entries(
             (0..8)
-                .map(|index| crate::config::QuickColorPaletteEntry {
+                .map(|index| QuickColorPaletteEntry {
                     label: format!("Clear {index}"),
                     color: Color {
                         r: 1.0,
@@ -385,7 +389,7 @@ mod tests {
         let data = surface.data().expect("pixel data");
         let covered = (0..samples)
             .filter(|step| {
-                let angle = std::f64::consts::TAU * f64::from(*step) / f64::from(samples);
+                let angle = consts::TAU * f64::from(*step) / f64::from(samples);
                 let x = (EXTENT + radius * angle.cos()).round() as usize;
                 let y = (EXTENT + radius * angle.sin()).round() as usize;
                 // ARGB32 is native-endian, so alpha is the last byte.
@@ -409,7 +413,7 @@ mod tests {
         use crate::input::state::test_support::make_test_input_state_with_action_bindings;
 
         let default_state = make_test_input_state();
-        let mut bindings = crate::config::KeybindingsConfig::default()
+        let mut bindings = KeybindingsConfig::default()
             .build_action_bindings()
             .expect("default bindings");
         bindings.insert(

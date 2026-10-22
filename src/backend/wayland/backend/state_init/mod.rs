@@ -4,20 +4,27 @@ use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 use std::env;
 use std::path::Path;
 
+use crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState;
+use crate::backend::wayland::session::PersistenceController;
+use crate::draw::TextMeasurer;
+use crate::input::state::{Toast, ToastPriority};
+use crate::palette_recents::{PaletteRecentsStore, PaletteRecentsWriter};
+use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot};
+use crate::ui_text::UiTextEngine;
+use crate::{env_vars, launch_environment, paths};
+
 use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
 use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
 use crate::backend::wayland::portal_capture::portal_freeze_fallback;
 use crate::backend::wayland::session::{SessionHome, SessionLaunch, session_target};
+use crate::capture::CaptureManager;
+use crate::config::Config;
 use crate::env_vars::{DESKTOP_SESSION_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
-use crate::{
-    capture::CaptureManager,
-    config::Config,
-    input::InputState,
-    input::state::{CompositorCapabilities, DesktopEnvironment, ShellMode},
-    onboarding::OnboardingStore,
-};
+use crate::input::InputState;
+use crate::input::state::{CompositorCapabilities, DesktopEnvironment, ShellMode};
+use crate::onboarding::OnboardingStore;
 
 mod config;
 mod output;
@@ -65,10 +72,9 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         home_options,
         session_target(session_options.as_ref()),
     );
-    let runtime_wake = RuntimeWakeSource::new()
+    let runtime_wake = RuntimeWakeSource::try_new()
         .map_err(|err| anyhow::anyhow!("failed to create runtime wake descriptor: {err}"))?;
-    let persistence =
-        crate::backend::wayland::session::PersistenceController::start(runtime_wake.handle())?;
+    let persistence = PersistenceController::start(runtime_wake.handle())?;
     let output_prefs = output::resolve(&config);
 
     #[cfg(feature = "tablet-input")]
@@ -90,31 +96,30 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         backend.tokio_runtime.handle(),
         &keybindings.keybinding_conflicts,
     );
-    let ui_text = crate::ui_text::UiTextEngine::default();
-    let text_measurer = crate::draw::TextMeasurer::default();
-    let runtime_ui_path = crate::paths::runtime_ui_state_file();
-    let (runtime_ui, runtime_ui_unavailable) =
-        match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
-            &config,
-            &input_state,
-            &runtime_ui_path,
-            runtime_wake.handle(),
-        ) {
-            Ok(runtime_ui) => {
-                runtime_ui.apply_startup_state(&ui_text, &text_measurer, &mut input_state);
-                (Some(runtime_ui), None)
-            }
-            Err(error) => {
-                warn!(
-                    "Runtime UI persistence is unavailable at {}: {error:#}",
-                    runtime_ui_path.display()
-                );
-                (
-                    None,
-                    Some(runtime_ui_unavailable_snapshot(&runtime_ui_path, &error)),
-                )
-            }
-        };
+    let ui_text = UiTextEngine::default();
+    let text_measurer = TextMeasurer::default();
+    let runtime_ui_path = paths::runtime_ui_state_file();
+    let (runtime_ui, runtime_ui_unavailable) = match ToolbarRuntimeState::start(
+        &config,
+        &input_state,
+        &runtime_ui_path,
+        runtime_wake.handle(),
+    ) {
+        Ok(runtime_ui) => {
+            runtime_ui.apply_startup_state(&ui_text, &text_measurer, &mut input_state);
+            (Some(runtime_ui), None)
+        }
+        Err(error) => {
+            warn!(
+                "Runtime UI persistence is unavailable at {}: {error:#}",
+                runtime_ui_path.display()
+            );
+            (
+                None,
+                Some(runtime_ui_unavailable_snapshot(&runtime_ui_path, &error)),
+            )
+        }
+    };
     input_state.set_session_preflight_options(session_options.clone());
     let screencopy_supported = setup.screencopy_manager.is_some();
     let image_copy_capture_supported = setup.ext_image_copy_managers.is_some();
@@ -125,7 +130,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tokio_handle = backend.tokio_runtime.handle().clone();
     // Read from the launch environment: a linked GTK 4.16 or later unsets the
     // token from the live environment before `main`.
-    let startup_activation_token = crate::launch_environment::startup_activation_token();
+    let startup_activation_token = launch_environment::startup_activation_token();
     if startup_activation_token.is_some() {
         info!("Received startup activation token from launcher environment");
     }
@@ -157,9 +162,9 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         && config.ui.show_onboarding_hints
     {
         input_state.push_toast(
-            crate::input::state::ToastPriority::Critical,
+            ToastPriority::Critical,
             "onboarding.persistence",
-            crate::input::state::Toast::warning(format!(
+            Toast::warning(format!(
                 "Automatic guidance is off because onboarding progress could not be saved: {error}"
             )),
         );
@@ -172,13 +177,13 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     );
 
     // Seed the palette's recent-commands history from its persisted store.
-    let palette_recents_store = crate::palette_recents::PaletteRecentsStore::load();
+    let palette_recents_store = PaletteRecentsStore::load();
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
     // Only a daemon-launched overlay child carries its generation.
     input_state.set_context_menu_exit_hides_overlay(
-        std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some(),
+        env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some(),
     );
-    let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
+    let palette_recents = PaletteRecentsWriter::new(palette_recents_store);
 
     apply_initial_mode(backend, &config, &mut input_state, &text_measurer);
 
@@ -253,10 +258,10 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
 fn runtime_ui_unavailable_snapshot(
     path: &Path,
     error: &anyhow::Error,
-) -> crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
-    crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+) -> RuntimeUiPersistenceSnapshot {
+    RuntimeUiPersistenceSnapshot {
         path: path.to_path_buf(),
-        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Unavailable,
+        mode: RuntimeUiPersistenceMode::Unavailable,
         detail: Some(format!(
             "Runtime preference persistence could not start: {error:#}. Runtime-only toolbar and board changes apply only to this process."
         )),
@@ -268,7 +273,7 @@ fn apply_initial_mode(
     backend: &WaylandBackend,
     _config: &Config,
     input_state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
 ) {
     // Apply initial board from CLI (if provided).
     if let Some(initial_id) = backend.initial_mode.clone() {
@@ -310,10 +315,7 @@ mod tests {
         );
 
         assert_eq!(snapshot.path, path);
-        assert_eq!(
-            snapshot.mode,
-            crate::ui::toolbar::RuntimeUiPersistenceMode::Unavailable
-        );
+        assert_eq!(snapshot.mode, RuntimeUiPersistenceMode::Unavailable);
         let detail = snapshot.detail.expect("startup failure detail");
         assert!(detail.contains("writer channel could not start"));
         assert!(

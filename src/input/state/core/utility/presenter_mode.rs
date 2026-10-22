@@ -7,12 +7,15 @@
 //! override marks it through `set_tool_override`, where the change actually
 //! reaches the snapshot.
 
+use crate::config::{
+    PresenterModeConfig, PresenterToolBehavior, PresenterToolbarMode, TopDisplayMode,
+};
+
 use super::super::base::InputState;
-use super::super::modes::PresenterRestore;
+use super::super::modes::{PresenterChrome, PresenterRestore};
 use crate::domain::Action;
 use crate::i18n::tr;
-use crate::input::state::InputTextResources;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{InputTextResources, Toast, ToastPriority};
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -20,7 +23,7 @@ impl InputState {
         self.modes.presenter_active()
     }
 
-    pub(crate) fn presenter_mode_config(&self) -> &crate::config::PresenterModeConfig {
+    pub(crate) fn presenter_mode_config(&self) -> &PresenterModeConfig {
         self.modes.presenter_config()
     }
 
@@ -36,16 +39,11 @@ impl InputState {
         self.modes.presenter_restored_click_highlight()
     }
 
-    pub(crate) fn presenter_restored_top_display_mode(
-        &self,
-    ) -> Option<crate::config::TopDisplayMode> {
+    pub(crate) fn presenter_restored_top_display_mode(&self) -> Option<TopDisplayMode> {
         self.modes.presenter_restored_top_display_mode()
     }
 
-    pub(crate) fn retarget_presenter_toolbar_display_mode(
-        &mut self,
-        mode: crate::config::TopDisplayMode,
-    ) -> bool {
+    pub(crate) fn retarget_presenter_toolbar_display_mode(&mut self, mode: TopDisplayMode) -> bool {
         self.modes.retarget_presenter_toolbar_display_mode(mode)
     }
 
@@ -55,9 +53,7 @@ impl InputState {
     }
 
     #[cfg(test)]
-    pub(crate) fn presenter_mode_config_mut_for_test(
-        &mut self,
-    ) -> &mut crate::config::PresenterModeConfig {
+    pub(crate) fn presenter_mode_config_mut_for_test(&mut self) -> &mut PresenterModeConfig {
         self.modes.presenter_config_mut_for_test()
     }
 
@@ -133,12 +129,14 @@ impl InputState {
         self.cancel_active_interaction_with(resources.measurer);
         let restore = PresenterRestore::capture(
             &config,
-            self.ui_visibility.show_status_bar,
-            self.ui_visibility.show_tool_preview,
-            self.toolbar_visibility_snapshot(),
-            self.click_highlight_enabled(),
-            self.input_hud_enabled(),
-            self.tool_override(),
+            PresenterChrome {
+                show_status_bar: self.ui_visibility.show_status_bar,
+                show_tool_preview: self.ui_visibility.show_tool_preview,
+                toolbar_visibility: self.toolbar_visibility_snapshot(),
+                click_highlight_enabled: self.click_highlight_enabled(),
+                input_hud_enabled: self.input_hud_enabled(),
+                tool_override: self.tool_override(),
+            },
         );
         if config.hide_status_bar {
             self.ui_visibility.show_status_bar = false;
@@ -148,23 +146,20 @@ impl InputState {
         }
         if config.hide_toolbars {
             match config.toolbar_mode {
-                crate::config::PresenterToolbarMode::Hidden => {
+                PresenterToolbarMode::Hidden => {
                     self.hide_toolbar_visibility();
                 }
-                crate::config::PresenterToolbarMode::Micro => {
+                PresenterToolbarMode::Micro => {
                     // The top strip stays up as the micro chip.
                     self.set_top_display_mode_with_resources(
                         resources.ui_engine,
                         resources.measurer,
-                        crate::config::TopDisplayMode::Micro,
+                        TopDisplayMode::Micro,
                     );
                 }
             }
         }
-        if !matches!(
-            config.tool_behavior,
-            crate::config::PresenterToolBehavior::Keep
-        ) {
+        if !matches!(config.tool_behavior, PresenterToolBehavior::Keep) {
             self.set_tool_override_with(resources.measurer, Some(Tool::Highlight));
         }
         if config.enable_click_highlight && !self.click_highlight_enabled() {

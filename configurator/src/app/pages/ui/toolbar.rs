@@ -36,7 +36,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Layout mode"),
             tr("Simple: core pens. Regular: adds Shape Pen, Line, Arrow, presets. Advanced: shapes inline, multi-step undo."),
             layout_modes,
-            layout_labels,
+            &layout_labels,
             |app| app.draft.ui_toolbar_layout_mode,
             Message::ToolbarLayoutModeChanged,
         )
@@ -44,7 +44,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Zoom chip"),
             "",
             zoom_chips,
-            zoom_chip_labels,
+            &zoom_chip_labels,
             |app| app.draft.ui_toolbar_zoom_chip_display,
             Message::ToolbarZoomChipDisplayChanged,
         )
@@ -58,7 +58,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Shortcut edit click"),
             "",
             rebinds,
-            rebind_labels,
+            &rebind_labels,
             |app| app.draft.ui_toolbar_rebind_modifier,
             Message::ToolbarRebindModifierChanged,
         )
@@ -66,7 +66,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Stroke controls"),
             tr("How the style pill shows pen smoothing and Shape Pen sensitivity. Panel: one Pen feel button opening meters with a live smoothing preview. Meters or Steppers: inline controls."),
             stroke_styles,
-            stroke_style_labels,
+            &stroke_style_labels,
             |app| app.draft.ui_toolbar_stroke_controls,
             Message::ToolbarStrokeControlsChanged,
         )
@@ -179,7 +179,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         tr("Edit mode"),
         tr("Overrides below apply to the mode selected here; \"Default\" keeps the mode preset."),
         override_modes,
-        override_mode_labels,
+        &override_mode_labels,
         |app| app.override_mode,
         Message::ToolbarOverrideModeChanged,
     );
@@ -198,7 +198,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             field.label(),
             "",
             values,
-            labels,
+            &labels,
             move |app| toolbar_override(app, field),
             move |value| Message::ToolbarOverrideChanged(field, value),
         );

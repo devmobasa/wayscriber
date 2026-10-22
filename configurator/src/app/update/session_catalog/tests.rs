@@ -1,5 +1,12 @@
 use std::path::PathBuf;
 
+use wayscriber::i18n;
+
+use crate::models::DaemonRuntimeStatus;
+use crate::models::session::SessionArtifactSummary;
+use crate::test_env::EnvGuard;
+use crate::{test_env, test_temp};
+
 use super::*;
 use crate::models::{
     DesktopEnvironment, LightShortcutApplyCapability, SessionCatalogState, ShortcutApplyCapability,
@@ -18,7 +25,7 @@ fn catalog_item(id: &str, display_name: &str) -> SessionCatalogItem {
         created_at_millis: 1_767_261_600_000,
         last_opened_at_millis: None,
         last_saved_at_millis: None,
-        artifacts: crate::models::session::SessionArtifactSummary {
+        artifacts: SessionArtifactSummary {
             primary_exists: false,
             backup_exists: false,
             recovery_exists: false,
@@ -30,8 +37,8 @@ fn catalog_item(id: &str, display_name: &str) -> SessionCatalogItem {
     }
 }
 
-fn inactive_daemon_status() -> crate::models::DaemonRuntimeStatus {
-    crate::models::DaemonRuntimeStatus {
+fn inactive_daemon_status() -> DaemonRuntimeStatus {
+    DaemonRuntimeStatus {
         desktop: DesktopEnvironment::Unknown,
         shortcut_backend: ShortcutBackend::Manual,
         shortcut_apply_capability: ShortcutApplyCapability::Manual,
@@ -124,14 +131,14 @@ fn catalog_load_preserves_a_defaults_confirmation() {
 
 #[test]
 fn a_finished_load_clears_its_notice_in_every_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::a_finished_load_clears_its_notice_in_every_language"
         ),
         || {
             for language in [Language::English, Language::SimplifiedChinese] {
-                wayscriber::i18n::set_language(language);
+                i18n::set_language(language);
                 let (mut app, _effects) = ConfiguratorApp::new_app();
 
                 let effects = app.handle_session_catalog_refresh_requested();
@@ -148,7 +155,7 @@ fn a_finished_load_clears_its_notice_in_every_language() {
 
 #[test]
 fn the_loading_notice_is_drawn_in_the_current_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::the_loading_notice_is_drawn_in_the_current_language"
@@ -158,7 +165,7 @@ fn the_loading_notice_is_drawn_in_the_current_language() {
             let _ = app.handle_session_catalog_refresh_requested();
             assert_eq!(app.status.text(), Some("Loading sessions..."));
 
-            wayscriber::i18n::set_language(Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
 
             assert_eq!(app.status.text(), Some("正在加载会话..."));
         },
@@ -191,8 +198,8 @@ fn a_failed_load_stops_loading_and_shows_the_error() {
 
 #[test]
 fn duplicate_request_blocks_without_daemon_status() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -208,8 +215,8 @@ fn duplicate_request_blocks_without_daemon_status() {
 
 #[test]
 fn duplicate_request_sets_busy_when_safe() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -228,8 +235,8 @@ fn duplicate_request_sets_busy_when_safe() {
 
 #[test]
 fn move_request_blocks_without_daemon_status() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -245,8 +252,8 @@ fn move_request_blocks_without_daemon_status() {
 
 #[test]
 fn move_request_sets_busy_when_safe() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -265,8 +272,8 @@ fn move_request_sets_busy_when_safe() {
 
 #[test]
 fn clear_request_blocks_without_daemon_status() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -281,8 +288,8 @@ fn clear_request_blocks_without_daemon_status() {
 
 #[test]
 fn clear_tool_state_request_blocks_without_daemon_status() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -298,8 +305,8 @@ fn clear_tool_state_request_blocks_without_daemon_status() {
 
 #[test]
 fn clear_tool_state_request_sets_busy_when_safe() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -319,8 +326,8 @@ fn clear_tool_state_request_sets_busy_when_safe() {
 
 #[test]
 fn clear_request_sets_pending_confirmation_when_safe() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -391,7 +398,7 @@ fn clear_canceled_disarms_and_clears_its_confirmation_status() {
     app.daemon.status = Some(inactive_daemon_status());
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
-    let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
+    let effects = app.handle_session_catalog_clear_canceled("s-1");
 
     assert!(effects.is_empty());
     assert!(app.pending_session_clear_id().is_none());
@@ -424,7 +431,7 @@ fn clear_canceled_preserves_status_that_replaced_its_confirmation() {
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
     app.status = StatusMessage::error("A newer session operation failed");
 
-    let _ = app.handle_session_catalog_clear_canceled("s-1".to_string());
+    let _ = app.handle_session_catalog_clear_canceled("s-1");
 
     assert!(app.pending_session_clear_id().is_none());
     assert!(matches!(app.status, StatusMessage::Error(_)));
@@ -440,7 +447,7 @@ fn stray_clear_cancel_preserves_unrelated_status() {
     app.pending_confirmation = None;
     app.status = StatusMessage::success("A completed operation");
 
-    let _ = app.handle_session_catalog_clear_canceled("s-1".to_string());
+    let _ = app.handle_session_catalog_clear_canceled("s-1");
 
     assert!(matches!(app.status, StatusMessage::Success(_)));
     assert!(status_contains(&app.status, "completed operation"));
@@ -458,7 +465,7 @@ fn stale_clear_cancel_does_not_disarm_a_newer_confirmation() {
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
     let _ = app.handle_session_catalog_clear_requested("s-2".to_string());
 
-    let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
+    let effects = app.handle_session_catalog_clear_canceled("s-1");
 
     assert!(effects.is_empty());
     assert_eq!(app.pending_session_clear_id(), Some("s-2"));
@@ -470,8 +477,8 @@ fn stale_clear_cancel_does_not_disarm_a_newer_confirmation() {
 /// the busy flag, the status, the effect — is untouched.
 #[test]
 fn clear_confirmed_consumes_the_pending_confirmation() {
-    let temp = crate::test_temp::tempdir().expect("temporary test directory");
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().expect("temporary test directory");
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -494,8 +501,8 @@ fn clear_confirmed_consumes_the_pending_confirmation() {
 /// stale one from a dialog — must not start it again.
 #[test]
 fn clear_confirmed_twice_starts_only_one_clear() {
-    let temp = crate::test_temp::tempdir().expect("temporary test directory");
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().expect("temporary test directory");
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
@@ -516,8 +523,8 @@ fn clear_confirmed_twice_starts_only_one_clear() {
 /// starts a clear nor consumes the confirmation that is armed.
 #[test]
 fn clear_confirmed_for_another_row_leaves_the_pending_one_armed() {
-    let temp = crate::test_temp::tempdir().expect("temporary test directory");
-    let _env = crate::test_env::EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let temp = test_temp::tempdir().expect("temporary test directory");
+    let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog.replace_items(vec![

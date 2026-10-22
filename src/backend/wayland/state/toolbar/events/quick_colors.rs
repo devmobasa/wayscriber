@@ -1,10 +1,12 @@
-use super::*;
 use crate::backend::wayland::config_edits::{ConfigEdit, ConfigEditWorker};
+use crate::backend::wayland::state::WaylandState;
 use crate::config::{
     Config, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, QuickColorSlotMissing,
 };
+use crate::domain::Action;
 use crate::i18n::{tr, trf};
 use crate::input::state::{QuickColorEdit, Toast, ToastPriority};
+use anyhow::Result;
 
 /// What the user is told when the swatch and the file both took the recolor.
 fn quick_color_saved_message(index: usize) -> String {
@@ -109,10 +111,7 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     "drawing.quick-color",
-                    Toast::warning(message).action(
-                        tr("Edit"),
-                        crate::domain::Action::OpenConfiguratorQuickColors,
-                    ),
+                    Toast::warning(message).action(tr("Edit"), Action::OpenConfiguratorQuickColors),
                 );
             }
         }
@@ -121,11 +120,15 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
+    use crate::config::{ColorSpec, ConfigDocument};
+    use crate::{config, test_temp};
+
     use super::*;
     use crate::config::io::persist_quick_color_at;
-    use crate::config::persist_quick_color;
     use crate::config::test_helpers::with_temp_config_home;
-    use crate::config::{Config, QuickColorSlotMissing, QuickColorsConfig};
+    use crate::config::{Config, QuickColorSlotMissing, QuickColorsConfig, persist_quick_color};
     use crate::draw::Color;
     use std::fs;
 
@@ -160,7 +163,7 @@ label = \"Green\"
 color = \"#33F54F\"
 ";
 
-    fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
+    fn write_fixture(dir: &Path) -> PathBuf {
         let path = dir.join("config.toml");
         fs::write(&path, AUTHORED_FILE).expect("the fixture should be written");
         path
@@ -176,7 +179,7 @@ color = \"#33F54F\"
     /// not asked to change.
     #[test]
     fn a_recolor_changes_exactly_its_own_slot() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         persist_quick_color_at(&path, 1, NEW_COLOR).expect("the write should succeed");
@@ -201,7 +204,7 @@ color = \"#33F54F\"
     /// nothing changes meaning.
     #[test]
     fn recoloring_an_implied_slot_materializes_only_up_to_that_slot() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         // Slot 3 is past the two authored entries, inside the default backfill.
@@ -213,8 +216,8 @@ color = \"#33F54F\"
             4,
             "the array must reach the edited slot and stop: {after}"
         );
-        let reloaded = crate::config::ConfigDocument::load_from_path(&path)
-            .expect("the written config should reload");
+        let reloaded =
+            ConfigDocument::load_from_path(&path).expect("the written config should reload");
         let palette = &reloaded.config().drawing.quick_colors;
         assert_eq!(
             palette.configured_entry_count(),
@@ -224,7 +227,7 @@ color = \"#33F54F\"
         let entries = palette.effective_entries();
         assert_eq!(
             entries.get(3).map(|entry| entry.color.clone()),
-            Some(crate::config::ColorSpec::from(NEW_COLOR))
+            Some(ColorSpec::from(NEW_COLOR))
         );
         assert_eq!(
             entries.get(2).map(|entry| entry.color.clone()),
@@ -250,9 +253,9 @@ color = \"#33F54F\"
     /// a success message for a save that did not happen.
     #[test]
     fn recoloring_a_slot_to_the_color_it_already_has_writes_nothing() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
-        let existing = crate::config::ConfigDocument::load_from_path(&path)
+        let existing = ConfigDocument::load_from_path(&path)
             .expect("load")
             .config()
             .drawing
@@ -278,10 +281,10 @@ color = \"#33F54F\"
     /// business.
     #[test]
     fn recoloring_an_implied_slot_to_its_default_writes_nothing() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
         let default =
-            crate::config::default_quick_color_for_index(3).expect("slot 4 has a shipped default");
+            config::default_quick_color_for_index(3).expect("slot 4 has a shipped default");
 
         let outcome = persist_quick_color_at(&path, 3, default).expect("a no-op is not a failure");
 
@@ -291,7 +294,7 @@ color = \"#33F54F\"
 
     #[test]
     fn a_recolor_leaves_a_timestamped_backup() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         let outcome =
@@ -308,7 +311,7 @@ color = \"#33F54F\"
     /// failure: nothing is wrong with the file, it simply got shorter.
     #[test]
     fn a_missing_slot_is_reported_without_touching_the_file() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
 
         // Past the authored entries and past the default backfill.
@@ -330,7 +333,7 @@ color = \"#33F54F\"
     fn a_read_only_config_fails_the_recolor_and_leaves_the_file_alone() {
         use std::os::unix::fs::PermissionsExt;
 
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = write_fixture(temp.path());
         fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).expect("chmod file");
         fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o555)).expect("chmod dir");
@@ -340,6 +343,7 @@ color = \"#33F54F\"
         fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o755)).expect("restore dir");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("restore file");
 
+        // SAFETY: geteuid has no preconditions and cannot fail.
         if unsafe { libc::geteuid() } == 0 {
             return;
         }
@@ -364,7 +368,7 @@ color = \"#33F54F\"
     #[test]
     fn a_fresh_load_returns_the_written_quick_color() {
         with_temp_config_home(|config_root| {
-            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+            let config_dir = config_root.join(config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).expect("test config directory");
             fs::write(config_dir.join("config.toml"), AUTHORED_FILE)
                 .expect("test config should be written");
@@ -379,7 +383,7 @@ color = \"#33F54F\"
                     .effective_entries()
                     .get(1)
                     .map(|entry| entry.color.clone()),
-                Some(crate::config::ColorSpec::from(NEW_COLOR))
+                Some(ColorSpec::from(NEW_COLOR))
             );
             assert_eq!(quick_color_saved_message(1), "Updated quick color 2.");
         });

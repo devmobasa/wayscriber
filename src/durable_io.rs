@@ -8,8 +8,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use std::ffi::{CString, OsStr, OsString};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::process;
 
 mod model;
 
@@ -332,10 +334,7 @@ fn finalize_overwrite_mode(
     }
 }
 
-fn create_temp_file(
-    parent: &Path,
-    file_name: &std::ffi::OsStr,
-) -> Result<(PathBuf, File), DurableIoError> {
+fn create_temp_file(parent: &Path, file_name: &OsStr) -> Result<(PathBuf, File), DurableIoError> {
     create_temp_file_from_candidates((0..64).map(|_| next_temp_path(parent, file_name)))
 }
 
@@ -371,6 +370,7 @@ where
 /// that audits its directory has to recognise those leftovers as its own
 /// rather than as foreign entries, and this is the one place that knows how
 /// [`next_temp_path`] spells them: `.{target}.{pid}.{stamp}.{sequence}.tmp`.
+#[must_use]
 pub fn temp_file_target(name: &str) -> Option<&str> {
     let mut rest = name.strip_prefix('.')?.strip_suffix(".tmp")?;
     for _ in 0..3 {
@@ -384,24 +384,20 @@ pub fn temp_file_target(name: &str) -> Option<&str> {
 }
 
 /// Whether `name` is a temporary an atomic write of `target` left behind.
+#[must_use]
 pub fn is_temp_file_for(name: &str, target: &str) -> bool {
     temp_file_target(name) == Some(target)
 }
 
-fn next_temp_path(parent: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
+fn next_temp_path(parent: &Path, file_name: &OsStr) -> PathBuf {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
     let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let mut name = std::ffi::OsString::from(".");
+    let mut name = OsString::from(".");
     name.push(file_name);
-    name.push(format!(
-        ".{}.{}.{}.tmp",
-        std::process::id(),
-        stamp,
-        sequence
-    ));
+    name.push(format!(".{}.{}.{}.tmp", process::id(), stamp, sequence));
     parent.join(name)
 }
 
@@ -618,7 +614,7 @@ pub fn rename_no_replace(source: &Path, target: &Path) -> io::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn path_to_cstring(path: &Path) -> io::Result<std::ffi::CString> {
+fn path_to_cstring(path: &Path) -> io::Result<CString> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
 

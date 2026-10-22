@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use super::primitives::draw_rounded_rect;
 use super::theme::{self, Rgba, overlay};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
@@ -296,13 +298,7 @@ pub(crate) fn render_onboarding_card_with_engine(
     for item in &card.items {
         let dot_x = content_x + item_dot_size * 0.5;
         let dot_y = cursor_y + item_dot_size * 0.5 + 1.0 * CARD_TYPE_SCALE;
-        ctx.arc(
-            dot_x,
-            dot_y,
-            item_dot_size * 0.5,
-            0.0,
-            std::f64::consts::TAU,
-        );
+        ctx.arc(dot_x, dot_y, item_dot_size * 0.5, 0.0, consts::TAU);
         if item.done {
             theme::set_color(ctx, DOT_DONE);
         } else {

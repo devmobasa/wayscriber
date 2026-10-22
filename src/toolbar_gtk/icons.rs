@@ -8,6 +8,7 @@
 //! recolor them for free.
 
 use std::cell::Cell;
+use std::ptr;
 use std::rc::Rc;
 
 use gtk4::prelude::*;
@@ -57,7 +58,7 @@ impl IconWidget {
     pub(super) fn set_painter(&self, painter: IconPainter) {
         // Address equality is only an optimization: merged functions draw
         // identical output, so a false match never skips a needed redraw.
-        if !std::ptr::fn_addr_eq(self.painter.get(), painter) {
+        if !ptr::fn_addr_eq(self.painter.get(), painter) {
             self.painter.set(painter);
             self.area.queue_draw();
         }

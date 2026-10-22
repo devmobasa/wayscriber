@@ -1,6 +1,7 @@
 mod thumbnail;
 pub(crate) use thumbnail::ThumbnailCache;
 
+use crate::draw::{RenderCtx, TextMeasurer};
 use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{
@@ -31,8 +32,8 @@ use thumbnail::{
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_page_panel(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
-    render: &mut crate::draw::RenderCtx<'_, '_>,
+    measurer: &TextMeasurer,
+    render: &mut RenderCtx<'_, '_>,
     cache: &mut ThumbnailCache,
     input_state: &InputState,
     layout: &BoardPickerLayout,

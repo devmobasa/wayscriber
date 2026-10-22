@@ -1,5 +1,9 @@
+use super::super::{AcceptedStateRevision, FlushRequestId, SourceMutationId};
 use super::integration::durability_satisfies_flush;
-use super::*;
+use super::{
+    FlushOutcome, InFlightSourceMutation, PendingStage, PersistencePipeline, PipelineProtocolError,
+    SourceMutationKind, SourceMutationRequest,
+};
 
 impl PersistencePipeline {
     #[allow(

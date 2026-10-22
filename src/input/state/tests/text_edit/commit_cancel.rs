@@ -1,8 +1,10 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 
 #[test]
 fn edit_selected_text_commit_updates_and_undo() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 100,
@@ -50,7 +52,7 @@ fn edit_selected_text_commit_updates_and_undo() {
 
 #[test]
 fn edit_selected_text_cancel_restores_original() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
@@ -87,7 +89,7 @@ fn edit_selected_text_cancel_restores_original() {
 
 #[test]
 fn edit_selected_sticky_note_commit_updates_and_undo() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let background = Color {
         r: 0.9,
@@ -157,7 +159,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
 
 #[test]
 fn edit_selected_sticky_note_cancel_restores_original() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let background = Color {
         r: 0.3,

@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 
 #[test]
@@ -12,14 +14,14 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
         thick: state.style.current_thickness,
     });
 
-    let removed = state.delete_shapes_by_ids_with(&crate::draw::TextMeasurer::default(), &[9999]);
+    let removed = state.delete_shapes_by_ids_with(&TextMeasurer::default(), &[9999]);
     assert!(!removed);
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
 }
 
 #[test]
 fn locked_shape_blocks_edit_and_delete() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,

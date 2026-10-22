@@ -102,15 +102,14 @@
 //!     fs::remove_dir_all(&root).unwrap();
 //! }
 //! ```
-use super::ToolStateSnapshot;
+use std::path::PathBuf;
+
+use super::compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES;
+use super::generation::{self, Generation};
+use super::load::{self, LoadSnapshotOutcome};
+use super::tests::{sample_snapshot, set_modified};
 use super::types::BoardFile;
-use super::{
-    compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES,
-    generation::{self, Generation},
-    load::{self, LoadSnapshotOutcome},
-    save,
-    tests::{sample_snapshot, set_modified},
-};
+use super::{ToolStateSnapshot, save};
 use crate::draw::Frame;
 use crate::session::{CompressionMode, SessionOptions};
 use crate::test_temp::tempdir;
@@ -273,7 +272,7 @@ enum Slot {
 }
 
 impl Slot {
-    fn path(self, o: &SessionOptions) -> std::path::PathBuf {
+    fn path(self, o: &SessionOptions) -> PathBuf {
         match self {
             Self::P => o.session_file_path(),
             Self::B => o.backup_file_path(),

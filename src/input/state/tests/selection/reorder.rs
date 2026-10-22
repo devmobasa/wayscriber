@@ -1,3 +1,5 @@
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::draw::{ShapeId, TextMeasurer};
 
@@ -91,7 +93,7 @@ fn a_selected_block_steps_as_one_and_keeps_its_own_order() {
 #[test]
 fn a_step_is_one_undo_entry_that_undoes_and_redoes() {
     let measurer = TextMeasurer::default();
-    let resources_engine = crate::ui_text::UiTextEngine::default();
+    let resources_engine = UiTextEngine::default();
     let resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &resources_engine,

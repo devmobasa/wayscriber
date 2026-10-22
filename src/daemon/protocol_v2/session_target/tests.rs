@@ -1,4 +1,8 @@
 use std::ffi::OsStr;
+use std::fs::Permissions;
+use std::os::unix;
+
+use crate::{test_env, test_temp};
 
 use super::*;
 use crate::env_vars::{
@@ -8,10 +12,10 @@ use crate::env_vars::{
 /// Runs `body` as the overlay child `generation` of a daemon that reads
 /// session reports when `reports` is set, in a private runtime directory.
 fn as_daemon_overlay(reports: Option<&str>, body: impl FnOnce(&str)) {
-    let runtime = crate::test_temp::tempdir().unwrap();
+    let runtime = test_temp::tempdir().unwrap();
     let generation = super::super::ProtocolId::generate().unwrap().to_string();
 
-    crate::test_env::with_env_vars(
+    test_env::with_env_vars(
         &[
             (XDG_RUNTIME_DIR_ENV, Some(runtime.path().as_os_str())),
             (OVERLAY_CHILD_GENERATION_ENV, Some(OsStr::new(&generation))),
@@ -22,7 +26,7 @@ fn as_daemon_overlay(reports: Option<&str>, body: impl FnOnce(&str)) {
 }
 
 fn read_record(generation: &str) -> SessionTargetRecord {
-    let bytes = std::fs::read(report_path(generation)).unwrap();
+    let bytes = fs::read(report_path(generation)).unwrap();
     super::super::wire::parse_canonical_json(&bytes, MAX_REPORT_BYTES).unwrap()
 }
 
@@ -37,12 +41,12 @@ fn a_daemon_overlay_reports_its_session_under_its_own_identity() {
         let record = read_record(generation);
         assert_eq!(record.schema, REPORT_SCHEMA);
         assert_eq!(record.generation, generation);
-        assert_eq!(record.pid, std::process::id());
+        assert_eq!(record.pid, process::id());
         assert_eq!(
             record.process_start_ticks,
             super::super::linux::current_process_start_ticks().unwrap()
         );
-        let expected = std::env::current_dir()
+        let expected = env::current_dir()
             .unwrap()
             .join("lectures/b.wayscriber-session");
         assert_eq!(record.target.as_deref(), expected.to_str());
@@ -75,7 +79,7 @@ fn an_overlay_without_its_child_identity_cannot_report() {
 
 fn current_identity() -> (u32, u64) {
     (
-        std::process::id(),
+        process::id(),
         super::super::linux::current_process_start_ticks().unwrap(),
     )
 }
@@ -86,11 +90,11 @@ fn write_entry(name: &str, bytes: &[u8], mode: u32) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
     // An overlay's identity proof creates this before any report is written.
-    std::fs::create_dir_all(crate::paths::daemon_command_dir()).unwrap();
+    fs::create_dir_all(paths::daemon_command_dir()).unwrap();
     super::super::linux::create_private_directory(&report_dir()).unwrap();
     let path = report_dir().join(name);
-    std::fs::write(&path, bytes).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+    fs::write(&path, bytes).unwrap();
+    fs::set_permissions(&path, Permissions::from_mode(mode)).unwrap();
     path
 }
 
@@ -162,9 +166,9 @@ fn an_untrusted_report_is_ignored_and_still_removed() {
         }
 
         let target = write_entry("elsewhere", &valid, 0o600);
-        std::os::unix::fs::symlink(&target, report_path(generation)).unwrap();
+        unix::fs::symlink(&target, report_path(generation)).unwrap();
         assert_eq!(take_final_session_report(generation, pid, ticks), None);
-        assert!(std::fs::symlink_metadata(report_path(generation)).is_err());
+        assert!(fs::symlink_metadata(report_path(generation)).is_err());
         assert!(target.exists(), "only the report's own name is removed");
     });
 }
@@ -222,11 +226,11 @@ fn startup_removes_every_stale_report_and_nothing_else() {
 fn reports_are_never_read_or_removed_through_a_symlinked_directory() {
     as_daemon_overlay(None, |generation| {
         let (pid, ticks) = current_identity();
-        let elsewhere = crate::test_temp::tempdir().unwrap();
+        let elsewhere = test_temp::tempdir().unwrap();
         let report = elsewhere.path().join(format!("{generation}.target"));
-        std::fs::write(&report, record_bytes(generation, pid, ticks, None)).unwrap();
-        std::fs::create_dir_all(crate::paths::daemon_command_dir()).unwrap();
-        std::os::unix::fs::symlink(elsewhere.path(), report_dir()).unwrap();
+        fs::write(&report, record_bytes(generation, pid, ticks, None)).unwrap();
+        fs::create_dir_all(paths::daemon_command_dir()).unwrap();
+        unix::fs::symlink(elsewhere.path(), report_dir()).unwrap();
 
         assert!(read_session_report(generation, pid, ticks).is_err());
         assert!(clear_stale_session_reports().is_err());

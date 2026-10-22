@@ -1,3 +1,6 @@
+use std::fmt::{Display, Formatter};
+use std::{error, fmt};
+
 use crate::util::Rect;
 
 use super::WindowGeometryBackend;
@@ -44,8 +47,8 @@ pub(crate) enum WindowGeometryError {
     },
 }
 
-impl std::fmt::Display for WindowGeometryError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for WindowGeometryError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unsupported => formatter.write_str("window snapping is unavailable"),
             Self::Broker(message) => write!(formatter, "window geometry broker failed: {message}"),
@@ -59,4 +62,4 @@ impl std::fmt::Display for WindowGeometryError {
     }
 }
 
-impl std::error::Error for WindowGeometryError {}
+impl error::Error for WindowGeometryError {}

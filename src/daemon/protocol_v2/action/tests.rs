@@ -1,4 +1,6 @@
-use std::env;
+use std::{env, thread};
+
+use crate::{test_env, test_temp};
 
 use super::*;
 use crate::env_vars::XDG_RUNTIME_DIR_ENV;
@@ -28,8 +30,8 @@ fn action_digests_match_protocol_v2_golden_values() {
 }
 
 fn with_runtime<T>(run: impl FnOnce() -> T) -> T {
-    let _guard = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
     let previous = env::var_os(XDG_RUNTIME_DIR_ENV);
     // SAFETY: serialized by the test environment mutex.
     unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, temp.path()) };
@@ -178,6 +180,8 @@ fn event_loop_claim_and_finish_defer_instead_of_waiting_for_locks() {
             .open(decision_path)
             .unwrap();
         assert_eq!(
+            // SAFETY: `held_decision` keeps the descriptor open for the call,
+            // and flock retains no pointer.
             unsafe { libc::flock(held_decision.as_raw_fd(), libc::LOCK_EX) },
             0
         );
@@ -185,6 +189,8 @@ fn event_loop_claim_and_finish_defer_instead_of_waiting_for_locks() {
             panic!("contended command finish should defer");
         };
         assert_eq!(
+            // SAFETY: `held_decision` keeps the descriptor open for the call,
+            // and flock retains no pointer.
             unsafe { libc::flock(held_decision.as_raw_fd(), libc::LOCK_UN) },
             0
         );
@@ -218,7 +224,7 @@ fn cancellation_during_action_preparation_leaves_a_collectable_tombstone() {
         let command = owner.claim_next().unwrap().unwrap();
         let held_journal_lock = open_journal_lock(&journal.root).unwrap();
         let worker_journal = journal.clone();
-        let worker = std::thread::spawn(move || {
+        let worker = thread::spawn(move || {
             let mut command = command;
             let outcome = command.prepare_action(&worker_journal);
             (outcome, command)

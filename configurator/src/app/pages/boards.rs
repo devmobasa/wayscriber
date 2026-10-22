@@ -34,6 +34,7 @@ use wayscriber::i18n::tr;
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
+use wayscriber::domain::BoardGridKind;
 
 use crate::messages::Message;
 use crate::models::{
@@ -238,7 +239,7 @@ struct SectionLayout {
     visible: bool,
     expanded: bool,
     background_kind: BoardBackgroundOption,
-    grid_kind: wayscriber::domain::BoardGridKind,
+    grid_kind: BoardGridKind,
     pen_enabled: bool,
     auto_adjust: bool,
     persist: bool,
@@ -271,18 +272,18 @@ fn section_layouts(app: &ConfiguratorApp, summary: &AppSearchSummary) -> Vec<Sec
 }
 
 /// One board row's values: everything the layout deliberately left out.
-struct BoardValues<'a> {
-    id: &'a str,
-    name: &'a str,
-    grid_spacing: &'a str,
-    background: ColorValues<'a>,
-    pen: ColorValues<'a>,
+struct BoardValues<'draft> {
+    id: &'draft str,
+    name: &'draft str,
+    grid_spacing: &'draft str,
+    background: ColorValues<'draft>,
+    pen: ColorValues<'draft>,
 }
 
 /// One color field's values: the picker's editing hex, and the draft's own
 /// triplet, so the swatch parses the components by the same rules the draft
 /// does.
-struct ColorValues<'a> {
-    hex: &'a str,
-    color: &'a ColorTripletInput,
+struct ColorValues<'draft> {
+    hex: &'draft str,
+    color: &'draft ColorTripletInput,
 }

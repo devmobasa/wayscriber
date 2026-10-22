@@ -1,8 +1,18 @@
 //! Palette shortcut-capture modal and action tooltips.
 
+use crate::config::Action;
 use crate::i18n::{tr, trf};
+use crate::ui::theme::Theme;
 
-use super::*;
+use super::super::constants;
+use super::super::primitives::draw_rounded_rect;
+use super::{
+    COMMAND_PALETTE_SHORTCUT_TEXT_SIZE, FRAME_SHADOW_OFFSET, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y,
+    TOOLTIP_POINTER_OFFSET, command_palette_text_style, draw_command_palette_frame,
+};
+use crate::config::action_label;
+use crate::input::state::COMMAND_PALETTE_TOP_RATIO;
+use crate::ui_text::UiTextEngine;
 
 pub(super) fn command_palette_action_tooltip_geometry(
     engine: &UiTextEngine,
@@ -29,7 +39,7 @@ pub(super) fn command_palette_action_tooltip_geometry(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_command_palette_action_tooltip(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     text: &str,
@@ -81,11 +91,11 @@ pub(super) fn keybinding_capture_geometry(
 }
 
 pub(super) fn render_keybinding_capture(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     current: &[String],
-    action: crate::config::Action,
+    action: Action,
     screen_width: u32,
     screen_height: u32,
 ) {

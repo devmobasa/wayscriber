@@ -4,18 +4,18 @@ use super::*;
 fn coalesced_a_to_b_to_a_reload_invalidates_pre_barrier_permit() {
     let mut controller = controller();
     let stale = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
     commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let (_, incident) = fail_current_replace(&mut controller, "temporary");
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, false)),
+        controller.update_seeds(&test_seeds(true, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     assert!(matches!(
-        controller.update_seeds(test_seeds(false, false)),
+        controller.update_seeds(&test_seeds(false, false)),
         UpdateSeedsResult::StagedBehindBarrier {
             replaced_older_staged_reload: true,
             ..
@@ -72,7 +72,7 @@ fn coalesced_a_to_b_to_a_reload_invalidates_pre_barrier_permit() {
     )
     .unwrap();
     assert!(matches!(
-        controller.commit(stale, values),
+        controller.commit(stale, &values),
         CommitResult::RejectedSeedChanged { targets }
             if targets == vec![InteractionSeedTarget::TopPinned]
     ));
@@ -111,17 +111,17 @@ fn accepted_mutation_uses_controller_seed_and_exact_source_revision() {
 fn relevant_seed_change_rejects_without_revision_or_write() {
     let mut controller = controller();
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
 
-    let result = controller.update_seeds(test_seeds(true, false));
+    let result = controller.update_seeds(&test_seeds(true, false));
     assert!(matches!(result, UpdateSeedsResult::Applied { .. }));
     let accepted_before = controller.pipeline().latest_accepted();
     let result = controller.commit(
         permit,
-        RuntimeUiMutationValues::one(
+        &RuntimeUiMutationValues::one(
             InteractionSeedTarget::TopPinned,
             InteractionSeedValue::Bool(true),
         )
@@ -141,7 +141,7 @@ fn relevant_seed_change_rejects_without_revision_or_write() {
 fn seed_reversal_still_rejects_an_old_permit() {
     let mut controller = controller();
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
@@ -151,8 +151,8 @@ fn seed_reversal_still_rejects_an_old_permit() {
         .unwrap()
         .generation();
 
-    controller.update_seeds(test_seeds(true, false));
-    controller.update_seeds(test_seeds(false, false));
+    controller.update_seeds(&test_seeds(true, false));
+    controller.update_seeds(&test_seeds(false, false));
 
     assert_eq!(
         controller
@@ -165,7 +165,7 @@ fn seed_reversal_still_rejects_an_old_permit() {
     assert!(matches!(
         controller.commit(
             permit,
-            RuntimeUiMutationValues::one(
+            &RuntimeUiMutationValues::one(
                 InteractionSeedTarget::TopPinned,
                 InteractionSeedValue::Bool(true),
             )
@@ -179,17 +179,17 @@ fn seed_reversal_still_rejects_an_old_permit() {
 fn unrelated_seed_change_keeps_permit_valid() {
     let mut controller = controller();
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
 
-    controller.update_seeds(test_seeds(false, true));
+    controller.update_seeds(&test_seeds(false, true));
 
     assert!(matches!(
         controller.commit(
             permit,
-            RuntimeUiMutationValues::one(
+            &RuntimeUiMutationValues::one(
                 InteractionSeedTarget::TopPinned,
                 InteractionSeedValue::Bool(true),
             )
@@ -203,16 +203,16 @@ fn unrelated_seed_change_keeps_permit_valid() {
 fn atomic_batch_rejects_when_one_guard_changes() {
     let mut controller = controller();
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::batch([
+        .begin_mutation(&RuntimeUiMutationScope::batch([
             InteractionSeedTarget::TopPinned,
             InteractionSeedTarget::TopMinimized,
         ]))
         .unwrap();
-    controller.update_seeds(test_seeds(false, true));
+    controller.update_seeds(&test_seeds(false, true));
 
     let result = controller.commit(
         permit,
-        RuntimeUiMutationValues::batch([
+        &RuntimeUiMutationValues::batch([
             (
                 InteractionSeedTarget::TopPinned,
                 InteractionSeedValue::Bool(true),
@@ -235,14 +235,14 @@ fn removed_and_reused_board_target_rejects_old_permit() {
     let mut controller = controller();
     let target = InteractionSeedTarget::BoardPin("board-6".to_string());
     let permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
+        .begin_mutation(&RuntimeUiMutationScope::one(target.clone()))
         .unwrap();
     let old_generation = controller.seeds().state(&target).unwrap().generation();
 
     let mut removed = test_seeds(false, false);
     removed.remove(&target);
-    controller.update_seeds(removed);
-    controller.update_seeds(test_seeds(false, false));
+    controller.update_seeds(&removed);
+    controller.update_seeds(&test_seeds(false, false));
 
     assert_eq!(
         controller.seeds().state(&target).unwrap().generation(),
@@ -251,7 +251,7 @@ fn removed_and_reused_board_target_rejects_old_permit() {
     assert!(matches!(
         controller.commit(
             permit,
-            RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(true)).unwrap(),
+            &RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(true)).unwrap(),
         ),
         CommitResult::RejectedSeedChanged { .. }
     ));
@@ -261,15 +261,15 @@ fn removed_and_reused_board_target_rejects_old_permit() {
 fn position_permit_survives_an_unrelated_seed_reload() {
     let mut controller = controller();
     let top = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPosition,
         ))
         .unwrap();
-    controller.update_seeds(test_seeds(false, true));
+    controller.update_seeds(&test_seeds(false, true));
     assert!(matches!(
         controller.commit(
             top,
-            RuntimeUiMutationValues::one(
+            &RuntimeUiMutationValues::one(
                 InteractionSeedTarget::TopPosition,
                 InteractionSeedValue::Position(ToolbarPositionSeed::new(11.0, 21.0).unwrap()),
             )

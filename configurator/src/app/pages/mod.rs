@@ -24,6 +24,8 @@ mod session;
 mod tablet;
 mod ui;
 
+use std::cell::Cell;
+
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
@@ -49,7 +51,7 @@ use super::state::ConfiguratorApp;
 pub(crate) type Binding = Box<dyn FnMut(&ConfiguratorApp, &AppSearchSummary)>;
 
 thread_local! {
-    static REPLACING_PAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static REPLACING_PAGES: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Marks the pages as being replaced for as long as it lives.
@@ -76,7 +78,7 @@ impl Drop for ReplacingPages {
 
 /// Whether the pages are being replaced right now; see [`ReplacingPages`].
 pub(crate) fn replacing_pages() -> bool {
-    REPLACING_PAGES.with(std::cell::Cell::get)
+    REPLACING_PAGES.with(Cell::get)
 }
 
 /// Writes editable text the model owns without reporting it as a user edit.
@@ -349,7 +351,7 @@ impl PageBuilder {
         title: &str,
         subtitle: &str,
         values: Vec<O>,
-        labels: Vec<String>,
+        labels: &[String],
         get: impl Fn(&ConfiguratorApp) -> O + 'static,
         to_message: impl Fn(O) -> Message + 'static,
     ) -> &mut Self
@@ -376,7 +378,7 @@ impl PageBuilder {
     where
         O: Copy + PartialEq + 'static,
     {
-        let row = self.add_combo_row(title, subtitle, values, labels, get, to_message);
+        let row = self.add_combo_row(title, subtitle, values, &labels, get, to_message);
         row.add_prefix(&gtk::Image::from_icon_name(icon_name));
         self
     }
@@ -386,7 +388,7 @@ impl PageBuilder {
         title: &str,
         subtitle: &str,
         values: Vec<O>,
-        labels: Vec<String>,
+        labels: &[String],
         get: impl Fn(&ConfiguratorApp) -> O + 'static,
         to_message: impl Fn(O) -> Message + 'static,
     ) -> adw::ComboRow

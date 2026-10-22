@@ -8,7 +8,6 @@
 use cairo::FontWeight;
 
 use crate::i18n::tr;
-use crate::input::InputState;
 use crate::input::state::properties_panel_metrics::{
     BODY_FONT, FOOTER_FONT, FOOTER_HEIGHT, SUBTITLE_FONT, SWITCH_VALUE_GAP, TITLE_FONT,
     TOOLTIP_FONT, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y, VALUE_FONT, text_style,
@@ -17,14 +16,14 @@ use crate::input::state::{
     PanelScroll, PropertiesPanelHit, PropertiesPanelLayout, PropertiesRowControl,
     PropertiesRowGeometry, ShapePropertiesPanel,
 };
-use crate::input::{SelectionPropertyEntry, SelectionPropertyValue};
+use crate::input::{InputState, SelectionPropertyEntry, SelectionPropertyValue};
 use crate::ui::primitives::{draw_keycap_with_engine, draw_rounded_rect, keycap_size_with_engine};
 use crate::ui::theme::overlay::{
     BG_HOVER_WASH, BORDER_FOCUS, BORDER_PROPERTIES, DIVIDER, DIVIDER_LIGHT, FOCUS_RING_WIDTH,
     PANEL_BG_CONTEXT_SUBMENU, RADIUS_PANEL, RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
     TEXT_SECONDARY, TEXT_TERTIARY, empty_properties,
 };
-use crate::ui::theme::{Rgba, set_color, with_alpha};
+use crate::ui::theme::{Rgba, popup, set_color, with_alpha};
 use crate::ui_text::UiTextEngine;
 
 mod actions;
@@ -86,9 +85,9 @@ pub(crate) fn render_properties_panel_with_engine(
         layout.height,
         RADIUS_PANEL,
     );
-    set_color(ctx, crate::ui::theme::popup::bg_properties());
+    set_color(ctx, popup::bg_properties());
     let _ = ctx.fill_preserve();
-    set_color(ctx, crate::ui::theme::popup::border_properties());
+    set_color(ctx, popup::border_properties());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

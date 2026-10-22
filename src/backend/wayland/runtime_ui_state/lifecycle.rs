@@ -1,6 +1,15 @@
 use std::path::PathBuf;
 
-use super::*;
+use super::ToolbarRuntimeState;
+use crate::runtime_ui_state::{
+    BeginPersistenceRecoveryResult, CancelPersistenceRecoveryResult,
+    CancelUnsupportedResetConfirmationResult, CheckoutPersistenceRecoveryHandleResult,
+    ConfirmUnsupportedResetResult, ControllerBarrierPhase, InvalidStateResetConfirmation,
+    PersistenceIncidentId, PersistenceRecoveryAction, PersistenceRecoveryEvidence,
+    PersistenceRecoveryHandle, PersistenceRecoveryRequest, PersistenceRecoveryResult,
+    RecoveryCancellation, RecoveryCompletionReceiver, RequestResetResult, RuntimeStateIoError,
+    RuntimeStateRecoveryArtifact, RuntimeUiFileStatus, UnsupportedResetConfirmation,
+};
 use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarEvent};
 
 #[derive(Debug)]
@@ -221,7 +230,7 @@ impl ToolbarRuntimeState {
         self.lifecycle.detail = Some(
             match self
                 .controller
-                .cancel_unsupported_reset_confirmation(prompt.confirmation)
+                .cancel_unsupported_reset_confirmation(&prompt.confirmation)
             {
                 CancelUnsupportedResetConfirmationResult::Cancelled => {
                     "The unsupported runtime-state file was left unchanged.".to_string()

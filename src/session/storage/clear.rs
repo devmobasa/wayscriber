@@ -1,3 +1,5 @@
+use crate::session;
+use crate::session::artifacts;
 use crate::session::artifacts::{parse_corrupt_copy_name, remove_corrupt_copies};
 use anyhow::{Context, Result};
 use std::fs;
@@ -11,7 +13,7 @@ use crate::session::options::SessionOptions;
 pub fn clear_session(options: &SessionOptions) -> Result<ClearOutcome> {
     let session_path = options.session_file_path();
     if options.is_named_file() {
-        crate::session::validate_named_session_file_for_clear(&session_path)?;
+        session::validate_named_session_file_for_clear(&session_path)?;
     }
     let backup_path = options.backup_file_path();
     let backup_recovery_marker_path = options.backup_recovery_marker_file_path();
@@ -92,7 +94,7 @@ fn remove_recovery_files(recovery_path: &Path) -> Result<bool> {
             let Some(name) = path.file_name() else {
                 continue;
             };
-            if crate::session::artifacts::is_recovery_variant(name, recovery_name) {
+            if artifacts::is_recovery_variant(name, recovery_name) {
                 fs::remove_file(&path)
                     .with_context(|| format!("failed to remove {}", path.display()))?;
                 removed = true;

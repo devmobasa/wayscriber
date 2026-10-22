@@ -1,10 +1,12 @@
+use crate::config::TopDisplayMode;
 use crate::configurator_destination::{
     ConfiguratorDestination, ConfiguratorScreen, language_destination,
     onboarding_hints_destination, quick_colors_destination,
 };
 use crate::domain::Action;
+use crate::draw::TextMeasurer;
 use crate::i18n::{tr, trf};
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{InputTextResources, Toast, ToastPriority};
 use log::info;
 
 use super::super::{DrawingState, InputState, PendingBackendAction, PendingToolbarPersistence};
@@ -12,7 +14,7 @@ use super::super::{DrawingState, InputState, PendingBackendAction, PendingToolba
 impl InputState {
     pub(in crate::input::state) fn handle_ui_action_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         action: Action,
     ) -> bool {
         match action {
@@ -181,10 +183,7 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_focus_mode_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-    ) {
+    fn handle_toggle_focus_mode_with_resources(&mut self, resources: InputTextResources<'_>) {
         // Presenter mode already owns chrome visibility and restores it on
         // exit; a second snapshot layer would fight it.
         if self.presenter_mode_active() {
@@ -287,10 +286,7 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_toolbar_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-    ) {
+    fn handle_toggle_toolbar_with_resources(&mut self, resources: InputTextResources<'_>) {
         if self.presenter_hides_toolbars() {
             return;
         }
@@ -320,10 +316,7 @@ impl InputState {
         }
     }
 
-    fn handle_cycle_toolbar_display_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-    ) {
+    fn handle_cycle_toolbar_display_with_resources(&mut self, resources: InputTextResources<'_>) {
         if self.presenter_hides_toolbars() {
             return;
         }
@@ -334,7 +327,7 @@ impl InputState {
         self.pending_onboarding_usage.used_toolbar_toggle = true;
         let toast = self.toolbar_display_toast(mode);
         self.push_toast(ToastPriority::Info, "ui", toast);
-        if mode == crate::config::TopDisplayMode::Hidden {
+        if mode == TopDisplayMode::Hidden {
             self.warn_if_all_chrome_hidden();
         }
         self.queue_toolbar_persistence(PendingToolbarPersistence::DisplayMode {
@@ -345,11 +338,11 @@ impl InputState {
         info!("Toolbar display mode cycled to {mode:?}");
     }
 
-    fn toolbar_display_toast(&self, mode: crate::config::TopDisplayMode) -> Toast {
+    fn toolbar_display_toast(&self, mode: TopDisplayMode) -> Toast {
         match mode {
-            crate::config::TopDisplayMode::Full => Toast::info(tr("Toolbar: full")),
-            crate::config::TopDisplayMode::Micro => Toast::info(tr("Toolbar: micro")),
-            crate::config::TopDisplayMode::Hidden => {
+            TopDisplayMode::Full => Toast::info(tr("Toolbar: full")),
+            TopDisplayMode::Micro => Toast::info(tr("Toolbar: micro")),
+            TopDisplayMode::Hidden => {
                 let label = match self.action_binding_primary_label(Action::CycleToolbarDisplay) {
                     Some(binding) => trf("Show ({})", &[&binding]),
                     None => tr("Show").to_string(),
@@ -368,10 +361,7 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_selection_properties_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    fn handle_toggle_selection_properties_with_measurer(&mut self, measurer: &TextMeasurer) {
         if !matches!(self.state, DrawingState::Idle) {
             return;
         }

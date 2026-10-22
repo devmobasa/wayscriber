@@ -2,9 +2,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::{
     AcceptedStateRevision, ControllerBarrierId, FlushRequestId, RuntimeStateFailurePathEffect,
-    RuntimeStateIoError, RuntimeStateObservedPathEffect, RuntimeStatePostClaimPathEffect,
-    RuntimeStateRecoveryArtifact, RuntimeStateSourceObservation, RuntimeStateSourceRevision,
-    RuntimeUiWireState, SourceMutationId,
+    RuntimeStateIoError, RuntimeStatePostClaimPathEffect, RuntimeStateRecoveryArtifact,
+    RuntimeStateSourceObservation, RuntimeStateSourceRevision, RuntimeUiWireState,
+    SourceMutationId,
 };
 
 mod integration;

@@ -18,6 +18,7 @@ fn channel(value: f64) -> u8 {
 /// Format an RGBA token as a CSS `rgba()` string with three-decimal alpha —
 /// the precision the generated stylesheet has always used for values routed
 /// through its original `rgba()` helper.
+#[must_use]
 pub fn rgba_css(color: Rgba) -> String {
     format!(
         "rgba({}, {}, {}, {:.3})",
@@ -34,6 +35,7 @@ pub fn rgba_css(color: Rgba) -> String {
 /// byte-identical.
 // TODO(theme-consolidation): fold into `rgba_css` (visual no-op, byte diff
 // only) once byte-stability against the pre-M1 sheet no longer matters.
+#[must_use]
 pub fn rgba_css_compact(color: Rgba) -> String {
     format!(
         "rgba({}, {}, {}, {:.2})",
@@ -46,6 +48,7 @@ pub fn rgba_css_compact(color: Rgba) -> String {
 
 /// Format a fully opaque token as a `#rrggbb` hex color (the sheet's
 /// shorthand for foregrounds on filled controls).
+#[must_use]
 pub fn hex_css(color: Rgba) -> String {
     debug_assert!(
         color.3 >= 1.0,
@@ -62,6 +65,7 @@ pub fn hex_css(color: Rgba) -> String {
 /// A token's channels with alpha forced to integer `0`, as the sheet's
 /// capture-suppression rules spell it: keeps box-shadow geometry identical
 /// while painting nothing.
+#[must_use]
 pub fn transparent_css(color: Rgba) -> String {
     format!(
         "rgba({}, {}, {}, 0)",
@@ -73,11 +77,13 @@ pub fn transparent_css(color: Rgba) -> String {
 
 /// Scale-dependent pixel size: multiply by the toolbar scale, round, and
 /// floor at 1px so no scaled dimension ever vanishes.
+#[must_use]
 pub fn scaled_px(value: f64, scale: f64) -> i32 {
     (value * scale).round().max(1.0) as i32
 }
 
 /// Scale-independent pixel size (hairlines and fixed chrome details).
+#[must_use]
 pub fn fixed_px(value: f64) -> i32 {
     value.round() as i32
 }
@@ -182,6 +188,7 @@ impl GtkStylesheetValues {
     /// Build the full value set at the given toolbar scale. Non-finite
     /// scales fall back to 1.0; finite scales clamp to the 0.5–3.0 range
     /// the sheet has always supported.
+    #[must_use]
     pub fn new(scale: f64) -> Self {
         let scale = if scale.is_finite() {
             scale.clamp(0.5, 3.0)

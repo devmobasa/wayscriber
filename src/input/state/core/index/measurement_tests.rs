@@ -1,9 +1,11 @@
+use crate::input::state::test_support;
+
 use super::*;
 use crate::draw::{ArrowLabel, ArrowStyle, FontDescriptor, RED, Shape, StepMarkerLabel};
 use crate::input::hit_test;
 
 fn scene(threshold: usize) -> (InputState, Vec<ShapeId>) {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.set_hit_test_threshold(threshold);
     state.set_hit_test_tolerance(1.0);
     let shapes = [

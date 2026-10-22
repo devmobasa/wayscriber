@@ -1,5 +1,7 @@
 //! Shared semantic expectations and snapshot scenarios.
 
+use crate::input::{SelectionPropertyEntry, SelectionPropertyKind};
+
 use super::super::{Tool, ToolbarEvent, ToolbarSnapshot, TopStripPlan, model};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,10 +134,10 @@ pub(super) fn style_pill_tool_snapshot(base: &ToolbarSnapshot, tool: Tool) -> To
 fn selection_property_entry(
     label: &str,
     value: &str,
-    kind: crate::input::SelectionPropertyKind,
+    kind: SelectionPropertyKind,
     disabled: bool,
-) -> crate::input::SelectionPropertyEntry {
-    crate::input::SelectionPropertyEntry {
+) -> SelectionPropertyEntry {
+    SelectionPropertyEntry {
         label: label.to_string(),
         value: value.to_string(),
         kind,

@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use super::types::EraserReplayContext;
 use crate::draw::Color;
 use crate::draw::shape::{EraserBrush, EraserKind};
@@ -54,7 +56,7 @@ pub(crate) fn render_eraser_stroke(
             let (x, y) = (points[0].0 as f64, points[0].1 as f64);
             let half = stroke_width / 2.0;
             match brush.kind {
-                EraserKind::Circle => ctx.arc(x, y, half, 0.0, std::f64::consts::PI * 2.0),
+                EraserKind::Circle => ctx.arc(x, y, half, 0.0, consts::PI * 2.0),
                 EraserKind::Rect => ctx.rectangle(x - half, y - half, stroke_width, stroke_width),
             }
             return;

@@ -82,13 +82,17 @@ impl ConfigDraft {
 
 #[cfg(test)]
 mod tests {
-    use wayscriber::config::{PERFORMANCE_FIELD_METADATA, PerformanceFieldId, ScalarConstraint};
+    use wayscriber::config::{
+        Config, PERFORMANCE_FIELD_METADATA, PerformanceFieldId, ScalarConstraint,
+    };
+
+    use crate::models::{TextField, ToggleField};
 
     use super::*;
 
     #[test]
     fn every_performance_descriptor_routes_through_a_typed_binding() {
-        let mut draft = ConfigDraft::from_config(&wayscriber::config::Config::default());
+        let mut draft = ConfigDraft::from_config(&Config::default());
         for metadata in PERFORMANCE_FIELD_METADATA {
             match metadata.constraint {
                 ScalarConstraint::Boolean => {
@@ -106,17 +110,11 @@ mod tests {
 
     #[test]
     fn typed_bindings_update_each_performance_draft_field() {
-        let mut draft = ConfigDraft::from_config(&wayscriber::config::Config::default());
+        let mut draft = ConfigDraft::from_config(&Config::default());
         draft.set_performance_choice(PerformanceFieldId::BufferCount, 4);
-        draft.set_toggle(crate::models::ToggleField::PerformanceVsync, true);
-        draft.set_text(
-            crate::models::TextField::PerformanceMaxFpsNoVsync,
-            "144".to_string(),
-        );
-        draft.set_text(
-            crate::models::TextField::PerformanceUiAnimationFps,
-            "60".to_string(),
-        );
+        draft.set_toggle(ToggleField::PerformanceVsync, true);
+        draft.set_text(TextField::PerformanceMaxFpsNoVsync, "144".to_string());
+        draft.set_text(TextField::PerformanceUiAnimationFps, "60".to_string());
 
         assert_eq!(draft.performance_buffer_count, 4);
         assert!(draft.performance_enable_vsync);
@@ -126,7 +124,7 @@ mod tests {
 
     #[test]
     fn conversion_rejects_values_outside_shared_performance_constraints() {
-        let base = wayscriber::config::Config::default();
+        let base = Config::default();
         let mut draft = ConfigDraft::from_config(&base);
         draft.performance_buffer_count = 5;
         draft.performance_ui_animation_fps = "241".to_string();

@@ -1,4 +1,8 @@
 use super::*;
+use crate::backend::wayland::state::perf::{
+    PerfDamageDiagnostics, PerfRenderProfileKind, PerfRenderStageDurations, damage_area_pct,
+    damage_covers_surface,
+};
 use crate::util::Rect;
 
 fn record_sample(metrics: &mut PerfMetrics, received_at: Instant) {

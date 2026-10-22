@@ -84,6 +84,12 @@ impl ZoomState {
 
 #[cfg(test)]
 mod tests {
+    use tokio::runtime::Handle;
+    use tokio::task;
+
+    use crate::backend::wayland::{RuntimeWakeSource, zoom};
+    use crate::input::InputState;
+
     use super::*;
     use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
     use crate::backend::wayland::frozen_geometry::OutputGeometry;
@@ -117,13 +123,13 @@ mod tests {
         }
     }
 
-    async fn drain(zoom: &mut ZoomState, input: &mut crate::input::InputState) {
+    async fn drain(zoom: &mut ZoomState, input: &mut InputState) {
         for _ in 0..100 {
             zoom.poll_portal_capture(input, Instant::now(), Some(1));
             if !zoom.portal.is_running() {
                 return;
             }
-            tokio::task::yield_now().await;
+            task::yield_now().await;
         }
 
         panic!("portal task did not finish");
@@ -132,12 +138,12 @@ mod tests {
     #[tokio::test]
     async fn stale_raster_retries_once_with_the_same_waiter_and_activation() {
         for second_change in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             zoom.set_active_output(None, Some(1));
             zoom.set_active_geometry(Some(geometry(0)));
-            zoom.start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::Portal)
+            zoom.start_capture(zoom::ZoomCaptureBackend::Portal)
                 .unwrap();
             assert_eq!(
                 zoom.take_preflight_pending(),
@@ -153,7 +159,7 @@ mod tests {
 
             let old_generation = zoom.layout_generations.desktop;
             zoom.portal.start(PortalTask::spawn(
-                &tokio::runtime::Handle::current(),
+                &Handle::current(),
                 wake.handle(),
                 async move {
                     Ok((
@@ -193,7 +199,7 @@ mod tests {
 
             let fresh_generation = zoom.layout_generations.desktop;
             zoom.portal.start(PortalTask::spawn(
-                &tokio::runtime::Handle::current(),
+                &Handle::current(),
                 wake.handle(),
                 async move {
                     Ok((
@@ -243,7 +249,7 @@ mod tests {
     #[tokio::test]
     async fn cancellation_and_stable_raster_failure_do_not_schedule_retry() {
         for cancelled in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             zoom.set_active_output(None, Some(1));
@@ -251,7 +257,7 @@ mod tests {
             let id = zoom.begin_identified_capture();
             let generation = zoom.layout_generations.active_output;
             zoom.portal.start(PortalTask::spawn(
-                &tokio::runtime::Handle::current(),
+                &Handle::current(),
                 wake.handle(),
                 async move {
                     if cancelled {

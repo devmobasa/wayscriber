@@ -9,14 +9,12 @@ mod mouse;
 mod render;
 mod spotlight;
 mod text_resources;
-pub(crate) use core::{ClipboardFallbackSaveRequest, InputEffect, InputEffectDrain};
 pub(crate) use core::{
-    DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
-};
-pub(crate) use core::{
-    LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit, PropertiesPanelLayout,
-    PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl, PropertiesRowGeometry,
-    ShapePropertiesPanel, properties_panel_metrics,
+    ClipboardFallbackSaveRequest, DrawingStyle, HistoryLimits, IdleHandle, InputEffect,
+    InputEffectDrain, LevelRange, PanelAction, PanelRect, PanelScroll, PropertiesPanelHit,
+    PropertiesPanelLayout, PropertiesPanelLock, PropertiesPanelSwatch, PropertiesRowControl,
+    PropertiesRowGeometry, ShapePropertiesPanel, SpotlightMagnificationTrack, TopMenuState,
+    properties_panel_metrics,
 };
 pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
 pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};
@@ -26,11 +24,10 @@ mod tests;
 
 #[cfg(test)]
 pub(crate) use actions::key_press::bindings::key_to_action_label_for_test;
-pub(crate) use core::board_picker::BoardPickerEditMode;
-pub(crate) use core::board_picker::BoardPickerFocus;
 pub(crate) use core::board_picker::appearance::AppearanceField;
 pub(crate) use core::board_picker::{
-    PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
+    BoardPickerEditMode, BoardPickerFocus, PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE,
+    PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
 #[cfg(test)]
 pub(crate) use core::build_text_input_preview;
@@ -87,6 +84,13 @@ pub use input_hud::{
 
 #[cfg(test)]
 pub(crate) mod test_support {
+    use crate::config::{
+        ArrowConfig, DrawingConfig, HistoryConfig, MouseDragToolsConfig, SpotlightConfig, UiConfig,
+    };
+    use crate::draw;
+    use crate::input::PerToolDrawingSettings;
+    use crate::input::tool::ToolSettingsSlot;
+
     use super::core::{CanvasIndex, InputStateSeed, Keymap};
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::FontDescriptor;
@@ -99,22 +103,19 @@ pub(crate) mod test_support {
 
     impl Default for TestInputStateBuilder {
         fn default() -> Self {
-            Self::with_keybindings(KeybindingsConfig::default())
+            Self::with_keybindings(&KeybindingsConfig::default())
         }
     }
 
     impl TestInputStateBuilder {
-        pub(crate) fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
-            let keymap = Keymap::from_config(
-                &keybindings,
-                &crate::config::MouseDragToolsConfig::default(),
-            );
+        pub(crate) fn with_keybindings(keybindings: &KeybindingsConfig) -> Self {
+            let keymap = Keymap::from_config(keybindings, &MouseDragToolsConfig::default());
             let mut style = super::DrawingStyle::from((
-                &crate::config::DrawingConfig::default(),
-                &crate::config::ArrowConfig::default(),
-                &crate::config::SpotlightConfig::default(),
+                &DrawingConfig::default(),
+                &ArrowConfig::default(),
+                &SpotlightConfig::default(),
             ));
-            style.current_color = crate::draw::RED;
+            style.current_color = draw::RED;
             style.current_thickness = 4.0;
             style.eraser_size = 4.0;
             style.marker_opacity = 0.32;
@@ -123,13 +124,11 @@ pub(crate) mod test_support {
             style.arrow_length = 20.0;
             style.arrow_angle = 30.0;
             style.arrow_head_at_end = false;
-            style.tool_settings = crate::input::PerToolDrawingSettings::new(
-                style.current_color,
-                style.current_thickness,
-            );
+            style.tool_settings =
+                PerToolDrawingSettings::new(style.current_color, style.current_thickness);
             style.tool_settings.step_marker.thickness =
                 super::core::utility::default_step_marker_size(style.current_font_size);
-            let history_limits = super::HistoryLimits::from(&crate::config::HistoryConfig {
+            let history_limits = super::HistoryLimits::from(&HistoryConfig {
                 undo_all_delay_ms: 0,
                 redo_all_delay_ms: 0,
                 custom_section_enabled: true,
@@ -142,7 +141,7 @@ pub(crate) mod test_support {
             Self {
                 seed: InputStateSeed {
                     style,
-                    ui_visibility: super::UiVisibility::from(&crate::config::UiConfig::default()),
+                    ui_visibility: super::UiVisibility::from(&UiConfig::default()),
                     boards_config: BoardsConfig::default(),
                     keymap,
                     canvas_index: CanvasIndex::from_config(6.0, usize::MAX),
@@ -168,8 +167,8 @@ pub(crate) mod test_support {
 
         pub(crate) fn thickness(mut self, thickness: f64) -> Self {
             self.seed.style.current_thickness = thickness;
-            for tool in crate::input::tool::ToolSettingsSlot::ALL {
-                self.seed.style.tool_settings.get_slot_mut(tool).thickness = thickness;
+            for tool in ToolSettingsSlot::ALL {
+                self.seed.style.tool_settings.slot_mut(tool).thickness = thickness;
             }
             self
         }

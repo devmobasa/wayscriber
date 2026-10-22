@@ -1,18 +1,28 @@
-use super::*;
+use super::super::types::SessionSnapshot;
+use super::artifact_outcome::CorruptLoadAction;
+use super::markers::{
+    backup_is_newer_than_primary, clear_marker_suppresses_artifact, preserve_unloadable_recovery,
+};
+use super::{LoadSnapshotOutcome, RestoredArtifact, corrupt, load_snapshot_path_with_outcome};
+use crate::session::options::SessionOptions;
+use anyhow::{Result, anyhow};
+use log::{info, warn};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 // These arguments carry the loader artifact view and its preservation/size policy.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn load_normal_session_or_empty(
     options: &SessionOptions,
     session_path: &Path,
-    session_metadata: Option<fs::Metadata>,
+    session_metadata: Option<&fs::Metadata>,
     max_expanded_size: u64,
     clear_marker_metadata: Option<&fs::Metadata>,
     backup_recovery_marker_metadata: Option<&fs::Metadata>,
     recovery_recoverable_marker_metadata: Option<&fs::Metadata>,
     restore_named_primary: bool,
 ) -> Result<LoadSnapshotOutcome> {
-    let Some(primary_metadata) = session_metadata.as_ref() else {
+    let Some(primary_metadata) = session_metadata else {
         if let Some(backup) = load_contentful_backup(
             options,
             max_expanded_size,

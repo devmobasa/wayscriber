@@ -20,7 +20,10 @@ mod state;
 pub use state::ZoomChipState;
 
 use crate::config::{Action, StatusBarStyle};
+use crate::input::DrawingState;
+use crate::ui;
 use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress};
+use crate::ui_text::UiTextEngine;
 
 use super::base::InputState;
 
@@ -52,7 +55,7 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        let engine = crate::ui_text::UiTextEngine::default();
+        let engine = UiTextEngine::default();
         self.update_zoom_chip_layout_for_pointer_with_engine(
             &engine,
             style,
@@ -64,14 +67,14 @@ impl InputState {
 
     pub(crate) fn update_zoom_chip_layout_for_pointer_with_engine(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
+        engine: &UiTextEngine,
         style: &StatusBarStyle,
         screen_width: u32,
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
         let layout = if self.zoom_chip_enabled() {
-            crate::ui::compute_zoom_chip_layout_with_engine(
+            ui::compute_zoom_chip_layout_with_engine(
                 engine,
                 self,
                 style,
@@ -111,8 +114,7 @@ impl InputState {
     /// contract as `update_status_hud_hover_from_pointer`: click gates +
     /// idle pointer, redraw on transitions only).
     pub(crate) fn update_zoom_chip_hover_from_pointer(&mut self, x: i32, y: i32) {
-        let new_hover = if matches!(self.state, crate::input::DrawingState::Idle)
-            && self.zoom_chip_contains(x, y)
+        let new_hover = if matches!(self.state, DrawingState::Idle) && self.zoom_chip_contains(x, y)
         {
             self.zoom_chip_button_at(x, y)
                 .filter(|kind| self.zoom_chip_button_enabled(*kind))

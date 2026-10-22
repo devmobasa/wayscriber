@@ -1,26 +1,53 @@
-use crate::backend::wayland::{RuntimeOperationController, RuntimeOperationIdSource};
+use crate::backend::wayland::state::screen_image;
+use crate::backend::wayland::{
+    RuntimeOperationController, RuntimeOperationIdSource, RuntimeWakeHandle,
+};
+use crate::capture::window_geometry::{WindowGeometryError, WindowQueryResult};
+use crate::i18n;
+use crate::input::InputState;
+use crate::input::state::{Toast, ToastPriority};
 
-use super::*;
+use super::super::WaylandState;
+use super::super::screen_image::{
+    ScreenSourceToken, current_screen_source_token, screen_source_is,
+};
+use super::active_state::{ActiveScreenRegion, FreezeOwnership, RegionInteractionPhase};
+use super::cut_preview::CutPreviewOutcome;
+use super::cut_review::{CutPreviewKey, RegionReviewEdits};
+use super::events::{
+    begin_region_selection_event, finalize_region_selection_with_review_edits,
+    initial_square_modifier, region_owner_lost_event, review_resize_handle_at,
+    sync_region_square_modifier_event, update_region_selection_event,
+};
+use super::geometry::{RegionPickerMeasurement, RegionSelectionGeometry};
+use super::measure::{
+    MeasureModeTransition, RegionOwnerLoss, RegionSelectionFinalize, measure_mode_transition,
+};
+use super::source_guard::{
+    active_eyedropper_source_changed, active_region_source_changed, screen_region_invariant,
+};
+use super::window_snap::{WindowSnapQuery, WindowSnapSession};
+use crate::backend::wayland::acquisition::ScreenAcquisitionId;
+use crate::input::SelectionHandle;
+use crate::input::state::{
+    RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection,
+};
+use crate::screen_pixels::ImagePixelRect;
 
 pub(in crate::backend::wayland) struct RegionCaptureRuntime {
     active: Option<ActiveScreenRegion>,
     window_snap: Option<WindowSnapSession>,
     review_edits: Option<RegionReviewEdits>,
     next_generation: u64,
-    window_query: RuntimeOperationController<
-        WindowSnapQuery,
-        Result<
-            crate::capture::window_geometry::WindowQueryResult,
-            crate::capture::window_geometry::WindowGeometryError,
-        >,
-    >,
+    window_query:
+        RuntimeOperationController<WindowSnapQuery, Result<WindowQueryResult, WindowGeometryError>>,
     cut_preview: RuntimeOperationController<CutPreviewKey, CutPreviewOutcome>,
 }
 
 impl RegionCaptureRuntime {
     pub(in crate::backend::wayland) fn new(
         ids: RuntimeOperationIdSource,
-        wake: crate::backend::wayland::RuntimeWakeHandle,
+        wake: RuntimeWakeHandle,
     ) -> Self {
         Self {
             active: None,
@@ -142,7 +169,7 @@ impl RegionCaptureRuntime {
 
     pub(in crate::backend::wayland::state) fn finalize_selection(
         &mut self,
-        input_state: &mut crate::input::InputState,
+        input_state: &mut InputState,
         owner: RegionInputSource,
         logical: (f64, f64),
     ) -> RegionSelectionFinalize {
@@ -163,14 +190,14 @@ impl RegionCaptureRuntime {
 
     pub(in crate::backend::wayland::state) fn sync_input_projection(
         &self,
-        input_state: &mut crate::input::InputState,
+        input_state: &mut InputState,
     ) {
         input_state.sync_region_projection(self.ui_state());
     }
 
     pub(in crate::backend::wayland::state) fn begin_review_aux_drag(
         &mut self,
-        input_state: &mut crate::input::InputState,
+        input_state: &mut InputState,
         owner: RegionInputSource,
     ) -> bool {
         let Some(region) = self.active.as_mut() else {
@@ -186,7 +213,7 @@ impl RegionCaptureRuntime {
 
     pub(in crate::backend::wayland::state) fn finish_review_aux_drag(
         &mut self,
-        input_state: &mut crate::input::InputState,
+        input_state: &mut InputState,
         owner: RegionInputSource,
     ) -> bool {
         let Some(region) = self.active.as_mut() else {
@@ -226,10 +253,7 @@ impl RegionCaptureRuntime {
     ) -> (
         &mut RuntimeOperationController<
             WindowSnapQuery,
-            Result<
-                crate::capture::window_geometry::WindowQueryResult,
-                crate::capture::window_geometry::WindowGeometryError,
-            >,
+            Result<WindowQueryResult, WindowGeometryError>,
         >,
         &mut Option<WindowSnapSession>,
     ) {
@@ -272,9 +296,9 @@ impl WaylandState {
             }
             MeasureModeTransition::Refuse => {
                 self.input_state.push_toast(
-                    crate::input::state::ToastPriority::Info,
+                    ToastPriority::Info,
                     "measure.refused",
-                    crate::input::state::Toast::info(crate::i18n::tr(
+                    Toast::info(i18n::tr(
                         "Finish or cancel the current screen selection first.",
                     )),
                 );
@@ -372,7 +396,7 @@ impl WaylandState {
         freeze_ownership: FreezeOwnership,
         include_drawings: bool,
     ) -> bool {
-        let Some(source) = crate::backend::wayland::state::screen_image::displayed_screen_image(
+        let Some(source) = screen_image::displayed_screen_image(
             &self.zoom,
             &self.frozen,
             self.input_state.board_is_transparent(),
@@ -662,20 +686,24 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland::state) fn debug_assert_screen_region_invariant(&self) {
-        debug_assert!(screen_region_invariant(
+        debug_assert!(
+            screen_region_invariant(
+                self.region_capture.active(),
+                self.input_state.region_state(),
+            ),
+            "backend region {:?} and input region UI {:?} have diverged",
             self.region_capture.active(),
-            self.input_state.region_state(),
-        ));
+            self.input_state.region_state()
+        );
     }
 
     pub(in crate::backend::wayland) fn cancel_screen_modals_if_source_changed(&mut self) {
         let (cancel_eyedropper, cancel_region) = {
-            let current_source =
-                crate::backend::wayland::state::screen_image::displayed_screen_image(
-                    &self.zoom,
-                    &self.frozen,
-                    self.input_state.board_is_transparent(),
-                );
+            let current_source = screen_image::displayed_screen_image(
+                &self.zoom,
+                &self.frozen,
+                self.input_state.board_is_transparent(),
+            );
             let source_matches = |expected| {
                 current_source.as_ref().is_some_and(|source| {
                     screen_source_is(
@@ -735,7 +763,7 @@ mod owner_tests {
     use wayland_client::protocol::wl_output::Transform;
 
     fn runtime() -> RegionCaptureRuntime {
-        let wake = RuntimeWakeSource::new().expect("runtime wake source");
+        let wake = RuntimeWakeSource::try_new().expect("runtime wake source");
         RegionCaptureRuntime::new(RuntimeOperationIdSource::new(), wake.handle())
     }
 

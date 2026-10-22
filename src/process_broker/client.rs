@@ -1,11 +1,17 @@
 use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
+use std::io;
+use std::io::ErrorKind;
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, Weak};
+#[cfg(test)]
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+
+use crate::daemon::protocol_v2::ProtocolId;
 
 use super::error::{BrokerError, BrokerErrorKind};
 use super::execution::supports_retained_publication;
@@ -27,7 +33,7 @@ pub(super) struct BrokerInner {
     pub(super) exchange_lock: Mutex<()>,
     pub(super) healthy: AtomicBool,
     #[cfg(test)]
-    pub(super) test_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    pub(super) test_thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -96,14 +102,15 @@ pub(crate) fn start_for_runtime() -> Result<ProcessBrokerGuard> {
     let broker = super::bootstrap::start()?;
     *active_slot()
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::downgrade(&broker.inner);
+        .expect("the active broker slot is never locked across a panic") =
+        Arc::downgrade(&broker.inner);
     Ok(ProcessBrokerGuard { broker })
 }
 
 pub(crate) fn current() -> Result<ProcessBroker> {
     let inner = active_slot()
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .expect("the active broker slot is never locked across a panic")
         .upgrade()
         .ok_or_else(|| anyhow!("runtime process broker is not active"))?;
     Ok(ProcessBroker { inner })
@@ -134,7 +141,7 @@ impl Drop for ProcessBrokerGuard {
             .inner
             .test_thread
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expect("the test broker thread slot is never locked across a panic")
             .take()
         {
             let _ = thread.join();
@@ -146,7 +153,7 @@ impl Drop for ProcessBrokerGuard {
 
         let mut slot = active_slot()
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .expect("the active broker slot is never locked across a panic");
         if slot
             .upgrade()
             .is_some_and(|active| Arc::ptr_eq(&active, &self.broker.inner))
@@ -156,7 +163,7 @@ impl Drop for ProcessBrokerGuard {
     }
 }
 
-fn signal_shutdown(descriptor: RawFd) -> std::io::Result<()> {
+fn signal_shutdown(descriptor: RawFd) -> io::Result<()> {
     let byte = [GRACEFUL_SHUTDOWN_BYTE];
     loop {
         // SAFETY: descriptor is the broker shutdown socket and byte is readable.
@@ -171,14 +178,13 @@ fn signal_shutdown(descriptor: RawFd) -> std::io::Result<()> {
         if written == 1 {
             return Ok(());
         }
-        if written < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted
-        {
+        if written < 0 && io::Error::last_os_error().kind() == ErrorKind::Interrupted {
             continue;
         }
         return Err(if written < 0 {
-            std::io::Error::last_os_error()
+            io::Error::last_os_error()
         } else {
-            std::io::Error::new(std::io::ErrorKind::WriteZero, "short broker shutdown write")
+            io::Error::new(ErrorKind::WriteZero, "short broker shutdown write")
         });
     }
 }
@@ -206,24 +212,33 @@ impl ProcessBroker {
     }
 
     fn lock_exchange(&self, wait: ExchangeWait) -> Result<MutexGuard<'_, ()>> {
-        match wait {
-            ExchangeWait::Queue => Ok(self
-                .inner
-                .exchange_lock
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())),
+        let locked = match wait {
+            ExchangeWait::Queue => self.inner.exchange_lock.lock(),
             // One attempt, never a timed retry: sleeping here would be the very
             // stall this policy exists to avoid.
             ExchangeWait::Immediate => match self.inner.exchange_lock.try_lock() {
                 Ok(guard) => Ok(guard),
-                Err(TryLockError::Poisoned(poisoned)) => Ok(poisoned.into_inner()),
-                Err(TryLockError::WouldBlock) => Err(BrokerError::new(
-                    BrokerErrorKind::Busy,
-                    "process broker is busy running another helper",
-                )
-                .into()),
+                Err(TryLockError::Poisoned(poisoned)) => Err(poisoned),
+                Err(TryLockError::WouldBlock) => {
+                    return Err(BrokerError::new(
+                        BrokerErrorKind::Busy,
+                        "process broker is busy running another helper",
+                    )
+                    .into());
+                }
             },
-        }
+        };
+
+        // An exchange that panicked may have left the stream mid-message, so
+        // the broker is retired as a failed exchange retires it.
+        locked.map_err(|_| {
+            self.inner.healthy.store(false, Ordering::Release);
+            BrokerError::new(
+                BrokerErrorKind::Transport,
+                "process broker exchange panicked earlier; the broker is no longer used",
+            )
+            .into()
+        })
     }
 
     pub(super) fn request(&self, operation: BrokerOperation) -> Result<BrokerOutcome> {
@@ -241,7 +256,7 @@ impl ProcessBroker {
         descriptors: &[RawFd],
         wait: ExchangeWait,
     ) -> Result<(BrokerOutcome, Vec<OwnedFd>)> {
-        let request_id = crate::daemon::protocol_v2::ProtocolId::generate()?.to_string();
+        let request_id = ProtocolId::generate()?.to_string();
         let exchange_timeout = broker_exchange_timeout(&operation);
         let packet = serde_json::to_vec(&BrokerRequest {
             token: self.inner.token.clone(),

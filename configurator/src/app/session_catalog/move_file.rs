@@ -1,4 +1,6 @@
 use wayscriber::i18n::{tr, trf};
+use wayscriber::session;
+use wayscriber::session::{NamedSessionMoveOutcome, catalog};
 
 use std::path::{Path, PathBuf};
 
@@ -41,29 +43,27 @@ fn move_session_catalog_entry_sync(
         return Err(blocker);
     }
 
-    let outcome = wayscriber::session::move_named_session_non_lock_artifacts(&item.path, target)
+    let outcome = session::move_named_session_non_lock_artifacts(&item.path, target)
         .map_err(|err| err.to_string())?;
-    let entry =
-        match wayscriber::session::catalog::move_session_path_by_id(&item.id, &outcome.target) {
-            Ok(Some(entry)) => entry,
-            Ok(None) => {
-                return rollback_moved_artifacts_after_catalog_failure(
-                    &item,
-                    &outcome,
-                    initial_items,
-                    tr("the original catalog entry disappeared before metadata could be updated")
-                        .to_string(),
-                );
-            }
-            Err(err) => {
-                return rollback_moved_artifacts_after_catalog_failure(
-                    &item,
-                    &outcome,
-                    initial_items,
-                    format!("failed to update the session catalog: {err}"),
-                );
-            }
-        };
+    let entry = match catalog::move_session_path_by_id(&item.id, &outcome.target) {
+        Ok(Some(entry)) => entry,
+        Ok(None) => {
+            return rollback_moved_artifacts_after_catalog_failure(
+                &item,
+                &outcome,
+                initial_items,
+                tr("the original catalog entry disappeared before metadata could be updated"),
+            );
+        }
+        Err(err) => {
+            return rollback_moved_artifacts_after_catalog_failure(
+                &item,
+                &outcome,
+                initial_items,
+                &format!("failed to update the session catalog: {err}"),
+            );
+        }
+    };
     let items = match load_session_catalog_sync() {
         Ok(items) => items,
         Err(err) => {
@@ -88,11 +88,11 @@ fn move_session_catalog_entry_sync(
 
 fn rollback_moved_artifacts_after_catalog_failure(
     item: &SessionCatalogItem,
-    outcome: &wayscriber::session::NamedSessionMoveOutcome,
+    outcome: &NamedSessionMoveOutcome,
     initial_items: Vec<SessionCatalogItem>,
-    reason: String,
+    reason: &str,
 ) -> Result<SessionCatalogActionResult, String> {
-    match wayscriber::session::rollback_named_session_non_lock_artifacts_move(outcome) {
+    match session::rollback_named_session_non_lock_artifacts_move(outcome) {
         Ok(_) => Err(trf(
             "Move Session failed because {}; rolled back moved files for {}.",
             &[&reason, &item.display_name],
@@ -118,10 +118,10 @@ fn reject_catalog_target_collision(
     source_id: &str,
     target: &Path,
 ) -> Result<(), String> {
-    if let Some(existing) = items.iter().find(|item| {
-        item.id != source_id
-            && wayscriber::session::catalog::session_paths_match(&item.path, target)
-    }) {
+    if let Some(existing) = items
+        .iter()
+        .find(|item| item.id != source_id && catalog::session_paths_match(&item.path, target))
+    {
         return Err(trf(
             "Move Session target is already in the catalog as {}.",
             &[&existing.display_name],
@@ -133,11 +133,16 @@ fn reject_catalog_target_collision(
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
+    use std::fs;
+
+    use wayscriber::session::catalog::CatalogEvent;
 
     use crate::models::{
         DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability,
         ShortcutApplyCapability, ShortcutBackend,
     };
+    use crate::test_env::EnvGuard;
+    use crate::test_temp;
     use wayscriber::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV};
 
     use super::*;
@@ -162,22 +167,22 @@ mod tests {
 
     #[test]
     fn move_session_catalog_entry_moves_artifacts_and_preserves_catalog_id() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = crate::test_env::EnvGuard::set(&[
+        let temp = test_temp::tempdir().unwrap();
+        let _env = EnvGuard::set(&[
             (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
             (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
             (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
         ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("archive.wayscriber-session");
-        let source_artifacts = wayscriber::session::named_session_artifact_paths(&source);
-        let target_artifacts = wayscriber::session::named_session_artifact_paths(&target);
-        std::fs::write(&source_artifacts.primary, b"primary").unwrap();
-        std::fs::write(&source_artifacts.backup, b"backup").unwrap();
-        std::fs::write(&source_artifacts.lock, b"source lock").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
+        let source_artifacts = session::named_session_artifact_paths(&source);
+        let target_artifacts = session::named_session_artifact_paths(&target);
+        fs::write(&source_artifacts.primary, b"primary").unwrap();
+        fs::write(&source_artifacts.backup, b"backup").unwrap();
+        fs::write(&source_artifacts.lock, b"source lock").unwrap();
+        let source_entry = catalog::upsert_session_event_with_display_name(
             &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
+            CatalogEvent::Saved,
             "Lecture",
         )
         .unwrap();
@@ -186,18 +191,12 @@ mod tests {
             move_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status()).unwrap();
 
         assert!(!result.warning);
-        assert_eq!(
-            std::fs::read(&target_artifacts.primary).unwrap(),
-            b"primary"
-        );
-        assert_eq!(std::fs::read(&target_artifacts.backup).unwrap(), b"backup");
-        assert_eq!(
-            std::fs::read(&source_artifacts.lock).unwrap(),
-            b"source lock"
-        );
+        assert_eq!(fs::read(&target_artifacts.primary).unwrap(), b"primary");
+        assert_eq!(fs::read(&target_artifacts.backup).unwrap(), b"backup");
+        assert_eq!(fs::read(&source_artifacts.lock).unwrap(), b"source lock");
         assert!(!source_artifacts.primary.exists());
         assert!(!source_artifacts.backup.exists());
-        let recents = wayscriber::session::catalog::recent_sessions().unwrap();
+        let recents = catalog::recent_sessions().unwrap();
         assert_eq!(recents.len(), 1);
         assert_eq!(recents[0].id, source_entry.id);
         assert_eq!(Path::new(&recents[0].path), target.as_path());
@@ -205,22 +204,22 @@ mod tests {
 
     #[test]
     fn move_session_catalog_entry_failure_keeps_catalog_and_source_artifacts() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = crate::test_env::EnvGuard::set(&[
+        let temp = test_temp::tempdir().unwrap();
+        let _env = EnvGuard::set(&[
             (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
             (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
             (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
         ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("archive.wayscriber-session");
-        let source_artifacts = wayscriber::session::named_session_artifact_paths(&source);
-        let target_artifacts = wayscriber::session::named_session_artifact_paths(&target);
-        std::fs::write(&source_artifacts.primary, b"primary").unwrap();
-        std::fs::write(&source_artifacts.backup, b"backup").unwrap();
-        std::fs::write(&target_artifacts.clear_marker, b"cleared").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
+        let source_artifacts = session::named_session_artifact_paths(&source);
+        let target_artifacts = session::named_session_artifact_paths(&target);
+        fs::write(&source_artifacts.primary, b"primary").unwrap();
+        fs::write(&source_artifacts.backup, b"backup").unwrap();
+        fs::write(&target_artifacts.clear_marker, b"cleared").unwrap();
+        let source_entry = catalog::upsert_session_event_with_display_name(
             &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
+            CatalogEvent::Saved,
             "Lecture",
         )
         .unwrap();
@@ -229,16 +228,13 @@ mod tests {
             .expect_err("target artifact should block move");
 
         assert!(err.contains("already has session artifacts"));
+        assert_eq!(fs::read(&source_artifacts.primary).unwrap(), b"primary");
+        assert_eq!(fs::read(&source_artifacts.backup).unwrap(), b"backup");
         assert_eq!(
-            std::fs::read(&source_artifacts.primary).unwrap(),
-            b"primary"
-        );
-        assert_eq!(std::fs::read(&source_artifacts.backup).unwrap(), b"backup");
-        assert_eq!(
-            std::fs::read(&target_artifacts.clear_marker).unwrap(),
+            fs::read(&target_artifacts.clear_marker).unwrap(),
             b"cleared"
         );
-        let recents = wayscriber::session::catalog::recent_sessions().unwrap();
+        let recents = catalog::recent_sessions().unwrap();
         assert_eq!(recents.len(), 1);
         assert_eq!(recents[0].id, source_entry.id);
         assert_eq!(Path::new(&recents[0].path), source.as_path());
@@ -246,75 +242,71 @@ mod tests {
 
     #[test]
     fn move_session_catalog_entry_rejects_catalog_target_collision_before_disk_move() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = crate::test_env::EnvGuard::set(&[
+        let temp = test_temp::tempdir().unwrap();
+        let _env = EnvGuard::set(&[
             (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
             (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
             (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
         ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("archive.wayscriber-session");
-        std::fs::write(&source, b"primary").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
+        fs::write(&source, b"primary").unwrap();
+        let source_entry = catalog::upsert_session_event_with_display_name(
             &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
+            CatalogEvent::Saved,
             "Lecture",
         )
         .unwrap();
-        wayscriber::session::catalog::upsert_session_event_with_display_name(
-            &target,
-            wayscriber::session::catalog::CatalogEvent::Saved,
-            "Archive",
-        )
-        .unwrap();
+        catalog::upsert_session_event_with_display_name(&target, CatalogEvent::Saved, "Archive")
+            .unwrap();
 
         let err = move_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status())
             .expect_err("target catalog entry should block move");
 
         assert!(err.contains("already in the catalog"));
-        assert_eq!(std::fs::read(&source).unwrap(), b"primary");
+        assert_eq!(fs::read(&source).unwrap(), b"primary");
         assert!(!target.exists());
     }
 
     #[test]
     fn move_session_catalog_entry_rolls_back_when_catalog_update_fails_after_move() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = crate::test_env::EnvGuard::set(&[
+        let temp = test_temp::tempdir().unwrap();
+        let _env = EnvGuard::set(&[
             (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
             (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
             (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
         ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("archive.wayscriber-session");
-        let source_artifacts = wayscriber::session::named_session_artifact_paths(&source);
-        std::fs::write(&source_artifacts.primary, b"primary").unwrap();
-        std::fs::create_dir(&source_artifacts.backup).unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
+        let source_artifacts = session::named_session_artifact_paths(&source);
+        fs::write(&source_artifacts.primary, b"primary").unwrap();
+        fs::create_dir(&source_artifacts.backup).unwrap();
+        let source_entry = catalog::upsert_session_event_with_display_name(
             &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
+            CatalogEvent::Saved,
             "Lecture",
         )
         .unwrap();
         let lock_path = catalog_lock_path();
-        std::fs::remove_file(&lock_path).unwrap();
-        std::fs::create_dir(&lock_path).unwrap();
+        fs::remove_file(&lock_path).unwrap();
+        fs::create_dir(&lock_path).unwrap();
 
         let err = move_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status())
             .expect_err("catalog update failure should roll back disk move");
 
-        std::fs::remove_dir(&lock_path).unwrap();
+        fs::remove_dir(&lock_path).unwrap();
         assert!(err.contains("failed to update the session catalog"));
         assert!(err.contains("rolled back moved files"));
-        assert_eq!(std::fs::read(&source).unwrap(), b"primary");
+        assert_eq!(fs::read(&source).unwrap(), b"primary");
         assert!(source_artifacts.backup.is_dir());
         assert!(!target.exists());
-        let recents = wayscriber::session::catalog::recent_sessions().unwrap();
+        let recents = catalog::recent_sessions().unwrap();
         assert_eq!(recents.len(), 1);
         assert_eq!(Path::new(&recents[0].path), source.as_path());
     }
 
     fn catalog_lock_path() -> PathBuf {
-        let catalog_path = wayscriber::session::catalog::catalog_path();
+        let catalog_path = catalog::catalog_path();
         let mut raw = OsString::from(catalog_path.as_os_str());
         raw.push(".lock");
         raw.into()

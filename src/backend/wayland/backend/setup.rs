@@ -1,32 +1,30 @@
+use std::env;
+
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use smithay_client_toolkit::globals::ProvidesBoundGlobal;
-use smithay_client_toolkit::{
-    activation::ActivationState,
-    compositor::CompositorState,
-    output::OutputState,
-    registry::RegistryState,
-    seat::{
-        SeatState, pointer_constraints::PointerConstraintsState,
-        relative_pointer::RelativePointerState,
-    },
-    shell::{wlr_layer::LayerShell, xdg::XdgShell},
-    shm::Shm,
-};
-use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
-use wayland_protocols::ext::{
-    image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
-    image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
-};
+use smithay_client_toolkit::activation::ActivationState;
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::output::OutputState;
+use smithay_client_toolkit::registry::RegistryState;
+use smithay_client_toolkit::seat::SeatState;
+use smithay_client_toolkit::seat::pointer_constraints::PointerConstraintsState;
+use smithay_client_toolkit::seat::relative_pointer::RelativePointerState;
+use smithay_client_toolkit::shell::wlr_layer::LayerShell;
+use smithay_client_toolkit::shell::xdg::XdgShell;
+use smithay_client_toolkit::shm::Shm;
+use wayland_client::{Connection, EventQueue};
+use wayland_client::globals::registry_queue_init;
+use wayland_protocols::ext::image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1;
+use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1;
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+use wayland_client::globals::GlobalList;
 
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
-use super::super::{
-    frozen::ExtImageCopyManagers,
-    state::{ProtocolGlobals, ProtocolGlobalsSeed, WaylandState},
-};
+use super::super::frozen::ExtImageCopyManagers;
+use super::super::state::{ProtocolGlobals, ProtocolGlobalsSeed, WaylandState};
 
 // Freeze/zoom capture currently consumes wl_shm buffer events and ignores linux-dmabuf.
 // Version 3 can negotiate linux-dmabuf-only frames on newer wlroots/NVIDIA stacks, so
@@ -36,7 +34,7 @@ const MAX_SHM_SCREENCOPY_VERSION: u32 = 2;
 pub(super) struct WaylandSetup {
     pub(super) conn: Connection,
     #[cfg(feature = "tablet-input")]
-    pub(super) globals: wayland_client::globals::GlobalList,
+    pub(super) globals: GlobalList,
     pub(super) event_queue: EventQueue<WaylandState>,
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
     pub(super) state_globals: ProtocolGlobals,
@@ -53,7 +51,7 @@ type ShellGlobals = (
 );
 
 fn bind_shell_globals(
-    globals: &wayland_client::globals::GlobalList,
+    globals: &GlobalList,
     qh: &wayland_client::QueueHandle<WaylandState>,
 ) -> Result<ShellGlobals> {
     let layer_shell = match LayerShell::bind(globals, qh) {
@@ -63,9 +61,9 @@ fn bind_shell_globals(
         }
         Err(err) => {
             let desktop_env =
-                std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
+                env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
             let session_env =
-                std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
+                env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
             warn!(
                 "Layer shell not available: {} (desktop='{}', session='{}'); toolbars will be disabled and xdg fallback may not cover docks/panels.",
                 err, desktop_env, session_env
@@ -102,7 +100,7 @@ fn bind_shell_globals(
 }
 
 fn bind_capture_globals(
-    globals: &wayland_client::globals::GlobalList,
+    globals: &GlobalList,
     qh: &wayland_client::QueueHandle<WaylandState>,
 ) -> (
     Option<ZwlrScreencopyManagerV1>,
@@ -149,7 +147,7 @@ fn bind_capture_globals(
 }
 
 fn bind_text_input_manager(
-    globals: &wayland_client::globals::GlobalList,
+    globals: &GlobalList,
     qh: &wayland_client::QueueHandle<WaylandState>,
 ) -> Option<ZwpTextInputManagerV3> {
     match globals.bind::<ZwpTextInputManagerV3, _, _>(qh, 1..=1, ()) {

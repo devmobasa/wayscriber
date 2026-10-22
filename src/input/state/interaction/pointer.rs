@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::{InputTextResources, ZoomAnchor};
+
 use super::adapters;
 use super::event::{PointerMotion, PointerPress, PointerRelease};
 use super::outcome::{ConsumedBy, NoRouteReason, RoutingOutcome};
@@ -7,7 +10,7 @@ use crate::ui::ZoomChipPress;
 
 pub(crate) fn route_pointer_press(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     event: PointerPress,
 ) -> RoutingOutcome {
     let points = event.points();
@@ -88,7 +91,7 @@ pub(crate) fn route_pointer_press(
 
 pub(crate) fn route_pointer_motion(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     event: PointerMotion,
 ) -> RoutingOutcome {
     let points = event.points();
@@ -131,7 +134,7 @@ pub(crate) fn route_pointer_motion(
 
 pub(crate) fn route_pointer_release(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     event: PointerRelease,
 ) -> RoutingOutcome {
     let points = event.points();
@@ -179,11 +182,7 @@ pub(crate) fn route_pointer_release(
                 let screen = points.screen();
                 let (_, action) = state.check_zoom_chip_click(kind, screen.x(), screen.y());
                 if let Some(action) = action {
-                    state.handle_action_anchored(
-                        resources,
-                        action,
-                        crate::input::state::ZoomAnchor::ScreenCenter,
-                    );
+                    state.handle_action_anchored(resources, action, ZoomAnchor::ScreenCenter);
                 }
             }
             state.needs_redraw = true;

@@ -1,3 +1,5 @@
+use std::env;
+
 use wayscriber::i18n::tr;
 
 use wayscriber::env_vars::{
@@ -18,11 +20,11 @@ pub enum DesktopEnvironment {
 
 impl DesktopEnvironment {
     pub fn detect_current() -> Self {
-        if std::env::var_os(HYPRLAND_INSTANCE_SIGNATURE_ENV).is_some() {
+        if env::var_os(HYPRLAND_INSTANCE_SIGNATURE_ENV).is_some() {
             return Self::Hyprland;
         }
-        let current = std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
-        let session = std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
+        let current = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
+        let session = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
         Self::from_desktop_strings(&current, &session)
     }
 

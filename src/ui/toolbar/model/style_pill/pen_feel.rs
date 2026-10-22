@@ -8,7 +8,10 @@
 //! meters inside reuse [`StrokeSetting::meter`], so they click and scroll
 //! exactly like the inline ones.
 
-use super::*;
+use super::StylePillControl;
+use super::meter::{StrokeSetting, StylePillMeter};
+use crate::i18n::{tr, trf};
+use crate::ui::toolbar::{ToolContext, ToolbarSnapshot};
 
 /// The chip's visible label. The caret says it opens something.
 pub(crate) fn pen_feel_chip_label() -> &'static str {
@@ -193,11 +196,13 @@ impl StylePillControl {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::input::Tool;
 
     fn snapshot_for(tool: Tool, smoothing: u8, sensitivity: u8) -> ToolbarSnapshot {
-        let mut state = crate::input::state::test_support::make_test_input_state();
+        let mut state = test_support::make_test_input_state();
         state.set_pen_smoothing(smoothing);
         state.set_shape_recognition_sensitivity(sensitivity);
         let mut snapshot = ToolbarSnapshot::from_input(&state);

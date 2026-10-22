@@ -1,3 +1,5 @@
+use crate::desktop_open::DesktopOpenRequest;
+
 use super::super::base::InputState;
 use crate::config::Config;
 use crate::configurator_destination::ConfiguratorDestination;
@@ -46,13 +48,13 @@ impl InputState {
 
         log::info!("Queued capture folder open at {}", folder.display());
         self.set_pending_backend_action(PendingBackendAction::DesktopOpen(
-            crate::desktop_open::DesktopOpenRequest::CaptureFolder(folder),
+            DesktopOpenRequest::CaptureFolder(folder),
         ));
     }
 
     /// Opens the primary config file using the desktop default application.
     pub(crate) fn open_config_file_default(&mut self) -> bool {
-        let path = match Config::get_config_path() {
+        let path = match Config::config_path() {
             Ok(p) => p,
             Err(err) => {
                 log::error!("Unable to resolve config path: {}", err);
@@ -67,7 +69,7 @@ impl InputState {
 
         log::info!("Queued config file open at {}", path.display());
         self.set_pending_backend_action(PendingBackendAction::DesktopOpen(
-            crate::desktop_open::DesktopOpenRequest::ConfigFile(path),
+            DesktopOpenRequest::ConfigFile(path),
         ));
         true
     }

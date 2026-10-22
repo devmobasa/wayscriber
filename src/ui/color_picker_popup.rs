@@ -3,25 +3,21 @@
 //! Renders a modal popup with a large gradient color picker,
 //! hex input field, and OK/Cancel buttons.
 
-use crate::draw::Color;
 use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{
     COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_RECENT_SWATCH_COUNT as RECENT_SWATCH_COUNT,
     COLOR_PICKER_RECENT_SWATCH_SIZE as RECENT_SWATCH_SIZE, ColorPickerPopupLayout,
 };
+use crate::toolbar_icons;
 use crate::ui::primitives::{
-    checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, ellipsize_to_fit_with_engine,
-    text_extents_for_with_engine,
+    draw_rounded_rect, ellipsize_to_fit_with_engine, text_extents_for_with_engine,
 };
-use crate::ui::theme::Rgba;
+use crate::ui::theme::{Rgba, popup};
+use crate::ui::tooltip;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
-use super::constants::{
-    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED,
-    INPUT_CARET, OVERLAY_DIM_MEDIUM, RADIUS_MD, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_HINT_DIM,
-    TEXT_PRIMARY,
-};
+use super::constants::{self, OVERLAY_DIM_MEDIUM, RADIUS_PANEL, TEXT_HINT_DIM, TEXT_PRIMARY};
 
 mod controls;
 
@@ -118,8 +114,8 @@ pub(crate) fn color_picker_popup_visual_geometry_with_engine(
             (
                 x,
                 y,
-                width + crate::ui::tooltip::TOOLTIP_PAINT_OUTSET,
-                height + crate::ui::tooltip::TOOLTIP_PAINT_OUTSET,
+                width + tooltip::TOOLTIP_PAINT_OUTSET,
+                height + tooltip::TOOLTIP_PAINT_OUTSET,
             ),
         );
     }
@@ -193,9 +189,9 @@ pub(crate) fn render_color_picker_popup_with_engine(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, crate::ui::theme::popup::bg_modal());
+    constants::set_color(ctx, popup::bg_modal());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_modal());
+    constants::set_color(ctx, popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -315,7 +311,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
         layout.copy_btn_y,
         size,
         copy_hover,
-        crate::toolbar_icons::draw_icon_copy,
+        toolbar_icons::draw_icon_copy,
         16.0,
     );
     draw_action_button(
@@ -324,7 +320,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
         layout.paste_btn_y,
         size,
         paste_hover,
-        crate::toolbar_icons::draw_icon_paste,
+        toolbar_icons::draw_icon_paste,
         16.0,
     );
     if layout.eyedropper_enabled {
@@ -334,7 +330,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
             layout.eyedropper_btn_y,
             size,
             eyedropper_hover,
-            crate::toolbar_icons::draw_icon_eyedropper,
+            toolbar_icons::draw_icon_eyedropper,
             18.0,
         );
     }
@@ -457,6 +453,8 @@ fn fit_title_to_panel(
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::ColorPickerPopupLayoutOptions;
+
     use super::*;
 
     fn test_context() -> cairo::Context {
@@ -492,11 +490,8 @@ mod tests {
     fn wide_titles_are_trimmed_to_the_panel_not_a_character_budget() {
         let engine = &UiTextEngine::default();
         let ctx = test_context();
-        let layout = ColorPickerPopupLayout::compute(
-            1920,
-            1080,
-            crate::input::state::ColorPickerPopupLayoutOptions::ALL,
-        );
+        let layout =
+            ColorPickerPopupLayout::compute(1920, 1080, ColorPickerPopupLayoutOptions::ALL);
         let content_width = layout.width - TITLE_INSET * 2.0;
 
         // Wide glyphs: few characters, far more pixels than a Latin label of

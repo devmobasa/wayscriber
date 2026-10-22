@@ -1,6 +1,8 @@
 use std::time::Instant;
 
-use super::*;
+use crate::backend::wayland::toolbar_intent::ToolbarIntent;
+
+use super::super::{ToolbarEvent, WaylandState, drag_log, intent_to_event};
 use crate::backend::wayland::state::contact_owner::{InlinePress, inline_primary_press};
 
 impl WaylandState {
@@ -45,7 +47,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn inline_toolbar_hit_at(
         &self,
         position: (f64, f64),
-    ) -> Option<(crate::backend::wayland::toolbar_intent::ToolbarIntent, bool)> {
+    ) -> Option<(ToolbarIntent, bool)> {
         if !self.toolbar_chrome.inline_toolbars() || !self.toolbar.is_visible() {
             return None;
         }
@@ -83,10 +85,7 @@ impl WaylandState {
         true
     }
 
-    fn inline_toolbar_drag_at(
-        &self,
-        position: (f64, f64),
-    ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
+    fn inline_toolbar_drag_at(&self, position: (f64, f64)) -> Option<ToolbarIntent> {
         if !self.toolbar_chrome.inline_toolbars() || !self.toolbar.is_visible() {
             return None;
         }

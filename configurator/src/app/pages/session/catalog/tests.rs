@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+use wayscriber::i18n;
+
+use crate::test_env;
+
 use super::*;
 use crate::app::state::PendingConfirmation;
 use crate::models::session::SessionArtifactSummary;
@@ -182,7 +186,7 @@ fn catalog_focus_fallback_leaves_the_tab_chain_when_busy_work_finishes() {
 /// chosen when the layout is drawn, and a new language rebuilds the card.
 #[test]
 fn card_labels_follow_the_language_the_list_is_drawn_in() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::card_labels_follow_the_language_the_list_is_drawn_in"
@@ -193,7 +197,7 @@ fn card_labels_follow_the_language_the_list_is_drawn_in() {
             let english = catalog_layout(&app);
             assert_eq!(english.items[0].last_opened_label, "Never");
 
-            wayscriber::i18n::set_language(Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
             let chinese = catalog_layout(&app);
 
             assert_eq!(chinese.items[0].last_opened_label, "从不");

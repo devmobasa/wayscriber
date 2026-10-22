@@ -1,4 +1,18 @@
-use super::*;
+use std::mem;
+use std::path::PathBuf;
+
+use super::super::{
+    AbandonedPreviewResolutionReason, ControllerBarrierPhase, RecoveryAttemptId,
+    RuntimeStateIoError, RuntimeStateObservedEnvelope, RuntimeStateObservedPathEffect,
+    RuntimeStatePostClaimPathEffect, RuntimeStateSourceObservation, RuntimeStateSourceRevision,
+    RuntimeUiFileStatus, RuntimeUiLiveState, RuntimeUiStateController, RuntimeUiWireState,
+    WirePassthrough,
+};
+use super::protocol::evidence;
+use super::{
+    InvalidStateResetConfirmation, PersistenceIncident, PersistenceRecoveryResult,
+    RecoveryAttemptKind, RecoveryCleanupState, RecoveryInspection, SubmitPersistenceRecoveryResult,
+};
 
 impl RuntimeUiStateController {
     pub(super) fn apply_incident_staged_reload(&mut self) {
@@ -288,7 +302,7 @@ impl RuntimeUiStateController {
     pub(super) fn finish_preserved_invalid(
         &mut self,
         observation: RuntimeStateSourceObservation,
-        recovery_path: std::path::PathBuf,
+        recovery_path: PathBuf,
     ) -> SubmitPersistenceRecoveryResult {
         self.install_preserved_invalid_authority();
         let incident = self.incident.take().expect("incident");
@@ -323,7 +337,7 @@ impl RuntimeUiStateController {
             .map(|incident| {
                 incident.retry_desired_through = None;
                 incident.cleanup = RecoveryCleanupState::Clean;
-                std::mem::take(&mut incident.held_replacements)
+                mem::take(&mut incident.held_replacements)
             })
             .unwrap_or_default();
         self.pipeline.settle_held_external(&held);
@@ -419,11 +433,11 @@ impl RuntimeUiStateController {
         let incident = self.incident.take()?;
         let error = RuntimeStateIoError::new("runtime-state persistence shut down");
         self.pipeline
-            .settle_held_failed(&incident.held_replacements, error.clone());
+            .settle_held_failed(&incident.held_replacements, &error);
         if let RecoveryCleanupState::Pending { through }
         | RecoveryCleanupState::InFlight { through, .. } = incident.cleanup
         {
-            self.pipeline.settle_failed([through], error);
+            self.pipeline.settle_failed([through], &error);
         }
         self.close_barrier_and_resolve_previews(
             incident.barrier,

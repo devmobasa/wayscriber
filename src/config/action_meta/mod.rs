@@ -1,3 +1,5 @@
+use crate::i18n;
+
 use super::Action;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +53,7 @@ pub struct ActionMeta {
 }
 
 impl ActionMeta {
+    #[must_use]
     pub fn short_label(self) -> &'static str {
         self.short_label.unwrap_or(self.label)
     }
@@ -66,8 +69,8 @@ macro_rules! meta {
         $in_palette:expr,
         $in_help:expr,
         $in_toolbar:expr,
-        $aliases:expr,
-        icon: $icon:expr
+        $aliases:expr,icon:
+        $icon:expr
     ) => {
         ActionMeta {
             action: crate::config::Action::$action,
@@ -90,8 +93,8 @@ macro_rules! meta {
         $category:ident,
         $in_palette:expr,
         $in_help:expr,
-        $in_toolbar:expr,
-        icon: $icon:expr
+        $in_toolbar:expr,icon:
+        $icon:expr
     ) => {
         ActionMeta {
             action: crate::config::Action::$action,
@@ -177,6 +180,7 @@ pub fn action_meta_iter() -> impl Iterator<Item = &'static ActionMeta> {
         .flat_map(|entries| entries.iter())
 }
 
+#[must_use]
 pub fn action_meta(action: Action) -> Option<&'static ActionMeta> {
     action_meta_iter().find(|meta| meta.action == action)
 }
@@ -189,12 +193,14 @@ fn source_label(action: Action) -> &'static str {
         .unwrap_or("Action")
 }
 
+#[must_use]
 pub fn action_label(action: Action) -> &'static str {
-    crate::i18n::tr(source_label(action))
+    i18n::tr(source_label(action))
 }
 
+#[must_use]
 pub fn action_short_label(action: Action) -> &'static str {
-    crate::i18n::tr(
+    i18n::tr(
         action_meta(action)
             .map(|meta| meta.short_label())
             .unwrap_or("Action"),
@@ -205,26 +211,28 @@ pub fn action_short_label(action: Action) -> &'static str {
 ///
 /// Derivation happens on the English source label so the suffixes this UI
 /// abbreviates stay English; only the result is translated.
+#[must_use]
 pub fn action_display_label(action: Action) -> &'static str {
     if matches!(action, Action::SelectEllipseTool) {
         return action_short_label(action);
     }
     let label = source_label(action);
     if let Some(stripped) = label.strip_suffix(" Tool") {
-        return crate::i18n::tr(stripped);
+        return i18n::tr(stripped);
     }
     if let Some(stripped) = label.strip_suffix(" Mode") {
-        return crate::i18n::tr(stripped);
+        return i18n::tr(stripped);
     }
     if let Some(stripped) = label.strip_prefix("Toggle ") {
-        return crate::i18n::tr(stripped);
+        return i18n::tr(stripped);
     }
     action_label(action)
 }
 
 #[allow(dead_code)]
+#[must_use]
 pub fn action_description(action: Action) -> &'static str {
-    crate::i18n::tr(
+    i18n::tr(
         action_meta(action)
             .map(|meta| meta.description)
             .unwrap_or(""),

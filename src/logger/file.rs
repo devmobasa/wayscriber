@@ -1,8 +1,8 @@
-use std::env;
 use std::ffi::OsString;
-use std::fs;
 use std::io::{self, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use crate::env_vars::{LOG_FILE_ENV, LOG_MAX_SIZE_ENV};
 use crate::{paths, time_utils};
@@ -176,7 +176,7 @@ impl DailyFileWriter {
         let mut open_options = fs::OpenOptions::new();
         open_options.create(true).append(true);
         #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut open_options, 0o600);
+        OpenOptionsExt::mode(&mut open_options, 0o600);
         match open_options.open(&path) {
             Ok(file) => {
                 self.file = Some(file);
@@ -255,6 +255,11 @@ impl Write for DailyFileWriter {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
+    use std::fs;
+    use std::path::Path;
+
     use super::LogFileTarget;
     use std::path::PathBuf;
 
@@ -264,7 +269,7 @@ mod tests {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
 
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let data = temp.path().join("wayscriber");
         let logs = data.join("logs");
         let mut writer = super::DailyFileWriter::new(LogFileTarget {
@@ -276,9 +281,8 @@ mod tests {
         writer.write_all(b"session saved\n").unwrap();
         writer.flush().unwrap();
 
-        let mode =
-            |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
-        let log_files: Vec<_> = std::fs::read_dir(&logs)
+        let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let log_files: Vec<_> = fs::read_dir(&logs)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect();

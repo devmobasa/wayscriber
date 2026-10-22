@@ -5,6 +5,8 @@
 
 use xkbcommon::xkb;
 
+use crate::input::state;
+
 use super::super::handlers::keyboard::keysym_to_key;
 use crate::i18n::{tr, trf};
 use crate::input::Modifiers;
@@ -36,7 +38,7 @@ pub(super) fn modifiers_from_xkb(state: &xkb::State) -> Modifiers {
 pub(super) fn key_label(keysym: xkb::Keysym, modifiers: Modifiers) -> Option<(String, bool)> {
     let key = keysym_to_key(keysym);
     let label = input_hud_key_label(key, modifiers)?;
-    Some((label, crate::input::state::is_bare_modifier(key)))
+    Some((label, state::is_bare_modifier(key)))
 }
 
 /// Chip label for a pointer button press.

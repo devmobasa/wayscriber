@@ -7,6 +7,7 @@ pub const MAX_STROKE_THICKNESS: f64 = 50.0;
 /// A fractional width, such as one drawn before widths snapped or loaded from
 /// an older session, lands on the nearest whole pixel in the step's direction
 /// first: 30.8 steps up to 31 and down to 30, never skipping a value.
+#[must_use]
 pub fn step_stroke_thickness(thickness: f64, delta: f64) -> f64 {
     let stepped = thickness + delta;
     let whole = if delta > 0.0 {

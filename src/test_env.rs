@@ -1,24 +1,81 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Condvar, Mutex};
 
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
+use crate::env_vars;
+use std::env;
+use std::ffi::{OsStr, OsString};
+use std::path::Path;
+use std::process::Command;
 
-pub(crate) fn lock() -> MutexGuard<'static, ()> {
-    ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+static ENV_LEASE: Lease = Lease::new();
+
+pub(crate) fn lock() -> LeaseGuard<'static> {
+    ENV_LEASE.acquire()
 }
 
-struct SavedEnv(Vec<(&'static str, Option<std::ffi::OsString>)>);
+/// Exclusive access to a process-wide test resource, such as the environment.
+///
+/// A `MutexGuard` held across a test body is poisoned when that test panics,
+/// and every later test would then either fail or reach inside the poisoned
+/// lock. The lease's mutex only guards a flag in short sections that cannot
+/// panic, and the guard hands the lease on while unwinding, so one failing
+/// test does not fail the rest.
+pub(crate) struct Lease {
+    held: Mutex<bool>,
+    released: Condvar,
+}
+
+/// Holds a [`Lease`] until dropped, including when the holder panics.
+pub(crate) struct LeaseGuard<'lease> {
+    lease: &'lease Lease,
+}
+
+impl Lease {
+    pub(crate) const fn new() -> Self {
+        Self {
+            held: Mutex::new(false),
+            released: Condvar::new(),
+        }
+    }
+
+    pub(crate) fn acquire(&self) -> LeaseGuard<'_> {
+        let mut held = self
+            .held
+            .lock()
+            .expect("the lease flag is never locked across a panic");
+        while *held {
+            held = self
+                .released
+                .wait(held)
+                .expect("the lease flag is never locked across a panic");
+        }
+        *held = true;
+
+        LeaseGuard { lease: self }
+    }
+}
+
+impl Drop for LeaseGuard<'_> {
+    fn drop(&mut self) {
+        // Dropping must not panic while a failed test unwinds, and the flag's
+        // mutex is never poisoned, so a failed lock only skips the release.
+        if let Ok(mut held) = self.lease.held.lock() {
+            *held = false;
+        }
+        self.lease.released.notify_one();
+    }
+}
+
+struct SavedEnv(Vec<(&'static str, Option<OsString>)>);
 
 impl Drop for SavedEnv {
     fn drop(&mut self) {
         for (key, value) in self.0.drain(..) {
-            // SAFETY: every caller creates this guard while holding
-            // `ENV_MUTEX`, and it is dropped before that mutex guard.
+            // SAFETY: every caller creates this guard while holding the
+            // environment lease, and it is dropped before that lease guard.
             unsafe {
                 match value {
-                    Some(value) => std::env::set_var(key, value),
-                    None => std::env::remove_var(key),
+                    Some(value) => env::set_var(key, value),
+                    None => env::remove_var(key),
                 }
             }
         }
@@ -28,7 +85,7 @@ impl Drop for SavedEnv {
 #[cfg(test)]
 pub(crate) fn with_env_var<T>(
     key: &'static str,
-    value: Option<&std::ffi::OsStr>,
+    value: Option<&OsStr>,
     body: impl FnOnce() -> T,
 ) -> T {
     with_env_vars(&[(key, value)], body)
@@ -38,13 +95,13 @@ pub(crate) fn with_env_var<T>(
 /// all of them afterwards, including when `body` panics.
 #[cfg(test)]
 pub(crate) fn with_env_vars<T>(
-    vars: &[(&'static str, Option<&std::ffi::OsStr>)],
+    vars: &[(&'static str, Option<&OsStr>)],
     body: impl FnOnce() -> T,
 ) -> T {
     let _guard = lock();
     let _saved = SavedEnv(
         vars.iter()
-            .map(|(key, _)| (*key, std::env::var_os(key)))
+            .map(|(key, _)| (*key, env::var_os(key)))
             .collect(),
     );
 
@@ -52,8 +109,8 @@ pub(crate) fn with_env_vars<T>(
         // SAFETY: serialized by the environment lock held above.
         unsafe {
             match value {
-                Some(value) => std::env::set_var(key, value),
-                None => std::env::remove_var(key),
+                Some(value) => env::set_var(key, value),
+                None => env::remove_var(key),
             }
         }
     }
@@ -70,13 +127,13 @@ pub(crate) fn with_env_vars<T>(
 #[cfg(test)]
 pub(crate) fn with_scrubbed_desktop_env<T>(body: impl FnOnce() -> T) -> T {
     let _guard = lock();
-    let saved: Vec<(&'static str, Option<std::ffi::OsString>)> = crate::env_vars::DESKTOP_ENV_KEYS
+    let saved: Vec<(&'static str, Option<OsString>)> = env_vars::DESKTOP_ENV_KEYS
         .iter()
-        .map(|key| (*key, std::env::var_os(key)))
+        .map(|key| (*key, env::var_os(key)))
         .collect();
     for (key, _) in &saved {
         // SAFETY: serialized by the environment lock held above.
-        unsafe { std::env::remove_var(key) };
+        unsafe { env::remove_var(key) };
     }
     let _saved = SavedEnv(saved);
     body()
@@ -99,12 +156,12 @@ pub(crate) fn in_language_isolated_child(test_path: &str, body: impl FnOnce()) {
 /// override directory.
 pub(crate) fn in_language_isolated_child_with_overrides(
     test_path: &str,
-    locale_dir: &std::path::Path,
+    locale_dir: &Path,
     body: impl FnOnce(),
 ) {
     const CHILD_ENV: &str = "WAYSCRIBER_TEST_LANGUAGE_ISOLATED_CHILD";
 
-    if std::env::var_os(CHILD_ENV).is_some() {
+    if env::var_os(CHILD_ENV).is_some() {
         body();
         return;
     }
@@ -112,13 +169,13 @@ pub(crate) fn in_language_isolated_child_with_overrides(
     let test_name = test_path
         .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
         .expect("test path starts with the crate name");
-    let mut command = std::process::Command::new(std::env::current_exe().expect("test binary"));
+    let mut command = Command::new(env::current_exe().expect("test binary"));
     command
         .args([test_name, "--exact", "--test-threads=1"])
         .env(CHILD_ENV, "1")
-        .env(crate::env_vars::LOCALE_DIR_ENV, locale_dir)
-        .env_remove(crate::env_vars::LANGUAGE_OVERRIDE_ENV);
-    for key in crate::env_vars::LOCALE_ENV_KEYS {
+        .env(env_vars::LOCALE_DIR_ENV, locale_dir)
+        .env_remove(env_vars::LANGUAGE_OVERRIDE_ENV);
+    for key in env_vars::LOCALE_ENV_KEYS {
         command.env_remove(key);
     }
 
@@ -139,24 +196,28 @@ pub(crate) fn in_language_isolated_child_with_overrides(
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+    use std::{env, thread};
+
     #[test]
     fn environment_is_restored_when_the_body_panics() {
         const KEY: &str = "WAYSCRIBER_TEST_ENV_PANIC_RESTORE";
         // SAFETY: this key is private to this test.
-        unsafe { std::env::set_var(KEY, "before") };
+        unsafe { env::set_var(KEY, "before") };
 
-        let result = std::panic::catch_unwind(|| {
-            super::with_env_var(KEY, Some(std::ffi::OsStr::new("during")), || {
-                panic!("exercise unwind restoration");
-            });
+        let result = thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    super::with_env_var(KEY, Some(OsStr::new("during")), || {
+                        panic!("exercise unwind restoration");
+                    });
+                })
+                .join()
         });
 
         assert!(result.is_err());
-        assert_eq!(
-            std::env::var_os(KEY).as_deref(),
-            Some(std::ffi::OsStr::new("before"))
-        );
+        assert_eq!(env::var_os(KEY).as_deref(), Some(OsStr::new("before")));
         // SAFETY: this key is private to this test.
-        unsafe { std::env::remove_var(KEY) };
+        unsafe { env::remove_var(KEY) };
     }
 }

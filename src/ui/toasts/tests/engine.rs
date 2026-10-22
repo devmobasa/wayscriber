@@ -1,3 +1,8 @@
+use std::path::Path;
+use std::time::Duration;
+
+use crate::input::state::test_support;
+
 use super::*;
 
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
@@ -15,7 +20,7 @@ fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
 #[test]
 fn retained_toast_owner_matches_standalone_across_targets() {
     let engine = UiTextEngine::default();
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let mut toast = Toast::info("Saved — Καλημέρα 你好");
     toast.duration_ms = 60_000;
     state.push_toast(ToastPriority::Hint, "paint", toast);
@@ -23,7 +28,7 @@ fn retained_toast_owner_matches_standalone_across_targets() {
     state.preset_slots.set_feedback(
         1,
         PresetFeedbackKind::Save,
-        Instant::now() + std::time::Duration::from_secs(60),
+        Instant::now() + Duration::from_secs(60),
     );
     let bounds = ui_toast_geometry_with_engine(&engine, &state, 640, 480).unwrap();
     let preset = preset_toast_geometry_with_engine(&engine, &state, 640, 480).unwrap();
@@ -59,7 +64,7 @@ fn retained_toast_owner_matches_standalone_across_targets() {
 fn explicit_toast_action_layout_handoff_preserves_release_target() {
     use crate::input::state::ToastCommand;
     let engine = UiTextEngine::default();
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.push_toast(
         ToastPriority::Hint,
         "actions",
@@ -96,9 +101,9 @@ fn explicit_toast_action_layout_handoff_preserves_release_target() {
 #[test]
 fn capture_toast_fits_its_message_and_both_buttons_on_a_1080p_output() {
     let engine = UiTextEngine::default();
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.set_capture_feedback(
-        Some(std::path::Path::new(
+        Some(Path::new(
             "/very/long/absolute/path/Pictures/Wayscriber/screenshot_2026-09-25_213231.png",
         )),
         true,

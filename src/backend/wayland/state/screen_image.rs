@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::backend::wayland::frozen::{FrozenImage, FrozenState, ScreenImageProvenance};
 use crate::backend::wayland::zoom::ZoomState;
-use crate::screen_pixels::{ImagePixelRect, ImagePoint, PixelSpan};
+use crate::screen_pixels::{ImagePixelRect, ImagePoint, PackedArgb32, PixelSpan};
 use crate::util::Rect;
 use wayland_client::protocol::wl_output;
 
@@ -20,8 +20,8 @@ pub(super) enum ScreenImageKind {
 }
 
 /// The captured image that the canvas renderer actually displays.
-pub(super) struct DisplayedScreenImage<'a> {
-    pub image: &'a FrozenImage,
+pub(super) struct DisplayedScreenImage<'image> {
+    pub image: &'image FrozenImage,
     pub kind: ScreenImageKind,
     pub provenance: ScreenImageProvenance,
     /// The renderer is painting this image through the zoom transform, so
@@ -68,13 +68,28 @@ pub(super) enum ScreenSourceEntry {
     ZoomImageUnavailable,
 }
 
-pub(super) fn screen_source_entry(
-    has_source: bool,
-    board_is_transparent: bool,
-    zoom_engaged: bool,
-    zoom_active: bool,
-    frozen_enabled: bool,
-) -> ScreenSourceEntry {
+/// The overlay state that decides how a screen-image modal can start.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ScreenSourceConditions {
+    /// A displayed screen image is ready to read.
+    pub(super) has_source: bool,
+    pub(super) board_is_transparent: bool,
+    /// Zoom is active or waiting for its activation capture.
+    pub(super) zoom_engaged: bool,
+    pub(super) zoom_active: bool,
+    /// Frozen capture is available for a temporary freeze.
+    pub(super) frozen_enabled: bool,
+}
+
+pub(super) fn screen_source_entry(conditions: ScreenSourceConditions) -> ScreenSourceEntry {
+    let ScreenSourceConditions {
+        has_source,
+        board_is_transparent,
+        zoom_engaged,
+        zoom_active,
+        frozen_enabled,
+    } = conditions;
+
     if has_source {
         ScreenSourceEntry::Activate
     } else if !board_is_transparent && zoom_engaged {
@@ -347,7 +362,7 @@ fn image_rect_from_points(
 pub(super) fn copy_image_rect(
     source: &FrozenImage,
     rect: ImagePixelRect,
-) -> Result<crate::screen_pixels::PackedArgb32, CropError> {
+) -> Result<PackedArgb32, CropError> {
     if source.width == 0 || source.height == 0 {
         return Err(CropError::Empty);
     }
@@ -356,6 +371,8 @@ pub(super) fn copy_image_rect(
 
 #[cfg(test)]
 mod tests {
+    use std::ptr;
+
     use super::*;
     use crate::backend::wayland::frozen::ScreenImageProvenance;
 
@@ -372,7 +389,7 @@ mod tests {
         let mut data = Vec::with_capacity((width * height * 4) as usize);
         for y in 0..height {
             for x in 0..width {
-                data.extend_from_slice(&[x as u8, y as u8, 0, 0xFF]);
+                data.extend_from_slice(&[x as u8, y as u8, 0, 0xff]);
             }
         }
         image(width, height, (width * 4) as i32, data)
@@ -447,7 +464,7 @@ mod tests {
 
         let shared = shared_displayed_screen_image(&zoom, &frozen, source.kind).unwrap();
 
-        assert!(std::ptr::eq(shared.as_ref(), source.image));
+        assert!(ptr::eq(shared.as_ref(), source.image));
         assert_eq!(shared.data.as_ptr(), source.image.data.as_ptr());
     }
 
@@ -852,7 +869,7 @@ mod tests {
         // 2x3, and the crop must read that post-transform layout.
         let mut data = Vec::new();
         for value in [1u8, 2, 3, 4, 5, 6] {
-            data.extend_from_slice(&[value, 0, 0, 0xFF]);
+            data.extend_from_slice(&[value, 0, 0, 0xff]);
         }
         let rotated = image(3, 2, 12, data)
             .with_output_transform(wl_output::Transform::_270)

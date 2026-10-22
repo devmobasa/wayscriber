@@ -1,14 +1,17 @@
-use crate::draw::Shape;
-use crate::draw::TextMeasurer;
+use crate::config::PresenterToolBehavior;
+use crate::draw::{Color, Shape, TextMeasurer};
+use crate::input::events::MouseButton;
+use crate::input::state::InputTextResources;
 use crate::input::tool::ToolPressBehavior;
-use crate::input::{DragTool, Tool, events::MouseButton};
+use crate::input::{DragTool, Tool};
+use crate::ui_text::UiTextEngine;
 use std::sync::Arc;
 
 use super::super::core::{IdleHandle, MenuCommand};
-use super::super::{
-    ContextMenuKind, DrawingState, InputState, SelectionGrab,
-    interaction::{CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press},
+use super::super::interaction::{
+    CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press,
 };
+use super::super::{ContextMenuKind, DrawingState, InputState, SelectionGrab};
 
 mod panels;
 mod polygon;
@@ -44,7 +47,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_right_click_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         screen_x: i32,
         screen_y: i32,
         canvas_x: i32,
@@ -95,7 +98,7 @@ impl InputState {
 
         self.update_context_menu_hover_from_pointer(screen_x, screen_y);
         if focus_edit {
-            self.focus_context_menu_command(MenuCommand::EditText);
+            self.focus_context_menu_command(&MenuCommand::EditText);
         }
         if self.is_context_menu_open() {
             self.pending_onboarding_usage.used_context_menu_right_click = true;
@@ -128,8 +131,8 @@ impl InputState {
         canvas_x: impl Into<f64>,
         canvas_y: impl Into<f64>,
     ) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.on_mouse_press_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -145,7 +148,7 @@ impl InputState {
 
     pub(crate) fn on_mouse_press_with_canvas_and_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
@@ -175,7 +178,7 @@ impl InputState {
             && self.presenter_mode_active()
             && matches!(
                 self.presenter_mode_config().tool_behavior,
-                crate::config::PresenterToolBehavior::ForceHighlightLocked
+                PresenterToolBehavior::ForceHighlightLocked
             )
         {
             // Locked presenting still allows the laser, which leaves nothing
@@ -204,10 +207,10 @@ impl InputState {
 
     fn handle_tool_button_press_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         button: MouseButton,
         tool: Tool,
-        color: Option<crate::draw::Color>,
+        color: Option<Color>,
         coords: PressCoords,
     ) {
         self.update_pointer_positions(
@@ -273,7 +276,7 @@ impl InputState {
         measurer: &TextMeasurer,
         canvas_x: i32,
         canvas_y: i32,
-        color: Option<crate::draw::Color>,
+        color: Option<Color>,
     ) -> bool {
         if !matches!(self.state, DrawingState::TextInput { .. }) {
             return false;
@@ -373,12 +376,7 @@ impl InputState {
     /// Begin an Alt+left-drag that moves the whole active text block. Records
     /// the grab offset so the block tracks the cursor exactly under the grabbed
     /// point, and arms the pointer drag so motion/release route back here.
-    fn begin_text_block_drag(
-        &mut self,
-        canvas_x: i32,
-        canvas_y: i32,
-        color: Option<crate::draw::Color>,
-    ) {
+    fn begin_text_block_drag(&mut self, canvas_x: i32, canvas_y: i32, color: Option<Color>) {
         if self
             .text_editing
             .begin_block_drag(&self.state, canvas_x, canvas_y)
@@ -414,10 +412,10 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_tool_button_press_at_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         button: MouseButton,
         tool: Tool,
-        color: Option<crate::draw::Color>,
+        color: Option<Color>,
         screen: (i32, i32),
         canvas: CanvasPoint,
     ) {
@@ -436,10 +434,10 @@ impl InputState {
 
     fn handle_idle_tool_click_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         button: MouseButton,
         tool: Tool,
-        color: Option<crate::draw::Color>,
+        color: Option<Color>,
         canvas: CanvasPoint,
     ) {
         let (x, y) = (canvas.x(), canvas.y());

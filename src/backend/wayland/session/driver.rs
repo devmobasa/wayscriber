@@ -1,4 +1,7 @@
 //! Live session-command orchestration, shared by Wayland and headless runtime tests.
+use std::collections::VecDeque;
+use std::mem;
+
 use anyhow::{Result, anyhow};
 use std::time::{Duration, Instant};
 
@@ -151,7 +154,7 @@ pub(in crate::backend::wayland) fn complete_session_command(
             transaction.command(),
             &anyhow!("explicit session completion identity mismatch"),
         );
-        start_queued_commands(runtime, std::mem::take(&mut transaction.queued_commands));
+        start_queued_commands(runtime, mem::take(&mut transaction.queued_commands));
         return;
     }
 
@@ -206,10 +209,7 @@ fn advance_session_command(
                     } else {
                         runtime.fail_session_command(transaction.command(), &error);
                     }
-                    start_queued_commands(
-                        runtime,
-                        std::mem::take(&mut transaction.queued_commands),
-                    );
+                    start_queued_commands(runtime, mem::take(&mut transaction.queued_commands));
                 }
             }
         }
@@ -226,7 +226,7 @@ fn advance_session_command(
 
             runtime.session_target_committed();
             runtime.finish_session_command(*report);
-            start_queued_commands(runtime, std::mem::take(&mut transaction.queued_commands));
+            start_queued_commands(runtime, mem::take(&mut transaction.queued_commands));
         }
         Err(error) => {
             // Resave retained state if a clear may have changed disk, without postponing
@@ -238,14 +238,14 @@ fn advance_session_command(
                 .record_input_dirty(Instant::now(), needs_recovery);
 
             runtime.fail_session_command(transaction.command(), &error);
-            start_queued_commands(runtime, std::mem::take(&mut transaction.queued_commands));
+            start_queued_commands(runtime, mem::take(&mut transaction.queued_commands));
         }
     }
 }
 
 fn start_queued_commands(
     runtime: &mut impl SessionCommandRuntime,
-    mut commands: std::collections::VecDeque<QueuedSessionCommand>,
+    mut commands: VecDeque<QueuedSessionCommand>,
 ) {
     if let Some(pending) = runtime.pending_command().as_mut() {
         pending.queued_commands.extend(commands);
@@ -425,7 +425,7 @@ pub(in crate::backend::wayland) fn persist_after_pending_commands<R: SessionComm
     persist: impl FnOnce(&mut R) -> Result<T>,
 ) -> Result<T> {
     if let Some(transaction) = runtime.pending_command().as_mut() {
-        let canceled = std::mem::take(&mut transaction.queued_commands)
+        let canceled = mem::take(&mut transaction.queued_commands)
             .into_iter()
             .map(|queued| {
                 (

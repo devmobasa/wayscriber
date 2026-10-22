@@ -1,10 +1,13 @@
+use crate::config::Action;
+use crate::help_overlay_interaction::{HelpHitMap, HelpRenderResult};
+use crate::input::events::Key;
 use crate::input::state::{
     HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayPressSource, HelpOverlayReleaseOutcome,
-    InputState,
+    InputState, test_support,
 };
 
 fn make_state() -> InputState {
-    crate::input::state::test_support::make_test_input_state()
+    test_support::make_test_input_state()
 }
 
 #[test]
@@ -24,12 +27,12 @@ fn tab_toggles_unbound_rows_without_typing_into_search() {
     state.toggle_help_overlay();
     state.needs_redraw = false;
 
-    assert!(state.handle_help_overlay_key(crate::input::events::Key::Tab));
+    assert!(state.handle_help_overlay_key(Key::Tab));
     assert!(state.help_overlay.shows_unbound());
     assert!(state.needs_redraw);
     assert_eq!(state.help_overlay.query(), "");
 
-    assert!(state.handle_help_overlay_key(crate::input::events::Key::Tab));
+    assert!(state.handle_help_overlay_key(Key::Tab));
     assert!(!state.help_overlay.shows_unbound());
 }
 
@@ -37,14 +40,10 @@ fn tab_toggles_unbound_rows_without_typing_into_search() {
 fn help_overlay_toggle_region_maps_to_a_pointer_toggle_click() {
     let mut state = make_state();
     state.toggle_help_overlay();
-    state.install_help_overlay_render_result(crate::help_overlay_interaction::HelpRenderResult {
+    state.install_help_overlay_render_result(HelpRenderResult {
         scroll_max: 0.0,
-        hit_map: crate::help_overlay_interaction::HelpHitMap::new(
-            (100.0, 100.0, 200.0, 300.0),
-            None,
-            [],
-        )
-        .with_unbound_toggle((120.0, 350.0, 80.0, 30.0)),
+        hit_map: HelpHitMap::new((100.0, 100.0, 200.0, 300.0), None, [])
+            .with_unbound_toggle((120.0, 350.0, 80.0, 30.0)),
     });
 
     assert_eq!(
@@ -97,7 +96,7 @@ fn help_overlay_cursor_hint_maps_real_layout_regions() {
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         Some((110.0, 130.0, 180.0, 24.0)),
-        &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ToggleHelp)],
     );
 
     assert_eq!(
@@ -123,18 +122,12 @@ fn help_overlay_click_runs_rows_and_dismisses_outside() {
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         Some((110.0, 130.0, 180.0, 24.0)),
-        &[(
-            120.0,
-            200.0,
-            160.0,
-            30.0,
-            crate::config::Action::ToggleStatusBar,
-        )],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ToggleStatusBar)],
     );
 
     assert_eq!(
         state.help_overlay_click_at(150, 215),
-        HelpOverlayClick::Run(crate::config::Action::ToggleStatusBar)
+        HelpOverlayClick::Run(Action::ToggleStatusBar)
     );
     assert_eq!(
         state.help_overlay_click_at(150, 140),
@@ -158,7 +151,7 @@ fn close_help_overlay_resets_state_and_clears_hit_map() {
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
-        &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ToggleHelp)],
     );
 
     state.help_overlay.update_scroll_extent(100.0);
@@ -182,7 +175,7 @@ fn close_help_overlay_resets_state_and_clears_hit_map() {
 /// 130..154). The overlay is opened first so the install survives the
 /// open-time defensive clear, mirroring a real render pass populating the
 /// map while help is visible.
-fn state_with_help_row(action: crate::config::Action) -> InputState {
+fn state_with_help_row(action: Action) -> InputState {
     let mut state = make_state();
     state.toggle_help_overlay();
     install_hit_map(
@@ -196,15 +189,13 @@ fn state_with_help_row(action: crate::config::Action) -> InputState {
 
 #[test]
 fn help_release_runs_row_only_when_press_and_release_share_the_row() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
 
     // Press and release both on the row -> the row's action runs.
     state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 215);
     assert_eq!(
         state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
-        Some(HelpOverlayReleaseOutcome::Run(
-            crate::config::Action::ClearCanvas
-        ))
+        Some(HelpOverlayReleaseOutcome::Run(Action::ClearCanvas))
     );
     // The recorded press was consumed.
     assert!(state.help_overlay.pending_presses.is_empty());
@@ -215,7 +206,7 @@ fn help_press_on_chrome_then_drag_onto_row_does_not_run() {
     // The destructive-action hazard: a press that starts on bare chrome and
     // is dragged onto a clickable row (here the ClearCanvas row) must never
     // execute it.
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
 
     // (150, 280) is inside the box but below the row and search well: chrome.
     state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 280);
@@ -231,7 +222,7 @@ fn help_press_on_chrome_then_drag_onto_row_does_not_run() {
 
 #[test]
 fn help_press_outside_then_release_on_row_does_not_run() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
 
     state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 10, 10);
     assert_eq!(
@@ -249,7 +240,7 @@ fn help_press_outside_then_release_on_row_does_not_run() {
 
 #[test]
 fn help_press_and_release_outside_dismisses() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
 
     state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 10, 10);
     assert_eq!(
@@ -260,7 +251,7 @@ fn help_press_and_release_outside_dismisses() {
 
 #[test]
 fn help_press_on_row_then_release_on_chrome_does_not_run() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
 
     state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 215);
     assert_eq!(
@@ -271,7 +262,7 @@ fn help_press_on_row_then_release_on_chrome_does_not_run() {
 
 #[test]
 fn help_release_without_a_recorded_press_is_inert() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
 
     // No note_help_overlay_press call: a release cannot fabricate intent.
     assert!(state.help_overlay.pending_presses.is_empty());
@@ -283,7 +274,7 @@ fn help_release_without_a_recorded_press_is_inert() {
 
 #[test]
 fn help_release_requires_the_modality_that_owned_the_press() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
     state.note_help_overlay_press(HelpOverlayPressSource::Touch, 150, 215);
 
     assert_eq!(
@@ -297,15 +288,13 @@ fn help_release_requires_the_modality_that_owned_the_press() {
     );
     assert_eq!(
         state.resolve_help_overlay_release(HelpOverlayPressSource::Touch, 150, 215),
-        Some(HelpOverlayReleaseOutcome::Run(
-            crate::config::Action::ClearCanvas
-        ))
+        Some(HelpOverlayReleaseOutcome::Run(Action::ClearCanvas))
     );
 }
 
 #[test]
 fn help_pointer_ownership_is_tracked_per_button() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
     let left = HelpOverlayPressSource::Pointer(1);
     let middle = HelpOverlayPressSource::Pointer(2);
     state.note_help_overlay_press(left, 150, 215);
@@ -321,16 +310,14 @@ fn help_pointer_ownership_is_tracked_per_button() {
     );
     assert_eq!(
         state.resolve_help_overlay_release(left, 150, 215),
-        Some(HelpOverlayReleaseOutcome::Run(
-            crate::config::Action::ClearCanvas
-        )),
+        Some(HelpOverlayReleaseOutcome::Run(Action::ClearCanvas)),
         "middle ownership must not consume the left help click"
     );
 }
 
 #[test]
 fn closing_help_keeps_its_press_release_owned_without_running_the_stale_target() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
     let pointer = HelpOverlayPressSource::Pointer(1);
     state.note_help_overlay_press(pointer, 150, 215);
 
@@ -350,7 +337,7 @@ fn closing_help_keeps_its_press_release_owned_without_running_the_stale_target()
 
 #[test]
 fn reopening_help_cannot_retarget_a_press_from_the_previous_layout() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
     let pointer = HelpOverlayPressSource::Pointer(1);
     state.note_help_overlay_press(pointer, 150, 215);
 
@@ -360,13 +347,7 @@ fn reopening_help_cannot_retarget_a_press_from_the_previous_layout() {
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
-        &[(
-            120.0,
-            200.0,
-            160.0,
-            30.0,
-            crate::config::Action::ClearCanvas,
-        )],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ClearCanvas)],
     );
 
     assert_eq!(
@@ -378,7 +359,7 @@ fn reopening_help_cannot_retarget_a_press_from_the_previous_layout() {
 
 #[test]
 fn a_new_help_press_supersedes_consume_only_ownership_for_its_source() {
-    let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+    let mut state = state_with_help_row(Action::ClearCanvas);
     let pointer = HelpOverlayPressSource::Pointer(1);
     state.note_help_overlay_press(pointer, 150, 215);
     state.close_help_overlay();
@@ -387,22 +368,14 @@ fn a_new_help_press_supersedes_consume_only_ownership_for_its_source() {
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
-        &[(
-            120.0,
-            200.0,
-            160.0,
-            30.0,
-            crate::config::Action::ClearCanvas,
-        )],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ClearCanvas)],
     );
 
     state.note_help_overlay_press(pointer, 150, 215);
 
     assert_eq!(
         state.resolve_help_overlay_release(pointer, 150, 215),
-        Some(HelpOverlayReleaseOutcome::Run(
-            crate::config::Action::ClearCanvas
-        ))
+        Some(HelpOverlayReleaseOutcome::Run(Action::ClearCanvas))
     );
 }
 
@@ -414,7 +387,7 @@ fn opening_help_drops_stale_hit_map_geometry() {
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
-        &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ToggleHelp)],
     );
 
     // Opening must drop it so a click can never act on the previous layout
@@ -434,7 +407,7 @@ fn opening_the_command_palette_routes_help_close_through_the_canonical_closer() 
         &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
-        &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        &[(120.0, 200.0, 160.0, 30.0, Action::ToggleHelp)],
     );
 
     state.toggle_command_palette();
@@ -448,19 +421,17 @@ fn install_hit_map(
     state: &mut InputState,
     bounds: (f64, f64, f64, f64),
     search: Option<(f64, f64, f64, f64)>,
-    rows: &[(f64, f64, f64, f64, crate::config::Action)],
+    rows: &[(f64, f64, f64, f64, Action)],
 ) {
-    state
-        .help_overlay
-        .install_render_result(crate::help_overlay_interaction::HelpRenderResult {
-            scroll_max: 0.0,
-            hit_map: crate::help_overlay_interaction::HelpHitMap::new(
-                bounds,
-                search,
-                rows.iter()
-                    .map(|&(x, y, w, h, action)| ((x, y, w, h), action)),
-            ),
-        });
+    state.help_overlay.install_render_result(HelpRenderResult {
+        scroll_max: 0.0,
+        hit_map: HelpHitMap::new(
+            bounds,
+            search,
+            rows.iter()
+                .map(|&(x, y, w, h, action)| ((x, y, w, h), action)),
+        ),
+    });
 }
 
 #[test]

@@ -1,6 +1,8 @@
-use crate::draw::TextMeasurer;
-use crate::draw::{Shape, ShapeId};
+use crate::draw;
+use crate::draw::{Shape, ShapeId, TextMeasurer};
 use crate::input::InputState;
+use crate::input::state::DrawingState;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 use crate::util::Rect;
 
 /// Knob size in canvas pixels.
@@ -48,10 +50,9 @@ impl SpotlightMagnificationTrack {
         let travelled =
             f64::from(x) - f64::from(self.track.x) - f64::from(MAGNIFICATION_HANDLE_SIZE / 2);
         let t = (travelled / span).clamp(0.0, 1.0);
-        let range =
-            crate::draw::MAX_SPOTLIGHT_MAGNIFICATION - crate::draw::MIN_SPOTLIGHT_MAGNIFICATION;
-        crate::ui::toolbar::model::ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION
-            .normalize_value(crate::draw::MIN_SPOTLIGHT_MAGNIFICATION + t * range)
+        let range = draw::MAX_SPOTLIGHT_MAGNIFICATION - draw::MIN_SPOTLIGHT_MAGNIFICATION;
+        ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION
+            .normalize_value(draw::MIN_SPOTLIGHT_MAGNIFICATION + t * range)
     }
 }
 
@@ -124,10 +125,10 @@ pub(crate) fn spotlight_magnification_track(
         MAGNIFICATION_TRACK_LENGTH,
         MAGNIFICATION_HANDLE_SIZE,
     )?;
-    let range = crate::draw::MAX_SPOTLIGHT_MAGNIFICATION - crate::draw::MIN_SPOTLIGHT_MAGNIFICATION;
+    let range = draw::MAX_SPOTLIGHT_MAGNIFICATION - draw::MIN_SPOTLIGHT_MAGNIFICATION;
     let t = if range > f64::EPSILON {
-        ((crate::draw::normalize_spotlight_magnification(magnification)
-            - crate::draw::MIN_SPOTLIGHT_MAGNIFICATION)
+        ((draw::normalize_spotlight_magnification(magnification)
+            - draw::MIN_SPOTLIGHT_MAGNIFICATION)
             / range)
             .clamp(0.0, 1.0)
     } else {
@@ -193,9 +194,7 @@ impl InputState {
         measurer: &TextMeasurer,
         x: i32,
     ) -> bool {
-        let crate::input::state::DrawingState::AdjustingSpotlightMagnification { shape_id, .. } =
-            self.state
-        else {
+        let DrawingState::AdjustingSpotlightMagnification { shape_id, .. } = self.state else {
             return false;
         };
         let Some(control) = self.selected_spotlight_control_with(measurer) else {

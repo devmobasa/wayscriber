@@ -1,18 +1,23 @@
+use std::thread;
+
 use anyhow::Result;
 use log::warn;
 use std::thread::JoinHandle;
 
+use crate::desktop_open::DesktopOpenInvocation;
+use crate::{clipboard_text, desktop_open};
+
 pub(super) fn open_url(url: &str) -> Result<JoinHandle<()>> {
     open_url_with(url, |invocation| {
-        crate::desktop_open::open_in_background(invocation.clone())
+        desktop_open::open_in_background(invocation.clone())
     })
 }
 
 fn open_url_with<R>(
     url: &str,
-    open: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> Result<R>,
+    open: impl FnOnce(&DesktopOpenInvocation) -> Result<R>,
 ) -> Result<R> {
-    let invocation = crate::desktop_open::trusted_url(url)?;
+    let invocation = desktop_open::trusted_url(url)?;
     open(&invocation)
 }
 
@@ -22,7 +27,7 @@ pub(super) fn copy_text_to_clipboard(text: &str) -> Option<JoinHandle<()>> {
     }
 
     let text = text.to_string();
-    Some(std::thread::spawn(move || {
+    Some(thread::spawn(move || {
         if let Err(err) = copy_text_with_command(&text, copy_text_via_command) {
             warn!("Failed to copy About text to clipboard: {err:#}");
         }
@@ -40,11 +45,12 @@ where
 }
 
 fn copy_text_via_command(text: &str) -> Result<()> {
-    crate::clipboard_text::copy_text_via_command(text).map_err(anyhow::Error::msg)
+    clipboard_text::copy_text_via_command(text).map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
@@ -66,9 +72,7 @@ mod tests {
         assert!(!matches!(program.to_str(), Some("sh" | "bash" | "cmd")));
         assert_eq!(
             arguments,
-            [std::ffi::OsString::from(
-                "https://wayscriber.com/report#d=abc"
-            )]
+            [OsString::from("https://wayscriber.com/report#d=abc")]
         );
     }
 
@@ -104,7 +108,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             observed.unwrap(),
-            [std::ffi::OsString::from(
+            [OsString::from(
                 "https://www.wayscriber.com/docs/getting-started/updating.html"
             )]
         );

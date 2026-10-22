@@ -1,12 +1,14 @@
 //! Real subscription transactions on an owned private session bus.
 
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::task;
+
 use super::*;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use zbus::message::Header;
 
 struct PrivateBus {
@@ -55,7 +57,7 @@ enum ResponseMode {
 
 struct ScreenshotFixture {
     mode: ResponseMode,
-    requested: tokio::sync::mpsc::UnboundedSender<OwnedObjectPath>,
+    requested: UnboundedSender<OwnedObjectPath>,
     closed: Arc<AtomicUsize>,
 }
 
@@ -78,7 +80,7 @@ impl ScreenshotFixture {
         mut options: HashMap<String, OwnedValue>,
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] connection: &Connection,
-    ) -> zbus::fdo::Result<OwnedObjectPath> {
+    ) -> fdo::Result<OwnedObjectPath> {
         let token =
             String::try_from(options.remove(PORTAL_OPTION_HANDLE_TOKEN_KEY).unwrap()).unwrap();
         let sender = header
@@ -102,7 +104,7 @@ impl ScreenshotFixture {
                 },
             )
             .await
-            .map_err(|error| zbus::fdo::Error::Failed(error.to_string()))?;
+            .map_err(|error| fdo::Error::Failed(error.to_string()))?;
         if matches!(self.mode, ResponseMode::Immediate) {
             emit_response(connection, &path, 0).await;
         }
@@ -138,10 +140,10 @@ async fn fixture(
 ) -> (
     Connection,
     Connection,
-    tokio::sync::mpsc::UnboundedReceiver<OwnedObjectPath>,
+    UnboundedReceiver<OwnedObjectPath>,
     Arc<AtomicUsize>,
 ) {
-    let (requested, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (requested, receiver) = mpsc::unbounded_channel();
     let closed = Arc::new(AtomicUsize::new(0));
     let service = zbus::connection::Builder::address(bus.address.as_str())
         .unwrap()
@@ -184,7 +186,7 @@ async fn wait_for_response_subscription(
     client: &Connection,
     path: &OwnedObjectPath,
 ) {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    let deadline = Instant::now() + Duration::from_secs(2);
     loop {
         let reply = service
             .call_method(
@@ -208,10 +210,10 @@ async fn wait_for_response_subscription(
             return;
         }
         assert!(
-            tokio::time::Instant::now() < deadline,
+            Instant::now() < deadline,
             "client did not subscribe at {path}"
         );
-        tokio::task::yield_now().await;
+        task::yield_now().await;
     }
 }
 
@@ -219,7 +221,7 @@ async fn wait_for_response_subscription(
 async fn portal_transport_immediate_response_before_method_reply_is_not_lost() {
     let bus = PrivateBus::start();
     let (_service, client, _requests, closed) = fixture(&bus, ResponseMode::Immediate).await;
-    let result = tokio::time::timeout(Duration::from_secs(2), capture(client))
+    let result = time::timeout(Duration::from_secs(2), capture(client))
         .await
         .unwrap()
         .unwrap();
@@ -234,7 +236,7 @@ async fn deferred_case(mode: ResponseMode, code: u32) -> Result<String, CaptureE
     let path = requests.recv().await.unwrap();
     wait_for_response_subscription(&service, &client, &path).await;
     emit_response(&service, &path, code).await;
-    let result = tokio::time::timeout(Duration::from_secs(2), operation)
+    let result = time::timeout(Duration::from_secs(2), operation)
         .await
         .unwrap()
         .unwrap();
@@ -284,7 +286,7 @@ async fn portal_transport_bus_disconnect_is_a_terminal_failure() {
     requests.recv().await.unwrap();
     bus.child.kill().unwrap();
     bus.child.wait().unwrap();
-    let outcome = tokio::time::timeout(Duration::from_secs(2), operation)
+    let outcome = time::timeout(Duration::from_secs(2), operation)
         .await
         .unwrap()
         .unwrap();

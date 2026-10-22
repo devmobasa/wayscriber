@@ -1,11 +1,13 @@
 use crate::config::Config;
-use crate::input::state::{DrawingStyle, HistoryLimits};
+use crate::input::state::{DrawingStyle, HistoryLimits, UiVisibility};
 use crate::input::{ClickHighlightSettings, InputHudSettings, InputState};
+use crate::render_profiles::RenderProfileSet;
 
 use super::core::{CanvasIndex, InputStateSeed, Keymap};
 
 impl InputState {
     /// Build runtime input state from validated application configuration.
+    #[must_use]
     pub fn from_config(config: &Config) -> Self {
         let style = DrawingStyle::from((&config.drawing, &config.arrow, &config.spotlight));
         let keymap =
@@ -17,7 +19,7 @@ impl InputState {
 
         let mut input_state = InputState::from_seed(InputStateSeed {
             style,
-            ui_visibility: crate::input::state::UiVisibility::from(&config.ui),
+            ui_visibility: UiVisibility::from(&config.ui),
             boards_config: config.resolved_boards(),
             keymap,
             canvas_index,
@@ -27,9 +29,7 @@ impl InputState {
         });
         input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
         input_state.init_laser_from_config(&config.laser);
-        input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(
-            &config.render_profiles,
-        ));
+        input_state.set_render_profiles(RenderProfileSet::from_config(&config.render_profiles));
 
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
         input_state.set_shape_recognition_feedback(config.drawing.shape_recognition_feedback);
@@ -60,6 +60,11 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::ColorSpec;
+    use crate::input::{
+        DragBindableTool, DragBinding, DragButtonBindings, DragTool, DragToolBindings, Tool,
+    };
+
     use super::*;
     use crate::config::KeybindingsConfig;
 
@@ -148,25 +153,25 @@ mod tests {
     #[test]
     fn build_input_state_applies_drag_tool_bindings() {
         let mut config = Config::default();
-        config.drawing.drag_tool = crate::input::DragBindableTool::Arrow;
-        config.drawing.shift_drag_tool = crate::input::DragBindableTool::Eraser;
-        config.drawing.ctrl_drag_tool = crate::input::DragBindableTool::Pen;
-        config.drawing.ctrl_shift_drag_tool = crate::input::DragBindableTool::Rect;
-        config.drawing.tab_drag_tool = crate::input::DragBindableTool::Ellipse;
+        config.drawing.drag_tool = DragBindableTool::Arrow;
+        config.drawing.shift_drag_tool = DragBindableTool::Eraser;
+        config.drawing.ctrl_drag_tool = DragBindableTool::Pen;
+        config.drawing.ctrl_shift_drag_tool = DragBindableTool::Rect;
+        config.drawing.tab_drag_tool = DragBindableTool::Ellipse;
 
         let input = InputState::from_config(&config);
         assert_eq!(
             input.drag_tool_bindings(),
-            crate::input::DragToolBindings {
-                left: crate::input::DragButtonBindings {
-                    drag: crate::input::DragBinding::from_tool(crate::input::Tool::Arrow),
-                    shift_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Eraser),
-                    ctrl_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Pen),
-                    ctrl_shift_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Rect,),
-                    tab_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Ellipse),
+            DragToolBindings {
+                left: DragButtonBindings {
+                    drag: DragBinding::from_tool(Tool::Arrow),
+                    shift_drag: DragBinding::from_tool(Tool::Eraser),
+                    ctrl_drag: DragBinding::from_tool(Tool::Pen),
+                    ctrl_shift_drag: DragBinding::from_tool(Tool::Rect,),
+                    tab_drag: DragBinding::from_tool(Tool::Ellipse),
                 },
-                right: crate::input::DragButtonBindings::button_default(),
-                middle: crate::input::DragButtonBindings::button_default(),
+                right: DragButtonBindings::button_default(),
+                middle: DragButtonBindings::button_default(),
             },
         );
     }
@@ -175,24 +180,18 @@ mod tests {
     fn build_input_state_applies_mouse_button_drag_tool_bindings() {
         let mut config = Config::default();
         let mut drag_tools = config.drawing.effective_drag_tools();
-        drag_tools.left.drag_tool = crate::input::DragTool::Line;
-        drag_tools.right.drag_tool = crate::input::DragTool::Pen;
-        drag_tools.right.drag_color = Some(crate::config::ColorSpec::Name("blue".to_string()));
+        drag_tools.left.drag_tool = DragTool::Line;
+        drag_tools.right.drag_tool = DragTool::Pen;
+        drag_tools.right.drag_color = Some(ColorSpec::Name("blue".to_string()));
         config.drawing.drag_tools = Some(drag_tools);
 
         let input = InputState::from_config(&config);
 
-        assert_eq!(
-            input.drag_tool_bindings().left.drag.tool,
-            crate::input::DragTool::Line
-        );
-        assert_eq!(
-            input.drag_tool_bindings().right.drag.tool,
-            crate::input::DragTool::Pen
-        );
+        assert_eq!(input.drag_tool_bindings().left.drag.tool, DragTool::Line);
+        assert_eq!(input.drag_tool_bindings().right.drag.tool, DragTool::Pen);
         assert_eq!(
             input.drag_tool_bindings().right.drag.color,
-            Some(crate::config::ColorSpec::Name("blue".to_string()).to_color())
+            Some(ColorSpec::Name("blue".to_string()).to_color())
         );
     }
 }

@@ -1,6 +1,6 @@
 use std::env;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use crate::env_vars::{
     HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_DIRS_ENV,
@@ -16,6 +16,7 @@ pub fn home_dir() -> Option<PathBuf> {
 }
 
 /// Resolve the XDG config directory, falling back to `~/.config`.
+#[must_use]
 pub fn config_dir() -> Option<PathBuf> {
     if let Some(dir) = env::var_os(XDG_CONFIG_HOME_ENV)
         && !dir.is_empty()
@@ -26,6 +27,7 @@ pub fn config_dir() -> Option<PathBuf> {
 }
 
 /// Resolve the XDG cache directory, falling back to `~/.cache`.
+#[must_use]
 pub fn cache_dir() -> Option<PathBuf> {
     if let Some(dir) = env::var_os(XDG_CACHE_HOME_ENV)
         && !dir.is_empty()
@@ -37,6 +39,7 @@ pub fn cache_dir() -> Option<PathBuf> {
 
 /// Location for the last update-check result. Cache, not data: it is
 /// regenerable, and deleting it only costs one extra request.
+#[must_use]
 pub fn update_check_cache_file() -> PathBuf {
     cache_dir()
         .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
@@ -45,6 +48,7 @@ pub fn update_check_cache_file() -> PathBuf {
 }
 
 /// Resolve the XDG data directory, falling back to `~/.local/share`.
+#[must_use]
 pub fn data_dir() -> Option<PathBuf> {
     if let Some(dir) = env::var_os(XDG_DATA_HOME_ENV)
         && !dir.is_empty()
@@ -60,6 +64,7 @@ pub fn data_dir() -> Option<PathBuf> {
 ///
 /// Unlike [`data_dir`], this ignores relative values, as the spec requires, so
 /// the result does not depend on the current directory.
+#[must_use]
 pub fn searched_data_dirs() -> Vec<PathBuf> {
     searched_data_dirs_from(
         env::var_os(XDG_DATA_HOME_ENV),
@@ -111,6 +116,7 @@ pub(crate) fn runtime_ui_state_file() -> PathBuf {
 }
 
 /// Best-effort pictures directory (XDG), falling back to `~/Pictures`.
+#[must_use]
 pub fn pictures_dir() -> Option<PathBuf> {
     if let Some(dir) = env::var_os(XDG_PICTURES_DIR_ENV)
         && !dir.is_empty()
@@ -121,6 +127,7 @@ pub fn pictures_dir() -> Option<PathBuf> {
 }
 
 /// Expand a path string that may start with `~/` into an absolute path.
+#[must_use]
 pub fn expand_tilde(path: &str) -> PathBuf {
     if let Some(stripped) = path.strip_prefix("~/")
         && let Some(home) = home_dir()
@@ -134,17 +141,18 @@ pub fn expand_tilde(path: &str) -> PathBuf {
 ///
 /// Rejects empty names, `.`, `..`, NULs, slashes, and anything `Path::join`
 /// would treat as leaving or replacing the parent directory.
+#[must_use]
 pub fn is_single_path_component(name: &str) -> bool {
     if name.is_empty() || name.contains('\0') || name.contains('/') || name.contains('\\') {
         return false;
     }
-    let path = std::path::Path::new(name);
+    let path = Path::new(name);
     if path.is_absolute() {
         return false;
     }
     let mut components = path.components();
     match components.next() {
-        Some(std::path::Component::Normal(os_name)) => {
+        Some(Component::Normal(os_name)) => {
             components.next().is_none()
                 && os_name.to_str().is_some_and(|component| {
                     component == name && component != "." && component != ".."
@@ -155,7 +163,7 @@ pub fn is_single_path_component(name: &str) -> bool {
 }
 
 fn fallback_runtime_root() -> PathBuf {
-    std::env::temp_dir().join("wayscriber")
+    env::temp_dir().join("wayscriber")
 }
 
 fn runtime_root() -> PathBuf {
@@ -174,35 +182,41 @@ fn runtime_root() -> PathBuf {
 
 /// Location for transient tray commands.
 /// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
+#[must_use]
 pub fn tray_action_file() -> PathBuf {
     runtime_root().join("tray_action")
 }
 
 /// Location for queued transient tray commands.
 /// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
+#[must_use]
 pub fn tray_action_dir() -> PathBuf {
     runtime_root().join("tray-actions")
 }
 
 /// Location for transient daemon toggle requests.
 /// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
+#[must_use]
 pub fn daemon_command_file() -> PathBuf {
     runtime_root().join("daemon_command.json")
 }
 
 /// Location for queued daemon toggle requests.
 /// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
+#[must_use]
 pub fn daemon_command_dir() -> PathBuf {
     runtime_root().join("daemon-commands")
 }
 
 /// Location for the running daemon PID.
 /// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
+#[must_use]
 pub fn daemon_pid_file() -> PathBuf {
     runtime_root().join("wayscriber.pid")
 }
 
 /// Location for persistent logs.
+#[must_use]
 pub fn log_dir() -> PathBuf {
     data_dir()
         .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
@@ -211,11 +225,13 @@ pub fn log_dir() -> PathBuf {
 }
 
 /// Location for the daemon single-instance lock.
+#[must_use]
 pub fn daemon_lock_file() -> PathBuf {
     runtime_root().join("wayscriber.lock")
 }
 
 /// Location for the active-overlay single-instance lock.
+#[must_use]
 pub fn overlay_lock_file() -> PathBuf {
     runtime_root().join("wayscriber-overlay.lock")
 }

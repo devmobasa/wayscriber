@@ -18,7 +18,7 @@ pub(super) fn build(page: &mut PageBuilder) {
             tr("Color mode"),
             tr("A palette name or hex string, or explicit RGB components."),
             COLOR_MODES.to_vec(),
-            vec![tr("Named color").to_string(), tr("RGB color").to_string()],
+            &[tr("Named color").to_string(), tr("RGB color").to_string()],
             |app| app.draft.drawing_color.mode,
             Message::ColorModeChanged,
         );
@@ -29,7 +29,7 @@ pub(super) fn build(page: &mut PageBuilder) {
         &named,
         tr("Named color"),
         NamedColorOption::list(),
-        named_color_labels(),
+        &named_color_labels(),
         |app| app.draft.drawing_color.selected_named,
         Message::NamedColorSelected,
     );

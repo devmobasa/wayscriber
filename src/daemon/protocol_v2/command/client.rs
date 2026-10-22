@@ -1,5 +1,6 @@
-use std::fs;
+use std::path::Path;
 use std::time::Duration;
+use std::{fs, process, thread};
 
 use anyhow::{Context, Result, bail};
 
@@ -39,10 +40,7 @@ impl ClientCommand {
     fn publish_with_final_control_write(
         request: &DaemonRequestV2,
         daemon_token: &str,
-        final_control_write: impl FnOnce(
-            &std::path::Path,
-            &super::super::wire::CommandControl,
-        ) -> Result<()>,
+        final_control_write: impl FnOnce(&Path, &super::super::wire::CommandControl) -> Result<()>,
     ) -> Result<Self> {
         request.validate()?;
         validate_token(daemon_token)?;
@@ -73,7 +71,7 @@ impl ClientCommand {
             identity: identity.clone(),
             target_daemon_token: daemon_token.to_owned(),
             caller_identity: CallerIdentity {
-                pid: std::process::id(),
+                pid: process::id(),
                 process_start_ticks: super::super::linux::current_process_start_ticks()?,
                 nonce: caller_nonce,
             },
@@ -168,7 +166,7 @@ impl ClientCommand {
             }
             if let Some(response) = control.response.clone() {
                 let result = terminal_result(&response);
-                acknowledge(&mut control, response)?;
+                acknowledge(&mut control, &response)?;
                 write_control(&self.control_path, &control)?;
                 unlock(&self.decision_lock)?;
                 unlock(&self.caller_lease)?;
@@ -192,7 +190,7 @@ impl ClientCommand {
                 ));
             }
             unlock(&self.decision_lock)?;
-            std::thread::sleep(Duration::from_millis(5));
+            thread::sleep(Duration::from_millis(5));
         }
     }
 
@@ -216,7 +214,7 @@ impl ClientCommand {
             .clone()
             .ok_or_else(|| anyhow!("cancellation lost to a nonterminal committed effect"))?;
         let result = terminal_result(&response);
-        acknowledge(&mut control, response)?;
+        acknowledge(&mut control, &response)?;
         write_control(&self.control_path, &control)?;
         unlock(&self.decision_lock)?;
         unlock(&self.caller_lease)?;
@@ -239,13 +237,13 @@ fn cancel_open(control: &mut CommandControl) -> Result<bool> {
     Ok(true)
 }
 
-fn acknowledge(control: &mut CommandControl, response: CommandResponse) -> Result<()> {
+fn acknowledge(control: &mut CommandControl, response: &CommandResponse) -> Result<()> {
     if !matches!(control.caller_disposition, CallerDisposition::Waiting) {
         bail!("command response was already acknowledged");
     }
     bump_revision(control)?;
     control.caller_disposition = CallerDisposition::Acknowledged {
-        response_digest: response_digest(&response)?,
+        response_digest: response_digest(response)?,
     };
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::io;
+
 use super::super::sync_session_parent_dir;
 use anyhow::{Context, Result};
 use log::warn;
@@ -32,7 +34,7 @@ fn commit_save_as_target_with<Replace, Sync, Cleanup>(
     cleanup_sidecars: Cleanup,
 ) -> Result<()>
 where
-    Replace: FnOnce(&Path, &Path) -> std::io::Result<()>,
+    Replace: FnOnce(&Path, &Path) -> io::Result<()>,
     Sync: FnOnce() -> Result<()>,
     Cleanup: FnOnce(SaveAsSidecarQuarantine) -> Result<()>,
 {

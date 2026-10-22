@@ -1,11 +1,12 @@
 use crate::domain::Action;
+use crate::draw::TextMeasurer;
 
 use super::super::InputState;
 
 impl InputState {
     pub(in crate::input::state) fn handle_preset_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         match action {

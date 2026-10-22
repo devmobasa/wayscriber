@@ -1,3 +1,12 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::test_support::TestInputStateBuilder;
+use crate::input::state::{PickerDrag, ToastPriority};
+use crate::input::{Key, MouseButton};
+use crate::session::{SaveSnapshotOutcome, SaveSnapshotReport};
+use crate::test_env::LeaseGuard;
+use crate::ui_text::UiTextEngine;
+use crate::{durable_io, test_env, test_temp};
+
 use super::*;
 use crate::config::{Action, Config, Shortcut};
 use crate::draw::{
@@ -10,25 +19,29 @@ use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, DrawingState, Eras
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::MutexGuard;
 
+use std::ffi::OsString;
+use std::fs::{OpenOptions, Permissions};
 #[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
+use std::{env, fs, process};
 
 pub(super) struct EnvGuard {
-    _guard: MutexGuard<'static, ()>,
-    catalog_hooks: Option<std::ffi::OsString>,
-    xdg_data_home: Option<std::ffi::OsString>,
+    _guard: LeaseGuard<'static>,
+    catalog_hooks: Option<OsString>,
+    xdg_data_home: Option<OsString>,
 }
 
 impl EnvGuard {
     pub(super) fn set_xdg_data_home(path: &Path) -> Self {
-        let guard = crate::test_env::lock();
-        let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
-        let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
+        let guard = test_env::lock();
+        let catalog_hooks = env::var_os(CATALOG_HOOKS_TEST_ENV);
+        let xdg_data_home = env::var_os(XDG_DATA_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex in `guard`, which
+        // the returned value keeps until it restores both variables.
         unsafe {
-            std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
-            std::env::set_var(XDG_DATA_HOME_ENV, path);
+            env::set_var(CATALOG_HOOKS_TEST_ENV, path);
+            env::set_var(XDG_DATA_HOME_ENV, path);
         }
         Self {
             _guard: guard,
@@ -40,13 +53,17 @@ impl EnvGuard {
 
 impl Drop for EnvGuard {
     fn drop(&mut self) {
-        match self.catalog_hooks.take() {
-            Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
-            None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
-        }
-        match self.xdg_data_home.take() {
-            Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
+        // SAFETY: fields drop only after this body returns, so `_guard` still
+        // holds the test environment mutex here.
+        unsafe {
+            match self.catalog_hooks.take() {
+                Some(value) => env::set_var(CATALOG_HOOKS_TEST_ENV, value),
+                None => env::remove_var(CATALOG_HOOKS_TEST_ENV),
+            }
+            match self.xdg_data_home.take() {
+                Some(value) => env::set_var(XDG_DATA_HOME_ENV, value),
+                None => env::remove_var(XDG_DATA_HOME_ENV),
+            }
         }
     }
 }
@@ -60,21 +77,17 @@ struct ReadonlyDirGuard {
 #[cfg(unix)]
 impl Drop for ReadonlyDirGuard {
     fn drop(&mut self) {
-        let _ = std::fs::set_permissions(
-            &self.path,
-            std::fs::Permissions::from_mode(self.original_mode),
-        );
+        let _ = fs::set_permissions(&self.path, Permissions::from_mode(self.original_mode));
     }
 }
 
 #[cfg(unix)]
 fn readonly_dir_guard(path: &Path) -> ReadonlyDirGuard {
-    let original_mode = std::fs::metadata(path)
+    let original_mode = fs::metadata(path)
         .expect("parent metadata")
         .permissions()
         .mode();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o555))
-        .expect("make parent read-only");
+    fs::set_permissions(path, Permissions::from_mode(0o555)).expect("make parent read-only");
     ReadonlyDirGuard {
         path: path.to_path_buf(),
         original_mode,
@@ -85,16 +98,12 @@ fn readonly_dir_guard(path: &Path) -> ReadonlyDirGuard {
 fn can_create_probe(parent: &Path) -> bool {
     let probe = parent.join(format!(
         ".wayscriber-runtime-open-manual-access-test-{}",
-        std::process::id()
+        process::id()
     ));
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&probe)
-    {
+    match OpenOptions::new().write(true).create_new(true).open(&probe) {
         Ok(file) => {
             drop(file);
-            let _ = std::fs::remove_file(&probe);
+            let _ = fs::remove_file(&probe);
             true
         }
         Err(_) => false,
@@ -104,7 +113,7 @@ fn can_create_probe(parent: &Path) -> bool {
 pub(super) fn test_input_state() -> InputState {
     let mut action_map = HashMap::new();
     action_map.insert(Shortcut::parse("Escape").unwrap(), Action::Exit);
-    crate::input::state::test_support::TestInputStateBuilder::default()
+    TestInputStateBuilder::default()
         .action_map(action_map)
         .action_bindings(HashMap::new())
         .thickness(3.0)
@@ -250,7 +259,7 @@ pub(super) fn loaded_line_x2(options: &SessionOptions) -> i32 {
 
 #[test]
 fn runtime_save_as_new_path_writes_and_switches_active_target() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-new");
     let target_options = named_options(temp.path(), "target-save-as-new");
@@ -262,7 +271,7 @@ fn runtime_save_as_new_path_writes_and_switches_active_target() {
 
     let report = save_named_session_as_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -302,12 +311,12 @@ fn runtime_save_as_new_path_writes_and_switches_active_target() {
 
 #[test]
 fn runtime_save_as_rejects_existing_target_without_confirmation() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-existing");
     let target_options = named_options(temp.path(), "target-save-as-existing");
     stored_session::save_snapshot(&snapshot_for_board("transparent", 17), &target_options)
         .expect("save existing target");
-    let before = std::fs::read(target_options.session_file_path()).expect("existing target bytes");
+    let before = fs::read(target_options.session_file_path()).expect("existing target bytes");
 
     let mut input = test_input_state();
     add_line(&mut input, 88);
@@ -316,7 +325,7 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
 
     let err = save_named_session_as_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -336,7 +345,7 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
     );
     assert!(session_state.is_dirty());
     assert_eq!(
-        std::fs::read(target_options.session_file_path()).expect("target unchanged"),
+        fs::read(target_options.session_file_path()).expect("target unchanged"),
         before
     );
     assert_eq!(loaded_line_x2(&target_options), 17);
@@ -344,10 +353,10 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
 
 #[test]
 fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-sidecar");
     let target_options = named_options(temp.path(), "target-save-as-sidecar");
-    std::fs::write(target_options.clear_marker_file_path(), b"stale clear").expect("stale clear");
+    fs::write(target_options.clear_marker_file_path(), b"stale clear").expect("stale clear");
 
     let mut input = test_input_state();
     add_line(&mut input, 88);
@@ -356,7 +365,7 @@ fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
 
     let err = save_named_session_as_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -381,14 +390,14 @@ fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
 
 #[test]
 fn runtime_save_as_overwrite_preflight_reports_existing_artifacts() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-preflight");
     let fresh_options = named_options(temp.path(), "fresh-save-as-preflight");
     let primary_options = named_options(temp.path(), "primary-save-as-preflight");
     let sidecar_options = named_options(temp.path(), "sidecar-save-as-preflight");
     stored_session::save_snapshot(&snapshot_for_board("transparent", 17), &primary_options)
         .expect("save existing target");
-    std::fs::write(sidecar_options.clear_marker_file_path(), b"stale clear").expect("stale clear");
+    fs::write(sidecar_options.clear_marker_file_path(), b"stale clear").expect("stale clear");
     let mut session_state = SessionState::new(Some(current_options));
 
     assert!(
@@ -416,9 +425,9 @@ fn runtime_save_as_overwrite_preflight_reports_existing_artifacts() {
 
 #[test]
 fn runtime_save_as_overwrite_preflight_skips_current_target() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-preflight-self");
-    std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
+    fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
     let mut session_state = SessionState::new(Some(current_options.clone()));
 
     assert!(
@@ -432,25 +441,24 @@ fn runtime_save_as_overwrite_preflight_skips_current_target() {
 
 #[test]
 fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-overwrite");
     let target_options = named_options(temp.path(), "target-save-as-overwrite");
-    std::fs::write(target_options.session_file_path(), b"old primary").expect("old primary");
-    std::fs::write(target_options.backup_file_path(), b"old backup").expect("old backup");
-    std::fs::write(target_options.recovery_file_path(), b"old recovery").expect("old recovery");
+    fs::write(target_options.session_file_path(), b"old primary").expect("old primary");
+    fs::write(target_options.backup_file_path(), b"old backup").expect("old backup");
+    fs::write(target_options.recovery_file_path(), b"old recovery").expect("old recovery");
     let preserved_recovery = target_options
         .recovery_file_path()
         .with_extension("recovery.preserved");
-    std::fs::write(&preserved_recovery, b"old preserved recovery").expect("old preserved recovery");
+    fs::write(&preserved_recovery, b"old preserved recovery").expect("old preserved recovery");
     let preserved_newer = PathBuf::from(format!(
         "{}.v99-preserved-0123456789abcdef",
         target_options.session_file_path().display()
     ));
-    std::fs::write(&preserved_newer, b"old newer-version session")
-        .expect("old newer-version session");
-    std::fs::write(target_options.clear_marker_file_path(), b"old clear").expect("old clear");
-    std::fs::write(target_options.lock_file_path(), b"lock").expect("old lock");
+    fs::write(&preserved_newer, b"old newer-version session").expect("old newer-version session");
+    fs::write(target_options.clear_marker_file_path(), b"old clear").expect("old clear");
+    fs::write(target_options.lock_file_path(), b"lock").expect("old lock");
 
     let mut input = test_input_state();
     add_line(&mut input, 63);
@@ -459,7 +467,7 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
 
     save_named_session_as_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::ConfirmReplace,
@@ -487,15 +495,15 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
 
 #[test]
 fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-self");
-    std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
+    fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
 
     let mut input = test_input_state();
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let report = save_named_session_as_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &current_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -520,10 +528,9 @@ fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
 #[cfg(unix)]
 #[test]
 fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-as-symlink");
-    std::fs::write(current_options.session_file_path(), b"current primary")
-        .expect("current primary");
+    fs::write(current_options.session_file_path(), b"current primary").expect("current primary");
     let symlink_path = temp.path().join("current-save-as-link.wayscriber-session");
     symlink(current_options.session_file_path(), &symlink_path).expect("target symlink");
 
@@ -531,7 +538,7 @@ fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let err = save_named_session_as_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &symlink_path,
         stored_session::SaveAsOverwrite::Deny,
@@ -550,13 +557,12 @@ fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
 
 #[test]
 fn runtime_clear_persists_boundary_then_clears_live_session() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-runtime-clear");
     stored_session::save_snapshot(&snapshot_for_board("transparent", 12), &current_options)
         .expect("seed saved session");
-    std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
-    std::fs::write(current_options.recovery_file_path(), b"stale recovery")
-        .expect("stale recovery");
+    fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
+    fs::write(current_options.recovery_file_path(), b"stale recovery").expect("stale recovery");
 
     let mut input = test_input_state();
     add_line(&mut input, 77);
@@ -567,7 +573,7 @@ fn runtime_clear_persists_boundary_then_clears_live_session() {
 
     let report = clear_current_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         Instant::now(),
     )
@@ -592,12 +598,11 @@ fn runtime_clear_persists_boundary_then_clears_live_session() {
 
 #[test]
 fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let mut current_options =
         SessionOptions::new(temp.path().to_path_buf(), "runtime-clear-cleanup-fail");
     current_options.persist_transparent = true;
-    std::fs::create_dir(current_options.session_file_path())
-        .expect("primary cleanup failure fixture");
+    fs::create_dir(current_options.session_file_path()).expect("primary cleanup failure fixture");
 
     let mut input = test_input_state();
     add_line(&mut input, 83);
@@ -608,7 +613,7 @@ fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session(
 
     let report = clear_current_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         Instant::now(),
     )
@@ -629,22 +634,22 @@ fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session(
 #[cfg(unix)]
 #[test]
 fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-runtime-clear-fail");
     let current_target = temp.path().join("current-runtime-clear-symlink-target");
-    std::fs::write(&current_target, b"preserve current target").expect("write target");
+    fs::write(&current_target, b"preserve current target").expect("write target");
     symlink(&current_target, current_options.session_file_path()).expect("current symlink");
 
     let mut input = test_input_state();
     add_line(&mut input, 91);
     input.mark_session_dirty();
-    let mut session_state = SessionState::new(Some(current_options.clone()));
+    let mut session_state = SessionState::new(Some(current_options));
     session_state.commit_output_options(session_state.options().unwrap().clone(), true);
     session_state.record_input_dirty(Instant::now(), true);
 
     let err = clear_current_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         Instant::now(),
     )
@@ -655,14 +660,14 @@ fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
     assert!(session_state.is_dirty());
     assert!(session_state.has_loaded_board_data());
     assert_eq!(
-        std::fs::read(&current_target).expect("current target bytes"),
+        fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
     );
 }
 
 #[test]
 fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-tool-reset");
     let mut saved = snapshot_for_board("transparent", 121);
     saved.tool_state = Some(sample_tool_state());
@@ -683,7 +688,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     config.ui.show_status_bar = true;
     let report = clear_saved_tool_state_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         stored_session::ToolStateSnapshot::from_config(&config),
         Instant::now(),
@@ -729,7 +734,7 @@ fn runtime_clear_saved_tool_state_without_active_session_resets_live_tools_only(
 
     let report = clear_saved_tool_state_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         stored_session::ToolStateSnapshot::from_config(&config),
         Instant::now(),
@@ -745,7 +750,7 @@ fn runtime_clear_saved_tool_state_without_active_session_resets_live_tools_only(
 
 #[test]
 fn runtime_open_success_commits_target_and_catalog_after_apply() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current");
     let candidate_options = named_options(temp.path(), "candidate");
@@ -756,7 +761,7 @@ fn runtime_open_success_commits_target_and_catalog_after_apply() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let report = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -791,7 +796,7 @@ fn runtime_open_success_commits_target_and_catalog_after_apply() {
 
 #[test]
 fn runtime_open_marks_full_damage_after_replacing_boards() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-damage");
     let candidate_options = named_options(temp.path(), "candidate-damage");
@@ -807,7 +812,7 @@ fn runtime_open_marks_full_damage_after_replacing_boards() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -822,13 +827,12 @@ fn runtime_open_marks_full_damage_after_replacing_boards() {
 
 #[test]
 fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-before-backup-open");
     let source_options = named_options(temp.path(), "source-contentful-backup");
     stored_session::save_snapshot(&sample_snapshot(), &source_options)
         .expect("save source contentful session");
-    let backup_bytes =
-        std::fs::read(source_options.session_file_path()).expect("source session bytes");
+    let backup_bytes = fs::read(source_options.session_file_path()).expect("source session bytes");
 
     let candidate_options = named_options(temp.path(), "candidate-recoverable-backup");
     let contentless = stored_session::SessionSnapshot {
@@ -838,22 +842,22 @@ fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
     };
     stored_session::save_snapshot(&contentless, &candidate_options)
         .expect("save contentless candidate primary");
-    std::fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
-    std::fs::write(candidate_options.backup_file_path(), &backup_bytes)
+    fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
+    fs::write(candidate_options.backup_file_path(), &backup_bytes)
         .expect("seed recoverable backup");
-    std::fs::write(
+    fs::write(
         candidate_options.backup_recovery_marker_file_path(),
         b"recoverable",
     )
     .expect("seed recoverable backup marker");
     let primary_before =
-        std::fs::read(candidate_options.session_file_path()).expect("candidate primary bytes");
+        fs::read(candidate_options.session_file_path()).expect("candidate primary bytes");
 
     let mut input = test_input_state();
     let mut session_state = SessionState::new(Some(current_options));
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -862,11 +866,11 @@ fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
 
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
     assert_eq!(
-        std::fs::read(candidate_options.session_file_path()).expect("candidate primary unchanged"),
+        fs::read(candidate_options.session_file_path()).expect("candidate primary unchanged"),
         primary_before
     );
     assert_eq!(
-        std::fs::read(candidate_options.backup_file_path()).expect("backup unchanged"),
+        fs::read(candidate_options.backup_file_path()).expect("backup unchanged"),
         backup_bytes
     );
     assert!(
@@ -882,7 +886,7 @@ fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
 
 #[test]
 fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-with-whiteboard");
     let candidate_options = named_options(temp.path(), "candidate-transparent-only");
@@ -898,7 +902,7 @@ fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -912,7 +916,7 @@ fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
 
 #[test]
 fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-pointer-cache");
     let mut candidate_options = named_options(temp.path(), "candidate-pointer-cache");
@@ -932,7 +936,7 @@ fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -946,7 +950,7 @@ fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
 
 #[test]
 fn runtime_open_releases_old_board_slots_for_candidate_boards() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-full-board-slots");
     let candidate_options = named_options(temp.path(), "candidate-custom-board");
@@ -965,7 +969,7 @@ fn runtime_open_releases_old_board_slots_for_candidate_boards() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -979,7 +983,7 @@ fn runtime_open_releases_old_board_slots_for_candidate_boards() {
 
 #[test]
 fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-apply-failure");
     let candidate_options = named_options(temp.path(), "candidate-too-many-boards");
@@ -995,7 +999,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
     };
     stored_session::save_snapshot(&oversized_snapshot, &candidate_options)
         .expect("save oversized candidate");
-    std::fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
+    fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
 
     let mut input = input;
     add_line(&mut input, 121);
@@ -1003,7 +1007,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
 
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1037,7 +1041,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
 
 #[test]
 fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-overlay-preserved");
     let candidate_options = named_options(temp.path(), "candidate-without-overlay");
@@ -1059,12 +1063,12 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
     };
     stored_session::save_snapshot(&full_non_overlay_snapshot, &candidate_options)
         .expect("save full candidate");
-    std::fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
+    fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
 
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1097,7 +1101,7 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
 
 #[test]
 fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-with-deleted-page");
     let candidate_options = named_options(temp.path(), "candidate-after-deleted-page");
@@ -1115,7 +1119,7 @@ fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1129,7 +1133,7 @@ fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
 
 #[test]
 fn runtime_open_cancels_active_interaction_from_previous_session() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-interaction");
     let candidate_options = named_options(temp.path(), "candidate-after-interaction");
@@ -1149,7 +1153,7 @@ fn runtime_open_cancels_active_interaction_from_previous_session() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1163,7 +1167,7 @@ fn runtime_open_cancels_active_interaction_from_previous_session() {
 
 #[test]
 fn runtime_open_closes_active_board_picker_drag() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-board-picker-drag");
     let candidate_options = named_options(temp.path(), "candidate-after-board-picker-drag");
@@ -1171,7 +1175,7 @@ fn runtime_open_closes_active_board_picker_drag() {
     let candidate_path = candidate_options.session_file_path();
 
     let mut input = test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(input.board_picker_start_drag(0));
     assert!(input.is_board_picker_open());
     assert!(input.board_picker_is_dragging());
@@ -1179,7 +1183,7 @@ fn runtime_open_closes_active_board_picker_drag() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1194,7 +1198,7 @@ fn runtime_open_closes_active_board_picker_drag() {
 
 #[test]
 fn runtime_open_closes_active_board_picker_page_drag() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-board-picker-page-drag");
     let candidate_options = named_options(temp.path(), "candidate-after-board-picker-page-drag");
@@ -1202,7 +1206,7 @@ fn runtime_open_closes_active_board_picker_page_drag() {
     let candidate_path = candidate_options.session_file_path();
 
     let mut input = test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(input.board_picker_start_page_drag(0));
     assert!(input.is_board_picker_open());
     assert!(input.board_picker_is_page_dragging());
@@ -1210,7 +1214,7 @@ fn runtime_open_closes_active_board_picker_page_drag() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1225,9 +1229,9 @@ fn runtime_open_closes_active_board_picker_page_drag() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_active_selection_move() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-selection-move");
     let candidate_options = named_options(temp.path(), "candidate-after-selection-move");
@@ -1252,7 +1256,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1275,9 +1279,9 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_active_text_edit() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-text-edit");
     let candidate_options = named_options(temp.path(), "candidate-after-text-edit");
@@ -1317,7 +1321,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1343,7 +1347,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_color_picker_preview() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-color-picker-preview");
     let candidate_options = named_options(temp.path(), "candidate-after-color-picker");
@@ -1354,7 +1358,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
     let original = input.color_for_tool(Tool::Pen);
     input.open_color_picker_popup();
     input.color_picker_popup_set_from_gradient(0.6, 0.1);
-    input.color_picker_popup_set_dragging(Some(crate::input::state::PickerDrag::SatVal));
+    input.color_picker_popup_set_dragging(Some(PickerDrag::SatVal));
     assert_ne!(input.color_for_tool(Tool::Pen), original);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));
@@ -1362,7 +1366,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1384,12 +1388,12 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_preserves_active_selection_move() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-active-save-fail");
     let current_target = temp.path().join("current-active-symlink-target");
-    std::fs::write(&current_target, b"preserve current target").expect("write target");
+    fs::write(&current_target, b"preserve current target").expect("write target");
     symlink(&current_target, current_options.session_file_path()).expect("current symlink");
 
     let candidate_options = named_options(temp.path(), "candidate-active-save-fail");
@@ -1408,12 +1412,12 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
         moved: true,
     };
     input.mark_session_dirty();
-    let mut session_state = SessionState::new(Some(current_options.clone()));
+    let mut session_state = SessionState::new(Some(current_options));
     session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1429,7 +1433,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
     assert_eq!((*x1, *y1, *x2, *y2), (100, 0, 109, 10));
     assert!(session_state.is_dirty());
     assert_eq!(
-        std::fs::read(&current_target).expect("current target bytes"),
+        fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
     );
 }
@@ -1437,11 +1441,11 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selection_move() {
-    let measurer = crate::draw::TextMeasurer::default();
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let measurer = TextMeasurer::default();
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-spatial-save-fail");
     let current_target = temp.path().join("current-spatial-symlink-target");
-    std::fs::write(&current_target, b"preserve current target").expect("write target");
+    fs::write(&current_target, b"preserve current target").expect("write target");
     symlink(&current_target, current_options.session_file_path()).expect("current symlink");
 
     let candidate_options = named_options(temp.path(), "candidate-spatial-save-fail");
@@ -1479,12 +1483,12 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         moved: true,
     };
     input.mark_session_dirty();
-    let mut session_state = SessionState::new(Some(current_options.clone()));
+    let mut session_state = SessionState::new(Some(current_options));
     session_state.commit_output_options(session_state.options().unwrap().clone(), true);
 
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1500,14 +1504,14 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         "hit testing should use the restored in-progress selection position"
     );
     assert_eq!(
-        std::fs::read(&current_target).expect("current target bytes"),
+        fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
     );
 }
 
 #[test]
 fn runtime_open_clears_stale_selection_and_hit_cache() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-selected-shape");
     let candidate_options = named_options(temp.path(), "candidate-reuses-shape-id");
@@ -1535,7 +1539,7 @@ fn runtime_open_clears_stale_selection_and_hit_cache() {
 
     open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1548,11 +1552,11 @@ fn runtime_open_clears_stale_selection_and_hit_cache() {
 
 #[test]
 fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-save-first");
     let candidate_options = named_options(temp.path(), "candidate-corrupt");
-    std::fs::write(candidate_options.session_file_path(), b"{not valid json")
+    fs::write(candidate_options.session_file_path(), b"{not valid json")
         .expect("write corrupt candidate");
 
     let mut input = test_input_state();
@@ -1563,7 +1567,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
 
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1590,7 +1594,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
     );
     assert!(!session_state.is_dirty());
     assert_eq!(
-        std::fs::read(candidate_options.session_file_path()).expect("candidate bytes"),
+        fs::read(candidate_options.session_file_path()).expect("candidate bytes"),
         b"{not valid json"
     );
     assert_no_candidate_sidecars(&candidate_options);
@@ -1607,11 +1611,11 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_dir = temp.path().join("current");
     let candidate_dir = temp.path().join("candidate");
-    std::fs::create_dir(&current_dir).expect("create current dir");
-    std::fs::create_dir(&candidate_dir).expect("create candidate dir");
+    fs::create_dir(&current_dir).expect("create current dir");
+    fs::create_dir(&candidate_dir).expect("create candidate dir");
     let current_options = named_options(&current_dir, "current");
     let candidate_options = named_options(&candidate_dir, "candidate");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1625,7 +1629,7 @@ fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1647,10 +1651,10 @@ fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_aborts_before_candidate_load() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-save-fail");
     let current_target = temp.path().join("current-symlink-target");
-    std::fs::write(&current_target, b"preserve current target").expect("write target");
+    fs::write(&current_target, b"preserve current target").expect("write target");
     symlink(&current_target, current_options.session_file_path()).expect("current symlink");
 
     let candidate_options = named_options(temp.path(), "candidate-valid");
@@ -1664,7 +1668,7 @@ fn runtime_open_current_save_failure_aborts_before_candidate_load() {
 
     let err = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1680,7 +1684,7 @@ fn runtime_open_current_save_failure_aborts_before_candidate_load() {
     );
     assert!(session_state.is_dirty());
     assert_eq!(
-        std::fs::read(&current_target).expect("current target bytes"),
+        fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
     );
 }
@@ -1763,7 +1767,7 @@ fn protected_session_path_blocks_save_until_session_is_dirty() {
     options.autosave_enabled = true;
     options.persist_transparent = true;
     let path = options.session_file_path();
-    let mut state = SessionState::new(Some(options.clone()));
+    let mut state = SessionState::new(Some(options));
 
     assert!(!state.should_skip_save_for_protected_path(&path, false));
     state.protect_session_path(path.clone());
@@ -1781,8 +1785,8 @@ fn protected_session_path_blocks_save_until_session_is_dirty() {
 /// autosave or final save would replace the session that failed to restore.
 #[test]
 fn protected_session_path_survives_a_run_only_status_bar_toggle() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -1832,47 +1836,48 @@ fn load_baseline_clears_stale_dirty_before_protected_save_check() {
 #[test]
 fn contentless_save_guard_blocks_clean_unloaded_save_when_primary_exists() {
     assert!(should_skip_unloaded_contentless_save(
-        false, false, false, false, true,
+        ContentlessSaveCheck {
+            session_artifact_exists: true,
+            ..ContentlessSaveCheck::default()
+        }
     ));
 }
 
 #[test]
 fn contentless_save_guard_blocks_clean_unloaded_save_when_only_backup_exists() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let options = SessionOptions::new(temp.path().to_path_buf(), "backup-only");
-    std::fs::write(options.backup_file_path(), b"backup").expect("backup write");
+    fs::write(options.backup_file_path(), b"backup").expect("backup write");
 
     assert!(has_session_artifact(&options));
     assert!(should_skip_unloaded_contentless_save(
-        false,
-        false,
-        false,
-        false,
-        has_session_artifact(&options),
+        ContentlessSaveCheck {
+            session_artifact_exists: has_session_artifact(&options),
+            ..ContentlessSaveCheck::default()
+        }
     ));
 }
 
 #[test]
 fn contentless_save_guard_blocks_clean_unloaded_save_when_only_recovery_exists() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let options = SessionOptions::new(temp.path().to_path_buf(), "recovery-only");
-    std::fs::write(options.recovery_file_path(), b"recovery").expect("recovery write");
+    fs::write(options.recovery_file_path(), b"recovery").expect("recovery write");
 
     assert!(has_session_artifact(&options));
     assert!(should_skip_unloaded_contentless_save(
-        false,
-        false,
-        false,
-        false,
-        has_session_artifact(&options),
+        ContentlessSaveCheck {
+            session_artifact_exists: has_session_artifact(&options),
+            ..ContentlessSaveCheck::default()
+        }
     ));
 }
 
 #[test]
 fn contentless_save_guard_blocks_clean_loaded_empty_save_when_only_preserved_recovery_exists() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let options = SessionOptions::new(temp.path().to_path_buf(), "preserved-recovery");
-    std::fs::write(
+    fs::write(
         options
             .recovery_file_path()
             .with_extension("recovery.empty"),
@@ -1882,34 +1887,49 @@ fn contentless_save_guard_blocks_clean_loaded_empty_save_when_only_preserved_rec
 
     assert!(has_session_artifact(&options));
     assert!(should_skip_unloaded_contentless_save(
-        false,
-        false,
-        false,
-        false,
-        has_session_artifact(&options),
+        ContentlessSaveCheck {
+            session_artifact_exists: has_session_artifact(&options),
+            ..ContentlessSaveCheck::default()
+        }
     ));
 }
 
 #[test]
 fn contentless_save_guard_allows_real_board_data_or_dirty_state() {
+    let clean_with_artifact = ContentlessSaveCheck {
+        session_artifact_exists: true,
+        ..ContentlessSaveCheck::default()
+    };
     assert!(!should_skip_unloaded_contentless_save(
-        false, false, false, true, true,
+        ContentlessSaveCheck {
+            has_board_data: true,
+            ..clean_with_artifact
+        }
     ));
     assert!(!should_skip_unloaded_contentless_save(
-        false, true, false, false, true,
+        ContentlessSaveCheck {
+            session_dirty: true,
+            ..clean_with_artifact
+        }
     ));
     assert!(!should_skip_unloaded_contentless_save(
-        false, false, true, false, true,
+        ContentlessSaveCheck {
+            input_dirty: true,
+            ..clean_with_artifact
+        }
     ));
     assert!(!should_skip_unloaded_contentless_save(
-        true, false, false, false, true,
+        ContentlessSaveCheck {
+            loaded_board_data: true,
+            ..clean_with_artifact
+        }
     ));
 }
 
 #[test]
 fn contentless_save_guard_allows_noop_when_no_session_artifact_exists() {
     assert!(!should_skip_unloaded_contentless_save(
-        false, false, false, false, false,
+        ContentlessSaveCheck::default()
     ));
 }
 
@@ -1934,10 +1954,10 @@ fn autosave_completion_does_not_clear_newer_generation() {
     let newer_edit = started + Duration::from_millis(2);
     state.record_input_dirty(newer_edit, true);
     let result = Ok(SaveCompletion {
-        report: Some(crate::session::SaveSnapshotReport {
+        report: Some(SaveSnapshotReport {
             generation: None,
             path: PathBuf::from("/tmp/generation-test.json"),
-            outcome: crate::session::SaveSnapshotOutcome::Full,
+            outcome: SaveSnapshotOutcome::Full,
             raw_size: 1,
             written_size: 1,
             max_file_size_bytes: 1024,
@@ -2023,7 +2043,7 @@ fn output_transition_deferral_moves_deadline_forward() {
 
 fn drive_session_command(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     session: &mut SessionState,
     command: SessionCommand,
 ) -> Result<SessionCommandReport> {
@@ -2040,7 +2060,7 @@ fn drive_session_command(
 
 fn open_named_session_runtime(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     session: &mut SessionState,
     target: &Path,
     _now: Instant,
@@ -2058,7 +2078,7 @@ fn open_named_session_runtime(
 }
 fn save_named_session_as_runtime(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     session: &mut SessionState,
     target: &Path,
     overwrite: stored_session::SaveAsOverwrite,
@@ -2082,7 +2102,7 @@ fn save_named_session_as_requires_overwrite(
     let mut input = test_input_state();
     let SessionCommandReport::Overwrite(_, required) = drive_session_command(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         session,
         SessionCommand::CheckOverwrite(target.to_path_buf()),
     )?
@@ -2093,7 +2113,7 @@ fn save_named_session_as_requires_overwrite(
 }
 fn clear_current_session_runtime(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     session: &mut SessionState,
     _now: Instant,
 ) -> Result<RuntimeClearSessionReport> {
@@ -2106,7 +2126,7 @@ fn clear_current_session_runtime(
 }
 fn clear_saved_tool_state_runtime(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     session: &mut SessionState,
     defaults: stored_session::ToolStateSnapshot,
     _now: Instant,
@@ -2125,18 +2145,18 @@ fn clear_saved_tool_state_runtime(
 
 #[test]
 fn explicit_clear_keeps_dispatch_available_and_preserves_edits_during_blocked_disk_work() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "blocked-clear");
     stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
-    let lock = std::fs::OpenOptions::new()
+    let lock = OpenOptions::new()
         .read(true)
         .write(true)
         .open(options.lock_file_path())
         .unwrap();
-    crate::durable_io::lock_exclusive(&lock).unwrap();
+    durable_io::lock_exclusive(&lock).unwrap();
     let mut input = test_input_state();
     add_line(&mut input, 51);
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut session = SessionState::new(Some(options.clone()));
     let mut persistence = PersistenceController::start_for_test().unwrap();
     let mut transaction = SessionCommandTransaction::new(
@@ -2211,13 +2231,13 @@ fn explicit_clear_keeps_dispatch_available_and_preserves_edits_during_blocked_di
 
 #[test]
 fn explicit_open_rejects_a_completion_after_target_epoch_changes() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "epoch-source");
     let target = named_options(temp.path(), "epoch-candidate");
     stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
     let mut input = test_input_state();
     add_line(&mut input, 91);
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut session = SessionState::new(Some(options));
     let mut persistence = PersistenceController::start_for_test().unwrap();
     let mut transaction = SessionCommandTransaction::new(
@@ -2261,11 +2281,11 @@ fn explicit_open_rejects_a_completion_after_target_epoch_changes() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_validates_target_before_saving_dirty_current_session() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "unsaved-source");
     let candidate = named_options(temp.path(), "symlink-candidate");
     let destination = temp.path().join("keep-unrelated-bytes");
-    std::fs::write(&destination, b"unrelated content").unwrap();
+    fs::write(&destination, b"unrelated content").unwrap();
     symlink(&destination, candidate.session_file_path()).unwrap();
     let mut input = test_input_state();
     add_line(&mut input, 63);
@@ -2274,7 +2294,7 @@ fn runtime_open_validates_target_before_saving_dirty_current_session() {
 
     let error = open_named_session_runtime(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut session,
         &candidate.session_file_path(),
         Instant::now(),
@@ -2292,18 +2312,18 @@ fn runtime_open_validates_target_before_saving_dirty_current_session() {
         session.options().unwrap().session_file_path(),
         current.session_file_path()
     );
-    assert_eq!(std::fs::read(destination).unwrap(), b"unrelated content");
+    assert_eq!(fs::read(destination).unwrap(), b"unrelated content");
 }
 
 #[test]
 fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
-    fn begin_draft(input: &mut InputState, measurer: &crate::draw::TextMeasurer, kind: &str) {
+    fn begin_draft(input: &mut InputState, measurer: &TextMeasurer, kind: &str) {
         if kind == "pointer" {
-            input.on_mouse_press(crate::input::MouseButton::Left, 80, 80);
+            input.on_mouse_press(MouseButton::Left, 80, 80);
             input.on_mouse_motion(90, 90);
             assert!(matches!(input.state, DrawingState::Drawing { .. }));
         } else {
-            let ui_engine = crate::ui_text::UiTextEngine::default();
+            let ui_engine = UiTextEngine::default();
             input.handle_action_with_resources(
                 crate::input::state::InputTextResources {
                     measurer,
@@ -2311,7 +2331,7 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
                 },
                 Action::EnterTextMode,
             );
-            input.on_key_press(crate::input::Key::Char('x'));
+            input.on_key_press(Key::Char('x'));
             assert!(
                 matches!(&input.state, DrawingState::TextInput { buffer, .. } if buffer == "x")
             );
@@ -2333,7 +2353,7 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
         ("save_as", "snapshot"),
     ] {
         for draft_kind in ["pointer", "text"] {
-            let temp = crate::test_temp::tempdir().unwrap();
+            let temp = test_temp::tempdir().unwrap();
             let current = named_options(temp.path(), "draft-source");
             let target = named_options(temp.path(), "draft-target");
             if command_kind == "open" {
@@ -2341,7 +2361,7 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
             }
             let mut input = test_input_state();
             add_line(&mut input, 61);
-            let measurer = crate::draw::TextMeasurer::default();
+            let measurer = TextMeasurer::default();
             let mut session = SessionState::new(Some(current.clone()));
             let mut worker = PersistenceController::start_for_test().unwrap();
             let command = match command_kind {
@@ -2437,15 +2457,15 @@ fn pending_session_handoffs_preserve_new_unfinished_pointer_and_text_drafts() {
 #[test]
 fn actual_corrupt_load_outcomes_publish_critical_preservation_notices() {
     for restore in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let mut options =
             stored_session::SessionOptions::new(temp.path().to_path_buf(), "corrupt-toast");
         options.persist_transparent = true;
         if restore {
             stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
-            std::fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
+            fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
         }
-        std::fs::write(options.session_file_path(), b"unreadable primary").unwrap();
+        fs::write(options.session_file_path(), b"unreadable primary").unwrap();
         let outcome = stored_session::load_snapshot_with_outcome(&options).unwrap();
         if restore {
             assert!(matches!(
@@ -2461,14 +2481,14 @@ fn actual_corrupt_load_outcomes_publish_critical_preservation_notices() {
         let mut input = test_input_state();
         apply_load_outcome(
             &mut input,
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             outcome,
             &options,
             "regression",
         )
         .unwrap();
         let toast = input.active_toast().unwrap();
-        assert_eq!(toast.priority, crate::input::state::ToastPriority::Critical);
+        assert_eq!(toast.priority, ToastPriority::Critical);
         assert_eq!(toast.duration_ms, 20_000);
         assert!(
             toast.message.contains(

@@ -1,5 +1,7 @@
 //! Pointer positions, hover invalidation, activity timing, and provisional bounds.
 
+use std::mem;
+
 use crate::input::tool::LiveShapeMemo;
 use crate::util::Rect;
 use std::time::Instant;
@@ -70,7 +72,7 @@ impl PointerTracking {
     }
 
     pub(in crate::input::state) fn take_menu_hover_recalc(&mut self) -> bool {
-        std::mem::take(&mut self.menu_hover_recalc_pending)
+        mem::take(&mut self.menu_hover_recalc_pending)
     }
 
     pub(in crate::input::state) fn clear_menu_hover_recalc(&mut self) {
@@ -97,7 +99,7 @@ impl PointerTracking {
         &mut self,
         bounds: Option<Rect>,
     ) -> Option<Rect> {
-        std::mem::replace(&mut self.provisional_bounds, bounds)
+        mem::replace(&mut self.provisional_bounds, bounds)
     }
 
     /// Forget the previous stroke's Shape Pen preview.
@@ -116,7 +118,7 @@ impl PointerTracking {
         &mut self,
         shape: bool,
     ) -> bool {
-        std::mem::replace(&mut self.live_shape_previewed_shape, shape)
+        mem::replace(&mut self.live_shape_previewed_shape, shape)
     }
 
     pub(in crate::input::state) fn union_provisional_bounds(&mut self, bounds: Rect) {

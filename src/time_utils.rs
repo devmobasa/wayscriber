@@ -1,3 +1,4 @@
+use std::mem::MaybeUninit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +22,7 @@ pub fn now_local() -> LocalDateTime {
 ///
 /// Supported directives: `%Y`, `%m`, `%d`, `%H`, `%M`, `%S`, and `%%`.
 /// Unknown directives are emitted literally (e.g., `%q` becomes `%q`).
+#[must_use]
 pub fn format_with_template(dt: LocalDateTime, template: &str) -> String {
     let mut out = String::with_capacity(template.len() + 8);
     let mut chars = template.chars();
@@ -57,6 +59,7 @@ pub fn format_system_time(time: SystemTime, template: &str) -> Option<String> {
 }
 
 /// Format a UNIX timestamp in milliseconds using the strftime-like subset.
+#[must_use]
 pub fn format_unix_millis(ms: u64, template: &str) -> Option<String> {
     const MAX_FORMAT_UNIX_MILLIS: u64 = 253_402_300_799_999; // 9999-12-31T23:59:59Z
     if ms > MAX_FORMAT_UNIX_MILLIS {
@@ -155,7 +158,7 @@ fn utc_datetime_from_unix(secs: i64) -> Option<LocalDateTime> {
 #[cfg(unix)]
 fn libc_datetime_from_unix(secs: i64, local: bool) -> Option<LocalDateTime> {
     let raw = unix_seconds_to_time_t(secs)?;
-    let mut out = std::mem::MaybeUninit::<libc::tm>::uninit();
+    let mut out = MaybeUninit::<libc::tm>::uninit();
     // SAFETY: `raw` is a valid time_t and `out` points to writable storage for
     // one `tm`. The reentrant variants keep no pointer to either.
     let ptr = unsafe {

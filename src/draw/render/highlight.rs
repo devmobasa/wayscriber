@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use crate::draw::Color;
 
 /// Renders a circular click highlight with configurable fill/outline colors.
@@ -27,7 +29,7 @@ pub fn render_click_highlight(
             fill_color.b,
             fill_color.a * alpha,
         );
-        ctx.arc(center_x, center_y, radius, 0.0, std::f64::consts::PI * 2.0);
+        ctx.arc(center_x, center_y, radius, 0.0, consts::PI * 2.0);
         let _ = ctx.fill();
     }
 
@@ -39,7 +41,7 @@ pub fn render_click_highlight(
             outline_color.a * alpha,
         );
         ctx.set_line_width(outline_thickness);
-        ctx.arc(center_x, center_y, radius, 0.0, std::f64::consts::PI * 2.0);
+        ctx.arc(center_x, center_y, radius, 0.0, consts::PI * 2.0);
         let _ = ctx.stroke();
     }
 

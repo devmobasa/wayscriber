@@ -1,3 +1,14 @@
+use std::fs;
+
+use crate::config;
+use crate::config::test_helpers::ConfigFileSnapshot;
+use crate::config::{
+    ChordModifiers, Config, QuickColorPalette, QuickColorPaletteEntry, test_helpers,
+};
+use crate::draw::{TextMeasurer, color};
+use crate::input::state;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
 use crate::draw::{ArrowStyle, BlurStyle};
@@ -6,12 +17,12 @@ use crate::ui::toolbar::model::{StylePillControl, StylePillSpec, TopStripPlan};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
 /// Pointer releases publish config edits through the live runtime inventory.
-fn runtime_quick_color_edits(state: &mut InputState) -> Vec<crate::input::state::QuickColorEdit> {
+fn runtime_quick_color_edits(state: &mut InputState) -> Vec<state::QuickColorEdit> {
     state
-        .drain_input_effects(crate::input::state::InputEffectDrain::Runtime)
+        .drain_input_effects(state::InputEffectDrain::Runtime)
         .into_iter()
         .filter_map(|effect| match effect {
-            crate::input::state::InputEffect::QuickColor(edit) => Some(edit),
+            state::InputEffect::QuickColor(edit) => Some(edit),
             _ => None,
         })
         .collect()
@@ -158,8 +169,8 @@ fn cycling_from_black_out_to_sampling_blur_requests_frozen_capture() {
 
 #[test]
 fn pick_screen_color_requests_backend_eyedropper_activation() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -561,8 +572,8 @@ fn tool_color_and_thickness_are_independent_between_pen_and_marker() {
 
 #[test]
 fn increase_thickness_action_changes_marker_width_not_marker_opacity() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -574,10 +585,7 @@ fn increase_thickness_action_changes_marker_width_not_marker_opacity() {
     let original_opacity = state.style.marker_opacity;
     let pen_thickness = state.thickness_for_tool(Tool::Pen);
 
-    state.handle_action_with_resources(
-        test_text_resources,
-        crate::config::Action::IncreaseThickness,
-    );
+    state.handle_action_with_resources(test_text_resources, Action::IncreaseThickness);
 
     assert_eq!(state.thickness_for_tool(Tool::Marker), 25.0);
     assert_eq!(state.thickness_for_tool(Tool::Pen), pen_thickness);
@@ -685,7 +693,7 @@ fn sync_modifiers_resyncs_current_settings_to_compositor_tool() {
     assert_eq!(state.style.current_color, line_color);
     assert_eq!(state.style.current_thickness, 14.0);
 
-    state.sync_modifiers(false, false, false, false);
+    state.sync_modifiers(ChordModifiers::default());
     assert_eq!(state.active_tool(), Tool::Pen);
     assert_eq!(state.style.current_color, pen_color);
     assert_eq!(state.style.current_thickness, pen_thickness);
@@ -796,7 +804,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     assert_eq!(state.style.quick_colors.color_for_index(2), Some(picked));
     assert_eq!(
         runtime_quick_color_edits(&mut state),
-        vec![crate::input::state::QuickColorEdit {
+        vec![state::QuickColorEdit {
             index: 2,
             color: picked
         }]
@@ -815,9 +823,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
 fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     let mut state = create_test_input_state();
     let slot_color = state.style.quick_colors.color_for_index(3).expect("slot 3");
-    assert!(
-        state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), slot_color)
-    );
+    assert!(state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), slot_color));
     state.preset_slots.restore_active(Some(2));
     state.clear_session_dirty();
 
@@ -901,7 +907,7 @@ fn recolor_hex_entry_lands_on_the_swatch() {
     }
     assert!(state.color_picker_popup_commit_hex());
 
-    let expected = crate::input::state::parse_hex_color("#1A2B3C").expect("hex");
+    let expected = state::parse_hex_color("#1A2B3C").expect("hex");
     assert_eq!(state.style.quick_colors.color_for_index(4), Some(expected));
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
 }
@@ -936,11 +942,11 @@ fn default_button_appears_only_for_slots_the_shipped_palette_defines() {
     state.close_color_picker_popup(true);
 
     // A slot the user added past the built-in palette has no default to offer.
-    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(
+    state.set_quick_colors(QuickColorPalette::from_entries(
         (0..13)
-            .map(|index| crate::config::QuickColorPaletteEntry {
+            .map(|index| QuickColorPaletteEntry {
                 label: format!("Custom {index}"),
-                color: crate::draw::color::RED,
+                color: color::RED,
             })
             .collect(),
     ));
@@ -960,8 +966,8 @@ fn default_button_appears_only_for_slots_the_shipped_palette_defines() {
 #[test]
 fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     let mut state = create_test_input_state();
-    let shipped = crate::config::default_quick_color_for_index(1).expect("built-in slot 1");
-    let customized = crate::draw::Color {
+    let shipped = config::default_quick_color_for_index(1).expect("built-in slot 1");
+    let customized = Color {
         r: 0.1,
         g: 0.2,
         b: 0.9,
@@ -990,7 +996,7 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     assert_eq!(state.style.quick_colors.color_for_index(1), Some(shipped));
     assert_eq!(
         runtime_quick_color_edits(&mut state),
-        vec![crate::input::state::QuickColorEdit {
+        vec![state::QuickColorEdit {
             index: 1,
             color: shipped
         }]
@@ -1000,7 +1006,7 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
 #[test]
 fn canceling_after_default_keeps_the_customized_color() {
     let mut state = create_test_input_state();
-    let customized = crate::draw::Color {
+    let customized = Color {
         r: 0.4,
         g: 0.1,
         b: 0.3,
@@ -1047,7 +1053,7 @@ fn accepting_a_recolor_from_the_popup_release_queues_the_durable_write() {
     assert_eq!(state.style.quick_colors.color_for_index(0), Some(picked));
     assert_eq!(
         runtime_quick_color_edits(&mut state),
-        vec![crate::input::state::QuickColorEdit {
+        vec![state::QuickColorEdit {
             index: 0,
             color: picked
         }]
@@ -1095,10 +1101,10 @@ fn popup_title_names_the_slot_being_recolored() {
 #[test]
 fn popup_title_flattens_and_bounds_an_authored_label() {
     let mut state = create_test_input_state();
-    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(vec![
-        crate::config::QuickColorPaletteEntry {
+    state.set_quick_colors(QuickColorPalette::from_entries(vec![
+        QuickColorPaletteEntry {
             label: "  Ünreasonable\n\tlabel   with breaks  ".to_string(),
-            color: crate::draw::color::RED,
+            color: color::RED,
         },
     ]));
 
@@ -1114,10 +1120,10 @@ fn popup_title_flattens_and_bounds_an_authored_label() {
     // A pathological label is bounded so the renderer's width measurement never
     // walks a huge string. Fitting it to the panel stays the renderer's job.
     state.close_color_picker_popup(true);
-    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(vec![
-        crate::config::QuickColorPaletteEntry {
+    state.set_quick_colors(QuickColorPalette::from_entries(vec![
+        QuickColorPaletteEntry {
             label: "W".repeat(5_000),
-            color: crate::draw::color::RED,
+            color: color::RED,
         },
     ]));
     assert!(state.open_color_picker_popup_for_quick_color(0));
@@ -1244,7 +1250,7 @@ fn restoring_recent_colors_reapplies_the_cap_and_dedupe() {
         });
     }
 
-    state.restore_recent_colors(oversized);
+    state.restore_recent_colors(&oversized);
 
     let recents = state.recent_colors();
     assert_eq!(recents.len(), 6, "cap survives a hand-edited session");
@@ -1265,9 +1271,9 @@ fn recent_swatches_are_hit_testable_in_the_popup() {
         b: 0.875,
         a: 1.0,
     };
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), stashed);
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), stashed);
     state.apply_color_from_ui_with_measurer(
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         Color {
             r: 1.0,
             g: 1.0,
@@ -1311,11 +1317,11 @@ fn empty_recents_have_no_clickable_swatches() {
     // click that does nothing.
     assert_eq!(
         layout.cursor_hint_at(sx + 2.0, sy + 2.0, 0),
-        crate::input::state::ColorPickerCursorHint::Default
+        state::ColorPickerCursorHint::Default
     );
     assert_eq!(
         layout.cursor_hint_at(sx + 2.0, sy + 2.0, 1),
-        crate::input::state::ColorPickerCursorHint::Pointer,
+        state::ColorPickerCursorHint::Pointer,
         "a rendered swatch still gets the pointer"
     );
 }
@@ -1402,7 +1408,7 @@ fn a_picker_drag_released_over_a_recent_swatch_does_not_adopt_it() {
         b: 0.875,
         a: 1.0,
     };
-    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), stashed);
+    state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), stashed);
 
     state.open_color_picker_popup();
     state.color_picker_popup_set_hue(0.1);
@@ -1715,7 +1721,7 @@ fn color_picker_set_color_updates_live_preview_and_buffer() {
     assert_eq!(state.color_picker_popup_current_color(), Some(pasted));
     assert_eq!(
         state.color_picker_popup_hex_buffer(),
-        Some(crate::input::state::color_to_hex(pasted).as_str())
+        Some(state::color_to_hex(pasted).as_str())
     );
     assert!(!state.color_picker_popup_is_hex_editing());
     // Previews live on the editing tool, like a gradient drag.
@@ -1741,7 +1747,7 @@ fn typing_a_hex_key_starts_manual_entry_without_a_click() {
     assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B2C3"));
     assert_eq!(
         state.color_picker_popup_current_color(),
-        crate::input::state::parse_hex_color("A1B2C3")
+        state::parse_hex_color("A1B2C3")
     );
 }
 
@@ -1761,7 +1767,7 @@ fn hex_typing_defers_live_preview_until_six_digits() {
     for ch in ['2', 'c', '3'] {
         state.on_key_press(Key::Char(ch));
     }
-    let expected = crate::input::state::parse_hex_color("A1B2C3").unwrap();
+    let expected = state::parse_hex_color("A1B2C3").unwrap();
     assert_eq!(state.color_picker_popup_current_color(), Some(expected));
 }
 
@@ -1776,7 +1782,7 @@ fn three_digit_hex_still_applies_when_committed() {
 
     state.on_key_press(Key::Return);
 
-    let expected = crate::input::state::parse_hex_color("A1B").unwrap();
+    let expected = state::parse_hex_color("A1B").unwrap();
     assert_eq!(state.color_picker_popup_current_color(), Some(expected));
     assert_eq!(state.color_picker_popup_hex_buffer(), Some("#AA11BB"));
     assert!(!state.color_picker_popup_is_hex_editing());
@@ -1802,7 +1808,7 @@ fn color_picker_ok_button_commits_valid_three_digit_hex_before_apply() {
     assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
     assert!(state.handle_color_picker_popup_release_at(x, y));
 
-    let expected = crate::input::state::parse_hex_color("A1B").unwrap();
+    let expected = state::parse_hex_color("A1B").unwrap();
     assert!(!state.is_color_picker_popup_open());
     assert_eq!(state.color_for_tool(Tool::Pen), expected);
     assert_eq!(state.style.current_color, expected);
@@ -2114,7 +2120,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         drag_tools: None,
     });
 
-    let snapshot = crate::ui::toolbar::ToolbarSnapshot::from_input(&state);
+    let snapshot = ToolbarSnapshot::from_input(&state);
     let preset = snapshot.presets[0].as_ref().expect("preset preview");
     let eraser_preset = snapshot.presets[1].as_ref().expect("eraser preset preview");
 
@@ -2336,26 +2342,24 @@ fn set_marker_opacity_clamps_and_reports_noop_after_reaching_target() {
 /// beside `handle_quick_color_edit`.
 #[test]
 fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
-    crate::config::test_helpers::with_temp_config_home(|config_root| {
-        let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
-        std::fs::create_dir_all(&config_dir).expect("test config directory");
+    test_helpers::with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(config::PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).expect("test config directory");
         let path = config_dir.join("config.toml");
-        std::fs::write(
+        fs::write(
             &path,
             "[[drawing.quick_colors]]\nlabel = 'Authored'\ncolor = '#112233'\n",
         )
         .expect("test config should be written");
-        let snapshot = crate::config::test_helpers::ConfigFileSnapshot::capture(&path);
+        let snapshot = ConfigFileSnapshot::capture(&path);
 
-        let configured = crate::config::Config::load()
-            .expect("test config should load")
-            .config;
+        let configured = Config::load().expect("test config should load").config;
         let authored = configured.drawing.quick_colors.effective_entries()[0]
             .color
             .clone();
 
         let mut state = create_test_input_state();
-        state.set_quick_colors(crate::config::QuickColorPalette::from_config(
+        state.set_quick_colors(QuickColorPalette::from_config(
             &configured.drawing.quick_colors,
         ));
         assert!(state.open_color_picker_popup_for_quick_color(0));
@@ -2368,16 +2372,14 @@ fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
         assert_eq!(state.style.quick_colors.color_for_index(0), Some(picked));
         assert_eq!(
             runtime_quick_color_edits(&mut state),
-            vec![crate::input::state::QuickColorEdit {
+            vec![state::QuickColorEdit {
                 index: 0,
                 color: picked
             }]
         );
         snapshot.assert_unchanged("accepting a quick-color recolor in InputState");
 
-        let restarted = crate::config::Config::load()
-            .expect("test config should reload")
-            .config;
+        let restarted = Config::load().expect("test config should reload").config;
         assert_eq!(
             restarted.drawing.quick_colors.effective_entries()[0].color,
             authored,
@@ -2388,8 +2390,8 @@ fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
 
 #[test]
 fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -2432,8 +2434,8 @@ fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
 
 #[test]
 fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -2477,8 +2479,8 @@ fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
 
 #[test]
 fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -2512,9 +2514,9 @@ fn bold_reaches_selected_text_and_otherwise_sets_what_the_next_label_uses() {
         x: 10,
         y: 10,
         text: "hello".to_string(),
-        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        color: Color::new(1.0, 1.0, 1.0, 1.0),
         size: 24.0,
-        font_descriptor: crate::draw::FontDescriptor::new(
+        font_descriptor: FontDescriptor::new(
             "Sans".to_string(),
             "normal".to_string(),
             "normal".to_string(),
@@ -2556,7 +2558,7 @@ fn rendered_bold_control_reads_and_mutates_the_selected_text_target() {
     // toggle whose click bolds the selection, not a checked toggle whose click
     // sends the no-op "turn normal" event.
     let mut state = create_test_input_state();
-    state.set_font_descriptor(crate::draw::FontDescriptor::new(
+    state.set_font_descriptor(FontDescriptor::new(
         "Sans".to_string(),
         "bold".to_string(),
         "normal".to_string(),
@@ -2565,9 +2567,9 @@ fn rendered_bold_control_reads_and_mutates_the_selected_text_target() {
         x: 10,
         y: 10,
         text: "selected".to_string(),
-        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        color: Color::new(1.0, 1.0, 1.0, 1.0),
         size: 24.0,
-        font_descriptor: crate::draw::FontDescriptor::new(
+        font_descriptor: FontDescriptor::new(
             "Serif".to_string(),
             "normal".to_string(),
             "normal".to_string(),
@@ -2612,9 +2614,9 @@ fn rendered_bold_control_skips_locked_text_and_disables_without_an_editable_targ
         x: 10,
         y: 10,
         text: "locked bold".to_string(),
-        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        color: Color::new(1.0, 1.0, 1.0, 1.0),
         size: 24.0,
-        font_descriptor: crate::draw::FontDescriptor::new(
+        font_descriptor: FontDescriptor::new(
             "Sans".to_string(),
             "bold".to_string(),
             "normal".to_string(),
@@ -2632,9 +2634,9 @@ fn rendered_bold_control_skips_locked_text_and_disables_without_an_editable_targ
         x: 20,
         y: 20,
         text: "editable normal".to_string(),
-        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        color: Color::new(1.0, 1.0, 1.0, 1.0),
         size: 24.0,
-        font_descriptor: crate::draw::FontDescriptor::new(
+        font_descriptor: FontDescriptor::new(
             "Sans".to_string(),
             "normal".to_string(),
             "normal".to_string(),
@@ -2683,7 +2685,7 @@ fn rendered_bold_control_skips_locked_text_and_disables_without_an_editable_targ
 #[test]
 fn turning_bold_off_leaves_the_family_and_style_alone() {
     let mut state = create_test_input_state();
-    state.set_font_descriptor(crate::draw::FontDescriptor::new(
+    state.set_font_descriptor(FontDescriptor::new(
         "Serif".to_string(),
         "bold".to_string(),
         "italic".to_string(),

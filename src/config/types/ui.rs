@@ -239,6 +239,7 @@ impl Default for UiConfig {
 }
 
 impl UiConfig {
+    #[must_use]
     pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
         match item {
             StatusBarItem::ActiveOutput => self.active_output_badge,

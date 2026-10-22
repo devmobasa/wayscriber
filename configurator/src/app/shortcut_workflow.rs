@@ -1,4 +1,6 @@
 //! Shortcut edit modes are mutually exclusive and clear as one workflow.
+use std::mem;
+
 use crate::models::{
     KeybindingField, PendingShortcutConflict, ShortcutRecorderState, ShortcutTextEditor,
 };
@@ -59,7 +61,7 @@ impl ShortcutWorkflow {
     }
     pub(crate) fn take_recorder(&mut self) -> Option<ShortcutRecorderState> {
         self.recorder()?;
-        match std::mem::take(&mut self.phase) {
+        match mem::take(&mut self.phase) {
             ShortcutPhase::Recording(value) => Some(value),
             _ => None,
         }
@@ -98,7 +100,7 @@ impl ShortcutWorkflow {
     }
     pub(crate) fn take_conflict(&mut self) -> Option<PendingShortcutConflict> {
         self.conflict()?;
-        match std::mem::take(&mut self.phase) {
+        match mem::take(&mut self.phase) {
             ShortcutPhase::Conflict(value) => Some(value),
             _ => None,
         }

@@ -1,4 +1,4 @@
-use std::fs;
+use std::{env, fs};
 
 pub use crate::env_vars::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV, PORTAL_SHORTCUT_OPT_IN_ENV};
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
@@ -32,19 +32,23 @@ pub enum ShortcutRuntimeBackend {
     Manual,
 }
 
+#[must_use]
 pub const fn portal_runtime_supported() -> bool {
     cfg!(feature = "portal")
 }
 
+#[must_use]
 pub fn gnome_shortcut_schema_with_path() -> String {
     format!("{GNOME_CUSTOM_KEYBINDING_SCHEMA}:{GNOME_WAYSCRIBER_KEYBINDING_PATH}")
 }
 
+#[must_use]
 pub fn is_gnome_desktop(current: &str, session: &str) -> bool {
     let combined = format!("{current};{session}").to_lowercase();
     combined.contains("gnome")
 }
 
+#[must_use]
 pub fn resolve_shortcut_runtime_backend(inputs: ShortcutRuntimeInputs) -> ShortcutRuntimeBackend {
     if inputs.gnome_desktop {
         if inputs.portal_runtime_supported
@@ -61,9 +65,10 @@ pub fn resolve_shortcut_runtime_backend(inputs: ShortcutRuntimeInputs) -> Shortc
     }
 }
 
+#[must_use]
 pub fn current_shortcut_runtime_backend() -> ShortcutRuntimeBackend {
-    let current = std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
-    let session = std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
+    let current = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
+    let session = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
     resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
         gnome_desktop: is_gnome_desktop(&current, &session),
         portal_runtime_supported: portal_runtime_supported(),
@@ -71,6 +76,7 @@ pub fn current_shortcut_runtime_backend() -> ShortcutRuntimeBackend {
     })
 }
 
+#[must_use]
 pub fn normalize_shortcut_hint(value: Option<&str>) -> Option<String> {
     let trimmed = value?.trim();
     if trimmed.is_empty() {
@@ -79,6 +85,7 @@ pub fn normalize_shortcut_hint(value: Option<&str>) -> Option<String> {
     Some(trimmed.to_string())
 }
 
+#[must_use]
 pub fn normalize_binding_hint(value: Option<&str>) -> Option<String> {
     let trimmed = value?.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("disabled") {
@@ -87,6 +94,7 @@ pub fn normalize_binding_hint(value: Option<&str>) -> Option<String> {
     Some(trimmed.to_string())
 }
 
+#[must_use]
 pub fn parse_gsettings_string_value(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "''" {
@@ -127,6 +135,7 @@ pub fn parse_gsettings_path_list(raw: &str) -> Result<Vec<String>, String> {
     Ok(values)
 }
 
+#[must_use]
 pub fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
     portal_shortcut_dropin_path()
         .and_then(|path| fs::read_to_string(path).ok())
@@ -134,6 +143,7 @@ pub fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
         .unwrap_or_default()
 }
 
+#[must_use]
 pub fn parse_portal_shortcut_dropin_state(content: &str) -> PortalShortcutDropInState {
     let mut state = PortalShortcutDropInState::default();
     for line in content.lines() {
@@ -156,6 +166,7 @@ pub fn parse_portal_shortcut_dropin_state(content: &str) -> PortalShortcutDropIn
     state
 }
 
+#[must_use]
 pub fn parse_portal_shortcut_from_dropin(content: &str) -> Option<String> {
     content.lines().find_map(|line| {
         let (name, value) = parse_systemd_environment_assignment(line)?;
@@ -166,6 +177,7 @@ pub fn parse_portal_shortcut_from_dropin(content: &str) -> Option<String> {
     })
 }
 
+#[must_use]
 pub fn gnome_effective_shortcut(custom_keybindings_raw: &str, binding_raw: &str) -> Option<String> {
     let configured_paths = parse_gsettings_path_list(custom_keybindings_raw).ok()?;
     if !configured_paths
@@ -178,6 +190,7 @@ pub fn gnome_effective_shortcut(custom_keybindings_raw: &str, binding_raw: &str)
     normalize_binding_hint(Some(binding.as_str()))
 }
 
+#[must_use]
 pub fn resolve_toggle_shortcut_hint(
     portal_shortcut_env: Option<&str>,
     gnome_desktop: bool,

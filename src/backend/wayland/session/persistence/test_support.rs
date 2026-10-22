@@ -1,5 +1,6 @@
 //! Controlled channel peer for session driver tests, not a second command driver.
-use super::{worker::execute, *};
+use super::worker::execute;
+use super::*;
 
 impl PersistenceController {
     pub(in crate::backend::wayland) fn controlled_for_test() -> (Self, ControlledPersistenceWorker)

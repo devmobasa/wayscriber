@@ -1,5 +1,10 @@
 use std::os::fd::AsRawFd;
-use std::time::Duration;
+use std::process::Command;
+use std::time::{Duration, Instant};
+use std::{env, process};
+
+use crate::tray_action::TrayAction;
+use crate::{env_vars, test_env, test_temp};
 
 use super::*;
 
@@ -57,7 +62,7 @@ fn kernel_boot_and_namespace_identities_are_stable() {
 
 #[test]
 fn boottime_deadline_source_arms_absolutely_and_drains_once() {
-    let source = linux::BootDeadlineSource::new().unwrap();
+    let source = linux::BootDeadlineSource::try_new().unwrap();
     assert!(!source.drain().unwrap());
 
     let deadline = BootClock::now()
@@ -89,7 +94,7 @@ fn pidfd_wait_times_out_while_alive_and_returns_once_exited() {
     use std::os::fd::AsFd;
     use std::time::{Duration, Instant};
 
-    let mut child = std::process::Command::new("/bin/sh")
+    let mut child = Command::new("/bin/sh")
         .args(["-c", "sleep 30"])
         .spawn()
         .expect("spawn a child to wait on");
@@ -137,9 +142,9 @@ fn self_pidfd_is_not_readable_while_process_is_alive() {
 fn bounded_nofollow_reads_reject_symlinks_and_oversize_records() {
     use std::os::unix::fs::symlink;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let regular = temp.path().join("record");
-    std::fs::write(&regular, b"bounded").unwrap();
+    fs::write(&regular, b"bounded").unwrap();
     assert_eq!(
         linux::read_bounded_regular_file(&regular, 7).unwrap(),
         b"bounded"
@@ -153,32 +158,32 @@ fn bounded_nofollow_reads_reject_symlinks_and_oversize_records() {
 
 #[test]
 fn directory_identity_detects_path_replacement() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first = temp.path().join("first");
     let replacement = temp.path().join("replacement");
-    std::fs::create_dir(&first).unwrap();
-    std::fs::create_dir(&replacement).unwrap();
+    fs::create_dir(&first).unwrap();
+    fs::create_dir(&replacement).unwrap();
     let (_file, identity) = linux::open_nofollow_directory(&first).unwrap();
     linux::revalidate_path_identity(&first, identity).unwrap();
-    std::fs::rename(&first, temp.path().join("old")).unwrap();
-    std::fs::rename(&replacement, &first).unwrap();
+    fs::rename(&first, temp.path().join("old")).unwrap();
+    fs::rename(&replacement, &first).unwrap();
     assert!(linux::revalidate_path_identity(&first, identity).is_err());
 }
 
 #[test]
 fn process_start_identity_is_nonzero_and_pidfd_matches_live_process() {
     assert!(linux::current_process_start_ticks().unwrap() > 0);
-    let _pidfd = linux::open_pidfd(std::process::id()).unwrap();
+    let _pidfd = linux::open_pidfd(process::id()).unwrap();
 }
 
 #[test]
 fn command_queue_watch_reports_atomic_publication_and_rejects_replacement() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let queue = temp.path().join("queue");
-    std::fs::create_dir(&queue).unwrap();
-    let mut watcher = CommandQueueWatcher::new(&queue).unwrap();
-    std::fs::write(temp.path().join("temporary"), b"request").unwrap();
-    std::fs::rename(
+    fs::create_dir(&queue).unwrap();
+    let mut watcher = CommandQueueWatcher::try_new(&queue).unwrap();
+    fs::write(temp.path().join("temporary"), b"request").unwrap();
+    fs::rename(
         temp.path().join("temporary"),
         queue.join("0000000000000001-00000000000000000000000000000000.request"),
     )
@@ -193,8 +198,8 @@ fn command_queue_watch_reports_atomic_publication_and_rejects_replacement() {
     assert_eq!(unsafe { libc::poll(&mut poll_fd, 1, 500) }, 1);
     assert!(watcher.drain().unwrap().scan_pending);
 
-    std::fs::rename(&queue, temp.path().join("old-queue")).unwrap();
-    std::fs::create_dir(&queue).unwrap();
+    fs::rename(&queue, temp.path().join("old-queue")).unwrap();
+    fs::create_dir(&queue).unwrap();
     assert!(watcher.revalidate().is_err());
 }
 
@@ -205,24 +210,24 @@ fn fail_stop_has_a_non_returning_signature() {
 
 #[test]
 fn only_an_identified_internal_overlay_can_claim_daemon_actions() {
-    let _environment = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
-    let previous_runtime = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
-    let previous_generation = std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV);
+    let _environment = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
+    let previous_runtime = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
+    let previous_generation = env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV);
     // SAFETY: serialized by the test environment mutex.
     unsafe {
-        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
-        std::env::remove_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV);
+        env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+        env::remove_var(env_vars::OVERLAY_CHILD_GENERATION_ENV);
     }
     let token = ProtocolToken::generate().unwrap();
     let token_text = token.to_string();
     let _owner = CommandOwner::open(&token_text).unwrap();
     let journal = ActionJournal::open().unwrap();
     journal
-        .publish_anonymous(&token_text, crate::tray_action::TrayAction::ToggleFreeze)
+        .publish_anonymous(&token_text, TrayAction::ToggleFreeze)
         .unwrap();
     let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
-    write_runtime_record_v2(&crate::paths::daemon_pid_file(), &runtime).unwrap();
+    write_runtime_record_v2(&paths::daemon_pid_file(), &runtime).unwrap();
 
     assert!(matches!(
         try_claim_overlay_action().unwrap(),
@@ -232,16 +237,16 @@ fn only_an_identified_internal_overlay_can_claim_daemon_actions() {
     let generation = ProtocolId::generate().unwrap().to_string();
     // SAFETY: serialized by the test environment mutex.
     unsafe {
-        std::env::set_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV, &generation);
+        env::set_var(env_vars::OVERLAY_CHILD_GENERATION_ENV, &generation);
     }
     publish_ready_from_environment().unwrap();
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     assert!(matches!(
         try_claim_overlay_action().unwrap(),
         ActionClaimOutcome::Deferred
     ));
     assert!(
-        started.elapsed() < std::time::Duration::from_millis(100),
+        started.elapsed() < Duration::from_millis(100),
         "missing enable proof blocked instead of deferring"
     );
     child::enable_current_generation_for_test(&token_text).unwrap();
@@ -253,12 +258,12 @@ fn only_an_identified_internal_overlay_can_claim_daemon_actions() {
     // SAFETY: this test still holds the environment mutex.
     unsafe {
         match previous_runtime {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+            Some(value) => env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV),
         }
         match previous_generation {
-            Some(value) => std::env::set_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV, value),
-            None => std::env::remove_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV),
+            Some(value) => env::set_var(env_vars::OVERLAY_CHILD_GENERATION_ENV, value),
+            None => env::remove_var(env_vars::OVERLAY_CHILD_GENERATION_ENV),
         }
     }
 }

@@ -2,6 +2,8 @@
 //!
 //! Collects axis-aligned rectangles that need repainting between frames.
 
+use std::mem;
+
 use super::Shape;
 use crate::draw::TextMeasurer;
 use crate::util::Rect;
@@ -35,6 +37,7 @@ impl Default for DirtyTracker {
 
 impl DirtyTracker {
     /// Creates a new, empty tracker with pre-allocated capacity.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             regions: Vec::with_capacity(8), // Typical frame has 4-8 dirty regions
@@ -118,7 +121,7 @@ impl DirtyTracker {
             self.force_full_reason = None;
             self.regions.retain(Rect::is_valid);
             DirtyRegionReport {
-                regions: std::mem::take(&mut self.regions),
+                regions: mem::take(&mut self.regions),
                 full_reason: None,
             }
         }

@@ -1,5 +1,9 @@
 //! One retained retry on the backend that failed admission or produced stale pixels.
-use super::*;
+use super::super::frozen_geometry::OutputGeometry;
+use super::{
+    CAPTURE_LOG_TARGET, CaptureBackend, CaptureLayoutGenerations, CapturePreflight,
+    CapturePreflightError,
+};
 use std::time::{Duration, Instant};
 
 const LAYOUT_QUIET_PERIOD: Duration = Duration::from_millis(100);

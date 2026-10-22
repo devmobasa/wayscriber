@@ -41,15 +41,15 @@ const HOVER_TINT: f64 = 0.12;
 const SUCCESS: Rgba = theme::rgba(theme::overlay::TOAST_SUCCESS, 1.0);
 
 /// Everything one frame needs.
-pub(super) struct Frame<'a> {
-    pub(super) plan: &'a Plan,
-    pub(super) content: &'a AboutContent,
-    pub(super) update: &'a UpdateState,
-    pub(super) icon: Option<&'a cairo::ImageSurface>,
+pub(super) struct Frame<'state> {
+    pub(super) plan: &'state Plan,
+    pub(super) content: &'state AboutContent,
+    pub(super) update: &'state UpdateState,
+    pub(super) icon: Option<&'state cairo::ImageSurface>,
     pub(super) hover: Option<Element>,
     pub(super) focus: Option<Element>,
     /// Transient footer message ("Copied to clipboard").
-    pub(super) notice: Option<&'a str>,
+    pub(super) notice: Option<&'state str>,
 }
 
 impl Frame<'_> {

@@ -7,9 +7,9 @@ use crate::ui_text::UiTextEngine;
 /// This borrow is operation-local and must not be retained in input values,
 /// editor state, shapes, or snapshots.
 #[derive(Clone, Copy)]
-pub(crate) struct InputTextResources<'a> {
-    pub(crate) measurer: &'a TextMeasurer,
-    pub(crate) ui_engine: &'a UiTextEngine,
+pub(crate) struct InputTextResources<'text> {
+    pub(crate) measurer: &'text TextMeasurer,
+    pub(crate) ui_engine: &'text UiTextEngine,
 }
 
 #[cfg(test)]

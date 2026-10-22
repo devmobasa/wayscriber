@@ -1,19 +1,23 @@
+use tokio::runtime::Handle;
+
 use crate::input::state::{Toast, ToastPriority};
 use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
-#[cfg(test)]
+use crate::backend::wayland::capture_preflight::CapturePreflightError;
 use crate::backend::wayland::frozen::FrozenImage;
-use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
+use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, portal_output_matches,
 };
+use crate::backend::wayland::portal_raster;
 use crate::backend::wayland::portal_task::{PortalPoll, PortalTask};
 use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureError;
 use crate::input::InputState;
+use crate::notification;
 
 use super::state::FrozenState;
 use crate::i18n::tr;
@@ -21,7 +25,7 @@ use crate::i18n::tr;
 impl FrozenState {
     pub(in crate::backend::wayland) fn capture_via_portal(
         &mut self,
-        tokio_handle: &tokio::runtime::Handle,
+        tokio_handle: &Handle,
     ) -> Result<()> {
         if self.portal.is_running() {
             warn!("Portal capture already running; ignoring new request");
@@ -41,7 +45,7 @@ impl FrozenState {
 
         let layout_generation = self.layout_generations.desktop;
         // Notify user that portal fallback is in progress
-        crate::notification::send_notification_async(
+        notification::send_notification_async(
             tokio_handle,
             tr("Freezing screen").to_string(),
             tr("Requesting screen capture...").to_string(),
@@ -56,12 +60,8 @@ impl FrozenState {
                         CaptureError::ImageError(format!("Decode failed: {error}"))
                     })?;
 
-                    let image = crate::backend::wayland::portal_raster::crop_portal_raster(
-                        data,
-                        width,
-                        height,
-                        &source_geometry,
-                    );
+                    let image =
+                        portal_raster::crop_portal_raster(&data, width, height, &source_geometry);
                     Ok((
                         Some(target_output_id),
                         layout_generation,
@@ -201,8 +201,8 @@ impl FrozenState {
         &mut self,
         target_output: Option<u32>,
         layout_generation: u64,
-        source_geometry: Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
-        image: Result<crate::backend::wayland::frozen::FrozenImage, CaptureError>,
+        source_geometry: Option<OutputGeometry>,
+        image: Result<FrozenImage, CaptureError>,
         input_state: &mut InputState,
         live_output_count: Option<u32>,
     ) {
@@ -227,9 +227,7 @@ impl FrozenState {
                     warn!("Portal frozen raster rejected: {err}");
                     if self.has_acquisition_attempt() {
                         self.finish_preflight_failure(
-                            crate::backend::wayland::capture_preflight::CapturePreflightError::Backend(
-                                err.to_string(),
-                            ),
+                            &CapturePreflightError::Backend(err.to_string()),
                             input_state,
                         );
                     } else {
@@ -274,6 +272,13 @@ impl FrozenState {
 
 #[cfg(test)]
 mod tests {
+    use std::future;
+
+    use tokio::task;
+    use wayland_client::protocol::wl_output::Transform;
+
+    use crate::backend::wayland::RuntimeWakeSource;
+
     use super::*;
     use crate::backend::wayland::acquisition::{
         ScreenAcquisitionOutcome, ScreenAcquisitionOwner, ScreenAcquisitionRegistry,
@@ -291,16 +296,14 @@ mod tests {
         }
     }
 
-    fn crop_geometry(
-        origin: (u32, u32),
-    ) -> crate::backend::wayland::frozen_geometry::OutputGeometry {
-        crate::backend::wayland::frozen_geometry::OutputGeometry {
+    fn crop_geometry(origin: (u32, u32)) -> OutputGeometry {
+        OutputGeometry {
             logical_x: 0,
             logical_y: 0,
             logical_width: 2,
             logical_height: 1,
             scale: 1,
-            transform: wayland_client::protocol::wl_output::Transform::Normal,
+            transform: Transform::Normal,
             overlay_buffer_size: (2, 1),
             pixel_size: Some((2, 1)),
             screenshot_origin: Some(origin),
@@ -319,14 +322,14 @@ mod tests {
             if !frozen.portal.is_running() {
                 return Ok(());
             }
-            tokio::task::yield_now().await;
+            task::yield_now().await;
         }
         anyhow::bail!("frozen portal task did not finish")
     }
 
     #[test]
     fn live_topology_is_checked_before_a_crop_error() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let mut registry = ScreenAcquisitionRegistry::default();
@@ -357,11 +360,11 @@ mod tests {
 
     #[tokio::test]
     async fn portal_start_requires_verifiable_geometry_and_output_identity() -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
 
         let error = frozen
-            .capture_via_portal(&tokio::runtime::Handle::current())
+            .capture_via_portal(&Handle::current())
             .expect_err("missing geometry must fail closed");
         assert!(error.to_string().contains("geometry is unavailable"));
         assert!(!frozen.portal.is_running());
@@ -369,7 +372,7 @@ mod tests {
 
         frozen.set_active_geometry(Some(crop_geometry((0, 0))));
         let error = frozen
-            .capture_via_portal(&tokio::runtime::Handle::current())
+            .capture_via_portal(&Handle::current())
             .expect_err("missing output identity must fail closed");
         assert!(error.to_string().contains("identity is unavailable"));
         assert!(!frozen.portal.is_running());
@@ -379,13 +382,13 @@ mod tests {
 
     #[tokio::test]
     async fn poll_portal_applies_image() -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         frozen.set_active_output(None, Some(1));
 
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), Ok(image(0)))) },
         ));
@@ -410,15 +413,15 @@ mod tests {
     #[tokio::test]
     async fn domain_error_and_task_panic_restore_the_frozen_lifecycle() -> anyhow::Result<()> {
         for panic_task in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+            let wake = RuntimeWakeSource::try_new()?;
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             frozen.portal.start(if panic_task {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
+                PortalTask::spawn(&Handle::current(), wake.handle(), async {
                     panic!("expected frozen portal panic")
                 })
             } else {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
+                PortalTask::spawn(&Handle::current(), wake.handle(), async {
                     Err(CaptureError::PermissionDenied)
                 })
             });
@@ -438,17 +441,17 @@ mod tests {
     {
         let now = Instant::now();
         for timed_out in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+            let wake = RuntimeWakeSource::try_new()?;
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             frozen.portal.start(if timed_out {
                 PortalTask::spawn_at_for_test(
-                    &tokio::runtime::Handle::current(),
+                    &Handle::current(),
                     wake.handle(),
                     now.checked_sub(PORTAL_CAPTURE_TIMEOUT).ok_or_else(|| {
                         anyhow::anyhow!("monotonic clock cannot represent the test deadline")
                     })?,
-                    std::future::pending(),
+                    future::pending(),
                 )
             } else {
                 PortalTask::disconnected_for_test(now)
@@ -466,11 +469,11 @@ mod tests {
 
     #[tokio::test]
     async fn user_cancellation_restores_quietly_without_an_error_toast() -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async {
                 Err(CaptureError::Cancelled(
@@ -490,7 +493,7 @@ mod tests {
 
     #[tokio::test]
     async fn portal_cancellation_finishes_the_correlated_attempt() -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let mut registry = ScreenAcquisitionRegistry::default();
@@ -499,7 +502,7 @@ mod tests {
             .expect("id");
         frozen.start_capture_for(id, ScreenAcquisitionOwner::UserFreeze)?;
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async {
                 Err(CaptureError::Cancelled(
@@ -524,13 +527,13 @@ mod tests {
     #[tokio::test]
     async fn stale_output_is_discarded_without_mutating_current_frozen_state() -> anyhow::Result<()>
     {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         input.set_frozen_active(true);
         frozen.set_active_output(None, Some(2));
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async { Ok((Some(1), 0, None, Ok(image(9)))) },
         ));
@@ -546,13 +549,13 @@ mod tests {
 
     #[tokio::test]
     async fn stale_layout_is_discarded_without_a_pending_image() -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         frozen.set_active_geometry(Some(crop_geometry((0, 0))));
         let layout_generation = frozen.layout_generations.desktop;
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async move { Ok((None, layout_generation, None, Ok(image(9)))) },
         ));
@@ -569,14 +572,14 @@ mod tests {
     #[tokio::test]
     async fn matching_layout_still_applies_after_an_identical_geometry_refresh()
     -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         let geometry = crop_geometry((0, 0));
         frozen.set_active_geometry(Some(geometry.clone()));
         let layout_generation = frozen.layout_generations.desktop;
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             async move { Ok((None, layout_generation, None, Ok(image(0)))) },
         ));
@@ -592,16 +595,16 @@ mod tests {
     #[tokio::test]
     async fn supersession_is_ignored_and_explicit_cancel_owns_task_cancellation()
     -> anyhow::Result<()> {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let wake = RuntimeWakeSource::try_new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
         frozen.portal.start(PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
-            std::future::pending(),
+            future::pending(),
         ));
 
-        frozen.capture_via_portal(&tokio::runtime::Handle::current())?;
+        frozen.capture_via_portal(&Handle::current())?;
         assert!(frozen.portal.is_running());
         frozen.cancel(&mut input);
         assert!(!frozen.portal.is_running());

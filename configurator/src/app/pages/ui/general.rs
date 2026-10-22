@@ -32,7 +32,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Theme"),
             tr("\"Auto\" uses dark. \"Light\" supports the command palette, including shortcut editing and tooltips; other popups still use dark."),
             themes,
-            theme_labels,
+            &theme_labels,
             |app| app.draft.ui_theme,
             Message::UiThemeChanged,
         )
@@ -40,7 +40,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Reduced motion"),
             tr("\"On\" disables UI animations. \"Auto\" follows the system preference in a future release and keeps full motion for now."),
             motions,
-            motion_labels,
+            &motion_labels,
             |app| app.draft.ui_reduced_motion,
             Message::UiReducedMotionChanged,
         )

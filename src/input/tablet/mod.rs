@@ -3,7 +3,9 @@
 //! These helpers map tablet tool events (position, pressure) into the existing
 //! `InputState` without changing the drawing logic.
 
-use crate::input::{InputState, state::MAX_STROKE_THICKNESS};
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
+use crate::input::state::MAX_STROKE_THICKNESS;
 
 /// User-configurable settings for tablet input.
 #[derive(Debug, Clone, Copy)]
@@ -31,12 +33,12 @@ impl Default for TabletSettings {
 
 /// Apply a normalized pressure value [0.0, 1.0] to a pressure-sensitive tool.
 pub fn apply_pressure_to_state(pressure01: f64, state: &mut InputState, settings: TabletSettings) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let _ = try_apply_pressure_to_state_with(&measurer, pressure01, state, settings);
 }
 
 pub(crate) fn try_apply_pressure_to_state_with(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     pressure01: f64,
     state: &mut InputState,
     settings: TabletSettings,
@@ -68,12 +70,14 @@ pub(crate) fn try_apply_pressure_to_state_with(
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::draw::Shape;
     use crate::input::{DrawingState, MouseButton, Tool};
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     #[test]
@@ -83,7 +87,7 @@ mod tests {
         state.needs_redraw = false;
 
         assert!(!try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             0.8,
             &mut state,
             TabletSettings::default()
@@ -105,7 +109,7 @@ mod tests {
         };
 
         assert!(!try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             0.8,
             &mut state,
             settings
@@ -127,7 +131,7 @@ mod tests {
         };
 
         assert!(try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             -1.0,
             &mut state,
             settings
@@ -138,7 +142,7 @@ mod tests {
 
         state.needs_redraw = false;
         assert!(try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             2.0,
             &mut state,
             settings
@@ -159,7 +163,7 @@ mod tests {
         };
 
         assert!(try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             1.0,
             &mut state,
             settings
@@ -183,14 +187,14 @@ mod tests {
         state.set_tool_override(Some(Tool::Pen));
         state.on_mouse_press(MouseButton::Left, 0, 0);
         assert!(try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             0.0,
             &mut state,
             settings
         ));
         state.on_mouse_motion(10, 0);
         assert!(try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             1.0,
             &mut state,
             settings
@@ -220,7 +224,7 @@ mod tests {
         assert!(state.set_thickness(31.0));
 
         assert!(!try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             0.05,
             &mut state,
             settings
@@ -251,7 +255,7 @@ mod tests {
         assert!(state.set_thickness(30.0));
 
         assert!(!try_apply_pressure_to_state_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             0.05,
             &mut state,
             settings
@@ -269,7 +273,7 @@ mod tests {
 
     #[test]
     fn first_pressure_sample_replaces_unpressured_stroke_samples() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_text_measurer = TextMeasurer::default();
 
         let mut state = make_state();
 

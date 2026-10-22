@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::config::{
@@ -46,8 +49,8 @@ impl PdfPageSizeOption {
     }
 }
 
-impl std::fmt::Display for PdfPageSizeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PdfPageSizeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -89,8 +92,8 @@ impl PdfOrientationOption {
     }
 }
 
-impl std::fmt::Display for PdfOrientationOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PdfOrientationOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -136,8 +139,8 @@ impl PdfFitModeOption {
     }
 }
 
-impl std::fmt::Display for PdfFitModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PdfFitModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -175,8 +178,8 @@ impl PdfTransparentBackgroundOption {
     }
 }
 
-impl std::fmt::Display for PdfTransparentBackgroundOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PdfTransparentBackgroundOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -232,8 +235,8 @@ impl PdfLabelPositionOption {
     }
 }
 
-impl std::fmt::Display for PdfLabelPositionOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PdfLabelPositionOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -289,8 +292,8 @@ impl PdfLabelContentModeOption {
     }
 }
 
-impl std::fmt::Display for PdfLabelContentModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PdfLabelContentModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

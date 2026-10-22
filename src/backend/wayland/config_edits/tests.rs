@@ -8,6 +8,14 @@
 //! full, which is the case that used to answer the newest gesture first — and an
 //! edit still waiting when the overlay quits reaches the file anyway.
 
+use crate::config::{Action, ColorSpec, ConfigDocument, KeybindingsConfig, ToolPresetConfig};
+use crate::draw::Color;
+use crate::input::state::test_support::TestInputStateBuilder;
+use crate::{config, session};
+
+use std::ffi::OsStr;
+use std::path::PathBuf;
+
 use super::*;
 use crate::backend::wayland::RuntimeWakeSource;
 use crate::config::ConfigEditWrite;
@@ -23,11 +31,11 @@ const AUTHORED_FILE: &str = "\
 setting_from_a_later_release = 7
 ";
 
-fn preset(name: &str) -> Box<crate::config::ToolPresetConfig> {
-    Box::new(crate::config::ToolPresetConfig {
+fn preset(name: &str) -> Box<ToolPresetConfig> {
+    Box::new(ToolPresetConfig {
         name: Some(name.to_string()),
         tool: Tool::Pen,
-        color: crate::config::ColorSpec::from(crate::draw::Color {
+        color: ColorSpec::from(Color {
             r: 0.13,
             g: 0.27,
             b: 0.41,
@@ -58,8 +66,8 @@ fn save(slot: usize, name: &str) -> ConfigEdit {
     })
 }
 
-fn config_in(config_root: &Path) -> std::path::PathBuf {
-    let directory = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+fn config_in(config_root: &Path) -> PathBuf {
+    let directory = config_root.join(config::PRIMARY_CONFIG_DIR);
     fs::create_dir_all(&directory).expect("the config directory this test named");
     let path = directory.join("config.toml");
     fs::write(&path, AUTHORED_FILE).expect("the fixture this test named a directory for");
@@ -105,7 +113,7 @@ fn completed_preset_name(completion: &ConfigEditCompletion) -> String {
 fn hold_config_write_lock(config_path: &Path) -> File {
     let name = config_path
         .file_name()
-        .and_then(std::ffi::OsStr::to_str)
+        .and_then(OsStr::to_str)
         .expect("the fixture path this test built has a file name");
     let path = config_path.with_file_name(format!("{name}.lock"));
     let file = OpenOptions::new()
@@ -115,7 +123,7 @@ fn hold_config_write_lock(config_path: &Path) -> File {
         .truncate(false)
         .open(&path)
         .expect("the lock file beside a fixture this test created");
-    crate::session::try_lock_exclusive(&file)
+    session::try_lock_exclusive(&file)
         .expect("nothing else can hold the lock on a directory this test just made");
     file
 }
@@ -139,11 +147,11 @@ fn wait_for_slot(path: &Path, slot: usize, name: &str) {
 }
 
 fn slot_name(path: &Path, slot: usize) -> Option<String> {
-    crate::config::ConfigDocument::load_from_path(path)
+    ConfigDocument::load_from_path(path)
         .expect("the written config reloads")
         .config()
         .presets
-        .get_slot(slot)
+        .slot(slot)
         .and_then(|preset| preset.name.clone())
 }
 
@@ -156,7 +164,7 @@ fn slot_name(path: &Path, slot: usize) -> Option<String> {
 fn two_rapid_edits_are_written_and_completed_in_order() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
 
         worker.submit(save(1, "First"));
@@ -218,7 +226,7 @@ fn two_shortcut_edits_are_written_and_completed_in_order() {
 
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
 
         worker.submit(rebind(Action::SelectPenTool, "Ctrl+Alt+Shift+P"));
@@ -248,8 +256,7 @@ fn two_shortcut_edits_are_written_and_completed_in_order() {
             );
         }
 
-        let reloaded = crate::config::ConfigDocument::load_from_path(&path)
-            .expect("the written config reloads");
+        let reloaded = ConfigDocument::load_from_path(&path).expect("the written config reloads");
         assert_eq!(
             reloaded
                 .config()
@@ -277,7 +284,7 @@ fn two_shortcut_edits_are_written_and_completed_in_order() {
 fn shutdown_drains_a_queued_edit_before_returning() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
 
         worker.submit(save(3, "Quitting"));
@@ -297,7 +304,7 @@ fn shutdown_drains_a_queued_edit_before_returning() {
 fn an_edit_submitted_after_shutdown_still_gets_exactly_one_completion() {
     with_temp_config_home(|config_root| {
         let _path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
 
         worker.submit(save(4, "Before"));
@@ -332,7 +339,7 @@ fn an_edit_submitted_after_shutdown_still_gets_exactly_one_completion() {
 fn a_full_queue_answers_edits_in_submission_order_and_keeps_the_newest() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         // One slot in the worker's channel, so the third gesture finds it full.
         let mut worker = ConfigEditWorker::with_capacity(wake.handle(), 1);
         let names = ["First", "Second", "Third", "Fourth"];
@@ -382,7 +389,7 @@ fn a_full_queue_answers_edits_in_submission_order_and_keeps_the_newest() {
 fn shutdown_drains_edits_the_channel_had_no_room_for() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::with_capacity(wake.handle(), 1);
         let staged = [(1, "First"), (2, "Second"), (3, "Third"), (4, "Fourth")];
 
@@ -425,7 +432,7 @@ fn shutdown_drains_edits_the_channel_had_no_room_for() {
 fn the_worker_writes_the_edits_behind_a_stalled_one_after_the_receiver_is_gone() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
 
         let held = hold_config_write_lock(&path);
@@ -474,14 +481,14 @@ fn the_worker_writes_the_edits_behind_a_stalled_one_after_the_receiver_is_gone()
 fn shutdown_that_gives_up_waiting_names_the_edits_it_could_not_confirm() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::with_drain(wake.handle(), Duration::from_millis(50));
 
         let held = hold_config_write_lock(&path);
         worker.submit(save(4, "Unconfirmed"));
         worker.submit(ConfigEdit::QuickColor(QuickColorEdit {
             index: 2,
-            color: crate::draw::Color {
+            color: Color {
                 r: 0.1,
                 g: 0.2,
                 b: 0.3,
@@ -523,10 +530,10 @@ fn shutdown_that_gives_up_waiting_names_the_edits_it_could_not_confirm() {
 /// reads the deltas already outstanding on the worker, and submitting straight
 /// past it would test nothing.
 fn rebind_through_the_palette(
-    keybindings: &crate::config::KeybindingsConfig,
-    input: &mut crate::input::state::InputState,
+    keybindings: &KeybindingsConfig,
+    input: &mut InputState,
     worker: &mut ConfigEditWorker,
-    action: crate::config::Action,
+    action: Action,
     binding: &str,
 ) {
     use crate::backend::wayland::state::queue_keybinding_edit;
@@ -543,8 +550,8 @@ fn rebind_through_the_palette(
     );
 }
 
-fn written_bindings(path: &Path, action: crate::config::Action) -> Option<Vec<String>> {
-    crate::config::ConfigDocument::load_from_path(path)
+fn written_bindings(path: &Path, action: Action) -> Option<Vec<String>> {
+    ConfigDocument::load_from_path(path)
         .expect("the written config reloads")
         .config()
         .keybindings
@@ -571,7 +578,7 @@ fn a_chord_an_outstanding_edit_freed_is_rebindable_and_both_edits_reach_the_file
 
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
         let mut config = Config::default();
         let mut input = test_input_state();
@@ -631,7 +638,7 @@ fn a_freed_chord_is_rebindable_between_two_ordinary_drains() {
 
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
         let mut input = test_input_state();
         let keybindings = KeybindingsConfig::default();
@@ -698,7 +705,7 @@ fn an_answered_edit_gives_its_projection_back_even_when_the_write_failed() {
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
         fs::write(&path, "this is not TOML =\n").expect("an unparseable fixture");
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
         let mut input = test_input_state();
         let keybindings = KeybindingsConfig::default();
@@ -731,7 +738,7 @@ fn an_answered_edit_gives_its_projection_back_even_when_the_write_failed() {
 
 /// An input state the way the overlay's own suites build one, so the gestures
 /// below are recorded by the real code rather than poked into a field.
-fn test_input_state() -> crate::input::state::InputState {
+fn test_input_state() -> InputState {
     use crate::config::{Action, Shortcut};
 
     use std::collections::HashMap;
@@ -741,7 +748,7 @@ fn test_input_state() -> crate::input::state::InputState {
         Shortcut::parse("Escape").expect("a chord this test spelled"),
         Action::Exit,
     );
-    crate::input::state::test_support::TestInputStateBuilder::default()
+    TestInputStateBuilder::default()
         .action_map(action_map)
         .action_bindings(HashMap::new())
         .thickness(3.0)
@@ -777,7 +784,7 @@ fn gestures_still_pending_when_the_overlay_quits_reach_the_file() {
 
     with_temp_config_home(|config_root| {
         let path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
         let mut config = Config::default();
         let mut input = test_input_state();
@@ -807,7 +814,7 @@ fn gestures_still_pending_when_the_overlay_quits_reach_the_file() {
 
         let written = ConfigDocument::load_from_path(&path).expect("the written config reloads");
         assert!(
-            written.config().presets.get_slot(1).is_some(),
+            written.config().presets.slot(1).is_some(),
             "the preset gesture must have reached the file"
         );
         assert_eq!(
@@ -827,8 +834,8 @@ fn gestures_still_pending_when_the_overlay_quits_reach_the_file() {
             .map(|entry| entry.color.to_color())
             .expect("the palette always resolves a first slot");
         assert_eq!(
-            crate::config::ColorSpec::from(swatch),
-            crate::config::ColorSpec::from(RECOLORED),
+            ColorSpec::from(swatch),
+            ColorSpec::from(RECOLORED),
             "the accepted recolor must have reached the file"
         );
     });
@@ -840,7 +847,7 @@ fn gestures_still_pending_when_the_overlay_quits_reach_the_file() {
 fn a_finished_write_wakes_the_event_loop() {
     with_temp_config_home(|config_root| {
         let _path = config_in(config_root);
-        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let wake = RuntimeWakeSource::try_new().expect("an eventfd");
         let mut worker = ConfigEditWorker::new(wake.handle());
         // Drain anything the descriptor already carried, so the wait below is
         // about this edit.
