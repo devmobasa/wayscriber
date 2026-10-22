@@ -96,19 +96,20 @@ pub(super) fn assert_restored(widget: &impl IsA<gtk4::Widget>, expected: &[[u8; 
 pub(super) fn settled_pixels(widget: &impl IsA<gtk4::Widget>) -> Vec<[u8; 4]> {
     let deadline = Instant::now() + Duration::from_secs(2);
     let mut previous = pixels(widget);
-    let mut stable = 0;
+    let mut stable_since = Instant::now();
+
+    // Popup layout can change after several identical frames. Require a
+    // quiet interval before saving the normal pixels used after capture.
     loop {
         wait_for_frame(widget);
         let current = pixels(widget);
-        if current == previous {
-            stable += 1;
-        } else {
-            stable = 0;
-        }
-        if stable == 3 {
+        let now = Instant::now();
+        if current != previous {
+            stable_since = now;
+        } else if now.duration_since(stable_since) >= Duration::from_millis(200) {
             return current;
         }
-        assert!(Instant::now() < deadline, "normal fixture did not settle");
+        assert!(now < deadline, "normal fixture did not settle");
         previous = current;
     }
 }
